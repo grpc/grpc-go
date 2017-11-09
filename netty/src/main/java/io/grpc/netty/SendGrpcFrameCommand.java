@@ -28,16 +28,13 @@ import io.netty.channel.ChannelPromise;
 class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.QueuedCommand {
   private final StreamIdHolder stream;
   private final boolean endStream;
-  private final int numMessages;
 
   private ChannelPromise promise;
 
-  SendGrpcFrameCommand(
-      StreamIdHolder stream, ByteBuf content, boolean endStream, int numMessages) {
+  SendGrpcFrameCommand(StreamIdHolder stream, ByteBuf content, boolean endStream) {
     super(content);
     this.stream = stream;
     this.endStream = endStream;
-    this.numMessages = numMessages;
   }
 
   int streamId() {
@@ -50,12 +47,12 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
 
   @Override
   public ByteBufHolder copy() {
-    return new SendGrpcFrameCommand(stream, content().copy(), endStream, numMessages);
+    return new SendGrpcFrameCommand(stream, content().copy(), endStream);
   }
 
   @Override
   public ByteBufHolder duplicate() {
-    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream, numMessages);
+    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream);
   }
 
   @Override
@@ -89,14 +86,13 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
     }
     SendGrpcFrameCommand thatCmd = (SendGrpcFrameCommand) that;
     return thatCmd.stream.equals(stream) && thatCmd.endStream == endStream
-        && thatCmd.content().equals(content()) && thatCmd.numMessages == numMessages;
+        && thatCmd.content().equals(content());
   }
 
   @Override
   public String toString() {
     return getClass().getSimpleName() + "(streamId=" + streamId()
         + ", endStream=" + endStream + ", content=" + content()
-        + ", numMessages=" + numMessages
         + ")";
   }
 
@@ -107,7 +103,6 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
     if (endStream) {
       hash = -hash;
     }
-    hash = hash * 31 + numMessages;
     return hash;
   }
 

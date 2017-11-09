@@ -64,7 +64,7 @@ public abstract class AbstractClientStream extends AbstractStream
      * @param endOfStream {@code true} if this is the last frame; {@code flush} is guaranteed to be
      *     {@code true} if this is {@code true}
      * @param flush {@code true} if more data may not be arriving soon
-     * @Param numMessages the number of messages this series of frames represents
+     * @Param numMessages the number of messages this series of frames represents, must be >= 0.
      */
     void writeFrame(
         @Nullable WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages);

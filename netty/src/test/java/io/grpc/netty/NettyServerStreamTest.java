@@ -124,7 +124,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream.flush();
 
     verify(writeQueue).enqueue(
-        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false, 1)),
+        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false)),
         isA(ChannelPromise.class),
         eq(true));
   }

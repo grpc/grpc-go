@@ -176,7 +176,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     verify(writeQueue).enqueue(
-        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false, 1)),
+        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false)),
         any(ChannelPromise.class),
         eq(true));
   }
@@ -192,12 +192,12 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // The framer reports the message count when the payload is completely written
     verify(writeQueue).enqueue(
             eq(new SendGrpcFrameCommand(
-                stream.transportState(), messageFrame(MESSAGE).slice(0, 5), false, 0)),
+                stream.transportState(), messageFrame(MESSAGE).slice(0, 5), false)),
             any(ChannelPromise.class),
             eq(false));
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(
-            stream.transportState(), messageFrame(MESSAGE).slice(5, 11), false, 1)),
+            stream.transportState(), messageFrame(MESSAGE).slice(5, 11), false)),
         any(ChannelPromise.class),
         eq(true));
   }

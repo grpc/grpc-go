@@ -268,7 +268,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
     // Send a frame and verify that it was written.
     ChannelFuture future
-        = enqueue(new SendGrpcFrameCommand(streamTransportState, content(), true, 1));
+        = enqueue(new SendGrpcFrameCommand(streamTransportState, content(), true));
 
     assertTrue(future.isSuccess());
     verifyWrite().writeData(eq(ctx()), eq(3), eq(content()), eq(0), eq(true),
@@ -280,7 +280,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Test
   public void sendForUnknownStreamShouldFail() throws Exception {
     ChannelFuture future
-        = enqueue(new SendGrpcFrameCommand(streamTransportState, content(), true, 1));
+        = enqueue(new SendGrpcFrameCommand(streamTransportState, content(), true));
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
   }
