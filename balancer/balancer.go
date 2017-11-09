@@ -158,7 +158,7 @@ type Picker interface {
 	// If a SubConn is returned:
 	// - If it is READY, gRPC will send the RPC on it;
 	// - If it is not ready, or becomes not ready after it's returned, gRPC will block
-	//   this call until a new picker is updated and will call pick on the new picker.
+	//   until UpdateBalancerState() is called and will call pick on the new picker.
 	//
 	// If the returned error is not nil:
 	// - If the error is ErrNoSubConnAvailable, gRPC will block until UpdateBalancerState()
