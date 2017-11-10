@@ -39,7 +39,7 @@ apply plugin: 'com.google.cloud.tools.appengine'  // App Engine tasks
 
 dependencies {
   providedCompile group: 'javax.servlet', name: 'servlet-api', version:'2.5'
-  compile 'com.google.appengine:appengine:+'
+  compile 'com.google.appengine:appengine:1.9.59'
   // Deps needed by all gRPC apps in GAE
   compile libraries.google_api_protos
   compile project(":grpc-okhttp")
