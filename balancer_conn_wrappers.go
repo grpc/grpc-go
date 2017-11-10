@@ -246,7 +246,9 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 			return
 		}
 		acbw.ac = ac
+		ac.mu.Lock()
 		ac.acbw = acbw
+		ac.mu.Unlock()
 		if acState != connectivity.Idle {
 			ac.connect()
 		}
