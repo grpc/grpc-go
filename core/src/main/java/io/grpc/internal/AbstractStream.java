@@ -108,6 +108,8 @@ public abstract class AbstractStream implements Stream {
     private Deframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
+    @Nullable // okhttp transports don't trace yet
+    private final TransportTracer transportTracer;
 
     /**
      * The number of bytes currently queued, waiting to be sent. When this falls below
@@ -131,8 +133,9 @@ public abstract class AbstractStream implements Stream {
     protected TransportState(
         int maxMessageSize,
         StatsTraceContext statsTraceCtx,
-        @Nullable TransportTracer transportTracer) { // nullable: client streams don't trace yet
+        @Nullable TransportTracer transportTracer) { // nullable: okhttp transports don't trace yet
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
+      this.transportTracer = transportTracer;
       deframer = new MessageDeframer(
           this,
           Codec.Identity.NONE,
@@ -231,6 +234,9 @@ public abstract class AbstractStream implements Stream {
         allocated = true;
       }
       notifyIfReady();
+      if (transportTracer != null) {
+        transportTracer.reportStreamStarted();
+      }
     }
 
     /**
@@ -279,6 +285,10 @@ public abstract class AbstractStream implements Stream {
       if (doNotify) {
         notifyIfReady();
       }
+    }
+
+    protected TransportTracer getTransportTracer() {
+      return transportTracer;
     }
 
     private void notifyIfReady() {

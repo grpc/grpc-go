@@ -25,7 +25,6 @@ import com.google.common.base.Splitter;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
@@ -681,11 +680,10 @@ public final class GrpcUtil {
           transport.ping(callback, executor);
         }
 
+        @Nullable
         @Override
         public Future<TransportTracer.Stats> getTransportStats() {
-          SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
-          ret.set(null);
-          return ret;
+          return transport.getTransportStats();
         }
       };
     }

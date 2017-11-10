@@ -191,7 +191,6 @@ public abstract class AbstractServerStream extends AbstractStream
     private boolean listenerClosed;
     private ServerStreamListener listener;
     private final StatsTraceContext statsTraceCtx;
-    private final TransportTracer transportTracer;
 
     private boolean endOfStream = false;
     private boolean deframerClosed = false;
@@ -210,7 +209,6 @@ public abstract class AbstractServerStream extends AbstractStream
           statsTraceCtx,
           Preconditions.checkNotNull(transportTracer, "transportTracer"));
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-      this.transportTracer = transportTracer;
     }
 
     /**
@@ -225,7 +223,6 @@ public abstract class AbstractServerStream extends AbstractStream
     @Override
     public final void onStreamAllocated() {
       super.onStreamAllocated();
-      transportTracer.reportStreamStarted();
     }
 
     @Override
@@ -336,9 +333,9 @@ public abstract class AbstractServerStream extends AbstractStream
       if (!listenerClosed) {
         if (!newStatus.isOk()) {
           statsTraceCtx.streamClosed(newStatus);
-          transportTracer.reportStreamClosed(false);
+          getTransportTracer().reportStreamClosed(false);
         } else {
-          transportTracer.reportStreamClosed(closedStatus.isOk());
+          getTransportTracer().reportStreamClosed(closedStatus.isOk());
         }
         listenerClosed = true;
         onStreamDeallocated();

@@ -29,7 +29,6 @@ import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
 import static io.netty.buffer.Unpooled.directBuffer;
-import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -66,7 +65,6 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener;
-import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.TestServerStreamTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -126,7 +124,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
 
-  private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   private int maxHeaderListSize = Integer.MAX_VALUE;
   private boolean permitKeepAliveWithoutCalls = true;
@@ -136,7 +133,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
   private long keepAliveTimeInNanos = DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
-  private TransportTracer transportTracer = new TransportTracer();
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -764,48 +760,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     // channel closed
     assertTrue(!channel().isOpen());
-  }
-
-  @Test
-  public void transportTracer_windowSizeDefault() throws Exception {
-    manualSetUp();
-    TransportTracer.Stats stats = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, stats.localFlowControlWindow);
-  }
-
-  @Test
-  public void transportTracer_windowUpdate_remote() throws Exception {
-    flowControlWindow = 1048576; // 1MiB
-    manualSetUp();
-    TransportTracer.Stats before = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, before.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, before.localFlowControlWindow);
-
-    ByteBuf serializedSettings = windowUpdate(0, 1000);
-    channelRead(serializedSettings);
-    TransportTracer.Stats after = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE + 1000,
-        after.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, after.localFlowControlWindow);
-  }
-
-  @Test
-  public void transportTracer_windowUpdate_local() throws Exception {
-    manualSetUp();
-    TransportTracer.Stats before = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, before.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, before.localFlowControlWindow);
-
-    // If the window size is below a certain threshold, netty will wait to apply the update.
-    // Use a large increment to be sure that it exceeds the threshold.
-    connection().local().flowController().incrementWindowSize(
-        connection().connectionStream(), 8 * Http2CodecUtil.DEFAULT_WINDOW_SIZE);
-
-    TransportTracer.Stats after = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, after.remoteFlowControlWindow);
-    assertEquals(flowControlWindow + 8 * Http2CodecUtil.DEFAULT_WINDOW_SIZE,
-        after.localFlowControlWindow);
   }
 
   private void createStream() throws Exception {

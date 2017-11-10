@@ -50,6 +50,7 @@ import io.netty.util.AsciiString;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import javax.annotation.Nullable;
@@ -84,6 +85,8 @@ class NettyClientTransport implements ConnectionClientTransport {
   private Status statusExplainingWhyTheChannelIsNull;
   /** Since not thread-safe, may only be used from event loop. */
   private ClientTransportLifecycleManager lifecycleManager;
+  /** Since not thread-safe, may only be used from event loop. */
+  private final TransportTracer transportTracer = new TransportTracer();
 
   NettyClientTransport(
       SocketAddress address, Class<? extends Channel> channelType,
@@ -146,15 +149,25 @@ class NettyClientTransport implements ConnectionClientTransport {
     }
     StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
     return new NettyClientStream(
-        new NettyClientStream.TransportState(handler, channel.eventLoop(), maxMessageSize,
-            statsTraceCtx) {
+        new NettyClientStream.TransportState(
+            handler,
+            channel.eventLoop(),
+            maxMessageSize,
+            statsTraceCtx,
+            transportTracer) {
           @Override
           protected Status statusFromFailedFuture(ChannelFuture f) {
             return NettyClientTransport.this.statusFromFailedFuture(f);
           }
         },
-        method, headers, channel, authority, negotiationHandler.scheme(), userAgent,
-        statsTraceCtx);
+        method,
+        headers,
+        channel,
+        authority,
+        negotiationHandler.scheme(),
+        userAgent,
+        statsTraceCtx,
+        transportTracer);
   }
 
   @SuppressWarnings("unchecked")
@@ -175,7 +188,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         flowControlWindow,
         maxHeaderListSize,
         GrpcUtil.STOPWATCH_SUPPLIER,
-        tooManyPingsRunnable);
+        tooManyPingsRunnable,
+        transportTracer);
     NettyHandlerSettings.setAutoWindow(handler);
 
     negotiationHandler = negotiator.newHandler(handler);
@@ -295,9 +309,20 @@ class NettyClientTransport implements ConnectionClientTransport {
 
   @Override
   public Future<TransportTracer.Stats> getTransportStats() {
-    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
-    ret.set(null);
-    return ret;
+    if (channel.eventLoop().inEventLoop()) {
+      // This is necessary, otherwise we will block forever if we get the future from inside
+      // the event loop.
+      SettableFuture<TransportTracer.Stats> result = SettableFuture.create();
+      result.set(transportTracer.getStats());
+      return result;
+    }
+    return channel.eventLoop().submit(
+        new Callable<TransportTracer.Stats>() {
+          @Override
+          public TransportTracer.Stats call() throws Exception {
+            return transportTracer.getStats();
+          }
+        });
   }
 
   @VisibleForTesting

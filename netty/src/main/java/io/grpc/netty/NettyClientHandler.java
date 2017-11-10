@@ -31,6 +31,7 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.TransportTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -52,6 +53,7 @@ import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2FlowController;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
@@ -97,6 +99,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private final KeepAliveManager keepAliveManager;
   // Returns new unstarted stopwatches
   private final Supplier<Stopwatch> stopwatchFactory;
+  private final TransportTracer transportTracer;
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
   private Attributes attributes = Attributes.EMPTY;
@@ -107,7 +110,8 @@ class NettyClientHandler extends AbstractNettyHandler {
       int flowControlWindow,
       int maxHeaderListSize,
       Supplier<Stopwatch> stopwatchFactory,
-      Runnable tooManyPingsRunnable) {
+      Runnable tooManyPingsRunnable,
+      TransportTracer transportTracer) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ClientHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
@@ -128,12 +132,13 @@ class NettyClientHandler extends AbstractNettyHandler {
         flowControlWindow,
         maxHeaderListSize,
         stopwatchFactory,
-        tooManyPingsRunnable);
+        tooManyPingsRunnable,
+        transportTracer);
   }
 
   @VisibleForTesting
   static NettyClientHandler newHandler(
-      Http2Connection connection,
+      final Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
       ClientTransportLifecycleManager lifecycleManager,
@@ -141,7 +146,8 @@ class NettyClientHandler extends AbstractNettyHandler {
       int flowControlWindow,
       int maxHeaderListSize,
       Supplier<Stopwatch> stopwatchFactory,
-      Runnable tooManyPingsRunnable) {
+      Runnable tooManyPingsRunnable,
+      TransportTracer transportTracer) {
     Preconditions.checkNotNull(connection, "connection");
     Preconditions.checkNotNull(frameReader, "frameReader");
     Preconditions.checkNotNull(lifecycleManager, "lifecycleManager");
@@ -164,6 +170,18 @@ class NettyClientHandler extends AbstractNettyHandler {
     Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
         frameReader);
 
+    transportTracer.setFlowControlWindowReader(new TransportTracer.FlowControlReader() {
+      final Http2FlowController local = connection.local().flowController();
+      final Http2FlowController remote = connection.remote().flowController();
+
+      @Override
+      public TransportTracer.FlowControlWindows read() {
+        return new TransportTracer.FlowControlWindows(
+            local.windowSize(connection.connectionStream()),
+            remote.windowSize(connection.connectionStream()));
+      }
+    });
+
     Http2Settings settings = new Http2Settings();
     settings.pushEnabled(false);
     settings.initialWindowSize(flowControlWindow);
@@ -177,7 +195,8 @@ class NettyClientHandler extends AbstractNettyHandler {
         lifecycleManager,
         keepAliveManager,
         stopwatchFactory,
-        tooManyPingsRunnable);
+        tooManyPingsRunnable,
+        transportTracer);
   }
 
   private NettyClientHandler(
@@ -187,11 +206,13 @@ class NettyClientHandler extends AbstractNettyHandler {
       ClientTransportLifecycleManager lifecycleManager,
       KeepAliveManager keepAliveManager,
       Supplier<Stopwatch> stopwatchFactory,
-      final Runnable tooManyPingsRunnable) {
+      final Runnable tooManyPingsRunnable,
+      TransportTracer transportTracer) {
     super(decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
     this.keepAliveManager = keepAliveManager;
     this.stopwatchFactory = stopwatchFactory;
+    this.transportTracer = Preconditions.checkNotNull(transportTracer);
 
     // Set the frame listener on the decoder.
     decoder().frameListener(new FrameListener());
@@ -550,7 +571,9 @@ class NettyClientHandler extends AbstractNettyHandler {
     promise.addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
+        if (future.isSuccess()) {
+          transportTracer.reportKeepAliveSent();
+        } else {
           Throwable cause = future.cause();
           if (cause instanceof ClosedChannelException) {
             cause = lifecycleManager.getShutdownThrowable();
