@@ -60,12 +60,11 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
     // We can not use JUnit because it tries to spawn backgrounds threads.
     // GAE+JDK7 does not allow arbitrary background threads.
     // Let's use reflection to run test methods.
-    Tester tester = new Tester();
     List<Method> befores = new ArrayList<>();
     List<Method> afters = new ArrayList<>();
     List<Method> testMethods = new ArrayList<>();
     int ignored = 0;
-    for (Method method : tester.getClass().getMethods()) {
+    for (Method method : Tester.class.getMethods()) {
       if (method.getAnnotation(Test.class) != null) {
         if (method.getAnnotation(Ignore.class) != null) {
           ignored++;
@@ -82,6 +81,8 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
     StringBuilder sb = new StringBuilder();
     int failures = 0;
     for (Method method : testMethods) {
+      // JUnit creates a new instance per test method, we will emulate that behavior.
+      Tester tester = new Tester();
       try {
         for (Method before : befores) {
           before.invoke(tester);
