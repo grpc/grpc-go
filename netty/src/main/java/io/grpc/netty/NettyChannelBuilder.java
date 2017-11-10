@@ -237,6 +237,15 @@ public final class NettyChannelBuilder
   }
 
   /**
+   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code TLS}.
+   */
+  @Override
+  public NettyChannelBuilder useTransportSecurity() {
+    negotiationType(NegotiationType.TLS);
+    return this;
+  }
+
+  /**
    * Enable keepalive with default delay and timeout.
    *
    * @deprecated Please use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead

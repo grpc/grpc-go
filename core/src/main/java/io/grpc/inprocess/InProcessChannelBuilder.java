@@ -84,6 +84,14 @@ public final class InProcessChannelBuilder extends
    * Does nothing.
    */
   @Override
+  public InProcessChannelBuilder useTransportSecurity() {
+    return this;
+  }
+
+  /**
+   * Does nothing.
+   */
+  @Override
   public InProcessChannelBuilder usePlaintext(boolean skipNegotiation) {
     return this;
   }

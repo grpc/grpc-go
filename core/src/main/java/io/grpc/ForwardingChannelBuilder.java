@@ -98,6 +98,12 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
   }
 
   @Override
+  public T useTransportSecurity() {
+    delegate().useTransportSecurity();
+    return thisT();
+  }
+
+  @Override
   public T nameResolverFactory(NameResolver.Factory resolverFactory) {
     delegate().nameResolverFactory(resolverFactory);
     return thisT();

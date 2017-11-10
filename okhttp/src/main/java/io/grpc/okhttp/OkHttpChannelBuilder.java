@@ -289,6 +289,15 @@ public class OkHttpChannelBuilder extends
     return this;
   }
 
+  /**
+   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code TLS}.
+   */
+  @Override
+  public final OkHttpChannelBuilder useTransportSecurity() {
+    negotiationType(NegotiationType.TLS);
+    return this;
+  }
+
   @Override
   @Internal
   protected final ClientTransportFactory buildTransportFactory() {

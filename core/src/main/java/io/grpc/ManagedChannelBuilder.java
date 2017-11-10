@@ -161,6 +161,18 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T usePlaintext(boolean skipNegotiation);
 
   /**
+   * Makes the client use TLS.
+   *
+   * @return this
+   * @throws UnsupportedOperationException if transport security is not supported.
+   * @since 1.9.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3713")
+  public T useTransportSecurity() {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Provides a custom {@link NameResolver.Factory} for the channel. If this method is not called,
    * the builder will try the providers listed by {@link NameResolverProvider#providers()} for the
    * given target.
