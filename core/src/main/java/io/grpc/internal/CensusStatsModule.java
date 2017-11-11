@@ -16,7 +16,6 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.opencensus.tags.unsafe.ContextUtils.TAG_CONTEXT_KEY;
@@ -53,7 +52,6 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 
 /**
  * Provides factories for {@link StreamTracer} that records stats to Census.
@@ -133,22 +131,25 @@ public final class CensusStatsModule {
    */
   @VisibleForTesting
   ClientCallTracer newClientCallTracer(
-      TagContext parentCtx, String fullMethodName, boolean recordStats) {
-    return new ClientCallTracer(this, parentCtx, fullMethodName, recordStats);
+      TagContext parentCtx, String fullMethodName,
+      boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+    return new ClientCallTracer(
+        this, parentCtx, fullMethodName, recordStartedRpcs, recordFinishedRpcs);
   }
 
   /**
    * Returns the server tracer factory.
    */
-  ServerStreamTracer.Factory getServerTracerFactory(boolean recordStats) {
-    return new ServerTracerFactory(recordStats);
+  ServerStreamTracer.Factory getServerTracerFactory(
+      boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+    return new ServerTracerFactory(recordStartedRpcs, recordFinishedRpcs);
   }
 
   /**
    * Returns the client interceptor that facilitates Census-based stats reporting.
    */
-  ClientInterceptor getClientInterceptor(boolean recordStats) {
-    return new StatsClientInterceptor(recordStats);
+  ClientInterceptor getClientInterceptor(boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+    return new StatsClientInterceptor(recordStartedRpcs, recordFinishedRpcs);
   }
 
   private static final class ClientTracer extends ClientStreamTracer {
@@ -221,18 +222,27 @@ public final class CensusStatsModule {
     private volatile ClientTracer streamTracer;
     private volatile int callEnded;
     private final TagContext parentCtx;
-    private final boolean recordStats;
+    private final TagContext startCtx;
+    private final boolean recordFinishedRpcs;
 
     ClientCallTracer(
         CensusStatsModule module,
         TagContext parentCtx,
         String fullMethodName,
-        boolean recordStats) {
+        boolean recordStartedRpcs,
+        boolean recordFinishedRpcs) {
       this.module = module;
-      this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
+      this.parentCtx = checkNotNull(parentCtx);
+      this.startCtx =
+          module.tagger.toBuilder(parentCtx)
+          .put(RpcMeasureConstants.RPC_METHOD, TagValue.create(fullMethodName)).build();
       this.stopwatch = module.stopwatchSupplier.get().start();
-      this.recordStats = recordStats;
+      this.recordFinishedRpcs = recordFinishedRpcs;
+      if (recordStartedRpcs) {
+        module.statsRecorder.newMeasureMap().put(RpcMeasureConstants.RPC_CLIENT_STARTED_COUNT, 1)
+            .record(startCtx);
+      }
     }
 
     @Override
@@ -262,7 +272,7 @@ public final class CensusStatsModule {
       if (callEndedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      if (!recordStats) {
+      if (!recordFinishedRpcs) {
         return;
       }
       stopwatch.stop();
@@ -272,7 +282,8 @@ public final class CensusStatsModule {
         tracer = BLANK_CLIENT_TRACER;
       }
       MeasureMap measureMap = module.statsRecorder.newMeasureMap()
-          // The metrics are in double
+          .put(RpcMeasureConstants.RPC_CLIENT_FINISHED_COUNT, 1)
+          // The latency is double value
           .put(RpcMeasureConstants.RPC_CLIENT_ROUNDTRIP_LATENCY, roundtripNanos / NANOS_PER_MILLI)
           .put(RpcMeasureConstants.RPC_CLIENT_REQUEST_COUNT, tracer.outboundMessageCount)
           .put(RpcMeasureConstants.RPC_CLIENT_RESPONSE_COUNT, tracer.inboundMessageCount)
@@ -290,8 +301,7 @@ public final class CensusStatsModule {
       measureMap.record(
           module
               .tagger
-              .toBuilder(parentCtx)
-              .put(RpcMeasureConstants.RPC_METHOD, TagValue.create(fullMethodName))
+              .toBuilder(startCtx)
               .put(RpcMeasureConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
               .build());
     }
@@ -315,12 +325,11 @@ public final class CensusStatsModule {
 
     private final CensusStatsModule module;
     private final String fullMethodName;
-    @Nullable
     private final TagContext parentCtx;
     private volatile int streamClosed;
     private final Stopwatch stopwatch;
     private final Tagger tagger;
-    private final boolean recordStats;
+    private final boolean recordFinishedRpcs;
     private volatile long outboundMessageCount;
     private volatile long inboundMessageCount;
     private volatile long outboundWireSize;
@@ -334,13 +343,18 @@ public final class CensusStatsModule {
         TagContext parentCtx,
         Supplier<Stopwatch> stopwatchSupplier,
         Tagger tagger,
-        boolean recordStats) {
+        boolean recordStartedRpcs,
+        boolean recordFinishedRpcs) {
       this.module = module;
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.stopwatch = stopwatchSupplier.get().start();
       this.tagger = tagger;
-      this.recordStats = recordStats;
+      this.recordFinishedRpcs = recordFinishedRpcs;
+      if (recordStartedRpcs) {
+        module.statsRecorder.newMeasureMap().put(RpcMeasureConstants.RPC_SERVER_STARTED_COUNT, 1)
+            .record(parentCtx);
+      }
     }
 
     @Override
@@ -384,13 +398,14 @@ public final class CensusStatsModule {
       if (streamClosedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      if (!recordStats) {
+      if (!recordFinishedRpcs) {
         return;
       }
       stopwatch.stop();
       long elapsedTimeNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
       MeasureMap measureMap = module.statsRecorder.newMeasureMap()
-          // The metrics are in double
+          .put(RpcMeasureConstants.RPC_SERVER_FINISHED_COUNT, 1)
+          // The latency is double value
           .put(RpcMeasureConstants.RPC_SERVER_SERVER_LATENCY, elapsedTimeNanos / NANOS_PER_MILLI)
           .put(RpcMeasureConstants.RPC_SERVER_RESPONSE_COUNT, outboundMessageCount)
           .put(RpcMeasureConstants.RPC_SERVER_REQUEST_COUNT, inboundMessageCount)
@@ -401,11 +416,10 @@ public final class CensusStatsModule {
       if (!status.isOk()) {
         measureMap.put(RpcMeasureConstants.RPC_SERVER_ERROR_COUNT, 1);
       }
-      TagContext ctx = firstNonNull(parentCtx, tagger.empty());
       measureMap.record(
           module
               .tagger
-              .toBuilder(ctx)
+              .toBuilder(parentCtx)
               .put(RpcMeasureConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
               .build());
     }
@@ -421,10 +435,12 @@ public final class CensusStatsModule {
 
   @VisibleForTesting
   final class ServerTracerFactory extends ServerStreamTracer.Factory {
-    private final boolean recordStats;
+    private final boolean recordStartedRpcs;
+    private final boolean recordFinishedRpcs;
 
-    ServerTracerFactory(boolean recordStats) {
-      this.recordStats = recordStats;
+    ServerTracerFactory(boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+      this.recordStartedRpcs = recordStartedRpcs;
+      this.recordFinishedRpcs = recordFinishedRpcs;
     }
 
     @Override
@@ -444,16 +460,19 @@ public final class CensusStatsModule {
           parentCtx,
           stopwatchSupplier,
           tagger,
-          recordStats);
+          recordStartedRpcs,
+          recordFinishedRpcs);
     }
   }
 
   @VisibleForTesting
   final class StatsClientInterceptor implements ClientInterceptor {
-    private final boolean recordStats;
+    private final boolean recordStartedRpcs;
+    private final boolean recordFinishedRpcs;
 
-    StatsClientInterceptor(boolean recordStats) {
-      this.recordStats = recordStats;
+    StatsClientInterceptor(boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+      this.recordStartedRpcs = recordStartedRpcs;
+      this.recordFinishedRpcs = recordFinishedRpcs;
     }
 
     @Override
@@ -462,7 +481,8 @@ public final class CensusStatsModule {
       // New RPCs on client-side inherit the tag context from the current Context.
       TagContext parentCtx = tagger.getCurrentTagContext();
       final ClientCallTracer tracerFactory =
-          newClientCallTracer(parentCtx, method.getFullMethodName(), recordStats);
+          newClientCallTracer(parentCtx, method.getFullMethodName(),
+              recordStartedRpcs, recordFinishedRpcs);
       ClientCall<ReqT, RespT> call =
           next.newCall(method, callOptions.withStreamTracerFactory(tracerFactory));
       return new SimpleForwardingClientCall<ReqT, RespT>(call) {

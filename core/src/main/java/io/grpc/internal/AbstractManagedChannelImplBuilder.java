@@ -144,7 +144,8 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   private boolean statsEnabled = true;
-  private boolean recordStats = true;
+  private boolean recordStartedRpcs = true;
+  private boolean recordFinishedRpcs = true;
   private boolean tracingEnabled = true;
 
   @Nullable
@@ -296,11 +297,19 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
-   * Disable or enable stats recording.  Effective only if {@link #setStatsEnabled} is set to true.
-   * Enabled by default.
+   * Disable or enable stats recording for RPC upstarts.  Effective only if {@link
+   * #setStatsEnabled} is set to true.  Enabled by default.
    */
-  protected void setRecordStats(boolean value) {
-    recordStats = value;
+  protected void setStatsRecordStartedRpcs(boolean value) {
+    recordStartedRpcs = value;
+  }
+
+  /**
+   * Disable or enable stats recording for RPC completions.  Effective only if {@link
+   * #setStatsEnabled} is set to true.  Enabled by default.
+   */
+  protected void setStatsRecordFinishedRpcs(boolean value) {
+    recordFinishedRpcs = value;
   }
 
   /**
@@ -348,7 +357,8 @@ public abstract class AbstractManagedChannelImplBuilder
       }
       // First interceptor runs last (see ClientInterceptors.intercept()), so that no
       // other interceptor can override the tracer factory we set in CallOptions.
-      effectiveInterceptors.add(0, censusStats.getClientInterceptor(recordStats));
+      effectiveInterceptors.add(
+          0, censusStats.getClientInterceptor(recordStartedRpcs, recordFinishedRpcs));
     }
     if (tracingEnabled) {
       CensusTracingModule censusTracing =

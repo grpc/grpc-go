@@ -103,7 +103,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   private CensusStatsModule censusStatsOverride;
 
   private boolean statsEnabled = true;
-  private boolean recordStats = true;
+  private boolean recordStartedRpcs = true;
+  private boolean recordFinishedRpcs = true;
   private boolean tracingEnabled = true;
 
   @Override
@@ -207,11 +208,19 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   /**
-   * Disable or enable stats recording.  Effective only if {@link #setStatsEnabled} is set to true.
-   * Enabled by default.
+   * Disable or enable stats recording for RPC upstarts.  Effective only if {@link
+   * #setStatsEnabled} is set to true.  Enabled by default.
    */
-  protected void setRecordStats(boolean value) {
-    recordStats = value;
+  protected void setStatsRecordStartedRpcs(boolean value) {
+    recordStartedRpcs = value;
+  }
+
+  /**
+   * Disable or enable stats recording for RPC completions.  Effective only if {@link
+   * #setStatsEnabled} is set to true.  Enabled by default.
+   */
+  protected void setStatsRecordFinishedRpcs(boolean value) {
+    recordFinishedRpcs = value;
   }
 
   /**
@@ -242,7 +251,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       if (censusStats == null) {
         censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
       }
-      tracerFactories.add(censusStats.getServerTracerFactory(recordStats));
+      tracerFactories.add(
+          censusStats.getServerTracerFactory(recordStartedRpcs, recordFinishedRpcs));
     }
     if (tracingEnabled) {
       CensusTracingModule censusTracing =

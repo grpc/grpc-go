@@ -104,6 +104,11 @@ public class StatsTestUtils {
       }
       return longValue;
     }
+
+    @Override
+    public String toString() {
+      return "[tags=" + tags + ", metrics=" + metrics + "]";
+    }
   }
 
   /**
