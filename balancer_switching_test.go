@@ -121,12 +121,12 @@ func TestSwitchBalancer(t *testing.T) {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
 	}
 	// Switch to roundrobin.
-	cc.handleServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	cc.handleServiceConfig(`{"loadBalancingPolicy": "roundrobin"}`)
 	if err := checkRoundRobin(cc, servers); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
 	}
 	// Switch to pickfirst.
-	cc.handleServiceConfig(`{"loadBalancingPolicy": ""pickfirst"}`)
+	cc.handleServiceConfig(`{"loadBalancingPolicy": "pickfirst"}`)
 	if err := checkPickFirst(cc, servers); err != nil {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
 	}
