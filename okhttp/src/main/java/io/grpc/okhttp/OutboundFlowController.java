@@ -73,19 +73,21 @@ class OutboundFlowController {
   }
 
   /**
-   * Update the outbound window for given stream, or for the connection if stream is null.
+   * Update the outbound window for given stream, or for the connection if stream is null. Returns
+   * the new value of the window size.
    *
    * <p>Must be called with holding transport lock.
    */
-  void windowUpdate(@Nullable OkHttpClientStream stream, int delta) {
+  int windowUpdate(@Nullable OkHttpClientStream stream, int delta) {
+    final int updatedWindow;
     if (stream == null) {
       // Update the connection window and write any pending frames for all streams.
-      connectionState.incrementStreamWindow(delta);
+      updatedWindow = connectionState.incrementStreamWindow(delta);
       writeStreams();
     } else {
       // Update the stream window and write any pending frames for the stream.
       OutboundFlowState state = state(stream);
-      state.incrementStreamWindow(delta);
+      updatedWindow = state.incrementStreamWindow(delta);
 
       WriteStatus writeStatus = new WriteStatus();
       state.writeBytes(state.writableWindow(), writeStatus);
@@ -93,6 +95,7 @@ class OutboundFlowController {
         flush();
       }
     }
+    return updatedWindow;
   }
 
   /**
