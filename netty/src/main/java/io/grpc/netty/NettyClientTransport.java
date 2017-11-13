@@ -86,7 +86,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   /** Since not thread-safe, may only be used from event loop. */
   private ClientTransportLifecycleManager lifecycleManager;
   /** Since not thread-safe, may only be used from event loop. */
-  private final TransportTracer transportTracer = new TransportTracer();
+  private final TransportTracer transportTracer;
 
   NettyClientTransport(
       SocketAddress address, Class<? extends Channel> channelType,
@@ -94,7 +94,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
       int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
       boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent,
-      Runnable tooManyPingsRunnable) {
+      Runnable tooManyPingsRunnable, TransportTracer transportTracer) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -110,6 +110,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
   }
 
   @Override

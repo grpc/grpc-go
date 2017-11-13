@@ -73,7 +73,8 @@ class NettyServerTransport implements ServerTransport {
 
   NettyServerTransport(
       Channel channel, ProtocolNegotiator protocolNegotiator,
-      List<ServerStreamTracer.Factory> streamTracerFactories, int maxStreams,
+      List<ServerStreamTracer.Factory> streamTracerFactories,
+      TransportTracer transportTracer, int maxStreams,
       int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
       long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
       long maxConnectionIdleInNanos,
@@ -83,6 +84,7 @@ class NettyServerTransport implements ServerTransport {
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.streamTracerFactories =
         Preconditions.checkNotNull(streamTracerFactories, "streamTracerFactories");
+    this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
@@ -94,7 +96,6 @@ class NettyServerTransport implements ServerTransport {
     this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
     this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
-    this.transportTracer = new TransportTracer();
   }
 
   public void start(ServerTransportListener listener) {

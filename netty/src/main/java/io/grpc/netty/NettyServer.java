@@ -26,6 +26,7 @@ import io.grpc.internal.InternalServer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.TransportTracer;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -72,11 +73,13 @@ class NettyServer implements InternalServer {
   private final long permitKeepAliveTimeInNanos;
   private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
+  private final TransportTracer.Factory transportTracerFactory;
 
   NettyServer(
       SocketAddress address, Class<? extends ServerChannel> channelType,
       @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
       ProtocolNegotiator protocolNegotiator, List<ServerStreamTracer.Factory> streamTracerFactories,
+      TransportTracer.Factory transportTracerFactory,
       int maxStreamsPerConnection, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
       long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
       long maxConnectionIdleInNanos,
@@ -90,6 +93,7 @@ class NettyServer implements InternalServer {
     this.streamTracerFactories = checkNotNull(streamTracerFactories, "streamTracerFactories");
     this.usingSharedBossGroup = bossGroup == null;
     this.usingSharedWorkerGroup = workerGroup == null;
+    this.transportTracerFactory = transportTracerFactory;
     this.maxStreamsPerConnection = maxStreamsPerConnection;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
@@ -142,7 +146,8 @@ class NettyServer implements InternalServer {
 
         NettyServerTransport transport =
             new NettyServerTransport(
-                ch, protocolNegotiator, streamTracerFactories, maxStreamsPerConnection,
+                ch, protocolNegotiator, streamTracerFactories, transportTracerFactory.create(),
+                maxStreamsPerConnection,
                 flowControlWindow, maxMessageSize, maxHeaderListSize,
                 keepAliveTimeInNanos, keepAliveTimeoutInNanos,
                 maxConnectionIdleInNanos,

@@ -124,6 +124,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
   long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
 
+  protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
+
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
   /**

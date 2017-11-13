@@ -22,6 +22,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
@@ -30,6 +31,7 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.TransportTracer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -202,6 +204,12 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   @Override
   protected void setStatsEnabled(boolean value) {
     super.setStatsEnabled(value);
+  }
+
+  @VisibleForTesting
+  NettyServerBuilder setTransportTracerFactory(TransportTracer.Factory transportTracerFactory) {
+    this.transportTracerFactory = transportTracerFactory;
+    return this;
   }
 
   /**
@@ -391,7 +399,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
     return new NettyServer(
         address, channelType, bossEventLoopGroup, workerEventLoopGroup,
-        negotiator, streamTracerFactories, maxConcurrentCallsPerConnection, flowControlWindow,
+        negotiator, streamTracerFactories, transportTracerFactory,
+        maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,

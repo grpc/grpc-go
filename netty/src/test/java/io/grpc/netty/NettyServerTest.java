@@ -22,6 +22,7 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.TransportTracer;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -42,6 +43,7 @@ public class NettyServerTest {
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
+        TransportTracer.getDefaultFactory(),
         1, // ignore
         1, // ignore
         1, // ignore
@@ -77,6 +79,7 @@ public class NettyServerTest {
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
+        TransportTracer.getDefaultFactory(),
         1, // ignore
         1, // ignore
         1, // ignore

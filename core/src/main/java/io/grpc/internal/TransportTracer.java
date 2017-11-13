@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.util.concurrent.TimeUnit;
 
@@ -24,6 +25,15 @@ import java.util.concurrent.TimeUnit;
  * Can only be called from the transport thread unless otherwise noted.
  */
 public final class TransportTracer {
+  private static final TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
+    @Override
+    public long currentTimeMillis() {
+      return System.currentTimeMillis();
+    }
+  };
+  private static final Factory DEFAULT_FACTORY = new Factory(SYSTEM_TIME_PROVIDER);
+
+  private final TimeProvider timeProvider;
   private long streamsStarted;
   private long lastStreamCreatedTimeNanos;
   private long streamsSucceeded;
@@ -36,6 +46,14 @@ public final class TransportTracer {
   // deframing happens on the application thread, and there's no easy way to avoid synchronization
   private final LongCounter messagesReceived = LongCounterFactory.create();
   private volatile long lastMessageReceivedTimeNanos;
+
+  public TransportTracer() {
+    this.timeProvider = SYSTEM_TIME_PROVIDER;
+  }
+
+  private TransportTracer(TimeProvider timeProvider) {
+    this.timeProvider = timeProvider;
+  }
 
   /**
    * Returns a read only set of current stats.
@@ -128,8 +146,8 @@ public final class TransportTracer {
     FlowControlWindows read();
   }
 
-  private static long currentTimeNanos() {
-    return TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis());
+  private long currentTimeNanos() {
+    return TimeUnit.MILLISECONDS.toNanos(timeProvider.currentTimeMillis());
   }
 
   /**
@@ -177,5 +195,32 @@ public final class TransportTracer {
         this.remoteFlowControlWindow = windows.remoteBytes;
       }
     }
+  }
+
+  /**
+   * Time source representing the current system time in millis. Used to inject a fake clock
+   * into unit tests.
+   */
+  @VisibleForTesting
+  public interface TimeProvider {
+    /** Returns the current milli time. */
+    long currentTimeMillis();
+  }
+
+  public static final class Factory {
+    private TimeProvider timeProvider;
+
+    @VisibleForTesting
+    public Factory(TimeProvider timeProvider) {
+      this.timeProvider = timeProvider;
+    }
+
+    public TransportTracer create() {
+      return new TransportTracer(timeProvider);
+    }
+  }
+
+  public static Factory getDefaultFactory() {
+    return DEFAULT_FACTORY;
   }
 }
