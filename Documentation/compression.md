@@ -12,11 +12,15 @@ it via the
 `CallOption`.  Remember that `CallOption`s may be turned into defaults for all
 calls from a `ClientConn` by using the
 [`WithDefaultCallOptions`](https://godoc.org/google.golang.org/grpc#WithDefaultCallOptions)
-`DialOption`.
+`DialOption`.  If `UseCompressor` is used and the corresponding compressor has
+not been installed, an `Internal` error will be returned to the application
+before the RPC is sent.
 
 Server-side, registered compressors will be used automatically to decode request
 messages and encode the responses.  Servers currently always respond using the
-same compression method specified by the client.
+same compression method specified by the client.  If the corresponding
+compressor has not been registered, an `Unimplemented` status will be returned
+to the client.
 
 ## Deprecated API
 

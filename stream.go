@@ -588,11 +588,10 @@ type serverStream struct {
 	p     *parser
 	codec Codec
 
-	cp        Compressor
-	dc        Decompressor
-	comp      encoding.Compressor
-	decomp    encoding.Compressor
-	decompSet bool
+	cp     Compressor
+	dc     Decompressor
+	comp   encoding.Compressor
+	decomp encoding.Compressor
 
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
@@ -667,18 +666,6 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
-	if !ss.decompSet {
-		if ct := ss.s.RecvCompress(); ct != "" && ct != encoding.Identity {
-			if ss.dc == nil || ss.dc.Type() != ct {
-				ss.dc = nil
-				ss.decomp = encoding.GetCompressor(ct)
-			}
-		} else {
-			// No compression is used; disable our decompressor.
-			ss.dc = nil
-		}
-		ss.decompSet = true
-	}
 
 	defer func() {
 		if ss.trInfo != nil {

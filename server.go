@@ -731,22 +731,12 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
+func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	var (
 		outPayload *stats.OutPayload
 	)
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
-	}
-	// Set comp if cp is not set and a registered compressor matches the
-	// request's encoding.
-	var comp encoding.Compressor
-	if cp == nil && stream.RecvCompress() != "" && stream.RecvCompress() != encoding.Identity {
-		comp = encoding.GetCompressor(stream.RecvCompress())
-		if comp == nil {
-			// This should be impossible; we decompressed the request message already using it.
-			return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", stream.RecvCompress())
-		}
 	}
 	hdr, data, err := encode(s.opts.codec, msg, cp, outPayload, comp)
 	if err != nil {
@@ -803,12 +793,15 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
-	if rc := stream.RecvCompress(); s.opts.dc == nil || s.opts.dc.Type() != rc {
-		if rc != "" && rc != encoding.Identity {
-			decomp = encoding.GetCompressor(rc)
-		}
-	} else {
+	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
 		dc = s.opts.dc
+	} else if rc != "" && rc != encoding.Identity {
+		decomp = encoding.GetCompressor(rc)
+		if decomp == nil {
+			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
+			t.WriteStatus(stream, st)
+			return st.Err()
+		}
 	}
 
 	// If cp is set, use it.  Otherwise, attempt to compress the response using
@@ -872,13 +865,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if pf == compressionMade {
 			var err error
-			if s.opts.dc != nil {
-				req, err = s.opts.dc.Do(bytes.NewReader(req))
+			if dc != nil {
+				req, err = dc.Do(bytes.NewReader(req))
 				if err != nil {
 					return Errorf(codes.Internal, err.Error())
 				}
 			} else {
-				tmp, _ := comp.Decompress(bytes.NewReader(req))
+				tmp, _ := decomp.Decompress(bytes.NewReader(req))
 				req, err = ioutil.ReadAll(tmp)
 				if err != nil {
 					return Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
@@ -928,7 +921,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		Last:  true,
 		Delay: false,
 	}
-	if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
+
+	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -982,30 +976,40 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		s:     stream,
 		p:     &parser{r: stream},
 		codec: s.opts.codec,
-		cp:    s.opts.cp,
-		dc:    s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
 		statsHandler:          sh,
 	}
-	// If cp is set, use it.  Otherwise, if dc is also not set, attempt to
-	// decompress the requests and compress the response using a registered
-	// compressor.
-	if s.opts.cp != nil {
-		stream.SetSendCompress(s.opts.cp.Type())
-	} else if s.opts.dc == nil {
-		// No legacy compressor OR decompressor; use encoding package.
-		if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
-			stream.SetSendCompress(rc)
-			ss.comp = encoding.GetCompressor(rc)
-			if ss.comp == nil {
-				st := status.Newf(codes.Unimplemented, "grpc: Compressor is not installed for grpc-encoding %q", rc)
-				t.WriteStatus(ss.s, st)
-				return st.Err()
-			}
+
+	// If dc is set and matches the stream's compression, use it.  Otherwise, try
+	// to find a matching registered compressor for decomp.
+	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
+		ss.dc = s.opts.dc
+	} else if rc != "" && rc != encoding.Identity {
+		ss.decomp = encoding.GetCompressor(rc)
+		if ss.decomp == nil {
+			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
+			t.WriteStatus(ss.s, st)
+			return st.Err()
 		}
 	}
+
+	// If cp is set, use it.  Otherwise, attempt to compress the response using
+	// the incoming message compression method.
+	//
+	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
+	if s.opts.cp != nil {
+		ss.cp = s.opts.cp
+		stream.SetSendCompress(s.opts.cp.Type())
+	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
+		// Legacy compressor not specified; attempt to respond with same encoding.
+		ss.comp = encoding.GetCompressor(rc)
+		if ss.comp != nil {
+			stream.SetSendCompress(rc)
+		}
+	}
+
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		defer func() {

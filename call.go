@@ -66,12 +66,10 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		// otherwise set comp if a registered compressor exists for it.
 		var comp encoding.Compressor
 		var dc Decompressor
-		if rc := stream.RecvCompress(); dopts.dc == nil || dopts.dc.Type() != rc {
-			if rc != "" && rc != encoding.Identity {
-				comp = encoding.GetCompressor(rc)
-			}
-		} else {
+		if rc := stream.RecvCompress(); dopts.dc != nil && dopts.dc.Type() == rc {
 			dc = dopts.dc
+		} else if rc != "" && rc != encoding.Identity {
+			comp = encoding.GetCompressor(rc)
 		}
 		if err = recv(p, dopts.codec, stream, dc, reply, *c.maxReceiveMessageSize, inPayload, comp); err != nil {
 			if err == io.EOF {
