@@ -817,12 +817,12 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 		return err
 	}
 	cc.mu.Lock()
-	defer cc.mu.Unlock()
 	cc.scRaw = js
 	cc.sc = sc
 	if sc.LB != nil {
 		cc.switchBalancer(*sc.LB)
 	}
+	cc.mu.Unlock()
 	return nil
 }
 
