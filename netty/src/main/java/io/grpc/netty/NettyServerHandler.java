@@ -774,7 +774,8 @@ class NettyServerHandler extends AbstractNettyHandler {
     @Override
     public void ping() {
       ChannelFuture pingFuture = encoder().writePing(
-          ctx, false /* isAck */, KEEPALIVE_PING_BUF, ctx.newPromise());
+          // slice KEEPALIVE_PING_BUF because tls handler may modify the reader index
+          ctx, false /* isAck */, KEEPALIVE_PING_BUF.slice(), ctx.newPromise());
       ctx.flush();
       if (transportTracer != null) {
         pingFuture.addListener(new ChannelFutureListener() {
