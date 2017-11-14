@@ -70,5 +70,9 @@ public final class InternalNettyChannelBuilder {
     builder.setTracingEnabled(value);
   }
 
+  public static void setStatsRecordStartedRpcs(NettyChannelBuilder builder, boolean value) {
+    builder.setStatsRecordStartedRpcs(value);
+  }
+
   private InternalNettyChannelBuilder() {}
 }

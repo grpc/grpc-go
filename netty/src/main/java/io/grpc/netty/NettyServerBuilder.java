@@ -206,6 +206,11 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     super.setStatsEnabled(value);
   }
 
+  @Override
+  protected void setStatsRecordStartedRpcs(boolean value) {
+    super.setStatsRecordStartedRpcs(value);
+  }
+
   @VisibleForTesting
   NettyServerBuilder setTransportTracerFactory(TransportTracer.Factory transportTracerFactory) {
     this.transportTracerFactory = transportTracerFactory;

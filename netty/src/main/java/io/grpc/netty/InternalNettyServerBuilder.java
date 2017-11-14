@@ -29,6 +29,10 @@ public final class InternalNettyServerBuilder {
     builder.setStatsEnabled(value);
   }
 
+  public static void setStatsRecordStartedRpcs(NettyServerBuilder builder, boolean value) {
+    builder.setStatsRecordStartedRpcs(value);
+  }
+
   public static void setTracingEnabled(NettyServerBuilder builder, boolean value) {
     builder.setTracingEnabled(value);
   }
