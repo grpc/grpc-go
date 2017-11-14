@@ -4202,6 +4202,50 @@ func TestServerCredsDispatch(t *testing.T) {
 	}
 }
 
+type clientFailCreds struct {
+	got string
+}
+
+func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *clientFailCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, fmt.Errorf("client handshake fails with fatal error")
+}
+func (c *clientFailCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *clientFailCreds) Clone() credentials.TransportCredentials {
+	return c
+}
+func (c *clientFailCreds) OverrideServerName(s string) error {
+	return nil
+}
+
+// This test makes sure that failfast RPCs fail if client handshake fails with
+// fatal errors.
+func TestFailfastRPCFailOnFatalHandshakeError(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+
+	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(&clientFailCreds{}))
+	if err != nil {
+		t.Fatalf("grpc.Dial(_) = %v", err)
+	}
+	defer cc.Close()
+
+	tc := testpb.NewTestServiceClient(cc)
+	// This unary call should fail, but not timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(true)); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want <Unavailable>", err)
+	}
+}
+
 func TestFlowControlLogicalRace(t *testing.T) {
 	// Test for a regression of https://github.com/grpc/grpc-go/issues/632,
 	// and other flow control bugs.
