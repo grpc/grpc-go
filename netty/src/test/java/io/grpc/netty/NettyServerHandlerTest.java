@@ -29,6 +29,7 @@ import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
 import static io.netty.buffer.Unpooled.directBuffer;
+import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -53,6 +54,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.common.truth.Truth;
 import io.grpc.Attributes;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
@@ -109,6 +111,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public final Timeout globalTimeout = Timeout.seconds(1);
 
   private static final int STREAM_ID = 3;
+
+  private static final AsciiString HTTP_FAKE_METHOD = AsciiString.of("FAKE");
+
 
   @Mock
   private ServerStreamListener streamListener;
@@ -406,14 +411,76 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void headersWithInvalidContentTypeShouldFail() throws Exception {
     manualSetUp();
     Http2Headers headers = new DefaultHttp2Headers()
-            .method(HTTP_METHOD)
-            .set(CONTENT_TYPE_HEADER, new AsciiString("application/bad", UTF_8))
-            .set(TE_HEADER, TE_TRAILERS)
-            .path(new AsciiString("/foo/bar"));
+        .method(HTTP_METHOD)
+        .set(CONTENT_TYPE_HEADER, new AsciiString("application/bad", UTF_8))
+        .set(TE_HEADER, TE_TRAILERS)
+        .path(new AsciiString("/foo/bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     channelRead(headersFrame);
-    verifyWrite().writeRstStream(eq(ctx()), eq(STREAM_ID), eq(Http2Error.REFUSED_STREAM.code()),
-        any(ChannelPromise.class));
+    Http2Headers responseHeaders = new DefaultHttp2Headers()
+        .set(InternalStatus.CODE_KEY.name(), String.valueOf(Code.INTERNAL.value()))
+        .set(InternalStatus.MESSAGE_KEY.name(), "Content-Type 'application/bad' is not supported")
+        .status("" + 415)
+        .set(CONTENT_TYPE_HEADER, "text/plain; encoding=utf-8");
+
+    verifyWrite().writeHeaders(eq(ctx()), eq(STREAM_ID), eq(responseHeaders), eq(0),
+        eq(DEFAULT_PRIORITY_WEIGHT), eq(false), eq(0), eq(false), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void headersWithInvalidMethodShouldFail() throws Exception {
+    manualSetUp();
+    Http2Headers headers = new DefaultHttp2Headers()
+        .method(HTTP_FAKE_METHOD)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
+        .path(new AsciiString("/foo/bar"));
+    ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
+    channelRead(headersFrame);
+    Http2Headers responseHeaders = new DefaultHttp2Headers()
+        .set(InternalStatus.CODE_KEY.name(), String.valueOf(Code.INTERNAL.value()))
+        .set(InternalStatus.MESSAGE_KEY.name(), "Method 'FAKE' is not supported")
+        .status("" + 405)
+        .set(CONTENT_TYPE_HEADER, "text/plain; encoding=utf-8");
+
+    verifyWrite().writeHeaders(eq(ctx()), eq(STREAM_ID), eq(responseHeaders), eq(0),
+        eq(DEFAULT_PRIORITY_WEIGHT), eq(false), eq(0), eq(false), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void headersWithMissingPathShouldFail() throws Exception {
+    manualSetUp();
+    Http2Headers headers = new DefaultHttp2Headers()
+        .method(HTTP_METHOD)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
+    ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
+    channelRead(headersFrame);
+    Http2Headers responseHeaders = new DefaultHttp2Headers()
+        .set(InternalStatus.CODE_KEY.name(), String.valueOf(Code.UNIMPLEMENTED.value()))
+        .set(InternalStatus.MESSAGE_KEY.name(), "Expected path but is missing")
+        .status("" + 404)
+        .set(CONTENT_TYPE_HEADER, "text/plain; encoding=utf-8");
+
+    verifyWrite().writeHeaders(eq(ctx()), eq(STREAM_ID), eq(responseHeaders), eq(0),
+        eq(DEFAULT_PRIORITY_WEIGHT), eq(false), eq(0), eq(false), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void headersWithInvalidPathShouldFail() throws Exception {
+    manualSetUp();
+    Http2Headers headers = new DefaultHttp2Headers()
+        .method(HTTP_METHOD)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
+        .path(new AsciiString("foo/bar"));
+    ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
+    channelRead(headersFrame);
+    Http2Headers responseHeaders = new DefaultHttp2Headers()
+        .set(InternalStatus.CODE_KEY.name(), String.valueOf(Code.UNIMPLEMENTED.value()))
+        .set(InternalStatus.MESSAGE_KEY.name(), "Expected path to start with /: foo/bar")
+        .status("" + 404)
+        .set(CONTENT_TYPE_HEADER, "text/plain; encoding=utf-8");
+
+    verifyWrite().writeHeaders(eq(ctx()), eq(STREAM_ID), eq(responseHeaders), eq(0),
+        eq(DEFAULT_PRIORITY_WEIGHT), eq(false), eq(0), eq(false), any(ChannelPromise.class));
   }
 
   @Test

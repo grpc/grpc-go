@@ -32,6 +32,8 @@ import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAU
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
+import io.grpc.InternalMetadata;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
@@ -54,6 +56,7 @@ import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2RemoteFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
@@ -375,15 +378,49 @@ class NettyServerHandler extends AbstractNettyHandler {
       throws Http2Exception {
     if (!teWarningLogged && !TE_TRAILERS.equals(headers.get(TE_HEADER))) {
       logger.warning(String.format("Expected header TE: %s, but %s is received. This means "
-            + "some intermediate proxy may not support trailers",
-            TE_TRAILERS, headers.get(TE_HEADER)));
+              + "some intermediate proxy may not support trailers",
+          TE_TRAILERS, headers.get(TE_HEADER)));
       teWarningLogged = true;
     }
 
     try {
+
+      // Remove the leading slash of the path and get the fully qualified method name
+      CharSequence path = headers.path();
+
+      if (path == null) {
+        respondWithHttpError(ctx, streamId, 404, Status.Code.UNIMPLEMENTED,
+            "Expected path but is missing");
+        return;
+      }
+
+      if (path.charAt(0) != '/') {
+        respondWithHttpError(ctx, streamId, 404, Status.Code.UNIMPLEMENTED,
+            String.format("Expected path to start with /: %s", path));
+        return;
+      }
+
+      String method = path.subSequence(1, path.length()).toString();
+
       // Verify that the Content-Type is correct in the request.
-      verifyContentType(streamId, headers);
-      String method = determineMethod(streamId, headers);
+      CharSequence contentType = headers.get(CONTENT_TYPE_HEADER);
+      if (contentType == null) {
+        respondWithHttpError(
+            ctx, streamId, 415, Status.Code.INTERNAL, "Content-Type is missing from the request");
+        return;
+      }
+      String contentTypeString = contentType.toString();
+      if (!GrpcUtil.isGrpcContentType(contentTypeString)) {
+        respondWithHttpError(ctx, streamId, 415, Status.Code.INTERNAL,
+            String.format("Content-Type '%s' is not supported", contentTypeString));
+        return;
+      }
+
+      if (!HTTP_METHOD.equals(headers.method())) {
+        respondWithHttpError(ctx, streamId, 405, Status.Code.INTERNAL,
+            String.format("Method '%s' is not supported", headers.method()));
+        return;
+      }
 
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
       // method.
@@ -400,7 +437,7 @@ class NettyServerHandler extends AbstractNettyHandler {
           maxMessageSize,
           statsTraceCtx,
           transportTracer);
-      String authority = getOrUpdateAuthority((AsciiString)headers.authority());
+      String authority = getOrUpdateAuthority((AsciiString) headers.authority());
       NettyServerStream stream = new NettyServerStream(
           ctx.channel(),
           state,
@@ -411,10 +448,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       transportListener.streamCreated(stream, method, metadata);
       state.onStreamAllocated();
       http2Stream.setProperty(streamKey, state);
-
-    } catch (Http2Exception e) {
-      throw e;
-    } catch (Throwable e) {
+    } catch (Exception e) {
       logger.log(Level.WARNING, "Exception in onHeadersRead()", e);
       // Throw an exception that will get handled by onStreamError.
       throw newStreamException(streamId, e);
@@ -634,17 +668,22 @@ class NettyServerHandler extends AbstractNettyHandler {
     });
   }
 
-  private void verifyContentType(int streamId, Http2Headers headers) throws Http2Exception {
-    CharSequence contentType = headers.get(CONTENT_TYPE_HEADER);
-    if (contentType == null) {
-      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Content-Type is missing from the request");
+  private void respondWithHttpError(
+      ChannelHandlerContext ctx, int streamId, int code, Status.Code statusCode, String msg) {
+    Metadata metadata = new Metadata();
+    metadata.put(InternalStatus.CODE_KEY, statusCode.toStatus());
+    metadata.put(InternalStatus.MESSAGE_KEY, msg);
+    byte[][] serialized = InternalMetadata.serialize(metadata);
+
+    Http2Headers headers = new DefaultHttp2Headers(true, serialized.length / 2)
+        .status("" + code)
+        .set(CONTENT_TYPE_HEADER, "text/plain; encoding=utf-8");
+    for (int i = 0; i < serialized.length; i += 2) {
+      headers.add(new AsciiString(serialized[i], false), new AsciiString(serialized[i + 1], false));
     }
-    String contentTypeString = contentType.toString();
-    if (!GrpcUtil.isGrpcContentType(contentTypeString)) {
-      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Content-Type '%s' is not supported", contentTypeString);
-    }
+    encoder().writeHeaders(ctx, streamId, headers, 0, false, ctx.newPromise());
+    ByteBuf msgBuf = ByteBufUtil.writeUtf8(ctx.alloc(), msg);
+    encoder().writeData(ctx, streamId, msgBuf, 0, true, ctx.newPromise());
   }
 
   private Http2Stream requireHttp2Stream(int streamId) {
@@ -654,20 +693,6 @@ class NettyServerHandler extends AbstractNettyHandler {
       throw new AssertionError("Stream does not exist: " + streamId);
     }
     return stream;
-  }
-
-  private String determineMethod(int streamId, Http2Headers headers) throws Http2Exception {
-    if (!HTTP_METHOD.equals(headers.method())) {
-      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Method '%s' is not supported", headers.method());
-    }
-    // Remove the leading slash of the path and get the fully qualified method name
-    CharSequence path = headers.path();
-    if (path.charAt(0) != '/') {
-      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Malformatted path: %s", path);
-    }
-    return path.subSequence(1, path.length()).toString();
   }
 
   /**
