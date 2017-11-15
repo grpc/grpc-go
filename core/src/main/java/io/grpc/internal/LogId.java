@@ -25,7 +25,8 @@ public final class LogId {
   private static final AtomicLong idAlloc = new AtomicLong();
 
   /**
-   * @param tag a loggable tag associated with this ID.
+   * @param tag a loggable tag associated with this tag. The ID that is allocated is guaranteed
+   *            to be unique and increasing, irrespective of the tag.
    */
   public static LogId allocate(String tag) {
     return new LogId(tag, idAlloc.incrementAndGet());

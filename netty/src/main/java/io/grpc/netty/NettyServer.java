@@ -23,10 +23,12 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
+import io.grpc.internal.LogId;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.TransportTracer;
+import io.grpc.internal.WithLogId;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -48,9 +50,10 @@ import javax.annotation.Nullable;
 /**
  * Netty-based server implementation.
  */
-class NettyServer implements InternalServer {
+class NettyServer implements InternalServer, WithLogId {
   private static final Logger log = Logger.getLogger(InternalServer.class.getName());
 
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
   private final ProtocolNegotiator protocolNegotiator;
@@ -216,6 +219,11 @@ class NettyServer implements InternalServer {
     if (workerGroup == null) {
       workerGroup = SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP);
     }
+  }
+
+  @Override
+  public LogId getLogId() {
+    return logId;
   }
 
   class EventLoopReferenceCounter extends AbstractReferenceCounted {
