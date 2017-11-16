@@ -37,8 +37,24 @@ public final class SerializingExecutor implements Executor, Runnable {
   private static final Logger log =
       Logger.getLogger(SerializingExecutor.class.getName());
 
-  private static final AtomicIntegerFieldUpdater<SerializingExecutor> runStateUpdater =
-      AtomicIntegerFieldUpdater.newUpdater(SerializingExecutor.class, "runState");
+  // When using Atomic*FieldUpdater, some Samsung Android 5.0.x devices encounter a bug in their JDK
+  // reflection API that triggers a NoSuchFieldException. When this occurs, fallback to a
+  // synchronized implementation.
+  private static final AtomicHelper atomicHelper = getAtomicHelper();
+
+  private static AtomicHelper getAtomicHelper() {
+    AtomicHelper helper;
+    try {
+      helper =
+          new FieldUpdaterAtomicHelper(
+              AtomicIntegerFieldUpdater.newUpdater(SerializingExecutor.class, "runState"));
+    } catch (Throwable t) {
+      log.log(Level.SEVERE, "FieldUpdaterAtomicHelper failed", t);
+      helper = new SynchronizedAtomicHelper();
+    }
+    return helper;
+  }
+
   private static final int STOPPED = 0;
   private static final int RUNNING = -1;
 
@@ -71,7 +87,7 @@ public final class SerializingExecutor implements Executor, Runnable {
   }
 
   private void schedule(@Nullable Runnable removable) {
-    if (runStateUpdater.compareAndSet(this, STOPPED, RUNNING)) {
+    if (atomicHelper.runStateCompareAndSet(this, STOPPED, RUNNING)) {
       boolean success = false;
       try {
         executor.execute(this);
@@ -92,7 +108,7 @@ public final class SerializingExecutor implements Executor, Runnable {
             // to execute don't succeed and accidentally run a previous runnable.
             runQueue.remove(removable);
           }
-          runStateUpdater.set(this, STOPPED);
+          atomicHelper.runStateSet(this, STOPPED);
         }
       }
     }
@@ -111,11 +127,56 @@ public final class SerializingExecutor implements Executor, Runnable {
         }
       }
     } finally {
-      runStateUpdater.set(this, STOPPED);
+      atomicHelper.runStateSet(this, STOPPED);
     }
     if (!runQueue.isEmpty()) {
       // we didn't enqueue anything but someone else did.
       schedule(null);
+    }
+  }
+
+  private abstract static class AtomicHelper {
+    public abstract boolean runStateCompareAndSet(SerializingExecutor obj, int expect, int update);
+
+    public abstract void runStateSet(SerializingExecutor obj, int newValue);
+  }
+
+  private static final class FieldUpdaterAtomicHelper extends AtomicHelper {
+    private final AtomicIntegerFieldUpdater<SerializingExecutor> runStateUpdater;
+
+    private FieldUpdaterAtomicHelper(
+        AtomicIntegerFieldUpdater<SerializingExecutor> runStateUpdater) {
+      this.runStateUpdater = runStateUpdater;
+    }
+
+    @Override
+    public boolean runStateCompareAndSet(SerializingExecutor obj, int expect, int update) {
+      return runStateUpdater.compareAndSet(obj, expect, update);
+    }
+
+    @Override
+    public void runStateSet(SerializingExecutor obj, int newValue) {
+      runStateUpdater.set(obj, newValue);
+    }
+  }
+
+  private static final class SynchronizedAtomicHelper extends AtomicHelper {
+    @Override
+    public boolean runStateCompareAndSet(SerializingExecutor obj, int expect, int update) {
+      synchronized (obj) {
+        if (obj.runState == expect) {
+          obj.runState = update;
+          return true;
+        }
+        return false;
+      }
+    }
+
+    @Override
+    public void runStateSet(SerializingExecutor obj, int newValue) {
+      synchronized (obj) {
+        obj.runState = newValue;
+      }
     }
   }
 }

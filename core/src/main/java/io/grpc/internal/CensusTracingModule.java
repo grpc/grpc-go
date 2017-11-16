@@ -58,10 +58,32 @@ import javax.annotation.Nullable;
  */
 final class CensusTracingModule {
   private static final Logger logger = Logger.getLogger(CensusTracingModule.class.getName());
-  private static final AtomicIntegerFieldUpdater<ClientCallTracer> callEndedUpdater =
-      AtomicIntegerFieldUpdater.newUpdater(ClientCallTracer.class, "callEnded");
-  private static final AtomicIntegerFieldUpdater<ServerTracer> streamClosedUpdater =
-      AtomicIntegerFieldUpdater.newUpdater(ServerTracer.class, "streamClosed");
+
+  @Nullable private static final AtomicIntegerFieldUpdater<ClientCallTracer> callEndedUpdater;
+
+  @Nullable private static final AtomicIntegerFieldUpdater<ServerTracer> streamClosedUpdater;
+
+  /**
+   * When using Atomic*FieldUpdater, some Samsung Android 5.0.x devices encounter a bug in their JDK
+   * reflection API that triggers a NoSuchFieldException. When this occurs, we fallback to
+   * (potentially racy) direct updates of the volatile variables.
+   */
+  static {
+    AtomicIntegerFieldUpdater<ClientCallTracer> tmpCallEndedUpdater;
+    AtomicIntegerFieldUpdater<ServerTracer> tmpStreamClosedUpdater;
+    try {
+      tmpCallEndedUpdater =
+          AtomicIntegerFieldUpdater.newUpdater(ClientCallTracer.class, "callEnded");
+      tmpStreamClosedUpdater =
+          AtomicIntegerFieldUpdater.newUpdater(ServerTracer.class, "streamClosed");
+    } catch (Throwable t) {
+      logger.log(Level.SEVERE, "Creating atomic field updaters failed", t);
+      tmpCallEndedUpdater = null;
+      tmpStreamClosedUpdater = null;
+    }
+    callEndedUpdater = tmpCallEndedUpdater;
+    streamClosedUpdater = tmpStreamClosedUpdater;
+  }
 
   private final Tracer censusTracer;
   @VisibleForTesting
@@ -232,8 +254,15 @@ final class CensusTracingModule {
      * is a no-op.
      */
     void callEnded(io.grpc.Status status) {
-      if (callEndedUpdater.getAndSet(this, 1) != 0) {
-        return;
+      if (callEndedUpdater != null) {
+        if (callEndedUpdater.getAndSet(this, 1) != 0) {
+          return;
+        }
+      } else {
+        if (callEnded != 0) {
+          return;
+        }
+        callEnded = 1;
       }
       span.end(createEndSpanOptions(status, isSampledToLocalTracing));
     }
@@ -291,8 +320,15 @@ final class CensusTracingModule {
      */
     @Override
     public void streamClosed(io.grpc.Status status) {
-      if (streamClosedUpdater.getAndSet(this, 1) != 0) {
-        return;
+      if (streamClosedUpdater != null) {
+        if (streamClosedUpdater.getAndSet(this, 1) != 0) {
+          return;
+        }
+      } else {
+        if (streamClosed != 0) {
+          return;
+        }
+        streamClosed = 1;
       }
       span.end(createEndSpanOptions(status, isSampledToLocalTracing));
     }
