@@ -100,7 +100,7 @@ public final class ServiceDescriptor {
    * @since 1.1.0
    */
   @Nullable
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2666")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
   public Object getSchemaDescriptor() {
     return schemaDescriptor;
   }
