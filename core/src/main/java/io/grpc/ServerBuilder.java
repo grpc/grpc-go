@@ -136,7 +136,6 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * @return this
    * @since 1.0.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
   public abstract T fallbackHandlerRegistry(@Nullable HandlerRegistry fallbackRegistry);
 
   /**
