@@ -86,8 +86,8 @@ def grpc_java_repositories(
 def com_google_api_grpc_google_common_protos():
   native.maven_jar(
       name = "com_google_api_grpc_proto_google_common_protos",
-      artifact = "com.google.api.grpc:proto-google-common-protos:0.1.9",
-      sha1 = "3760f6a6e13c8ab070aa629876cdd183614ee877",
+      artifact = "com.google.api.grpc:proto-google-common-protos:1.0.0",
+      sha1 = "de4e859c3530f7e9f854e40b0a8b7074d95e3aff",
   )
 
 def com_google_code_findbugs_jsr305():

@@ -25,7 +25,7 @@ repositories {
 def grpcVersion = '1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 dependencies {
-  compile "com.google.api.grpc:proto-google-common-protos:0.1.9"
+  compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
   compile "io.grpc:grpc-netty:${grpcVersion}"
   compile "io.grpc:grpc-protobuf:${grpcVersion}"
   compile "io.grpc:grpc-stub:${grpcVersion}"
