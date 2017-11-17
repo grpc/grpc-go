@@ -73,9 +73,6 @@ public abstract class ManagedChannel extends Channel {
   /**
    * Gets the current connectivity state. Note the result may soon become outdated.
    *
-   * <p><strong>Warning</strong>: this API is not yet implemented by the gRPC library (<a
-   * href="https://github.com/grpc/grpc-java/issues/2292" target="_blank">issue on github</a>).
-   *
    * @param requestConnection if {@code true}, the channel will try to make a connection if it is
    *        currently IDLE
    * @throws UnsupportedOperationException if not supported by implementation
@@ -91,9 +88,6 @@ public abstract class ManagedChannel extends Channel {
    * from the given {@code source}, which is typically what has just been returned by {@link
    * #getState}.  If the states are already different, the callback will be called immediately.  The
    * callback is run in the same executor that runs Call listeners.
-   *
-   * <p><strong>Warning</strong>: this API is not yet implemented by the gRPC library (<a
-   * href="https://github.com/grpc/grpc-java/issues/2292" target="_blank">issue on github</a>).
    *
    * @param source the assumed current state, typically just returned by {@link #getState}
    * @param callback the one-off callback
