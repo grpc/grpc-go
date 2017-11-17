@@ -643,8 +643,6 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 
 // switchBalancer starts the switching from current balancer to the balancer with name.
 func (cc *ClientConn) switchBalancer(name string) {
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
 	if cc.conns == nil {
 		return
 	}
@@ -818,6 +816,9 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	cc.mu.Lock()
 	cc.scRaw = js
 	cc.sc = sc
+	if sc.LB != nil {
+		cc.switchBalancer(*sc.LB)
+	}
 	cc.mu.Unlock()
 	return nil
 }

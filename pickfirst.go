@@ -37,7 +37,7 @@ func (*pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions
 }
 
 func (*pickfirstBuilder) Name() string {
-	return "pickfirst"
+	return "pick_first"
 }
 
 type pickfirstBalancer struct {

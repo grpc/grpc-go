@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/test/leakcheck"
 )
 
-var rr = balancer.Get("roundrobin")
+var rr = balancer.Get("round_robin")
 
 type testServer struct {
 	testpb.TestServiceServer

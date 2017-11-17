@@ -377,7 +377,7 @@ type env struct {
 	network      string // The type of network such as tcp, unix, etc.
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
-	balancer     string // One of "roundrobin", "pickfirst", "v1", or "".
+	balancer     string // One of "round_robin", "pick_first", "v1", or "".
 	customDialer func(string, string, time.Duration) (net.Conn, error)
 }
 
@@ -398,9 +398,9 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 var (
 	tcpClearEnv   = env{name: "tcp-clear-v1-balancer", network: "tcp", balancer: "v1"}
 	tcpTLSEnv     = env{name: "tcp-tls-v1-balancer", network: "tcp", security: "tls", balancer: "v1"}
-	tcpClearRREnv = env{name: "tcp-clear", network: "tcp", balancer: "roundrobin"}
-	tcpTLSRREnv   = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: "roundrobin"}
-	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: "roundrobin"}
+	tcpClearRREnv = env{name: "tcp-clear", network: "tcp", balancer: "round_robin"}
+	tcpTLSRREnv   = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: "round_robin"}
+	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: "round_robin"}
 	noBalancerEnv = env{name: "no-balancer", network: "tcp", security: "tls"}
 	allEnv        = []env{tcpClearEnv, tcpTLSEnv, tcpClearRREnv, tcpTLSRREnv, handlerEnv, noBalancerEnv}
 )
@@ -682,7 +682,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	default:
 		opts = append(opts, grpc.WithInsecure())
 	}
-	// TODO(bar) switch balancer case "pickfirst".
+	// TODO(bar) switch balancer case "pick_first".
 	var scheme string
 	if te.resolverScheme == "" {
 		scheme = "passthrough:///"
@@ -692,8 +692,8 @@ func (te *test) clientConn() *grpc.ClientConn {
 	switch te.e.balancer {
 	case "v1":
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
-	case "roundrobin":
-		rr := balancer.Get("roundrobin")
+	case "round_robin":
+		rr := balancer.Get("round_robin")
 		if rr == nil {
 			te.t.Fatalf("got nil when trying to get roundrobin balancer builder")
 		}
