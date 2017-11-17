@@ -666,7 +666,6 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
-
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
