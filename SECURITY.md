@@ -320,14 +320,13 @@ Below are known to work version combinations:
 
 grpc-netty version | netty-code-http2 version | netty-tcnative-boringssl-static version
 ------------------ | ------------------------ | ---------------------------------------
-1.0.0              | 4.1.3.Final              | 1.1.33.Fork19
-1.1.0              | 4.1.8.Final              | 1.1.33.Fork26
-1.2.0              | 4.1.8.Final              | 1.1.33.Fork26
-1.3.0              | 4.1.8.Final              | 1.1.33.Fork26
-1.4.0              | 4.1.11.Final             | 2.0.1.Final
-1.5.0              | 4.1.12.Final             | 2.0.5.Final
-1.6.1              | 4.1.14.Final             | 2.0.5.Final
-1.7.0              | 4.1.16.Final             | 2.0.6.Final
+1.0.0-1.0.1        | 4.1.3.Final              | 1.1.33.Fork19
+1.0.2-1.0.3        | 4.1.6.Final              | 1.1.33.Fork23
+1.1.x-1.3.x        | 4.1.8.Final              | 1.1.33.Fork26
+1.4.x              | 4.1.11.Final             | 2.0.1.Final
+1.5.x              | 4.1.12.Final             | 2.0.5.Final
+1.6.x              | 4.1.14.Final             | 2.0.5.Final
+1.7.x-             | 4.1.16.Final             | 2.0.6.Final
 
 ### OkHttp
 If you are using gRPC on Android devices, you are most likely using `grpc-okhttp` transport.
