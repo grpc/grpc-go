@@ -154,7 +154,13 @@ class Utils {
       // ClosedChannelException is used any time the Netty channel is closed. Proper error
       // processing requires remembering the error that occurred before this one and using it
       // instead.
-      return Status.UNKNOWN.withCause(t);
+      //
+      // Netty uses an exception that has no stack trace, while we would never hope to show this to
+      // users, if it happens having the extra information may provide a small hint of where to
+      // look.
+      ClosedChannelException extraT = new ClosedChannelException();
+      extraT.initCause(t);
+      return Status.UNKNOWN.withCause(extraT);
     }
     if (t instanceof IOException) {
       return Status.UNAVAILABLE.withCause(t);
