@@ -23,6 +23,7 @@ import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Builder for a server that services in-process requests. Clients identify the in-process server by
@@ -83,6 +84,9 @@ public final class InProcessServerBuilder
     // https://github.com/grpc/grpc-java/issues/2284
     setStatsRecordStartedRpcs(false);
     setStatsRecordFinishedRpcs(false);
+    // Disable handshake timeout because it is unnecessary, and can trigger Thread creation that can
+    // break some environments (like tests).
+    handshakeTimeout(Long.MAX_VALUE, TimeUnit.SECONDS);
   }
 
   @Override

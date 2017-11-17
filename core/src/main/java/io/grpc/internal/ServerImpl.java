@@ -50,6 +50,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -357,8 +358,15 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
         }
       }
 
-      handshakeTimeoutFuture = transport.getScheduledExecutorService()
-          .schedule(new TransportShutdownNow(), handshakeTimeoutMillis, TimeUnit.MILLISECONDS);
+      if (handshakeTimeoutMillis != Long.MAX_VALUE) {
+        handshakeTimeoutFuture = transport.getScheduledExecutorService()
+            .schedule(new TransportShutdownNow(), handshakeTimeoutMillis, TimeUnit.MILLISECONDS);
+      } else {
+        // Noop, to avoid triggering Thread creation in InProcessServer
+        handshakeTimeoutFuture = new FutureTask<Void>(new Runnable() {
+          @Override public void run() {}
+        }, null);
+      }
     }
 
     @Override
