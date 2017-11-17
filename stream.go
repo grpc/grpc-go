@@ -151,10 +151,24 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		// time soon, so we ask the transport to flush the header.
 		Flush: desc.ClientStreams,
 	}
-	if c.compressorType != "" {
-		callHdr.SendCompress = c.compressorType
+
+	// Set our outgoing compression according to the UseCompressor CallOption, if
+	// set.  In that case, also find the compressor from the encoding package.
+	// Otherwise, use the compressor configured by the WithCompressor DialOption,
+	// if set.
+	var cp Compressor
+	var comp encoding.Compressor
+	if ct := c.compressorType; ct != "" {
+		callHdr.SendCompress = ct
+		if ct != encoding.Identity {
+			comp = encoding.GetCompressor(ct)
+			if comp == nil {
+				return nil, Errorf(codes.Internal, "grpc: Compressor is not installed for requested grpc-encoding %q", ct)
+			}
+		}
 	} else if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
+		cp = cc.dopts.cp
 	}
 	if c.creds != nil {
 		callHdr.Creds = c.creds
@@ -241,9 +255,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		c:      c,
 		desc:   desc,
 		codec:  cc.dopts.codec,
-		cpType: c.compressorType,
-		cp:     cc.dopts.cp,
+		cp:     cp,
 		dc:     cc.dopts.dc,
+		comp:   comp,
 		cancel: cancel,
 
 		done: done,
@@ -285,16 +299,20 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	opts   []CallOption
-	c      *callInfo
-	t      transport.ClientTransport
-	s      *transport.Stream
-	p      *parser
-	desc   *StreamDesc
-	codec  Codec
-	cpType string
-	cp     Compressor
-	dc     Decompressor
+	opts []CallOption
+	c    *callInfo
+	t    transport.ClientTransport
+	s    *transport.Stream
+	p    *parser
+	desc *StreamDesc
+
+	codec     Codec
+	cp        Compressor
+	dc        Decompressor
+	comp      encoding.Compressor
+	decomp    encoding.Compressor
+	decompSet bool
+
 	cancel context.CancelFunc
 
 	tracing bool // set to EnableTracing when the clientStream is created.
@@ -370,10 +388,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	if cs.cpType != "" && encoding.GetCompressor(cs.cpType) == nil {
-		return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", cs.cpType)
-	}
-	hdr, data, err := encode(cs.codec, m, cs.cp, outPayload, encoding.GetCompressor(cs.cpType))
+	hdr, data, err := encode(cs.codec, m, cs.cp, outPayload, cs.comp)
 	if err != nil {
 		return err
 	}
@@ -401,7 +416,23 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	if cs.c.maxReceiveMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 	}
-	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, inPayload, encoding.GetCompressor(cs.cpType))
+	if !cs.decompSet {
+		// Block until we receive headers containing received message encoding.
+		if ct := cs.s.RecvCompress(); ct != "" && ct != encoding.Identity {
+			if cs.dc == nil || cs.dc.Type() != ct {
+				// No configured decompressor, or it does not match the incoming
+				// message encoding; attempt to find a registered compressor that does.
+				cs.dc = nil
+				cs.decomp = encoding.GetCompressor(ct)
+			}
+		} else {
+			// No compression is used; disable our decompressor.
+			cs.dc = nil
+		}
+		// Only initialize this state once per stream.
+		cs.decompSet = true
+	}
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, inPayload, cs.decomp)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -427,7 +458,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		if cs.c.maxReceiveMessageSize == nil {
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
-		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil, encoding.GetCompressor(cs.cpType))
+		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil, cs.decomp)
 		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -552,13 +583,16 @@ type ServerStream interface {
 
 // serverStream implements a server side Stream.
 type serverStream struct {
-	t                     transport.ServerTransport
-	s                     *transport.Stream
-	p                     *parser
-	codec                 Codec
-	cpType                string
-	cp                    Compressor
-	dc                    Decompressor
+	t     transport.ServerTransport
+	s     *transport.Stream
+	p     *parser
+	codec Codec
+
+	cp     Compressor
+	dc     Decompressor
+	comp   encoding.Compressor
+	decomp encoding.Compressor
+
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -614,12 +648,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	if ss.cpType != "" {
-		if encoding.GetCompressor(ss.cpType) == nil && (ss.cp == nil || ss.cp != nil && ss.cp.Type() != ss.cpType) {
-			return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", ss.cpType)
-		}
-	}
-	hdr, data, err := encode(ss.codec, m, ss.cp, outPayload, encoding.GetCompressor(ss.cpType))
+	hdr, data, err := encode(ss.codec, m, ss.cp, outPayload, ss.comp)
 	if err != nil {
 		return err
 	}
@@ -659,7 +688,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		inPayload = &stats.InPayload{}
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, inPayload, encoding.GetCompressor(ss.cpType)); err != nil {
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, inPayload, ss.decomp); err != nil {
 		if err == io.EOF {
 			return err
 		}

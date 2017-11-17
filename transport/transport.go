@@ -252,6 +252,9 @@ type Stream struct {
 // RecvCompress returns the compression algorithm applied to the inbound
 // message. It is empty string if there is no compression applied.
 func (s *Stream) RecvCompress() string {
+	if s.headerChan != nil {
+		<-s.headerChan
+	}
 	return s.recvCompress
 }
 
@@ -527,10 +530,6 @@ type CallHdr struct {
 
 	// Method specifies the operation to perform.
 	Method string
-
-	// RecvCompress specifies the compression algorithm applied on
-	// inbound messages.
-	RecvCompress string
 
 	// SendCompress specifies the compression algorithm applied on
 	// outbound message.

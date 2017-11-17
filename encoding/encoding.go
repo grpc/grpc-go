@@ -55,3 +55,7 @@ func RegisterCompressor(c Compressor) {
 func GetCompressor(name string) Compressor {
 	return registerCompressor[name]
 }
+
+// Identity specifies the optional encoding for uncompressed streams.
+// It is intended for grpc internal use only.
+const Identity = "identity"

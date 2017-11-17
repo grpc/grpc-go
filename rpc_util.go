@@ -236,6 +236,18 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 	})
 }
 
+// UseCompressor returns a CallOption which sets the compressor used when
+// sending the request.  If WithCompressor is also set, UseCompressor has
+// higher priority.
+//
+// This API is EXPERIMENTAL.
+func UseCompressor(name string) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.compressorType = name
+		return nil
+	})
+}
+
 // The format of the payload: compressed or not?
 type payloadFormat uint8
 
@@ -359,22 +371,26 @@ func encode(c Codec, msg interface{}, cp Compressor, outPayload *stats.OutPayloa
 	return bufHeader, b, nil
 }
 
-func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {
+func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool) *status.Status {
 	switch pf {
 	case compressionNone:
 	case compressionMade:
-		if (dc == nil || recvCompress != dc.Type()) && encoding.GetCompressor(recvCompress) == nil {
-			return Errorf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+		if recvCompress == "" || recvCompress == encoding.Identity {
+			return status.New(codes.Internal, "grpc: compressed flag set with identity or empty encoding")
+		}
+		if !haveCompressor {
+			return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
 		}
 	default:
-		return Errorf(codes.Internal, "grpc: received unexpected payload format %d", pf)
+		return status.Newf(codes.Internal, "grpc: received unexpected payload format %d", pf)
 	}
 	return nil
 }
 
-// TODO(ddyihai): eliminate extra Compressor parameter.
-func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int,
-	inPayload *stats.InPayload, compressor encoding.Compressor) error {
+// For the two compressor parameters, both should not be set, but if they are,
+// dc takes precedence over compressor.
+// TODO(dfawley): wrap the old compressor/decompressor using the new API?
+func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, inPayload *stats.InPayload, compressor encoding.Compressor) error {
 	pf, d, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return err
@@ -382,9 +398,11 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	if inPayload != nil {
 		inPayload.WireLength = len(d)
 	}
-	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
-		return err
+
+	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
+		return st.Err()
 	}
+
 	if pf == compressionMade {
 		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,
 		// use this decompressor as the default.

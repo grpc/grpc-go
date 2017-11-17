@@ -3886,8 +3886,67 @@ func testCompressOK(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
+	stream.CloseSend()
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v.Recv() = %v, want io.EOF", stream, err)
+	}
+}
+
+func TestIdentityEncoding(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testIdentityEncoding(t, e)
+	}
+}
+
+func testIdentityEncoding(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	// Unary call
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: 10,
+		Payload:      payload,
+	}
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
+	if _, err := tc.UnaryCall(ctx, req); err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	// Streaming RPC
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx, grpc.UseCompressor("identity"))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: []*testpb.ResponseParameters{{Size: 10}},
+		Payload:            payload,
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	stream.CloseSend()
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v.Recv() = %v, want io.EOF", stream, err)
 	}
 }
 

@@ -61,7 +61,17 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		if c.maxReceiveMessageSize == nil {
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload, encoding.GetCompressor(c.compressorType)); err != nil {
+
+		// Set dc if it exists and matches the message compression type used,
+		// otherwise set comp if a registered compressor exists for it.
+		var comp encoding.Compressor
+		var dc Decompressor
+		if rc := stream.RecvCompress(); dopts.dc != nil && dopts.dc.Type() == rc {
+			dc = dopts.dc
+		} else if rc != "" && rc != encoding.Identity {
+			comp = encoding.GetCompressor(rc)
+		}
+		if err = recv(p, dopts.codec, stream, dc, reply, *c.maxReceiveMessageSize, inPayload, comp); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -95,10 +105,18 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	if c.compressorType != "" && encoding.GetCompressor(c.compressorType) == nil {
-		return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", c.compressorType)
+	// Set comp and clear compressor if a registered compressor matches the type
+	// specified via UseCompressor.  (And error if a matching compressor is not
+	// registered.)
+	var comp encoding.Compressor
+	if ct := c.compressorType; ct != "" && ct != encoding.Identity {
+		compressor = nil // Disable the legacy compressor.
+		comp = encoding.GetCompressor(ct)
+		if comp == nil {
+			return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", ct)
+		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, outPayload, encoding.GetCompressor(c.compressorType))
+	hdr, data, err := encode(dopts.codec, args, compressor, outPayload, comp)
 	if err != nil {
 		return err
 	}
@@ -210,9 +228,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
-	}
-	if cc.dopts.cp != nil {
-		callHdr.SendCompress = cc.dopts.cp.Type()
 	}
 	if c.creds != nil {
 		callHdr.Creds = c.creds
