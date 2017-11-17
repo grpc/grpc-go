@@ -25,6 +25,7 @@ import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
+import io.grpc.Status;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -86,8 +87,14 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
         if (callOptions.getAuthority() != null) {
           effectiveAttrsBuilder.set(CallCredentials.ATTR_AUTHORITY, callOptions.getAuthority());
         }
-        creds.applyRequestMetadata(method, effectiveAttrsBuilder.build(),
-            firstNonNull(callOptions.getExecutor(), appExecutor), applier);
+        try {
+          creds.applyRequestMetadata(method, effectiveAttrsBuilder.build(),
+              firstNonNull(callOptions.getExecutor(), appExecutor), applier);
+        } catch (Throwable t) {
+          applier.fail(Status.UNAUTHENTICATED
+              .withDescription("Credentials should use fail() instead of throwing exceptions")
+              .withCause(t));
+        }
         return applier.returnStream();
       } else {
         return delegate.newStream(method, headers, callOptions);

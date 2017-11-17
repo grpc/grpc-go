@@ -19,6 +19,7 @@ package io.grpc.auth;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auth.Credentials;
+import com.google.auth.RequestMetadataCallback;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
@@ -84,48 +85,48 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
       applier.fail(e.getStatus());
       return;
     }
-    appExecutor.execute(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            // Credentials is expected to manage caching internally if the metadata is fetched over
-            // the network.
-            //
-            // TODO(zhangkun83): we don't know whether there is valid cache data. If there is, we
-            // would waste a context switch by always scheduling in executor. However, we have to
-            // do so because we can't risk blocking the network thread. This can be resolved after
-            // https://github.com/google/google-auth-library-java/issues/3 is resolved.
-            //
-            // Some implementations may return null here.
-            Map<String, List<String>> metadata;
-            try {
-              metadata = creds.getRequestMetadata(uri);
-            } catch (IOException e) {
-              // Since it's an I/O failure, let the call be retried with UNAVAILABLE.
-              applier.fail(Status.UNAVAILABLE
-                  .withDescription("Credentials failed to obtain metadata")
-                  .withCause(e));
-              return;
+    // Credentials is expected to manage caching internally if the metadata is fetched over
+    // the network.
+    creds.getRequestMetadata(uri, appExecutor, new RequestMetadataCallback() {
+      @Override
+      public void onSuccess(Map<String, List<String>> metadata) {
+        // Some implementations may pass null metadata.
+
+        // Re-use the headers if getRequestMetadata() returns the same map. It may return a
+        // different map based on the provided URI, i.e., for JWT. However, today it does not
+        // cache JWT and so we won't bother tring to save its return value based on the URI.
+        Metadata headers;
+        try {
+          synchronized (GoogleAuthLibraryCallCredentials.this) {
+            if (lastMetadata == null || lastMetadata != metadata) {
+              lastHeaders = toHeaders(metadata);
+              lastMetadata = metadata;
             }
-            // Re-use the headers if getRequestMetadata() returns the same map. It may return a
-            // different map based on the provided URI, i.e., for JWT. However, today it does not
-            // cache JWT and so we won't bother tring to save its return value based on the URI.
-            Metadata headers;
-            synchronized (GoogleAuthLibraryCallCredentials.this) {
-              if (lastMetadata == null || lastMetadata != metadata) {
-                lastMetadata = metadata;
-                lastHeaders = toHeaders(metadata);
-              }
-              headers = lastHeaders;
-            }
-            applier.apply(headers);
-          } catch (Throwable e) {
-            applier.fail(Status.UNAUTHENTICATED
-                .withDescription("Failed computing credential metadata")
-                .withCause(e));
+            headers = lastHeaders;
           }
+        } catch (Throwable t) {
+          applier.fail(Status.UNAUTHENTICATED
+              .withDescription("Failed to convert credential metadata")
+              .withCause(t));
+          return;
         }
-      });
+        applier.apply(headers);
+      }
+
+      @Override
+      public void onFailure(Throwable e) {
+        if (e instanceof IOException) {
+          // Since it's an I/O failure, let the call be retried with UNAVAILABLE.
+          applier.fail(Status.UNAVAILABLE
+              .withDescription("Credentials failed to obtain metadata")
+              .withCause(e));
+        } else {
+          applier.fail(Status.UNAUTHENTICATED
+              .withDescription("Failed computing credential metadata")
+              .withCause(e));
+        }
+      }
+    });
   }
 
   /**

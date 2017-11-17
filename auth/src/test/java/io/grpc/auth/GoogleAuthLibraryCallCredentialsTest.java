@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.auth.Credentials;
+import com.google.auth.RequestMetadataCallback;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
@@ -43,6 +44,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
+import io.grpc.testing.TestMethodDescriptors;
 import java.io.IOException;
 import java.net.URI;
 import java.security.KeyPair;
@@ -51,7 +53,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,19 +79,16 @@ public class GoogleAuthLibraryCallCredentialsTest {
       "Extra-Authorization-bin", Metadata.BINARY_BYTE_MARSHALLER);
 
   @Mock
-  private MethodDescriptor.Marshaller<String> stringMarshaller;
-
-  @Mock
-  private MethodDescriptor.Marshaller<Integer> intMarshaller;
-
-  @Mock
   private Credentials credentials;
 
   @Mock
   private MetadataApplier applier;
 
-  @Mock
-  private Executor executor;
+  private Executor executor = new Executor() {
+    @Override public void execute(Runnable r) {
+      pendingRunnables.add(r);
+    }
+  };
 
   @Captor
   private ArgumentCaptor<Metadata> headersCaptor;
@@ -95,8 +96,13 @@ public class GoogleAuthLibraryCallCredentialsTest {
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
 
-  private MethodDescriptor<String, Integer> method;
-  private URI expectedUri;
+  private MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
+      .setType(MethodDescriptor.MethodType.UNKNOWN)
+      .setFullMethodName("a.service/method")
+      .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+      .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+      .build();
+  private URI expectedUri = URI.create("https://testauthority/a.service");
 
   private final String authority = "testauthority";
   private final Attributes attrs = Attributes.newBuilder()
@@ -109,21 +115,32 @@ public class GoogleAuthLibraryCallCredentialsTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    method = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("a.service/method")
-        .setRequestMarshaller(stringMarshaller)
-        .setResponseMarshaller(intMarshaller)
-        .build();
-    expectedUri = new URI("https://testauthority/a.service");
     doAnswer(new Answer<Void>() {
-        @Override
-        public Void answer(InvocationOnMock invocation) {
-          Runnable r = (Runnable) invocation.getArguments()[0];
-          pendingRunnables.add(r);
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        Credentials mock = (Credentials) invocation.getMock();
+        URI uri = (URI) invocation.getArguments()[0];
+        RequestMetadataCallback callback = (RequestMetadataCallback) invocation.getArguments()[2];
+        Map<String, List<String>> metadata;
+        try {
+          // Default to calling the blocking method, since it is easier to mock
+          metadata = mock.getRequestMetadata(uri);
+        } catch (Exception ex) {
+          callback.onFailure(ex);
           return null;
         }
-      }).when(executor).execute(any(Runnable.class));
+        callback.onSuccess(metadata);
+        return null;
+      }
+    }).when(credentials).getRequestMetadata(
+        any(URI.class),
+        any(Executor.class),
+        any(RequestMetadataCallback.class));
+  }
+
+  @After
+  public void tearDown() {
+    assertEquals(0, pendingRunnables.size());
   }
 
   @Test
@@ -138,7 +155,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).apply(headersCaptor.capture());
@@ -161,7 +177,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -171,14 +186,13 @@ public class GoogleAuthLibraryCallCredentialsTest {
   }
 
   @Test
-  public void credentialsThrowsIoException() throws Exception {
+  public void credentialsFailsWithIoException() throws Exception {
     Exception exception = new IOException("Broken");
     when(credentials.getRequestMetadata(eq(expectedUri))).thenThrow(exception);
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -188,14 +202,13 @@ public class GoogleAuthLibraryCallCredentialsTest {
   }
 
   @Test
-  public void credentialsThrowsRuntimeException() throws Exception {
+  public void credentialsFailsWithRuntimeException() throws Exception {
     Exception exception = new RuntimeException("Broken");
     when(credentials.getRequestMetadata(eq(expectedUri))).thenThrow(exception);
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -218,7 +231,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
       callCredentials.applyRequestMetadata(method, attrs, executor, applier);
     }
 
-    assertEquals(3, runPendingRunnables());
     verify(credentials, times(3)).getRequestMetadata(eq(expectedUri));
 
     verify(applier, times(3)).apply(headersCaptor.capture());
@@ -265,7 +277,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
             .set(CallCredentials.ATTR_AUTHORITY, "example.com:443")
             .build(),
         executor, applier);
-    assertEquals(1, runPendingRunnables());
     verify(credentials).getRequestMetadata(eq(new URI("https://example.com/a.service")));
 
     callCredentials.applyRequestMetadata(method,
@@ -274,13 +285,13 @@ public class GoogleAuthLibraryCallCredentialsTest {
             .set(CallCredentials.ATTR_AUTHORITY, "example.com:123")
             .build(),
         executor, applier);
-    assertEquals(1, runPendingRunnables());
     verify(credentials).getRequestMetadata(eq(new URI("https://example.com:123/a.service")));
   }
 
   @Test
   public void serviceAccountToJwt() throws Exception {
     KeyPair pair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    @SuppressWarnings("deprecation")
     ServiceAccountCredentials credentials = new ServiceAccountCredentials(
         null, "email@example.com", pair.getPrivate(), null, null) {
       @Override
@@ -292,7 +303,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
+    assertEquals(0, runPendingRunnables());
 
     verify(applier).apply(headersCaptor.capture());
     Metadata headers = headersCaptor.getValue();
@@ -307,6 +318,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
   public void serviceAccountWithScopeNotToJwt() throws Exception {
     final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
     KeyPair pair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    @SuppressWarnings("deprecation")
     ServiceAccountCredentials credentials = new ServiceAccountCredentials(
         null, "email@example.com", pair.getPrivate(), null, Arrays.asList("somescope")) {
       @Override
@@ -337,7 +349,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials, null);
     callCredentials.applyRequestMetadata(method, attrs, executor, applier);
-    assertEquals(1, runPendingRunnables());
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).apply(headersCaptor.capture());

@@ -22,6 +22,7 @@ import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -169,6 +170,21 @@ public class CallCredentialsApplyingTest {
     assertSame(ATTR_VALUE, attrs.get(ATTR_KEY));
     assertEquals("calloptions-authority", attrs.get(CallCredentials.ATTR_AUTHORITY));
     assertSame(SecurityLevel.INTEGRITY, attrs.get(CallCredentials.ATTR_SECURITY_LEVEL));
+  }
+
+  @Test
+  public void credentialThrows() {
+    final RuntimeException ex = new RuntimeException();
+    when(mockTransport.getAttributes()).thenReturn(Attributes.EMPTY);
+    doThrow(ex).when(mockCreds).applyRequestMetadata(
+        same(method), any(Attributes.class), same(mockExecutor), any(MetadataApplier.class));
+
+    FailingClientStream stream =
+        (FailingClientStream) transport.newStream(method, origHeaders, callOptions);
+
+    verify(mockTransport, never()).newStream(method, origHeaders, callOptions);
+    assertEquals(Status.Code.UNAUTHENTICATED, stream.getError().getCode());
+    assertSame(ex, stream.getError().getCause());
   }
 
   @Test

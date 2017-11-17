@@ -1601,7 +1601,7 @@ public abstract class AbstractInteropTest {
 
   /** Sends a large unary rpc with compute engine credentials. */
   public void computeEngineCreds(String serviceAccount, String oauthScope) throws Exception {
-    ComputeEngineCredentials credentials = new ComputeEngineCredentials();
+    ComputeEngineCredentials credentials = ComputeEngineCredentials.create();
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
         .withCallCredentials(MoreCallCredentials.from(credentials));
     final SimpleRequest request = SimpleRequest.newBuilder()
@@ -1656,17 +1656,7 @@ public abstract class AbstractInteropTest {
     utilCredentials = utilCredentials.createScoped(Arrays.<String>asList(authScope));
     AccessToken accessToken = utilCredentials.refreshAccessToken();
 
-    // TODO(madongfly): The Auth library may have something like AccessTokenCredentials in the
-    // future, change to the official implementation then.
-    OAuth2Credentials credentials = new OAuth2Credentials(accessToken) {
-      private static final long serialVersionUID = 0;
-
-      @Override
-      public AccessToken refreshAccessToken() throws IOException {
-        throw new IOException("This credential is based on a certain AccessToken, "
-            + "so you can not refresh AccessToken");
-      }
-    };
+    OAuth2Credentials credentials = OAuth2Credentials.create(accessToken);
 
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
         .withCallCredentials(MoreCallCredentials.from(credentials));
