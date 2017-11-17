@@ -135,12 +135,12 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Overrides the authority used with TLS and HTTP virtual hosting. It does not change what host is
    * actually connected to. Is commonly in the form {@code host:port}.
    *
-   * <p>Should only used by tests.
+   * <p>This method is intended for testing, but may safely be used outside of tests as an
+   * alternative to DNS overrides.
    *
    * @return this
    * @since 1.0.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1767")
   public abstract T overrideAuthority(String authority);
 
   /**
