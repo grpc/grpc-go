@@ -27,6 +27,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -96,7 +97,16 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
             // https://github.com/google/google-auth-library-java/issues/3 is resolved.
             //
             // Some implementations may return null here.
-            Map<String, List<String>> metadata = creds.getRequestMetadata(uri);
+            Map<String, List<String>> metadata;
+            try {
+              metadata = creds.getRequestMetadata(uri);
+            } catch (IOException e) {
+              // Since it's an I/O failure, let the call be retried with UNAVAILABLE.
+              applier.fail(Status.UNAVAILABLE
+                  .withDescription("Credentials failed to obtain metadata")
+                  .withCause(e));
+              return;
+            }
             // Re-use the headers if getRequestMetadata() returns the same map. It may return a
             // different map based on the provided URI, i.e., for JWT. However, today it does not
             // cache JWT and so we won't bother tring to save its return value based on the URI.
@@ -110,7 +120,9 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
             }
             applier.apply(headers);
           } catch (Throwable e) {
-            applier.fail(Status.UNAUTHENTICATED.withCause(e));
+            applier.fail(Status.UNAUTHENTICATED
+                .withDescription("Failed computing credential metadata")
+                .withCause(e));
           }
         }
       });

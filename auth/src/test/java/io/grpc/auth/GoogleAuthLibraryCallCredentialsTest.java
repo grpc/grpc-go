@@ -171,8 +171,25 @@ public class GoogleAuthLibraryCallCredentialsTest {
   }
 
   @Test
-  public void credentialsThrows() throws Exception {
-    IOException exception = new IOException("Broken");
+  public void credentialsThrowsIoException() throws Exception {
+    Exception exception = new IOException("Broken");
+    when(credentials.getRequestMetadata(eq(expectedUri))).thenThrow(exception);
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    assertEquals(1, runPendingRunnables());
+
+    verify(credentials).getRequestMetadata(eq(expectedUri));
+    verify(applier).fail(statusCaptor.capture());
+    Status status = statusCaptor.getValue();
+    assertEquals(Status.Code.UNAVAILABLE, status.getCode());
+    assertEquals(exception, status.getCause());
+  }
+
+  @Test
+  public void credentialsThrowsRuntimeException() throws Exception {
+    Exception exception = new RuntimeException("Broken");
     when(credentials.getRequestMetadata(eq(expectedUri))).thenThrow(exception);
 
     GoogleAuthLibraryCallCredentials callCredentials =
