@@ -17,6 +17,7 @@
 package io.grpc.cronet;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
@@ -28,12 +29,14 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -85,6 +88,13 @@ class CronetClientTransport implements ConnectionClientTransport, WithLogId {
     this.alwaysUsePut = alwaysUsePut;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.streamFactory = Preconditions.checkNotNull(streamFactory, "streamFactory");
+  }
+
+  @Override
+  public Future<TransportTracer.Stats> getTransportStats() {
+    SettableFuture<TransportTracer.Stats> f = SettableFuture.create();
+    f.set(null);
+    return f;
   }
 
   @Override

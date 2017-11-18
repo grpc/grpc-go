@@ -91,7 +91,7 @@ class CronetClientStream extends AbstractClientStream {
       MethodDescriptor<?, ?> method,
       StatsTraceContext statsTraceCtx,
       CallOptions callOptions) {
-    super(new CronetWritableBufferAllocator(), statsTraceCtx, headers, method.isSafe());
+    super(new CronetWritableBufferAllocator(), statsTraceCtx, null, headers, method.isSafe());
     this.url = Preconditions.checkNotNull(url, "url");
     this.userAgent = Preconditions.checkNotNull(userAgent, "userAgent");
     this.executor = Preconditions.checkNotNull(executor, "executor");
@@ -155,7 +155,8 @@ class CronetClientStream extends AbstractClientStream {
     }
 
     @Override
-    public void writeFrame(WritableBuffer buffer, boolean endOfStream, boolean flush) {
+    public void writeFrame(
+        WritableBuffer buffer, boolean endOfStream, boolean flush, int numMessages) {
       synchronized (state.lock) {
         if (state.cancelSent) {
           return;
@@ -218,7 +219,7 @@ class CronetClientStream extends AbstractClientStream {
     private boolean readClosed;
 
     public TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx, Object lock) {
-      super(maxMessageSize, statsTraceCtx);
+      super(maxMessageSize, statsTraceCtx, null);
       this.lock = Preconditions.checkNotNull(lock, "lock");
     }
 
