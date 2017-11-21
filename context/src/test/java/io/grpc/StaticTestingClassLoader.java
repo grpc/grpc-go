@@ -17,7 +17,7 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
-import io.grpc.internal.IoUtils;
+import com.google.common.io.ByteStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.regex.Pattern;
@@ -45,7 +45,7 @@ public final class StaticTestingClassLoader extends ClassLoader {
     }
     byte[] b;
     try {
-      b = IoUtils.toByteArray(is);
+      b = ByteStreams.toByteArray(is);
     } catch (IOException ex) {
       throw new ClassNotFoundException(name, ex);
     }

@@ -26,7 +26,8 @@ dependencies {
         exclude group: 'io.grpc', module: 'grpc-context'
     }
 
-    testCompile project(':grpc-testing')
+    testCompile project(':grpc-context').sourceSets.test.output,
+                project(':grpc-testing')
 
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }

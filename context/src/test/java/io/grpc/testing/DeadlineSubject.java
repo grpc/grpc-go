@@ -23,7 +23,6 @@ import com.google.common.truth.ComparableSubject;
 import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.SubjectFactory;
 import io.grpc.Deadline;
-import io.grpc.ExperimentalApi;
 import java.math.BigInteger;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
@@ -32,7 +31,6 @@ import javax.annotation.Nullable;
 /**
  * Propositions for {@link Deadline} subjects.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/3613")
 public final class DeadlineSubject extends ComparableSubject<DeadlineSubject, Deadline> {
   private static final SubjectFactory<DeadlineSubject, Deadline> deadlineFactory =
       new DeadlineSubjectFactory();
@@ -79,7 +77,6 @@ public final class DeadlineSubject extends ComparableSubject<DeadlineSubject, De
    * A partially specified proposition about an approximate relationship to a {@code deadline}
    * subject using a tolerance.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3613")
   public abstract static class TolerantDeadlineComparison {
 
     private TolerantDeadlineComparison() {}

@@ -1,7 +1,6 @@
 description = 'gRPC: Context'
 
 dependencies {
-    testCompile project(':grpc-testing')
-    testCompile project(':grpc-core').sourceSets.test.output
+    testCompile libraries.jsr305
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
