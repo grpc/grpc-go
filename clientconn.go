@@ -637,10 +637,8 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	if cc.balancerWrapper == nil {
 		// First time handling resolved addresses. Build a balancer use either
 		// the builder specified by dial option, or pickfirst.
-		var builder balancer.Builder
-		if cc.dopts.balancerBuilder != nil {
-			builder = cc.dopts.balancerBuilder
-		} else {
+		builder := cc.dopts.balancerBuilder
+		if builder == nil {
 			// No customBalancer was specified by DialOption, and this is the first
 			// time handling resolved addresses, create a pickfirst balancer.
 			builder = newPickfirstBuilder()
@@ -838,11 +836,10 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 	cc.mu.Lock()
 	r := cc.resolverWrapper
+	cc.mu.Unlock()
 	if r == nil {
-		cc.mu.Unlock()
 		return
 	}
-	cc.mu.Unlock()
 	go r.resolveNow(o)
 }
 
