@@ -81,14 +81,16 @@ func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 	return m, nil
 }
 
-// NewLBBuilder creates a builder for grpclb.
+// NewLBBuilder creates a builder for grpclb. For testing only.
 func NewLBBuilder() balancer.Builder {
 	// TODO(bar grpclb) this function is exported for testing only, remove it when resolver supports selecting grpclb.
 	return NewLBBuilderWithFallbackTimeout(defaultFallbackTimeout)
 }
 
 // NewLBBuilderWithFallbackTimeout creates a grpclb builder with the given
-// fallbackTimeout.
+// fallbackTimeout. If no response is received from the remote balancer within
+// fallbackTimeout, the backend addresses from the resolved address list will be
+// used.
 //
 // Only call this function when a non-default fallback timeout is needed.
 func NewLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Builder {
@@ -154,7 +156,11 @@ type lbBalancer struct {
 	// The ClientConn to talk to the remote balancer.
 	ccRemoteLB *ClientConn
 
-	mu sync.Mutex
+	// Support client side load reporting. Each picker gets a reference to this,
+	// and will update its content.
+	clientStats *rpcStats
+
+	mu sync.Mutex // guards everything following.
 	// The full server list including drops, used to check if the newly received
 	// serverList contains anything new. Each generate picker will also have
 	// reference to this list to do the first layer pick.
@@ -178,16 +184,12 @@ type lbBalancer struct {
 	// when resolved address updates are received, and read in the goroutine
 	// handling fallback.
 	resolvedBackendAddrs []resolver.Address
-
-	// Support client side load reporting. Each picker gets a reference to this,
-	// and will update its content.
-	clientStats *rpcStats
 }
 
-// regeneratePicker takes a snapshot of the balancer, and generate a picker from
+// regeneratePicker takes a snapshot of the balancer, and generates a picker from
 // it. The picker
-//  - always return ErrTransientFailure if the balancer is in TransientFailure,
-//  - do two layer roundrobin pick otherwise.
+//  - always returns ErrTransientFailure if the balancer is in TransientFailure,
+//  - does two layer roundrobin pick otherwise.
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker() {
 	if lb.state == connectivity.TransientFailure {
