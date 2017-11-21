@@ -133,7 +133,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		csEvltr:            &connectivityStateEvaluator{},
 		subConns:           make(map[resolver.Address]balancer.SubConn),
 		scStates:           make(map[balancer.SubConn]connectivity.State),
-		picker:             newPicker(nil, nil, nil, nil),
+		picker:             &errPicker{err: balancer.ErrNoSubConnAvailable},
 		clientStats:        &rpcStats{},
 	}
 
@@ -175,7 +175,7 @@ type lbBalancer struct {
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
-	picker   *lbPicker
+	picker   balancer.Picker
 	// Support fallback to resolved backend addresses if there's no response
 	// from remote balancer within fallbackTimeout.
 	fallbackTimerExpired bool
@@ -193,7 +193,7 @@ type lbBalancer struct {
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker() {
 	if lb.state == connectivity.TransientFailure {
-		lb.picker = newPicker(balancer.ErrTransientFailure, nil, nil, nil)
+		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
 	}
 	var readySCs []balancer.SubConn
@@ -204,7 +204,20 @@ func (lb *lbBalancer) regeneratePicker() {
 			}
 		}
 	}
-	lb.picker = newPicker(nil, lb.fullServerList, readySCs, lb.clientStats)
+
+	if len(lb.fullServerList) <= 0 {
+		if len(readySCs) <= 0 {
+			lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+			return
+		}
+		lb.picker = &rrPicker{subConns: readySCs}
+		return
+	}
+	lb.picker = &lbPicker{
+		serverList: lb.fullServerList,
+		subConns:   readySCs,
+		stats:      lb.clientStats,
+	}
 	return
 }
 

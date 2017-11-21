@@ -107,13 +107,13 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 
 			// Use addrWithMD to create the SubConn.
 			sc, err := lb.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
-			if err == nil {
-				lb.subConns[addrWithoutMD] = sc // Use the addr without MD as key for the map.
-				lb.scStates[sc] = connectivity.Idle
-				sc.Connect()
-			} else {
+			if err != nil {
 				grpclog.Warningf("roundrobinBalancer: failed to create new SubConn: %v", err)
+				continue
 			}
+			lb.subConns[addrWithoutMD] = sc // Use the addr without MD as key for the map.
+			lb.scStates[sc] = connectivity.Idle
+			sc.Connect()
 		}
 	}
 
@@ -172,11 +172,15 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 }
 
 func (lb *lbBalancer) watchRemoteBalancer() {
+	var remoteBalancerErr error
 	for {
 		select {
 		case <-lb.doneCh:
 			return
 		default:
+			if remoteBalancerErr != nil {
+				grpclog.Error(remoteBalancerErr)
+			}
 		}
 
 		lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
@@ -184,7 +188,7 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		defer cancel()
 		stream, err := lbClient.BalanceLoad(ctx, FailFast(false))
 		if err != nil {
-			grpclog.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
+			remoteBalancerErr = fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 			continue
 		}
 
@@ -197,21 +201,21 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 			},
 		}
 		if err := stream.Send(initReq); err != nil {
-			grpclog.Errorf("grpclb: failed to send init request: %v", err)
+			remoteBalancerErr = fmt.Errorf("grpclb: failed to send init request: %v", err)
 			continue
 		}
 		reply, err := stream.Recv()
 		if err != nil {
-			grpclog.Errorf("grpclb: failed to recv init response: %v", err)
+			remoteBalancerErr = fmt.Errorf("grpclb: failed to recv init response: %v", err)
 			continue
 		}
 		initResp := reply.GetInitialResponse()
 		if initResp == nil {
-			grpclog.Errorf("grpclb: reply from remote balancer did not include initial response.")
+			remoteBalancerErr = fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
 			continue
 		}
 		if initResp.LoadBalancerDelegate != "" {
-			grpclog.Errorf("Delegation is not supported.")
+			remoteBalancerErr = fmt.Errorf("grpclb: Delegation is not supported")
 			continue
 		}
 
