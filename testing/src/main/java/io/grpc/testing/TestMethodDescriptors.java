@@ -49,60 +49,23 @@ public final class TestMethodDescriptors {
   }
 
   /**
-   * Creates a new method descriptor that always creates zero length messages, and always parses to
-   * null objects.
-   *
-   * @deprecated Prefer to use {@link #voidMethod()} instead or use one MethodDescriptor from {@code
-   *             io.grpc.testing.protobuf.SimpleServiceGrpc} or from other generated classes.
-   * @since 1.1.0
-   */
-  @Deprecated
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
-  public static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod() {
-    return noopMethod("service_foo", "method_bar");
-  }
-
-  @Deprecated
-  private static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod(
-      String serviceName, String methodName) {
-    return MethodDescriptor.<ReqT, RespT>newBuilder()
-        .setType(MethodType.UNARY)
-        .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, methodName))
-        .setRequestMarshaller(TestMethodDescriptors.<ReqT>noopMarshaller())
-        .setResponseMarshaller(TestMethodDescriptors.<RespT>noopMarshaller())
-        .build();
-  }
-
-  /**
    * Creates a new marshaller that does nothing.
    *
    * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
   public static MethodDescriptor.Marshaller<Void> voidMarshaller() {
-    return new NoopMarshaller<Void>();
+    return new NoopMarshaller();
   }
 
-  /**
-   * Creates a new marshaller that does nothing.
-   *
-   * @deprecated Use {@link #voidMarshaller()} instead or implement/mock one
-   * @since 1.1.0
-   */
-  @Deprecated
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
-  public static <T> MethodDescriptor.Marshaller<T> noopMarshaller() {
-    return new NoopMarshaller<T>();
-  }
-
-  private static final class NoopMarshaller<T> implements MethodDescriptor.Marshaller<T> {
+  private static final class NoopMarshaller implements MethodDescriptor.Marshaller<Void> {
     @Override
-    public InputStream stream(T value) {
+    public InputStream stream(Void value) {
       return new ByteArrayInputStream(new byte[]{});
     }
 
     @Override
-    public T parse(InputStream stream) {
+    public Void parse(InputStream stream) {
       return null;
     }
   }
