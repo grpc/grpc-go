@@ -132,12 +132,11 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 	return backendsUpdated
 }
 
-func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) {
+func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) error {
 	for {
 		reply, err := s.Recv()
 		if err != nil {
-			grpclog.Errorf("grpclb: failed to recv server list: %v", err)
-			break
+			return fmt.Errorf("grpclb: failed to recv server list: %v", err)
 		}
 		if serverList := reply.GetServerList(); serverList != nil {
 			lb.processServerList(serverList)
@@ -165,66 +164,62 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 				ClientStats: stats,
 			},
 		}); err != nil {
-			grpclog.Errorf("grpclb: failed to send load report: %v", err)
 			return
 		}
 	}
 }
+func (lb *lbBalancer) callRemoteBalancer() error {
+	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := lbClient.BalanceLoad(ctx, FailFast(false))
+	if err != nil {
+		return fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
+	}
+
+	// grpclb handshake on the stream.
+	initReq := &lbpb.LoadBalanceRequest{
+		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
+			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+				Name: lb.target,
+			},
+		},
+	}
+	if err := stream.Send(initReq); err != nil {
+		return fmt.Errorf("grpclb: failed to send init request: %v", err)
+	}
+	reply, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("grpclb: failed to recv init response: %v", err)
+	}
+	initResp := reply.GetInitialResponse()
+	if initResp == nil {
+		return fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
+	}
+	if initResp.LoadBalancerDelegate != "" {
+		return fmt.Errorf("grpclb: Delegation is not supported")
+	}
+
+	go func() {
+		if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
+			lb.sendLoadReport(stream, d)
+		}
+	}()
+	return lb.readServerList(stream)
+}
 
 func (lb *lbBalancer) watchRemoteBalancer() {
-	var remoteBalancerErr error
 	for {
+		err := lb.callRemoteBalancer()
 		select {
 		case <-lb.doneCh:
 			return
 		default:
-			if remoteBalancerErr != nil {
-				grpclog.Error(remoteBalancerErr)
+			if err != nil {
+				grpclog.Error(err)
 			}
 		}
 
-		lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		stream, err := lbClient.BalanceLoad(ctx, FailFast(false))
-		if err != nil {
-			remoteBalancerErr = fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
-			continue
-		}
-
-		// grpclb handshake on the stream.
-		initReq := &lbpb.LoadBalanceRequest{
-			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-				InitialRequest: &lbpb.InitialLoadBalanceRequest{
-					Name: lb.target,
-				},
-			},
-		}
-		if err := stream.Send(initReq); err != nil {
-			remoteBalancerErr = fmt.Errorf("grpclb: failed to send init request: %v", err)
-			continue
-		}
-		reply, err := stream.Recv()
-		if err != nil {
-			remoteBalancerErr = fmt.Errorf("grpclb: failed to recv init response: %v", err)
-			continue
-		}
-		initResp := reply.GetInitialResponse()
-		if initResp == nil {
-			remoteBalancerErr = fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
-			continue
-		}
-		if initResp.LoadBalancerDelegate != "" {
-			remoteBalancerErr = fmt.Errorf("grpclb: Delegation is not supported")
-			continue
-		}
-
-		go func() {
-			if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
-				lb.sendLoadReport(stream, d)
-			}
-		}()
-		lb.readServerList(stream)
 	}
 }
 
