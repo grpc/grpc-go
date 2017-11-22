@@ -642,6 +642,8 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 }
 
 // switchBalancer starts the switching from current balancer to the balancer with name.
+//
+// Caller must hold cc.mu.
 func (cc *ClientConn) switchBalancer(name string) {
 	if cc.conns == nil {
 		return
@@ -659,7 +661,9 @@ func (cc *ClientConn) switchBalancer(name string) {
 
 	// TODO(bar switching) change this to two steps: drain and close.
 	// Keep track of sc in wrapper.
-	cc.balancerWrapper.close()
+	if cc.balancerWrapper != nil {
+		cc.balancerWrapper.close()
+	}
 
 	builder := balancer.Get(name)
 	if builder == nil {
@@ -684,6 +688,8 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 }
 
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
+//
+// Caller needs to make sure len(addrs) > 0.
 func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	ac := &addrConn{
 		cc:    cc,
