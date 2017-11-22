@@ -346,7 +346,7 @@ func TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	// makes sure we don't call close on nil balancerWrapper.
 	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`) // This should not panic.
 
-	time.Sleep(time.Second) //Sleep to make sure the service config is handled by ClientConn.
+	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
 
 func TestResolverEmptyUpdateNotPanic(t *testing.T) {
@@ -363,7 +363,7 @@ func TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	// This make sure we don't create addrConn with empty address list.
 	r.NewAddress([]resolver.Address{}) // This should not panic.
 
-	time.Sleep(time.Second) //Sleep to make sure the service config is handled by ClientConn.
+	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
 
 func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
