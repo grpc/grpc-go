@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -183,6 +184,9 @@ func (ccb *ccBalancerWrapper) handleResolvedAddrs(addrs []resolver.Address, err 
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	if len(addrs) <= 0 {
+		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
+	}
 	ac, err := ccb.cc.newAddrConn(addrs)
 	if err != nil {
 		return nil, err
@@ -223,6 +227,10 @@ type acBalancerWrapper struct {
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
+	if len(addrs) <= 0 {
+		acbw.ac.tearDown(errConnDrain)
+		return
+	}
 	if !acbw.ac.tryUpdateAddrs(addrs) {
 		cc := acbw.ac.cc
 		acbw.ac.mu.Lock()
