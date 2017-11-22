@@ -97,6 +97,8 @@ type dialOptions struct {
 	callOptions []CallOption
 	// This is to support v1 balancer.
 	balancerBuilder balancer.Builder
+	// This is to support grpclb.
+	resolverBuilder resolver.Builder
 }
 
 const (
@@ -203,6 +205,13 @@ func WithBalancerBuilder(b balancer.Builder) DialOption {
 	// TODO(bar) remove this when switching balancer is done.
 	return func(o *dialOptions) {
 		o.balancerBuilder = b
+	}
+}
+
+// withResolverBuilder is only for grpclb.
+func withResolverBuilder(b resolver.Builder) DialOption {
+	return func(o *dialOptions) {
+		o.resolverBuilder = b
 	}
 }
 

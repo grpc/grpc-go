@@ -242,9 +242,10 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerBuilder(newPickfirstBuilder()))
+	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
 	// Dial using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	cc, err := Dial(lb.manualResolver.Scheme()+":///grpclb.server", dopts...)
+	cc, err := Dial("grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}

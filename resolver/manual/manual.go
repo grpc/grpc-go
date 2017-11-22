@@ -16,7 +16,8 @@
  *
  */
 
-// Package manual contains a resolver for testing purpose only.
+// Package manual defines a resolver that can be used to manually send resolved
+// addresses to ClientConn.
 package manual
 
 import (

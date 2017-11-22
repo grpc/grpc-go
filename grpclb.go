@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -111,7 +112,8 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	// This generates a manual resolver builder with a random scheme. This
 	// scheme will be used to dial to remote LB, so we can send filtered address
 	// updates to remote LB ClientConn using this manual resolver.
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	scheme := "grpclb_internal_" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	r := manual.NewBuilderWithScheme(scheme)
 
 	var target string
 	targetSplitted := strings.Split(cc.Target(), ":///")
@@ -128,13 +130,12 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
-		manualResolver:     r,
-		unregisterResolver: cleanup,
-		csEvltr:            &connectivityStateEvaluator{},
-		subConns:           make(map[resolver.Address]balancer.SubConn),
-		scStates:           make(map[balancer.SubConn]connectivity.State),
-		picker:             &errPicker{err: balancer.ErrNoSubConnAvailable},
-		clientStats:        &rpcStats{},
+		manualResolver: r,
+		csEvltr:        &connectivityStateEvaluator{},
+		subConns:       make(map[resolver.Address]balancer.SubConn),
+		scStates:       make(map[balancer.SubConn]connectivity.State),
+		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
+		clientStats:    &rpcStats{},
 	}
 
 	return lb
@@ -151,8 +152,6 @@ type lbBalancer struct {
 	// resolved address updates are received by grpclb, filtered updates will be
 	// send to remote LB ClientConn through this resolver.
 	manualResolver *manual.Resolver
-	// Call this function in close to unregister the manual resolver.
-	unregisterResolver func()
 	// The ClientConn to talk to the remote balancer.
 	ccRemoteLB *ClientConn
 
