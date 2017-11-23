@@ -34,6 +34,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -42,7 +43,9 @@ import io.netty.util.ReferenceCounted;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -56,6 +59,7 @@ class NettyServer implements InternalServer, WithLogId {
   private final LogId logId = LogId.allocate(getClass().getName());
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
+  private final Map<ChannelOption<?>, ?> channelOptions;
   private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreamsPerConnection;
   private final boolean usingSharedBossGroup;
@@ -80,6 +84,7 @@ class NettyServer implements InternalServer, WithLogId {
 
   NettyServer(
       SocketAddress address, Class<? extends ServerChannel> channelType,
+      Map<ChannelOption<?>, ?> channelOptions,
       @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
       ProtocolNegotiator protocolNegotiator, List<ServerStreamTracer.Factory> streamTracerFactories,
       TransportTracer.Factory transportTracerFactory,
@@ -90,6 +95,8 @@ class NettyServer implements InternalServer, WithLogId {
       boolean permitKeepAliveWithoutCalls, long permitKeepAliveTimeInNanos) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
+    checkNotNull(channelOptions, "channelOptions");
+    this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
     this.bossGroup = bossGroup;
     this.workerGroup = workerGroup;
     this.protocolNegotiator = checkNotNull(protocolNegotiator, "protocolNegotiator");
@@ -136,6 +143,15 @@ class NettyServer implements InternalServer, WithLogId {
       b.option(SO_BACKLOG, 128);
       b.childOption(SO_KEEPALIVE, true);
     }
+
+    if (channelOptions != null) {
+      for (Map.Entry<ChannelOption<?>, ?> entry : channelOptions.entrySet()) {
+        @SuppressWarnings("unchecked")
+        ChannelOption<Object> key = (ChannelOption<Object>) entry.getKey();
+        b.childOption(key, entry.getValue());
+      }
+    }
+
     b.childHandler(new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {

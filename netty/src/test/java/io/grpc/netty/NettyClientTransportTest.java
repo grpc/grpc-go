@@ -556,7 +556,9 @@ public class NettyClientTransportTest {
   private void startServer(int maxStreamsPerConnection, int maxHeaderListSize) throws IOException {
     server = new NettyServer(
         TestUtils.testServerAddress(0),
-        NioServerSocketChannel.class, group, group, negotiator,
+        NioServerSocketChannel.class,
+        new HashMap<ChannelOption<?>, Object>(),
+        group, group, negotiator,
         Collections.<ServerStreamTracer.Factory>emptyList(),
         TransportTracer.getDefaultFactory(),
         maxStreamsPerConnection,

@@ -32,6 +32,7 @@ import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.TransportTracer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -39,7 +40,9 @@ import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -65,6 +68,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
   private final SocketAddress address;
   private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
+  private final Map<ChannelOption<?>, Object> channelOptions =
+      new HashMap<ChannelOption<?>, Object>();
   @Nullable
   private EventLoopGroup bossEventLoopGroup;
   @Nullable
@@ -120,6 +125,17 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    */
   public NettyServerBuilder channelType(Class<? extends ServerChannel> channelType) {
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    return this;
+  }
+
+  /**
+   * Specifies a channel option. As the underlying channel as well as network implementation may
+   * ignore this value applications should consider it a hint.
+   *
+   * @since 1.9.0
+   */
+  public <T> NettyServerBuilder withChildOption(ChannelOption<T> option, T value) {
+    this.channelOptions.put(option, value);
     return this;
   }
 
@@ -403,7 +419,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     }
 
     return new NettyServer(
-        address, channelType, bossEventLoopGroup, workerEventLoopGroup,
+        address, channelType, channelOptions, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, streamTracerFactories, transportTracerFactory,
         maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
