@@ -297,7 +297,7 @@ class OutboundFlowController {
     }
 
     /**
-     * Returns the the head of the pending queue, or {@code null} if empty.
+     * Returns the head of the pending queue, or {@code null} if empty.
      */
     private Frame peek() {
       return pendingWriteQueue.peek();

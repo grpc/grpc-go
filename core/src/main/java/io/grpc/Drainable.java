@@ -25,7 +25,7 @@ import java.io.OutputStream;
  *
  * <p>This can be used for optimizing for the case where the content of the input stream will be
  * written to an {@link OutputStream} eventually. Instead of copying the content to a byte array
- * through {@code read()}, then writing the the {@code OutputStream}, the implementation can write
+ * through {@code read()}, then writing the {@code OutputStream}, the implementation can write
  * the content directly to the {@code OutputStream}.
  */
 public interface Drainable {

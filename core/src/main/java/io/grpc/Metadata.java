@@ -544,7 +544,7 @@ public final class Metadata {
    * <li>special characters: {@code -_.}
    * </ul>
    *
-   * <p>This is a a strict subset of the HTTP field-name rules. Applications may not send or receive
+   * <p>This is a strict subset of the HTTP field-name rules. Applications may not send or receive
    * metadata with invalid key names. However, the gRPC library may preserve any metadata received
    * even if it does not conform to the above limitations. Additionally, if metadata contains non
    * conforming field names, they will still be sent. In this way, unknown metadata fields are

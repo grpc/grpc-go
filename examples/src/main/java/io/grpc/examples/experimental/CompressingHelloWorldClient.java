@@ -30,7 +30,7 @@ import java.util.logging.Logger;
  * A simple client that requests a greeting from the
  *      {@link io.grpc.examples.helloworld.HelloWorldServer}.
  *
- * <p>This class should act a a drop in replacement for
+ * <p>This class should act a drop in replacement for
  *      {@link io.grpc.examples.helloworld.HelloWorldClient}.
  */
 public class CompressingHelloWorldClient {
