@@ -472,7 +472,13 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private Socket createHttpProxySocket(InetSocketAddress address, InetSocketAddress proxyAddress,
       String proxyUsername, String proxyPassword) throws IOException, StatusException {
     try {
-      Socket sock = new Socket(proxyAddress.getAddress(), proxyAddress.getPort());
+      Socket sock;
+      // The proxy address may not be resolved
+      if (proxyAddress.getAddress() != null) {
+        sock = new Socket(proxyAddress.getAddress(), proxyAddress.getPort());
+      } else {
+        sock = new Socket(proxyAddress.getHostName(), proxyAddress.getPort());
+      }
       sock.setTcpNoDelay(true);
 
       Source source = Okio.source(sock);

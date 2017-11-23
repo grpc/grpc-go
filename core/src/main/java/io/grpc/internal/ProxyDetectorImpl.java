@@ -184,7 +184,8 @@ class ProxyDetectorImpl implements ProxyDetector {
             + "be removed in a future release. Use the JVM flags "
             + "\"-Dhttps.proxyHost=HOST -Dhttps.proxyPort=PORT\" to set the https proxy for "
             + "this JVM.");
-    return new InetSocketAddress(parts[0], port);
+    // Return an unresolved InetSocketAddress to avoid DNS lookup
+    return InetSocketAddress.createUnresolved(parts[0], port);
   }
 
   /**
