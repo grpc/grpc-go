@@ -18,3 +18,7 @@ dependencies {
 
     testCompile project(':grpc-testing-proto')
 }
+
+javadoc {
+  exclude 'io/grpc/internal/**'
+}
