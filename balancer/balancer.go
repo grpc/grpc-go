@@ -128,6 +128,10 @@ type PickOptions struct{}
 type DoneInfo struct {
 	// Err is the rpc error the RPC finished with. It could be nil.
 	Err error
+	// BytesSent indicates if any bytes have been sent to the server.
+	BytesSent bool
+	// BytesReceived indicates if any byte has been received from the server.
+	BytesReceived bool
 }
 
 var (

@@ -97,6 +97,8 @@ type dialOptions struct {
 	callOptions []CallOption
 	// This is to support v1 balancer.
 	balancerBuilder balancer.Builder
+	// This is to support grpclb.
+	resolverBuilder resolver.Builder
 }
 
 const (
@@ -204,6 +206,13 @@ func WithBalancerBuilder(b balancer.Builder) DialOption {
 	}
 }
 
+// withResolverBuilder is only for grpclb.
+func withResolverBuilder(b resolver.Builder) DialOption {
+	return func(o *dialOptions) {
+		o.resolverBuilder = b
+	}
+}
+
 // WithServiceConfig returns a DialOption which has a channel to read the service configuration.
 // DEPRECATED: service config should be received through name resolver, as specified here.
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
@@ -283,18 +292,23 @@ func WithTimeout(d time.Duration) DialOption {
 	}
 }
 
+func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Dialer = f
+	}
+}
+
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
 // If FailOnNonTempDialError() is set to true, and an error is returned by f, gRPC checks the error's
 // Temporary() method to decide if it should try to reconnect to the network address.
 func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
-	return func(o *dialOptions) {
-		o.copts.Dialer = func(ctx context.Context, addr string) (net.Conn, error) {
+	return withContextDialer(
+		func(ctx context.Context, addr string) (net.Conn, error) {
 			if deadline, ok := ctx.Deadline(); ok {
 				return f(addr, deadline.Sub(time.Now()))
 			}
 			return f(addr, 0)
-		}
-	}
+		})
 }
 
 // WithStatsHandler returns a DialOption that specifies the stats handler

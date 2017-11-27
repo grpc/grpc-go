@@ -277,11 +277,11 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, c, callHdr, stream, t, args, topts)
 		if err != nil {
 			if done != nil {
-				updateRPCInfoInContext(ctx, rpcInfo{
-					bytesSent:     true,
-					bytesReceived: stream.BytesReceived(),
+				done(balancer.DoneInfo{
+					Err:           err,
+					BytesSent:     true,
+					BytesReceived: stream.BytesReceived(),
 				})
-				done(balancer.DoneInfo{Err: err})
 			}
 			// Retry a non-failfast RPC when
 			// i) the server started to drain before this RPC was initiated.
@@ -301,11 +301,11 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, c, stream, reply)
 		if err != nil {
 			if done != nil {
-				updateRPCInfoInContext(ctx, rpcInfo{
-					bytesSent:     true,
-					bytesReceived: stream.BytesReceived(),
+				done(balancer.DoneInfo{
+					Err:           err,
+					BytesSent:     true,
+					BytesReceived: stream.BytesReceived(),
 				})
-				done(balancer.DoneInfo{Err: err})
 			}
 			if !c.failFast && stream.Unprocessed() {
 				// In these cases, the server did not receive the data, but we still
@@ -323,12 +323,13 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, nil)
+		err = stream.Status().Err()
 		if done != nil {
-			updateRPCInfoInContext(ctx, rpcInfo{
-				bytesSent:     true,
-				bytesReceived: stream.BytesReceived(),
+			done(balancer.DoneInfo{
+				Err:           err,
+				BytesSent:     true,
+				BytesReceived: stream.BytesReceived(),
 			})
-			done(balancer.DoneInfo{Err: err})
 		}
 		if !c.failFast && stream.Unprocessed() {
 			// In these cases, the server did not receive the data, but we still
@@ -339,6 +340,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				continue
 			}
 		}
-		return stream.Status().Err()
+		return err
 	}
 }

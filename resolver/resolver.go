@@ -78,7 +78,9 @@ type Address struct {
 	// Type is the type of this address.
 	Type AddressType
 	// ServerName is the name of this address.
-	// It's the name of the grpc load balancer, which will be used for authentication.
+	//
+	// e.g. if Type is GRPCLB, ServerName should be the name of the remote load
+	// balancer, not the name of the backend.
 	ServerName string
 	// Metadata is the information associated with Addr, which may be used
 	// to make load balancing decision.

@@ -232,7 +232,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if done != nil {
-				done(balancer.DoneInfo{Err: err})
+				doneInfo := balancer.DoneInfo{Err: err}
+				if _, ok := err.(transport.ConnectionError); ok {
+					// If error is connection error, transport was sending data on wire,
+					// and we are not sure if anything has been sent on wire.
+					// If error is not connection error, we are sure nothing has been sent.
+					doneInfo.BytesSent = true
+				}
+				done(doneInfo)
 				done = nil
 			}
 			// In the event of any error from NewStream, we never attempted to write
@@ -529,11 +536,11 @@ func (cs *clientStream) finish(err error) {
 		o.after(cs.c)
 	}
 	if cs.done != nil {
-		updateRPCInfoInContext(cs.s.Context(), rpcInfo{
-			bytesSent:     true,
-			bytesReceived: cs.s.BytesReceived(),
+		cs.done(balancer.DoneInfo{
+			Err:           err,
+			BytesSent:     true,
+			BytesReceived: cs.s.BytesReceived(),
 		})
-		cs.done(balancer.DoneInfo{Err: err})
 		cs.done = nil
 	}
 	if cs.statsHandler != nil {
