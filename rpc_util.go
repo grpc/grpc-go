@@ -458,7 +458,7 @@ func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 //
-// Deprecated; use status.FromError and Code method instead.
+// Deprecated: use status.FromError and Code method instead.
 func Code(err error) codes.Code {
 	if s, ok := status.FromError(err); ok {
 		return s.Code()
@@ -469,7 +469,7 @@ func Code(err error) codes.Code {
 // ErrorDesc returns the error description of err if it was produced by the rpc system.
 // Otherwise, it returns err.Error() or empty string when err is nil.
 //
-// Deprecated; use status.FromError and Message method instead.
+// Deprecated: use status.FromError and Message method instead.
 func ErrorDesc(err error) string {
 	if s, ok := status.FromError(err); ok {
 		return s.Message()
@@ -480,7 +480,7 @@ func ErrorDesc(err error) string {
 // Errorf returns an error containing an error code and a description;
 // Errorf returns nil if c is OK.
 //
-// Deprecated; use status.Errorf instead.
+// Deprecated: use status.Errorf instead.
 func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return status.Errorf(c, format, a...)
 }
