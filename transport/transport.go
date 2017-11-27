@@ -151,55 +151,6 @@ type item interface {
 	item()
 }
 
-// controlBuffer is an unbounded channel of item.
-type controlBuffer struct {
-	c       chan item
-	mu      sync.Mutex
-	backlog []item
-}
-
-func newControlBuffer() *controlBuffer {
-	b := &controlBuffer{
-		c: make(chan item, 1),
-	}
-	return b
-}
-
-func (b *controlBuffer) put(r item) {
-	b.mu.Lock()
-	if len(b.backlog) == 0 {
-		select {
-		case b.c <- r:
-			b.mu.Unlock()
-			return
-		default:
-		}
-	}
-	b.backlog = append(b.backlog, r)
-	b.mu.Unlock()
-}
-
-func (b *controlBuffer) load() {
-	b.mu.Lock()
-	if len(b.backlog) > 0 {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog[0] = nil
-			b.backlog = b.backlog[1:]
-		default:
-		}
-	}
-	b.mu.Unlock()
-}
-
-// get returns the channel that receives an item in the buffer.
-//
-// Upon receipt of an item, the caller should call load to send another
-// item onto the channel if there is any.
-func (b *controlBuffer) get() <-chan item {
-	return b.c
-}
-
 type streamState uint8
 
 const (
@@ -711,6 +662,360 @@ const (
 	// "too_many_pings".
 	GoAwayTooManyPings GoAwayReason = 2
 )
+
+type outStreamState int
+
+const (
+	active outStreamState = iota
+	empty
+	notStartedYet
+	waitingOnStreamQuota
+	waitingOnTrQuota
+)
+
+type outStream struct {
+	st               outStreamState
+	it               item
+	bytesOutStanding int
+
+	next *outStream
+	prev *outStream
+}
+
+func (s *outStream) deleteSelf() {
+	if s.prev != nil {
+		s.prev.next = s.next
+	}
+	if s.next != nil {
+		s.next.prev = s.prev
+	}
+	str.next, str.prev = nil, nil
+}
+
+type outStreamList struct {
+	// Following are sentinal objects that mark the
+	// begining and end of the list. They do not
+	// contain any item lists. All valid objects are
+	// inserted in between them.
+	head *outStream
+	tail *outStream
+}
+
+func newOutStreamList() {
+	head, tail := new(outStream), new(outStream)
+	head.next = tail
+	tail.prev = head
+}
+
+// remove from the end of the list.
+func (l *outStreamList) add(s *outStream) {
+	e := l.tail.prev
+	e.next = s
+	s.prev = e
+	s.next = l.tail
+	l.tail.prev = s
+}
+
+// remove from the begining of the list.
+func (l *outStreamList) remove() *outStream {
+	b := l.head.next
+	if b == l.tail {
+		return nil
+	}
+	b.deleteSelf()
+	return b
+}
+
+func (l *outStreamList) deleteAll() {
+	b := l.head.next
+	if b == l.tail {
+		return
+	}
+	l.head.next = l.tail
+	b.prev = nil
+	e := l.tail.prev
+	l.tail.prev = l.head
+	e.next = nil
+}
+
+type controlBuffer struct {
+	ch chan struct{}
+
+	mu   sync.Mutex
+	head itemList
+	tail itemList
+}
+
+func (c *controlBuffer) get() itemList {
+	c.mu.Lock()
+	h := c.head
+	c.head, c.tail = nil, nil
+	c.mu.Unlock()
+	return h
+}
+
+func (c *controlBuffer) put(it item) itemList {
+	i = &itemList{it: it}
+	var wakeUpLoopy bool
+	s.mu.Lock()
+	if s.head == nil {
+		s.head, s.tail = i, i
+		wakeUpLoopy = true
+	} else {
+		s.tail.next = i
+		s.tail = i
+	}
+	s.mu.Unlock()
+
+	if wakeUpLoopy {
+		select {
+		case s.ch <- struct{}{}:
+		default:
+			panic(fmt.Errorf("waking up on loopy shouldn't have blocked!"))
+		}
+	}
+}
+
+type loopyWriter struct {
+	cbuf        *controlBuffer
+	sendQuota   int32
+	mcs         int32 // max concurrent streams.
+	oiws        int32 // outbound initial window size.
+	itemHandler func(item) error
+
+	numEstdStreams uint32 // Number of established streams.
+	allStreams     map[uint32]*outStream
+	activeStreams  *outStream
+	waitingStreams *outStream
+}
+
+func newLoopyWriter(cbuf *controlBuffer, itemHandler func(item) error) *loopyWriter {
+	return &loopyWriter{
+		cbuf:           cbuf,
+		sendQuota:      defaultWindowSize,
+		mcs:            defaultMaxStreamsClient,
+		oiws:           defaultWindowSize,
+		itemHandler:    itemHandler,
+		allStream:      make(map[uint32]*outStream),
+		activeStreams:  newOutStreamList(),
+		waitingStreams: newOutStreamList(),
+	}
+}
+
+const flushSig = &flushIO{}
+
+// run should be run in a separate goroutine.
+func (l *loopyWriter) run(ctx context) {
+	for {
+		select {
+		case <-l.cbuf.ch:
+			l.preprocess(l.cbuf.get())
+			l.processData()
+		case <-ctx.Done():
+			warningf("transport: loopy returning. Err: %v", ctx.Err())
+			return
+		}
+	hasdata:
+		for {
+			select {
+			case <-l.cbuf.ch:
+				l.preprocess(l.cbuf.get())
+				l.processData()
+			case <-ctx.Done():
+				warningf("transport: loopy returning. Err: %v", ctx.Err())
+				return
+			default:
+				l.itemHandler(flushSig)
+				break hasdata
+			}
+		}
+	}
+}
+
+func (l *loopyWriter) prepocess(il itemList) error {
+	for i := il; il != nil; il = il.next {
+		i := il.it
+		switch i := i.(type) {
+		case *windowUpdate:
+			if i.dir == outgoing {
+				i.itemHandler(i)
+				continue
+			}
+			// Otherwise, update the quota.
+			if i.streamID == 0 {
+				l.sendQuota += i.increment
+				continue
+			}
+			// Find the stream and update it.
+			if str, ok := allStreams[i.streamID]; ok {
+				str.bytesOutStanding -= i.increment
+				if str.st == waitingOnStreamQuota {
+					str.st = active
+					l.activeStreams.add(str)
+				}
+			}
+		case *settings:
+			if i.dir == outgoing {
+				i.itemHandler(i)
+				continue
+			}
+			i.itemHandler(&settingsAck{})
+			l.applySettings(i.ss)
+		case *headerFrame:
+			if i.startStream { // Case 1. Client wants to originate stream.
+				str := &outStream{
+					st: notStartedYet,
+					it: i,
+				}
+				l.allStreams[i.streamID] = str
+				if numEsdtStreams >= l.mcs { // Can't start another stream right now.
+					l.waitingStreams.add(str)
+					continue
+				}
+				str.st = empty
+				l.itemHandler(i)
+				str.it = nil
+				numOfEstdStreams++
+				continue
+			}
+			if i.endStream { // Case 2. Server wants to close stream.
+				str := l.allStream[i.streamID]
+				delete(l.allStreams, i.streamID)
+				str.deleteSelf()
+			}
+			// Case 3. Server is responding back with headers.
+			l.itemHandler(i)
+		case *cleanupStream:
+			numOfEstdStreams--
+			str := l.allStreams[i.streamID]
+			delete(l.allStreams, i.streamID)
+			str.deleteSelf()
+			if i.rst && str.st != waitingOnHeaderQuota {
+				l.itemHandler(&rstStream{
+					streamID: i.streamID,
+					code:     i.rstCode,
+				})
+			}
+			// Originate a waiting stream
+			str := l.waitingStreams.remove()
+			if str == nil {
+				continue
+			}
+			str.st = empty
+			l.itemHandlers(st.it)
+			str.it = nil
+		case *incomingGoAway:
+			l.waitingStreams.deleteAll()
+		case *dataFrame:
+			str := l.allStreams[i.streamID]
+			// If we got data for stream it means the
+			// stream was originated and headers were sent out.
+			// Also, it means that the last data scheduled by
+			// writer has been written out. So the only state it
+			// can be in is empty.
+			str.st = active
+			str.it = i
+			l.activeStreams.add(str)
+			continue
+		default:
+			l.itemHandler(i)
+		}
+	}
+}
+
+func (l *loopyWriter) applySettings(ss []http2.Setting) {
+	for _, s := range ss {
+		switch s.ID {
+		case http2.SettingMaxConcurrentStreams:
+			delta := l.mcs - s.Val
+			l.mcs = s.Val
+			// If the server is allowing more streams,
+			// send out headers of waiting streams.
+			var str *outStream
+			for ; delta > 0; delta-- {
+				if str = l.waitingStream.remove(); str == nil {
+					break
+				}
+				str.state = empty
+				l.itemHandler(str.it) // Send the header.
+				str.it = nil
+				numEstdStreams++
+			}
+		case http2.SettingInitialWindowSize:
+			l.oiws = s.Val
+		}
+	}
+}
+
+func (l *loopyWriter) processData() {
+	var str *outStream
+	for {
+		if l.sendQuota == 0 {
+			break
+		}
+		if str = l.activeStream.remove(); str == nil {
+			break
+		}
+		dataItem := str.it
+		if len(dataItem.h) == 0 && len(dataItem.d) == 0 {
+			// Client sends out empty data frame with endStream = true
+			l.itemHandler(dataItem)
+			str.st = empty
+			continue
+		}
+		var (
+			idx int
+			buf []byte
+		)
+		if len(dataItem.h) != 0 { // data header has not been written out yet.
+			buf = dataItem.h
+		} else {
+			idx = 1
+			buf = dataItem.d
+		}
+		size := http2MaxFrameLen
+		if len(buf) < size {
+			size = len(buf)
+		}
+		if strQuota := l.oiwa - str.bytesOutStandin; strQuota < size {
+			size = strQuota
+		}
+		if l.sendQuota < size {
+			size = l.sendQuota
+		}
+		var endStream bool
+		// This last data message on this stream and all
+		// of it can be written in this go.
+		if dataItem.endStream && size == len(buf) {
+			// buf contains either data or it contians header but data is empty.
+			if idx == 1 || len(dataItem.d) == 0 {
+				endStream = true
+			}
+		}
+		l.itemHandler(&dataFrame{
+			streamID:  dataItem.streamID,
+			endStream: endStream,
+			d:         buf[:size],
+			f:         dataItem.f,
+		})
+		buf = buf[size:]
+		str.bytesOutstanding += size
+		l.sendQuota -= size
+		if idx == 0 {
+			dataItem.h = buf
+		} else {
+			dataItem.d = buf
+		}
+
+		if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data was written out.
+			str.st = empty
+		} else if l.oiws-str.bytesOutStanding == 0 { // Ran out of stream quota.
+			str.st = waitingOnStreamQuota
+		} else {
+			l.activeStreams.add(str) // Otherwise, add it to the back of list.
+		}
+	}
+}
 
 // loopyWriter is run in a separate go routine. It is the single code path that will
 // write data on wire.

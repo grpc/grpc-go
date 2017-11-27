@@ -20,7 +20,6 @@ package transport
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"sync"
 	"time"
@@ -52,44 +51,70 @@ const (
 	defaultLocalSendQuota = 128 * 1024
 )
 
+type direction int
+
+const (
+	incoming direction = iota
+	outgoing
+)
+
+// TODO(mmukhi): making a wrapping struct instead.
+type item interface {
+	item()
+}
+
+type itemList struct {
+	it   item
+	next item
+}
+
 // The following defines various control items which could flow through
 // the control buffer of transport. They represent different aspects of
 // control tasks, e.g., flow control, settings, streaming resetting, etc.
 
 type headerFrame struct {
-	streamID  uint32
-	hf        []hpack.HeaderField
-	endStream bool
+	streamID    uint32
+	hf          []hpack.HeaderField
+	endStream   bool // Valid on server side.
+	startStream bool // Valid on client side.
+	// On the client-side f is called when the
+	// header frame is sent out.
+	f func()
 }
 
 func (*headerFrame) item() {}
 
-type continuationFrame struct {
-	streamID            uint32
-	endHeaders          bool
-	headerBlockFragment []byte
+type cleanupStream struct {
+	streamID uint32
+	rst      bool
+	rstCode  http2.ErrCode
 }
+
+func (*cleanupStream) item() {}
 
 type dataFrame struct {
 	streamID  uint32
 	endStream bool
+	h         []byte
 	d         []byte
-	f         func()
+	// f is called every time
+	// a part of d is written out.
+	f func()
 }
 
 func (*dataFrame) item() {}
 
-func (*continuationFrame) item() {}
-
 type windowUpdate struct {
 	streamID  uint32
 	increment uint32
+	dir       direction
 }
 
 func (*windowUpdate) item() {}
 
 type settings struct {
-	ss []http2.Setting
+	ss  []http2.Setting
+	dir direction
 }
 
 func (*settings) item() {}
@@ -105,6 +130,11 @@ type resetStream struct {
 }
 
 func (*resetStream) item() {}
+
+type incomingGoAway struct {
+}
+
+func (*incomingGoAway) item() {}
 
 type goAway struct {
 	code      http2.ErrCode
@@ -126,110 +156,6 @@ type ping struct {
 }
 
 func (*ping) item() {}
-
-// quotaPool is a pool which accumulates the quota and sends it to acquire()
-// when it is available.
-type quotaPool struct {
-	mu      sync.Mutex
-	c       chan struct{}
-	version uint32
-	quota   int
-}
-
-// newQuotaPool creates a quotaPool which has quota q available to consume.
-func newQuotaPool(q int) *quotaPool {
-	qb := &quotaPool{
-		quota: q,
-		c:     make(chan struct{}, 1),
-	}
-	return qb
-}
-
-// add cancels the pending quota sent on acquired, incremented by v and sends
-// it back on acquire.
-func (qb *quotaPool) add(v int) {
-	qb.mu.Lock()
-	defer qb.mu.Unlock()
-	qb.lockedAdd(v)
-}
-
-func (qb *quotaPool) lockedAdd(v int) {
-	var wakeUp bool
-	if qb.quota <= 0 {
-		wakeUp = true // Wake up potential waiters.
-	}
-	qb.quota += v
-	if wakeUp && qb.quota > 0 {
-		select {
-		case qb.c <- struct{}{}:
-		default:
-		}
-	}
-}
-
-func (qb *quotaPool) addAndUpdate(v int) {
-	qb.mu.Lock()
-	qb.lockedAdd(v)
-	qb.version++
-	qb.mu.Unlock()
-}
-
-func (qb *quotaPool) get(v int, wc waiters) (int, uint32, error) {
-	qb.mu.Lock()
-	if qb.quota > 0 {
-		if v > qb.quota {
-			v = qb.quota
-		}
-		qb.quota -= v
-		ver := qb.version
-		qb.mu.Unlock()
-		return v, ver, nil
-	}
-	qb.mu.Unlock()
-	for {
-		select {
-		case <-wc.ctx.Done():
-			return 0, 0, ContextErr(wc.ctx.Err())
-		case <-wc.tctx.Done():
-			return 0, 0, ErrConnClosing
-		case <-wc.done:
-			return 0, 0, io.EOF
-		case <-wc.goAway:
-			return 0, 0, errStreamDrain
-		case <-qb.c:
-			qb.mu.Lock()
-			if qb.quota > 0 {
-				if v > qb.quota {
-					v = qb.quota
-				}
-				qb.quota -= v
-				ver := qb.version
-				if qb.quota > 0 {
-					select {
-					case qb.c <- struct{}{}:
-					default:
-					}
-				}
-				qb.mu.Unlock()
-				return v, ver, nil
-
-			}
-			qb.mu.Unlock()
-		}
-	}
-}
-
-func (qb *quotaPool) compareAndExecute(version uint32, success, failure func()) bool {
-	qb.mu.Lock()
-	if version == qb.version {
-		success()
-		qb.mu.Unlock()
-		return true
-	}
-	failure()
-	qb.mu.Unlock()
-	return false
-}
 
 // inFlow deals with inbound flow control
 type inFlow struct {
