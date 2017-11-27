@@ -48,7 +48,7 @@ public final class CronetClientTransportTest {
   private CronetClientTransport transport;
   @Mock private StreamBuilderFactory streamFactory;
   @Mock private Executor executor;
-  private MethodDescriptor<Void, Void> descriptor = TestMethodDescriptors.noopMethod();
+  private MethodDescriptor<Void, Void> descriptor = TestMethodDescriptors.voidMethod();
   @Mock private ManagedClientTransport.Listener clientTransportListener;
   @Mock private BidirectionalStream.Builder builder;
 
