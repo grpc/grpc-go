@@ -36,6 +36,7 @@ import (
 const (
 	lbTokeyKey             = "lb-token"
 	defaultFallbackTimeout = 10 * time.Second
+	grpclbName             = "grpclb"
 )
 
 func convertDuration(d *lbpb.Duration) time.Duration {
@@ -82,10 +83,13 @@ func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 	return m, nil
 }
 
-// NewLBBuilder creates a builder for grpclb. For testing only.
-func NewLBBuilder() balancer.Builder {
-	// TODO(bar grpclb) this function is exported for testing only, remove it when resolver supports selecting grpclb.
+// newLBBuilder creates a builder for grpclb.
+func newLBBuilder() balancer.Builder {
 	return NewLBBuilderWithFallbackTimeout(defaultFallbackTimeout)
+}
+
+func init() {
+	balancer.Register(newLBBuilder())
 }
 
 // NewLBBuilderWithFallbackTimeout creates a grpclb builder with the given
@@ -105,7 +109,7 @@ type lbBuilder struct {
 }
 
 func (b *lbBuilder) Name() string {
-	return "grpclb"
+	return grpclbName
 }
 
 func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {

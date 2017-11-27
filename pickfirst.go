@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+const pickfirstName = "pick_first"
+
 func newPickfirstBuilder() balancer.Builder {
 	return &pickfirstBuilder{}
 }
@@ -37,7 +39,7 @@ func (*pickfirstBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions
 }
 
 func (*pickfirstBuilder) Name() string {
-	return "pick_first"
+	return pickfirstName
 }
 
 type pickfirstBalancer struct {
