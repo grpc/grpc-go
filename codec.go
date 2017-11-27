@@ -69,6 +69,11 @@ func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+	if pm, ok := v.(proto.Marshaler); ok {
+		// object can marshal itself, no need for buffer
+		return pm.Marshal()
+	}
+
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	out, err := p.marshal(v, cb)
 
