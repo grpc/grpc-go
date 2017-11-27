@@ -128,8 +128,10 @@ type ResolveNowOption struct{}
 // Resolver watches for the updates on the specified target.
 // Updates include address updates and service config updates.
 type Resolver interface {
-	// ResolveNow will be called by gRPC to try to resolve the target name again.
-	// It's just a hint, resolver can ignore this if it's not necessary.
+	// ResolveNow will be called by gRPC to try to resolve the target name
+	// again. It's just a hint, resolver can ignore this if it's not necessary.
+	//
+	// It could be called multiple times concurrently.
 	ResolveNow(ResolveNowOption)
 	// Close closes the resolver.
 	Close()
