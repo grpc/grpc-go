@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// The parent ClientConn should re-resolve when grpclb lose connection to the
+// The parent ClientConn should re-resolve when grpclb loses connection to the
 // remote balancer. When the ClientConn inside grpclb gets a TransientFailure,
 // it calls lbManualResolver.ResolveNow(), which calls parent ClientConn's
 // ResolveNow, and eventually results in re-resolve happening in parent
@@ -31,33 +31,23 @@ import (
 //
 //                          parent
 //                          ClientConn
-//  +-------------------------------------------------------------------+
-//  |                                                                   |
-//  |             parent          +----------------------------------+  |
-//  | DNS         ClientConn      |                                  |  |
-//  | resolver    balancerWrapper |  grpclb                          |  |
-//  |                             |                                  |  |
-//  | +              +            |    grpclb           grpclb       |  |
-//  | |              |            |    ManualResolver   ClientConn   |  |
-//  | |              |            |                                  |  |
-//  | |              |            |     +               +            |  |
-//  | |              |            |     |               | Transient  |  |
-//  | |              |            |     |               | Failure    |  |
-//  | |              |            |     |  <----------  |            |  |
-//  | |              |            |     |               |            |  |
-//  | |              |  <-------------  | ResolveNow    |            |  |
-//  | |              |            |     |               |            |  |
-//  | |  <---------  | ResolveNow |     |               |            |  |
-//  | |              |            |     |               |            |  |
-//  | | ResolveNow   |            |     |               |            |  |
-//  | |              |            |     |               |            |  |
-//  | |              |            |     |               |            |  |
-//  | |              |            |     |               |            |  |
-//  | +              +            |     +               +            |  |
-//  |                             |                                  |  |
-//  |                             +----------------------------------+  |
-//  |                                                                   |
-//  +-------------------------------------------------------------------+
+//  +-----------------------------------------------------------------+
+//  |             parent          +---------------------------------+ |
+//  | DNS         ClientConn      |  grpclb                         | |
+//  | resolver    balancerWrapper |                                 | |
+//  | +              +            |    grpclb          grpclb       | |
+//  | |              |            |    ManualResolver  ClientConn   | |
+//  | |              |            |     +              +            | |
+//  | |              |            |     |              | Transient  | |
+//  | |              |            |     |              | Failure    | |
+//  | |              |            |     |  <---------  |            | |
+//  | |              | <--------------- |  ResolveNow  |            | |
+//  | |  <---------  | ResolveNow |     |              |            | |
+//  | |  ResolveNow  |            |     |              |            | |
+//  | |              |            |     |              |            | |
+//  | +              +            |     +              +            | |
+//  |                             +---------------------------------+ |
+//  +-----------------------------------------------------------------+
 
 // lbManualResolver is used by the ClientConn inside grpclb. It's a manual
 // resolver with a special ResolveNow() function.
