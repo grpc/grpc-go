@@ -103,7 +103,7 @@ func TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	for i := 0; i < numServers; i++ {
 		resolvedAddrs[i] = resolver.Address{Addr: servers[i].Addr().String()}
 	}
-	r.BootstrapWithAddrs(resolvedAddrs)
+	r.InitialAddrs(resolvedAddrs)
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
 	if err != nil {
 		t.Errorf("Dial failed. Err: %v", err)
@@ -151,7 +151,7 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 		<-dialDone // Close conn only after dial returns.
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForServerSettings(), WithBlock())
+	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 	close(dialDone)
 	if err != nil {
 		cancel()
@@ -274,7 +274,7 @@ func TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 			conn.Close()
 			dr := meow.Sub(prevAt)
 			if dr <= prevDuration {
-				t.Errorf("Client backoff did not increase with retries. Previoud duration: %v, current duration: %v", prevDuration, dr)
+				t.Errorf("Client backoff did not increase with retries. Previous duration: %v, current duration: %v", prevDuration, dr)
 				return
 			}
 			prevDuration = dr

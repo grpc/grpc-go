@@ -44,9 +44,9 @@ type Resolver struct {
 	bootstrapAddrs []resolver.Address
 }
 
-// BootstrapWithAddrs adds resolved addresses to the resolver so that
+// InitialAddrs adds resolved addresses to the resolver so that
 // NewAddress doesn't need to be explicitly called after Dial.
-func (r *Resolver) BootstrapWithAddrs(addrs []resolver.Address) {
+func (r *Resolver) InitialAddrs(addrs []resolver.Address) {
 	r.bootstrapAddrs = addrs
 }
 
