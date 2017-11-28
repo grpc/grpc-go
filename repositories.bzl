@@ -177,8 +177,8 @@ def com_squareup_okhttp():
 def com_squareup_okio():
   native.maven_jar(
       name = "com_squareup_okio_okio",
-      artifact = "com.squareup.okio:okio:1.6.0",
-      sha1 = "98476622f10715998eacf9240d6b479f12c66143",
+      artifact = "com.squareup.okio:okio:1.13.0",
+      sha1 = "a9283170b7305c8d92d25aff02a6ab7e45d06cbe",
   )
 
 def io_netty_codec_http2():
