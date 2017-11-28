@@ -54,6 +54,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private final byte[] messageAcceptEncoding;
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
+  private final BinaryLog binlog;
 
   // state
   private volatile boolean cancelled;
@@ -71,6 +72,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     this.messageAcceptEncoding = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
+    binlog = BinaryLog.getLog(method.getFullMethodName());
   }
 
   @Override
