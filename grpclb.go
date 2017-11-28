@@ -83,6 +83,10 @@ func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 	return m, nil
 }
 
+func init() {
+	balancer.Register(newLBBuilder())
+}
+
 // newLBBuilder creates a builder for grpclb.
 func newLBBuilder() balancer.Builder {
 	return NewLBBuilderWithFallbackTimeout(defaultFallbackTimeout)

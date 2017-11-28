@@ -37,6 +37,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
@@ -574,6 +575,24 @@ func TestBalancerDisconnects(t *testing.T) {
 	t.Fatalf("No RPC sent to second backend after 1 second")
 }
 
+type customGRPCLBBuilder struct {
+	balancer.Builder
+	name string
+}
+
+func (b *customGRPCLBBuilder) Name() string {
+	return b.name
+}
+
+const grpclbCustomFallbackName = "grpclb_with_custom_fallback_timeout"
+
+func init() {
+	balancer.Register(&customGRPCLBBuilder{
+		Builder: grpc.NewLBBuilderWithFallbackTimeout(100 * time.Millisecond),
+		name:    grpclbCustomFallbackName,
+	})
+}
+
 func TestFallback(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -612,7 +631,7 @@ func TestFallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithBalancerBuilder(grpc.NewLBBuilderWithFallbackTimeout(100*time.Millisecond)),
+		grpc.WithBalancerName(grpclbCustomFallbackName),
 		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)

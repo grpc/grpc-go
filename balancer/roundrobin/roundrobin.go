@@ -31,9 +31,12 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+// Name is the name of round_robin balancer.
+const Name = "round_robin"
+
 // newBuilder creates a new roundrobin balancer builder.
 func newBuilder() balancer.Builder {
-	return base.NewBalancerBuilder("round_robin", &rrPickerBuilder{})
+	return base.NewBalancerBuilder(Name, &rrPickerBuilder{})
 }
 
 func init() {

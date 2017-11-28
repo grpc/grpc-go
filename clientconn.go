@@ -95,8 +95,10 @@ type dialOptions struct {
 	scChan      <-chan ServiceConfig
 	copts       transport.ConnectOptions
 	callOptions []CallOption
-	// This is to support v1 balancer.
+	// This is used by v1 balancer dial option WithBalancer to support v1 balancer.
 	balancerBuilder balancer.Builder
+	// The balancer to be used. Can not be overridden by service config.
+	balancerName string
 	// This is to support grpclb.
 	resolverBuilder resolver.Builder
 	// Custom user options for resolver.Build.
@@ -200,7 +202,8 @@ func WithDecompressor(dc Decompressor) DialOption {
 
 // WithBalancer returns a DialOption which sets a load balancer with the v1 API.
 // Name resolver will be ignored if this DialOption is specified.
-// Deprecated: use the new balancer APIs in balancer package instead.
+//
+// Deprecated: use the new balancer APIs in balancer package and WithBalancerName.
 func WithBalancer(b Balancer) DialOption {
 	return func(o *dialOptions) {
 		o.balancerBuilder = &balancerWrapperBuilder{
@@ -209,12 +212,17 @@ func WithBalancer(b Balancer) DialOption {
 	}
 }
 
-// WithBalancerBuilder is for testing only. Users using custom balancers should
-// register their balancer and use service config to choose the balancer to use.
-func WithBalancerBuilder(b balancer.Builder) DialOption {
-	// TODO(bar) remove this when switching balancer is done.
+// WithBalancerName sets the balancer that the ClientConn will be initialized
+// with. Balancer registered with balancerName will be used. If no balancer was
+// registered by balancerName, pick_first will be used.
+//
+// The balancer cannot be overridden by balancer option specified by service
+// config.
+//
+// This is an EXPERIMENTAL API.
+func WithBalancerName(balancerName string) DialOption {
 	return func(o *dialOptions) {
-		o.balancerBuilder = b
+		o.balancerName = balancerName
 	}
 }
 
@@ -670,9 +678,9 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	cc.curAddresses = addrs
 
-	if cc.dopts.balancerBuilder != nil && cc.balancerWrapper == nil {
-		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
-	} else {
+	if cc.dopts.balancerName == "" && cc.dopts.balancerBuilder == nil {
+		// Only look at balancer types ans switch balancer if balancer dial
+		// option is not set.
 		var isGRPCLB bool
 		for _, a := range addrs {
 			if a.Type == resolver.GRPCLB {
@@ -697,11 +705,28 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 			// - the first time handling non-grpclb addresses
 			//   (curBalancerName="grpclb", preBalancerName="")
 			if newBalancerName == "" {
-				newBalancerName = pickfirstName
+				newBalancerName = PickFirstBalancerName
 			}
 		}
 		cc.switchBalancer(newBalancerName)
+	} else if cc.balancerWrapper == nil {
+		// Balancer dial option was set, and this is the first time handling
+		// resolved addresses. Build a balancer use the first non-nil:
+		//  - the builder with dopts.balancerName
+		//  - the builder from dopts.balancerBuilder
+		//  - pickfirst
+		builder := balancer.Get(cc.dopts.balancerName)
+		if builder == nil && cc.dopts.balancerBuilder != nil {
+			builder = cc.dopts.balancerBuilder
+		}
+		if builder == nil {
+			// No customBalancer was specified by DialOption, and this is the first
+			// time handling resolved addresses, create a pickfirst balancer.
+			builder = newPickfirstBuilder()
+		}
+		cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
 	}
+
 	cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
 }
 
@@ -723,8 +748,8 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	grpclog.Infof("ClientConn switching balancer to %q", name)
-	if cc.dopts.balancerBuilder != nil {
-		grpclog.Infoln("ignoring balancer switching: WithBalancer DialOption used instead")
+	if cc.dopts.balancerName != "" || cc.dopts.balancerBuilder != nil {
+		grpclog.Infoln("ignoring balancer switching: Balancer DialOption used instead")
 		return
 	}
 	// TODO(bar switching) change this to two steps: drain and close.
