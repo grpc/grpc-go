@@ -98,7 +98,7 @@ type ccBalancerWrapper struct {
 	resolverUpdateCh chan *resolverUpdate
 	done             chan struct{}
 
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	subConns map[*acBalancerWrapper]struct{}
 }
 
@@ -143,11 +143,13 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
-			ccb.mu.RLock()
-			for acbw := range ccb.subConns {
+			ccb.mu.Lock()
+			scs := ccb.subConns
+			ccb.subConns = nil
+			ccb.mu.Unlock()
+			for acbw := range scs {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
-			ccb.mu.RUnlock()
 			return
 		default:
 		}
@@ -190,6 +192,11 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	if len(addrs) <= 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
+	ccb.mu.Lock()
+	defer ccb.mu.Unlock()
+	if ccb.subConns == nil {
+		return nil, fmt.Errorf("grpc: ClientConn balancer wrapper was closed")
+	}
 	ac, err := ccb.cc.newAddrConn(addrs)
 	if err != nil {
 		return nil, err
@@ -198,9 +205,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	acbw.ac.mu.Lock()
 	ac.acbw = acbw
 	acbw.ac.mu.Unlock()
-	ccb.mu.Lock()
 	ccb.subConns[acbw] = struct{}{}
-	ccb.mu.Unlock()
 	return acbw, nil
 }
 
@@ -210,12 +215,20 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 		return
 	}
 	ccb.mu.Lock()
+	defer ccb.mu.Unlock()
+	if ccb.subConns == nil {
+		return
+	}
 	delete(ccb.subConns, acbw)
-	ccb.mu.Unlock()
 	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
+	ccb.mu.Lock()
+	defer ccb.mu.Unlock()
+	if ccb.subConns == nil {
+		return
+	}
 	ccb.cc.csMgr.updateState(s)
 	ccb.cc.blockingpicker.updatePicker(p)
 }
