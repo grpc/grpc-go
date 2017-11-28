@@ -98,6 +98,7 @@ type ccBalancerWrapper struct {
 	resolverUpdateCh chan *resolverUpdate
 	done             chan struct{}
 
+	mu       sync.RWMutex
 	subConns map[*acBalancerWrapper]struct{}
 }
 
@@ -142,9 +143,11 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
+			ccb.mu.RLock()
 			for acbw := range ccb.subConns {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
+			ccb.mu.RUnlock()
 			return
 		default:
 		}
@@ -195,7 +198,9 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	acbw.ac.mu.Lock()
 	ac.acbw = acbw
 	acbw.ac.mu.Unlock()
+	ccb.mu.Lock()
 	ccb.subConns[acbw] = struct{}{}
+	ccb.mu.Unlock()
 	return acbw, nil
 }
 
@@ -204,7 +209,9 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	if !ok {
 		return
 	}
+	ccb.mu.Lock()
 	delete(ccb.subConns, acbw)
+	ccb.mu.Unlock()
 	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
