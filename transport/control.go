@@ -54,18 +54,17 @@ const (
 type direction int
 
 const (
-	incoming direction = iota
-	outgoing
+	outgoing direction = iota
+	incoming
 )
 
-// TODO(mmukhi): making a wrapping struct instead.
 type item interface {
 	item()
 }
 
 type itemList struct {
 	it   item
-	next item
+	next *itemList
 }
 
 // The following defines various control items which could flow through
@@ -97,9 +96,12 @@ type dataFrame struct {
 	endStream bool
 	h         []byte
 	d         []byte
-	// f is called every time
+	// onEachWrite is called every time
 	// a part of d is written out.
-	f func()
+	onEachWrite func()
+	// onWriteComplete is called when all
+	// of d is written out.
+	onWriteComplete func()
 }
 
 func (*dataFrame) item() {}

@@ -68,12 +68,7 @@ type http2Server struct {
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *controlBuffer
 	fc         *inFlow
-	// sendQuotaPool provides flow control to outbound message.
-	sendQuotaPool *quotaPool
-	// localSendQuota limits the amount of data that can be scheduled
-	// for writing before it is actually written out.
-	localSendQuota *quotaPool
-	stats          stats.Handler
+	stats      stats.Handler
 	// Flag to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
 	activity uint32 // Accessed atomically.
@@ -104,8 +99,6 @@ type http2Server struct {
 	drainChan     chan struct{}
 	state         transportState
 	activeStreams map[uint32]*Stream
-	// the per-stream outbound flow control window size set by the peer.
-	streamSendQuota uint32
 	// idle is the time instant when the connection went idle.
 	// This is either the beginning of the connection or when the number of
 	// RPCs go down to 0.
@@ -201,11 +194,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		inTapHandle:       config.InTapHandle,
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
-		sendQuotaPool:     newQuotaPool(defaultWindowSize),
-		localSendQuota:    newQuotaPool(defaultLocalSendQuota),
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
-		streamSendQuota:   defaultWindowSize,
 		stats:             config.StatsHandler,
 		kp:                kp,
 		idle:              time.Now(),
@@ -253,7 +243,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	t.handleSettings(sf)
 
 	go func() {
-		loopyWriter(t.ctx, t.controlBuf, t.itemHandler)
+		loopy := newLoopyWriter(t.controlBuf, t.itemHandler)
+		loopy.run(t.ctx)
 		t.Close()
 	}()
 	go t.keepalive()
@@ -282,6 +273,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		fc:           &inFlow{limit: uint32(t.initialWindowSize)},
 		recvCompress: state.encoding,
 		method:       state.method,
+		msgWritten:   make(chan struct{}, 1),
 	}
 
 	if frame.StreamEnded() {
@@ -344,7 +336,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return true
 	}
 	t.maxStreamID = streamID
-	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
@@ -458,9 +449,17 @@ func (t *http2Server) adjustWindow(s *Stream, n uint32) {
 	}
 	if w := s.fc.maybeAdjust(n); w > 0 {
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw})
+			t.controlBuf.put(&windowUpdate{
+				streamID:  0,
+				increment: cw,
+				dir:       outgoing,
+			})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w})
+		t.controlBuf.put(&windowUpdate{
+			streamID:  s.id,
+			increment: w,
+			dir:       outgoing,
+		})
 	}
 }
 
@@ -475,9 +474,16 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	}
 	if w := s.fc.onRead(n); w > 0 {
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw})
+			t.controlBuf.put(&windowUpdate{
+				streamID:  0,
+				increment: cw,
+				dir:       outgoing,
+			})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w})
+		t.controlBuf.put(&windowUpdate{streamID: s.id,
+			increment: w,
+			dir:       outgoing,
+		})
 	}
 }
 
@@ -491,8 +497,13 @@ func (t *http2Server) updateFlowControl(n uint32) {
 	}
 	t.initialWindowSize = int32(n)
 	t.mu.Unlock()
-	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
+	t.controlBuf.put(&windowUpdate{
+		streamID:  0,
+		increment: t.fc.newLimit(n),
+		dir:       outgoing,
+	})
 	t.controlBuf.put(&settings{
+		dir: outgoing,
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
@@ -522,7 +533,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// connection's window update for the bytes we just received.
 	if sendBDPPing {
 		if size != 0 { // Could be an empty frame.
-			t.controlBuf.put(&windowUpdate{0, uint32(size)})
+			t.controlBuf.put(&windowUpdate{
+				streamID:  0,
+				increment: uint32(size),
+				dir:       outgoing,
+			})
 		}
 		t.controlBuf.put(bdpPing)
 	} else {
@@ -532,7 +547,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			return
 		}
 		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
+			t.controlBuf.put(&windowUpdate{
+				streamID:  0,
+				increment: w,
+				dir:       outgoing,
+			})
 		}
 	}
 	// Select the right stream to dispatch.
@@ -554,7 +573,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{s.id, w})
+				t.controlBuf.put(&windowUpdate{
+					streamID:  s.id,
+					increment: w,
+					dir:       outgoing,
+				})
 			}
 		}
 		s.mu.Unlock()
@@ -590,43 +613,15 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
 		return
 	}
-	var rs []http2.Setting
-	var ps []http2.Setting
+	var ss []http2.Setting
 	f.ForeachSetting(func(s http2.Setting) error {
-		if t.isRestrictive(s) {
-			rs = append(rs, s)
-		} else {
-			ps = append(ps, s)
-		}
+		ss = append(ss, s)
 		return nil
 	})
-	t.applySettings(rs)
-	t.controlBuf.put(&settingsAck{})
-	t.applySettings(ps)
-}
-
-func (t *http2Server) isRestrictive(s http2.Setting) bool {
-	switch s.ID {
-	case http2.SettingInitialWindowSize:
-		// Note: we don't acquire a lock here to read streamSendQuota
-		// because the same goroutine updates it later.
-		return s.Val < t.streamSendQuota
-	}
-	return false
-}
-
-func (t *http2Server) applySettings(ss []http2.Setting) {
-	for _, s := range ss {
-		if s.ID == http2.SettingInitialWindowSize {
-			t.mu.Lock()
-			for _, stream := range t.activeStreams {
-				stream.sendQuotaPool.addAndUpdate(int(s.Val) - int(t.streamSendQuota))
-			}
-			t.streamSendQuota = s.Val
-			t.mu.Unlock()
-		}
-
-	}
+	t.controlBuf.put(&settings{
+		dir: incoming,
+		ss:  ss,
+	})
 }
 
 const (
@@ -685,15 +680,11 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 }
 
 func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
-	id := f.Header().StreamID
-	incr := f.Increment
-	if id == 0 {
-		t.sendQuotaPool.add(int(incr))
-		return
-	}
-	if s, ok := t.getStream(f); ok {
-		s.sendQuotaPool.add(int(incr))
-	}
+	t.controlBuf.put(&windowUpdate{
+		dir:       incoming,
+		streamID:  f.Header().StreamID,
+		increment: f.Increment,
+	})
 }
 
 // WriteHeader sends the header metedata md back to the client.
@@ -848,75 +839,30 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	if writeHeaderFrame {
 		t.WriteHeader(s, nil)
 	}
-	// Add data to header frame so that we can equally distribute data across frames.
+	// Add some data to header frame so that we can equally distribute bytes across frames.
 	emptyLen := http2MaxFrameLen - len(hdr)
 	if emptyLen > len(data) {
 		emptyLen = len(data)
 	}
 	hdr = append(hdr, data[:emptyLen]...)
 	data = data[emptyLen:]
-	var (
-		streamQuota    int
-		streamQuotaVer uint32
-		err            error
-	)
-	for _, r := range [][]byte{hdr, data} {
-		for len(r) > 0 {
-			size := http2MaxFrameLen
-			if size > len(r) {
-				size = len(r)
-			}
-			if streamQuota == 0 { // Used up all the locally cached stream quota.
-				// Get all the stream quota there is.
-				streamQuota, streamQuotaVer, err = s.sendQuotaPool.get(math.MaxInt32, s.waiters)
-				if err != nil {
-					return err
-				}
-			}
-			if size > streamQuota {
-				size = streamQuota
-			}
-			// Get size worth quota from transport.
-			tq, _, err := t.sendQuotaPool.get(size, s.waiters)
-			if err != nil {
-				return err
-			}
-			if tq < size {
-				size = tq
-			}
-			ltq, _, err := t.localSendQuota.get(size, s.waiters)
-			if err != nil {
-				return err
-			}
-			// even if ltq is smaller than size we don't adjust size since,
-			// ltq is only a soft limit.
-			streamQuota -= size
-			p := r[:size]
-			// Reset ping strikes when sending data since this might cause
-			// the peer to send ping.
+	t.controlBuf.put(&dataFrame{
+		streamID: s.id,
+		h:        hdr,
+		d:        data,
+		onEachWrite: func() {
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
-			success := func() {
-				ltq := ltq
-				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: false, d: p, f: func() {
-					t.localSendQuota.add(ltq)
-				}})
-				r = r[size:]
-			}
-			failure := func() { // The stream quota version must have changed.
-				// Our streamQuota cache is invalidated now, so give it back.
-				s.sendQuotaPool.lockedAdd(streamQuota + size)
-			}
-			if !s.sendQuotaPool.compareAndExecute(streamQuotaVer, success, failure) {
-				// Couldn't send this chunk out.
-				t.sendQuotaPool.add(size)
-				t.localSendQuota.add(ltq)
-				streamQuota = 0
-			}
-		}
-	}
-	if streamQuota > 0 {
-		// ADd the left over quota back to stream.
-		s.sendQuotaPool.add(streamQuota)
+		},
+		onWriteComplete: func() {
+			s.msgWritten <- struct{}{}
+		},
+	})
+	select {
+	case <-s.msgWritten:
+	case <-s.ctx.Done():
+		return ContextErr(s.ctx.Err())
+	case <-t.ctx.Done():
+		return ErrConnClosing
 	}
 	return nil
 }
@@ -1009,10 +955,10 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 func (t *http2Server) itemHandler(i item) error {
 	switch i := i.(type) {
 	case *dataFrame:
+		i.onEachWrite()
 		if err := t.framer.fr.WriteData(i.streamID, i.endStream, i.d); err != nil {
 			return err
 		}
-		i.f()
 		return nil
 	case *headerFrame:
 		t.hBuf.Reset()
