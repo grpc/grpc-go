@@ -233,6 +233,10 @@ func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balanc
 	ccb.cc.blockingpicker.updatePicker(p)
 }
 
+func (ccb *ccBalancerWrapper) ResolveNow(o resolver.ResolveNowOption) {
+	ccb.cc.resolveNow(o)
+}
+
 func (ccb *ccBalancerWrapper) Target() string {
 	return ccb.cc.target
 }

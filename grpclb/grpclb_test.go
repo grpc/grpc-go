@@ -567,6 +567,7 @@ func TestBalancerDisconnects(t *testing.T) {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tests[1].bePorts[0] {
+			time.Sleep(time.Second)
 			return
 		}
 		time.Sleep(time.Millisecond)

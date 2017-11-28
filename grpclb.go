@@ -30,7 +30,6 @@ import (
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 )
 
 const (
@@ -117,7 +116,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	// scheme will be used to dial to remote LB, so we can send filtered address
 	// updates to remote LB ClientConn using this manual resolver.
 	scheme := "grpclb_internal_" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	r := manual.NewBuilderWithScheme(scheme)
+	r := &lbManualResolver{scheme: scheme, ccb: cc}
 
 	var target string
 	targetSplitted := strings.Split(cc.Target(), ":///")
@@ -155,7 +154,7 @@ type lbBalancer struct {
 	// manualResolver is used in the remote LB ClientConn inside grpclb. When
 	// resolved address updates are received by grpclb, filtered updates will be
 	// send to remote LB ClientConn through this resolver.
-	manualResolver *manual.Resolver
+	manualResolver *lbManualResolver
 	// The ClientConn to talk to the remote balancer.
 	ccRemoteLB *ClientConn
 
