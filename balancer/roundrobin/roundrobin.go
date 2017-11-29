@@ -51,7 +51,7 @@ func (*rrBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balan
 		// Initialize picker to a picker that always return
 		// ErrNoSubConnAvailable, because when state of a SubConn changes, we
 		// may call UpdateBalancerState with this picker.
-		picker: newPicker([]balancer.SubConn{}, nil),
+		picker: &errPicker{err: balancer.ErrNoSubConnAvailable},
 	}
 }
 
@@ -67,7 +67,7 @@ type rrBalancer struct {
 
 	subConns map[resolver.Address]balancer.SubConn
 	scStates map[balancer.SubConn]connectivity.State
-	picker   *picker
+	picker   balancer.Picker
 }
 
 func (b *rrBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
@@ -109,7 +109,7 @@ func (b *rrBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 //  - or does round robin selection of all READY SubConns otherwise.
 func (b *rrBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
-		b.picker = newPicker(nil, balancer.ErrTransientFailure)
+		b.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
 	}
 	var readySCs []balancer.SubConn
@@ -118,7 +118,7 @@ func (b *rrBalancer) regeneratePicker() {
 			readySCs = append(readySCs, sc)
 		}
 	}
-	b.picker = newPicker(readySCs, nil)
+	b.picker = newPicker(readySCs)
 }
 
 func (b *rrBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -160,11 +160,16 @@ func (b *rrBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivit
 func (b *rrBalancer) Close() {
 }
 
-type picker struct {
-	// If err is not nil, Pick always returns this err. It's immutable after
-	// picker is created.
+type errPicker struct {
+	// Pick always returns this err.
 	err error
+}
 
+func (p *errPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+	return nil, nil, p.err
+}
+
+type picker struct {
 	// subConns is the snapshot of the roundrobin balancer when this picker was
 	// created. The slice is immutable. Each Get() will do a round robin
 	// selection from it and return the selected SubConn.
@@ -174,20 +179,14 @@ type picker struct {
 	next int
 }
 
-func newPicker(scs []balancer.SubConn, err error) *picker {
-	grpclog.Infof("roundrobinPicker: newPicker called with scs: %v, %v", scs, err)
-	if err != nil {
-		return &picker{err: err}
-	}
+func newPicker(scs []balancer.SubConn) *picker {
+	grpclog.Infof("roundrobinPicker: newPicker called with scs: %v", scs)
 	return &picker{
 		subConns: scs,
 	}
 }
 
 func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	if p.err != nil {
-		return nil, nil, p.err
-	}
 	if len(p.subConns) <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
