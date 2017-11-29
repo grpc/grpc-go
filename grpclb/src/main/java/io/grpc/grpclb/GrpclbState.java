@@ -101,12 +101,14 @@ final class GrpclbState {
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
 
-  // Once set, never go back to null.
+  // Reset to null when timer expires or cancelled.
   @Nullable
-  private ScheduledFuture<?> fallbackTimer;
+  private FallbackModeTask fallbackTimer;
   private List<EquivalentAddressGroup> fallbackBackendList = Collections.emptyList();
-  private boolean fallbackTimerExpired;
-  private boolean receivedServerListFromBalancer;
+  private boolean usingFallbackBackends;
+  // True if the current balancer has returned a serverlist.  Will be reset to false when lost
+  // connection to a balancer.
+  private boolean balancerWorking;
 
   @Nullable
   private ManagedChannel lbCommChannel;
@@ -141,14 +143,21 @@ final class GrpclbState {
       subchannel.requestConnection();
     }
     subchannel.getAttributes().get(STATE_INFO).set(newState);
+    maybeStartFallbackTimer();
     maybeUpdatePicker();
   }
 
   /**
-   * Set the new addresses of the balancer and backends, and create connection if not yet connected.
+   * Handle new addresses of the balancer and backends from the resolver, and create connection if
+   * not yet connected.
    */
-  void updateAddresses(
+  void handleAddresses(
       List<LbAddressGroup> newLbAddressGroups, List<EquivalentAddressGroup> newBackendServers) {
+    if (newLbAddressGroups.isEmpty()) {
+      propagateError(Status.UNAVAILABLE.withDescription(
+              "NameResolver returned no LB address while asking for GRPCLB"));
+      return;
+    }
     LbAddressGroup newLbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
     startLbComm(newLbAddressGroup);
     // Avoid creating a new RPC just because the addresses were updated, as it can cause a
@@ -158,30 +167,59 @@ final class GrpclbState {
     if (lbStream == null) {
       startLbRpc();
     }
-    // If we don't receive server list from the balancer within the timeout, we round-robin on
-    // the backend list from the resolver (aka fallback), until the balancer returns a server list.
     fallbackBackendList = newBackendServers;
-    if (fallbackTimer == null) {
-      fallbackTimer =
-          timerService.schedule(new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    } else {
-      maybeUseFallbackBackends();
+    maybeStartFallbackTimer();
+    if (usingFallbackBackends) {
+      // Populate the new fallback backends to round-robin list.
+      useFallbackBackends();
     }
+    maybeUpdatePicker();
   }
 
-  private void maybeUseFallbackBackends() {
-    // Only use fallback backends after fallback timer expired and before receiving server list from
-    // the balancer.
-    if (receivedServerListFromBalancer || !fallbackTimerExpired) {
+  /**
+   * Start the fallback timer if it's not already started and all connections are lost.
+   */
+  private void maybeStartFallbackTimer() {
+    if (fallbackTimer != null) {
       return;
     }
+    if (fallbackBackendList.isEmpty()) {
+      return;
+    }
+    if (balancerWorking) {
+      return;
+    }
+    if (usingFallbackBackends) {
+      return;
+    }
+    int numReadySubchannels = 0;
+    for (Subchannel subchannel : subchannels.values()) {
+      if (subchannel.getAttributes().get(STATE_INFO).get().getState() == READY) {
+        numReadySubchannels++;
+      }
+    }
+    if (numReadySubchannels > 0) {
+      return;
+    }
+    logger.log(Level.FINE, "[{0}] Starting fallback timer.", new Object[] {logId});
+    fallbackTimer = new FallbackModeTask();
+    fallbackTimer.schedule();
+  }
+
+  /**
+   * Populate the round-robin lists with the fallback backends.
+   */
+  private void useFallbackBackends() {
+    usingFallbackBackends = true;
+    logger.log(Level.INFO, "[{0}] Using fallback: {1}", new Object[] {logId, fallbackBackendList});
+
     List<DropEntry> newDropList = new ArrayList<DropEntry>();
     List<BackendAddressGroup> newBackendAddrList = new ArrayList<BackendAddressGroup>();
     for (EquivalentAddressGroup eag : fallbackBackendList) {
       newDropList.add(null);
       newBackendAddrList.add(new BackendAddressGroup(eag, null));
     }
-    updateRoundRobinLists(newDropList, newBackendAddrList, null);
+    useRoundRobinLists(newDropList, newBackendAddrList, null);
   }
 
   private void shutdownLbComm() {
@@ -231,12 +269,20 @@ final class GrpclbState {
     }
   }
 
+  private void cancelFallbackTimer() {
+    if (fallbackTimer != null) {
+      fallbackTimer.cancel();
+      fallbackTimer = null;
+    }
+  }
+
   void shutdown() {
     shutdownLbComm();
     for (Subchannel subchannel : subchannels.values()) {
       subchannel.shutdown();
     }
     subchannels = Collections.emptyMap();
+    cancelFallbackTimer();
   }
 
   void propagateError(Status status) {
@@ -257,7 +303,10 @@ final class GrpclbState {
     return lbStream.loadRecorder;
   }
 
-  private void updateRoundRobinLists(
+  /**
+   * Populate the round-robin lists with the given values.
+   */
+  private void useRoundRobinLists(
       List<DropEntry> newDropList, List<BackendAddressGroup> newBackendAddrList,
       @Nullable GrpclbClientLoadRecorder loadRecorder) {
     HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
@@ -301,20 +350,38 @@ final class GrpclbState {
     subchannels = Collections.unmodifiableMap(newSubchannelMap);
     dropList = Collections.unmodifiableList(newDropList);
     backendList = Collections.unmodifiableList(newBackendList);
-    maybeUpdatePicker();
   }
 
   @VisibleForTesting
   class FallbackModeTask implements Runnable {
+    private ScheduledFuture<?> scheduledFuture;
+    // If the scheduledFuture is cancelled after the task has made it into the ChannelExecutor, the
+    // task will be started anyway.  Use this boolean to signal that the task should not be run.
+    private boolean cancelled;
+
     @Override
     public void run() {
       helper.runSerialized(new Runnable() {
           @Override
           public void run() {
-            fallbackTimerExpired = true;
-            maybeUseFallbackBackends();
+            if (!cancelled) {
+              checkState(fallbackTimer == FallbackModeTask.this, "fallback timer mismatch");
+              fallbackTimer = null;
+              useFallbackBackends();
+              maybeUpdatePicker();
+            }
           }
         });
+    }
+
+    void cancel() {
+      scheduledFuture.cancel(false);
+      cancelled = true;
+    }
+
+    void schedule() {
+      checkState(scheduledFuture == null, "FallbackModeTask already scheduled");
+      scheduledFuture = timerService.schedule(this, FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
   }
 
@@ -443,10 +510,7 @@ final class GrpclbState {
         return;
       }
 
-      receivedServerListFromBalancer = true;
-      if (fallbackTimer != null) {
-        fallbackTimer.cancel(false);
-      }
+      balancerWorking = true;
       // TODO(zhangkun83): handle delegate from initialResponse
       ServerList serverList = response.getServerList();
       List<DropEntry> newDropList = new ArrayList<DropEntry>();
@@ -470,16 +534,23 @@ final class GrpclbState {
           newBackendAddrList.add(new BackendAddressGroup(eag, token));
         }
       }
-      updateRoundRobinLists(newDropList, newBackendAddrList, loadRecorder);
+      // Stop using fallback backends as soon as a new server list is received from the balancer.
+      usingFallbackBackends = false;
+      cancelFallbackTimer();
+      useRoundRobinLists(newDropList, newBackendAddrList, loadRecorder);
+      maybeUpdatePicker();
     }
 
-    private void handleStreamClosed(Status status) {
+    private void handleStreamClosed(Status error) {
+      checkArgument(!error.isOk(), "unexpected OK status");
       if (closed) {
         return;
       }
       closed = true;
       cleanUp();
-      propagateError(status);
+      propagateError(error);
+      balancerWorking = false;
+      maybeStartFallbackTimer();
       startLbRpc();
     }
 
@@ -705,7 +776,7 @@ final class GrpclbState {
 
   @VisibleForTesting
   static final class ErrorEntry implements RoundRobinEntry {
-    private final PickResult result;
+    final PickResult result;
 
     ErrorEntry(Status status) {
       result = PickResult.withError(status);
@@ -727,6 +798,13 @@ final class GrpclbState {
         return false;
       }
       return Objects.equal(result, ((ErrorEntry) other).result);
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("result", result)
+          .toString();
     }
   }
 

@@ -138,12 +138,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
         delegate.handleResolvedAddressGroups(newBackendServers, attributes);
         break;
       case GRPCLB:
-        if (newLbAddressGroups.isEmpty()) {
-          grpclbState.propagateError(Status.UNAVAILABLE.withDescription(
-                  "NameResolver returned no LB address while asking for GRPCLB"));
-        } else {
-          grpclbState.updateAddresses(newLbAddressGroups, newBackendServers);
-        }
+        grpclbState.handleAddresses(newLbAddressGroups, newBackendServers);
         break;
       default:
         // Do nothing
