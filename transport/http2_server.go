@@ -804,16 +804,16 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 		},
 		onWriteComplete: func() {
-			s.msgWritten <- struct{}{}
+			//s.msgWritten <- struct{}{}
 		},
 	})
-	select {
-	case <-s.msgWritten:
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-t.ctx.Done():
-		return ErrConnClosing
-	}
+	//select {
+	//case <-s.msgWritten:
+	//case <-s.ctx.Done():
+	//	return ContextErr(s.ctx.Err())
+	//case <-t.ctx.Done():
+	//	return ErrConnClosing
+	//}
 	return nil
 }
 

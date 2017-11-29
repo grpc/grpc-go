@@ -654,7 +654,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		streamID:  s.id,
 		endStream: opts.Last,
 		onWriteComplete: func() {
-			s.msgWritten <- struct{}{}
+			//s.msgWritten <- struct{}{}
 		},
 	}
 
@@ -671,13 +671,13 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	}
 	t.controlBuf.put(df)
 
-	select {
-	case <-s.msgWritten:
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-t.ctx.Done():
-		return ErrConnClosing
-	}
+	//	select {
+	//	case <-s.msgWritten:
+	//	case <-s.ctx.Done():
+	//		return ContextErr(s.ctx.Err())
+	//	case <-t.ctx.Done():
+	//		return ErrConnClosing
+	//	}
 	if opts.Last {
 		s.mu.Lock()
 		if s.state != streamDone {
