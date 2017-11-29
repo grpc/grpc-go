@@ -56,8 +56,12 @@ appengine {  // App Engine tasks configuration
   }
 
   deploy {   // deploy configuration
-    stopPreviousVersion = true  // default - stop the current version
-    promote = true              // default - & make this the current version
+    // default - stop the current version
+    stopPreviousVersion = System.getProperty('gaeStopPreviousVersion') ?: true
+    // default - make this the current version
+    promote = System.getProperty('gaePromote') ?: true
+    // Use -DgaeDeployVersion if set, otherwise the version is null and the plugin will generate it
+    version = System.getProperty('gaeDeployVersion')
   }
 }
 // [END model]
@@ -68,7 +72,8 @@ version = '1.0-SNAPSHOT'          // Version in generated output
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-def getAppName() {
+/** Returns the service name. */
+String getGaeProject() {
   def stream = new ByteArrayOutputStream()
   exec {
     executable 'gcloud'
@@ -78,17 +83,38 @@ def getAppName() {
   return stream.toString().trim()
 }
 
+String getService(java.nio.file.Path projectPath) {
+  Node xml = new XmlParser().parse(projectPath.resolve("src/main/webapp/WEB-INF/appengine-web.xml").toFile())
+  if (xml.service.isEmpty()) {
+    return null
+  } else {
+    return xml.service.text()
+  }
+}
+
+String getAppUrl(String project, String service, String version) {
+  if (version != null && service != null) {
+    return "http://${version}.${service}.${project}.appspot.com"
+  } else {
+    return "http://${project}.appspot.com"
+  }
+}
+
 task runInteropTestRemote(dependsOn: 'appengineDeploy') {
   doLast {
     // give remote app some time to settle down
-    sleep(5000)
+    sleep(20000)
 
-    def appName = getAppName()
+    def appUrl = getAppUrl(
+            getGaeProject(),
+            getService(project.getProjectDir().toPath()),
+            System.getProperty('gaeDeployVersion'))
+    logger.log(LogLevel.INFO, "the appURL=" + appUrl)
     def client = new com.squareup.okhttp.OkHttpClient()
     // The '?jdk8' argument is ignored by the server, it exists only to tag the request log entry
     client.setReadTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
     def request = new com.squareup.okhttp.Request.Builder()
-            .url("http://${appName}.appspot.com/long_lived_channel?jdk8").build()
+            .url("${appUrl}/long_lived_channel?jdk8").build()
     def result1 = client.newCall(request).execute()
     def result2 = client.newCall(request).execute()
     if (result1.code() != 200 || result2.code() != 200) {
@@ -99,10 +125,17 @@ task runInteropTestRemote(dependsOn: 'appengineDeploy') {
     client.setReadTimeout(3, java.util.concurrent.TimeUnit.MINUTES)
     // The '?jdk8' argument is ignored by the server, it exists only to tag the request log entry
     def interopRequest = new com.squareup.okhttp.Request.Builder()
-            .url("http://${appName}.appspot.com/?jdk8").build()
-    def result = client.newCall(interopRequest).execute()
-    if (result.code() != 200) {
-      throw new GradleException("Interop test failed: " + result.body().string())
+            .url("${appUrl}/?jdk8").build()
+
+    // Retry in case GAE is slow and times out
+    int maxRetries = 5
+    def result = null
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      result = client.newCall(interopRequest).execute()
+      if (result.code() == 200) {
+        return
+      }
     }
+    throw new GradleException("Interop test failed: " + result?.body()?.string())
   }
 }
