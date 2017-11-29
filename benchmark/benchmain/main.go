@@ -66,6 +66,8 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
+
+	_ "net/http/pprof"
 )
 
 const (
@@ -242,6 +244,8 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 
 // Initiate main function to get settings of features.
 func init() {
+	//runtime.SetBlockProfileRate(1)
+	//runtime.SetMutexProfileFraction(1)
 	var (
 		workloads, traceMode, compressorMode, readLatency string
 		readKbps, readMtu, readMaxConcurrentCalls         intSliceType
@@ -359,6 +363,10 @@ func readTimeFromInput(values *[]time.Duration, replace string) {
 }
 
 func main() {
+	//go func() {
+	//	log.Println(http.ListenAndServe("localhost:6060", nil))
+	//}()
+
 	before()
 	featuresPos := make([]int, 8)
 	// 0:enableTracing 1:ltc 2:kbps 3:mtu 4:maxC 5:reqSize 6:respSize

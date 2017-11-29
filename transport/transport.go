@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -49,65 +50,15 @@ type recvMsg struct {
 	err error
 }
 
-// recvBuffer is an unbounded channel of recvMsg structs.
-// Note recvBuffer differs from controlBuffer only in that recvBuffer
-// holds a channel of only recvMsg structs instead of objects implementing "item" interface.
-// recvBuffer is written to much more often than
-// controlBuffer and using strict recvMsg structs helps avoid allocation in "recvBuffer.put"
-type recvBuffer struct {
-	c       chan recvMsg
-	mu      sync.Mutex
-	backlog []recvMsg
-}
-
-func newRecvBuffer() *recvBuffer {
-	b := &recvBuffer{
-		c: make(chan recvMsg, 1),
-	}
-	return b
-}
-
-func (b *recvBuffer) put(r recvMsg) {
-	b.mu.Lock()
-	if len(b.backlog) == 0 {
-		select {
-		case b.c <- r:
-			b.mu.Unlock()
-			return
-		default:
-		}
-	}
-	b.backlog = append(b.backlog, r)
-	b.mu.Unlock()
-}
-
-func (b *recvBuffer) load() {
-	b.mu.Lock()
-	if len(b.backlog) > 0 {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog[0] = recvMsg{}
-			b.backlog = b.backlog[1:]
-		default:
-		}
-	}
-	b.mu.Unlock()
-}
-
-// get returns the channel that receives a recvMsg in the buffer.
-//
-// Upon receipt of a recvMsg, the caller should call load to send another
-// recvMsg onto the channel if there is any.
-func (b *recvBuffer) get() <-chan recvMsg {
-	return b.c
-}
+func (*recvMsg) item() {}
 
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
 	ctx    context.Context
 	goAway chan struct{}
-	recv   *recvBuffer
+	recv   *controlBuffer
+	rl     *itemList
 	last   []byte // Stores the remaining data in the previous calls.
 	err    error
 }
@@ -124,25 +75,43 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *recvBufferReader) read(p []byte) (n int, err error) {
-	if r.last != nil && len(r.last) > 0 {
-		// Read remaining data left in last call.
-		copied := copy(p, r.last)
-		r.last = r.last[copied:]
-		return copied, nil
+	if n, err = r.fillSlice(p); err != nil || n != 0 {
+		return n, err
 	}
 	select {
 	case <-r.ctx.Done():
 		return 0, ContextErr(r.ctx.Err())
 	case <-r.goAway:
 		return 0, errStreamDrain
-	case m := <-r.recv.get():
-		r.recv.load()
-		if m.err != nil {
-			return 0, m.err
+	case <-r.recv.ch:
+		r.rl = r.recv.get()
+		return r.fillSlice(p)
+	}
+}
+
+func (r *recvBufferReader) fillSlice(p []byte) (n int, err error) {
+	for {
+		if n == len(p) {
+			return n, err
 		}
-		copied := copy(p, m.data)
-		r.last = m.data[copied:]
-		return copied, nil
+		rl := r.rl
+		if rl == nil {
+			return n, err
+		}
+		if err = rl.it.(*recvMsg).err; err != nil {
+			return n, err
+		}
+		bufData := rl.it.(*recvMsg).data
+		if len(bufData) == 0 {
+			r.rl = r.rl.next
+			continue
+		}
+		remaining := len(p) - n
+		if remaining > len(bufData) {
+			remaining = len(bufData)
+		}
+		n += copy(p[n:], bufData[:remaining])
+		rl.it.(*recvMsg).data = bufData[remaining:]
 	}
 }
 
@@ -167,7 +136,7 @@ type Stream struct {
 	method       string             // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
-	buf          *recvBuffer
+	buf          *controlBuffer
 	trReader     io.Reader
 	fc           *inFlow
 	recvQuota    uint32
@@ -303,7 +272,7 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
-func (s *Stream) write(m recvMsg) {
+func (s *Stream) write(m *recvMsg) {
 	s.buf.put(m)
 }
 
@@ -313,7 +282,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
-	s.requestRead(len(p))
+	//s.requestRead(len(p))
 	return io.ReadFull(s.trReader, p)
 }
 
@@ -737,16 +706,33 @@ func (l *outStreamList) deleteAll() {
 	e.next = nil
 }
 
+type spinlock struct {
+	st int32
+}
+
+func (s *spinlock) Lock() {
+	for {
+		if atomic.CompareAndSwapInt32(&s.st, 0, 1) {
+			return
+		}
+	}
+}
+
+func (s *spinlock) Unlock() {
+	s.st = 0
+	//atomic.StoreInt32(&s.st, 0)
+}
+
 type controlBuffer struct {
 	ch chan struct{}
 
-	mu   sync.Mutex
+	mu   *spinlock
 	head *itemList
 	tail *itemList
 }
 
 func newControlBuffer() *controlBuffer {
-	return &controlBuffer{ch: make(chan struct{}, 1)}
+	return &controlBuffer{ch: make(chan struct{}, 1), mu: &spinlock{}}
 }
 
 func (c *controlBuffer) get() *itemList {

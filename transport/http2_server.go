@@ -67,7 +67,7 @@ type http2Server struct {
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *controlBuffer
-	fc         *inFlow
+	fc         *trInFlow
 	stats      stats.Handler
 	// Flag to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
@@ -193,7 +193,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		maxStreams:        maxStreams,
 		inTapHandle:       config.InTapHandle,
 		controlBuf:        newControlBuffer(),
-		fc:                &inFlow{limit: uint32(icwz)},
+		fc:                &trInFlow{limit: uint32(icwz)},
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
 		stats:             config.StatsHandler,
@@ -265,7 +265,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 	}
 
-	buf := newRecvBuffer()
+	buf := newControlBuffer()
 	s := &Stream{
 		id:           streamID,
 		st:           t,
@@ -442,44 +442,13 @@ func (t *http2Server) getStream(f http2.Frame) (*Stream, bool) {
 // of stream if the application is requesting data larger in size than
 // the window.
 func (t *http2Server) adjustWindow(s *Stream, n uint32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.state == streamDone {
-		return
-	}
-	if w := s.fc.maybeAdjust(n); w > 0 {
-		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{
-				streamID:  0,
-				increment: cw,
-				dir:       outgoing,
-			})
-		}
-		t.controlBuf.put(&windowUpdate{
-			streamID:  s.id,
-			increment: w,
-			dir:       outgoing,
-		})
-	}
 }
 
 // updateWindow adjusts the inbound quota for the stream and the transport.
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
 func (t *http2Server) updateWindow(s *Stream, n uint32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.state == streamDone {
-		return
-	}
 	if w := s.fc.onRead(n); w > 0 {
-		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{
-				streamID:  0,
-				increment: cw,
-				dir:       outgoing,
-			})
-		}
 		t.controlBuf.put(&windowUpdate{streamID: s.id,
 			increment: w,
 			dir:       outgoing,
@@ -528,31 +497,21 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// Decoupling the connection flow control will prevent other
 	// active(fast) streams from starving in presence of slow or
 	// inactive streams.
-	//
-	// Furthermore, if a bdpPing is being sent out we can piggyback
-	// connection's window update for the bytes we just received.
+	if w, err := t.fc.onData(uint32(size)); err != nil {
+		errorf("transport: http2Server %v", err)
+		t.Close()
+		return
+	} else if w > 0 {
+		t.controlBuf.put(&windowUpdate{
+			streamID:  0,
+			increment: w,
+			dir:       outgoing,
+		})
+	}
+	// TODO(mmukhi): This bdp ping may require a window update
+	// frame before it.
 	if sendBDPPing {
-		if size != 0 { // Could be an empty frame.
-			t.controlBuf.put(&windowUpdate{
-				streamID:  0,
-				increment: uint32(size),
-				dir:       outgoing,
-			})
-		}
 		t.controlBuf.put(bdpPing)
-	} else {
-		if err := t.fc.onData(uint32(size)); err != nil {
-			errorf("transport: http2Server %v", err)
-			t.Close()
-			return
-		}
-		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{
-				streamID:  0,
-				increment: w,
-				dir:       outgoing,
-			})
-		}
 	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
@@ -571,15 +530,6 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
 			return
 		}
-		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{
-					streamID:  s.id,
-					increment: w,
-					dir:       outgoing,
-				})
-			}
-		}
 		s.mu.Unlock()
 		// TODO(bradfitz, zhaoq): A copy is required here because there is no
 		// guarantee f.Data() is consumed before the arrival of next frame.
@@ -587,7 +537,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			data := make([]byte, len(f.Data()))
 			copy(data, f.Data())
-			s.write(recvMsg{data: data})
+			s.write(&recvMsg{data: data})
 		}
 	}
 	if f.Header().Flags.Has(http2.FlagDataEndStream) {
@@ -597,7 +547,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			s.state = streamReadDone
 		}
 		s.mu.Unlock()
-		s.write(recvMsg{err: io.EOF})
+		s.write(&recvMsg{err: io.EOF})
 	}
 }
 
@@ -689,13 +639,13 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 
 // WriteHeader sends the header metedata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
-	select {
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-t.ctx.Done():
-		return ErrConnClosing
-	default:
-	}
+	//select {
+	//case <-s.ctx.Done():
+	//	return ContextErr(s.ctx.Err())
+	//case <-t.ctx.Done():
+	//	return ErrConnClosing
+	//default:
+	//}
 
 	s.mu.Lock()
 	if s.headerOk || s.state == streamDone {
@@ -818,13 +768,13 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	select {
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-t.ctx.Done():
-		return ErrConnClosing
-	default:
-	}
+	//	select {
+	//	case <-s.ctx.Done():
+	//		return ContextErr(s.ctx.Err())
+	//	case <-t.ctx.Done():
+	//		return ErrConnClosing
+	//	default:
+	//	}
 
 	var writeHeaderFrame bool
 	s.mu.Lock()
