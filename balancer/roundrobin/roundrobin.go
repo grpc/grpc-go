@@ -22,9 +22,9 @@
 package roundrobin
 
 import (
-	"context"
 	"sync"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
@@ -32,7 +32,7 @@ import (
 
 // newBuilder creates a new roundrobin balancer builder.
 func newBuilder() balancer.Builder {
-	return base.NewBalancerBuilderWithPickerBuilder(&rrPickerBuilder{})
+	return base.NewBalancerBuilder("round_robin", &rrPickerBuilder{})
 }
 
 func init() {

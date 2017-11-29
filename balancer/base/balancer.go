@@ -27,6 +27,7 @@ import (
 )
 
 type baseBuilder struct {
+	name          string
 	pickerBuilder PickerBuilder
 }
 
@@ -45,8 +46,8 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) 
 	}
 }
 
-func (*baseBuilder) Name() string {
-	return "round_robin"
+func (bb *baseBuilder) Name() string {
+	return bb.name
 }
 
 type baseBalancer struct {
@@ -63,10 +64,10 @@ type baseBalancer struct {
 
 func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	if err != nil {
-		grpclog.Infof("roundrobin.rrBalancer: HandleResolvedAddrs called with error %v", err)
+		grpclog.Infof("base.baseBalancer: HandleResolvedAddrs called with error %v", err)
 		return
 	}
-	grpclog.Infoln("roundrobin.rrBalancer: got new resolved addresses: ", addrs)
+	grpclog.Infoln("base.baseBalancer: got new resolved addresses: ", addrs)
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
 	addrsSet := make(map[resolver.Address]struct{})
 	for _, a := range addrs {
@@ -75,7 +76,7 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 			// a is a new address (not existing in b.subConns).
 			sc, err := b.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{})
 			if err != nil {
-				grpclog.Warningf("roundrobin.rrBalancer: failed to create new SubConn: %v", err)
+				grpclog.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
 			b.subConns[a] = sc
@@ -95,9 +96,9 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 }
 
 // regeneratePicker takes a snapshot of the balancer, and generates a picker
-// from it. The picker
-//  - always returns ErrTransientFailure if the balancer is in TransientFailure,
-//  - or does round robin selection of all READY SubConns otherwise.
+// from it. The picker is
+//  - errPicker with ErrTransientFailure if the balancer is in TransientFailure,
+//  - built by the pickerBuilder with all READY SubConns otherwise.
 func (b *baseBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
 		b.picker = &errPicker{err: balancer.ErrTransientFailure}
@@ -113,10 +114,10 @@ func (b *baseBalancer) regeneratePicker() {
 }
 
 func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("roundrobin.rrBalancer: handle SubConn state change: %p, %v", sc, s)
+	grpclog.Infof("base.baseBalancer: handle SubConn state change: %p, %v", sc, s)
 	oldS, ok := b.scStates[sc]
 	if !ok {
-		grpclog.Infof("roundrobin.rrBalancer: got state changes for an unknown SubConn: %p, %v", sc, s)
+		grpclog.Infof("base.baseBalancer: got state changes for an unknown SubConn: %p, %v", sc, s)
 		return
 	}
 	b.scStates[sc] = s
@@ -146,7 +147,7 @@ func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 	return
 }
 
-// Close is a nop because roundrobin balancer doesn't internal state to clean
+// Close is a nop because base balancer doesn't internal state to clean
 // up, and it doesn't need to call RemoveSubConn for the SubConns.
 func (b *baseBalancer) Close() {
 }

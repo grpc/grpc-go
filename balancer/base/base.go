@@ -19,9 +19,12 @@
 // Package base defines a balancer base that can be used to build balancers with
 // different picking algothrim.
 //
-// This package is the base of round_robin balancer, it's purpose is to be used
-// to build round_robin like balancers but with complex picking algothrim.
-// Balancers with more complicated logic should try to implement a balancer from
+// The base balancer create a new SubConn for each resolved address. The
+// provided picker will only be notified about READY SubConns.
+//
+// This package is the base of round_robin balancer, its purpose is to be used
+// to build round_robin like balancers with complex picking algothrim. Balancers
+// with more complicated logic should try to implement a balancer builder from
 // scratch.
 package base
 
@@ -34,10 +37,11 @@ type PickerBuilder interface {
 	Build(readySCs []balancer.SubConn) balancer.Picker
 }
 
-// NewBalancerBuilderWithPickerBuilder returns a balancer builder. The balancers
+// NewBalancerBuilder returns a balancer builder. The balancers
 // built by this builder will use the picker builder to build pickers.
-func NewBalancerBuilderWithPickerBuilder(pb PickerBuilder) balancer.Builder {
+func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
 	return &baseBuilder{
+		name:          name,
 		pickerBuilder: pb,
 	}
 }
