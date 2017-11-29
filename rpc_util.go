@@ -499,7 +499,15 @@ const (
 	SupportPackageIsVersion5 = true
 )
 
-// Version is the current grpc version.
+// Version is the current grpc-go release version.
 const Version = "1.9.0-dev"
+
+// These constants specify the minimum and maximum acceptable protocol versions.
+const (
+	ProtocolVersionMaxMajor = 2
+	ProtocolVersionMaxMinor = 1
+	ProtocolVersionMinMajor = 2
+	ProtocolVersionMinMinor = 1
+)
 
 const grpcUA = "grpc-go/" + Version
