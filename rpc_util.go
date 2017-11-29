@@ -503,9 +503,11 @@ const (
 const Version = "1.9.0-dev"
 
 // These constants specify the minimum and maximum acceptable RPC version values.
-const MaxRPCVersionMajor = 2
-const MaxRPCVersionMinor = 1
-const MinRPCVersionMajor = 2
-const MinRPCVersionMinor = 1
+const (
+	MaxRPCVersionMajor = 2
+	MaxRPCVersionMinor = 1
+	MinRPCVersionMajor = 2
+	MinRPCVersionMinor = 1
+)
 
 const grpcUA = "grpc-go/" + Version
