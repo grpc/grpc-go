@@ -35,6 +35,7 @@ import io.grpc.ClientInterceptors;
 import io.grpc.CompressorRegistry;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
+import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -42,6 +43,7 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
@@ -385,6 +387,37 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         return transport;
       }
       return delayedTransport;
+    }
+
+    @Override
+    public <ReqT> RetriableStream<ReqT> newRetriableStream(
+        final MethodDescriptor<ReqT, ?> method,
+        final CallOptions callOptions,
+        final Metadata headers,
+        final Context context) {
+      return new RetriableStream<ReqT>(method) {
+        @Override
+        Status prestart() {
+          return delayedTransport.addUncommittedRetriableStream(this);
+        }
+
+        @Override
+        void postCommit() {
+          delayedTransport.removeUncommittedRetriableStream(this);
+        }
+
+        @Override
+        ClientStream newSubstream() {
+          ClientTransport transport =
+              get(new PickSubchannelArgsImpl(method, headers, callOptions));
+          Context origContext = context.attach();
+          try {
+            return transport.newStream(method, headers, callOptions);
+          } finally {
+            context.detach(origContext);
+          }
+        }
+      };
     }
   };
 

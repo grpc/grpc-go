@@ -23,6 +23,7 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityStateInfo;
+import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer;
@@ -30,6 +31,7 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
@@ -69,6 +71,12 @@ final class OobChannel extends ManagedChannel implements WithLogId {
       // matter here because OOB communication should be sparse, and it's not on application RPC's
       // critical path.
       return delayedTransport;
+    }
+
+    @Override
+    public <ReqT> RetriableStream<ReqT> newRetriableStream(MethodDescriptor<ReqT, ?> method,
+        CallOptions callOptions, Metadata headers, Context context) {
+      throw new UnsupportedOperationException("OobChannel should not create retriable streams");
     }
   };
 
