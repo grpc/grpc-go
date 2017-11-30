@@ -814,6 +814,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	grpclog.Infof("addrConn: tryUpdateAddrs curAddrFound: %v", curAddrFound)
 	if curAddrFound {
 		ac.addrs = addrs
+		ac.reconnectIdx = 0 // Start reconnecting from begining in the new list.
 	}
 
 	return curAddrFound
@@ -915,10 +916,10 @@ type addrConn struct {
 	events trace.EventLog
 	acbw   balancer.SubConn
 
-	mu       sync.Mutex
-	curAddr  resolver.Address
-	prevAddr resolver.Address
-	state    connectivity.State
+	mu           sync.Mutex
+	curAddr      resolver.Address
+	reconnectIdx int // The index in adder list to start reconnecting from.
+	state        connectivity.State
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready     chan struct{}
@@ -990,7 +991,7 @@ func (ac *addrConn) resetTransport() error {
 		ac.ready = nil
 	}
 	ac.transport = nil
-	prevAddr := ac.prevAddr
+	ridx := ac.reconnectIdx
 	ac.mu.Unlock()
 	ac.cc.mu.RLock()
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
@@ -1012,7 +1013,7 @@ func (ac *addrConn) resetTransport() error {
 			start := time.Now()
 			backoffDeadline = start.Add(backoffFor)
 			connectDeadline = start.Add(dialDuration)
-			prevAddr = resolver.Address{} // Start connecting from the beginning.
+			ridx = 0 // Start connecting from the beginning.
 		} else {
 			// Continue trying to conect with the same deadlines.
 			connectRetryNum = ac.connectRetryNum
@@ -1036,7 +1037,7 @@ func (ac *addrConn) resetTransport() error {
 		copy(addrsIter, ac.addrs)
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
-		connected, err := ac.createTransport(connectRetryNum, backoffDeadline, connectDeadline, addrsIter, prevAddr, copts)
+		connected, err := ac.createTransport(connectRetryNum, ridx, backoffDeadline, connectDeadline, addrsIter, copts)
 		if err != nil {
 			return err
 		}
@@ -1048,17 +1049,8 @@ func (ac *addrConn) resetTransport() error {
 
 // createTransport creates a connection to one of the backends in addrs.
 // It returns true if a connection was established.
-func (ac *addrConn) createTransport(connectRetryNum int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, prevAddr resolver.Address, copts transport.ConnectOptions) (bool, error) {
-	startFrom := 0
-	for idx, addr := range addrs {
-		if addr.Addr == prevAddr.Addr {
-			// Find the previous attempted address and start with the
-			// one after it.
-			startFrom = idx + 1
-			break
-		}
-	}
-	for i := startFrom; i < len(addrs); i++ {
+func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions) (bool, error) {
+	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
 		target := transport.TargetInfo{
 			Addr:      addr.Addr,
@@ -1110,11 +1102,10 @@ func (ac *addrConn) createTransport(connectRetryNum int, backoffDeadline, connec
 			select {
 			case <-done:
 			case <-connectCtx.Done():
-				// Didn't receive server preface, must kill this new
-				// transport now.
-				grpclog.Warningf("grpc: addrConn.createTransport will close the newly established transport since no server preface was received.")
+				// Didn't receive server preface, must kill this new transport now.
+				grpclog.Warningf("grpc: addrConn.createTransport failed to receive server preface before deadline.")
 				newTr.Close()
-				continue
+				break
 			case <-ac.ctx.Done():
 			}
 		}
@@ -1128,9 +1119,6 @@ func (ac *addrConn) createTransport(connectRetryNum int, backoffDeadline, connec
 		ac.printf("ready")
 		ac.state = connectivity.Ready
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-		if ac.transport != nil {
-			ac.transport.Close()
-		}
 		ac.transport = newTr
 		ac.curAddr = addr
 		if ac.ready != nil {
@@ -1140,6 +1128,7 @@ func (ac *addrConn) createTransport(connectRetryNum int, backoffDeadline, connec
 		ac.connectRetryNum = connectRetryNum
 		ac.backoffDeadline = backoffDeadline
 		ac.connectDeadline = connectDeadline
+		ac.reconnectIdx = i + 1 // Start reconnecting from the next backend in the list.
 		ac.mu.Unlock()
 		return true, nil
 	}
@@ -1217,7 +1206,6 @@ func (ac *addrConn) transportMonitor() {
 		ac.state = connectivity.TransientFailure
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.cc.resolveNow(resolver.ResolveNowOption{})
-		ac.prevAddr = ac.curAddr
 		ac.curAddr = resolver.Address{}
 		ac.mu.Unlock()
 		if err := ac.resetTransport(); err != nil {

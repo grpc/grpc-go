@@ -151,6 +151,7 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 		<-dialDone // Close conn only after dial returns.
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 	close(dialDone)
 	if err != nil {
