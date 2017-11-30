@@ -796,7 +796,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	}
 	hdr = append(hdr, data[:emptyLen]...)
 	data = data[emptyLen:]
-	t.controlBuf.put(&dataFrame{
+	df := &dataFrame{
 		streamID: s.id,
 		h:        hdr,
 		d:        data,
@@ -806,7 +806,14 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		onWriteComplete: func() {
 			//s.msgWritten <- struct{}{}
 		},
-	})
+	}
+	select {
+	case t.controlBuf.ch <- df:
+	case <-s.ctx.Done():
+		return ContextErr(s.ctx.Err())
+	case <-t.ctx.Done():
+		return ErrConnClosing
+	}
 	//select {
 	//case <-s.msgWritten:
 	//case <-s.ctx.Done():

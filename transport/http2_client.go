@@ -669,7 +669,14 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		data = data[emptyLen:]
 		df.h, df.d = hdr, data
 	}
-	t.controlBuf.put(df)
+	//t.controlBuf.put(df)
+	select {
+	case t.controlBuf.ch <- df:
+	case <-s.ctx.Done():
+		return ContextErr(s.ctx.Err())
+	case <-t.ctx.Done():
+		return ErrConnClosing
+	}
 
 	//	select {
 	//	case <-s.msgWritten:
