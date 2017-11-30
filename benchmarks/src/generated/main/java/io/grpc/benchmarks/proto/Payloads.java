@@ -55,6 +55,9 @@ public final class Payloads {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -506,7 +509,7 @@ public final class Payloads {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ByteBufferParams(input, extensionRegistry);
+        return new ByteBufferParams(input, extensionRegistry);
       }
     };
 
@@ -566,6 +569,9 @@ public final class Payloads {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -1017,7 +1023,7 @@ public final class Payloads {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new SimpleProtoParams(input, extensionRegistry);
+        return new SimpleProtoParams(input, extensionRegistry);
       }
     };
 
@@ -1070,6 +1076,9 @@ public final class Payloads {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -1411,7 +1420,7 @@ public final class Payloads {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ComplexProtoParams(input, extensionRegistry);
+        return new ComplexProtoParams(input, extensionRegistry);
       }
     };
 
@@ -1500,6 +1509,9 @@ public final class Payloads {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2517,7 +2529,7 @@ public final class Payloads {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new PayloadConfig(input, extensionRegistry);
+        return new PayloadConfig(input, extensionRegistry);
       }
     };
 
@@ -2574,7 +2586,7 @@ public final class Payloads {
       "sH\000\0228\n\rsimple_params\030\002 \001(\0132\037.grpc.testin" +
       "g.SimpleProtoParamsH\000\022:\n\016complex_params\030" +
       "\003 \001(\0132 .grpc.testing.ComplexProtoParamsH" +
-      "\000B\t\n\007payloadB$\n\030io.grpc.benchmarks.proto",
+      "\000B\t\n\007payloadB$\n\030io.grpc.benchmarks.proto" +
       "B\010Payloadsb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =

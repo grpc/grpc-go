@@ -67,7 +67,7 @@ public final class MonitoringProto {
       "on.v1alpha.StatsResponse\022N\n\031rpc_client_c" +
       "ompleted_rpcs\030\002 \001(\0132+.grpc.instrumentati" +
       "on.v1alpha.StatsResponse\022L\n\027rpc_client_s" +
-      "tarted_rpcs\030\003 \001(\0132+.grpc.instrumentation",
+      "tarted_rpcs\030\003 \001(\0132+.grpc.instrumentation" +
       ".v1alpha.StatsResponse\022L\n\027rpc_client_ela" +
       "psed_time\030\004 \001(\0132+.grpc.instrumentation.v" +
       "1alpha.StatsResponse\022S\n\036rpc_client_serve" +
@@ -77,7 +77,7 @@ public final class MonitoringProto {
       "on.v1alpha.StatsResponse\022N\n\031rpc_client_r" +
       "esponse_bytes\030\007 \001(\0132+.grpc.instrumentati" +
       "on.v1alpha.StatsResponse\022M\n\030rpc_client_r" +
-      "equest_count\030\010 \001(\0132+.grpc.instrumentatio",
+      "equest_count\030\010 \001(\0132+.grpc.instrumentatio" +
       "n.v1alpha.StatsResponse\022N\n\031rpc_client_re" +
       "sponse_count\030\t \001(\0132+.grpc.instrumentatio" +
       "n.v1alpha.StatsResponse\022F\n\021rpc_server_er" +
@@ -87,7 +87,7 @@ public final class MonitoringProto {
       "a.StatsResponse\022S\n\036rpc_server_server_ela" +
       "psed_time\030\014 \001(\0132+.grpc.instrumentation.v" +
       "1alpha.StatsResponse\022M\n\030rpc_server_reque" +
-      "st_bytes\030\r \001(\0132+.grpc.instrumentation.v1",
+      "st_bytes\030\r \001(\0132+.grpc.instrumentation.v1" +
       "alpha.StatsResponse\022N\n\031rpc_server_respon" +
       "se_bytes\030\016 \001(\0132+.grpc.instrumentation.v1" +
       "alpha.StatsResponse\022M\n\030rpc_server_reques" +
@@ -97,7 +97,7 @@ public final class MonitoringProto {
       "lpha.StatsResponse\022L\n\027rpc_server_elapsed" +
       "_time\030\021 \001(\0132+.grpc.instrumentation.v1alp" +
       "ha.StatsResponse\"q\n\014StatsRequest\022\022\n\nview" +
-      "_names\030\001 \003(\t\022\031\n\021measurement_names\030\002 \003(\t\022",
+      "_names\030\001 \003(\t\022\031\n\021measurement_names\030\002 \003(\t\022" +
       "2\n*dont_include_descriptors_in_first_res" +
       "ponse\030\003 \001(\010\"\313\001\n\rStatsResponse\022M\n\026measure" +
       "ment_descriptor\030\001 \001(\0132-.google.instrumen" +
@@ -107,7 +107,7 @@ public final class MonitoringProto {
       "trumentation.View\"\016\n\014TraceRequest\"\017\n\rTra" +
       "ceResponse\"#\n\023MonitoringDataGroup\022\014\n\004nam" +
       "e\030\001 \001(\t\">\n\024CustomMonitoringData\022&\n\010conte" +
-      "nts\030\001 \001(\0132\024.google.protobuf.Any2\265\004\n\nMoni",
+      "nts\030\001 \001(\0132\024.google.protobuf.Any2\265\004\n\nMoni" +
       "toring\022a\n\024GetCanonicalRpcStats\022\026.google." +
       "protobuf.Empty\032/.grpc.instrumentation.v1" +
       "alpha.CanonicalRpcStats\"\000\022e\n\010GetStats\022*." +
@@ -117,7 +117,7 @@ public final class MonitoringProto {
       "ation.v1alpha.StatsRequest\032+.grpc.instru" +
       "mentation.v1alpha.StatsResponse\"\0000\001\022m\n\020G" +
       "etRequestTraces\022*.grpc.instrumentation.v" +
-      "1alpha.TraceRequest\032+.grpc.instrumentati",
+      "1alpha.TraceRequest\032+.grpc.instrumentati" +
       "on.v1alpha.TraceResponse\"\000\022\202\001\n\027GetCustom" +
       "MonitoringData\0221.grpc.instrumentation.v1" +
       "alpha.MonitoringDataGroup\0322.grpc.instrum" +

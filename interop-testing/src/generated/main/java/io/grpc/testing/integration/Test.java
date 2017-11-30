@@ -32,7 +32,7 @@ public final class Test {
       "impleRequest\032\034.grpc.testing.SimpleRespon" +
       "se\022O\n\022CacheableUnaryCall\022\033.grpc.testing." +
       "SimpleRequest\032\034.grpc.testing.SimpleRespo" +
-      "nse\022l\n\023StreamingOutputCall\022(.grpc.testin",
+      "nse\022l\n\023StreamingOutputCall\022(.grpc.testin" +
       "g.StreamingOutputCallRequest\032).grpc.test" +
       "ing.StreamingOutputCallResponse0\001\022i\n\022Str" +
       "eamingInputCall\022\'.grpc.testing.Streaming" +
@@ -42,7 +42,7 @@ public final class Test {
       "\032).grpc.testing.StreamingOutputCallRespo" +
       "nse(\0010\001\022i\n\016HalfDuplexCall\022(.grpc.testing" +
       ".StreamingOutputCallRequest\032).grpc.testi" +
-      "ng.StreamingOutputCallResponse(\0010\001\022=\n\021Un",
+      "ng.StreamingOutputCallResponse(\0010\001\022=\n\021Un" +
       "implementedCall\022\023.grpc.testing.Empty\032\023.g" +
       "rpc.testing.Empty2U\n\024UnimplementedServic" +
       "e\022=\n\021UnimplementedCall\022\023.grpc.testing.Em" +

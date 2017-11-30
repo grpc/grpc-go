@@ -98,7 +98,7 @@ subprojects {
 
         nettyVersion = '4.1.17.Final'
         guavaVersion = '19.0'
-        protobufVersion = '3.4.0'
+        protobufVersion = '3.5.0'
         protocVersion = protobufVersion
         protobufNanoVersion = '3.0.0-alpha-5'
 

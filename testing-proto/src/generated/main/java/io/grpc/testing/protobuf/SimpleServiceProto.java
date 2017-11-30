@@ -42,7 +42,7 @@ public final class SimpleServiceProto {
       "lientStreamingRpc\022\033.grpc.testing.SimpleR" +
       "equest\032\034.grpc.testing.SimpleResponse\"\000(\001" +
       "\022S\n\022ServerStreamingRpc\022\033.grpc.testing.Si" +
-      "mpleRequest\032\034.grpc.testing.SimpleRespons",
+      "mpleRequest\032\034.grpc.testing.SimpleRespons" +
       "e\"\0000\001\022S\n\020BidiStreamingRpc\022\033.grpc.testing" +
       ".SimpleRequest\032\034.grpc.testing.SimpleResp" +
       "onse\"\000(\0010\001B0\n\030io.grpc.testing.protobufB\022" +

@@ -32,7 +32,7 @@ public final class Services {
       "nse(\0010\001\022R\n\023StreamingFromClient\022\033.grpc.te" +
       "sting.SimpleRequest\032\034.grpc.testing.Simpl" +
       "eResponse(\001\022R\n\023StreamingFromServer\022\033.grp" +
-      "c.testing.SimpleRequest\032\034.grpc.testing.S",
+      "c.testing.SimpleRequest\032\034.grpc.testing.S" +
       "impleResponse0\001\022R\n\021StreamingBothWays\022\033.g" +
       "rpc.testing.SimpleRequest\032\034.grpc.testing" +
       ".SimpleResponse(\0010\0012\227\002\n\rWorkerService\022E\n" +
@@ -42,7 +42,7 @@ public final class Services {
       "ng.ClientStatus(\0010\001\022B\n\tCoreCount\022\031.grpc." +
       "testing.CoreRequest\032\032.grpc.testing.CoreR" +
       "esponse\0224\n\nQuitWorker\022\022.grpc.testing.Voi" +
-      "d\032\022.grpc.testing.Void2^\n\030ReportQpsScenar",
+      "d\032\022.grpc.testing.Void2^\n\030ReportQpsScenar" +
       "ioService\022B\n\016ReportScenario\022\034.grpc.testi" +
       "ng.ScenarioResult\032\022.grpc.testing.VoidB$\n" +
       "\030io.grpc.benchmarks.protoB\010Servicesb\006pro" +

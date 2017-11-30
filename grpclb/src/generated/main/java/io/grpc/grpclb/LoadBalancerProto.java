@@ -72,7 +72,7 @@ public final class LoadBalancerProto {
       "load_balance_request_type\")\n\031InitialLoad" +
       "BalanceRequest\022\014\n\004name\030\001 \001(\t\"D\n\023ClientSt" +
       "atsPerToken\022\032\n\022load_balance_token\030\001 \001(\t\022" +
-      "\021\n\tnum_calls\030\002 \001(\003\"\244\002\n\013ClientStats\022-\n\tti",
+      "\021\n\tnum_calls\030\002 \001(\003\"\244\002\n\013ClientStats\022-\n\tti" +
       "mestamp\030\001 \001(\0132\032.google.protobuf.Timestam" +
       "p\022\031\n\021num_calls_started\030\002 \001(\003\022\032\n\022num_call" +
       "s_finished\030\003 \001(\003\0225\n-num_calls_finished_w" +
@@ -82,7 +82,7 @@ public final class LoadBalancerProto {
       "1.ClientStatsPerTokenJ\004\010\004\020\005J\004\010\005\020\006\"\246\001\n\023Lo" +
       "adBalanceResponse\022B\n\020initial_response\030\001 " +
       "\001(\0132&.grpc.lb.v1.InitialLoadBalanceRespo" +
-      "nseH\000\022-\n\013server_list\030\002 \001(\0132\026.grpc.lb.v1.",
+      "nseH\000\022-\n\013server_list\030\002 \001(\0132\026.grpc.lb.v1." +
       "ServerListH\000B\034\n\032load_balance_response_ty" +
       "pe\"}\n\032InitialLoadBalanceResponse\022\036\n\026load" +
       "_balancer_delegate\030\001 \001(\t\022?\n\034client_stats" +
@@ -92,7 +92,7 @@ public final class LoadBalancerProto {
       "ip_address\030\001 \001(\014\022\014\n\004port\030\002 \001(\005\022\032\n\022load_b" +
       "alance_token\030\003 \001(\t\022\014\n\004drop\030\004 \001(\010J\004\010\005\020\0062b" +
       "\n\014LoadBalancer\022R\n\013BalanceLoad\022\036.grpc.lb." +
-      "v1.LoadBalanceRequest\032\037.grpc.lb.v1.LoadB",
+      "v1.LoadBalanceRequest\032\037.grpc.lb.v1.LoadB" +
       "alanceResponse(\0010\001B%\n\016io.grpc.grpclbB\021Lo" +
       "adBalancerProtoP\001b\006proto3"
     };

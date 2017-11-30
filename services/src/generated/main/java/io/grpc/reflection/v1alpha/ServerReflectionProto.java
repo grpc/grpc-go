@@ -72,7 +72,7 @@ public final class ServerReflectionProto {
       "nsionRequestH\000\022\'\n\035all_extension_numbers_" +
       "of_type\030\006 \001(\tH\000\022\027\n\rlist_services\030\007 \001(\tH\000" +
       "B\021\n\017message_request\"E\n\020ExtensionRequest\022" +
-      "\027\n\017containing_type\030\001 \001(\t\022\030\n\020extension_nu",
+      "\027\n\017containing_type\030\001 \001(\t\022\030\n\020extension_nu" +
       "mber\030\002 \001(\005\"\321\003\n\030ServerReflectionResponse\022" +
       "\022\n\nvalid_host\030\001 \001(\t\022J\n\020original_request\030" +
       "\002 \001(\01320.grpc.reflection.v1alpha.ServerRe" +
@@ -82,7 +82,7 @@ public final class ServerReflectionProto {
       "mbers_response\030\005 \001(\01320.grpc.reflection.v" +
       "1alpha.ExtensionNumberResponseH\000\022N\n\026list" +
       "_services_response\030\006 \001(\0132,.grpc.reflecti" +
-      "on.v1alpha.ListServiceResponseH\000\022@\n\016erro",
+      "on.v1alpha.ListServiceResponseH\000\022@\n\016erro" +
       "r_response\030\007 \001(\0132&.grpc.reflection.v1alp" +
       "ha.ErrorResponseH\000B\022\n\020message_response\"7" +
       "\n\026FileDescriptorResponse\022\035\n\025file_descrip" +
@@ -92,7 +92,7 @@ public final class ServerReflectionProto {
       "ervice\030\001 \003(\0132(.grpc.reflection.v1alpha.S" +
       "erviceResponse\"\037\n\017ServiceResponse\022\014\n\004nam" +
       "e\030\001 \001(\t\":\n\rErrorResponse\022\022\n\nerror_code\030\001" +
-      " \001(\005\022\025\n\rerror_message\030\002 \001(\t2\223\001\n\020ServerRe",
+      " \001(\005\022\025\n\rerror_message\030\002 \001(\t2\223\001\n\020ServerRe" +
       "flection\022\177\n\024ServerReflectionInfo\0220.grpc." +
       "reflection.v1alpha.ServerReflectionReque" +
       "st\0321.grpc.reflection.v1alpha.ServerRefle" +

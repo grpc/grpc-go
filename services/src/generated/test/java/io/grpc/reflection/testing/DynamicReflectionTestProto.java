@@ -32,7 +32,7 @@ public final class DynamicReflectionTestProto {
       "esting.DynamicReply\"\0002s\n\025AnotherDynamicS" +
       "ervice\022Z\n\006Method\022\'.grpc.reflection.testi" +
       "ng.DynamicRequest\032%.grpc.reflection.test" +
-      "ing.DynamicReply\"\000B:\n\032io.grpc.reflection",
+      "ing.DynamicReply\"\000B:\n\032io.grpc.reflection" +
       ".testingB\032DynamicReflectionTestProtoP\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =

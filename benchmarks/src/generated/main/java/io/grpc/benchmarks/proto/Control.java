@@ -432,6 +432,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -850,7 +853,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new PoissonParams(input, extensionRegistry);
+        return new PoissonParams(input, extensionRegistry);
       }
     };
 
@@ -903,6 +906,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -1244,7 +1250,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ClosedLoopParams(input, extensionRegistry);
+        return new ClosedLoopParams(input, extensionRegistry);
       }
     };
 
@@ -1320,6 +1326,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2133,7 +2142,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new LoadParams(input, extensionRegistry);
+        return new LoadParams(input, extensionRegistry);
       }
     };
 
@@ -2202,6 +2211,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2727,7 +2739,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new SecurityParams(input, extensionRegistry);
+        return new SecurityParams(input, extensionRegistry);
       }
     };
 
@@ -2803,6 +2815,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -3560,7 +3575,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ChannelArg(input, extensionRegistry);
+        return new ChannelArg(input, extensionRegistry);
       }
     };
 
@@ -3846,6 +3861,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -6396,7 +6414,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ClientConfig(input, extensionRegistry);
+        return new ClientConfig(input, extensionRegistry);
       }
     };
 
@@ -6457,6 +6475,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -6975,7 +6996,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ClientStatus(input, extensionRegistry);
+        return new ClientStatus(input, extensionRegistry);
       }
     };
 
@@ -7037,6 +7058,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -7452,7 +7476,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Mark(input, extensionRegistry);
+        return new Mark(input, extensionRegistry);
       }
     };
 
@@ -7528,6 +7552,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -8341,7 +8368,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ClientArgs(input, extensionRegistry);
+        return new ClientArgs(input, extensionRegistry);
       }
     };
 
@@ -8531,6 +8558,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -10045,7 +10075,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ServerConfig(input, extensionRegistry);
+        return new ServerConfig(input, extensionRegistry);
       }
     };
 
@@ -10121,6 +10151,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -10934,7 +10967,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ServerArgs(input, extensionRegistry);
+        return new ServerArgs(input, extensionRegistry);
       }
     };
 
@@ -11015,6 +11048,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -11679,7 +11715,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ServerStatus(input, extensionRegistry);
+        return new ServerStatus(input, extensionRegistry);
       }
     };
 
@@ -11727,6 +11763,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -12063,7 +12102,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new CoreRequest(input, extensionRegistry);
+        return new CoreRequest(input, extensionRegistry);
       }
     };
 
@@ -12121,6 +12160,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -12531,7 +12573,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new CoreResponse(input, extensionRegistry);
+        return new CoreResponse(input, extensionRegistry);
       }
     };
 
@@ -12579,6 +12621,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -12915,7 +12960,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Void(input, extensionRegistry);
+        return new Void(input, extensionRegistry);
       }
     };
 
@@ -13086,6 +13131,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -14404,7 +14452,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Scenario(input, extensionRegistry);
+        return new Scenario(input, extensionRegistry);
       }
     };
 
@@ -14481,6 +14529,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -15166,7 +15217,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Scenarios(input, extensionRegistry);
+        return new Scenarios(input, extensionRegistry);
       }
     };
 
@@ -15355,6 +15406,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -16817,7 +16871,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ScenarioResultSummary(input, extensionRegistry);
+        return new ScenarioResultSummary(input, extensionRegistry);
       }
     };
 
@@ -17145,6 +17199,9 @@ public final class Control {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -20026,7 +20083,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ScenarioResult(input, extensionRegistry);
+        return new ScenarioResult(input, extensionRegistry);
       }
     };
 
@@ -20158,7 +20215,7 @@ public final class Control {
       "ad\"C\n\016SecurityParams\022\023\n\013use_test_ca\030\001 \001(" +
       "\010\022\034\n\024server_host_override\030\002 \001(\t\"M\n\nChann" +
       "elArg\022\014\n\004name\030\001 \001(\t\022\023\n\tstr_value\030\002 \001(\tH\000" +
-      "\022\023\n\tint_value\030\003 \001(\005H\000B\007\n\005value\"\275\004\n\014Clien",
+      "\022\023\n\tint_value\030\003 \001(\005H\000B\007\n\005value\"\275\004\n\014Clien" +
       "tConfig\022\026\n\016server_targets\030\001 \003(\t\022-\n\013clien" +
       "t_type\030\002 \001(\0162\030.grpc.testing.ClientType\0225" +
       "\n\017security_params\030\003 \001(\0132\034.grpc.testing.S" +
@@ -20168,7 +20225,7 @@ public final class Control {
       " \001(\0162\025.grpc.testing.RpcType\022-\n\013load_para" +
       "ms\030\n \001(\0132\030.grpc.testing.LoadParams\0223\n\016pa" +
       "yload_config\030\013 \001(\0132\033.grpc.testing.Payloa" +
-      "dConfig\0227\n\020histogram_params\030\014 \001(\0132\035.grpc",
+      "dConfig\0227\n\020histogram_params\030\014 \001(\0132\035.grpc" +
       ".testing.HistogramParams\022\021\n\tcore_list\030\r " +
       "\003(\005\022\022\n\ncore_limit\030\016 \001(\005\022\030\n\020other_client_" +
       "api\030\017 \001(\t\022.\n\014channel_args\030\020 \003(\0132\030.grpc.t" +
@@ -20178,7 +20235,7 @@ public final class Control {
       "t\030\001 \001(\010\"h\n\nClientArgs\022+\n\005setup\030\001 \001(\0132\032.g" +
       "rpc.testing.ClientConfigH\000\022\"\n\004mark\030\002 \001(\013" +
       "2\022.grpc.testing.MarkH\000B\t\n\007argtype\"\264\002\n\014Se" +
-      "rverConfig\022-\n\013server_type\030\001 \001(\0162\030.grpc.t",
+      "rverConfig\022-\n\013server_type\030\001 \001(\0162\030.grpc.t" +
       "esting.ServerType\0225\n\017security_params\030\002 \001" +
       "(\0132\034.grpc.testing.SecurityParams\022\014\n\004port" +
       "\030\004 \001(\005\022\034\n\024async_server_threads\030\007 \001(\005\022\022\n\n" +
@@ -20188,7 +20245,7 @@ public final class Control {
       "source_quota_size\030\351\007 \001(\005\"h\n\nServerArgs\022+" +
       "\n\005setup\030\001 \001(\0132\032.grpc.testing.ServerConfi" +
       "gH\000\022\"\n\004mark\030\002 \001(\0132\022.grpc.testing.MarkH\000B" +
-      "\t\n\007argtype\"U\n\014ServerStatus\022(\n\005stats\030\001 \001(",
+      "\t\n\007argtype\"U\n\014ServerStatus\022(\n\005stats\030\001 \001(" +
       "\0132\031.grpc.testing.ServerStats\022\014\n\004port\030\002 \001" +
       "(\005\022\r\n\005cores\030\003 \001(\005\"\r\n\013CoreRequest\"\035\n\014Core" +
       "Response\022\r\n\005cores\030\001 \001(\005\"\006\n\004Void\"\375\001\n\010Scen" +
@@ -20198,7 +20255,7 @@ public final class Control {
       ".testing.ServerConfig\022\023\n\013num_servers\030\005 \001" +
       "(\005\022\026\n\016warmup_seconds\030\006 \001(\005\022\031\n\021benchmark_" +
       "seconds\030\007 \001(\005\022 \n\030spawn_local_worker_coun" +
-      "t\030\010 \001(\005\"6\n\tScenarios\022)\n\tscenarios\030\001 \003(\0132",
+      "t\030\010 \001(\005\"6\n\tScenarios\022)\n\tscenarios\030\001 \003(\0132" +
       "\026.grpc.testing.Scenario\"\274\003\n\025ScenarioResu" +
       "ltSummary\022\013\n\003qps\030\001 \001(\001\022\033\n\023qps_per_server" +
       "_core\030\002 \001(\001\022\032\n\022server_system_time\030\003 \001(\001\022" +
@@ -20208,7 +20265,7 @@ public final class Control {
       "\022\n\nlatency_95\030\t \001(\001\022\022\n\nlatency_99\030\n \001(\001\022" +
       "\023\n\013latency_999\030\013 \001(\001\022\030\n\020server_cpu_usage" +
       "\030\014 \001(\001\022&\n\036successful_requests_per_second" +
-      "\030\r \001(\001\022\"\n\032failed_requests_per_second\030\016 \001",
+      "\030\r \001(\001\022\"\n\032failed_requests_per_second\030\016 \001" +
       "(\001\022 \n\030client_polls_per_request\030\017 \001(\001\022 \n\030" +
       "server_polls_per_request\030\020 \001(\001\"\203\003\n\016Scena" +
       "rioResult\022(\n\010scenario\030\001 \001(\0132\026.grpc.testi" +
@@ -20218,7 +20275,7 @@ public final class Control {
       "tats\030\004 \003(\0132\031.grpc.testing.ServerStats\022\024\n" +
       "\014server_cores\030\005 \003(\005\0224\n\007summary\030\006 \001(\0132#.g" +
       "rpc.testing.ScenarioResultSummary\022\026\n\016cli" +
-      "ent_success\030\007 \003(\010\022\026\n\016server_success\030\010 \003(",
+      "ent_success\030\007 \003(\010\022\026\n\016server_success\030\010 \003(" +
       "\010\0229\n\017request_results\030\t \003(\0132 .grpc.testin" +
       "g.RequestResultCount*A\n\nClientType\022\017\n\013SY" +
       "NC_CLIENT\020\000\022\020\n\014ASYNC_CLIENT\020\001\022\020\n\014OTHER_C" +

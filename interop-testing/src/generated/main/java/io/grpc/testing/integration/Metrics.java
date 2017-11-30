@@ -80,6 +80,9 @@ public final class Metrics {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -917,7 +920,7 @@ public final class Metrics {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new GaugeResponse(input, extensionRegistry);
+        return new GaugeResponse(input, extensionRegistry);
       }
     };
 
@@ -980,6 +983,9 @@ public final class Metrics {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -1447,7 +1453,7 @@ public final class Metrics {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new GaugeRequest(input, extensionRegistry);
+        return new GaugeRequest(input, extensionRegistry);
       }
     };
 
@@ -1495,6 +1501,9 @@ public final class Metrics {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -1831,7 +1840,7 @@ public final class Metrics {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new EmptyMessage(input, extensionRegistry);
+        return new EmptyMessage(input, extensionRegistry);
       }
     };
 
@@ -1883,7 +1892,7 @@ public final class Metrics {
       "llGauges\022\032.grpc.testing.EmptyMessage\032\033.g" +
       "rpc.testing.GaugeResponse0\001\022C\n\010GetGauge\022" +
       "\032.grpc.testing.GaugeRequest\032\033.grpc.testi" +
-      "ng.GaugeResponseB\035\n\033io.grpc.testing.inte",
+      "ng.GaugeResponseB\035\n\033io.grpc.testing.inte" +
       "grationb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =

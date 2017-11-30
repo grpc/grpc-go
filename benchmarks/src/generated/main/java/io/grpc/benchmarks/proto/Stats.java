@@ -104,6 +104,9 @@ public final class Stats {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -895,7 +898,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ServerStats(input, extensionRegistry);
+        return new ServerStats(input, extensionRegistry);
       }
     };
 
@@ -967,6 +970,9 @@ public final class Stats {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -1460,7 +1466,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new HistogramParams(input, extensionRegistry);
+        return new HistogramParams(input, extensionRegistry);
       }
     };
 
@@ -1556,6 +1562,9 @@ public final class Stats {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2360,7 +2369,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new HistogramData(input, extensionRegistry);
+        return new HistogramData(input, extensionRegistry);
       }
     };
 
@@ -2420,6 +2429,9 @@ public final class Stats {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2872,7 +2884,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new RequestResultCount(input, extensionRegistry);
+        return new RequestResultCount(input, extensionRegistry);
       }
     };
 
@@ -3022,6 +3034,9 @@ public final class Stats {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -4297,7 +4312,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ClientStats(input, extensionRegistry);
+        return new ClientStats(input, extensionRegistry);
       }
     };
 
@@ -4359,7 +4374,7 @@ public final class Stats {
       "HistogramData\022\016\n\006bucket\030\001 \003(\r\022\020\n\010min_see" +
       "n\030\002 \001(\001\022\020\n\010max_seen\030\003 \001(\001\022\013\n\003sum\030\004 \001(\001\022\026" +
       "\n\016sum_of_squares\030\005 \001(\001\022\r\n\005count\030\006 \001(\001\"8\n" +
-      "\022RequestResultCount\022\023\n\013status_code\030\001 \001(\005",
+      "\022RequestResultCount\022\023\n\013status_code\030\001 \001(\005" +
       "\022\r\n\005count\030\002 \001(\003\"\315\001\n\013ClientStats\022.\n\tlaten" +
       "cies\030\001 \001(\0132\033.grpc.testing.HistogramData\022" +
       "\024\n\014time_elapsed\030\002 \001(\001\022\021\n\ttime_user\030\003 \001(\001" +

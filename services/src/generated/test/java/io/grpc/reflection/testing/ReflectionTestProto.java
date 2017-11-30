@@ -44,7 +44,7 @@ public final class ReflectionTestProto {
       "grpc.reflection.testing.Request\032\036.grpc.r" +
       "eflection.testing.Reply\"\000:4\n\003bar\022\'.grpc." +
       "reflection.testing.ThirdLevelType\030d \001(\005B" +
-      "3\n\032io.grpc.reflection.testingB\023Reflectio",
+      "3\n\032io.grpc.reflection.testingB\023Reflectio" +
       "nTestProtoP\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =

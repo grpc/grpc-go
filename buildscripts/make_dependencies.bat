@@ -4,7 +4,7 @@ REM 7za is in http://www.7-zip.org/a/7z1507-extra.7z
 REM Prerequisite:
 REM   7za.exe in current directory or PATH
 
-set PROTOBUF_VER=3.4.0
+set PROTOBUF_VER=3.5.0
 set CMAKE_NAME=cmake-3.3.2-win32-x86
 
 if not exist "protobuf-%PROTOBUF_VER%\cmake\build\Release\" (

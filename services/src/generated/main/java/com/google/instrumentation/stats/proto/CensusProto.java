@@ -69,6 +69,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -577,7 +580,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Duration(input, extensionRegistry);
+        return new Duration(input, extensionRegistry);
       }
     };
 
@@ -650,6 +653,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -1154,7 +1160,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Timestamp(input, extensionRegistry);
+        return new Timestamp(input, extensionRegistry);
       }
     };
 
@@ -1269,6 +1275,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -1646,6 +1655,9 @@ public final class CensusProto {
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         int mutable_bitField0_ = 0;
         com.google.protobuf.UnknownFieldSet.Builder unknownFields =
             com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -2531,7 +2543,7 @@ public final class CensusProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-            return new MeasurementUnit(input, extensionRegistry);
+          return new MeasurementUnit(input, extensionRegistry);
         }
       };
 
@@ -3361,7 +3373,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new MeasurementDescriptor(input, extensionRegistry);
+        return new MeasurementDescriptor(input, extensionRegistry);
       }
     };
 
@@ -3587,6 +3599,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -3746,6 +3761,9 @@ public final class CensusProto {
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         int mutable_bitField0_ = 0;
         com.google.protobuf.UnknownFieldSet.Builder unknownFields =
             com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -4239,7 +4257,7 @@ public final class CensusProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-            return new Range(input, extensionRegistry);
+          return new Range(input, extensionRegistry);
         }
       };
 
@@ -5736,7 +5754,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new DistributionAggregation(input, extensionRegistry);
+        return new DistributionAggregation(input, extensionRegistry);
       }
     };
 
@@ -5852,6 +5870,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -6526,7 +6547,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new DistributionAggregationDescriptor(input, extensionRegistry);
+        return new DistributionAggregationDescriptor(input, extensionRegistry);
       }
     };
 
@@ -6676,6 +6697,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -6820,6 +6844,9 @@ public final class CensusProto {
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         int mutable_bitField0_ = 0;
         com.google.protobuf.UnknownFieldSet.Builder unknownFields =
             com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -7542,7 +7569,7 @@ public final class CensusProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-            return new Interval(input, extensionRegistry);
+          return new Interval(input, extensionRegistry);
         }
       };
 
@@ -8732,7 +8759,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new IntervalAggregation(input, extensionRegistry);
+        return new IntervalAggregation(input, extensionRegistry);
       }
     };
 
@@ -8851,6 +8878,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -9752,7 +9782,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new IntervalAggregationDescriptor(input, extensionRegistry);
+        return new IntervalAggregationDescriptor(input, extensionRegistry);
       }
     };
 
@@ -9826,6 +9856,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -10419,7 +10452,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Tag(input, extensionRegistry);
+        return new Tag(input, extensionRegistry);
       }
     };
 
@@ -10598,6 +10631,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -12118,7 +12154,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ViewDescriptor(input, extensionRegistry);
+        return new ViewDescriptor(input, extensionRegistry);
       }
     };
 
@@ -12259,6 +12295,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -13473,7 +13512,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new DistributionView(input, extensionRegistry);
+        return new DistributionView(input, extensionRegistry);
       }
     };
 
@@ -13576,6 +13615,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -14377,7 +14419,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new IntervalView(input, extensionRegistry);
+        return new IntervalView(input, extensionRegistry);
       }
     };
 
@@ -14476,6 +14518,9 @@ public final class CensusProto {
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      if (extensionRegistry == null) {
+        throw new java.lang.NullPointerException();
+      }
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -15447,7 +15492,7 @@ public final class CensusProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-          return new View(input, extensionRegistry);
+        return new View(input, extensionRegistry);
       }
     };
 
@@ -15559,7 +15604,7 @@ public final class CensusProto {
       "umentation.MeasurementDescriptor.Measure" +
       "mentUnit\032\276\001\n\017MeasurementUnit\022\017\n\007power10\030" +
       "\001 \001(\005\022K\n\nnumerators\030\002 \003(\01627.google.instr" +
-      "umentation.MeasurementDescriptor.BasicUn",
+      "umentation.MeasurementDescriptor.BasicUn" +
       "it\022M\n\014denominators\030\003 \003(\01627.google.instru" +
       "mentation.MeasurementDescriptor.BasicUni" +
       "t\"`\n\tBasicUnit\022\013\n\007UNKNOWN\020\000\022\n\n\006SCALAR\020\001\022" +
@@ -15569,7 +15614,7 @@ public final class CensusProto {
       "sum\030\003 \001(\001\022D\n\005range\030\004 \001(\01325.google.instru" +
       "mentation.DistributionAggregation.Range\022" +
       "\025\n\rbucket_counts\030\005 \003(\003\022)\n\004tags\030\006 \003(\0132\033.g" +
-      "oogle.instrumentation.Tag\032!\n\005Range\022\013\n\003mi",
+      "oogle.instrumentation.Tag\032!\n\005Range\022\013\n\003mi" +
       "n\030\001 \001(\001\022\013\n\003max\030\002 \001(\001\":\n!DistributionAggr" +
       "egationDescriptor\022\025\n\rbucket_bounds\030\001 \003(\001" +
       "\"\352\001\n\023IntervalAggregation\022G\n\tintervals\030\001 " +
@@ -15579,7 +15624,7 @@ public final class CensusProto {
       "rval_size\030\001 \001(\0132 .google.instrumentation" +
       ".Duration\022\r\n\005count\030\002 \001(\001\022\013\n\003sum\030\003 \001(\001\"r\n" +
       "\035IntervalAggregationDescriptor\022\027\n\017n_sub_" +
-      "intervals\030\001 \001(\005\0228\n\016interval_sizes\030\002 \003(\0132",
+      "intervals\030\001 \001(\005\0228\n\016interval_sizes\030\002 \003(\0132" +
       " .google.instrumentation.Duration\"!\n\003Tag" +
       "\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t\"\257\002\n\016ViewDes" +
       "criptor\022\014\n\004name\030\001 \001(\t\022\023\n\013description\030\002 \001" +
@@ -15589,7 +15634,7 @@ public final class CensusProto {
       "ptorH\000\022]\n\030distribution_aggregation\030\005 \001(\013" +
       "29.google.instrumentation.DistributionAg" +
       "gregationDescriptorH\000\022\020\n\010tag_keys\030\006 \003(\tB" +
-      "\r\n\013aggregation\"\273\001\n\020DistributionView\022E\n\014a",
+      "\r\n\013aggregation\"\273\001\n\020DistributionView\022E\n\014a" +
       "ggregations\030\001 \003(\0132/.google.instrumentati" +
       "on.DistributionAggregation\0220\n\005start\030\002 \001(" +
       "\0132!.google.instrumentation.Timestamp\022.\n\003" +
@@ -15599,7 +15644,7 @@ public final class CensusProto {
       "egation\"\247\001\n\004View\022\021\n\tview_name\030\001 \001(\t\022E\n\021d" +
       "istribution_view\030\002 \001(\0132(.google.instrume" +
       "ntation.DistributionViewH\000\022=\n\rinterval_v" +
-      "iew\030\003 \001(\0132$.google.instrumentation.Inter",
+      "iew\030\003 \001(\0132$.google.instrumentation.Inter" +
       "valViewH\000B\006\n\004viewB5\n&com.google.instrume" +
       "ntation.stats.protoB\013CensusProtob\006proto3"
     };
