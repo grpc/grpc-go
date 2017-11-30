@@ -92,6 +92,11 @@ type BuildOption struct {
 
 // ClientConn contains the callbacks for resolver to notify any updates
 // to the gRPC ClientConn.
+//
+// This interface is to be implemented by gRPC. Users should not need a
+// brand new implementation of this interface. For the situations like
+// testing, the new implementation should embed this interface. This allows
+// gRPC to add new methods to this interface.
 type ClientConn interface {
 	// NewAddress is called by resolver to notify ClientConn a new list
 	// of resolved addresses.
