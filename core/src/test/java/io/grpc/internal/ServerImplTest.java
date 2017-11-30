@@ -50,6 +50,7 @@ import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalLogId;
 import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -1264,7 +1265,7 @@ public class ServerImplTest {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       throw new UnsupportedOperationException();
     }
 

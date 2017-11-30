@@ -60,6 +60,7 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
@@ -1596,7 +1597,7 @@ public class ManagedChannelImplTest {
         false, // Don't create a transport, Helper maintains a ref to the channel.
         ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
     assertNotNull(channel);
-    LogId logId = channel.getLogId();
+    InternalLogId logId = channel.getLogId();
 
     // Try to capture the log output but without causing terminal noise.  Adding the filter must
     // be done before clearing the ref or else it might be missed.

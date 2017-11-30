@@ -17,12 +17,13 @@
 package io.grpc.internal;
 
 import io.grpc.InternalTransportStats;
+import io.grpc.InternalWithLogId;
 import io.grpc.Status;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** An inbound connection. */
-public interface ServerTransport extends WithLogId {
+public interface ServerTransport extends InternalWithLogId {
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
    * eventually begin failing. New streams "eventually" begin failing because shutdown may need to

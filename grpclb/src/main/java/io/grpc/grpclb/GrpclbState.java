@@ -33,6 +33,7 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -42,7 +43,6 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.LoadBalanceResponse.LoadBalanceResponseTypeCase;
-import io.grpc.internal.LogId;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -53,8 +53,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -92,7 +92,7 @@ final class GrpclbState {
       }
     };
 
-  private final LogId logId;
+  private final InternalLogId logId;
   private final String serviceName;
   private final Helper helper;
   private final TimeProvider time;
@@ -127,7 +127,10 @@ final class GrpclbState {
       new RoundRobinPicker(Collections.<DropEntry>emptyList(), Arrays.asList(BUFFER_ENTRY));
 
   GrpclbState(
-      Helper helper, TimeProvider time, ScheduledExecutorService timerService, LogId logId) {
+      Helper helper,
+      TimeProvider time,
+      ScheduledExecutorService timerService,
+      InternalLogId logId) {
     this.helper = checkNotNull(helper, "helper");
     this.time = checkNotNull(time, "time provider");
     this.timerService = checkNotNull(timerService, "timerService");

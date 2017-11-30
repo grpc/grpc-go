@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Context;
+import io.grpc.InternalLogId;
 import io.grpc.InternalTransportStats;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -48,7 +49,7 @@ import javax.annotation.concurrent.GuardedBy;
  * thus the delayed transport stops owning the stream.
  */
 final class DelayedClientTransport implements ManagedClientTransport {
-  private final LogId lodId = LogId.allocate(getClass().getName());
+  private final InternalLogId lodId = InternalLogId.allocate(getClass().getName());
 
   private final Object lock = new Object();
 
@@ -389,7 +390,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   // TODO(carl-mastrangelo): remove this once the Subchannel change is in.
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return lodId;
   }
 

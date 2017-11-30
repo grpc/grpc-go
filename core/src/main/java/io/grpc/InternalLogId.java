@@ -14,28 +14,31 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A loggable ID, unique for the duration of the program.
+ * Do not use this.
+ *
+ * <p>A loggable ID, unique for the duration of the program.
  */
-public final class LogId {
+@Internal
+public final class InternalLogId {
   private static final AtomicLong idAlloc = new AtomicLong();
 
   /**
    * @param tag a loggable tag associated with this tag. The ID that is allocated is guaranteed
    *            to be unique and increasing, irrespective of the tag.
    */
-  public static LogId allocate(String tag) {
-    return new LogId(tag, idAlloc.incrementAndGet());
+  public static InternalLogId allocate(String tag) {
+    return new InternalLogId(tag, idAlloc.incrementAndGet());
   }
 
   private final String tag;
   private final long id;
 
-  private LogId(String tag, long id) {
+  private InternalLogId(String tag, long id) {
     this.tag = tag;
     this.id = id;
   }

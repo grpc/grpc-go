@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.InternalWithLogId;
 import io.grpc.Status;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -33,7 +34,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * {@link Listener#transportTerminated}.
  */
 @ThreadSafe
-public interface ManagedClientTransport extends ClientTransport, WithLogId {
+public interface ManagedClientTransport extends ClientTransport, InternalWithLogId {
 
   /**
    * Starts transport. This method may only be called once.

@@ -38,6 +38,8 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalLogId;
+import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -74,7 +76,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl extends ManagedChannel implements WithLogId {
+public final class ManagedChannelImpl extends ManagedChannel implements InternalWithLogId {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -108,7 +110,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final Executor executor;
   private final ObjectPool<? extends Executor> executorPool;
   private final ObjectPool<? extends Executor> oobExecutorPool;
-  private final LogId logId = LogId.allocate(getClass().getName());
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
 
   private final ChannelExecutor channelExecutor = new ChannelExecutor();
 
@@ -869,7 +871,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return logId;
   }
 
@@ -1026,7 +1028,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         Boolean.parseBoolean(System.getProperty(ALLOCATION_SITE_PROPERTY_NAME, "true"));
     private static final RuntimeException missingCallSite = missingCallSite();
 
-    private final LogId logId;
+    private final InternalLogId logId;
     private final String target;
     private final Reference<RuntimeException> allocationSite;
     private volatile boolean shutdown;

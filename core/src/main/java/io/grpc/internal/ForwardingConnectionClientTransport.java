@@ -19,6 +19,7 @@ package io.grpc.internal;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.InternalLogId;
 import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -54,7 +55,7 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return delegate().getLogId();
   }
 
