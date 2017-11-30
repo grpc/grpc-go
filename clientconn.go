@@ -814,7 +814,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	grpclog.Infof("addrConn: tryUpdateAddrs curAddrFound: %v", curAddrFound)
 	if curAddrFound {
 		ac.addrs = addrs
-		ac.reconnectIdx = 0 // Start reconnecting from begining in the new list.
+		ac.reconnectIdx = 0 // Start reconnecting from beginning in the new list.
 	}
 
 	return curAddrFound
