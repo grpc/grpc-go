@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import io.grpc.CallOptions;
+import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import java.util.concurrent.Executor;
@@ -67,7 +68,7 @@ public interface ClientTransport {
    * Returns a Future representing the transport level stats. If this transport does not support
    * stats, the return value will be a Future of a null value.
    */
-  Future<TransportTracer.Stats> getTransportStats();
+  Future<InternalTransportStats> getTransportStats();
 
   /**
    * A callback that is invoked when the acknowledgement to a {@link #ping} is received. Exactly one

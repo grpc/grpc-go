@@ -30,6 +30,7 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.internal.http.StatusLine;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -45,7 +46,6 @@ import io.grpc.internal.LogId;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -857,8 +857,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public Future<TransportTracer.Stats> getTransportStats() {
-    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+  public Future<InternalTransportStats> getTransportStats() {
+    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
   }

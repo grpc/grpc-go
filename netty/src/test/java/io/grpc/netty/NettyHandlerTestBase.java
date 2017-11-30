@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import io.grpc.InternalTransportStats;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.MessageFramer;
 import io.grpc.internal.StatsTraceContext;
@@ -459,30 +460,30 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   @Test
   public void transportTracer_windowSizeDefault() throws Exception {
     manualSetUp();
-    TransportTracer.Stats stats = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, stats.localFlowControlWindow);
+    InternalTransportStats transportStats = transportTracer.getStats();
+    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, transportStats.remoteFlowControlWindow);
+    assertEquals(flowControlWindow, transportStats.localFlowControlWindow);
   }
 
   @Test
   public void transportTracer_windowSize() throws Exception {
     flowControlWindow = 1024 * 1024;
     manualSetUp();
-    TransportTracer.Stats stats = transportTracer.getStats();
-    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
-    assertEquals(flowControlWindow, stats.localFlowControlWindow);
+    InternalTransportStats transportStats = transportTracer.getStats();
+    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, transportStats.remoteFlowControlWindow);
+    assertEquals(flowControlWindow, transportStats.localFlowControlWindow);
   }
 
   @Test
   public void transportTracer_windowUpdate_remote() throws Exception {
     manualSetUp();
-    TransportTracer.Stats before = transportTracer.getStats();
+    InternalTransportStats before = transportTracer.getStats();
     assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, before.remoteFlowControlWindow);
     assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, before.localFlowControlWindow);
 
     ByteBuf serializedSettings = windowUpdate(0, 1000);
     channelRead(serializedSettings);
-    TransportTracer.Stats after = transportTracer.getStats();
+    InternalTransportStats after = transportTracer.getStats();
     assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE + 1000,
         after.remoteFlowControlWindow);
     assertEquals(flowControlWindow, after.localFlowControlWindow);
@@ -491,7 +492,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   @Test
   public void transportTracer_windowUpdate_local() throws Exception {
     manualSetUp();
-    TransportTracer.Stats before = transportTracer.getStats();
+    InternalTransportStats before = transportTracer.getStats();
     assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, before.remoteFlowControlWindow);
     assertEquals(flowControlWindow, before.localFlowControlWindow);
 
@@ -500,7 +501,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     connection().local().flowController().incrementWindowSize(
         connection().connectionStream(), 8 * Http2CodecUtil.DEFAULT_WINDOW_SIZE);
 
-    TransportTracer.Stats after = transportTracer.getStats();
+    InternalTransportStats after = transportTracer.getStats();
     assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, after.remoteFlowControlWindow);
     assertEquals(flowControlWindow + 8 * Http2CodecUtil.DEFAULT_WINDOW_SIZE,
         connection().local().flowController().windowSize(connection().connectionStream()));

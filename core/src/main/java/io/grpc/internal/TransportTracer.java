@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.InternalTransportStats;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -58,8 +59,12 @@ public final class TransportTracer {
   /**
    * Returns a read only set of current stats.
    */
-  public Stats getStats() {
-    return new Stats(
+  public InternalTransportStats getStats() {
+    long localFlowControlWindow =
+        flowControlWindowReader == null ? -1 : flowControlWindowReader.read().localBytes;
+    long remoteFlowControlWindow =
+        flowControlWindowReader == null ? -1 : flowControlWindowReader.read().remoteBytes;
+    return new InternalTransportStats(
         streamsStarted,
         lastStreamCreatedTimeNanos,
         streamsSucceeded,
@@ -69,7 +74,8 @@ public final class TransportTracer {
         keepAlivesSent,
         lastMessageSentTimeNanos,
         lastMessageReceivedTimeNanos,
-        flowControlWindowReader);
+        localFlowControlWindow,
+        remoteFlowControlWindow);
   }
 
   /**
@@ -148,53 +154,6 @@ public final class TransportTracer {
 
   private long currentTimeNanos() {
     return TimeUnit.MILLISECONDS.toNanos(timeProvider.currentTimeMillis());
-  }
-
-  /**
-   * A read only copy of stats from the transport tracer.
-   */
-  public static final class Stats {
-    public final long streamsStarted;
-    public final long lastStreamCreatedTimeNanos;
-    public final long streamsSucceeded;
-    public final long streamsFailed;
-    public final long messagesSent;
-    public final long messagesReceived;
-    public final long keepAlivesSent;
-    public final long lastMessageSentTimeNanos;
-    public final long lastMessageReceivedTimeNanos;
-    public final long localFlowControlWindow;
-    public final long remoteFlowControlWindow;
-
-    private Stats(
-        long streamsStarted,
-        long lastStreamCreatedTimeNanos,
-        long streamsSucceeded,
-        long streamsFailed,
-        long messagesSent,
-        long messagesReceived,
-        long keepAlivesSent,
-        long lastMessageSentTimeNanos,
-        long lastMessageReceivedTimeNanos,
-        FlowControlReader flowControlReader) {
-      this.streamsStarted = streamsStarted;
-      this.lastStreamCreatedTimeNanos = lastStreamCreatedTimeNanos;
-      this.streamsSucceeded = streamsSucceeded;
-      this.streamsFailed = streamsFailed;
-      this.messagesSent = messagesSent;
-      this.messagesReceived = messagesReceived;
-      this.keepAlivesSent = keepAlivesSent;
-      this.lastMessageSentTimeNanos = lastMessageSentTimeNanos;
-      this.lastMessageReceivedTimeNanos = lastMessageReceivedTimeNanos;
-      if (flowControlReader == null) {
-        this.localFlowControlWindow = -1;
-        this.remoteFlowControlWindow = -1;
-      } else {
-        FlowControlWindows windows = flowControlReader.read();
-        this.localFlowControlWindow = windows.localBytes;
-        this.remoteFlowControlWindow = windows.remoteBytes;
-      }
-    }
   }
 
   /**

@@ -24,6 +24,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -309,18 +310,18 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public Future<TransportTracer.Stats> getTransportStats() {
+  public Future<InternalTransportStats> getTransportStats() {
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      SettableFuture<TransportTracer.Stats> result = SettableFuture.create();
+      SettableFuture<InternalTransportStats> result = SettableFuture.create();
       result.set(transportTracer.getStats());
       return result;
     }
     return channel.eventLoop().submit(
-        new Callable<TransportTracer.Stats>() {
+        new Callable<InternalTransportStats>() {
           @Override
-          public TransportTracer.Stats call() throws Exception {
+          public InternalTransportStats call() throws Exception {
             return transportTracer.getStats();
           }
         });

@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Context;
+import io.grpc.InternalTransportStats;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
@@ -188,8 +189,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public Future<TransportTracer.Stats> getTransportStats() {
-    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+  public Future<InternalTransportStats> getTransportStats() {
+    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
   }

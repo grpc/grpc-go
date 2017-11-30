@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.InternalTransportStats;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.LogId;
@@ -176,18 +177,18 @@ class NettyServerTransport implements ServerTransport {
   }
 
   @Override
-  public Future<TransportTracer.Stats> getTransportStats() {
+  public Future<InternalTransportStats> getTransportStats() {
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      SettableFuture<TransportTracer.Stats> result = SettableFuture.create();
+      SettableFuture<InternalTransportStats> result = SettableFuture.create();
       result.set(transportTracer.getStats());
       return result;
     }
     return channel.eventLoop().submit(
-        new Callable<TransportTracer.Stats>() {
+        new Callable<InternalTransportStats>() {
           @Override
-          public TransportTracer.Stats call() throws Exception {
+          public InternalTransportStats call() throws Exception {
             return transportTracer.getStats();
           }
         });

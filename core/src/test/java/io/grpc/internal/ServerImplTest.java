@@ -50,6 +50,7 @@ import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -1273,8 +1274,8 @@ public class ServerImplTest {
     }
 
     @Override
-    public Future<TransportTracer.Stats> getTransportStats() {
-      SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+    public Future<InternalTransportStats> getTransportStats() {
+      SettableFuture<InternalTransportStats> ret = SettableFuture.create();
       ret.set(null);
       return ret;
     }

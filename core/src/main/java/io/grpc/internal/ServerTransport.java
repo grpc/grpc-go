@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.InternalTransportStats;
 import io.grpc.Status;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,5 +49,5 @@ public interface ServerTransport extends WithLogId {
    * Returns a Future representing the transport level stats. If this transport does not support
    * stats, the return value will be a Future of a null value.
    */
-  Future<TransportTracer.Stats> getTransportStats();
+  Future<InternalTransportStats> getTransportStats();
 }

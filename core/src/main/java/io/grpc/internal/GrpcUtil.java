@@ -30,6 +30,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.InternalMetadata;
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
+import io.grpc.InternalTransportStats;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
@@ -682,7 +683,7 @@ public final class GrpcUtil {
 
         @Nullable
         @Override
-        public Future<TransportTracer.Stats> getTransportStats() {
+        public Future<InternalTransportStats> getTransportStats() {
           return transport.getTransportStats();
         }
       };
