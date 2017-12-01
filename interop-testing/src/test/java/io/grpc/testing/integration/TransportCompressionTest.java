@@ -37,6 +37,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -49,7 +50,6 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -77,32 +77,28 @@ public class TransportCompressionTest extends AbstractInteropTest {
     FZIPPER.anyWritten = false;
   }
 
-  /** Start server. */
   @BeforeClass
-  public static void startServer() {
+  public static void registerCompressors() {
     compressors.register(FZIPPER);
     compressors.register(Codec.Identity.NONE);
-    startStaticServer(
-        NettyServerBuilder.forPort(0)
-            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-            .compressorRegistry(compressors)
-            .decompressorRegistry(decompressors),
-        new ServerInterceptor() {
-          @Override
-          public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
-              Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-            Listener<ReqT> listener = next.startCall(call, headers);
-            // TODO(carl-mastrangelo): check that encoding was set.
-            call.setMessageCompression(true);
-            return listener;
-          }
-        });
   }
 
-  /** Stop server. */
-  @AfterClass
-  public static void stopServer() {
-    stopStaticServer();
+  @Override
+  protected AbstractServerImplBuilder<?> getServerBuilder() {
+    return NettyServerBuilder.forPort(0)
+        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .compressorRegistry(compressors)
+        .decompressorRegistry(decompressors)
+        .intercept(new ServerInterceptor() {
+            @Override
+            public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+              Listener<ReqT> listener = next.startCall(call, headers);
+              // TODO(carl-mastrangelo): check that encoding was set.
+              call.setMessageCompression(true);
+              return listener;
+            }
+          });
   }
 
   @Test
@@ -228,4 +224,3 @@ public class TransportCompressionTest extends AbstractInteropTest {
     }
   }
 }
-

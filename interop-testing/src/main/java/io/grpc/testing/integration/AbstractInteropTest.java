@@ -121,6 +121,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 import org.junit.After;
@@ -147,21 +148,24 @@ public abstract class AbstractInteropTest {
   public static final int MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
-  private static final AtomicReference<ServerCall<?, ?>> serverCallCapture =
-      new AtomicReference<ServerCall<?, ?>>();
-  private static final AtomicReference<Metadata> requestHeadersCapture =
-      new AtomicReference<Metadata>();
-  private static final AtomicReference<Context> contextCapture =
-      new AtomicReference<Context>();
-  private static ScheduledExecutorService testServiceExecutor;
-  private static Server server;
+
   private static final FakeTagger tagger = new FakeTagger();
   private static final FakeTagContextBinarySerializer tagContextBinarySerializer =
       new FakeTagContextBinarySerializer();
-  private static final FakeStatsRecorder clientStatsRecorder = new FakeStatsRecorder();
-  private static final FakeStatsRecorder serverStatsRecorder = new FakeStatsRecorder();
 
-  private static final LinkedBlockingQueue<ServerStreamTracerInfo> serverStreamTracers =
+  private final AtomicReference<ServerCall<?, ?>> serverCallCapture =
+      new AtomicReference<ServerCall<?, ?>>();
+  private final AtomicReference<Metadata> requestHeadersCapture =
+      new AtomicReference<Metadata>();
+  private final AtomicReference<Context> contextCapture =
+      new AtomicReference<Context>();
+  private final FakeStatsRecorder clientStatsRecorder = new FakeStatsRecorder();
+  private final FakeStatsRecorder serverStatsRecorder = new FakeStatsRecorder();
+
+  private ScheduledExecutorService testServiceExecutor;
+  private Server server;
+
+  private final LinkedBlockingQueue<ServerStreamTracerInfo> serverStreamTracers =
       new LinkedBlockingQueue<ServerStreamTracerInfo>();
 
   private static final class ServerStreamTracerInfo {
@@ -184,7 +188,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  private static final ServerStreamTracer.Factory serverStreamTracerFactory =
+  private final ServerStreamTracer.Factory serverStreamTracerFactory =
       new ServerStreamTracer.Factory() {
         @Override
         public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
@@ -197,8 +201,12 @@ public abstract class AbstractInteropTest {
 
   protected static final Empty EMPTY = Empty.getDefaultInstance();
 
-  protected static void startStaticServer(
-      AbstractServerImplBuilder<?> builder, ServerInterceptor ... interceptors) {
+  private void startServer() {
+    AbstractServerImplBuilder<?> builder = getServerBuilder();
+    if (builder == null) {
+      server = null;
+      return;
+    }
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
     List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
@@ -206,7 +214,6 @@ public abstract class AbstractInteropTest {
         .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
         .add(recordContextInterceptor(contextCapture))
         .addAll(TestServiceImpl.interceptors())
-        .add(interceptors)
         .build();
 
     builder
@@ -230,13 +237,17 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  protected static void stopStaticServer() {
-    server.shutdownNow();
-    testServiceExecutor.shutdown();
+  private void stopServer() {
+    if (server != null) {
+      server.shutdownNow();
+    }
+    if (testServiceExecutor != null) {
+      testServiceExecutor.shutdown();
+    }
   }
 
   @VisibleForTesting
-  static int getPort() {
+  final int getPort() {
     return server.getPort();
   }
 
@@ -270,15 +281,13 @@ public abstract class AbstractInteropTest {
    */
   @Before
   public void setUp() {
+    startServer();
     channel = createChannel();
 
     blockingStub =
         TestServiceGrpc.newBlockingStub(channel).withInterceptors(tracerSetupInterceptor);
     asyncStub = TestServiceGrpc.newStub(channel).withInterceptors(tracerSetupInterceptor);
     requestHeadersCapture.set(null);
-    clientStatsRecorder.rolloverRecords();
-    serverStatsRecorder.rolloverRecords();
-    serverStreamTracers.clear();
   }
 
   /** Clean up. */
@@ -287,9 +296,19 @@ public abstract class AbstractInteropTest {
     if (channel != null) {
       channel.shutdown();
     }
+    stopServer();
   }
 
   protected abstract ManagedChannel createChannel();
+
+  /**
+   * Returns the server builder used to create server for each test run.  Return {@code null} if
+   * it shouldn't start a server in the same process.
+   */
+  @Nullable
+  protected AbstractServerImplBuilder<?> getServerBuilder() {
+    return null;
+  }
 
   protected final CensusStatsModule createClientCensusStatsModule() {
     return new CensusStatsModule(
@@ -300,13 +319,6 @@ public abstract class AbstractInteropTest {
    * Return true if exact metric values should be checked.
    */
   protected boolean metricsExpected() {
-    return true;
-  }
-
-  /**
-   * Return true if the server is in the same process as the test methods.
-   */
-  protected boolean serverInProcess() {
     return true;
   }
 
@@ -1414,9 +1426,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void censusContextsPropagated() {
-    if (!serverInProcess()) {
-      return;
-    }
+    Assume.assumeTrue("Skip the test because server is not in the same process.", server != null);
     Span clientParentSpan = MockableSpan.generateRandomSpan(new Random());
     Context ctx =
         Context.ROOT.withValues(
@@ -1826,86 +1836,48 @@ public abstract class AbstractInteropTest {
   @SuppressWarnings("AssertionFailureIgnored") // Failure is checked in the end by the passed flag.
   private void assertServerStatsTrace(String method, Status.Code code,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
-    if (!serverInProcess()) {
+    if (server == null) {
+      // Server is not in the same process.  We can't check server-side stats.
       return;
     }
     AssertionError checkFailure = null;
     boolean passed = false;
 
     if (metricsExpected()) {
-      // Because the server doesn't restart between tests, it may still be processing the requests
-      // from the previous tests when a new test starts, thus the test may see metrics from previous
-      // tests.  The best we can do here is to exhaust all records and find one that matches the
-      // given conditions.
-      while (true) {
-        MetricsRecord serverStartRecord;
-        MetricsRecord serverEndRecord;
-        try {
-          // On the server, the stats is finalized in ServerStreamListener.closed(), which can be
-          // run after the client receives the final status.  So we use a timeout.
-          serverStartRecord = serverStatsRecorder.pollRecord(5, TimeUnit.SECONDS);
-          serverEndRecord = serverStatsRecorder.pollRecord(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-          throw new RuntimeException(e);
-        }
-        if (serverEndRecord == null) {
-          break;
-        }
-        try {
-          checkStartTags(serverStartRecord, method);
-          checkEndTags(serverEndRecord, method, code);
-          if (requests != null && responses != null) {
-            checkCensus(serverEndRecord, true, requests, responses);
-          }
-          passed = true;
-          break;
-        } catch (AssertionError e) {
-          // May be the fallout from a previous test, continue trying
-          checkFailure = e;
-        }
+      MetricsRecord serverStartRecord;
+      MetricsRecord serverEndRecord;
+      try {
+        // On the server, the stats is finalized in ServerStreamListener.closed(), which can be
+        // run after the client receives the final status.  So we use a timeout.
+        serverStartRecord = serverStatsRecorder.pollRecord(5, TimeUnit.SECONDS);
+        serverEndRecord = serverStatsRecorder.pollRecord(5, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
       }
-      if (!passed) {
-        if (checkFailure == null) {
-          throw new AssertionError("No record found");
-        }
-        throw checkFailure;
+      assertNotNull(serverStartRecord);
+      assertNotNull(serverEndRecord);
+      checkStartTags(serverStartRecord, method);
+      checkEndTags(serverEndRecord, method, code);
+      if (server != null && requests != null && responses != null) {
+        checkCensus(serverEndRecord, true, requests, responses);
       }
     }
 
-    // Use the same trick to check ServerStreamTracer records
-    passed = false;
-    while (true) {
-      ServerStreamTracerInfo tracerInfo;
-      tracerInfo = serverStreamTracers.poll();
-      if (tracerInfo == null) {
-        break;
-      }
-      try {
-        assertEquals(method, tracerInfo.fullMethodName);
-        assertNotNull(tracerInfo.tracer.contextCapture);
-        // On the server, streamClosed() may be called after the client receives the final status.
-        // So we use a timeout.
-        try {
-          assertTrue(tracerInfo.tracer.await(1, TimeUnit.SECONDS));
-        } catch (InterruptedException e) {
-          throw new AssertionError(e);
-        }
-        assertEquals(code, tracerInfo.tracer.getStatus().getCode());
-        if (requests != null && responses != null) {
-          checkTracers(tracerInfo.tracer, responses, requests);
-        }
-        passed = true;
-        break;
-      } catch (AssertionError e) {
-        // May be the fallout from a previous test, continue trying
-        checkFailure = e;
-      }
+    ServerStreamTracerInfo tracerInfo;
+    tracerInfo = serverStreamTracers.poll();
+    assertNotNull(tracerInfo);
+    assertEquals(method, tracerInfo.fullMethodName);
+    assertNotNull(tracerInfo.tracer.contextCapture);
+    // On the server, streamClosed() may be called after the client receives the final status.
+    // So we use a timeout.
+    try {
+      assertTrue(tracerInfo.tracer.await(1, TimeUnit.SECONDS));
+    } catch (InterruptedException e) {
+      throw new AssertionError(e);
     }
-    if (!passed) {
-      if (checkFailure == null) {
-        throw new AssertionError("No ServerStreamTracer found");
-      }
-      throw checkFailure;
+    assertEquals(code, tracerInfo.tracer.getStatus().getCode());
+    if (requests != null && responses != null) {
+      checkTracers(tracerInfo.tracer, responses, requests);
     }
   }
 
@@ -1965,7 +1937,7 @@ public abstract class AbstractInteropTest {
   /**
    * Check information recorded by Census.
    */
-  private void checkCensus(MetricsRecord record, boolean server,
+  private void checkCensus(MetricsRecord record, boolean isServer,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     int uncompressedRequestsSize = 0;
     for (MessageLite request : requests) {
@@ -1975,7 +1947,7 @@ public abstract class AbstractInteropTest {
     for (MessageLite response : responses) {
       uncompressedResponsesSize += response.getSerializedSize();
     }
-    if (server && serverInProcess()) {
+    if (isServer) {
       assertEquals(
           requests.size(),
           record.getMetricAsLongOrFail(RpcMeasureConstants.RPC_SERVER_REQUEST_COUNT));
@@ -1993,8 +1965,7 @@ public abstract class AbstractInteropTest {
       // check if they are recorded.
       assertNotNull(record.getMetric(RpcMeasureConstants.RPC_SERVER_REQUEST_BYTES));
       assertNotNull(record.getMetric(RpcMeasureConstants.RPC_SERVER_RESPONSE_BYTES));
-    }
-    if (!server) {
+    } else {
       assertEquals(
           requests.size(),
           record.getMetricAsLongOrFail(RpcMeasureConstants.RPC_CLIENT_REQUEST_COUNT));

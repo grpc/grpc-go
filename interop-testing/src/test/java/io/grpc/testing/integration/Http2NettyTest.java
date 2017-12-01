@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 import io.grpc.ManagedChannel;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.testing.TestUtils;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
@@ -30,8 +31,6 @@ import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -42,11 +41,11 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class Http2NettyTest extends AbstractInteropTest {
 
-  /** Starts the server with HTTPS. */
-  @BeforeClass
-  public static void startServer() {
+  @Override
+  protected AbstractServerImplBuilder<?> getServerBuilder() {
+    // Starts the server with HTTPS.
     try {
-      startStaticServer(NettyServerBuilder.forPort(0)
+      return NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
           .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
           .sslContext(GrpcSslContexts
@@ -55,15 +54,10 @@ public class Http2NettyTest extends AbstractInteropTest {
               .trustManager(TestUtils.loadCert("ca.pem"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
               .sslProvider(SslProvider.OPENSSL)
-              .build()));
+              .build());
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
-  }
-
-  @AfterClass
-  public static void stopServer() {
-    stopStaticServer();
   }
 
   @Override

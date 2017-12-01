@@ -25,6 +25,7 @@ import com.google.protobuf.EmptyProtos.Empty;
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
 import io.grpc.ManagedChannel;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.StreamRecorder;
 import io.grpc.internal.testing.TestUtils;
@@ -42,7 +43,6 @@ import java.io.IOException;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -63,9 +63,9 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     Util.installConscryptIfAvailable();
   }
 
-  /** Starts the server with HTTPS. */
-  @BeforeClass
-  public static void startServer() throws Exception {
+  @Override
+  protected AbstractServerImplBuilder<?> getServerBuilder() {
+    // Starts the server with HTTPS.
     try {
       SslProvider sslProvider = SslContext.defaultServerProvider();
       if (sslProvider == SslProvider.OPENSSL && !OpenSsl.isAlpnSupported()) {
@@ -77,18 +77,13 @@ public class Http2OkHttpTest extends AbstractInteropTest {
           .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"));
       GrpcSslContexts.configure(contextBuilder, sslProvider);
       contextBuilder.ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE);
-      startStaticServer(NettyServerBuilder.forPort(0)
+      return NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
           .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-          .sslContext(contextBuilder.build()));
+          .sslContext(contextBuilder.build());
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
-  }
-
-  @AfterClass
-  public static void stopServer() throws Exception {
-    stopStaticServer();
   }
 
   @Override

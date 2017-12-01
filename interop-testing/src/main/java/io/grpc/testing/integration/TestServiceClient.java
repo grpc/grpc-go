@@ -371,12 +371,6 @@ public class TestServiceClient {
     }
 
     @Override
-    protected boolean serverInProcess() {
-      // Server is a separate process.
-      return false;
-    }
-
-    @Override
     protected boolean metricsExpected() {
       // Exact message size doesn't match when testing with Go servers:
       // https://github.com/grpc/grpc-go/issues/1572

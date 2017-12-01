@@ -17,11 +17,11 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ManagedChannel;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.netty.InternalHandlerSettings;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -33,14 +33,11 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
   public static void turnOnAutoWindow() {
     InternalHandlerSettings.enable(true);
     InternalHandlerSettings.autoWindowOn(true);
-    startStaticServer(
-        NettyServerBuilder.forPort(0)
-            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE));
   }
 
-  @AfterClass
-  public static void shutdown() {
-    stopStaticServer();
+  @Override
+  protected AbstractServerImplBuilder<?> getServerBuilder() {
+    return NettyServerBuilder.forPort(0).maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
   }
 
   @Override
