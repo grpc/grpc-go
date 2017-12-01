@@ -879,9 +879,18 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	cc.mu.Lock()
 	cc.scRaw = js
 	cc.sc = sc
-	if sc.LB != nil {
-		cc.switchBalancer(*sc.LB)
-		cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
+	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
+		if cc.curBalancerName == grpclbName {
+			// If current balancer is grpclb, there's at least one grpclb
+			// balancer address in the resolved list. Don't switch the balancer,
+			// but change the previous balancer name, so if a new resolved
+			// address list doesn't contain grpclb address, balancer will be
+			// switched to *sc.LB.
+			cc.preBalancerName = *sc.LB
+		} else {
+			cc.switchBalancer(*sc.LB)
+			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
+		}
 	}
 	cc.mu.Unlock()
 	return nil
