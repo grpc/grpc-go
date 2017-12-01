@@ -84,10 +84,17 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
+	protoMsg := v.(proto.Message)
+	protoMsg.Reset()
+
+	if pu, ok := protoMsg.(proto.Unmarshaler); ok {
+		// object can unmarshal itself, no need for buffer
+		return pu.Unmarshal(data)
+	}
+
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	cb.SetBuf(data)
-	v.(proto.Message).Reset()
-	err := cb.Unmarshal(v.(proto.Message))
+	err := cb.Unmarshal(protoMsg)
 	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return err
