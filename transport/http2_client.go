@@ -93,6 +93,11 @@ type http2Client struct {
 	bdpEst          *bdpEstimator
 	outQuotaVersion uint32
 
+	// onSuccess is a callback that client transport calls upon
+	// receiving server preface to signal that a succefull HTTP2
+	// connection was established.
+	onSuccess func()
+
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
@@ -145,16 +150,12 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, timeout time.Duration) (_ ClientTransport, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func()) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
-	connectCtx, connectCancel := context.WithTimeout(ctx, timeout)
 	defer func() {
 		if err != nil {
 			cancel()
-			// Don't call connectCancel in success path due to a race in Go 1.6:
-			// https://github.com/golang/go/issues/15078.
-			connectCancel()
 		}
 	}()
 
@@ -240,6 +241,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 		kp:                kp,
 		statsHandler:      opts.StatsHandler,
 		initialWindowSize: initialWindowSize,
+		onSuccess:         onSuccess,
 	}
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
@@ -1160,6 +1162,7 @@ func (t *http2Client) reader() {
 		t.Close()
 		return
 	}
+	t.onSuccess()
 	t.handleSettings(sf, true)
 
 	// loop to keep reading incoming messages on this transport.
