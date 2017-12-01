@@ -104,10 +104,12 @@ func (b *baseBalancer) regeneratePicker() {
 		b.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
 	}
-	var readySCs []balancer.SubConn
-	for sc, st := range b.scStates {
-		if st == connectivity.Ready {
-			readySCs = append(readySCs, sc)
+	readySCs := make(map[resolver.Address]balancer.SubConn)
+
+	// Filter out all ready SCs from full subConn map.
+	for addr, sc := range b.subConns {
+		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
+			readySCs[addr] = sc
 		}
 	}
 	b.picker = b.pickerBuilder.Build(readySCs)

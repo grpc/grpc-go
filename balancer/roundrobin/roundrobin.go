@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/resolver"
 )
 
 // newBuilder creates a new roundrobin balancer builder.
@@ -41,8 +42,12 @@ func init() {
 
 type rrPickerBuilder struct{}
 
-func (*rrPickerBuilder) Build(scs []balancer.SubConn) balancer.Picker {
-	grpclog.Infof("roundrobinPicker: newPicker called with scs: %v", scs)
+func (*rrPickerBuilder) Build(readySCs map[resolver.Address]balancer.SubConn) balancer.Picker {
+	grpclog.Infof("roundrobinPicker: newPicker called with readySCs: %v", readySCs)
+	var scs []balancer.SubConn
+	for _, sc := range readySCs {
+		scs = append(scs, sc)
+	}
 	return &rrPicker{
 		subConns: scs,
 	}

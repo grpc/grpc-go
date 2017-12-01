@@ -28,13 +28,16 @@
 // scratch.
 package base
 
-import "google.golang.org/grpc/balancer"
+import (
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/resolver"
+)
 
 // PickerBuilder creates balancer.Picker.
 type PickerBuilder interface {
 	// Build takes a slice of ready SubConns, and returns a picker that will be
 	// used by gRPC to pick a SubConn.
-	Build(readySCs []balancer.SubConn) balancer.Picker
+	Build(readySCs map[resolver.Address]balancer.SubConn) balancer.Picker
 }
 
 // NewBalancerBuilder returns a balancer builder. The balancers
