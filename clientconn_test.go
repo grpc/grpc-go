@@ -181,9 +181,12 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	}
 	defer server.Close()
 	done := make(chan struct{})
+	clientDone := make(chan struct{})
 	go func() { // Launch the server.
 		defer func() {
-			close(done)
+			if done != nil {
+				close(done)
+			}
 		}()
 		conn1, err := server.Accept()
 		if err != nil {
@@ -234,14 +237,18 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			t.Errorf("Unexpected error while reading. Err: %v, want timeout error", err)
 			break
 		}
+		close(done)
+		done = nil
+		<-clientDone
 
 	}()
 	client, err := Dial(server.Addr().String(), WithInsecure())
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
-	defer client.Close()
 	<-done
+	client.Close()
+	close(clientDone)
 }
 
 func TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
