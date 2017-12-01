@@ -689,7 +689,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 		return
 	}
 
-	if cc.curBalancerName == name {
+	if strings.ToLower(cc.curBalancerName) == strings.ToLower(name) {
 		return
 	}
 

@@ -23,6 +23,7 @@ package balancer
 import (
 	"errors"
 	"net"
+	"strings"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/connectivity"
@@ -38,13 +39,13 @@ var (
 // Register registers the balancer builder to the balancer map.
 // b.Name will be used as the name registered with this builder.
 func Register(b Builder) {
-	m[b.Name()] = b
+	m[strings.ToLower(b.Name())] = b
 }
 
 // Get returns the resolver builder registered with the given name.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
-	if b, ok := m[name]; ok {
+	if b, ok := m[strings.ToLower(name)]; ok {
 		return b
 	}
 	return nil
