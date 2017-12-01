@@ -670,27 +670,28 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	cc.curAddresses = addrs
 
-	newBalancerName := cc.curBalancerName
-	// This is the first time handling resolved addresses, try to create a
-	// pickfirst balancer.
-	if newBalancerName == "" {
-		newBalancerName = pickfirstName
-	}
-	for _, a := range addrs {
-		if a.Type == resolver.GRPCLB && newBalancerName != grpclbName {
-			// Switch from non-grpclb to grpclb.
-			newBalancerName = grpclbName
-			break
-		} else if a.Type == resolver.Backend && newBalancerName == grpclbName {
-			// Switch from grpclb to non-grpclb.
-			newBalancerName = cc.preBalancerName
-			break
+	if cc.dopts.balancerBuilder != nil && cc.balancerWrapper == nil {
+		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+	} else {
+		newBalancerName := cc.curBalancerName
+		// This is the first time handling resolved addresses, try to create a
+		// pickfirst balancer.
+		if newBalancerName == "" {
+			newBalancerName = pickfirstName
 		}
+		for _, a := range addrs {
+			if a.Type == resolver.GRPCLB && newBalancerName != grpclbName {
+				// Switch from non-grpclb to grpclb.
+				newBalancerName = grpclbName
+				break
+			} else if a.Type == resolver.Backend && newBalancerName == grpclbName {
+				// Switch from grpclb to non-grpclb.
+				newBalancerName = cc.preBalancerName
+				break
+			}
+		}
+		cc.switchBalancer(newBalancerName)
 	}
-	fmt.Println(newBalancerName)
-	cc.switchBalancer(newBalancerName)
-	fmt.Println(cc.balancerWrapper)
-
 	cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
 }
 
@@ -706,13 +707,11 @@ func (cc *ClientConn) switchBalancer(name string) {
 	grpclog.Infof("ClientConn switching balancer to %q", name)
 
 	if cc.dopts.balancerBuilder != nil {
-		fmt.Println("wtf")
 		grpclog.Infoln("ignoring service config balancer configuration: WithBalancer DialOption used instead")
 		return
 	}
 
 	if strings.ToLower(cc.curBalancerName) == strings.ToLower(name) {
-		fmt.Println("equal", cc.balancerWrapper)
 		return
 	}
 
@@ -730,7 +729,6 @@ func (cc *ClientConn) switchBalancer(name string) {
 	cc.preBalancerName = cc.curBalancerName
 	cc.curBalancerName = builder.Name()
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
-	fmt.Println("1", cc.balancerWrapper)
 }
 
 func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
