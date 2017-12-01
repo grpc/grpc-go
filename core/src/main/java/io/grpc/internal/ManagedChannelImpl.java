@@ -409,7 +409,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
         }
 
         @Override
-        ClientStream newSubstream() {
+        ClientStream newStream() {
           ClientTransport transport =
               get(new PickSubchannelArgsImpl(method, headers, callOptions));
           Context origContext = context.attach();

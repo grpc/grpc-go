@@ -43,12 +43,12 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
   private final MethodDescriptor<ReqT, ?> method;
 
-  /** Must be held when updating state or accessing state.buffer. */
+  /** Must be held when updating state, accessing state.buffer, or certain substream attributes. */
   private final Object lock = new Object();
 
   private volatile State state =
       new State(
-          new ArrayList<BufferEntry>(), Collections.<ClientStream>emptySet(), null, false, false);
+          new ArrayList<BufferEntry>(), Collections.<Substream>emptySet(), null, false, false);
 
   private ClientStreamListener masterListener;
 
@@ -56,7 +56,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     this.method = method;
   }
 
-  private boolean commit(ClientStream winningSubstream) {
+  private boolean commit(Substream winningSubstream) {
     if (commit0(winningSubstream)) {
       postCommit();
       return true;
@@ -64,8 +64,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     return false;
   }
 
-  private boolean commit0(ClientStream winningSubstream) {
-    Collection<ClientStream> savedDrainedSubstreams;
+  private boolean commit0(Substream winningSubstream) {
+    Collection<Substream> savedDrainedSubstreams;
     synchronized (lock) {
       if (state.winningSubstream != null) {
         return false;
@@ -78,9 +78,9 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     // For hedging only, not needed for normal retry
     // TODO(zdapeng): also cancel all the scheduled hedges.
-    for (ClientStream substream : savedDrainedSubstreams) {
+    for (Substream substream : savedDrainedSubstreams) {
       if (substream != winningSubstream) {
-        substream.cancel(CANCELLED_BECAUSE_COMMITTED);
+        substream.stream.cancel(CANCELLED_BECAUSE_COMMITTED);
       }
     }
     return true;
@@ -89,16 +89,26 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   abstract void postCommit();
 
   private void retry() {
-    ClientStream substream = newSubstream();
+    Substream substream = createSubstream();
 
     // TODO(zdapeng): update "grpc-retry-attempts" header
 
     drain(substream);
   }
 
-  abstract ClientStream newSubstream();
+  private Substream createSubstream() {
+    Substream sub = new Substream();
+    // NOTICE: This set _must_ be done before stream.start() and it actually is.
+    sub.stream = newStream();
+    return sub;
+  }
 
-  private void drain(ClientStream substream) {
+  /**
+   * Creates a new physical ClientStream that represents a retry/hedging attempt.
+   */
+  abstract ClientStream newStream();
+
+  private void drain(Substream substream) {
     int index = 0;
     int chunk = 0x80;
     List<BufferEntry> list = null;
@@ -113,7 +123,11 @@ abstract class RetriableStream<ReqT> implements ClientStream {
           break;
         }
         if (index == savedState.buffer.size()) { // I'm drained
-          state = savedState.drained(substream);
+          state = savedState.substreamDrained(substream);
+          return;
+        }
+
+        if (substream.closed) {
           return;
         }
 
@@ -142,7 +156,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       }
     }
 
-    substream.cancel(CANCELLED_BECAUSE_COMMITTED);
+    substream.stream.cancel(CANCELLED_BECAUSE_COMMITTED);
   }
 
   /**
@@ -166,8 +180,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     class StartEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.start(new Sublistener(substream));
+      public void runWith(Substream substream) {
+        substream.stream.start(new Sublistener(substream));
       }
     }
 
@@ -175,7 +189,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       state.buffer.add(new StartEntry());
     }
 
-    ClientStream substream = newSubstream();
+    Substream substream = createSubstream();
     drain(substream);
 
     // TODO(zdapeng): schedule hedging if needed
@@ -183,13 +197,15 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
   @Override
   public final void cancel(Status reason) {
-    if (commit0(new NoopClientStream())) {
+    Substream noopSubstream = new Substream();
+    noopSubstream.stream = new NoopClientStream();
+    if (commit0(noopSubstream)) {
       masterListener.closed(reason, new Metadata());
       postCommit();
       return;
     }
 
-    state.winningSubstream.cancel(reason);
+    state.winningSubstream.stream.cancel(reason);
     synchronized (lock) {
       // This is not required, but causes a short-circuit in the draining process.
       state = state.cancelled();
@@ -197,7 +213,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   }
 
   private void delayOrExecute(BufferEntry bufferEntry) {
-    Collection<ClientStream> savedDrainedSubstreams;
+    Collection<Substream> savedDrainedSubstreams;
     synchronized (lock) {
       if (!state.passThrough) {
         state.buffer.add(bufferEntry);
@@ -205,7 +221,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       savedDrainedSubstreams = state.drainedSubstreams;
     }
 
-    for (ClientStream substream : savedDrainedSubstreams) {
+    for (Substream substream : savedDrainedSubstreams) {
       bufferEntry.runWith(substream);
     }
   }
@@ -222,14 +238,14 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   final void sendMessage(final ReqT message) {
     State savedState = state;
     if (savedState.passThrough) {
-      savedState.winningSubstream.writeMessage(method.streamRequest(message));
+      savedState.winningSubstream.stream.writeMessage(method.streamRequest(message));
       return;
     }
 
     class SendMessageEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.writeMessage(method.streamRequest(message));
+      public void runWith(Substream substream) {
+        substream.stream.writeMessage(method.streamRequest(message));
       }
     }
 
@@ -240,14 +256,14 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void request(final int numMessages) {
     State savedState = state;
     if (savedState.passThrough) {
-      savedState.winningSubstream.request(numMessages);
+      savedState.winningSubstream.stream.request(numMessages);
       return;
     }
 
     class RequestEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.request(numMessages);
+      public void runWith(Substream substream) {
+        substream.stream.request(numMessages);
       }
     }
 
@@ -258,14 +274,14 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void flush() {
     State savedState = state;
     if (savedState.passThrough) {
-      savedState.winningSubstream.flush();
+      savedState.winningSubstream.stream.flush();
       return;
     }
 
     class FlushEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.flush();
+      public void runWith(Substream substream) {
+        substream.stream.flush();
       }
     }
 
@@ -274,8 +290,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
   @Override
   public final boolean isReady() {
-    for (ClientStream substream : state.drainedSubstreams) {
-      if (substream.isReady()) {
+    for (Substream substream : state.drainedSubstreams) {
+      if (substream.stream.isReady()) {
         return true;
       }
     }
@@ -286,8 +302,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setCompressor(final Compressor compressor) {
     class CompressorEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setCompressor(compressor);
+      public void runWith(Substream substream) {
+        substream.stream.setCompressor(compressor);
       }
     }
 
@@ -298,8 +314,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setFullStreamDecompression(final boolean fullStreamDecompression) {
     class FullStreamDecompressionEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setFullStreamDecompression(fullStreamDecompression);
+      public void runWith(Substream substream) {
+        substream.stream.setFullStreamDecompression(fullStreamDecompression);
       }
     }
 
@@ -310,8 +326,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setMessageCompression(final boolean enable) {
     class MessageCompressionEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setMessageCompression(enable);
+      public void runWith(Substream substream) {
+        substream.stream.setMessageCompression(enable);
       }
     }
 
@@ -322,8 +338,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void halfClose() {
     class HalfCloseEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.halfClose();
+      public void runWith(Substream substream) {
+        substream.stream.halfClose();
       }
     }
 
@@ -334,8 +350,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setAuthority(final String authority) {
     class AuthorityEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setAuthority(authority);
+      public void runWith(Substream substream) {
+        substream.stream.setAuthority(authority);
       }
     }
 
@@ -346,8 +362,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setDecompressorRegistry(final DecompressorRegistry decompressorRegistry) {
     class DecompressorRegistryEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setDecompressorRegistry(decompressorRegistry);
+      public void runWith(Substream substream) {
+        substream.stream.setDecompressorRegistry(decompressorRegistry);
       }
     }
 
@@ -358,8 +374,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setMaxInboundMessageSize(final int maxSize) {
     class MaxInboundMessageSizeEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setMaxInboundMessageSize(maxSize);
+      public void runWith(Substream substream) {
+        substream.stream.setMaxInboundMessageSize(maxSize);
       }
     }
 
@@ -370,8 +386,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void setMaxOutboundMessageSize(final int maxSize) {
     class MaxOutboundMessageSizeEntry implements BufferEntry {
       @Override
-      public void runWith(ClientStream substream) {
-        substream.setMaxOutboundMessageSize(maxSize);
+      public void runWith(Substream substream) {
+        substream.stream.setMaxOutboundMessageSize(maxSize);
       }
     }
 
@@ -381,7 +397,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   @Override
   public final Attributes getAttributes() {
     if (state.winningSubstream != null) {
-      return state.winningSubstream.getAttributes();
+      return state.winningSubstream.stream.getAttributes();
     }
     return Attributes.EMPTY;
   }
@@ -399,13 +415,13 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
   private interface BufferEntry {
     /** Replays the buffer entry with the given stream. */
-    void runWith(ClientStream substream);
+    void runWith(Substream substream);
   }
 
   private final class Sublistener implements ClientStreamListener {
-    final ClientStream substream;
+    final Substream substream;
 
-    Sublistener(ClientStream substream) {
+    Sublistener(Substream substream) {
       this.substream = substream;
     }
 
@@ -418,6 +434,10 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     @Override
     public void closed(Status status, Metadata trailers) {
+      synchronized (lock) {
+        state = state.substreamClosed(substream);
+      }
+
       if (state.winningSubstream == null && shouldRetry()) {
         // The check state.winningSubstream == null, checking if is not already committed, is racy,
         // but is still safe b/c the retry will also handle committed/cancellation
@@ -464,18 +484,18 @@ abstract class RetriableStream<ReqT> implements ClientStream {
      * Unmodifiable collection of all the substreams that are drained. Exceptional cases: Singleton
      * once passThrough; Empty if committed but not passTrough.
      */
-    final Collection<ClientStream> drainedSubstreams;
+    final Collection<Substream> drainedSubstreams;
 
     /** Null until committed. */
-    @Nullable final ClientStream winningSubstream;
+    @Nullable final Substream winningSubstream;
 
     /** Not required to set to true when cancelled, but can short-circuit the draining process. */
     final boolean cancelled;
 
     State(
         @Nullable List<BufferEntry> buffer,
-        Collection<ClientStream> drainedSubstreams,
-        @Nullable ClientStream winningSubstream,
+        Collection<Substream> drainedSubstreams,
+        @Nullable Substream winningSubstream,
         boolean cancelled,
         boolean passThrough) {
       this.buffer = buffer;
@@ -491,7 +511,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
           "passThrough should imply winningSubstream != null");
       checkState(
           !passThrough
-              || (drainedSubstreams.size() == 1 && drainedSubstreams.contains(winningSubstream)),
+              || (drainedSubstreams.size() == 1 && drainedSubstreams.contains(winningSubstream))
+              || (drainedSubstreams.size() == 0 && winningSubstream.closed),
           "passThrough should imply winningSubstream is drained");
       checkState(!cancelled || winningSubstream != null, "cancelled should imply committed");
     }
@@ -505,32 +526,49 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     /** The given substream is drained. */
     @CheckReturnValue
     @GuardedBy("lock")
-    State drained(ClientStream substream) {
+    State substreamDrained(Substream substream) {
       checkState(!passThrough, "Already passThrough");
 
-      Set<ClientStream> drainedSubstreams = new HashSet<ClientStream>();
-      drainedSubstreams.addAll(this.drainedSubstreams);
-      drainedSubstreams.add(substream);
+      Set<Substream> drainedSubstreams = new HashSet<Substream>(this.drainedSubstreams);
+
+      if (!substream.closed) {
+        drainedSubstreams.add(substream);
+      }
 
       boolean passThrough = winningSubstream != null;
 
       List<BufferEntry> buffer = this.buffer;
       if (passThrough) {
-        checkState(winningSubstream == substream, "Another RPC attempt has already committed");
+        checkState(
+            winningSubstream == substream, "Another RPC attempt has already committed");
         buffer = null;
       }
 
       return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);
     }
 
+    /** The given substream is closed. */
     @CheckReturnValue
     @GuardedBy("lock")
-    State committed(ClientStream winningSubstream) {
+    State substreamClosed(Substream substream) {
+      substream.closed = true;
+      if (this.drainedSubstreams.contains(substream)) {
+        Set<Substream> drainedSubstreams = new HashSet<Substream>(this.drainedSubstreams);
+        drainedSubstreams.remove(substream);
+        return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);
+      } else {
+        return this;
+      }
+    }
+
+    @CheckReturnValue
+    @GuardedBy("lock")
+    State committed(Substream winningSubstream) {
       checkState(this.winningSubstream == null, "Already committed");
 
       boolean passThrough = false;
       List<BufferEntry> buffer = this.buffer;
-      Collection<ClientStream> drainedSubstreams = Collections.emptySet();
+      Collection<Substream> drainedSubstreams = Collections.emptySet();
 
       if (this.drainedSubstreams.contains(winningSubstream)) {
         passThrough = true;
@@ -540,5 +578,16 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
       return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);
     }
+  }
+
+  /**
+   * A wrapper of a physical stream of a retry/hedging attempt, that comes with some useful
+   *  attributes.
+   */
+  private static final class Substream {
+    ClientStream stream;
+
+    // GuardedBy RetriableStream.lock
+    boolean closed;
   }
 }
