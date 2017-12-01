@@ -918,7 +918,7 @@ type addrConn struct {
 
 	mu           sync.Mutex
 	curAddr      resolver.Address
-	reconnectIdx int // The index in adder list to start reconnecting from.
+	reconnectIdx int // The index in addrs list to start reconnecting from.
 	state        connectivity.State
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
@@ -1169,17 +1169,13 @@ func (ac *addrConn) transportMonitor() {
 		case <-t.GoAway():
 		case <-t.Error():
 		case <-cdeadline:
-			var isConnected bool
 			ac.mu.Lock()
+			// This implies that client received server preface.
 			if ac.backoffDeadline.IsZero() {
-				// This implies that client received server
-				// preface.
-				isConnected = true
-			}
-			ac.mu.Unlock()
-			if isConnected {
+				ac.mu.Unlock()
 				continue
 			}
+			ac.mu.Unlock()
 			timer = nil
 			// No server preface received until deadline.
 			// Kill the connection.
