@@ -75,7 +75,6 @@ import io.grpc.internal.testing.StatsTestUtils.FakeTagContext;
 import io.grpc.internal.testing.StatsTestUtils.FakeTagContextBinarySerializer;
 import io.grpc.internal.testing.StatsTestUtils.FakeTagger;
 import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
-import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
 import io.grpc.internal.testing.StreamRecorder;
 import io.grpc.internal.testing.TestClientStreamTracer;
 import io.grpc.internal.testing.TestServerStreamTracer;
@@ -100,6 +99,8 @@ import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
 import io.opencensus.tags.TagKey;
 import io.opencensus.tags.TagValue;
 import io.opencensus.trace.Span;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.Tracing;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -114,7 +115,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -1427,7 +1427,9 @@ public abstract class AbstractInteropTest {
   @Test(timeout = 10000)
   public void censusContextsPropagated() {
     Assume.assumeTrue("Skip the test because server is not in the same process.", server != null);
-    Span clientParentSpan = MockableSpan.generateRandomSpan(new Random());
+    Span clientParentSpan = Tracing.getTracer().spanBuilder("Test.interopTest").startSpan();
+    // A valid ID is guaranteed to be unique, so we can verify it is actually propagated.
+    assertTrue(clientParentSpan.getContext().getTraceId().isValid());
     Context ctx =
         Context.ROOT.withValues(
             TAG_CONTEXT_KEY,
@@ -1455,7 +1457,8 @@ public abstract class AbstractInteropTest {
 
       Span span = CONTEXT_SPAN_KEY.get(serverCtx);
       assertNotNull(span);
-      assertEquals(clientParentSpan.getContext().getTraceId(), span.getContext().getTraceId());
+      SpanContext spanContext = span.getContext();
+      assertEquals(clientParentSpan.getContext().getTraceId(), spanContext.getTraceId());
     } finally {
       ctx.detach(origCtx);
     }
