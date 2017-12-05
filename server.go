@@ -507,6 +507,13 @@ func (s *Server) Serve(lis net.Listener) error {
 	}()
 
 	s.lis[lis] = true
+
+	if ChannelzOn {
+		ls := &listenSocket{s: lis}
+		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
+		channelz.AddChild(s.id, ls.id, "<nil>")
+	}
+
 	s.mu.Unlock()
 
 	if channelz.IsOn() {
@@ -654,6 +661,12 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 	}
 
 	if channelz.IsOn() {
+		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
+		st.(channelz.Socket).SetID(id)
+		channelz.AddChild(s.id, id, "<nil>")
+	}
+
+	if ChannelzOn {
 		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
 		st.(channelz.Socket).SetID(id)
 		channelz.AddChild(s.id, id, "<nil>")
