@@ -18,6 +18,8 @@
 
 package codes
 
+import "strconv"
+
 func (c Code) String() string {
 	switch c {
 	case OK:
@@ -55,6 +57,6 @@ func (c Code) String() string {
 	case Unauthenticated:
 		return "Unauthenticated"
 	default:
-		return "Unknown"
+		return "Code(" + strconv.FormatInt(int64(c), 10) + ")"
 	}
 }

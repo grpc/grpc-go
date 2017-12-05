@@ -63,3 +63,27 @@ func BenchmarkCodeStringSwitch(b *testing.B) {
 	}
 	b.StopTimer()
 }
+
+// Testing all codes (0<=c<=16) and also one overflow (17).
+func BenchmarkCodeStringGeneratedWithOverflow(b *testing.B) {
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c := codeGenerated(uint32(x % 18))
+		c.String()
+		x++
+	}
+	b.StopTimer()
+}
+
+// Testing all codes (0<=c<=16) and also one overflow (17).
+func BenchmarkCodeStringSwitchWithOverflow(b *testing.B) {
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c := codes.Code(uint32(x % 18))
+		c.String()
+		x++
+	}
+	b.StopTimer()
+}
