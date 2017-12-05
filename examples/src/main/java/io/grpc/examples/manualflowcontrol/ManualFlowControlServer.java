@@ -101,7 +101,8 @@ public class ManualFlowControlServer {
               }
             } catch (Throwable throwable) {
               throwable.printStackTrace();
-              responseObserver.onError(Status.UNKNOWN.withCause(throwable).asException());
+              responseObserver.onError(
+                  Status.UNKNOWN.withDescription("Error handling request").withCause(throwable).asException());
             }
           }
 

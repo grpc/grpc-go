@@ -86,7 +86,7 @@ public class HealthStatusManagerTest {
     //verify
     ArgumentCaptor<StatusException> exception = ArgumentCaptor.forClass(StatusException.class);
     verify(observer, times(1)).onError(exception.capture());
-    assertEquals(Status.NOT_FOUND, exception.getValue().getStatus());
+    assertEquals(Status.Code.NOT_FOUND, exception.getValue().getStatus().getCode());
 
     verify(observer, never()).onCompleted();
   }
@@ -107,7 +107,7 @@ public class HealthStatusManagerTest {
     //verify
     ArgumentCaptor<StatusException> exception = ArgumentCaptor.forClass(StatusException.class);
     verify(observer, times(1)).onError(exception.capture());
-    assertEquals(Status.NOT_FOUND, exception.getValue().getStatus());
+    assertEquals(Status.Code.NOT_FOUND, exception.getValue().getStatus().getCode());
 
     verify(observer, never()).onCompleted();
   }

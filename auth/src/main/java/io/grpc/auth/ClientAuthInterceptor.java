@@ -132,7 +132,8 @@ public final class ClientAuthInterceptor implements ClientInterceptor {
     try {
       return credentials.getRequestMetadata(uri);
     } catch (IOException e) {
-      throw Status.UNAUTHENTICATED.withCause(e).asException();
+      throw Status.UNAUTHENTICATED.withDescription("Unable to get request metadata").withCause(e)
+          .asException();
     }
   }
 

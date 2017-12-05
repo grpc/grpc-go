@@ -188,7 +188,10 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
             listServices(request);
             break;
           default:
-            sendErrorResponse(request, Status.UNIMPLEMENTED, "");
+            sendErrorResponse(
+                request,
+                Status.Code.UNIMPLEMENTED,
+                "not implemented " + request.getMessageRequestCase());
         }
         request = null;
         if (closeAfterSend) {
@@ -219,7 +222,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       if (fd != null) {
         serverCallStreamObserver.onNext(createServerReflectionResponse(request, fd));
       } else {
-        sendErrorResponse(request, Status.NOT_FOUND, "File not found.");
+        sendErrorResponse(request, Status.Code.NOT_FOUND, "File not found.");
       }
     }
 
@@ -229,7 +232,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       if (fd != null) {
         serverCallStreamObserver.onNext(createServerReflectionResponse(request, fd));
       } else {
-        sendErrorResponse(request, Status.NOT_FOUND, "Symbol not found.");
+        sendErrorResponse(request, Status.Code.NOT_FOUND, "Symbol not found.");
       }
     }
 
@@ -242,7 +245,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       if (fd != null) {
         serverCallStreamObserver.onNext(createServerReflectionResponse(request, fd));
       } else {
-        sendErrorResponse(request, Status.NOT_FOUND, "Extension not found.");
+        sendErrorResponse(request, Status.Code.NOT_FOUND, "Extension not found.");
       }
     }
 
@@ -261,7 +264,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
                 .setAllExtensionNumbersResponse(builder)
                 .build());
       } else {
-        sendErrorResponse(request, Status.NOT_FOUND, "Type not found.");
+        sendErrorResponse(request, Status.Code.NOT_FOUND, "Type not found.");
       }
     }
 
@@ -278,14 +281,15 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
               .build());
     }
 
-    private void sendErrorResponse(ServerReflectionRequest request, Status status, String message) {
+    private void sendErrorResponse(
+        ServerReflectionRequest request, Status.Code code, String message) {
       ServerReflectionResponse response =
           ServerReflectionResponse.newBuilder()
               .setValidHost(request.getHost())
               .setOriginalRequest(request)
               .setErrorResponse(
                   ErrorResponse.newBuilder()
-                      .setErrorCode(status.getCode().value())
+                      .setErrorCode(code.value())
                       .setErrorMessage(message))
               .build();
       serverCallStreamObserver.onNext(response);

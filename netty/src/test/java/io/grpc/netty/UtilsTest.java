@@ -19,6 +19,8 @@ package io.grpc.netty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.truth.Truth;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
@@ -118,7 +120,8 @@ public class UtilsTest {
 
   private static void assertStatusEquals(Status expected, Status actual) {
     assertEquals(expected.getCode(), actual.getCode());
-    assertEquals(expected.getDescription(), actual.getDescription());
+    Truth.assertThat(MoreObjects.firstNonNull(actual.getDescription(), ""))
+        .contains(MoreObjects.firstNonNull(expected.getDescription(), ""));
     assertEquals(expected.getCause(), actual.getCause());
   }
 }

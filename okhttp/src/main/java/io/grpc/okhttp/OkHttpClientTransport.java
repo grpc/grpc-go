@@ -895,7 +895,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
             Status.UNAVAILABLE.withDescription("End of stream or IOException"));
       } catch (Throwable t) {
         // TODO(madongfly): Send the exception message to the server.
-        startGoAway(0, ErrorCode.PROTOCOL_ERROR, Status.UNAVAILABLE.withCause(t));
+        startGoAway(
+            0, 
+            ErrorCode.PROTOCOL_ERROR, 
+            Status.UNAVAILABLE.withDescription("error in frame handler").withCause(t));
       } finally {
         try {
           frameReader.close();

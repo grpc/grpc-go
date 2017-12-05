@@ -169,7 +169,8 @@ final class DnsNameResolver extends NameResolver {
                   timerService.schedule(new LogExceptionRunnable(resolutionRunnableOnExecutor),
                       1, TimeUnit.MINUTES);
             }
-            savedListener.onError(Status.UNAVAILABLE.withCause(e));
+            savedListener.onError(
+                Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
             return;
           }
           // Each address forms an EAG

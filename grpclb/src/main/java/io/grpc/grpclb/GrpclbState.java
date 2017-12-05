@@ -530,7 +530,10 @@ final class GrpclbState {
             address = new InetSocketAddress(
                 InetAddress.getByAddress(server.getIpAddress().toByteArray()), server.getPort());
           } catch (UnknownHostException e) {
-            propagateError(Status.UNAVAILABLE.withCause(e));
+            propagateError(
+                Status.UNAVAILABLE
+                    .withDescription("Host for server not found: " + server)
+                    .withCause(e));
             continue;
           }
           EquivalentAddressGroup eag = new EquivalentAddressGroup(address);

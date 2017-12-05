@@ -222,7 +222,8 @@ public final class ClientCalls {
       }
       cause = cause.getCause();
     }
-    return Status.UNKNOWN.withCause(t).asRuntimeException();
+    return Status.UNKNOWN.withDescription("unexpected exception").withCause(t)
+        .asRuntimeException();
   }
 
   /**
@@ -547,7 +548,7 @@ public final class ClientCalls {
           last = waitForNext();
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
-          throw Status.CANCELLED.withCause(ie).asRuntimeException();
+          throw Status.CANCELLED.withDescription("interrupted").withCause(ie).asRuntimeException();
         }
       }
       if (last instanceof StatusRuntimeException) {

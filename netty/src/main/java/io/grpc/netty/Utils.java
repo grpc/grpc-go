@@ -160,13 +160,13 @@ class Utils {
       // look.
       ClosedChannelException extraT = new ClosedChannelException();
       extraT.initCause(t);
-      return Status.UNKNOWN.withCause(extraT);
+      return Status.UNKNOWN.withDescription("channel closed").withCause(extraT);
     }
     if (t instanceof IOException) {
-      return Status.UNAVAILABLE.withCause(t);
+      return Status.UNAVAILABLE.withDescription("io exception").withCause(t);
     }
     if (t instanceof Http2Exception) {
-      return Status.INTERNAL.withCause(t);
+      return Status.INTERNAL.withDescription("http2 exception").withCause(t);
     }
     return s;
   }

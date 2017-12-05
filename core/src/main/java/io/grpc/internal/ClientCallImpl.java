@@ -245,7 +245,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         }
       }
     } else {
-      stream = new FailingClientStream(DEADLINE_EXCEEDED);
+      stream = new FailingClientStream(
+          DEADLINE_EXCEEDED.withDescription("deadline exceeded: " + effectiveDeadline));
     }
 
     if (callOptions.getAuthority() != null) {
@@ -398,6 +399,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         Status status = Status.CANCELLED;
         if (message != null) {
           status = status.withDescription(message);
+        } else {
+          status = status.withDescription("Call cancelled without message");
         }
         if (cause != null) {
           status = status.withCause(cause);
@@ -433,9 +436,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         InputStream messageIs = method.streamRequest(message);
         stream.writeMessage(messageIs);
       }
-    } catch (Throwable e) {
+    } catch (RuntimeException e) {
       stream.cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));
       return;
+    } catch (Error e) {
+      stream.cancel(Status.CANCELLED.withDescription("Client sendMessage() failed with Error"));
+      throw e;
     }
     // For unary requests, we don't flush since we know that halfClose should be coming soon. This
     // allows us to piggy-back the END_STREAM=true on the last message frame without opening the

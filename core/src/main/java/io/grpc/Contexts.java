@@ -145,7 +145,7 @@ public final class Contexts {
         && status.getCause() == cancellationCause) {
       // If fromThrowable could not determine a status, then
       // just return CANCELLED.
-      return Status.CANCELLED.withCause(cancellationCause);
+      return Status.CANCELLED.withDescription("Context cancelled").withCause(cancellationCause);
     }
     return status.withCause(cancellationCause);
   }

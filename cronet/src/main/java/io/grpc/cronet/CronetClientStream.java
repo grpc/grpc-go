@@ -480,7 +480,7 @@ class CronetClientStream extends AbstractClientStream {
         } else if (info != null) {
           status = toGrpcStatus(info);
         } else {
-          status = Status.CANCELLED;
+          status = Status.CANCELLED.withDescription("stream cancelled without reason");
         }
       }
       finishStream(status);
