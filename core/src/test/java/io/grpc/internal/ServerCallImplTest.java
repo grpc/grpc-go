@@ -158,12 +158,7 @@ public class ServerCallImplTest {
     call.sendHeaders(new Metadata());
     doThrow(new RuntimeException("bad")).when(stream).writeMessage(isA(InputStream.class));
 
-    try {
-      call.sendMessage(1234L);
-      fail();
-    } catch (RuntimeException e) {
-      // expected
-    }
+    call.sendMessage(1234L);
 
     verify(stream).close(isA(Status.class), isA(Metadata.class));
   }
