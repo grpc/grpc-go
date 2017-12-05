@@ -413,6 +413,7 @@ type ServerConfig struct {
 	InitialConnWindowSize int32
 	WriteBufferSize       int
 	ReadBufferSize        int
+	ChannelzParentID      int64
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -448,6 +449,8 @@ type ConnectOptions struct {
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
 	ReadBufferSize int
+	// ChannelzParentID sets the addrConn id which initiate the creation of this client transport.
+	ChannelzParentID int64
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
@@ -547,6 +550,12 @@ type ClientTransport interface {
 
 	// GetGoAwayReason returns the reason why GoAway frame was received.
 	GetGoAwayReason() GoAwayReason
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -580,6 +589,12 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain()
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // streamErrorf creates an StreamError with the specified error code and description.

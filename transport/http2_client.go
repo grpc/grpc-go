@@ -30,6 +30,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -101,6 +103,8 @@ type http2Client struct {
 	// goAwayReason records the http2.ErrCode and debug data received with the
 	// GoAway frame.
 	goAwayReason GoAwayReason
+
+	channelzID int64 // channelz unique identification number
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -237,6 +241,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 			Client: true,
 		}
 		t.statsHandler.HandleConn(t.ctx, connBegin)
+	}
+	if channelz.IsOn() {
+		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -665,6 +672,9 @@ func (t *http2Client) Close() error {
 	t.controlBuf.finish()
 	t.cancel()
 	err := t.conn.Close()
+	if channelz.IsOn() {
+		channelz.RemoveEntry(t.channelzID)
+	}
 	// Notify all active streams.
 	for _, s := range streams {
 		t.closeStream(s, ErrConnClosing, false, http2.ErrCodeNo, nil, nil)
@@ -1188,3 +1198,10 @@ func (t *http2Client) Error() <-chan struct{} {
 func (t *http2Client) GoAway() <-chan struct{} {
 	return t.goAway
 }
+
+func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
+	return &channelz.SocketInternalMetric{}
+}
+
+func (t *http2Client) IncrMsgSent() {}
+func (t *http2Client) IncrMsgRecv() {}
