@@ -1304,7 +1304,7 @@ func TestGetMethodConfig(t *testing.T) {
                 }
             ],
             "waitForReady": true,
-            "timeout": "1ms"
+            "timeout": ".001s"
         },
         {
             "name": [
@@ -1343,7 +1343,7 @@ func TestGetMethodConfig(t *testing.T) {
                 }
             ],
             "waitForReady": true,
-            "timeout": "1ms"
+            "timeout": ".001s"
         },
         {
             "name": [
@@ -1393,7 +1393,7 @@ func TestServiceConfigWaitForReady(t *testing.T) {
                 }
             ],
             "waitForReady": false,
-            "timeout": "1ms"
+            "timeout": ".001s"
         }
     ]
 }`)
@@ -1433,7 +1433,7 @@ func TestServiceConfigWaitForReady(t *testing.T) {
                 }
             ],
             "waitForReady": true,
-            "timeout": "1ms"
+            "timeout": ".001s"
         }
     ]
 }`)
@@ -1478,7 +1478,7 @@ func TestServiceConfigTimeout(t *testing.T) {
                 }
             ],
             "waitForReady": true,
-            "timeout": "1h"
+            "timeout": "3600s"
         }
     ]
 }`)
@@ -1523,7 +1523,7 @@ func TestServiceConfigTimeout(t *testing.T) {
                 }
             ],
             "waitForReady": true,
-            "timeout": "1ns"
+            "timeout": ".000000001s"
         }
     ]
 }`)
