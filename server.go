@@ -826,7 +826,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		return err
 	}
 	if err == io.ErrUnexpectedEOF {
-		err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
+		err = status.Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
 	}
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -868,13 +868,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if dc != nil {
 				req, err = dc.Do(bytes.NewReader(req))
 				if err != nil {
-					return Errorf(codes.Internal, err.Error())
+					return status.Errorf(codes.Internal, err.Error())
 				}
 			} else {
 				tmp, _ := decomp.Decompress(bytes.NewReader(req))
 				req, err = ioutil.ReadAll(tmp)
 				if err != nil {
-					return Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
+					return status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 				}
 			}
 		}
@@ -1246,7 +1246,7 @@ func SetHeader(ctx context.Context, md metadata.MD) error {
 	}
 	stream, ok := transport.StreamFromContext(ctx)
 	if !ok {
-		return Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
+		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetHeader(md)
 }
@@ -1256,7 +1256,7 @@ func SetHeader(ctx context.Context, md metadata.MD) error {
 func SendHeader(ctx context.Context, md metadata.MD) error {
 	stream, ok := transport.StreamFromContext(ctx)
 	if !ok {
-		return Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
+		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	t := stream.ServerTransport()
 	if t == nil {
@@ -1276,7 +1276,7 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 	}
 	stream, ok := transport.StreamFromContext(ctx)
 	if !ok {
-		return Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
+		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetTrailer(md)
 }
