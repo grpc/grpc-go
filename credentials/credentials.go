@@ -31,6 +31,8 @@ import (
 	"net"
 	"strings"
 
+	"google.golang.org/grpc/channelz"
+
 	"golang.org/x/net/context"
 )
 
@@ -118,6 +120,18 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
+// GetSecurityValue returns security info requested by channelz.
+func (t TLSInfo) GetSecurityValue() channelz.SecurityValue {
+	v := &channelz.TLSSecurityValue{
+		StandardName: cipherSuiteLookup[t.State.CipherSuite],
+	}
+	// Currently there's no way to get LocalCertificate info from tls package.
+	if len(t.State.PeerCertificates) > 0 {
+		v.RemoteCertificate = t.State.PeerCertificates[0].Raw
+	}
+	return v
+}
+
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
 	// TLS configuration
@@ -155,7 +169,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return conn, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{conn, rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -163,7 +177,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if err := conn.Handshake(); err != nil {
 		return nil, nil, err
 	}
-	return conn, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{conn, rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {

@@ -250,6 +250,14 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	// eosReceived indicates whether a frame with eos bit set has been received on client side.
+	// There a three possible values for it: -1, 0, 1.
+	// 1 indicates: frame with eos bit set has been received.
+	// 0 indicates: frame with eos bit set has not been received.
+	// -1 indicates: eosReceived value has been read before and should not be counted again
+	// for streams failed/successful.
+	eosReceived int
 }
 
 func (s *Stream) waitOnHeader() error {
@@ -414,11 +422,14 @@ func (t *transportReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// finish sets the stream's state and status, and closes the done channel.
+// finish sets the stream's state, status and eosReceived, and closes the done channel.
 // s.mu must be held by the caller.  st must always be non-nil.
-func (s *Stream) finish(st *status.Status) {
+func (s *Stream) finish(st *status.Status, succeeded bool) {
 	s.status = st
 	s.state = streamDone
+	if succeeded {
+		s.eosReceived = 1
+	}
 	close(s.done)
 }
 
@@ -481,6 +492,7 @@ type ServerConfig struct {
 	InitialConnWindowSize int32
 	WriteBufferSize       int
 	ReadBufferSize        int
+	ChannelzParentID      int64
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -516,6 +528,8 @@ type ConnectOptions struct {
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
 	ReadBufferSize int
+	// ChannelzParentID sets the addrConn id which initiate the creation of this client transport.
+	ChannelzParentID int64
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
@@ -615,6 +629,12 @@ type ClientTransport interface {
 
 	// GetGoAwayReason returns the reason why GoAway frame was received.
 	GetGoAwayReason() GoAwayReason
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -648,6 +668,12 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain()
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // streamErrorf creates an StreamError with the specified error code and description.

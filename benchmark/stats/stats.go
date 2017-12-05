@@ -39,6 +39,7 @@ type Features struct {
 	ReqSizeBytes       int
 	RespSizeBytes      int
 	EnableCompressor   bool
+	EnableChannelz     bool
 }
 
 // String returns the textual output of the Features as string.
@@ -46,6 +47,13 @@ func (f Features) String() string {
 	return fmt.Sprintf("traceMode_%t-latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
 		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t", f.EnableTrace,
 		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor)
+}
+
+// ConciseString returns the concise textual output of the Features as string, skipping
+// setting with default value.
+func (f Features) ConciseString() string {
+	noneEmptyPos := []bool{f.EnableTrace, f.Latency != 0, f.Kbps != 0, f.Mtu != 0, true, true, true, f.EnableCompressor, f.EnableChannelz}
+	return PartialPrintString(noneEmptyPos, f, false)
 }
 
 // PartialPrintString can print certain features with different format.
@@ -63,7 +71,7 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 		linker = "_"
 	}
 	if noneEmptyPos[0] {
-		s += fmt.Sprintf("%sTrace%s%t%s", prefix, linker, f.EnableCompressor, suffix)
+		s += fmt.Sprintf("%sTrace%s%t%s", prefix, linker, f.EnableTrace, suffix)
 	}
 	if shared && f.NetworkMode != "" {
 		s += fmt.Sprintf("Network: %s \n", f.NetworkMode)
@@ -91,6 +99,9 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 	}
 	if noneEmptyPos[7] {
 		s += fmt.Sprintf("%sCompressor%s%t%s", prefix, linker, f.EnableCompressor, suffix)
+	}
+	if noneEmptyPos[8] {
+		s += fmt.Sprintf("%sChannelz%s%t%s", prefix, linker, f.EnableChannelz, suffix)
 	}
 	return s
 }
@@ -131,20 +142,37 @@ func (stats *Stats) GetBenchmarkResults() BenchResults {
 func (stats *Stats) BenchString() string {
 	stats.maybeUpdate()
 	s := stats.result
-	res := s.RunMode + "-" + s.Features.String() + ": \n"
+	// res := s.RunMode + "-" + s.Features.String() + ","
+	res := s.RunMode + "-" + s.Features.ConciseString() + ","
+
 	if len(s.Latency) != 0 {
 		var statsUnit = s.Latency[0].Value
 		var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
 		for i := 1; i < len(s.Latency)-1; i++ {
-			res += fmt.Sprintf("%d_Latency: %s %s \t", s.Latency[i].Percent,
+			res += fmt.Sprintf("%d_Latency,%s,%s,", s.Latency[i].Percent,
 				strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 		}
-		res += fmt.Sprintf("Avg latency: %s %s \t",
+		res += fmt.Sprintf("Avg latency,%s,%s,",
 			strconv.FormatFloat(float64(s.Latency[len(s.Latency)-1].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 	}
-	res += fmt.Sprintf("Count: %v \t", s.Operations)
-	res += fmt.Sprintf("%v Bytes/op\t", s.AllocedBytesPerOp)
-	res += fmt.Sprintf("%v Allocs/op\t", s.AllocsPerOp)
+	res += fmt.Sprintf("Count,%v,", s.Operations)
+	res += fmt.Sprintf("Bytes/op,%v,", s.AllocedBytesPerOp)
+	res += fmt.Sprintf("Allocs/op,%v", s.AllocsPerOp)
+
+	// res := s.RunMode + "-" + s.Features.String() + ": \n"
+	// if len(s.Latency) != 0 {
+	// 	var statsUnit = s.Latency[0].Value
+	// 	var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
+	// 	for i := 1; i < len(s.Latency)-1; i++ {
+	// 		res += fmt.Sprintf("%d_Latency: %s %s \t", s.Latency[i].Percent,
+	// 			strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
+	// 	}
+	// 	res += fmt.Sprintf("Avg latency: %s %s \t",
+	// 		strconv.FormatFloat(float64(s.Latency[len(s.Latency)-1].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
+	// }
+	// res += fmt.Sprintf("Count: %v \t", s.Operations)
+	// res += fmt.Sprintf("%v Bytes/op\t", s.AllocedBytesPerOp)
+	// res += fmt.Sprintf("%v Allocs/op\t", s.AllocsPerOp)
 
 	return res
 }

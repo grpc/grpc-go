@@ -55,6 +55,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -67,6 +68,10 @@ import (
 	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/testdata"
 )
+
+func init() {
+	grpc.RegisterChannelz()
+}
 
 var (
 	// For headers:
@@ -469,6 +474,8 @@ type test struct {
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
+	cliKeepAlive                *keepalive.ClientParameters
+	svrKeepAlive                *keepalive.ServerParameters
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -477,6 +484,10 @@ type test struct {
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
+
+	// srvs and srvAddrs are set once startServers is called.
+	srvs     []*grpc.Server
+	srvAddrs []string
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
 	restoreLogs func()           // nil unless declareLogNoise is used
@@ -487,16 +498,24 @@ func (te *test) tearDown() {
 		te.cancel()
 		te.cancel = nil
 	}
+
 	if te.cc != nil {
 		te.cc.Close()
 		te.cc = nil
 	}
+
 	if te.restoreLogs != nil {
 		te.restoreLogs()
 		te.restoreLogs = nil
 	}
+
 	if te.srv != nil {
 		te.srv.Stop()
+	}
+	if len(te.srvs) != 0 {
+		for _, s := range te.srvs {
+			s.Stop()
+		}
 	}
 }
 
@@ -513,9 +532,55 @@ func newTest(t *testing.T, e env) *test {
 	return te
 }
 
-// startServer starts a gRPC server listening. Callers should defer a
-// call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
+type listenerWrapper struct {
+	net.Listener
+	mu    sync.Mutex
+	conns []*rawConnWrapper
+}
+
+func listenWithConnControl(network, address string) (net.Listener, error) {
+	l, err := net.Listen(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return &listenerWrapper{Listener: l}, nil
+}
+
+// Accept blocks until Dial is called, then returns a net.Conn for the server
+// half of the connection.
+func (l *listenerWrapper) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	l.conns = append(l.conns, newRawConnWrapperFromConn(c))
+	l.mu.Unlock()
+	return c, nil
+}
+
+// Close stops the listener.
+func (l *listenerWrapper) Close() error {
+	return l.Listener.Close()
+}
+
+func (l *listenerWrapper) getLastConn() *rawConnWrapper {
+	l.mu.Lock()
+	if len(l.conns) == 0 {
+		l.mu.Unlock()
+		return nil
+	}
+	rcw := l.conns[len(l.conns)-1]
+	l.mu.Unlock()
+	return rcw
+}
+
+// Addr reports the address of the listener.
+func (l *listenerWrapper) Addr() net.Addr { return l.Listener.Addr() }
+
+var listen = net.Listen
+
+func (te *test) listenAndServe(ts testpb.TestServiceServer) net.Listener {
 	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
@@ -558,7 +623,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
 		syscall.Unlink(la)
 	}
-	lis, err := net.Listen(te.e.network, la)
+	lis, err := listen(te.e.network, la)
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
@@ -574,6 +639,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.customCodec != nil {
 		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
+	}
+	if te.svrKeepAlive != nil {
+		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
@@ -599,6 +667,21 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 
 	go s.Serve(lis)
 	te.srvAddr = addr
+	return lis
+}
+
+type listenFuncReplace func()
+
+func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) (*listenerWrapper, listenFuncReplace) {
+	listen = listenWithConnControl
+	l := te.listenAndServe(ts)
+	return l.(*listenerWrapper), func() { listen = net.Listen }
+}
+
+// startServer starts a gRPC server listening. Callers should defer a
+// call to te.tearDown to clean up.
+func (te *test) startServer(ts testpb.TestServiceServer) {
+	te.listenAndServe(ts)
 }
 
 type nopCompressor struct {
@@ -627,14 +710,24 @@ func (d *nopDecompressor) Type() string {
 	return "nop"
 }
 
-func (te *test) clientConn() *grpc.ClientConn {
-	if te.cc != nil {
-		return te.cc
-	}
-	opts := []grpc.DialOption{
-		grpc.WithDialer(te.e.dialer),
-		grpc.WithUserAgent(te.userAgent),
-	}
+type dialerWrapper struct {
+	c   net.Conn
+	rcw *rawConnWrapper
+}
+
+func (d *dialerWrapper) dialer(target string, t time.Duration) (net.Conn, error) {
+	c, err := net.DialTimeout("tcp", target, t)
+	d.c = c
+	d.rcw = newRawConnWrapperFromConn(c)
+	return c, err
+}
+
+func (d *dialerWrapper) getRawConnWrapper() *rawConnWrapper {
+	return d.rcw
+}
+
+func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
+	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
 
 	if te.sc != nil {
 		opts = append(opts, grpc.WithServiceConfig(te.sc))
@@ -705,7 +798,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
 	}
 	if te.customCodec != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(te.customCodec)))
+		opts = append(opts, grpc.WithCodec(te.customCodec))
 	}
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
@@ -714,7 +807,35 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
 	}
+	if te.cliKeepAlive != nil {
+		opts = append(opts, grpc.WithKeepaliveParams(*te.cliKeepAlive))
+	}
 	opts = append(opts, te.customDialOptions...)
+	return opts, scheme
+}
+
+func (te *test) clientConnWithConnControl() (*grpc.ClientConn, *dialerWrapper) {
+	if te.cc != nil {
+		return te.cc, nil
+	}
+	opts, scheme := te.configDial()
+	dw := &dialerWrapper{}
+	// overwrite the dialer before
+	opts = append(opts, grpc.WithDialer(dw.dialer))
+	var err error
+	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	if err != nil {
+		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
+	}
+	return te.cc, dw
+}
+
+func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
+	if te.cc != nil {
+		return te.cc
+	}
+	var scheme string
+	opts, scheme = te.configDial(opts...)
 	var err error
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
 	if err != nil {
@@ -5884,6 +6005,115 @@ func TestMethodFromServerStream(t *testing.T) {
 	_ = te.clientConn().Invoke(context.Background(), testMethod, nil, nil)
 	if !ok || method != testMethod {
 		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
+	}
+}
+
+func TestInterceptorCanAccessCallOptions(t *testing.T) {
+	defer leakcheck.Check(t)
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	type observedOptions struct {
+		headers     []*metadata.MD
+		trailers    []*metadata.MD
+		peer        []*peer.Peer
+		creds       []credentials.PerRPCCredentials
+		failFast    []bool
+		maxRecvSize []int
+		maxSendSize []int
+		compressor  []string
+		subtype     []string
+		codec       []grpc.Codec
+	}
+	var observedOpts observedOptions
+	populateOpts := func(opts []grpc.CallOption) {
+		for _, o := range opts {
+			switch o := o.(type) {
+			case grpc.HeaderCallOption:
+				observedOpts.headers = append(observedOpts.headers, o.HeaderAddr)
+			case grpc.TrailerCallOption:
+				observedOpts.trailers = append(observedOpts.trailers, o.TrailerAddr)
+			case grpc.PeerCallOption:
+				observedOpts.peer = append(observedOpts.peer, o.PeerAddr)
+			case grpc.PerRPCCredsCallOption:
+				observedOpts.creds = append(observedOpts.creds, o.Creds)
+			case grpc.FailFastCallOption:
+				observedOpts.failFast = append(observedOpts.failFast, o.FailFast)
+			case grpc.MaxRecvMsgSizeCallOption:
+				observedOpts.maxRecvSize = append(observedOpts.maxRecvSize, o.MaxRecvMsgSize)
+			case grpc.MaxSendMsgSizeCallOption:
+				observedOpts.maxSendSize = append(observedOpts.maxSendSize, o.MaxSendMsgSize)
+			case grpc.CompressorCallOption:
+				observedOpts.compressor = append(observedOpts.compressor, o.CompressorType)
+			case grpc.ContentSubtypeCallOption:
+				observedOpts.subtype = append(observedOpts.subtype, o.ContentSubtype)
+			case grpc.CustomCodecCallOption:
+				observedOpts.codec = append(observedOpts.codec, o.Codec)
+			}
+		}
+	}
+
+	te.unaryClientInt = func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		populateOpts(opts)
+		return nil
+	}
+	te.streamClientInt = func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		populateOpts(opts)
+		return nil, nil
+	}
+
+	defaults := []grpc.CallOption{
+		grpc.FailFast(false),
+		grpc.MaxCallRecvMsgSize(1010),
+	}
+	tc := testpb.NewTestServiceClient(te.clientConn(grpc.WithDefaultCallOptions(defaults...)))
+
+	var headers metadata.MD
+	var trailers metadata.MD
+	var pr peer.Peer
+	tc.UnaryCall(context.Background(), &testpb.SimpleRequest{},
+		grpc.MaxCallRecvMsgSize(100),
+		grpc.MaxCallSendMsgSize(200),
+		grpc.PerRPCCredentials(testPerRPCCredentials{}),
+		grpc.Header(&headers),
+		grpc.Trailer(&trailers),
+		grpc.Peer(&pr))
+	expected := observedOptions{
+		failFast:    []bool{false},
+		maxRecvSize: []int{1010, 100},
+		maxSendSize: []int{200},
+		creds:       []credentials.PerRPCCredentials{testPerRPCCredentials{}},
+		headers:     []*metadata.MD{&headers},
+		trailers:    []*metadata.MD{&trailers},
+		peer:        []*peer.Peer{&pr},
+	}
+
+	if !reflect.DeepEqual(expected, observedOpts) {
+		t.Errorf("unary call did not observe expected options: expected %#v, got %#v", expected, observedOpts)
+	}
+
+	observedOpts = observedOptions{} // reset
+
+	var codec errCodec
+	tc.StreamingInputCall(context.Background(),
+		grpc.FailFast(true),
+		grpc.MaxCallSendMsgSize(2020),
+		grpc.UseCompressor("comp-type"),
+		grpc.CallContentSubtype("json"),
+		grpc.CallCustomCodec(&codec))
+	expected = observedOptions{
+		failFast:    []bool{false, true},
+		maxRecvSize: []int{1010},
+		maxSendSize: []int{2020},
+		compressor:  []string{"comp-type"},
+		subtype:     []string{"json"},
+		codec:       []grpc.Codec{&codec},
+	}
+
+	if !reflect.DeepEqual(expected, observedOpts) {
+		t.Errorf("streaming call did not observe expected options: expected %#v, got %#v", expected, observedOpts)
 	}
 }
 
