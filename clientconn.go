@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
+	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -87,6 +88,8 @@ var (
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
 	// errNetworkIO indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
+	// ChannelzOn indicates whether channelz service is turned on.
+	ChannelzOn = false
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -115,6 +118,11 @@ const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultClientMaxSendMessageSize    = math.MaxInt32
 )
+
+func RegisterChannelz() channelz.DB {
+	ChannelzOn = true
+	return channelz.NewChannelzStorage()
+}
 
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
