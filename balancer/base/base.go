@@ -17,15 +17,17 @@
  */
 
 // Package base defines a balancer base that can be used to build balancers with
-// different picking algothrim.
+// different picking algorithms.
 //
-// The base balancer create a new SubConn for each resolved address. The
+// The base balancer creates a new SubConn for each resolved address. The
 // provided picker will only be notified about READY SubConns.
 //
 // This package is the base of round_robin balancer, its purpose is to be used
-// to build round_robin like balancers with complex picking algothrim. Balancers
-// with more complicated logic should try to implement a balancer builder from
-// scratch.
+// to build round_robin like balancers with complex picking algorithms.
+// Balancers with more complicated logic should try to implement a balancer
+// builder from scratch.
+//
+// All APIs in this package are experimental.
 package base
 
 import (

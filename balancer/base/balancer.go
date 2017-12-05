@@ -42,7 +42,7 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) 
 		// Initialize picker to a picker that always return
 		// ErrNoSubConnAvailable, because when state of a SubConn changes, we
 		// may call UpdateBalancerState with this picker.
-		picker: &errPicker{err: balancer.ErrNoSubConnAvailable},
+		picker: NewErrPicker(balancer.ErrNoSubConnAvailable),
 	}
 }
 
@@ -101,7 +101,7 @@ func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 //  - built by the pickerBuilder with all READY SubConns otherwise.
 func (b *baseBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
-		b.picker = &errPicker{err: balancer.ErrTransientFailure}
+		b.picker = NewErrPicker(balancer.ErrTransientFailure)
 		return
 	}
 	readySCs := make(map[resolver.Address]balancer.SubConn)
@@ -152,6 +152,11 @@ func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 // Close is a nop because base balancer doesn't internal state to clean
 // up, and it doesn't need to call RemoveSubConn for the SubConns.
 func (b *baseBalancer) Close() {
+}
+
+// NewErrPicker returns a picker that always returns err on Pick().
+func NewErrPicker(err error) balancer.Picker {
+	return &errPicker{err: err}
 }
 
 type errPicker struct {
