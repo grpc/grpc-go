@@ -29,7 +29,15 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/test/leakcheck"
+	"google.golang.org/grpc/status"
 )
+
+func errorDesc(err error) string {
+	if s, ok := status.FromError(err); ok {
+		return s.Message()
+	}
+	return err.Error()
+}
 
 func TestOneBackendPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
@@ -57,7 +65,7 @@ func TestOneBackendPickfirst(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}})
 	// The second RPC should succeed.
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -91,7 +99,7 @@ func TestBackendsPickfirst(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 	// The second RPC should succeed with the first server.
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -199,7 +207,7 @@ func TestOneServerDownPickfirst(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 	// The second RPC should succeed with the first server.
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -207,7 +215,7 @@ func TestOneServerDownPickfirst(t *testing.T) {
 
 	servers[0].stop()
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[1].port {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -241,7 +249,7 @@ func TestAllServersDownPickfirst(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 	// The second RPC should succeed with the first server.
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -284,13 +292,13 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}, {Addr: servers[2].addr}})
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[0].port {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || errorDesc(err) != servers[0].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 0, err, servers[0].port)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -299,13 +307,13 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 	// Remove server[0].
 	r.NewAddress([]resolver.Address{{Addr: servers[1].addr}, {Addr: servers[2].addr}})
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[1].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[1].port {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || errorDesc(err) != servers[1].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 1, err, servers[1].port)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -314,7 +322,7 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 	// Append server[0], nothing should change.
 	r.NewAddress([]resolver.Address{{Addr: servers[1].addr}, {Addr: servers[2].addr}, {Addr: servers[0].addr}})
 	for i := 0; i < 20; i++ {
-		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[1].port {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || errorDesc(err) != servers[1].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 1, err, servers[1].port)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -323,13 +331,13 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 	// Remove server[1].
 	r.NewAddress([]resolver.Address{{Addr: servers[2].addr}, {Addr: servers[0].addr}})
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[2].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[2].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[2].port {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || errorDesc(err) != servers[2].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 2, err, servers[2].port)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -338,13 +346,13 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 	// Remove server[2].
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}})
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && errorDesc(err) == servers[0].port {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	for i := 0; i < 20; i++ {
-		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[0].port {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || errorDesc(err) != servers[0].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 0, err, servers[0].port)
 		}
 		time.Sleep(10 * time.Millisecond)

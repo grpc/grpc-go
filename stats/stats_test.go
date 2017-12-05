@@ -648,7 +648,14 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	if st.EndTime.IsZero() {
 		t.Fatalf("st.EndTime = %v, want <non-zero>", st.EndTime)
 	}
-	if grpc.Code(st.Error) != grpc.Code(e.err) || grpc.ErrorDesc(st.Error) != grpc.ErrorDesc(e.err) {
+
+	actual, ok := status.FromError(st.Error)
+	if !ok {
+		t.Fatalf("expected st.Error to be a statusError, got %T", st.Error)
+	}
+
+	expectedStatus, _ := status.FromError(e.err)
+	if actual.Code() != expectedStatus.Code() || actual.Message() != expectedStatus.Message() {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
 }
