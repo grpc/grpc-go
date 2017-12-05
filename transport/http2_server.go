@@ -52,6 +52,7 @@ var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHe
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
 	ctx         context.Context
+	ctxDone     <-chan struct{} // Cache the context.Done() chan
 	cancel      context.CancelFunc
 	conn        net.Conn
 	remoteAddr  net.Addr
@@ -60,8 +61,7 @@ type http2Server struct {
 	authInfo    credentials.AuthInfo // auth info about the connection
 	inTapHandle tap.ServerInHandle
 	framer      *framer
-	hBuf        *bytes.Buffer  // the buffer for HPACK encoding
-	hEnc        *hpack.Encoder // HPACK encoder
+	wc          *waiters
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -178,18 +178,16 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
-	var buf bytes.Buffer
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &http2Server{
 		ctx:               ctx,
 		cancel:            cancel,
+		ctxDone:           ctx.Done(),
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
 		localAddr:         conn.LocalAddr(),
 		authInfo:          config.AuthInfo,
 		framer:            framer,
-		hBuf:              &buf,
-		hEnc:              hpack.NewEncoder(&buf),
 		maxStreams:        maxStreams,
 		inTapHandle:       config.InTapHandle,
 		controlBuf:        newControlBuffer(),
@@ -202,6 +200,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep:               kep,
 		initialWindowSize: iwz,
 	}
+	t.wc = &waiters{trDone: t.ctxDone}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
@@ -243,12 +242,17 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	t.handleSettings(sf)
 
 	go func() {
-		loopy := newLoopyWriter(t.controlBuf, t.itemHandler)
-		loopy.run(t.ctx)
+		loopy := newLoopyWriter(server, t.framer, t.controlBuf, t.bdpEst)
+		loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
+		loopy.run(t.ctxDone)
 		t.Close()
 	}()
 	go t.keepalive()
 	return t, nil
+}
+
+func (t *http2Server) headerHandler(hf *headerFrame) {
+
 }
 
 // operateHeader takes action on the decoded headers.
@@ -259,13 +263,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	for _, hf := range frame.Fields {
 		if err := state.processHeaderField(hf); err != nil {
 			if se, ok := err.(StreamError); ok {
-				t.controlBuf.put(&resetStream{streamID, statusCodeConvTab[se.Code]})
+				t.controlBuf.put(&cleanupStream{streamID, true, statusCodeConvTab[se.Code]}, t.wc)
 			}
 			return
 		}
 	}
 
-	buf := newControlBuffer()
+	buf := newRecvBuffer()
 	s := &Stream{
 		id:           streamID,
 		st:           t,
@@ -274,6 +278,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		recvCompress: state.encoding,
 		method:       state.method,
 		msgWritten:   make(chan struct{}, 1),
+		wq:           newWriteQuota(defaultWriteQuota),
 	}
 
 	if frame.StreamEnded() {
@@ -315,7 +320,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.ctx, err = t.inTapHandle(s.ctx, info)
 		if err != nil {
 			warningf("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
-			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+			t.controlBuf.put(&cleanupStream{s.id, true, http2.ErrCodeRefusedStream}, t.wc)
 			return
 		}
 	}
@@ -326,7 +331,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
-		t.controlBuf.put(&resetStream{streamID, http2.ErrCodeRefusedStream})
+		t.controlBuf.put(&cleanupStream{streamID, true, http2.ErrCodeRefusedStream}, t.wc)
 		return
 	}
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
@@ -358,16 +363,16 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
-			ctx:  s.ctx,
-			recv: s.buf,
+			ctxDone: s.ctx.Done(),
+			recv:    s.buf,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
 	}
-	s.waiters = waiters{
-		ctx:  s.ctx,
-		tctx: t.ctx,
+	s.waiters = &waiters{
+		trDone:  t.ctxDone,
+		strDone: s.ctx.Done(),
 	}
 	handle(s)
 	return
@@ -388,7 +393,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				if s != nil {
 					t.closeStream(s)
 				}
-				t.controlBuf.put(&resetStream{se.StreamID, se.Code})
+				t.controlBuf.put(&cleanupStream{se.StreamID, true, se.Code}, t.wc)
 				continue
 			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -452,7 +457,7 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 		t.controlBuf.put(&windowUpdate{streamID: s.id,
 			increment: w,
 			dir:       outgoing,
-		})
+		}, t.wc)
 	}
 }
 
@@ -470,7 +475,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 		streamID:  0,
 		increment: t.fc.newLimit(n),
 		dir:       outgoing,
-	})
+	}, t.wc)
 	t.controlBuf.put(&settings{
 		dir: outgoing,
 		ss: []http2.Setting{
@@ -479,7 +484,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 				Val: uint32(n),
 			},
 		},
-	})
+	}, t.wc)
 
 }
 
@@ -506,12 +511,12 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			streamID:  0,
 			increment: w,
 			dir:       outgoing,
-		})
+		}, t.wc)
 	}
 	// TODO(mmukhi): This bdp ping may require a window update
 	// frame before it.
 	if sendBDPPing {
-		t.controlBuf.put(bdpPing)
+		t.controlBuf.put(bdpPing, t.wc)
 	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
@@ -527,7 +532,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if err := s.fc.onData(uint32(size)); err != nil {
 			s.mu.Unlock()
 			t.closeStream(s)
-			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
+			t.controlBuf.put(&cleanupStream{s.id, true, http2.ErrCodeFlowControl}, t.wc)
 			return
 		}
 		s.mu.Unlock()
@@ -571,7 +576,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	t.controlBuf.put(&settings{
 		dir: incoming,
 		ss:  ss,
-	})
+	}, t.wc)
 }
 
 const (
@@ -593,7 +598,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	}
 	pingAck := &ping{ack: true}
 	copy(pingAck.data[:], f.Data[:])
-	t.controlBuf.put(pingAck)
+	t.controlBuf.put(pingAck, t.wc)
 
 	now := time.Now()
 	defer func() {
@@ -625,7 +630,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
 		errorf("transport: Got too many pings from the client, closing the connection.")
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true}, t.wc)
 	}
 }
 
@@ -634,7 +639,7 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 		dir:       incoming,
 		streamID:  f.Header().StreamID,
 		increment: f.Increment,
-	})
+	}, t.wc)
 }
 
 // WriteHeader sends the header metedata md back to the client.
@@ -683,7 +688,11 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: false,
-	})
+		onWrite: func() {
+			atomic.StoreUint32(&t.resetPingStrikes, 1)
+		},
+		wq: s.wq,
+	}, t.wc)
 	if t.stats != nil {
 		outHeader := &stats.OutHeader{
 		//WireLength: // TODO(mmukhi): Revisit this later, if needed.
@@ -757,7 +766,10 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: true,
-	})
+		onWrite: func() {
+			atomic.StoreUint32(&t.resetPingStrikes, 1)
+		},
+	}, t.wc)
 	if t.stats != nil {
 		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 	}
@@ -803,16 +815,18 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		onEachWrite: func() {
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 		},
-		onWriteComplete: func() {
-			//s.msgWritten <- struct{}{}
-		},
 	}
-	select {
-	case t.controlBuf.ch <- df:
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-t.ctx.Done():
-		return ErrConnClosing
+	if err := s.wq.get(int32(len(hdr)+len(data)), s.waiters); err != nil {
+		if err == errStreamClosing {
+			return ContextErr(s.ctx.Err())
+		}
+		return err
+	}
+	if err := t.controlBuf.put(df, s.waiters); err != nil {
+		if err == errStreamClosing {
+			return ContextErr(s.ctx.Err())
+		}
+		return err
 	}
 	//select {
 	//case <-s.msgWritten:
@@ -896,130 +910,11 @@ func (t *http2Server) keepalive() {
 				return
 			}
 			pingSent = true
-			t.controlBuf.put(p)
+			t.controlBuf.put(p, t.wc)
 			keepalive.Reset(t.kp.Timeout)
 		case <-t.ctx.Done():
 			return
 		}
-	}
-}
-
-var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
-
-// TODO(mmukhi): A lot of this code(and code in other places in the tranpsort layer)
-// is duplicated between the client and the server.
-// The transport layer needs to be refactored to take care of this.
-func (t *http2Server) itemHandler(i item) error {
-	switch i := i.(type) {
-	case *dataFrame:
-		i.onEachWrite()
-		if err := t.framer.fr.WriteData(i.streamID, i.endStream, i.d); err != nil {
-			return err
-		}
-		return nil
-	case *headerFrame:
-		t.hBuf.Reset()
-		for _, f := range i.hf {
-			t.hEnc.WriteField(f)
-		}
-		first := true
-		endHeaders := false
-		for !endHeaders {
-			size := t.hBuf.Len()
-			if size > http2MaxFrameLen {
-				size = http2MaxFrameLen
-			} else {
-				endHeaders = true
-			}
-			var err error
-			if first {
-				first = false
-				err = t.framer.fr.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      i.streamID,
-					BlockFragment: t.hBuf.Next(size),
-					EndStream:     i.endStream,
-					EndHeaders:    endHeaders,
-				})
-			} else {
-				err = t.framer.fr.WriteContinuation(
-					i.streamID,
-					endHeaders,
-					t.hBuf.Next(size),
-				)
-			}
-			if err != nil {
-				return err
-			}
-		}
-		atomic.StoreUint32(&t.resetPingStrikes, 1)
-		return nil
-	case *windowUpdate:
-		return t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
-	case *settings:
-		return t.framer.fr.WriteSettings(i.ss...)
-	case *settingsAck:
-		return t.framer.fr.WriteSettingsAck()
-	case *resetStream:
-		return t.framer.fr.WriteRSTStream(i.streamID, i.code)
-	case *goAway:
-		t.mu.Lock()
-		if t.state == closing {
-			t.mu.Unlock()
-			// The transport is closing.
-			return fmt.Errorf("transport: Connection closing")
-		}
-		sid := t.maxStreamID
-		if !i.headsUp {
-			// Stop accepting more streams now.
-			t.state = draining
-			t.mu.Unlock()
-			if err := t.framer.fr.WriteGoAway(sid, i.code, i.debugData); err != nil {
-				return err
-			}
-			if i.closeConn {
-				// Abruptly close the connection following the GoAway (via
-				// loopywriter).  But flush out what's inside the buffer first.
-				t.framer.writer.Flush()
-				return fmt.Errorf("transport: Connection closing")
-			}
-			return nil
-		}
-		t.mu.Unlock()
-		// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
-		// Follow that with a ping and wait for the ack to come back or a timer
-		// to expire. During this time accept new streams since they might have
-		// originated before the GoAway reaches the client.
-		// After getting the ack or timer expiration send out another GoAway this
-		// time with an ID of the max stream server intends to process.
-		if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{}); err != nil {
-			return err
-		}
-		if err := t.framer.fr.WritePing(false, goAwayPing.data); err != nil {
-			return err
-		}
-		go func() {
-			timer := time.NewTimer(time.Minute)
-			defer timer.Stop()
-			select {
-			case <-t.drainChan:
-			case <-timer.C:
-			case <-t.ctx.Done():
-				return
-			}
-			t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData})
-		}()
-		return nil
-	case *flushIO:
-		return t.framer.writer.Flush()
-	case *ping:
-		if !i.ack {
-			t.bdpEst.timesnap(i.data)
-		}
-		return t.framer.fr.WritePing(i.ack, i.data)
-	default:
-		err := status.Errorf(codes.Internal, "transport: http2Server.controller got unexpected item type %t", i)
-		errorf("%v", err)
-		return err
 	}
 }
 
@@ -1089,7 +984,59 @@ func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 		return
 	}
 	t.drainChan = make(chan struct{})
-	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true})
+	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true}, t.wc)
+}
+
+var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
+
+func (t *http2Server) outgoingGoAwayHandler(g *goAway) error {
+	t.mu.Lock()
+	if t.state == closing {
+		t.mu.Unlock()
+		// The transport is closing.
+		return ErrConnClosing
+	}
+	sid := t.maxStreamID
+	if !g.headsUp {
+		// Stop accepting more streams now.
+		t.state = draining
+		t.mu.Unlock()
+		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
+			return err
+		}
+		if g.closeConn {
+			// Abruptly close the connection following the GoAway (via
+			// loopywriter).  But flush out what's inside the buffer first.
+			t.framer.writer.Flush()
+			return fmt.Errorf("transport: Connection closing")
+		}
+		return nil
+	}
+	t.mu.Unlock()
+	// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
+	// Follow that with a ping and wait for the ack to come back or a timer
+	// to expire. During this time accept new streams since they might have
+	// originated before the GoAway reaches the client.
+	// After getting the ack or timer expiration send out another GoAway this
+	// time with an ID of the max stream server intends to process.
+	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{}); err != nil {
+		return err
+	}
+	if err := t.framer.fr.WritePing(false, goAwayPing.data); err != nil {
+		return err
+	}
+	go func() {
+		timer := time.NewTimer(time.Minute)
+		defer timer.Stop()
+		select {
+		case <-t.drainChan:
+		case <-timer.C:
+		case <-t.ctx.Done():
+			return
+		}
+		t.controlBuf.put(&goAway{code: g.code, debugData: g.debugData}, t.wc)
+	}()
+	return nil
 }
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))

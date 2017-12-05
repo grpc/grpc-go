@@ -317,7 +317,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		id:           0, // irrelevant
 		requestRead:  func(int) {},
 		cancel:       cancel,
-		buf:          newControlBuffer(),
+		buf:          newRecvBuffer(),
 		st:           ht,
 		method:       req.URL.Path,
 		recvCompress: req.Header.Get("grpc-encoding"),
@@ -332,7 +332,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	ctx = peer.NewContext(ctx, pr)
 	s.ctx = newContextWithStream(ctx, s)
 	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, recv: s.buf},
+		reader:        &recvBufferReader{ctxDone: s.ctx.Done(), recv: s.buf},
 		windowHandler: func(int) {},
 	}
 

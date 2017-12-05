@@ -20,6 +20,7 @@ package transport
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"sync/atomic"
 	"time"
@@ -48,7 +49,7 @@ const (
 	// defaultLocalSendQuota sets is default value for number of data
 	// bytes that each stream can schedule before some of it being
 	// flushed out.
-	defaultLocalSendQuota = 128 * 1024
+	defaultWriteQuota = 64 * 1024
 )
 
 type direction int
@@ -62,9 +63,43 @@ type item interface {
 	item()
 }
 
-type itemList struct {
+type itemNode struct {
 	it   item
-	next *itemList
+	next *itemNode
+}
+
+type itemList struct {
+	head *itemNode
+	tail *itemNode
+}
+
+func (il *itemList) put(i item) {
+	n := &itemNode{it: i}
+	if il.head == nil {
+		il.head, il.tail = n, n
+		return
+	}
+	il.tail.next = n
+	il.tail = n
+}
+
+// seek returns the first item in the list without removing it from the
+// list.
+func (il *itemList) seek() item {
+	return il.head.it
+}
+
+func (il *itemList) remove() item {
+	if il.head == nil {
+		return nil
+	}
+	i := il.head.it
+	il.head = il.head.next
+	return i
+}
+
+func (il *itemList) isEmpty() bool {
+	return il.head == nil
 }
 
 // The following defines various control items which could flow through
@@ -72,13 +107,11 @@ type itemList struct {
 // control tasks, e.g., flow control, settings, streaming resetting, etc.
 
 type headerFrame struct {
-	streamID    uint32
-	hf          []hpack.HeaderField
-	endStream   bool // Valid on server side.
-	startStream bool // Valid on client side.
-	// On the client-side f is called when the
-	// header frame is sent out.
-	f func()
+	streamID  uint32
+	hf        []hpack.HeaderField
+	endStream bool // Valid on server side.
+	onWrite   func()
+	wq        *writeQuota // write quota for the stream created.
 }
 
 func (*headerFrame) item() {}
@@ -99,9 +132,6 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of d is written out.
 	onEachWrite func()
-	// onWriteComplete is called when all
-	// of d is written out.
-	onWriteComplete func()
 }
 
 func (*dataFrame) item() {}
@@ -126,13 +156,6 @@ type settingsAck struct {
 
 func (*settingsAck) item() {}
 
-type resetStream struct {
-	streamID uint32
-	code     http2.ErrCode
-}
-
-func (*resetStream) item() {}
-
 type incomingGoAway struct {
 }
 
@@ -147,17 +170,58 @@ type goAway struct {
 
 func (*goAway) item() {}
 
-type flushIO struct {
-}
-
-func (*flushIO) item() {}
-
 type ping struct {
 	ack  bool
 	data [8]byte
 }
 
 func (*ping) item() {}
+
+// writeQuota is a soft limit on the amount of data a stream can
+// schedule before some of it is written out.
+type writeQuota struct {
+	quota int32
+	// get waits on read from when quota goes less than or equal to zero.
+	// replenish writes on it when quota goes positve again.
+	ch chan struct{}
+}
+
+func newWriteQuota(sz int32) *writeQuota {
+	return &writeQuota{
+		quota: sz,
+		ch:    make(chan struct{}, 1),
+	}
+}
+
+func (w *writeQuota) get(sz int32, wc *waiters) error {
+	q := atomic.LoadInt32(&w.quota)
+	if q > 0 {
+		atomic.AddInt32(&w.quota, -sz)
+		return nil
+	}
+	select {
+	case <-w.ch:
+		atomic.AddInt32(&w.quota, -sz)
+		return nil
+	case <-wc.trDone:
+		return ErrConnClosing
+	case <-wc.strDone:
+		return errStreamClosing
+	case <-wc.goAway:
+		return errStreamDrain
+	case <-wc.done:
+		return io.EOF
+
+	}
+}
+
+func (w *writeQuota) replenish(sz int32) {
+	b := atomic.LoadInt32(&w.quota)
+	a := atomic.AddInt32(&w.quota, sz)
+	if b <= 0 && a > 0 {
+		w.ch <- struct{}{}
+	}
+}
 
 type trInFlow struct {
 	limit   uint32

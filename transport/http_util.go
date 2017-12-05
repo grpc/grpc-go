@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -469,18 +468,17 @@ func decodeGrpcMessageUnchecked(msg string) string {
 }
 
 type framer struct {
-	numWriters int32
-	reader     io.Reader
-	writer     *bufio.Writer
-	fr         *http2.Framer
+	writer *bufio.Writer
+	fr     *http2.Framer
 }
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
+	r := bufio.NewReaderSize(conn, readBufferSize)
+	w := bufio.NewWriterSize(conn, writeBufferSize)
 	f := &framer{
-		reader: bufio.NewReaderSize(conn, readBufferSize),
-		writer: bufio.NewWriterSize(conn, writeBufferSize),
+		writer: w,
+		fr:     http2.NewFramer(w, r),
 	}
-	f.fr = http2.NewFramer(f.writer, f.reader)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
 	// Frames aren't safe to read from after a subsequent call to ReadFrame.
 	f.fr.SetReuseFrames()
