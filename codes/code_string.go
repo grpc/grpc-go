@@ -55,6 +55,6 @@ func (c Code) String() string {
 	case Unauthenticated:
 		return "Unauthenticated"
 	default:
-		return ""
+		return "Unknown"
 	}
 }
