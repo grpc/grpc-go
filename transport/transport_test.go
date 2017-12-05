@@ -478,7 +478,7 @@ func TestMaxConnectionIdle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Client failed to create RPC request: %v", err)
 	}
-	client.(*http2Client).closeStream(stream, io.EOF, true, http2.ErrCodeCancel, nil, nil)
+	client.(*http2Client).closeStream(stream, io.EOF, true, http2.ErrCodeCancel, nil, nil, false)
 	// wait for server to see that closed stream and max-age logic to send goaway after no new RPCs are mode
 	timeout := time.NewTimer(time.Second * 4)
 	select {

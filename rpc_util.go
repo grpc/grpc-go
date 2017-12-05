@@ -275,6 +275,7 @@ func (o FailFastCallOption) before(c *callInfo) error {
 	c.failFast = o.FailFast
 	return nil
 }
+
 func (o FailFastCallOption) after(c *callInfo) { return }
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
@@ -293,6 +294,7 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 	c.maxReceiveMessageSize = &o.MaxRecvMsgSize
 	return nil
 }
+
 func (o MaxRecvMsgSizeCallOption) after(c *callInfo) { return }
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
@@ -330,6 +332,7 @@ func (o PerRPCCredsCallOption) before(c *callInfo) error {
 	c.creds = o.Creds
 	return nil
 }
+
 func (o PerRPCCredsCallOption) after(c *callInfo) { return }
 
 // UseCompressor returns a CallOption which sets the compressor used when
@@ -351,6 +354,7 @@ func (o CompressorCallOption) before(c *callInfo) error {
 	c.compressorType = o.CompressorType
 	return nil
 }
+
 func (o CompressorCallOption) after(c *callInfo) { return }
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
@@ -384,6 +388,7 @@ func (o ContentSubtypeCallOption) before(c *callInfo) error {
 	c.contentSubtype = o.ContentSubtype
 	return nil
 }
+
 func (o ContentSubtypeCallOption) after(c *callInfo) { return }
 
 // CallCustomCodec returns a CallOption that will set the given Codec to be

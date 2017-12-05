@@ -101,25 +101,29 @@ type trInFlow struct {
 }
 
 func (f *trInFlow) newLimit(n uint32) uint32 {
-	d := n - f.limit
-	f.limit = n
+	d := n - atomic.LoadUint32(&f.limit)
+	atomic.StoreUint32(&f.limit, n)
 	return d
 }
 
 func (f *trInFlow) onData(n uint32) uint32 {
-	f.unacked += n
-	if f.unacked >= f.limit/4 {
-		w := f.unacked
-		f.unacked = 0
+	atomic.AddUint32(&f.unacked, n)
+	if atomic.LoadUint32(&f.unacked) >= atomic.LoadUint32(&f.limit)/4 {
+		w := atomic.LoadUint32(&f.unacked)
+		atomic.StoreUint32(&f.unacked, 0)
 		return w
 	}
 	return 0
 }
 
 func (f *trInFlow) reset() uint32 {
-	w := f.unacked
-	f.unacked = 0
+	w := atomic.LoadUint32(&f.unacked)
+	atomic.StoreUint32(&f.unacked, 0)
 	return w
+}
+
+func (f *trInFlow) getSize() uint32 {
+	return atomic.LoadUint32(&f.limit) - atomic.LoadUint32(&f.unacked)
 }
 
 // TODO(mmukhi): Simplify this code.
@@ -220,4 +224,11 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	}
 	f.mu.Unlock()
 	return 0
+}
+
+func (f *inFlow) getInFlowWindow() int64 {
+	f.mu.Lock()
+	localFc := int64(f.limit)
+	f.mu.Unlock()
+	return localFc
 }
