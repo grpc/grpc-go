@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
+	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
@@ -248,6 +249,9 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	cc, err := Dial("grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
+	}
+	if ChannelzOn {
+		channelz.AddChild(lb.opt.Pid, cc.id, "<nil>")
 	}
 	lb.ccRemoteLB = cc
 	go lb.watchRemoteBalancer()
