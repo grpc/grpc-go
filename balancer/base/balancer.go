@@ -149,8 +149,8 @@ func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 	return
 }
 
-// Close is a nop because base balancer doesn't internal state to clean
-// up, and it doesn't need to call RemoveSubConn for the SubConns.
+// Close is a nop because base balancer doesn't have internal state to clean up,
+// and it doesn't need to call RemoveSubConn for the SubConns.
 func (b *baseBalancer) Close() {
 }
 
@@ -160,8 +160,7 @@ func NewErrPicker(err error) balancer.Picker {
 }
 
 type errPicker struct {
-	// Pick always returns this err.
-	err error
+	err error // Pick() always returns this err.
 }
 
 func (p *errPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
