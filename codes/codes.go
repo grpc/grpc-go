@@ -19,11 +19,12 @@
 // Package codes defines the canonical error codes used by gRPC. It is
 // consistent across various languages.
 package codes // import "google.golang.org/grpc/codes"
+import (
+	"fmt"
+)
 
 // A Code is an unsigned 32-bit error code as defined in the gRPC spec.
 type Code uint32
-
-//go:generate stringer -type=Code
 
 const (
 	// OK is returned on success.
@@ -142,3 +143,35 @@ const (
 	// DataLoss indicates unrecoverable data loss or corruption.
 	DataLoss Code = 15
 )
+
+var strToCode = map[string]Code{
+	"OK": OK,
+	"CANCELLED":/* [sic] */ Canceled,
+	"UNKNOWN":             Unknown,
+	"INVALID_ARGUMENT":    InvalidArgument,
+	"DEADLINE_EXCEEDED":   DeadlineExceeded,
+	"NOT_FOUND":           NotFound,
+	"ALREADY_EXISTS":      AlreadyExists,
+	"PERMISSION_DENIED":   PermissionDenied,
+	"RESOURCE_EXHAUSTED":  ResourceExhausted,
+	"FAILED_PRECONDITION": FailedPrecondition,
+	"ABORTED":             Aborted,
+	"OUT_OF_RANGE":        OutOfRange,
+	"UNIMPLEMENTED":       Unimplemented,
+	"INTERNAL":            Internal,
+	"UNAVAILABLE":         Unavailable,
+	"DATA_LOSS":           DataLoss,
+	"UNAUTHENTICATED":     Unauthenticated,
+}
+
+// UnmarshalJSON unmarshals b into the Code.
+func (c *Code) UnmarshalJSON(b []byte) error {
+	if c == nil {
+		return fmt.Errorf("nil receiver passed to UnmarshalJSON")
+	}
+	if jc, ok := strToCode[string(b)]; ok {
+		*c = jc
+		return nil
+	}
+	return fmt.Errorf("invalid code: %q", string(b))
+}
