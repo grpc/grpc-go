@@ -110,6 +110,9 @@ const (
 	defaultClientMaxSendMessageSize    = math.MaxInt32
 )
 
+// RegisterChannelz registers channelz service, and returns a pointer to the
+// channelz data storage for inquiry.
+// This is an EXPERIMENTAL API.
 func RegisterChannelz() channelz.DB {
 	ChannelzOn = true
 	return channelz.NewChannelzStorage()
@@ -404,6 +407,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
+	if ChannelzOn {
+		if target == "grpclb:///grpclb.server" {
+			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelType)
+		} else {
+			cc.id = channelz.RegisterChannel(cc, channelz.TopChannelType)
+		}
+	}
+
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -510,6 +521,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.balancerBuildOpts = balancer.BuildOptions{
 		DialCreds: credsClone,
 		Dialer:    cc.dopts.copts.Dialer,
+		Pid:       cc.id,
 	}
 
 	// Build the resolver.
@@ -600,6 +612,8 @@ type ClientConn struct {
 	balancerBuildOpts balancer.BuildOptions
 	resolverWrapper   *ccResolverWrapper
 	blockingpicker    *pickerWrapper
+
+	id int64 // channelz unique identification number
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -746,6 +760,10 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	cc.conns[ac] = struct{}{}
+	if ChannelzOn {
+		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
+		channelz.AddChild(cc.id, ac.id, "<nil>")
+	}
 	cc.mu.Unlock()
 	return ac, nil
 }
@@ -761,6 +779,12 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	delete(cc.conns, ac)
 	cc.mu.Unlock()
 	ac.tearDown(err)
+}
+
+// ChannelzMetrics returns ChannelMetric of current ClientConn.
+// This is an EXPERIMENTAL API.
+func (cc *ClientConn) ChannelzMetrics() *channelz.ChannelMetric {
+	return &channelz.ChannelMetric{}
 }
 
 // connect starts to creating transport and also starts the transport monitor
@@ -924,10 +948,13 @@ type addrConn struct {
 	events trace.EventLog
 	acbw   balancer.SubConn
 
+	id int64 // channelz unique identification number
+
 	mu           sync.Mutex
 	curAddr      resolver.Address
 	reconnectIdx int // The index in addrs list to start reconnecting from.
 	state        connectivity.State
+
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready     chan struct{}
@@ -1105,6 +1132,11 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			ac.mu.Unlock()
 			grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 			continue
+		}
+		if ChannelzOn {
+			id := channelz.RegisterSocket(newTr.(channelz.Socket), channelz.NormalSocketType)
+			newTr.(channelz.Socket).SetID(id)
+			channelz.AddChild(ac.id, id, "<nil>")
 		}
 		if ac.dopts.waitForHandshake {
 			select {
@@ -1326,4 +1358,8 @@ func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+func (ac *addrConn) ChannelzMetrics() *channelz.ChannelMetric {
+	return &channelz.ChannelMetric{ID: ac.id}
 }

@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
+	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
@@ -94,6 +95,9 @@ type Server struct {
 	drain  bool
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	id int64 // channelz unique identification number
+
 	// A CondVar to let GracefulStop() blocks until all the pending RPCs are finished
 	// and all the transport goes away.
 	cv     *sync.Cond
@@ -348,6 +352,10 @@ func NewServer(opt ...ServerOption) *Server {
 		_, file, line, _ := runtime.Caller(1)
 		s.events = trace.NewEventLog("grpc.Server", fmt.Sprintf("%s:%d", file, line))
 	}
+
+	if ChannelzOn {
+		s.id = channelz.RegisterServer(s)
+	}
 	return s
 }
 
@@ -463,6 +471,21 @@ func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credenti
 	return s.opts.creds.ServerHandshake(rawConn)
 }
 
+type listenSocket struct {
+	s  net.Listener
+	id int64
+}
+
+func (l *listenSocket) ChannelzMetrics() *channelz.SocketMetric {
+	return &channelz.SocketMetric{}
+}
+
+func (*listenSocket) IncrMsgSent() {}
+func (*listenSocket) IncrMsgRecv() {}
+func (l *listenSocket) SetID(id int64) {
+	l.id = id
+}
+
 // Serve accepts incoming connections on the listener lis, creating a new
 // ServerTransport and service goroutine for each. The service goroutines
 // read gRPC requests and then call the registered handlers to reply to them.
@@ -479,6 +502,13 @@ func (s *Server) Serve(lis net.Listener) error {
 		return ErrServerStopped
 	}
 	s.lis[lis] = true
+
+	if ChannelzOn {
+		ls := &listenSocket{s: lis}
+		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
+		channelz.AddChild(s.id, ls.id, "<nil>")
+	}
+
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -602,6 +632,12 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 	if !s.addConn(st) {
 		st.Close()
 		return nil
+	}
+
+	if ChannelzOn {
+		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
+		st.(channelz.Socket).SetID(id)
+		channelz.AddChild(s.id, id, "<nil>")
 	}
 	return st
 }
@@ -729,6 +765,12 @@ func (s *Server) removeConn(c io.Closer) {
 		delete(s.conns, c)
 		s.cv.Broadcast()
 	}
+}
+
+// ChannelzMetrics returns ServerMetric of current server.
+// This is an EXPERIMENTAL API.
+func (s *Server) ChannelzMetrics() *channelz.ServerMetric {
+	return &channelz.ServerMetric{ID: s.id}
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {

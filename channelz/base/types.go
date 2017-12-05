@@ -15,7 +15,8 @@ const (
 	subChannelT
 	nestedChannelT
 	serverT
-	socketT
+	normalSocketT
+	listenSocketT
 )
 
 type conn interface {
@@ -25,6 +26,7 @@ type conn interface {
 
 // ChannelMetric defines the metrics collected for a Channel.
 type ChannelMetric struct {
+	ID                       int64
 	RefName                  string
 	State                    connectivity.State
 	Target                   string
@@ -33,12 +35,15 @@ type ChannelMetric struct {
 	CallsFailed              int64
 	LastCallStartedTimestamp time.Time
 	// trace
+	NestedChans map[int64]string
+	SubChans    map[int64]string
+	Sockets     map[int64]string
 }
 
 // Channel is the interface implemented by grpc.ClientConn and grpc.addrConn
 // that reports ChannelMetric.
 type Channel interface {
-	ChannelzMetrics() ChannelMetric
+	ChannelzMetrics() *ChannelMetric
 }
 
 type channel struct {
@@ -65,6 +70,7 @@ func (c *channel) Unlock() {
 
 // SocketMetric defines the metrics collected for a Socket.
 type SocketMetric struct {
+	ID                               int64
 	RefName                          string
 	StreamsStarted                   int64
 	StreamsSucceeded                 int64
@@ -87,20 +93,21 @@ type SocketMetric struct {
 
 // Socket is the interface implemented by transport.http2Client and transport.http2Server.
 type Socket interface {
-	ChannelzMetrics() SocketMetric
+	ChannelzMetrics() *SocketMetric
 	IncrMsgSent()
 	IncrMsgRecv()
 	SetID(int64)
 }
 
 type socket struct {
+	t    entryType
 	name string
 	s    Socket
 	pid  int64
 }
 
-func (*socket) Type() entryType {
-	return socketT
+func (s *socket) Type() entryType {
+	return s.t
 }
 
 func (s *socket) Lock() {
@@ -111,24 +118,28 @@ func (s *socket) Unlock() {
 
 // ServerMetric defines the metrics collected for a Server.
 type ServerMetric struct {
+	ID                       int64
 	RefName                  string
 	CallsStarted             int64
 	CallsSucceeded           int64
 	CallsFailed              int64
 	LastCallStartedTimestamp time.Time
 	// trace
+
+	ListenSockets map[int64]string
 }
 
 // Server is the interface implemented by grpc.Server that reports ServerMetric.
 type Server interface {
-	ChannelzMetrics() ServerMetric
+	ChannelzMetrics() *ServerMetric
 }
 
 type server struct {
-	name     string
-	s        Server
-	mu       sync.Mutex
-	children map[int64]string
+	name          string
+	s             Server
+	mu            sync.Mutex
+	sockets       map[int64]string
+	listenSockets map[int64]string
 }
 
 func (*server) Type() entryType {
