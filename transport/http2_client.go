@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -1382,3 +1383,11 @@ func (t *http2Client) Error() <-chan struct{} {
 func (t *http2Client) GoAway() <-chan struct{} {
 	return t.goAway
 }
+
+func (t *http2Client) ChannelzMetrics() *channelz.SocketMetric {
+	return &channelz.SocketMetric{}
+}
+
+func (t *http2Client) IncrMsgSent()   {}
+func (t *http2Client) IncrMsgRecv()   {}
+func (t *http2Client) SetID(id int64) {}
