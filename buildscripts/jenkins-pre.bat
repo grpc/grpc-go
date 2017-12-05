@@ -1,10 +1,6 @@
 if NOT EXIST grpc-java-helper mkdir grpc-java-helper
 cd grpc-java-helper
 
-REM check if 7za is available
-7za > NUL
-if ERRORLEVEL 1 call gsutil cp gs://grpc-jenkins-helpers/java/7za.exe .
-
 call "%VS120COMNTOOLS%\vsvars32.bat"
 call "%WORKSPACE%\buildscripts\make_dependencies.bat"
 

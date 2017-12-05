@@ -12,13 +12,6 @@ set ESCWORKSPACE=%WORKSPACE:\=\\%
 
 mkdir grpc-java-helper
 
-@rem Install 7za
-@rem TODO(mattkwong): After Windows tests are no longer running on Jenkins, 7za
-@rem doesn't need to be installed and make_dependencies.bat can use unzip instead
-wget -q http://www.7-zip.org/a/7za920.zip >NUL
-unzip 7za920.zip >NUL
-mv 7za.exe grpc-java-helper
-
 cd grpc-java-helper
 
 call "%VS120COMNTOOLS%\vsvars32.bat"

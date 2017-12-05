@@ -1,9 +1,3 @@
-REM installer http://www.7-zip.org/a/7z1507-x64.exe
-REM 7za is in http://www.7-zip.org/a/7z1507-extra.7z
-
-REM Prerequisite:
-REM   7za.exe in current directory or PATH
-
 set PROTOBUF_VER=3.5.0
 set CMAKE_NAME=cmake-3.3.2-win32-x86
 
@@ -23,7 +17,7 @@ if not exist "%CMAKE_NAME%" (
 )
 set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
 powershell -command "& { iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
-7za X protobuf.zip
+powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('protobuf.zip', '.') }"
 del protobuf.zip
 pushd protobuf-%PROTOBUF_VER%\cmake
 mkdir build
@@ -38,6 +32,6 @@ goto :eof
 :installCmake
 
 powershell -command "& { iwr https://cmake.org/files/v3.3/%CMAKE_NAME%.zip -OutFile cmake.zip }"
-7za X cmake.zip
+powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('cmake.zip', '.') }"
 del cmake.zip
 goto :eof
