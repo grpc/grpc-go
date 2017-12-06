@@ -225,7 +225,7 @@ func withResolverBuilder(b resolver.Builder) DialOption {
 	}
 }
 
-// WithResolverUserOptions returns a DialOptions which sets the UserOptions
+// WithResolverUserOptions returns a DialOption which sets the UserOptions
 // field of resolver's BuildOption.
 func WithResolverUserOptions(userOpt interface{}) DialOption {
 	return func(o *dialOptions) {
