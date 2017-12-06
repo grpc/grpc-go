@@ -90,6 +90,9 @@ type Address struct {
 // BuildOption includes additional information for the builder to create
 // the resolver.
 type BuildOption struct {
+	// UserOptions can be used to pass configuration between DialOptions and the
+	// resolver.
+	UserOptions interface{}
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates
