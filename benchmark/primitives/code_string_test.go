@@ -64,7 +64,7 @@ func BenchmarkCodeStringGenerated(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codeGenerated(uint32(x % 17))
-		c.String()
+		_ = c.String()
 		x++
 	}
 	b.StopTimer()
@@ -76,7 +76,7 @@ func BenchmarkCodeStringSwitch(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(x % 17))
-		c.String()
+		_ = c.String()
 		x++
 	}
 	b.StopTimer()
@@ -88,7 +88,7 @@ func BenchmarkCodeStringGeneratedWithOverflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codeGenerated(uint32(x % 18))
-		c.String()
+		_ = c.String()
 		x++
 	}
 	b.StopTimer()
@@ -100,7 +100,7 @@ func BenchmarkCodeStringSwitchWithOverflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(x % 18))
-		c.String()
+		_ = c.String()
 		x++
 	}
 	b.StopTimer()
