@@ -697,7 +697,9 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 // of stream if the application is requesting data larger in size than
 // the window.
 func (t *http2Client) adjustWindow(s *Stream, n uint32) {
-	return
+	if w := s.fc.maybeAdjust(n); w > 0 {
+		t.controlBuf.put(&windowUpdate{streamID: s.id, increment: w, dir: outgoing}, t.wc)
+	}
 }
 
 // updateWindow adjusts the inbound quota for the stream and the transport.
@@ -780,6 +782,11 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.mu.Unlock()
 			s.write(&recvMsg{err: io.EOF})
 			return
+		}
+		if f.Header().Flags.Has(http2.FlagDataPadded) {
+			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
+				t.controlBuf.put(&windowUpdate{s.id, w, outgoing}, t.wc)
+			}
 		}
 		s.mu.Unlock()
 		// TODO(bradfitz, zhaoq): A copy is required here because there is no

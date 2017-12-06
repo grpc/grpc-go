@@ -323,7 +323,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
-	//s.requestRead(len(p))
+	s.requestRead(len(p))
 	return io.ReadFull(s.trReader, p)
 }
 
