@@ -194,24 +194,25 @@ func newWriteQuota(sz int32) *writeQuota {
 }
 
 func (w *writeQuota) get(sz int32, wc *waiters) error {
-	q := atomic.LoadInt32(&w.quota)
-	if q > 0 {
-		atomic.AddInt32(&w.quota, -sz)
-		return nil
-	}
-	select {
-	case <-w.ch:
-		atomic.AddInt32(&w.quota, -sz)
-		return nil
-	case <-wc.trDone:
-		return ErrConnClosing
-	case <-wc.strDone:
-		return errStreamClosing
-	case <-wc.goAway:
-		return errStreamDrain
-	case <-wc.done:
-		return io.EOF
+	for {
+		q := atomic.LoadInt32(&w.quota)
+		if q > 0 {
+			atomic.AddInt32(&w.quota, -sz)
+			return nil
+		}
+		select {
+		case <-w.ch:
+			continue
+		case <-wc.trDone:
+			return ErrConnClosing
+		case <-wc.strDone:
+			return errStreamClosing
+		case <-wc.goAway:
+			return errStreamDrain
+		case <-wc.done:
+			return io.EOF
 
+		}
 	}
 }
 
@@ -219,7 +220,10 @@ func (w *writeQuota) replenish(sz int32) {
 	b := atomic.LoadInt32(&w.quota)
 	a := atomic.AddInt32(&w.quota, sz)
 	if b <= 0 && a > 0 {
-		w.ch <- struct{}{}
+		select {
+		case w.ch <- struct{}{}:
+		default:
+		}
 	}
 }
 
