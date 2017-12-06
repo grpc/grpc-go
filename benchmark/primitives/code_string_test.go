@@ -60,48 +60,40 @@ func (i codeGenerated) String() string {
 }
 
 func BenchmarkCodeStringGenerated(b *testing.B) {
-	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codeGenerated(uint32(x % 17))
+		c := codeGenerated(uint32(i % 17))
 		_ = c.String()
-		x++
 	}
 	b.StopTimer()
 }
 
 // codes.Code.String() does a switch.
 func BenchmarkCodeStringSwitch(b *testing.B) {
-	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codes.Code(uint32(x % 17))
-		_ = c.String()
-		x++
+		c := codes.Code(uint32(i % 17))
+		c.String()
 	}
 	b.StopTimer()
 }
 
 // Testing all codes (0<=c<=16) and also one overflow (17).
 func BenchmarkCodeStringGeneratedWithOverflow(b *testing.B) {
-	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codeGenerated(uint32(x % 18))
-		_ = c.String()
-		x++
+		c := codeGenerated(uint32(i % 18))
+		c.String()
 	}
 	b.StopTimer()
 }
 
 // Testing all codes (0<=c<=16) and also one overflow (17).
 func BenchmarkCodeStringSwitchWithOverflow(b *testing.B) {
-	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codes.Code(uint32(x % 18))
-		_ = c.String()
-		x++
+		c := codes.Code(uint32(i % 18))
+		c.String()
 	}
 	b.StopTimer()
 }
