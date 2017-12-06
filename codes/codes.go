@@ -23,8 +23,6 @@ package codes // import "google.golang.org/grpc/codes"
 // A Code is an unsigned 32-bit error code as defined in the gRPC spec.
 type Code uint32
 
-//go:generate stringer -type=Code
-
 const (
 	// OK is returned on success.
 	OK Code = 0

@@ -23,8 +23,7 @@ if [ "$1" = "-install" ]; then
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell \
-    github.com/golang/protobuf/protoc-gen-go \
-    golang.org/x/tools/cmd/stringer
+    github.com/golang/protobuf/protoc-gen-go
   if [[ "$check_proto" = "true" ]]; then
     if [[ "$TRAVIS" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
