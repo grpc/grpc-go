@@ -543,7 +543,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	if err != nil {
 		// notify in-flight streams, before the deletion
-		s.write(&recvMsg{err: err})
+		s.write(recvMsg{err: err})
 	}
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
@@ -605,7 +605,7 @@ func (t *http2Client) Close() error {
 			s.headerDone = true
 		}
 		s.mu.Unlock()
-		s.write(&recvMsg{err: ErrConnClosing})
+		s.write(recvMsg{err: ErrConnClosing})
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
@@ -780,7 +780,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.rstError = http2.ErrCodeFlowControl
 			s.finish(status.New(codes.Internal, err.Error()))
 			s.mu.Unlock()
-			s.write(&recvMsg{err: io.EOF})
+			s.write(recvMsg{err: io.EOF})
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
@@ -795,7 +795,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			data := make([]byte, len(f.Data()))
 			copy(data, f.Data())
-			s.write(&recvMsg{data: data})
+			s.write(recvMsg{data: data})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that
@@ -808,7 +808,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		}
 		s.finish(status.New(codes.Internal, "server closed the stream without sending trailers"))
 		s.mu.Unlock()
-		s.write(&recvMsg{err: io.EOF})
+		s.write(recvMsg{err: io.EOF})
 	}
 }
 
@@ -839,7 +839,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	}
 	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
 	s.mu.Unlock()
-	s.write(&recvMsg{err: io.EOF})
+	s.write(recvMsg{err: io.EOF})
 }
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
@@ -991,7 +991,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			s.headerDone = true
 		}
 		s.mu.Unlock()
-		s.write(&recvMsg{err: err})
+		s.write(recvMsg{err: err})
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
@@ -1038,7 +1038,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	s.finish(state.status())
 	s.mu.Unlock()
-	s.write(&recvMsg{err: io.EOF})
+	s.write(recvMsg{err: io.EOF})
 }
 
 func handleMalformedHTTP2(s *Stream, err error) {
@@ -1048,7 +1048,7 @@ func handleMalformedHTTP2(s *Stream, err error) {
 		s.headerDone = true
 	}
 	s.mu.Unlock()
-	s.write(&recvMsg{err: err})
+	s.write(recvMsg{err: err})
 }
 
 // reader runs as a separate goroutine in charge of reading data from network

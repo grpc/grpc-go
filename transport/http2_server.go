@@ -551,7 +551,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if len(f.Data()) > 0 {
 			data := make([]byte, len(f.Data()))
 			copy(data, f.Data())
-			s.write(&recvMsg{data: data})
+			s.write(recvMsg{data: data})
 		}
 	}
 	if f.Header().Flags.Has(http2.FlagDataEndStream) {
@@ -561,7 +561,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			s.state = streamReadDone
 		}
 		s.mu.Unlock()
-		s.write(&recvMsg{err: io.EOF})
+		s.write(recvMsg{err: io.EOF})
 	}
 }
 

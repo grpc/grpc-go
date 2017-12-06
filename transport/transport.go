@@ -51,61 +51,115 @@ type recvMsg struct {
 	err error
 }
 
-type recvMsgList struct {
-	msg  *recvMsg
-	next *recvMsgList
-}
+//type recvMsgList struct {
+//	msg  recvMsg
+//	next *recvMsgList
+//}
+//
+//type recvBuffer struct {
+//	ch chan struct{}
+//
+//	mu   sync.Mutex
+//	head *recvMsgList
+//	tail *recvMsgList
+//}
+//
+//func newRecvBuffer() *recvBuffer {
+//	return &recvBuffer{ch: make(chan struct{}, 1)}
+//}
+//
+//func (r *recvBuffer) put(msg recvMsg) {
+//	rl := &recvMsgList{msg: msg}
+//	var wakeUp bool
+//	r.mu.Lock()
+//	if r.head == nil {
+//		r.head, r.tail = rl, rl
+//		wakeUp = true
+//	} else {
+//		r.tail.next = rl
+//		r.tail = rl
+//	}
+//	r.mu.Unlock()
+//	if wakeUp {
+//		select {
+//		case r.ch <- struct{}{}:
+//		default:
+//			panic(fmt.Errorf("This shouldn't have happened!"))
+//		}
+//	}
+//}
+//
+//func (r *recvBuffer) get() *recvMsgList {
+//	r.mu.Lock()
+//	h := r.head
+//	r.head, r.tail = nil, nil
+//	r.mu.Unlock()
+//	return h
+//}
 
+// recvBuffer is an unbounded channel of recvMsg structs.
+// Note recvBuffer differs from controlBuffer only in that recvBuffer
+// holds a channel of only recvMsg structs instead of objects implementing "item" interface.
+// recvBuffer is written to much more often than
+// controlBuffer and using strict recvMsg structs helps avoid allocation in "recvBuffer.put"
 type recvBuffer struct {
-	ch chan struct{}
-
-	mu   sync.Mutex
-	head *recvMsgList
-	tail *recvMsgList
+	c       chan recvMsg
+	mu      sync.Mutex
+	backlog []recvMsg
 }
 
 func newRecvBuffer() *recvBuffer {
-	return &recvBuffer{ch: make(chan struct{}, 1)}
+	b := &recvBuffer{
+		c: make(chan recvMsg, 1),
+	}
+	return b
 }
 
-func (r *recvBuffer) put(msg *recvMsg) {
-	rl := &recvMsgList{msg: msg}
-	var wakeUp bool
-	r.mu.Lock()
-	if r.head == nil {
-		r.head, r.tail = rl, rl
-		wakeUp = true
-	} else {
-		r.tail.next = rl
-		r.tail = rl
-	}
-	r.mu.Unlock()
-	if wakeUp {
+func (b *recvBuffer) put(r recvMsg) {
+	b.mu.Lock()
+	if len(b.backlog) == 0 {
 		select {
-		case r.ch <- struct{}{}:
+		case b.c <- r:
+			b.mu.Unlock()
+			return
 		default:
-			panic(fmt.Errorf("This shouldn't have happened!"))
 		}
 	}
+	b.backlog = append(b.backlog, r)
+	b.mu.Unlock()
 }
 
-func (r *recvBuffer) get() *recvMsgList {
-	r.mu.Lock()
-	h := r.head
-	r.head, r.tail = nil, nil
-	r.mu.Unlock()
-	return h
+func (b *recvBuffer) load() {
+	b.mu.Lock()
+	if len(b.backlog) > 0 {
+		select {
+		case b.c <- b.backlog[0]:
+			b.backlog[0] = recvMsg{}
+			b.backlog = b.backlog[1:]
+		default:
+		}
+	}
+	b.mu.Unlock()
 }
 
+// get returns the channel that receives a recvMsg in the buffer.
+//
+// Upon receipt of a recvMsg, the caller should call load to send another
+// recvMsg onto the channel if there is any.
+func (b *recvBuffer) get() <-chan recvMsg {
+	return b.c
+}
+
+//
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
 	ctxDone <-chan struct{}
 	goAway  chan struct{}
 	recv    *recvBuffer
-	rl      *recvMsgList
-	last    []byte // Stores the remaining data in the previous calls.
-	err     error
+	//rl      *recvMsgList
+	last []byte // Stores the remaining data in the previous calls.
+	err  error
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -120,40 +174,63 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *recvBufferReader) read(p []byte) (n int, err error) {
-	if n, err = r.fillSlice(p); err != nil || n != 0 {
-		return n, err
+	if r.last != nil && len(r.last) > 0 {
+		// Read remaining data left in last call.
+		copied := copy(p, r.last)
+		r.last = r.last[copied:]
+		return copied, nil
 	}
 	select {
 	case <-r.ctxDone:
 		return 0, errStreamClosing
 	case <-r.goAway:
 		return 0, errStreamDrain
-	case <-r.recv.ch:
-		r.rl = r.recv.get()
-		return r.fillSlice(p)
+	case m := <-r.recv.get():
+		r.recv.load()
+		if m.err != nil {
+			return 0, m.err
+		}
+		copied := copy(p, m.data)
+		r.last = m.data[copied:]
+		return copied, nil
 	}
 }
 
-func (r *recvBufferReader) fillSlice(p []byte) (n int, err error) {
-	for {
-		if len(p) == n || r.rl == nil {
-			return n, nil
-		}
-		if err = r.rl.msg.err; err != nil {
-			return 0, err
-		}
-		if len(r.rl.msg.data) == 0 {
-			r.rl = r.rl.next
-			continue
-		}
-		remaining := len(p) - n
-		if remaining > len(r.rl.msg.data) {
-			remaining = len(r.rl.msg.data)
-		}
-		n += copy(p[n:], r.rl.msg.data[:remaining])
-		r.rl.msg.data = r.rl.msg.data[remaining:]
-	}
-}
+//func (r *recvBufferReader) read(p []byte) (n int, err error) {
+//	if n, err = r.fillSlice(p); err != nil || n != 0 {
+//		return n, err
+//	}
+//	select {
+//	case <-r.ctxDone:
+//		return 0, errStreamClosing
+//	case <-r.goAway:
+//		return 0, errStreamDrain
+//	case <-r.recv.ch:
+//		r.rl = r.recv.get()
+//		return r.fillSlice(p)
+//	}
+//}
+//
+//func (r *recvBufferReader) fillSlice(p []byte) (n int, err error) {
+//	for {
+//		if len(p) == n || r.rl == nil {
+//			return n, nil
+//		}
+//		if err = r.rl.msg.err; err != nil {
+//			return 0, err
+//		}
+//		if len(r.rl.msg.data) == 0 {
+//			r.rl = r.rl.next
+//			continue
+//		}
+//		remaining := len(p) - n
+//		if remaining > len(r.rl.msg.data) {
+//			remaining = len(r.rl.msg.data)
+//		}
+//		n += copy(p[n:], r.rl.msg.data[:remaining])
+//		r.rl.msg.data = r.rl.msg.data[remaining:]
+//	}
+//}
 
 type streamState uint8
 
@@ -313,7 +390,7 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
-func (s *Stream) write(m *recvMsg) {
+func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
