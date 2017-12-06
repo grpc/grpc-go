@@ -25,10 +25,10 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type codeGenerated uint32
+type codeBench uint32
 
 const (
-	OK codeGenerated = iota
+	OK codeBench = iota
 	Canceled
 	Unknown
 	InvalidArgument
@@ -52,18 +52,54 @@ const _Code_name = "OKCanceledUnknownInvalidArgumentDeadlineExceededNotFoundAlre
 
 var _Code_index = [...]uint8{0, 2, 10, 17, 32, 48, 56, 69, 85, 102, 120, 127, 137, 150, 158, 169, 177, 192}
 
-func (i codeGenerated) String() string {
-	if i >= codeGenerated(len(_Code_index)-1) {
+func (i codeBench) String() string {
+	if i >= codeBench(len(_Code_index)-1) {
 		return "Code(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _Code_name[_Code_index[i]:_Code_index[i+1]]
 }
 
-func BenchmarkCodeStringGenerated(b *testing.B) {
+var nameMap = map[codeBench]string{
+	OK:                 "OK",
+	Canceled:           "Canceled",
+	Unknown:            "Unknown",
+	InvalidArgument:    "InvalidArgument",
+	DeadlineExceeded:   "DeadlineExceeded",
+	NotFound:           "NotFound",
+	AlreadyExists:      "AlreadyExists",
+	PermissionDenied:   "PermissionDenied",
+	ResourceExhausted:  "ResourceExhausted",
+	FailedPrecondition: "FailedPrecondition",
+	Aborted:            "Aborted",
+	OutOfRange:         "OutOfRange",
+	Unimplemented:      "Unimplemented",
+	Internal:           "Internal",
+	Unavailable:        "Unavailable",
+	DataLoss:           "DataLoss",
+	Unauthenticated:    "Unauthenticated",
+}
+
+func (i codeBench) StringUsingMap() string {
+	if s, ok := nameMap[i]; ok {
+		return s
+	}
+	return "Code(" + strconv.FormatInt(int64(i), 10) + ")"
+}
+
+func BenchmarkCodeStringStringer(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codeGenerated(uint32(i % 17))
+		c := codeBench(uint32(i % 17))
 		_ = c.String()
+	}
+	b.StopTimer()
+}
+
+func BenchmarkCodeStringMap(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c := codeBench(uint32(i % 17))
+		_ = c.StringUsingMap()
 	}
 	b.StopTimer()
 }
@@ -73,17 +109,17 @@ func BenchmarkCodeStringSwitch(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(i % 17))
-		c.String()
+		_ = c.String()
 	}
 	b.StopTimer()
 }
 
 // Testing all codes (0<=c<=16) and also one overflow (17).
-func BenchmarkCodeStringGeneratedWithOverflow(b *testing.B) {
+func BenchmarkCodeStringStringerWithOverflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := codeGenerated(uint32(i % 18))
-		c.String()
+		c := codeBench(uint32(i % 18))
+		_ = c.String()
 	}
 	b.StopTimer()
 }
@@ -93,7 +129,7 @@ func BenchmarkCodeStringSwitchWithOverflow(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := codes.Code(uint32(i % 18))
-		c.String()
+		_ = c.String()
 	}
 	b.StopTimer()
 }
