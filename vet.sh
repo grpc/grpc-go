@@ -15,9 +15,6 @@ if [[ "$TRAVIS" != "true" || "$TRAVIS_EVENT_TYPE" = "cron" ]]; then
   check_proto="true"
 fi
 
-# Remove this!!!
-check_proto="true"
-
 if [ "$1" = "-install" ]; then
   go get -d \
     google.golang.org/grpc/...
