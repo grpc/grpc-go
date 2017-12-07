@@ -36,9 +36,10 @@ public class NettyServerBuilderTest {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
+  private NettyServerBuilder builder = NettyServerBuilder.forPort(8080);
+
   @Test
   public void sslContextCanBeNull() {
-    NettyServerBuilder builder = NettyServerBuilder.forPort(8080);
     builder.sslContext(null);
   }
 
@@ -46,8 +47,6 @@ public class NettyServerBuilderTest {
   public void failIfSslContextIsNotServer() {
     SslContext sslContext = mock(SslContext.class);
     when(sslContext.isClient()).thenReturn(true);
-
-    NettyServerBuilder builder = NettyServerBuilder.forPort(8080);
 
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("Client SSL context can not be used for server");
@@ -59,7 +58,7 @@ public class NettyServerBuilderTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("keepalive time must be positive");
 
-    NettyServerBuilder.forPort(8080).keepAliveTime(-10L, TimeUnit.HOURS);
+    builder.keepAliveTime(-10L, TimeUnit.HOURS);
   }
 
   @Test
@@ -67,6 +66,54 @@ public class NettyServerBuilderTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("keepalive timeout must be positive");
 
-    NettyServerBuilder.forPort(8080).keepAliveTimeout(-10L, TimeUnit.HOURS);
+    builder.keepAliveTimeout(-10L, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void failIfMaxConcurrentCallsPerConnectionNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("max must be positive");
+
+    builder.maxConcurrentCallsPerConnection(0);
+  }
+
+  @Test
+  public void failIfMaxHeaderListSizeNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("maxHeaderListSize must be > 0");
+
+    builder.maxHeaderListSize(0);
+  }
+
+  @Test
+  public void failIfMaxConnectionIdleNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("max connection idle must be positive");
+
+    builder.maxConnectionIdle(-1, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void failIfMaxConnectionAgeNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("max connection age must be positive");
+
+    builder.maxConnectionAge(-1, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void failIfMaxConnectionAgeGraceNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("max connection age grace must be non-negative");
+
+    builder.maxConnectionAgeGrace(-1, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void failIfPermitKeepAliveTimeNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("permit keepalive time must be non-negative");
+
+    builder.permitKeepAliveTime(-1, TimeUnit.HOURS);
   }
 }
