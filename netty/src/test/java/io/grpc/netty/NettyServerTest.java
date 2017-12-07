@@ -118,8 +118,9 @@ public class NettyServerTest {
 
     final CountDownLatch countDownLatch = new CountDownLatch(1);
 
+    InetSocketAddress addr = new InetSocketAddress(0);
     NettyServer ns = new NettyServer(
-        new InetSocketAddress(9999),
+        addr,
         NioServerSocketChannel.class,
         channelOptions,
         null, // no boss group
@@ -154,7 +155,7 @@ public class NettyServerTest {
     });
 
     Socket socket = new Socket();
-    socket.connect(new InetSocketAddress("localhost", 9999), 8000);
+    socket.connect(new InetSocketAddress("localhost", ns.getPort()), /* timeout= */ 8000);
     countDownLatch.await();
     socket.close();
 
