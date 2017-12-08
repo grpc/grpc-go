@@ -23,7 +23,9 @@ import java.util.List;
 public final class AccessProtectedHack {
   public static InternalServer serverBuilderBuildTransportServer(
       AbstractServerImplBuilder<?> builder,
-      List<ServerStreamTracer.Factory> streamTracerFactories) {
+      List<ServerStreamTracer.Factory> streamTracerFactories,
+      TransportTracer.Factory transportTracerFactory) {
+    builder.transportTracerFactory = transportTracerFactory;
     return builder.buildTransportServer(streamTracerFactories);
   }
 

@@ -46,6 +46,7 @@ import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -181,6 +182,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   @Nullable
   private final String proxyPassword;
   private final Runnable tooManyPingsRunnable;
+  @GuardedBy("lock")
+  private final TransportTracer transportTracer;
 
   // The following fields should only be used for test.
   Runnable connectingCallback;
@@ -190,7 +193,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       Executor executor, @Nullable SSLSocketFactory sslSocketFactory,
       @Nullable HostnameVerifier hostnameVerifier, ConnectionSpec connectionSpec,
       int maxMessageSize, @Nullable InetSocketAddress proxyAddress, @Nullable String proxyUsername,
-      @Nullable String proxyPassword, Runnable tooManyPingsRunnable) {
+      @Nullable String proxyPassword, Runnable tooManyPingsRunnable,
+      TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
@@ -209,6 +213,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.proxyPassword = proxyPassword;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    this.transportTracer = Preconditions.checkNotNull(transportTracer);
+    initTransportTracer();
   }
 
   /**
@@ -226,7 +232,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       @Nullable Runnable connectingCallback,
       SettableFuture<Void> connectedFuture,
       int maxMessageSize,
-      Runnable tooManyPingsRunnable) {
+      Runnable tooManyPingsRunnable,
+      TransportTracer transportTracer) {
     address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
@@ -246,6 +253,23 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.proxyPassword = null;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
+    initTransportTracer();
+  }
+
+  private void initTransportTracer() {
+    synchronized (lock) { // to make @GuardedBy linter happy
+      transportTracer.setFlowControlWindowReader(new TransportTracer.FlowControlReader() {
+        @Override
+        public TransportTracer.FlowControlWindows read() {
+          synchronized (lock) {
+            long local = -1; // okhttp does not track the local window size
+            long remote = outboundFlow == null ? -1 : outboundFlow.windowUpdate(null, 0);
+            return new TransportTracer.FlowControlWindows(local, remote);
+          }
+        }
+      });
+    }
   }
 
   /**
@@ -286,6 +310,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         stopwatch.start();
         p = ping = new Http2Ping(data, stopwatch);
         writePing = true;
+        transportTracer.reportKeepAliveSent();
       }
     }
     if (writePing) {
@@ -302,8 +327,18 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
-    return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
-        outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent, statsTraceCtx);
+    return new OkHttpClientStream(
+        method,
+        headers,
+        frameWriter,
+        OkHttpClientTransport.this,
+        outboundFlow,
+        lock,
+        maxMessageSize,
+        defaultAuthority,
+        userAgent,
+        statsTraceCtx,
+        transportTracer);
   }
 
   @GuardedBy("lock")
@@ -858,9 +893,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @Override
   public Future<InternalTransportStats> getTransportStats() {
-    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
-    ret.set(null);
-    return ret;
+    synchronized (lock) {
+      SettableFuture<InternalTransportStats> ret = SettableFuture.create();
+      ret.set(transportTracer.getStats());
+      return ret;
+    }
   }
 
   /**

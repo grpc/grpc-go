@@ -38,6 +38,7 @@ import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
+import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.Platform;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -125,6 +126,13 @@ public class OkHttpChannelBuilder extends
       setTracingEnabled(false);
       setStatsEnabled(false);
     }
+  }
+
+  @VisibleForTesting
+  final OkHttpChannelBuilder setTransportTracerFactory(
+      TransportTracer.Factory transportTracerFactory) {
+    this.transportTracerFactory = transportTracerFactory;
+    return this;
   }
 
   /**
@@ -310,7 +318,8 @@ public class OkHttpChannelBuilder extends
     boolean enableKeepAlive = keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED;
     return new OkHttpTransportFactory(transportExecutor,
         createSocketFactory(), hostnameVerifier, connectionSpec, maxInboundMessageSize(),
-        enableKeepAlive, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
+        enableKeepAlive, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls,
+        transportTracerFactory);
   }
 
   @Override
@@ -376,6 +385,7 @@ public class OkHttpChannelBuilder extends
   static final class OkHttpTransportFactory implements ClientTransportFactory {
     private final Executor executor;
     private final boolean usingSharedExecutor;
+    private final TransportTracer.Factory transportTracerFactory;
     @Nullable
     private final SSLSocketFactory socketFactory;
     @Nullable
@@ -398,7 +408,8 @@ public class OkHttpChannelBuilder extends
         boolean enableKeepAlive,
         long keepAliveTimeNanos,
         long keepAliveTimeoutNanos,
-        boolean keepAliveWithoutCalls) {
+        boolean keepAliveWithoutCalls,
+        TransportTracer.Factory transportTracerFactory) {
       this.socketFactory = socketFactory;
       this.hostnameVerifier = hostnameVerifier;
       this.connectionSpec = connectionSpec;
@@ -409,6 +420,8 @@ public class OkHttpChannelBuilder extends
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
 
       usingSharedExecutor = executor == null;
+      this.transportTracerFactory =
+          Preconditions.checkNotNull(transportTracerFactory, "transportTracerFactory");
       if (usingSharedExecutor) {
         // The executor was unspecified, using the shared executor.
         this.executor = SharedResourceHolder.get(SHARED_EXECUTOR);
@@ -444,7 +457,8 @@ public class OkHttpChannelBuilder extends
           proxy == null ? null : proxy.proxyAddress,
           proxy == null ? null : proxy.username,
           proxy == null ? null : proxy.password,
-          tooManyPingsRunnable);
+          tooManyPingsRunnable,
+          transportTracerFactory.create());
       if (enableKeepAlive) {
         transport.enableKeepAlive(
             true, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos, keepAliveWithoutCalls);

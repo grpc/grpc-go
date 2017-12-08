@@ -27,6 +27,7 @@ import io.grpc.Status;
 import io.grpc.internal.AbstractClientStream;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
@@ -69,11 +70,12 @@ class OkHttpClientStream extends AbstractClientStream {
       int maxMessageSize,
       String authority,
       String userAgent,
-      StatsTraceContext statsTraceCtx) {
+      StatsTraceContext statsTraceCtx,
+      TransportTracer transportTracer) {
     super(
         new OkHttpWritableBufferAllocator(),
         statsTraceCtx,
-        /*transportTracer=*/ null,
+        transportTracer,
         headers,
         method.isSafe());
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
@@ -152,6 +154,7 @@ class OkHttpClientStream extends AbstractClientStream {
 
       synchronized (state.lock) {
         state.sendBuffer(buffer, endOfStream, flush);
+        getTransportTracer().reportMessageSent(numMessages);
       }
     }
 
@@ -200,7 +203,7 @@ class OkHttpClientStream extends AbstractClientStream {
         AsyncFrameWriter frameWriter,
         OutboundFlowController outboundFlow,
         OkHttpClientTransport transport) {
-      super(maxMessageSize, statsTraceCtx,  /*transportTracer=*/ null);
+      super(maxMessageSize, statsTraceCtx, OkHttpClientStream.this.getTransportTracer());
       this.lock = checkNotNull(lock, "lock");
       this.frameWriter = frameWriter;
       this.outboundFlow = outboundFlow;

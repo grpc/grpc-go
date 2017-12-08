@@ -33,6 +33,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
 import java.io.ByteArrayInputStream;
@@ -62,6 +63,7 @@ public class OkHttpClientStreamTest {
   @Captor private ArgumentCaptor<List<Header>> headersCaptor;
 
   private final Object lock = new Object();
+  private final TransportTracer transportTracer = new TransportTracer();
 
   private MethodDescriptor<?, ?> methodDescriptor;
   private OkHttpClientStream stream;
@@ -76,8 +78,18 @@ public class OkHttpClientStreamTest {
         .setResponseMarshaller(marshaller)
         .build();
 
-    stream = new OkHttpClientStream(methodDescriptor, new Metadata(), frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "userAgent", StatsTraceContext.NOOP);
+    stream = new OkHttpClientStream(
+        methodDescriptor,
+        new Metadata(),
+        frameWriter,
+        transport,
+        flowController,
+        lock,
+        MAX_MESSAGE_SIZE,
+        "localhost",
+        "userAgent",
+        StatsTraceContext.NOOP,
+        transportTracer);
   }
 
   @Test
@@ -134,7 +146,7 @@ public class OkHttpClientStreamTest {
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP);
+        StatsTraceContext.NOOP, transportTracer);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -149,7 +161,7 @@ public class OkHttpClientStreamTest {
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP);
+        StatsTraceContext.NOOP, transportTracer);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -177,7 +189,7 @@ public class OkHttpClientStreamTest {
         .build();
     stream = new OkHttpClientStream(getMethod, new Metadata(), frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP);
+        StatsTraceContext.NOOP, transportTracer);
     stream.start(new BaseClientStreamListener());
 
     // GET streams send headers after halfClose is called.

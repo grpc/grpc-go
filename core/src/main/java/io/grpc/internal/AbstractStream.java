@@ -24,7 +24,6 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import java.io.InputStream;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -108,7 +107,6 @@ public abstract class AbstractStream implements Stream {
     private Deframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
-    @Nullable // okhttp transports don't trace yet
     private final TransportTracer transportTracer;
 
     /**
@@ -133,9 +131,9 @@ public abstract class AbstractStream implements Stream {
     protected TransportState(
         int maxMessageSize,
         StatsTraceContext statsTraceCtx,
-        @Nullable TransportTracer transportTracer) { // nullable: okhttp transports don't trace yet
+        TransportTracer transportTracer) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      this.transportTracer = transportTracer;
+      this.transportTracer = checkNotNull(transportTracer, "transportTracer");
       deframer = new MessageDeframer(
           this,
           Codec.Identity.NONE,
@@ -234,9 +232,7 @@ public abstract class AbstractStream implements Stream {
         allocated = true;
       }
       notifyIfReady();
-      if (transportTracer != null) {
-        transportTracer.reportStreamStarted();
-      }
+      transportTracer.reportStreamStarted();
     }
 
     /**

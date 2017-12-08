@@ -19,12 +19,15 @@ package io.grpc.okhttp;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AccessProtectedHack;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.FakeClock;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.AbstractTransportTest;
 import io.grpc.netty.NettyServerBuilder;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -34,10 +37,19 @@ import org.junit.runners.JUnit4;
 /** Unit tests for OkHttp transport. */
 @RunWith(JUnit4.class)
 public class OkHttpTransportTest extends AbstractTransportTest {
+  private final FakeClock fakeClock = new FakeClock();
+  private final TransportTracer.Factory fakeClockTransportTracer = new TransportTracer.Factory(
+      new TransportTracer.TimeProvider() {
+        @Override
+        public long currentTimeMillis() {
+          return fakeClock.currentTimeMillis();
+        }
+      });
   private ClientTransportFactory clientFactory = OkHttpChannelBuilder
       // Although specified here, address is ignored because we never call build.
       .forAddress("localhost", 0)
       .negotiationType(NegotiationType.PLAINTEXT)
+      .setTransportTracerFactory(fakeClockTransportTracer)
       .buildTransportFactory();
 
   @After
@@ -51,7 +63,8 @@ public class OkHttpTransportTest extends AbstractTransportTest {
         NettyServerBuilder
           .forPort(0)
           .flowControlWindow(65 * 1024),
-        streamTracerFactories);
+        streamTracerFactories,
+        fakeClockTransportTracer);
   }
 
   @Override
@@ -62,7 +75,8 @@ public class OkHttpTransportTest extends AbstractTransportTest {
         NettyServerBuilder
             .forPort(port)
             .flowControlWindow(65 * 1024),
-        streamTracerFactories);
+        streamTracerFactories,
+        fakeClockTransportTracer);
   }
 
   @Override
@@ -80,9 +94,24 @@ public class OkHttpTransportTest extends AbstractTransportTest {
         null /* proxy */);
   }
 
+  @Override
+  protected void advanceClock(long offset, TimeUnit unit) {
+    fakeClock.forwardNanos(unit.toNanos(offset));
+  }
+
+  @Override
+  protected long currentTimeMillis() {
+    return fakeClock.currentTimeMillis();
+  }
+
   // TODO(ejona): Flaky/Broken
   @Test
   @Ignore
   @Override
   public void flowControlPushBack() {}
+
+  @Override
+  protected boolean haveTransportTracer() {
+    return true;
+  }
 }
