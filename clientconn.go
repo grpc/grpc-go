@@ -1300,15 +1300,15 @@ func (ac *addrConn) tearDown(err error) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	ac.curAddr = resolver.Address{}
+	if ac.state == connectivity.Shutdown {
+		return
+	}
 	if err == errConnDrain && ac.transport != nil {
 		// GracefulClose(...) may be executed multiple times when
 		// i) receiving multiple GoAway frames from the server; or
 		// ii) there are concurrent name resolver/Balancer triggered
 		// address removal and GoAway.
 		ac.transport.GracefulClose()
-	}
-	if ac.state == connectivity.Shutdown {
-		return
 	}
 	ac.state = connectivity.Shutdown
 	ac.tearDownErr = err
