@@ -610,7 +610,7 @@ type ClientConn struct {
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
 	curBalancerName string
-	preBalancerName string // previous balancer nam.
+	preBalancerName string // previous balancer name.
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
 }
@@ -673,21 +673,31 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	if cc.dopts.balancerBuilder != nil && cc.balancerWrapper == nil {
 		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
 	} else {
-		newBalancerName := cc.curBalancerName
-		// This is the first time handling resolved addresses, try to create a
-		// pickfirst balancer.
-		if newBalancerName == "" {
-			newBalancerName = pickfirstName
-		}
+		var isGRPCLB bool
 		for _, a := range addrs {
-			if a.Type == resolver.GRPCLB && newBalancerName != grpclbName {
-				// Switch from non-grpclb to grpclb.
-				newBalancerName = grpclbName
+			if a.Type == resolver.GRPCLB {
+				isGRPCLB = true
 				break
-			} else if a.Type == resolver.Backend && newBalancerName == grpclbName {
-				// Switch from grpclb to non-grpclb.
+			}
+		}
+		var newBalancerName string
+		if isGRPCLB {
+			newBalancerName = grpclbName
+		} else {
+			// Address list doesn't contain grpclb address. Try to pick a
+			// non-grpclb balancer.
+			newBalancerName = cc.curBalancerName
+			// If current balancer is grpclb, switch to the previous one.
+			if newBalancerName == grpclbName {
 				newBalancerName = cc.preBalancerName
-				break
+			}
+			// The following could be true in two cases:
+			// - the first time handling resolved addresses
+			//   (curBalancerName="")
+			// - the first time handling non-grpclb addresses
+			//   (curBalancerName="grpclb", preBalancerName="")
+			if newBalancerName == "" {
+				newBalancerName = pickfirstName
 			}
 		}
 		cc.switchBalancer(newBalancerName)
@@ -696,8 +706,11 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 }
 
 // switchBalancer starts the switching from current balancer to the balancer
-// with the given name. It will NOT send the current address list to the new
-// balancer.
+// with the given name.
+//
+// It will NOT send the current address list to the new balancer. If needed,
+// caller of this function should send address list to the new balancer after
+// this function returns.
 //
 // Caller must hold cc.mu.
 func (cc *ClientConn) switchBalancer(name string) {
@@ -707,7 +720,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 	grpclog.Infof("ClientConn switching balancer to %q", name)
 
 	if cc.dopts.balancerBuilder != nil {
-		grpclog.Infoln("ignoring service config balancer configuration: WithBalancer DialOption used instead")
+		grpclog.Infoln("ignoring balancer switching: WithBalancer DialOption used instead")
 		return
 	}
 

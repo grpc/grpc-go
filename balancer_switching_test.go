@@ -38,7 +38,7 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 		err   error
 	)
 	connected := false
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); ErrorDesc(err) == servers[0].port {
 			if connected {
 				// connected is set to false if peer is not server[0]. So if
@@ -53,7 +53,7 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 		time.Sleep(time.Millisecond)
 	}
 	if !connected {
-		return fmt.Errorf("pickfirst is not in effect after 1 second, EmptyCall() = _, %v, want _, %v", err, servers[0].port)
+		return fmt.Errorf("pickfirst is not in effect after 5 second, EmptyCall() = _, %v, want _, %v", err, servers[0].port)
 	}
 	// The following RPCs should all succeed with the first server.
 	for i := 0; i < 3; i++ {
@@ -78,7 +78,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 		// picked by the closing pickfirst balancer, and the test becomes flaky.
 		for _, s := range servers {
 			var up bool
-			for i := 0; i < 1000; i++ {
+			for i := 0; i < 5000; i++ {
 				if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); ErrorDesc(err) == s.port {
 					up = true
 					break
@@ -86,7 +86,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 				time.Sleep(time.Millisecond)
 			}
 			if !up {
-				return fmt.Errorf("server %v is not up within 1 second", s.port)
+				return fmt.Errorf("server %v is not up within 5 second", s.port)
 			}
 		}
 	}
@@ -132,7 +132,70 @@ func TestSwitchBalancer(t *testing.T) {
 	}
 }
 
-func TestSwitchBalancerGRPCLB(t *testing.T) {
+// First addr update contains grpclb.
+func TestSwitchBalancerGRPCLBFirst(t *testing.T) {
+	defer leakcheck.Check(t)
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	// ClientConn will switch balancer to grpclb when receives an address of
+	// type GRPCLB.
+	r.NewAddress([]resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}})
+	var isGRPCLB bool
+	for i := 0; i < 5000; i++ {
+		cc.mu.Lock()
+		isGRPCLB = cc.curBalancerName == "grpclb"
+		cc.mu.Unlock()
+		if isGRPCLB {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !isGRPCLB {
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
+	}
+
+	// New update containing new backend and new grpclb. Should not switch
+	// balancer.
+	r.NewAddress([]resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}})
+	for i := 0; i < 200; i++ {
+		cc.mu.Lock()
+		isGRPCLB = cc.curBalancerName == "grpclb"
+		cc.mu.Unlock()
+		if !isGRPCLB {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !isGRPCLB {
+		t.Fatalf("within 200 ms, cc.balancer switched to !grpclb, want grpclb")
+	}
+
+	var isPickFirst bool
+	// Switch balancer to pickfirst.
+	r.NewAddress([]resolver.Address{{Addr: "backend"}})
+	for i := 0; i < 5000; i++ {
+		cc.mu.Lock()
+		isPickFirst = cc.curBalancerName == pickfirstName
+		cc.mu.Unlock()
+		if isPickFirst {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !isPickFirst {
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
+	}
+}
+
+// First addr update does not contain grpclb.
+func TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
@@ -145,7 +208,7 @@ func TestSwitchBalancerGRPCLB(t *testing.T) {
 
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
 	var isPickFirst bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isPickFirst = cc.curBalancerName == pickfirstName
 		cc.mu.Unlock()
@@ -155,14 +218,14 @@ func TestSwitchBalancerGRPCLB(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isPickFirst {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
 	}
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
-	r.NewAddress([]resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}})
+	r.NewAddress([]resolver.Address{{Addr: "backend"}, {Addr: "grpclb", Type: resolver.GRPCLB}})
 	var isGRPCLB bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isGRPCLB = cc.curBalancerName == "grpclb"
 		cc.mu.Unlock()
@@ -172,12 +235,28 @@ func TestSwitchBalancerGRPCLB(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isGRPCLB {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
+	}
+
+	// New update containing new backend and new grpclb. Should not switch
+	// balancer.
+	r.NewAddress([]resolver.Address{{Addr: "backend2"}, {Addr: "grpclb2", Type: resolver.GRPCLB}})
+	for i := 0; i < 200; i++ {
+		cc.mu.Lock()
+		isGRPCLB = cc.curBalancerName == "grpclb"
+		cc.mu.Unlock()
+		if !isGRPCLB {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !isGRPCLB {
+		t.Fatalf("within 200 ms, cc.balancer switched to !grpclb, want grpclb")
 	}
 
 	// Switch balancer back.
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isPickFirst = cc.curBalancerName == pickfirstName
 		cc.mu.Unlock()
@@ -187,7 +266,7 @@ func TestSwitchBalancerGRPCLB(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isPickFirst {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
 	}
 }
 
@@ -209,7 +288,7 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
 	var isRoundRobin bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isRoundRobin = cc.curBalancerName == "round_robin"
 		cc.mu.Unlock()
@@ -219,14 +298,14 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isRoundRobin {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
 	}
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
 	r.NewAddress([]resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}})
 	var isGRPCLB bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isGRPCLB = cc.curBalancerName == "grpclb"
 		cc.mu.Unlock()
@@ -236,12 +315,12 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isGRPCLB {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
 	}
 
 	// Switch balancer back.
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isRoundRobin = cc.curBalancerName == "round_robin"
 		cc.mu.Unlock()
@@ -251,7 +330,7 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isRoundRobin {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
 	}
 }
 
@@ -271,7 +350,7 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
 	var isPickFirst bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isPickFirst = cc.curBalancerName == pickfirstName
 		cc.mu.Unlock()
@@ -281,14 +360,14 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isPickFirst {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not pick_first", cc.curBalancerName)
 	}
 
 	// ClientConn will switch balancer to grpclb when receives an address of
 	// type GRPCLB.
 	r.NewAddress([]resolver.Address{{Addr: "grpclb", Type: resolver.GRPCLB}})
 	var isGRPCLB bool
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isGRPCLB = cc.curBalancerName == "grpclb"
 		cc.mu.Unlock()
@@ -298,7 +377,7 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isGRPCLB {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not grpclb", cc.curBalancerName)
 	}
 
 	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
@@ -320,7 +399,7 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 
 	// Switch balancer back.
 	r.NewAddress([]resolver.Address{{Addr: "backend"}})
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		cc.mu.Lock()
 		isRoundRobin = cc.curBalancerName == "round_robin"
 		cc.mu.Unlock()
@@ -330,6 +409,6 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if !isRoundRobin {
-		t.Fatalf("after 1 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
+		t.Fatalf("after 5 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
 	}
 }
