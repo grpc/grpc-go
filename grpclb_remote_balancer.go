@@ -34,6 +34,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+// NestedChannel is the context key for indicating whether this ClientConn is a
+// nested channel.
+type nestedChannel struct{}
+
 // processServerList updates balaner's internal state, create/remove SubConns
 // and regenerates picker using the received serverList.
 func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
@@ -244,9 +248,10 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerBuilder(newPickfirstBuilder()))
 	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
-	// Dial using manualResolver.Scheme, which is a random scheme generated
+
+	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	cc, err := Dial("grpclb:///grpclb.server", dopts...)
+	cc, err := DialContext(context.WithValue(context.Background(), nestedChannel{}, struct{}{}), "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
