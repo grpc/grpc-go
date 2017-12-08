@@ -79,8 +79,6 @@ var (
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
 	// errNetworkIO indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
-	// ChannelzOn indicates whether channelz service is turned on.
-	ChannelzOn = false
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -114,7 +112,7 @@ const (
 // channelz data storage for inquiry.
 // This is an EXPERIMENTAL API.
 func RegisterChannelz() channelz.DB {
-	ChannelzOn = true
+	channelz.ChannelzOn = true
 	return channelz.NewChannelzStorage()
 }
 
@@ -407,7 +405,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
-	if ChannelzOn {
+	if channelz.ChannelzOn {
 		if v := ctx.Value(nestedChannel{}); v != nil {
 			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelType)
 		} else {
@@ -760,7 +758,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	cc.conns[ac] = struct{}{}
-	if ChannelzOn {
+	if channelz.ChannelzOn {
 		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
 		channelz.AddChild(cc.id, ac.id, "<nil>")
 	}
@@ -1133,7 +1131,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 			continue
 		}
-		if ChannelzOn {
+		if channelz.ChannelzOn {
 			id := channelz.RegisterSocket(newTr.(channelz.Socket), channelz.NormalSocketType)
 			newTr.(channelz.Socket).SetID(id)
 			channelz.AddChild(ac.id, id, "<nil>")
