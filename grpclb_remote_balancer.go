@@ -255,7 +255,7 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
-	if ChannelzOn {
+	if channelz.ChannelzOn {
 		channelz.AddChild(lb.opt.Pid, cc.id, "<nil>")
 	}
 	lb.ccRemoteLB = cc

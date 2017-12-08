@@ -31,6 +31,8 @@ var (
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries shown on a web page.
 	EntryPerPage = 50
+	// ChannelzOn indicates whether channelz service is turned on.
+	ChannelzOn bool
 )
 
 // NewChannelzStorage initializes channelz data storage and unique id generator,
