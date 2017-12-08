@@ -37,6 +37,7 @@ def addLibraryIfNotLinked = { libName, argList ->
 
 def String arch = rootProject.hasProperty('targetArch') ? rootProject.targetArch : osdetector.arch
 def boolean vcDisable = rootProject.hasProperty('vcDisable') ? rootProject.vcDisable : false
+def boolean usingVisualCpp // Whether VisualCpp is actually available and selected
 
 model {
   toolChains {
@@ -104,6 +105,7 @@ model {
         }
         addEnvArgs("LDFLAGS", linker.args)
       } else if (toolChain in VisualCpp) {
+        usingVisualCpp = true
         cppCompiler.define("GRPC_VERSION", version)
         cppCompiler.args "/EHsc", "/MT"
         if (rootProject.hasProperty('vcProtobufInclude')) {
@@ -255,13 +257,44 @@ artifacts {
 
 [
   uploadArchives.repositories.mavenDeployer,
-]*.beforeDeployment {
-  def ret = exec {
-    executable 'bash'
-    args 'check-artifact.sh', osdetector.os, arch
-  }
-  if (ret.exitValue != 0) {
-    throw new GradleException("check-artifact.sh exited with " + ret.exitValue)
+]*.beforeDeployment { it ->
+  if (!usingVisualCpp) {
+    def ret = exec {
+      executable 'bash'
+      args 'check-artifact.sh', osdetector.os, arch
+    }
+    if (ret.exitValue != 0) {
+      throw new GradleException("check-artifact.sh exited with " + ret.exitValue)
+    }
+  } else {
+    def exeName = "$artifactStagingPath/java_plugin/${protocPluginBaseName}.exe"
+    def os = new ByteArrayOutputStream()
+    def ret = exec {
+      executable 'dumpbin'
+      args '/nologo', '/dependents', exeName
+      standardOutput = os
+    }
+    if (ret.exitValue != 0) {
+      throw new GradleException("dumpbin exited with " + ret.exitValue)
+    }
+    def dlls = os.toString() =~ /Image has the following dependencies:\s+(.*)\s+Summary/
+    if (dlls[0][1] != "KERNEL32.dll") {
+      throw new Exception("unexpected dll deps: " + dlls[0][1]);
+    }
+    os.reset()
+    ret = exec {
+      executable 'dumpbin'
+      args '/nologo', '/headers', exeName
+      standardOutput = os
+    }
+    if (ret.exitValue != 0) {
+      throw new GradleException("dumpbin exited with " + ret.exitValue)
+    }
+    def machine = os.toString() =~ / machine \(([^)]+)\)/
+    def expectedArch = [x86_32: "x86", x86_64: "x64"][arch]
+    if (machine[0][1] != expectedArch) {
+      throw new Exception("unexpected architecture: " + machine[0][1]);
+    }
   }
 }
 
