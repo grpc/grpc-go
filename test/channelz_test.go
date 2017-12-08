@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
@@ -41,6 +42,7 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 }
 
 func TestServerRegistration(t *testing.T) {
+	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
 		start  int64
@@ -68,6 +70,7 @@ func TestServerRegistration(t *testing.T) {
 }
 
 func TestTopChannelRegistration(t *testing.T) {
+	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
 		start  int64
@@ -103,6 +106,7 @@ func TestTopChannelRegistration(t *testing.T) {
 }
 
 func TestNestedChannelRegistration(t *testing.T) {
+	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
@@ -128,6 +132,7 @@ func TestNestedChannelRegistration(t *testing.T) {
 }
 
 func TestClientSubChannelSocketRegistration(t *testing.T) {
+	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	num := 3 // number of backends
@@ -167,6 +172,7 @@ func TestClientSubChannelSocketRegistration(t *testing.T) {
 }
 
 func TestServerSocketRegistration(t *testing.T) {
+	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	num := 3 // number of clients
