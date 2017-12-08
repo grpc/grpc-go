@@ -19,6 +19,8 @@
 package codes
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
@@ -28,9 +30,19 @@ func TestUnmarshalJSON(t *testing.T) {
 	for s, v := range cpb.Code_value {
 		want := Code(v)
 		var got Code
-		if err := got.UnmarshalJSON([]byte(s)); err != nil || got != want {
+		if err := got.UnmarshalJSON([]byte(`"` + s + `"`)); err != nil || got != want {
 			t.Errorf("got.UnmarshalJSON(%q) = %v; want <nil>.  got=%v; want %v", s, err, got, want)
 		}
+	}
+}
+
+func TestJSONUnmarshal(t *testing.T) {
+	var got []Code
+	want := []Code{OK, NotFound, Internal, Canceled}
+	in := `["OK", "NOT_FOUND", "INTERNAL", "CANCELLED"]`
+	err := json.Unmarshal([]byte(in), &got)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("json.Unmarshal(%q, &got) = %v; want <nil>.  got=%v; want %v", in, err, got, want)
 	}
 }
 
