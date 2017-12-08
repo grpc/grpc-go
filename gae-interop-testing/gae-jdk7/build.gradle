@@ -45,7 +45,11 @@ dependencies {
   compile project(":grpc-okhttp")
   compile project(":grpc-protobuf")
   compile project(":grpc-stub")
-  compile project(":grpc-interop-testing")
+  compile (project(":grpc-interop-testing")) {
+    exclude group: 'io.opencensus', module: 'opencensus-impl'
+  }
+  // The lite version of opencensus is required for jdk7 GAE
+  runtime libraries.opencensus_impl_lite
 }
 
 // [START model]

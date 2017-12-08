@@ -120,12 +120,6 @@ public class OkHttpChannelBuilder extends
 
   private OkHttpChannelBuilder(String target) {
     super(target);
-    // TODO(zpencer): re-enable after census issue is resolved
-    // census-instrumentation/opencensus-java/issues/777
-    if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
-      setTracingEnabled(false);
-      setStatsEnabled(false);
-    }
   }
 
   @VisibleForTesting

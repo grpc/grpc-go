@@ -182,7 +182,7 @@ subprojects {
             epoll_suffix = ":" + osdetector.classifier
         }
         libraries = [
-                errorprone: "com.google.errorprone:error_prone_annotations:2.0.19",
+                errorprone: "com.google.errorprone:error_prone_annotations:2.1.2",
                 guava: "com.google.guava:guava:${guavaVersion}",
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
@@ -191,9 +191,10 @@ subprojects {
                 google_auth_credentials: 'com.google.auth:google-auth-library-credentials:0.9.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.13.0',
-                opencensus_api: 'io.opencensus:opencensus-api:0.8.0',
-                opencensus_contrib_grpc_metrics: 'io.opencensus:opencensus-contrib-grpc-metrics:0.8.0',
-                opencensus_impl: 'io.opencensus:opencensus-impl:0.8.0',
+                opencensus_api: 'io.opencensus:opencensus-api:0.10.0',
+                opencensus_contrib_grpc_metrics: 'io.opencensus:opencensus-contrib-grpc-metrics:0.10.0',
+                opencensus_impl: 'io.opencensus:opencensus-impl:0.10.0',
+                opencensus_impl_lite: 'io.opencensus:opencensus-impl-lite:0.10.0',
                 instrumentation_api: 'com.google.instrumentation:instrumentation-api:0.4.3',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
