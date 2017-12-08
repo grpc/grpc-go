@@ -423,7 +423,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	if ChannelzOn {
-		if target == "grpclb:///grpclb.server" {
+		if v := ctx.Value(nestedChannel{}); v != nil {
 			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelType)
 		} else {
 			cc.id = channelz.RegisterChannel(cc, channelz.TopChannelType)
