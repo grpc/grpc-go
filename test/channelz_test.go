@@ -17,8 +17,6 @@
  *
  */
 
-=======
->>>>>>> propagate nested channel info through context. added test file.
 package test
 
 import (
@@ -26,18 +24,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-<<<<<<< HEAD
-=======
-	"google.golang.org/grpc/balancer"
->>>>>>> propagate nested channel info through context. added test file.
 	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-<<<<<<< HEAD
 	"google.golang.org/grpc/test/leakcheck"
-=======
->>>>>>> propagate nested channel info through context. added test file.
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
