@@ -553,6 +553,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		return
 	}
 	t.mu.Unlock()
+	cleanup := &cleanupStream{streamID: s.id}
 	var rstStream bool
 	var rstError http2.ErrCode
 	s.mu.Lock()
@@ -560,6 +561,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	rstError = s.rstError
 	if s.state == streamDone {
 		s.mu.Unlock()
+		t.controlBuf.put(cleanup, t.wc)
 		return
 	}
 	if !s.headerDone {
@@ -572,7 +574,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		rstStream = true
 		rstError = http2.ErrCodeCancel
 	}
-	cleanup := &cleanupStream{streamID: s.id}
 	if rstStream {
 		cleanup.rst = true
 		cleanup.rstCode = rstError
