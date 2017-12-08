@@ -1395,7 +1395,7 @@ public class GrpclbLoadBalancerTest {
 
     // Attempted to connect to balancer
     assertEquals(1, fakeOobChannels.size());
-    ManagedChannel oobChannel = fakeOobChannels.poll();
+    fakeOobChannels.poll();
     inOrder.verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
     StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
     assertEquals(1, lbRequestObservers.size());

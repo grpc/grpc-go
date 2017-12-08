@@ -1843,8 +1843,6 @@ public abstract class AbstractInteropTest {
       // Server is not in the same process.  We can't check server-side stats.
       return;
     }
-    AssertionError checkFailure = null;
-    boolean passed = false;
 
     if (metricsExpected()) {
       MetricsRecord serverStartRecord;
