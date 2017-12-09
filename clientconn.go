@@ -719,15 +719,14 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 	grpclog.Infof("ClientConn switching balancer to %q", name)
 
-	if cc.dopts.balancerBuilder != nil {
-		grpclog.Infoln("ignoring balancer switching: WithBalancer DialOption used instead")
-		return
-	}
-
 	if strings.ToLower(cc.curBalancerName) == strings.ToLower(name) {
 		return
 	}
 
+	if cc.dopts.balancerBuilder != nil {
+		grpclog.Infoln("ignoring balancer switching: WithBalancer DialOption used instead")
+		return
+	}
 	// TODO(bar switching) change this to two steps: drain and close.
 	// Keep track of sc in wrapper.
 	if cc.balancerWrapper != nil {
