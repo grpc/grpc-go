@@ -797,6 +797,18 @@ func newOutStreamList() *outStreamList {
 	}
 }
 
+//func (l *outStreamList) display() {
+//	nxt := l.head.next
+//	for {
+//		if nxt == l.tail {
+//			break
+//		}
+//		fmt.Printf("%d ", nxt.itl.seek().(*dataFrame).streamID)
+//		nxt = nxt.next
+//	}
+//	fmt.Println()
+//}
+
 // remove from the end of the list.
 func (l *outStreamList) add(s *outStream) {
 	e := l.tail.prev
@@ -975,6 +987,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 				delete(l.allStreams, h.streamID)
 				str.deleteSelf()
 			}
+			//fmt.Println("Server finished stream:", h.streamID)
 			return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite)
 		}
 		// Case 1.B: Server is responding back with headers.
@@ -1049,6 +1062,7 @@ func (l *loopyWriter) headerWriter(streamID uint32, endStream bool, hf []hpack.H
 func (l *loopyWriter) dataHandler(df *dataFrame) error {
 	str, ok := l.allStreams[df.streamID]
 	if !ok {
+		panic(fmt.Errorf("Tried to send data for a non existant stream!"))
 		warningf("transport: Tried to write data on an already closed stream: %d.", df.streamID)
 		return nil
 	}
@@ -1189,8 +1203,12 @@ func (l *loopyWriter) processData() error {
 				str.st = empty
 			} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // the next item is trailers.
 				delete(l.allStreams, trailer.streamID)
-				return l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite)
+				if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
+					return err
+				}
 
+			} else {
+				l.activeStreams.add(str)
 			}
 			continue
 		}
@@ -1214,30 +1232,32 @@ func (l *loopyWriter) processData() error {
 		if l.sendQuota < uint32(size) {
 			size = int(l.sendQuota)
 		}
-		// Now that outgoing flow controls are checked we can replenish str's write quota
-		str.wq.replenish(int32(size))
-		var endStream bool
-		// This last data message on this stream and all
-		// of it can be written in this go.
-		if dataItem.endStream && size == len(buf) {
-			// buf contains either data or it contians header but data is empty.
-			if idx == 1 || len(dataItem.d) == 0 {
-				endStream = true
+		if size > 0 {
+			// Now that outgoing flow controls are checked we can replenish str's write quota
+			str.wq.replenish(int32(size))
+			var endStream bool
+			// This last data message on this stream and all
+			// of it can be written in this go.
+			if dataItem.endStream && size == len(buf) {
+				// buf contains either data or it contians header but data is empty.
+				if idx == 1 || len(dataItem.d) == 0 {
+					endStream = true
+				}
 			}
-		}
-		if dataItem.onEachWrite != nil {
-			dataItem.onEachWrite()
-		}
-		if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
-			return err
-		}
-		buf = buf[size:]
-		str.bytesOutStanding += size
-		l.sendQuota -= uint32(size)
-		if idx == 0 {
-			dataItem.h = buf
-		} else {
-			dataItem.d = buf
+			if dataItem.onEachWrite != nil {
+				dataItem.onEachWrite()
+			}
+			if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
+				return err
+			}
+			buf = buf[size:]
+			str.bytesOutStanding += size
+			l.sendQuota -= uint32(size)
+			if idx == 0 {
+				dataItem.h = buf
+			} else {
+				dataItem.d = buf
+			}
 		}
 
 		if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
@@ -1247,8 +1267,10 @@ func (l *loopyWriter) processData() error {
 			str.st = empty
 		} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // The next item is trailers.
 			delete(l.allStreams, trailer.streamID)
-			return l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite)
-		} else if int(l.oiws)-str.bytesOutStanding == 0 { // Ran out of stream quota.
+			if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
+				return err
+			}
+		} else if int(l.oiws)-str.bytesOutStanding <= 0 { // Ran out of stream quota.
 			str.st = waitingOnStreamQuota
 		} else {
 			l.activeStreams.add(str) // Otherwise, add it to the back of list.

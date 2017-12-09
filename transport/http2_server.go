@@ -777,12 +777,13 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		endStream: true,
 		onWrite: func() {
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
+			t.closeStream(s)
 		},
 	}, t.wc)
 	if t.stats != nil {
 		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 	}
-	t.closeStream(s)
+	//t.closeStream(s)
 	return nil
 }
 
