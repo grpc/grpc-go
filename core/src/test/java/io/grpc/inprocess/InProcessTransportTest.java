@@ -30,6 +30,7 @@ import org.junit.runners.JUnit4;
 public class InProcessTransportTest extends AbstractTransportTest {
   private static final String TRANSPORT_NAME = "perfect-for-testing";
   private static final String AUTHORITY = "a-testing-authority";
+  private static final String USER_AGENT = "a-testing-user-agent";
 
   @Override
   protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
@@ -49,7 +50,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
-    return new InProcessTransport(TRANSPORT_NAME, testAuthority(server));
+    return new InProcessTransport(TRANSPORT_NAME, testAuthority(server), USER_AGENT);
   }
 
   @Override
