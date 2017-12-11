@@ -87,7 +87,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   public InProcessTransport(String name, String authority, String userAgent) {
     this.name = name;
     this.authority = authority;
-    this.userAgent = userAgent;
+    this.userAgent = GrpcUtil.getGrpcUserAgent("inprocess", userAgent);
   }
 
   @CheckReturnValue
@@ -146,9 +146,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         }
       };
     }
-    headers.put(
-        GrpcUtil.USER_AGENT_KEY,
-        GrpcUtil.getGrpcUserAgent("inprocess", userAgent));
+    headers.put(GrpcUtil.USER_AGENT_KEY, userAgent);
     return new InProcessStream(method, headers, callOptions, authority).clientStream;
   }
 
