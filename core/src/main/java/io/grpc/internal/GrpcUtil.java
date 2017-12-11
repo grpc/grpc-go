@@ -195,7 +195,7 @@ public final class GrpcUtil {
 
   public static final Splitter ACCEPT_ENCODING_SPLITTER = Splitter.on(',').trimResults();
 
-  private static final String IMPLEMENTATION_VERSION = getImplementationVersion();
+  private static final String IMPLEMENTATION_VERSION = "1.9.0-SNAPSHOT"; // CURRENT_GRPC_VERSION
 
   /**
    * The default delay in nanos before we send a keepalive.
@@ -741,12 +741,4 @@ public final class GrpcUtil {
   }
 
   private GrpcUtil() {}
-
-  private static String getImplementationVersion() {
-    String version = GrpcUtil.class.getPackage().getImplementationVersion();
-    if (version != null) {
-      return "/" + version;
-    }
-    return "";
-  }
 }
