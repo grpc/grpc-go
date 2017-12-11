@@ -114,8 +114,8 @@ def com_google_code_gson():
 def com_google_errorprone_error_prone_annotations():
   native.maven_jar(
       name = "com_google_errorprone_error_prone_annotations",
-      artifact = "com.google.errorprone:error_prone_annotations:2.0.19",
-      sha1 = "c3754a0bdd545b00ddc26884f9e7624f8b6a14de",
+      artifact = "com.google.errorprone:error_prone_annotations:2.1.2",
+      sha1 = "6dcc08f90f678ac33e5ef78c3c752b6f59e63e0c",
   )
 
 def com_google_guava():
@@ -261,15 +261,15 @@ def io_netty_tcnative_boringssl_static():
 def io_opencensus_api():
   native.maven_jar(
       name = "io_opencensus_opencensus_api",
-      artifact = "io.opencensus:opencensus-api:0.8.0",
-      sha1 = "f921cd399ff9a3084370969dca74ccea510ff91f",
+      artifact = "io.opencensus:opencensus-api:0.10.0",
+      sha1 = "46bcf07e0bd835022ccd531d99c3eb813382d4d8",
   )
 
 def io_opencensus_grpc_metrics():
   native.maven_jar(
       name = "io_opencensus_opencensus_contrib_grpc_metrics",
-      artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.8.0",
-      sha1 = "5e54d0e6dd946fe097e63ad68243e0006fbb1fbc",
+      artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.10.0",
+      sha1 = "e47f918dc577b6316f57a884c500b13a98d3c11b",
   )
 
 def junit_junit():
