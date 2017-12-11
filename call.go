@@ -29,8 +29,8 @@ import (
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/transport"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/transport"
 )
 
 // recvResponse receives and parses an RPC response.

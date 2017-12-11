@@ -26,10 +26,11 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func errorDesc(err error) string {
@@ -58,7 +59,7 @@ func TestOneBackendPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -92,7 +93,7 @@ func TestBackendsPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -126,7 +127,7 @@ func TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -163,7 +164,7 @@ func TestCloseWithPendingRPCPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -200,7 +201,7 @@ func TestOneServerDownPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -242,7 +243,7 @@ func TestAllServersDownPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -259,7 +260,7 @@ func TestAllServersDownPickfirst(t *testing.T) {
 		servers[i].stop()
 	}
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); Code(err) == codes.Unavailable {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); internal.Code(err) == codes.Unavailable {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -286,7 +287,7 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 	defer cancel()
 	req := "port"
 	var reply string
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || Code(err) != codes.DeadlineExceeded {
+	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc); err == nil || internal.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
