@@ -717,12 +717,12 @@ func (cc *ClientConn) switchBalancer(name string) {
 	if cc.conns == nil {
 		return
 	}
-	grpclog.Infof("ClientConn switching balancer to %q", name)
 
 	if strings.ToLower(cc.curBalancerName) == strings.ToLower(name) {
 		return
 	}
 
+	grpclog.Infof("ClientConn switching balancer to %q", name)
 	if cc.dopts.balancerBuilder != nil {
 		grpclog.Infoln("ignoring balancer switching: WithBalancer DialOption used instead")
 		return
