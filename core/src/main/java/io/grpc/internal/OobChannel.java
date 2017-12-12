@@ -65,6 +65,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
   private final ScheduledExecutorService deadlineCancellationExecutor;
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
+  final ChannelStats channelStats;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -84,7 +85,8 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
 
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
-      ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor) {
+      ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
+      ChannelStats channelStats) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -112,6 +114,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
           // Don't care
         }
       });
+    this.channelStats = channelStats;
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -165,7 +168,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
         callOptions.getExecutor() == null ? executor : callOptions.getExecutor(),
-        callOptions, transportProvider, deadlineCancellationExecutor);
+        callOptions, transportProvider, deadlineCancellationExecutor, channelStats);
   }
 
   @Override

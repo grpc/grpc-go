@@ -188,6 +188,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
 
   private final ManagedChannelReference phantom;
 
+  private final ChannelStats.Factory channelStatsFactory; // to create new stats for each oobchannel
+  final ChannelStats channelStats;
+
   // Called from channelExecutor
   private final ManagedClientTransport.Listener delayedTransportListener =
       new ManagedClientTransport.Listener() {
@@ -430,7 +433,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
       ObjectPool<? extends Executor> oobExecutorPool,
       Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors,
-      ProxyDetector proxyDetector) {
+      ProxyDetector proxyDetector,
+      ChannelStats.Factory channelStatsFactory) {
     this.target = checkNotNull(builder.target, "target");
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
@@ -463,6 +467,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
     this.proxyDetector = proxyDetector;
 
     phantom = new ManagedChannelReference(this);
+    this.channelStatsFactory = channelStatsFactory;
+    channelStats = channelStatsFactory.create();
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
 
@@ -613,7 +619,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
               executor,
               callOptions,
               transportProvider,
-              terminated ? null : transportFactory.getScheduledExecutorService())
+              terminated ? null : transportFactory.getScheduledExecutorService(),
+              channelStats)
           .setFullStreamDecompression(fullStreamDecompression)
           .setDecompressorRegistry(decompressorRegistry)
           .setCompressorRegistry(compressorRegistry);
@@ -810,7 +817,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor);
+          channelExecutor, channelStatsFactory.create());
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,

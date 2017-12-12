@@ -138,6 +138,17 @@ public class ManagedChannelImplTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private final FakeClock oobExecutor = new FakeClock();
+  private final ChannelStats.Factory channelStatsFactory = new ChannelStats.Factory() {
+    @Override
+    public ChannelStats create() {
+      return new ChannelStats(new ChannelStats.TimeProvider() {
+          @Override
+          public long currentTimeMillis() {
+            return executor.currentTimeMillis();
+          }
+        });
+    }
+  };
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -216,7 +227,8 @@ public class ManagedChannelImplTest {
     checkState(channel == null);
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
-        oobExecutorPool, timer.getStopwatchSupplier(), interceptors, GrpcUtil.NOOP_PROXY_DETECTOR);
+        oobExecutorPool, timer.getStopwatchSupplier(), interceptors, GrpcUtil.NOOP_PROXY_DETECTOR,
+        channelStatsFactory);
 
     if (requestConnection) {
       // Force-exit the initial idle-mode
@@ -1644,6 +1656,143 @@ public class ManagedChannelImplTest {
     } finally {
       channelLogger.setFilter(oldFilter);
     }
+  }
+
+  @Test
+  public void channelStat_callStarted() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    assertEquals(0, channel.channelStats.getCallsStarted());
+    call.start(mockCallListener, new Metadata());
+    assertEquals(1, channel.channelStats.getCallsStarted());
+    assertEquals(executor.currentTimeMillis(), channel.channelStats.getLastCallStartedMillis());
+  }
+
+  @Test
+  public void channelStat_callEndSuccess() throws Exception {
+    // set up
+    Metadata headers = new Metadata();
+    ClientStream mockStream = mock(ClientStream.class);
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    // Start a call with a call executor
+    CallOptions options =
+        CallOptions.DEFAULT.withExecutor(executor.getScheduledExecutorService());
+    ClientCall<String, Integer> call = channel.newCall(method, options);
+    call.start(mockCallListener, headers);
+
+    // Make the transport available
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    when(mockTransport.newStream(same(method), same(headers), any(CallOptions.class)))
+        .thenReturn(mockStream);
+    transportListener.transportReady();
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withSubchannel(subchannel));
+    helper.updateBalancingState(READY, mockPicker);
+
+    executor.runDueTasks();
+    verify(mockStream).start(streamListenerCaptor.capture());
+    // end set up
+
+    // the actual test
+    ClientStreamListener streamListener = streamListenerCaptor.getValue();
+    call.halfClose();
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
+    streamListener.closed(Status.OK, new Metadata());
+    executor.runDueTasks();
+    assertEquals(1, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
+  }
+
+  @Test
+  public void channelStat_callEndFail() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    call.cancel("msg", null);
+
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
+    executor.runDueTasks();
+    verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(1, channel.channelStats.getCallsFailed());
+  }
+
+  @Test
+  public void channelStat_callStarted_oob() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    OobChannel oob1 = (OobChannel) helper.createOobChannel(addressGroup, "oob1authority");
+    ClientCall<String, Integer> call = oob1.newCall(method, CallOptions.DEFAULT);
+
+    assertEquals(0, channel.channelStats.getCallsStarted());
+    call.start(mockCallListener, new Metadata());
+    // only oob channel stats updated
+    assertEquals(1, oob1.channelStats.getCallsStarted());
+    assertEquals(0, channel.channelStats.getCallsStarted());
+    assertEquals(executor.currentTimeMillis(), oob1.channelStats.getLastCallStartedMillis());
+  }
+
+  @Test
+  public void channelStat_callEndSuccess_oob() throws Exception {
+    // set up
+    ClientStream mockStream = mock(ClientStream.class);
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "oobauthority");
+    FakeClock callExecutor = new FakeClock();
+    CallOptions options =
+        CallOptions.DEFAULT.withExecutor(callExecutor.getScheduledExecutorService());
+    ClientCall<String, Integer> call = oobChannel.newCall(method, options);
+    Metadata headers = new Metadata();
+    call.start(mockCallListener, headers);
+
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    when(mockTransport.newStream(same(method), same(headers), any(CallOptions.class)))
+        .thenReturn(mockStream);
+    transportListener.transportReady();
+    callExecutor.runDueTasks();
+    verify(mockStream).start(streamListenerCaptor.capture());
+    // end set up
+
+    // the actual test
+    ClientStreamListener streamListener = streamListenerCaptor.getValue();
+    call.halfClose();
+    assertEquals(0, oobChannel.channelStats.getCallsSucceeded());
+    assertEquals(0, oobChannel.channelStats.getCallsFailed());
+    streamListener.closed(Status.OK, new Metadata());
+    callExecutor.runDueTasks();
+    // only oob channel stats updated
+    assertEquals(1, oobChannel.channelStats.getCallsSucceeded());
+    assertEquals(0, oobChannel.channelStats.getCallsFailed());
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
+  }
+
+  @Test
+  public void channelStat_callEndFail_oob() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    OobChannel oob1 = (OobChannel) helper.createOobChannel(addressGroup, "oob1authority");
+    ClientCall<String, Integer> call = oob1.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    call.cancel("msg", null);
+
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
+    oobExecutor.runDueTasks();
+    // only oob channel stats updated
+    verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
+    assertEquals(0, oob1.channelStats.getCallsSucceeded());
+    assertEquals(1, oob1.channelStats.getCallsFailed());
+    assertEquals(0, channel.channelStats.getCallsSucceeded());
+    assertEquals(0, channel.channelStats.getCallsFailed());
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {

@@ -89,6 +89,7 @@ public class ClientCallImplTest {
   private final FakeClock fakeClock = new FakeClock();
   private final ScheduledExecutorService deadlineCancellationExecutor =
       fakeClock.getScheduledExecutorService();
+  private final ChannelStats channaleStats = ChannelStats.getDefaultFactory().create();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance().with(new Codec.Gzip(), true);
   private final MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
@@ -149,7 +150,8 @@ public class ClientCallImplTest {
         executor,
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -169,7 +171,8 @@ public class ClientCallImplTest {
         executor,
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -204,7 +207,8 @@ public class ClientCallImplTest {
         executor,
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -237,7 +241,8 @@ public class ClientCallImplTest {
         executor,
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -269,7 +274,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -291,7 +297,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions.withAuthority("overridden-authority"),
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -306,7 +313,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         callOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
         .setDecompressorRegistry(decompressorRegistry);
     final Metadata metadata = new Metadata();
 
@@ -323,7 +331,8 @@ public class ClientCallImplTest {
         // Don't provide an authority
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -491,7 +500,8 @@ public class ClientCallImplTest {
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     Context.ROOT.attach();
@@ -564,7 +574,8 @@ public class ClientCallImplTest {
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -592,7 +603,8 @@ public class ClientCallImplTest {
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
         .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -635,7 +647,8 @@ public class ClientCallImplTest {
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         callOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
     verify(transport, times(0))
@@ -657,7 +670,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     Metadata headers = new Metadata();
 
@@ -684,7 +698,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         callOpts,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     Metadata headers = new Metadata();
 
@@ -711,7 +726,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         callOpts,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     Metadata headers = new Metadata();
 
@@ -736,7 +752,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     call.start(callListener, new Metadata());
 
@@ -759,7 +776,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     call.start(callListener, new Metadata());
 
@@ -778,7 +796,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     call.start(callListener, new Metadata());
     call.cancel("canceled", null);
 
@@ -801,7 +820,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
 
     Metadata headers = new Metadata();
 
@@ -817,7 +837,8 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         baseCallOptions,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor,
+        channaleStats);
     final Exception cause = new Exception();
     ClientCall.Listener<Void> callListener =
         new ClientCall.Listener<Void>() {
@@ -853,7 +874,8 @@ public class ClientCallImplTest {
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         callOptions,
         provider,
-        deadlineCancellationExecutor)
+        deadlineCancellationExecutor,
+        channaleStats)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -866,7 +888,7 @@ public class ClientCallImplTest {
   public void getAttributes() {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method, MoreExecutors.directExecutor(), baseCallOptions, provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor, channaleStats);
     Attributes attrs =
         Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
     when(stream.getAttributes()).thenReturn(attrs);

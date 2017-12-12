@@ -68,6 +68,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   private final MethodDescriptor<ReqT, RespT> method;
   private final Executor callExecutor;
+  private final ChannelStats channelStats;
   private final Context context;
   private volatile ScheduledFuture<?> deadlineCancellationFuture;
   private final boolean unaryRequest;
@@ -87,7 +88,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   ClientCallImpl(
       MethodDescriptor<ReqT, RespT> method, Executor executor, CallOptions callOptions,
       ClientTransportProvider clientTransportProvider,
-      ScheduledExecutorService deadlineCancellationExecutor) {
+      ScheduledExecutorService deadlineCancellationExecutor,
+      ChannelStats channelStats) {
     this.method = method;
     // If we know that the executor is a direct executor, we don't need to wrap it with a
     // SerializingExecutor. This is purely for performance reasons.
@@ -95,6 +97,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     this.callExecutor = executor == directExecutor()
         ? new SerializeReentrantCallsDirectExecutor()
         : new SerializingExecutor(executor);
+    this.channelStats = channelStats;
     // Propagate the context from the thread which initiated the call to all callbacks.
     this.context = Context.current();
     this.unaryRequest = method.getType() == MethodType.UNARY
@@ -224,7 +227,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     } else {
       compressor = Codec.Identity.NONE;
     }
-
     prepareHeaders(headers, decompressorRegistry, compressor, fullStreamDecompression);
 
     Deadline effectiveDeadline = effectiveDeadline();
@@ -261,6 +263,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     stream.setCompressor(compressor);
     stream.setFullStreamDecompression(fullStreamDecompression);
     stream.setDecompressorRegistry(decompressorRegistry);
+    channelStats.reportCallStarted();
     stream.start(new ClientStreamListenerImpl(observer));
 
     // Delay any sources of cancellation after start(), because most of the transports are broken if
@@ -556,6 +559,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         closeObserver(observer, status, trailers);
       } finally {
         removeContextListenerAndCancelDeadlineFuture();
+        channelStats.reportCallEnded(status.isOk());
       }
     }
 

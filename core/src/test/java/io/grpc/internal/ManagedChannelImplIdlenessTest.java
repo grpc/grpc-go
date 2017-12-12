@@ -143,7 +143,7 @@ public class ManagedChannelImplIdlenessTest {
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
         oobExecutorPool, timer.getStopwatchSupplier(),
         Collections.<ClientInterceptor>emptyList(),
-        GrpcUtil.NOOP_PROXY_DETECTOR);
+        GrpcUtil.NOOP_PROXY_DETECTOR, ChannelStats.getDefaultFactory());
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
     for (int i = 0; i < 2; i++) {
