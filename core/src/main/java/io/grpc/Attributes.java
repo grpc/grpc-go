@@ -129,7 +129,18 @@ public final class Attributes {
       return false;
     }
     Attributes that = (Attributes) o;
-    return Objects.equal(data, that.data);
+    if (data.size() != that.data.size()) {
+      return false;
+    }
+    for (Entry<Key<?>, Object> e : data.entrySet()) {
+      if (!that.data.containsKey(e.getKey())) {
+        return false;
+      }
+      if (!Objects.equal(e.getValue(), that.data.get(e.getKey()))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

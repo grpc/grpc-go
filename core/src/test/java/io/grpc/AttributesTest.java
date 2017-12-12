@@ -17,6 +17,7 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 
 import org.junit.Test;
@@ -49,5 +50,21 @@ public class AttributesTest {
   @Test
   public void empty() {
     assertEquals(0, Attributes.EMPTY.keys().size());
+  }
+
+  @Test
+  @SuppressWarnings("BoxedPrimitiveConstructor")
+  public void valueEquality() {
+    Attributes.Key<Integer> key = Attributes.Key.of("ints");
+    Integer v1 = new Integer(100000);
+    Integer v2 = new Integer(100000);
+
+    assertNotSame(v1, v2);
+    assertEquals(v1, v2);
+
+    Attributes attr1 = Attributes.newBuilder().set(key, v1).build();
+    Attributes attr2 = Attributes.newBuilder().set(key, v2).build();
+
+    assertEquals(attr1, attr2);
   }
 }
