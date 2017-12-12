@@ -332,7 +332,7 @@ func TestOneServerDown(t *testing.T) {
 	numServers := 2
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
 	defer cleanup()
-	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}), WithWaitForHandshake())
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -660,7 +660,7 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	numServers := 3
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
 	defer cleanup()
-	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(pickFirstBalancerV1(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(pickFirstBalancerV1(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}), WithWaitForHandshake())
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}

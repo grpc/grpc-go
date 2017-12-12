@@ -468,6 +468,7 @@ type test struct {
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
+	customDialOptions           []grpc.DialOption
 	resolverScheme              string
 
 	// All test dialing is blocking by default. Set this to true if dial
@@ -718,6 +719,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
 	}
+	opts = append(opts, te.customDialOptions...)
 	var err error
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
 	if err != nil {
@@ -803,6 +805,7 @@ func TestTimeoutOnDeadServer(t *testing.T) {
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te := newTest(t, e)
+	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
