@@ -470,7 +470,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		onWrite: func() {
 			close(created)
 		},
-		wq: s.wq,
+		wq:      s.wq,
+		isUnary: true, // TODO(mmukhi): update this.
 	}, t.wc)
 	t.mu.Unlock()
 	// Wait for the stream to be created.

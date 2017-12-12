@@ -113,6 +113,7 @@ type headerFrame struct {
 	endStream bool // Valid on server side.
 	onWrite   func()
 	wq        *writeQuota // write quota for the stream created.
+	isUnary   bool
 }
 
 func (*headerFrame) item() {}

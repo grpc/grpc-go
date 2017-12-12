@@ -885,6 +885,7 @@ type loopyWriter struct {
 	hBuf           *bytes.Buffer  // The buffer for HPACK encoding.
 	hEnc           *hpack.Encoder // HPACK encoder.
 	bdpEst         *bdpEstimator
+	noFlush        bool
 
 	// Side-specific handlers
 	ssGoAwayHandler func(*goAway) error
@@ -925,6 +926,7 @@ func (l *loopyWriter) run(ctxDone <-chan struct{}) {
 		for {
 			select {
 			case it := <-l.cbuf.ch:
+				l.noFlush = false
 				if err := l.preprocess(it); err != nil {
 					errorf("transport: error while handling item. Err: %v", err)
 					return
@@ -933,7 +935,10 @@ func (l *loopyWriter) run(ctxDone <-chan struct{}) {
 				warningf("transport: loopy returning. Err: %v", ErrConnClosing)
 				return
 			default:
-				l.framer.writer.Flush()
+				if !l.noFlush {
+					l.framer.writer.Flush()
+				}
+				l.noFlush = false
 				break hasdata
 			}
 		}
@@ -988,7 +993,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 				str.deleteSelf()
 			}
 			//fmt.Println("Server finished stream:", h.streamID)
-			return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite)
+			return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite, false)
 		}
 		// Case 1.B: Server is responding back with headers.
 		str := &outStream{
@@ -997,7 +1002,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 			wq:  h.wq,
 		}
 		l.allStreams[h.streamID] = str
-		return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite)
+		return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite, false)
 	}
 	// Case 2: Client wants to originate stream.
 	str := &outStream{
@@ -1009,7 +1014,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 	if l.numEstdStreams < l.mcs {
 		l.numEstdStreams++
 		str.st = empty
-		return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite)
+		return l.headerWriter(h.streamID, h.endStream, h.hf, h.onWrite, h.isUnary)
 	}
 	// Can't start another stream right now.
 	str.itl.put(h)
@@ -1017,7 +1022,7 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 	return nil
 }
 
-func (l *loopyWriter) headerWriter(streamID uint32, endStream bool, hf []hpack.HeaderField, onWrite func()) error {
+func (l *loopyWriter) headerWriter(streamID uint32, endStream bool, hf []hpack.HeaderField, onWrite func(), isUnary bool) error {
 	if onWrite != nil {
 		onWrite()
 	}
@@ -1055,6 +1060,9 @@ func (l *loopyWriter) headerWriter(streamID uint32, endStream bool, hf []hpack.H
 		if err != nil {
 			return err
 		}
+	}
+	if isUnary {
+		l.noFlush = true
 	}
 	return nil
 }
@@ -1113,7 +1121,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	l.numEstdStreams++
 	str.st = empty
 	hdr := str.itl.remove().(*headerFrame)
-	return l.headerWriter(hdr.streamID, hdr.endStream, hdr.hf, hdr.onWrite)
+	return l.headerWriter(hdr.streamID, hdr.endStream, hdr.hf, hdr.onWrite, hdr.isUnary)
 }
 
 func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
@@ -1172,7 +1180,7 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) error {
 				str.st = empty
 				hdr := str.itl.remove().(*headerFrame)
 				l.numEstdStreams++
-				if err := l.headerWriter(hdr.streamID, hdr.endStream, hdr.hf, hdr.onWrite); err != nil {
+				if err := l.headerWriter(hdr.streamID, hdr.endStream, hdr.hf, hdr.onWrite, hdr.isUnary); err != nil {
 					return err
 				}
 			}
@@ -1203,7 +1211,7 @@ func (l *loopyWriter) processData() error {
 				str.st = empty
 			} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // the next item is trailers.
 				delete(l.allStreams, trailer.streamID)
-				if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
+				if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite, false); err != nil {
 					return err
 				}
 
@@ -1267,7 +1275,7 @@ func (l *loopyWriter) processData() error {
 			str.st = empty
 		} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // The next item is trailers.
 			delete(l.allStreams, trailer.streamID)
-			if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
+			if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite, false); err != nil {
 				return err
 			}
 		} else if int(l.oiws)-str.bytesOutStanding <= 0 { // Ran out of stream quota.
