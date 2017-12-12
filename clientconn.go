@@ -679,7 +679,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	cc.curAddresses = addrs
 
 	if cc.dopts.balancerName == "" && cc.dopts.balancerBuilder == nil {
-		// Only look at balancer types ans switch balancer if balancer dial
+		// Only look at balancer types and switch balancer if balancer dial
 		// option is not set.
 		var isGRPCLB bool
 		for _, a := range addrs {
