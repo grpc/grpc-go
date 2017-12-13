@@ -22,19 +22,7 @@ package io.grpc;
  * <p>A read only copy of stats from the transport tracer.
  */
 @Internal
-public final class InternalTransportStats {
-  public final long streamsStarted;
-  public final long lastStreamCreatedTimeNanos;
-  public final long streamsSucceeded;
-  public final long streamsFailed;
-  public final long messagesSent;
-  public final long messagesReceived;
-  public final long keepAlivesSent;
-  public final long lastMessageSentTimeNanos;
-  public final long lastMessageReceivedTimeNanos;
-  public final long localFlowControlWindow;
-  public final long remoteFlowControlWindow;
-
+public final class InternalTransportStats extends TransportStats {
   /**
    * Creates an instance.
    */
@@ -50,16 +38,17 @@ public final class InternalTransportStats {
       long lastMessageReceivedTimeNanos,
       long localFlowControlWindow,
       long remoteFlowControlWindow) {
-    this.streamsStarted = streamsStarted;
-    this.lastStreamCreatedTimeNanos = lastStreamCreatedTimeNanos;
-    this.streamsSucceeded = streamsSucceeded;
-    this.streamsFailed = streamsFailed;
-    this.messagesSent = messagesSent;
-    this.messagesReceived = messagesReceived;
-    this.keepAlivesSent = keepAlivesSent;
-    this.lastMessageSentTimeNanos = lastMessageSentTimeNanos;
-    this.lastMessageReceivedTimeNanos = lastMessageReceivedTimeNanos;
-    this.localFlowControlWindow = localFlowControlWindow;
-    this.remoteFlowControlWindow = remoteFlowControlWindow;
+    super(
+        streamsStarted,
+        lastStreamCreatedTimeNanos,
+        streamsSucceeded,
+        streamsFailed,
+        messagesSent,
+        messagesReceived,
+        keepAlivesSent,
+        lastMessageSentTimeNanos,
+        lastMessageReceivedTimeNanos,
+        localFlowControlWindow,
+        remoteFlowControlWindow);
   }
 }
