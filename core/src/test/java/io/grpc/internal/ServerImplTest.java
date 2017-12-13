@@ -42,6 +42,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.truth.Truth;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
@@ -77,7 +78,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1275,7 +1275,7 @@ public class ServerImplTest {
     }
 
     @Override
-    public Future<InternalTransportStats> getTransportStats() {
+    public ListenableFuture<InternalTransportStats> getStats() {
       SettableFuture<InternalTransportStats> ret = SettableFuture.create();
       ret.set(null);
       return ret;

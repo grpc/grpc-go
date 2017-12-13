@@ -19,6 +19,7 @@ package io.grpc.netty;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.InternalLogId;
 import io.grpc.InternalTransportStats;
@@ -33,8 +34,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -43,7 +42,6 @@ import java.util.logging.Logger;
  * The Netty-based server transport.
  */
 class NettyServerTransport implements ServerTransport {
-  @SuppressWarnings("unused") // log is for general messages, but nothing currently uses it
   private static final Logger log = Logger.getLogger(NettyServerTransport.class.getName());
   // connectionLog is for connection related messages only
   private static final Logger connectionLog = Logger.getLogger(
@@ -177,21 +175,22 @@ class NettyServerTransport implements ServerTransport {
   }
 
   @Override
-  public Future<InternalTransportStats> getTransportStats() {
+  public ListenableFuture<InternalTransportStats> getStats() {
+    final SettableFuture<InternalTransportStats> result = SettableFuture.create();
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      SettableFuture<InternalTransportStats> result = SettableFuture.create();
       result.set(transportTracer.getStats());
       return result;
     }
-    return channel.eventLoop().submit(
-        new Callable<InternalTransportStats>() {
+    channel.eventLoop().submit(
+        new Runnable() {
           @Override
-          public InternalTransportStats call() throws Exception {
-            return transportTracer.getStats();
+          public void run() {
+            result.set(transportTracer.getStats());
           }
         });
+    return result;
   }
 
   /**

@@ -23,6 +23,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.squareup.okhttp.Credentials;
 import com.squareup.okhttp.HttpUrl;
@@ -70,7 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -892,7 +892,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public Future<InternalTransportStats> getTransportStats() {
+  public ListenableFuture<InternalTransportStats> getStats() {
     synchronized (lock) {
       SettableFuture<InternalTransportStats> ret = SettableFuture.create();
       ret.set(transportTracer.getStats());

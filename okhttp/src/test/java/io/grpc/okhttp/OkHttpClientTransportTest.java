@@ -547,7 +547,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void transportTracer_windowSizeDefault() throws Exception {
     initTransport();
-    InternalTransportStats stats = clientTransport.getTransportStats().get();
+    InternalTransportStats stats = clientTransport.getStats().get();
     assertEquals(Utils.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
     // okhttp does not track local window sizes
     assertEquals(-1, stats.localFlowControlWindow);
@@ -556,13 +556,13 @@ public class OkHttpClientTransportTest {
   @Test
   public void transportTracer_windowSize_remote() throws Exception {
     initTransport();
-    InternalTransportStats before = clientTransport.getTransportStats().get();
+    InternalTransportStats before = clientTransport.getStats().get();
     assertEquals(Utils.DEFAULT_WINDOW_SIZE, before.remoteFlowControlWindow);
     // okhttp does not track local window sizes
     assertEquals(-1, before.localFlowControlWindow);
 
     frameHandler().windowUpdate(0, 1000);
-    InternalTransportStats after = clientTransport.getTransportStats().get();
+    InternalTransportStats after = clientTransport.getStats().get();
     assertEquals(Utils.DEFAULT_WINDOW_SIZE + 1000, after.remoteFlowControlWindow);
     // okhttp does not track local window sizes
     assertEquals(-1, after.localFlowControlWindow);
@@ -1278,11 +1278,11 @@ public class OkHttpClientTransportTest {
     initTransport();
     PingCallbackImpl callback1 = new PingCallbackImpl();
     clientTransport.ping(callback1, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
     // add'l ping will be added as listener to outstanding operation
     PingCallbackImpl callback2 = new PingCallbackImpl();
     clientTransport.ping(callback2, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
 
     ArgumentCaptor<Integer> captor1 = ArgumentCaptor.forClass(int.class);
     ArgumentCaptor<Integer> captor2 = ArgumentCaptor.forClass(int.class);
@@ -1315,7 +1315,7 @@ public class OkHttpClientTransportTest {
     // now that previous ping is done, next request returns a different future
     callback1 = new PingCallbackImpl();
     clientTransport.ping(callback1, MoreExecutors.directExecutor());
-    assertEquals(2, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(2, clientTransport.getStats().get().keepAlivesSent);
     assertEquals(0, callback1.invocationCount);
     shutdownAndVerify();
   }
@@ -1325,7 +1325,7 @@ public class OkHttpClientTransportTest {
     initTransport();
     PingCallbackImpl callback = new PingCallbackImpl();
     clientTransport.ping(callback, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
     assertEquals(0, callback.invocationCount);
 
     clientTransport.shutdown(SHUTDOWN_REASON);
@@ -1337,7 +1337,7 @@ public class OkHttpClientTransportTest {
     // now that handler is in terminal state, all future pings fail immediately
     callback = new PingCallbackImpl();
     clientTransport.ping(callback, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
     assertEquals(1, callback.invocationCount);
     assertTrue(callback.failureCause instanceof StatusException);
     assertSame(SHUTDOWN_REASON, ((StatusException) callback.failureCause).getStatus());
@@ -1349,7 +1349,7 @@ public class OkHttpClientTransportTest {
     initTransport();
     PingCallbackImpl callback = new PingCallbackImpl();
     clientTransport.ping(callback, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
     assertEquals(0, callback.invocationCount);
 
     clientTransport.onException(new IOException());
@@ -1362,7 +1362,7 @@ public class OkHttpClientTransportTest {
     // now that handler is in terminal state, all future pings fail immediately
     callback = new PingCallbackImpl();
     clientTransport.ping(callback, MoreExecutors.directExecutor());
-    assertEquals(1, clientTransport.getTransportStats().get().keepAlivesSent);
+    assertEquals(1, clientTransport.getStats().get().keepAlivesSent);
     assertEquals(1, callback.invocationCount);
     assertTrue(callback.failureCause instanceof StatusException);
     assertEquals(Status.Code.UNAVAILABLE,

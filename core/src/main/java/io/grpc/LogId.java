@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, gRPC Authors All rights reserved.
+ * Copyright 2017, gRPC Authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,45 @@
 
 package io.grpc;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * Do not use this. This is an internal accessor class.
+ * A loggable ID, unique for the duration of the program.
  */
-@Internal
-public final class InternalLogId extends LogId {
-  private InternalLogId(String tag, long id) {
-    super(tag, id);
-  }
+// not final so that InternalLogId can make this class visible outside of io.grpc
+class LogId {
+  private static final AtomicLong idAlloc = new AtomicLong();
 
   /**
-   * An accessor method for {@link LogId#allocate(String)}.
-   *
    * @param tag a loggable tag associated with this tag. The ID that is allocated is guaranteed
    *            to be unique and increasing, irrespective of the tag.
    */
-  public static InternalLogId allocate(String tag) {
-    return new InternalLogId(tag, LogId.getNextId());
+  public static LogId allocate(String tag) {
+    return new LogId(tag, getNextId());
+  }
+
+  static long getNextId() {
+    return idAlloc.incrementAndGet();
+  }
+
+  private final String tag;
+  private final long id;
+
+  protected LogId(String tag, long id) {
+    this.tag = tag;
+    this.id = id;
+  }
+
+  public long getId() {
+    return id;
+  }
+
+  public String getTag() {
+    return tag;
+  }
+
+  @Override
+  public String toString() {
+    return tag + "-" + id;
   }
 }

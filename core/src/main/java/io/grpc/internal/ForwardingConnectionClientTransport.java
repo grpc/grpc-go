@@ -16,7 +16,7 @@
 
 package io.grpc.internal;
 
-import com.google.common.util.concurrent.SettableFuture;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.InternalLogId;
@@ -25,7 +25,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 
 abstract class ForwardingConnectionClientTransport implements ConnectionClientTransport {
   @Override
@@ -70,10 +69,8 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   }
 
   @Override
-  public Future<InternalTransportStats> getTransportStats() {
-    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
-    ret.set(null);
-    return ret;
+  public ListenableFuture<InternalTransportStats> getStats() {
+    return delegate().getStats();
   }
 
   protected abstract ConnectionClientTransport delegate();

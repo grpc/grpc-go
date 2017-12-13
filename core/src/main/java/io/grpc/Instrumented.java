@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, gRPC Authors All rights reserved.
+ * Copyright 2017, gRPC Authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,12 @@
 
 package io.grpc;
 
+import com.google.common.util.concurrent.ListenableFuture;
+
 /**
- * Do not use this.
- *
- * <p>An object that has an ID that is unique within the JVM, primarily for debug logging.
+ * An interface for types that <b>may</b> support instrumentation. If the actual type does not
+ * support instrumentation, then the future will return a {@code null}.
  */
-@Internal
-public interface InternalWithLogId extends WithLogId {
-  @Override
-  InternalLogId getLogId();
+interface Instrumented<T> extends WithLogId {
+  ListenableFuture<T> getStats();
 }

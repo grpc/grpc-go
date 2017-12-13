@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Context;
@@ -34,7 +35,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -199,7 +199,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public Future<InternalTransportStats> getTransportStats() {
+  public ListenableFuture<InternalTransportStats> getStats() {
     SettableFuture<InternalTransportStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
