@@ -1107,7 +1107,13 @@ func (t *http2Server) itemHandler(i item) error {
 		}()
 		return nil
 	case *flushIO:
-		return t.framer.writer.Flush()
+		if err := t.framer.writer.Flush(); err != nil {
+			return err
+		}
+		if i.closeTr {
+			t.Close()
+		}
+		return nil
 	case *ping:
 		if !i.ack {
 			t.bdpEst.timesnap(i.data)
@@ -1155,7 +1161,7 @@ func (t *http2Server) closeStream(s *Stream) {
 		t.idle = time.Now()
 	}
 	if t.state == draining && len(t.activeStreams) == 0 {
-		defer t.Close()
+		defer t.controlBuf.put(&flushIO{closeTr: true})
 	}
 	t.mu.Unlock()
 	// In case stream sending and receiving are invoked in separate
