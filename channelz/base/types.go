@@ -68,6 +68,7 @@ type channel struct {
 	t           entryType
 	c           Channel
 	mu          sync.Mutex
+	closeCalled bool
 	nestedChans map[int64]string
 	subChans    map[int64]string
 	sockets     map[int64]string
@@ -156,6 +157,7 @@ type server struct {
 	name          string
 	s             Server
 	mu            sync.Mutex
+	closeCalled   bool
 	sockets       map[int64]string
 	listenSockets map[int64]string
 }

@@ -184,7 +184,7 @@ func RegisterSocket(s Socket, t SocketType) int64 {
 // RemoveEntry removes an entry with unique identification number id from db.
 // This is an EXPERIMENTAL API.
 func RemoveEntry(id int64) {
-	db.get().deleteEntry(id)
+	db.get().removeEntry(id)
 }
 
 // AddChild adds a child to its parent's descendant set with ref as its reference
@@ -221,7 +221,22 @@ func (c *channelMap) addServer(id int64, cn conn) {
 	c.mu.Unlock()
 }
 
-// removeChild must be called where channelMap is already held.
+func (c *channelMap) checkDelete(p conn, t entryType) {
+	switch t {
+	case topChannelT, subChannelT, nestedChannelT:
+		if p.(*channel).closeCalled && (p.(*channel).subChans)+len(p.(*channel).nestedChans)+len(p.(*channel).sockets) == 0 {
+			c.deleteEntry(p.(*channel).id)
+		}
+	case serverT:
+		if p.(*server).closeCalled && len(p.(*server).sockets)+len(p.(*server).listenSockets) == 0 {
+			c.deleteEntry(p.(*server).id)
+		}
+	default:
+		// code should not reach here
+	}
+}
+
+// removeChild must be called where lock on channelMap is already held.
 func (c *channelMap) removeChild(pid, cid int64) {
 	p, ok := c.m[pid]
 	if !ok {
@@ -244,6 +259,7 @@ func (c *channelMap) removeChild(pid, cid int64) {
 			delete(p.(*channel).sockets, cid)
 		default:
 			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
+			return
 		}
 	case serverT:
 		switch child.Type() {
@@ -253,15 +269,55 @@ func (c *channelMap) removeChild(pid, cid int64) {
 			delete(p.(*server).listenSockets, cid)
 		default:
 			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
+			return
 		}
 	case normalSocketT, listenSocketT:
 		grpclog.Error("socket cannot have child")
+		return
 	}
+	c.checkDelete(p, p.Type())
+}
+
+// readyDelete should be called inside c.mu lock.
+func (c *channelMap) readyDelete(id int64) bool {
+	if v, ok := c.m[id]; ok {
+		switch v.Type() {
+		case normalSocketT, listenSocketT:
+			return true
+		case topChannelT, subChannelT, nestedChannelT:
+			v.(*channel).Lock()
+			defer v.(*channel).Unlock()
+			if len(v.(*channel).subChans)+len(v.(*channel).nestedChans)+len(v.(*channel).sockets) > 0 {
+				v.(*channel).closeCalled = true
+				return false
+			}
+			return true
+		case serverT:
+			v.(*server).Lock()
+			defer v.(*server).Unlock()
+			// TODO: should we take listenSockets into accounts?
+			if len(v.(*server).sockets)+len(v.(*server).listenSockets) > 0 {
+				v.(*server).closeCalled = true
+				return false
+			}
+			return true
+		}
+	}
+	return true
+}
+
+func (c *channelMap) removeEntry(id int64) {
+	c.mu.Lock()
+	c.deleteEntry(id)
+	c.mu.Unlock()
 }
 
 //TODO: optimize channelMap access here
+// deleteEntry should be called inside c.mu lock.
 func (c *channelMap) deleteEntry(id int64) {
-	c.mu.Lock()
+	if !c.readyDelete(id) {
+		return
+	}
 	// Delete itself from topLevelChannels if it is there.
 	if _, ok := c.topLevelChannels[id]; ok {
 		delete(c.topLevelChannels, id)
@@ -287,7 +343,6 @@ func (c *channelMap) deleteEntry(id int64) {
 
 	// Delete itself from the map
 	delete(c.m, id)
-	c.mu.Unlock()
 }
 
 //TODO: optimize channelMap access here

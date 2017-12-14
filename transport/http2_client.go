@@ -100,6 +100,7 @@ type http2Client struct {
 	// connection was established.
 	onSuccess func()
 
+	id            int64          // channelz identification number
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
@@ -602,6 +603,9 @@ func (t *http2Client) Close() error {
 	t.cancel()
 	err := t.conn.Close()
 	t.mu.Lock()
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(t.id)
+	}
 	streams := t.activeStreams
 	t.activeStreams = nil
 	t.mu.Unlock()
@@ -1388,6 +1392,8 @@ func (t *http2Client) ChannelzMetrics() *channelz.SocketMetric {
 	return &channelz.SocketMetric{}
 }
 
-func (t *http2Client) IncrMsgSent()   {}
-func (t *http2Client) IncrMsgRecv()   {}
-func (t *http2Client) SetID(id int64) {}
+func (t *http2Client) IncrMsgSent() {}
+func (t *http2Client) IncrMsgRecv() {}
+func (t *http2Client) SetID(id int64) {
+	t.id = id
+}
