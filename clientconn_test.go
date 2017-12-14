@@ -169,11 +169,12 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 }
 
 func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
-	defer leakcheck.Check(t)
 	mctBkp := minConnectTimeout
+	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
 		minConnectTimeout = mctBkp
 	}()
+	defer leakcheck.Check(t)
 	minConnectTimeout = time.Millisecond * 500
 	server, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
