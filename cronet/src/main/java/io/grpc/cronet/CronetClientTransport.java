@@ -17,6 +17,7 @@
 package io.grpc.cronet;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
@@ -37,7 +38,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -95,7 +95,7 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
   }
 
   @Override
-  public Future<InternalTransportStats> getTransportStats() {
+  public ListenableFuture<InternalTransportStats> getStats() {
     SettableFuture<InternalTransportStats> f = SettableFuture.create();
     f.set(null);
     return f;

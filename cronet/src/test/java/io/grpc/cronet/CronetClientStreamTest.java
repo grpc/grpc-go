@@ -162,7 +162,7 @@ public final class CronetClientStreamTest {
       buffers[i] = allocator.allocate(requests[i].length());
       buffers[i].write(requests[i].getBytes(Charset.forName("UTF-8")), 0, requests[i].length());
       // The 3rd and 5th writeFrame calls have flush=true.
-      clientStream.abstractClientStreamSink().writeFrame(buffers[i], false, i == 2 || i == 4);
+      clientStream.abstractClientStreamSink().writeFrame(buffers[i], false, i == 2 || i == 4, 1);
     }
     // BidirectionalStream.write is not called because stream is not ready yet.
     verify(cronetStream, times(0)).write(isA(ByteBuffer.class), isA(Boolean.class));
@@ -187,7 +187,7 @@ public final class CronetClientStreamTest {
     verify(cronetStream, times(5)).write(isA(ByteBuffer.class), eq(false));
 
     // Send end of stream. write will be immediately called since stream is ready.
-    clientStream.abstractClientStreamSink().writeFrame(null, true, true);
+    clientStream.abstractClientStreamSink().writeFrame(null, true, true, 1);
     verify(cronetStream, times(1)).write(isA(ByteBuffer.class), eq(true));
     verify(cronetStream, times(3)).flush();
   }
@@ -286,7 +286,7 @@ public final class CronetClientStreamTest {
     String request = new String("request");
     WritableBuffer writableBuffer = allocator.allocate(request.length());
     writableBuffer.write(request.getBytes(Charset.forName("UTF-8")), 0, request.length());
-    clientStream.abstractClientStreamSink().writeFrame(writableBuffer, false, true);
+    clientStream.abstractClientStreamSink().writeFrame(writableBuffer, false, true, 1);
     ArgumentCaptor<ByteBuffer> bufferCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
     verify(cronetStream, times(1)).write(bufferCaptor.capture(), isA(Boolean.class));
     ByteBuffer buffer = bufferCaptor.getValue();
@@ -311,7 +311,7 @@ public final class CronetClientStreamTest {
 
     // Send endOfStream
     callback.onWriteCompleted(cronetStream, null, buffer, false);
-    clientStream.abstractClientStreamSink().writeFrame(null, true, true);
+    clientStream.abstractClientStreamSink().writeFrame(null, true, true, 1);
     verify(cronetStream, times(2)).write(isA(ByteBuffer.class), isA(Boolean.class));
     verify(cronetStream, times(2)).flush();
 
@@ -346,7 +346,7 @@ public final class CronetClientStreamTest {
 
     callback.onStreamReady(cronetStream);
     verify(cronetStream, times(0)).write(isA(ByteBuffer.class), isA(Boolean.class));
-    clientStream.abstractClientStreamSink().writeFrame(null, true, true);
+    clientStream.abstractClientStreamSink().writeFrame(null, true, true, 1);
     verify(cronetStream, times(1)).write(isA(ByteBuffer.class), isA(Boolean.class));
     verify(cronetStream, times(1)).flush();
 
