@@ -94,6 +94,7 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
+	id int64      // channelz unique identification number
 	mu sync.Mutex // guard the following
 
 	// drainChan is initialized when drain(...) is called the first time.
@@ -1149,6 +1150,9 @@ func (t *http2Server) Close() error {
 	t.mu.Unlock()
 	t.cancel()
 	err := t.conn.Close()
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(t.id)
+	}
 	// Cancel all active streams.
 	for _, s := range streams {
 		s.cancel()
@@ -1207,9 +1211,11 @@ func (t *http2Server) ChannelzMetrics() *channelz.SocketMetric {
 	return &channelz.SocketMetric{}
 }
 
-func (t *http2Server) IncrMsgSent()   {}
-func (t *http2Server) IncrMsgRecv()   {}
-func (t *http2Server) SetID(id int64) {}
+func (t *http2Server) IncrMsgSent() {}
+func (t *http2Server) IncrMsgRecv() {}
+func (t *http2Server) SetID(id int64) {
+	t.id = id
+}
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
