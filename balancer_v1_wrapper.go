@@ -173,10 +173,10 @@ func (bw *balancerWrapper) lbWatcher() {
 					sc.Connect()
 				}
 			} else {
-				oldSC.UpdateAddresses(newAddrs)
 				bw.mu.Lock()
 				bw.connSt[oldSC].addr = addrs[0]
 				bw.mu.Unlock()
+				oldSC.UpdateAddresses(newAddrs)
 			}
 		} else {
 			var (
