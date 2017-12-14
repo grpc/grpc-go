@@ -38,6 +38,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener.MessageProducer;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.testing.TestMethodDescriptors;
 import java.io.ByteArrayInputStream;
@@ -72,6 +73,7 @@ public final class CronetClientStreamTest {
   @Mock private ClientStreamListener clientListener;
   @Mock private ExperimentalBidirectionalStream.Builder builder;
   private final Object lock = new Object();
+  private final TransportTracer transportTracer = TransportTracer.getDefaultFactory().create();
   CronetClientStream clientStream;
 
   private MethodDescriptor.Marshaller<Void> marshaller = TestMethodDescriptors.voidMarshaller();
@@ -115,7 +117,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             method,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT);
+            CallOptions.DEFAULT,
+            transportTracer);
     callback.setStream(clientStream);
     when(factory.newBidirectionalStreamBuilder(
             any(String.class), any(BidirectionalStream.Callback.class), any(Executor.class)))
@@ -573,7 +576,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             method,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT.withOption(CronetCallOptions.CRONET_ANNOTATION_KEY, annotation));
+            CallOptions.DEFAULT.withOption(CronetCallOptions.CRONET_ANNOTATION_KEY, annotation),
+            transportTracer);
     callback.setStream(stream);
     when(factory.newBidirectionalStreamBuilder(
             any(String.class), any(BidirectionalStream.Callback.class), any(Executor.class)))
@@ -605,7 +609,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             method,
             StatsTraceContext.NOOP,
-            callOptions);
+            callOptions,
+            transportTracer);
     callback.setStream(stream);
     when(factory.newBidirectionalStreamBuilder(
             any(String.class), any(BidirectionalStream.Callback.class), any(Executor.class)))
@@ -642,7 +647,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             getMethod,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT);
+            CallOptions.DEFAULT,
+            transportTracer);
     callback.setStream(stream);
     ExperimentalBidirectionalStream.Builder getBuilder =
         mock(ExperimentalBidirectionalStream.Builder.class);
@@ -696,7 +702,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             idempotentMethod,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT);
+            CallOptions.DEFAULT,
+            transportTracer);
     callback.setStream(stream);
     ExperimentalBidirectionalStream.Builder builder =
         mock(ExperimentalBidirectionalStream.Builder.class);
@@ -725,7 +732,8 @@ public final class CronetClientStreamTest {
             true /* alwaysUsePut */,
             method,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT);
+            CallOptions.DEFAULT,
+            transportTracer);
     callback.setStream(stream);
     ExperimentalBidirectionalStream.Builder builder =
         mock(ExperimentalBidirectionalStream.Builder.class);
@@ -762,7 +770,8 @@ public final class CronetClientStreamTest {
             false /* alwaysUsePut */,
             method,
             StatsTraceContext.NOOP,
-            CallOptions.DEFAULT);
+            CallOptions.DEFAULT,
+            transportTracer);
     callback.setStream(stream);
     ExperimentalBidirectionalStream.Builder builder =
         mock(ExperimentalBidirectionalStream.Builder.class);

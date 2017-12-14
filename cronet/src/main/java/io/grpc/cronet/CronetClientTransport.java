@@ -31,6 +31,7 @@ import io.grpc.InternalTransportStats;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -56,6 +57,7 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
   private final Executor executor;
   private final int maxMessageSize;
   private final boolean alwaysUsePut;
+  private final TransportTracer transportTracer;
   // Indicates the transport is in go-away state: no new streams will be processed,
   // but existing streams may continue.
   @GuardedBy("lock")
@@ -80,7 +82,8 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
       @Nullable String userAgent,
       Executor executor,
       int maxMessageSize,
-      boolean alwaysUsePut) {
+      boolean alwaysUsePut,
+      TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.authority = authority;
     this.userAgent = GrpcUtil.getGrpcUserAgent("cronet", userAgent);
@@ -88,6 +91,7 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
     this.alwaysUsePut = alwaysUsePut;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.streamFactory = Preconditions.checkNotNull(streamFactory, "streamFactory");
+    this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
   }
 
   @Override
@@ -111,7 +115,7 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
     class StartCallback implements Runnable {
       final CronetClientStream clientStream = new CronetClientStream(
           url, userAgent, executor, headers, CronetClientTransport.this, this, lock, maxMessageSize,
-          alwaysUsePut, method, statsTraceCtx, callOptions);
+          alwaysUsePut, method, statsTraceCtx, callOptions, transportTracer);
 
       @Override
       public void run() {

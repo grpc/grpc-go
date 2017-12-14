@@ -31,6 +31,7 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.TransportTracer;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
@@ -130,7 +131,7 @@ public final class CronetChannelBuilder extends
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
     return new CronetTransportFactory(streamFactory, MoreExecutors.directExecutor(),
-        maxMessageSize, alwaysUsePut);
+        maxMessageSize, alwaysUsePut, transportTracerFactory.create());
   }
 
   @Override
@@ -147,16 +148,19 @@ public final class CronetChannelBuilder extends
     private final int maxMessageSize;
     private final boolean alwaysUsePut;
     private final StreamBuilderFactory streamFactory;
+    private final TransportTracer transportTracer;
 
     private CronetTransportFactory(
         StreamBuilderFactory streamFactory,
         Executor executor,
         int maxMessageSize,
-        boolean alwaysUsePut) {
+        boolean alwaysUsePut,
+        TransportTracer transportTracer) {
       this.maxMessageSize = maxMessageSize;
       this.alwaysUsePut = alwaysUsePut;
       this.streamFactory = streamFactory;
       this.executor = Preconditions.checkNotNull(executor, "executor");
+      this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
     }
 
     @Override
@@ -164,7 +168,7 @@ public final class CronetChannelBuilder extends
         @Nullable String userAgent, @Nullable ProxyParameters proxy) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       return new CronetClientTransport(streamFactory, inetSocketAddr, authority, userAgent,
-          executor, maxMessageSize, alwaysUsePut);
+          executor, maxMessageSize, alwaysUsePut, transportTracer);
     }
 
     @Override

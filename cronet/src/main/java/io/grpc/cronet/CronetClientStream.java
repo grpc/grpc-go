@@ -38,6 +38,7 @@ import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.ReadableBuffers;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportFrameUtil;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -90,8 +91,11 @@ class CronetClientStream extends AbstractClientStream {
       boolean alwaysUsePut,
       MethodDescriptor<?, ?> method,
       StatsTraceContext statsTraceCtx,
-      CallOptions callOptions) {
-    super(new CronetWritableBufferAllocator(), statsTraceCtx, null, headers, method.isSafe());
+      CallOptions callOptions,
+      TransportTracer transportTracer) {
+    super(
+        new CronetWritableBufferAllocator(), statsTraceCtx, transportTracer, headers,
+        method.isSafe());
     this.url = Preconditions.checkNotNull(url, "url");
     this.userAgent = Preconditions.checkNotNull(userAgent, "userAgent");
     this.executor = Preconditions.checkNotNull(executor, "executor");
@@ -103,7 +107,7 @@ class CronetClientStream extends AbstractClientStream {
     this.delayRequestHeader = (method.getType() == MethodDescriptor.MethodType.UNARY);
     this.annotation = callOptions.getOption(CronetCallOptions.CRONET_ANNOTATION_KEY);
     this.annotations = callOptions.getOption(CronetCallOptions.CRONET_ANNOTATIONS_KEY);
-    this.state = new TransportState(maxMessageSize, statsTraceCtx, lock);
+    this.state = new TransportState(maxMessageSize, statsTraceCtx, lock, transportTracer);
   }
 
   @Override
@@ -218,8 +222,10 @@ class CronetClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     private boolean readClosed;
 
-    public TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx, Object lock) {
-      super(maxMessageSize, statsTraceCtx, null);
+    public TransportState(
+        int maxMessageSize, StatsTraceContext statsTraceCtx, Object lock,
+        TransportTracer transportTracer) {
+      super(maxMessageSize, statsTraceCtx, transportTracer);
       this.lock = Preconditions.checkNotNull(lock, "lock");
     }
 

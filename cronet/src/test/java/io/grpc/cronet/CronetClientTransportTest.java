@@ -30,6 +30,7 @@ import io.grpc.Status;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.TransportTracer;
 import io.grpc.testing.TestMethodDescriptors;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
@@ -64,7 +65,8 @@ public final class CronetClientTransportTest {
             null,
             executor,
             5000,
-            false);
+            false,
+            TransportTracer.getDefaultFactory().create());
     Runnable callback = transport.start(clientTransportListener);
     assertTrue(callback != null);
     callback.run();
