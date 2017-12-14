@@ -990,6 +990,9 @@ func (cc *ClientConn) Close() error {
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(cc.id)
+	}
 	return nil
 }
 
@@ -1404,6 +1407,9 @@ func (ac *addrConn) tearDown(err error) {
 	if ac.ready != nil {
 		close(ac.ready)
 		ac.ready = nil
+	}
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(ac.id)
 	}
 	return
 }
