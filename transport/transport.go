@@ -248,11 +248,28 @@ type Stream struct {
 	unprocessed   bool // set if the server sends a refused stream or GOAWAY including this stream
 }
 
+func (s *Stream) waitOnHeader() error {
+	if s.headerChan == nil {
+		// On the server headerChan is always nil since a stream originates
+		// only after having received headers.
+		return nil
+	}
+	wc := s.waiters
+	select {
+	case <-wc.ctx.Done():
+		return ContextErr(wc.ctx.Err())
+	case <-wc.goAway:
+		return errStreamDrain
+	case <-s.headerChan:
+		return nil
+	}
+}
+
 // RecvCompress returns the compression algorithm applied to the inbound
 // message. It is empty string if there is no compression applied.
 func (s *Stream) RecvCompress() string {
-	if s.headerChan != nil {
-		<-s.headerChan
+	if err := s.waitOnHeader(); err != nil {
+		return ""
 	}
 	return s.recvCompress
 }
@@ -278,15 +295,7 @@ func (s *Stream) GoAway() <-chan struct{} {
 // is available. It blocks until i) the metadata is ready or ii) there is no
 // header metadata or iii) the stream is canceled/expired.
 func (s *Stream) Header() (metadata.MD, error) {
-	var err error
-	select {
-	case <-s.ctx.Done():
-		err = ContextErr(s.ctx.Err())
-	case <-s.goAway:
-		err = errStreamDrain
-	case <-s.headerChan:
-		return s.header.Copy(), nil
-	}
+	err := s.waitOnHeader()
 	// Even if the stream is closed, header is returned if available.
 	select {
 	case <-s.headerChan:
