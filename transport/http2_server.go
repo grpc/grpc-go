@@ -254,7 +254,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 
 	go func() {
 		loopyWriter(t.ctx, t.controlBuf, t.itemHandler)
-		t.Close()
+		t.conn.Close()
 	}()
 	go t.keepalive()
 	return t, nil
