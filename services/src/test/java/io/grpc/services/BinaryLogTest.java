@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc.services;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import io.grpc.internal.BinaryLog.FactoryImpl;
+import io.grpc.services.BinaryLog.FactoryImpl;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

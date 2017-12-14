@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc.services;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;

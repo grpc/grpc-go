@@ -83,7 +83,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private boolean fullStreamDecompression;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
   private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
-  private final BinaryLog binlog;
 
   ClientCallImpl(
       MethodDescriptor<ReqT, RespT> method, Executor executor, CallOptions callOptions,
@@ -105,7 +104,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     this.callOptions = callOptions;
     this.clientTransportProvider = clientTransportProvider;
     this.deadlineCancellationExecutor = deadlineCancellationExecutor;
-    this.binlog = BinaryLog.getLog(method.getFullMethodName());
   }
 
   private final class ContextCancellationListener implements CancellationListener {
