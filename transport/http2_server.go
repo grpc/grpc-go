@@ -1069,6 +1069,9 @@ func (t *http2Server) itemHandler(i item) error {
 		if !i.headsUp {
 			// Stop accepting more streams now.
 			t.state = draining
+			if len(t.activeStreams) == 0 {
+				i.closeConn = true
+			}
 			t.mu.Unlock()
 			if err := t.framer.fr.WriteGoAway(sid, i.code, i.debugData); err != nil {
 				return err
@@ -1076,8 +1079,7 @@ func (t *http2Server) itemHandler(i item) error {
 			if i.closeConn {
 				// Abruptly close the connection following the GoAway (via
 				// loopywriter).  But flush out what's inside the buffer first.
-				t.framer.writer.Flush()
-				return fmt.Errorf("transport: Connection closing")
+				t.controlBuf.put(&flushIO{closeTr: true})
 			}
 			return nil
 		}
@@ -1111,7 +1113,7 @@ func (t *http2Server) itemHandler(i item) error {
 			return err
 		}
 		if i.closeTr {
-			t.Close()
+			return ErrConnClosing
 		}
 		return nil
 	case *ping:
