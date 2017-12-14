@@ -250,14 +250,12 @@ type Stream struct {
 
 func (s *Stream) waitOnHeader() error {
 	if s.headerChan == nil {
-		// On the server headerChan is always nil since is a stream originates
+		// On the server headerChan is always nil since a stream originates
 		// only after having received headers.
 		return nil
 	}
 	wc := s.waiters
 	select {
-	case <-wc.tctx.Done():
-		return ErrConnClosing
 	case <-wc.ctx.Done():
 		return ContextErr(wc.ctx.Err())
 	case <-wc.goAway:
