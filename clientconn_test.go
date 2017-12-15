@@ -248,6 +248,21 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
 	<-done
+	// TODO: The code from BEGIN to END should be delete once issue
+	// https://github.com/grpc/grpc-go/issues/1750 is fixed.
+	// BEGIN
+	// Set underlying addrConns state to Shutdown so that no reconnect
+	// attempts take place and thereby resetting minConnectTimeout is
+	// race free.
+	client.mu.Lock()
+	addrConns := client.conns
+	client.mu.Unlock()
+	for ac := range addrConns {
+		ac.mu.Lock()
+		ac.state = connectivity.Shutdown
+		ac.mu.Unlock()
+	}
+	// END
 	client.Close()
 	close(clientDone)
 }
