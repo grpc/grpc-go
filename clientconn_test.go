@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -243,13 +244,28 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 		<-clientDone
 
 	}()
-	client, err := Dial(server.Addr().String(), WithInsecure())
+	//var wg sync.WaitGroup
+	//wg.Add(2)
+	client, err := Dial(server.Addr().String(), WithInsecure(), WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		//wg.Done()
+		fmt.Println("Dial called")
+		return net.DialTimeout("tcp", addr, timeout)
+	}))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
 	<-done
+	client.mu.Lock()
+	addrConns := client.conns
+	client.mu.Unlock()
+	for ac := range addrConns {
+		ac.mu.Lock()
+		ac.state = connectivity.Shutdown
+		ac.mu.Unlock()
+	}
 	client.Close()
 	close(clientDone)
+	//wg.Wait()
 }
 
 func TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
