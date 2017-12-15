@@ -391,7 +391,7 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	// Balancer shoult NOT switch to round_robin because resolved list contains
+	// Balancer should NOT switch to round_robin because resolved list contains
 	// grpclb.
 	if isRoundRobin {
 		t.Fatalf("within 200 ms, cc.balancer switched to round_robin, want grpclb")
