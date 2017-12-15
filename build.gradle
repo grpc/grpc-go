@@ -317,8 +317,12 @@ subprojects {
             authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
           }
         }
-        repository(url: stagingUrl, configureAuth)
-        snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
+        if (rootProject.hasProperty('repositoryDir')) {
+          repository(url: new File(rootProject.repositoryDir).toURI())
+        } else {
+          repository(url: stagingUrl, configureAuth)
+          snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
+        }
     }
     uploadArchives.onlyIf { !name.contains("grpc-gae-interop-testing") }
 
