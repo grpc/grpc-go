@@ -1332,6 +1332,10 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
+	if ac.state == connectivity.Shutdown {
+		return
+	}
+	ac.state = connectivity.Shutdown
 	ac.curAddr = resolver.Address{}
 	if err == errConnDrain && ac.transport != nil {
 		// GracefulClose(...) may be executed multiple times when
@@ -1340,10 +1344,6 @@ func (ac *addrConn) tearDown(err error) {
 		// address removal and GoAway.
 		ac.transport.GracefulClose()
 	}
-	if ac.state == connectivity.Shutdown {
-		return
-	}
-	ac.state = connectivity.Shutdown
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.events != nil {
