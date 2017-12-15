@@ -60,6 +60,6 @@ protobuf {
 
 idea {
     module {
-        sourceDirs += file("${projectDir}/build/generated/source/proto/test/javalite/")
+        testSourceDirs += file("${projectDir}/build/generated/source/proto/test/javalite/")
     }
 }
