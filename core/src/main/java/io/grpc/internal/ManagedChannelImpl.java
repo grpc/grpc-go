@@ -26,6 +26,8 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -38,8 +40,8 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalChannelStats;
 import io.grpc.InternalLogId;
-import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -76,7 +78,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl extends ManagedChannel implements InternalWithLogId {
+public final class ManagedChannelImpl extends ManagedChannel {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -188,8 +190,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
 
   private final ManagedChannelReference phantom;
 
-  private final ChannelStats.Factory channelStatsFactory; // to create new stats for each oobchannel
-  final ChannelStats channelStats;
+  private final ChannelTracer.Factory channelTracerFactory; // new tracer for each oobchannel
+  private final ChannelTracer channelTracer;
 
   // Called from channelExecutor
   private final ManagedClientTransport.Listener delayedTransportListener =
@@ -259,6 +261,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
           rescheduleIdleTimer();
         }
       };
+
+  @Override
+  public ListenableFuture<InternalChannelStats> getStats() {
+    SettableFuture<InternalChannelStats> ret = SettableFuture.create();
+    ret.set(channelTracer.getStats());
+    return ret;
+  }
 
   // Run from channelExecutor
   private class IdleModeTimer implements Runnable {
@@ -434,7 +443,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
       Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors,
       ProxyDetector proxyDetector,
-      ChannelStats.Factory channelStatsFactory) {
+      ChannelTracer.Factory channelTracerFactory) {
     this.target = checkNotNull(builder.target, "target");
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
@@ -467,8 +476,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
     this.proxyDetector = proxyDetector;
 
     phantom = new ManagedChannelReference(this);
-    this.channelStatsFactory = channelStatsFactory;
-    channelStats = channelStatsFactory.create();
+    this.channelTracerFactory = channelTracerFactory;
+    channelTracer = channelTracerFactory.create();
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
 
@@ -620,7 +629,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
               callOptions,
               transportProvider,
               terminated ? null : transportFactory.getScheduledExecutorService(),
-              channelStats)
+          channelTracer)
           .setFullStreamDecompression(fullStreamDecompression)
           .setDecompressorRegistry(decompressorRegistry)
           .setCompressorRegistry(compressorRegistry);
@@ -817,7 +826,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Internal
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, channelStatsFactory.create());
+          channelExecutor, channelTracerFactory.create());
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,

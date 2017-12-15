@@ -23,7 +23,8 @@ import javax.annotation.concurrent.ThreadSafe;
  * A {@link Channel} that provides lifecycle management.
  */
 @ThreadSafe
-public abstract class ManagedChannel extends Channel {
+public abstract class ManagedChannel
+    extends Channel implements InternalInstrumented<InternalChannelStats> {
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
    * cancelled.

@@ -60,6 +60,8 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalChannelStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
@@ -138,15 +140,15 @@ public class ManagedChannelImplTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private final FakeClock oobExecutor = new FakeClock();
-  private final ChannelStats.Factory channelStatsFactory = new ChannelStats.Factory() {
+  private final ChannelTracer.Factory channelStatsFactory = new ChannelTracer.Factory() {
     @Override
-    public ChannelStats create() {
-      return new ChannelStats(new ChannelStats.TimeProvider() {
-          @Override
-          public long currentTimeMillis() {
-            return executor.currentTimeMillis();
-          }
-        });
+    public ChannelTracer create() {
+      return new ChannelTracer(new ChannelTracer.TimeProvider() {
+        @Override
+        public long currentTimeMillis() {
+          return executor.currentTimeMillis();
+        }
+      });
     }
   };
 
@@ -1662,10 +1664,10 @@ public class ManagedChannelImplTest {
   public void channelStat_callStarted() throws Exception {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
-    assertEquals(0, channel.channelStats.getCallsStarted());
+    assertEquals(0, getStats(channel).callsStarted);
     call.start(mockCallListener, new Metadata());
-    assertEquals(1, channel.channelStats.getCallsStarted());
-    assertEquals(executor.currentTimeMillis(), channel.channelStats.getLastCallStartedMillis());
+    assertEquals(1, getStats(channel).callsStarted);
+    assertEquals(executor.currentTimeMillis(), getStats(channel).lastCallStartedMillis);
   }
 
   @Test
@@ -1701,12 +1703,12 @@ public class ManagedChannelImplTest {
     // the actual test
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     call.halfClose();
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
     streamListener.closed(Status.OK, new Metadata());
     executor.runDueTasks();
-    assertEquals(1, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(1, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
   }
 
   @Test
@@ -1716,12 +1718,12 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, new Metadata());
     call.cancel("msg", null);
 
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
     executor.runDueTasks();
     verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(1, channel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(1, getStats(channel).callsFailed);
   }
 
   @Test
@@ -1730,12 +1732,12 @@ public class ManagedChannelImplTest {
     OobChannel oob1 = (OobChannel) helper.createOobChannel(addressGroup, "oob1authority");
     ClientCall<String, Integer> call = oob1.newCall(method, CallOptions.DEFAULT);
 
-    assertEquals(0, channel.channelStats.getCallsStarted());
+    assertEquals(0, getStats(channel).callsStarted);
     call.start(mockCallListener, new Metadata());
     // only oob channel stats updated
-    assertEquals(1, oob1.channelStats.getCallsStarted());
-    assertEquals(0, channel.channelStats.getCallsStarted());
-    assertEquals(executor.currentTimeMillis(), oob1.channelStats.getLastCallStartedMillis());
+    assertEquals(1, getStats(oob1).callsStarted);
+    assertEquals(0, getStats(channel).callsStarted);
+    assertEquals(executor.currentTimeMillis(), getStats(oob1).lastCallStartedMillis);
   }
 
   @Test
@@ -1765,15 +1767,15 @@ public class ManagedChannelImplTest {
     // the actual test
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     call.halfClose();
-    assertEquals(0, oobChannel.channelStats.getCallsSucceeded());
-    assertEquals(0, oobChannel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(oobChannel).callsSucceeded);
+    assertEquals(0, getStats(oobChannel).callsFailed);
     streamListener.closed(Status.OK, new Metadata());
     callExecutor.runDueTasks();
     // only oob channel stats updated
-    assertEquals(1, oobChannel.channelStats.getCallsSucceeded());
-    assertEquals(0, oobChannel.channelStats.getCallsFailed());
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(1, getStats(oobChannel).callsSucceeded);
+    assertEquals(0, getStats(oobChannel).callsFailed);
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
   }
 
   @Test
@@ -1784,15 +1786,15 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, new Metadata());
     call.cancel("msg", null);
 
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
     oobExecutor.runDueTasks();
     // only oob channel stats updated
     verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
-    assertEquals(0, oob1.channelStats.getCallsSucceeded());
-    assertEquals(1, oob1.channelStats.getCallsFailed());
-    assertEquals(0, channel.channelStats.getCallsSucceeded());
-    assertEquals(0, channel.channelStats.getCallsFailed());
+    assertEquals(0, getStats(oob1).callsSucceeded);
+    assertEquals(1, getStats(oob1).callsFailed);
+    assertEquals(0, getStats(channel).callsSucceeded);
+    assertEquals(0, getStats(channel).callsFailed);
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
@@ -1906,5 +1908,10 @@ public class ManagedChannelImplTest {
     public String getDefaultScheme() {
       return "fake";
     }
+  }
+
+  private static InternalChannelStats getStats(
+      InternalInstrumented<InternalChannelStats> instrumented) throws Exception {
+    return instrumented.getStats().get();
   }
 }

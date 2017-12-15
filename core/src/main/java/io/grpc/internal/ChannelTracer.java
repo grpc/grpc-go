@@ -17,23 +17,19 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.InternalChannelStats;
 
 /**
  * A collection of channel level stats for channelz.
  */
-final class ChannelStats {
+final class ChannelTracer {
   private final TimeProvider timeProvider;
   private final LongCounter callsStarted = LongCounterFactory.create();
   private final LongCounter callsSucceeded = LongCounterFactory.create();
   private final LongCounter callsFailed = LongCounterFactory.create();
   private volatile long lastCallStartedMillis;
 
-  private ChannelStats() {
-    timeProvider = SYSTEM_TIME_PROVIDER;
-  }
-
-  @VisibleForTesting
-  ChannelStats(TimeProvider timeProvider) {
+  ChannelTracer(TimeProvider timeProvider) {
     this.timeProvider = timeProvider;
   }
 
@@ -50,20 +46,9 @@ final class ChannelStats {
     }
   }
 
-  long getCallsStarted() {
-    return callsStarted.value();
-  }
-
-  long getCallsSucceeded() {
-    return callsSucceeded.value();
-  }
-
-  long getCallsFailed() {
-    return callsFailed.value();
-  }
-
-  long getLastCallStartedMillis() {
-    return lastCallStartedMillis;
+  public InternalChannelStats getStats() {
+    return new InternalChannelStats(
+        callsStarted.value(), callsSucceeded.value(), callsFailed.value(), lastCallStartedMillis);
   }
 
   @VisibleForTesting
@@ -72,24 +57,25 @@ final class ChannelStats {
     long currentTimeMillis();
   }
 
-  private static final TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
+  public interface Factory {
+    ChannelTracer create();
+  }
+
+  static final TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
     @Override
     public long currentTimeMillis() {
       return System.currentTimeMillis();
     }
   };
-  private static final Factory DEFAULT_FACTORY = new Factory() {
+
+  static final Factory DEFAULT_FACTORY = new Factory() {
     @Override
-    public ChannelStats create() {
-      return new ChannelStats(SYSTEM_TIME_PROVIDER);
+    public ChannelTracer create() {
+      return new ChannelTracer(SYSTEM_TIME_PROVIDER);
     }
   };
 
   public static Factory getDefaultFactory() {
     return DEFAULT_FACTORY;
-  }
-
-  public interface Factory {
-    ChannelStats create();
   }
 }

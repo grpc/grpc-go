@@ -19,12 +19,15 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalChannelStats;
 import io.grpc.InternalLogId;
 import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer.Subchannel;
@@ -65,7 +68,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
   private final ScheduledExecutorService deadlineCancellationExecutor;
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
-  final ChannelStats channelStats;
+  private final ChannelTracer channelTracer;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -86,7 +89,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
       ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
-      ChannelStats channelStats) {
+      ChannelTracer channelTracer) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -114,7 +117,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
           // Don't care
         }
       });
-    this.channelStats = channelStats;
+    this.channelTracer = channelTracer;
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -168,7 +171,7 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
         callOptions.getExecutor() == null ? executor : callOptions.getExecutor(),
-        callOptions, transportProvider, deadlineCancellationExecutor, channelStats);
+        callOptions, transportProvider, deadlineCancellationExecutor, channelTracer);
   }
 
   @Override
@@ -242,5 +245,12 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
   @VisibleForTesting
   Subchannel getSubchannel() {
     return subchannelImpl;
+  }
+
+  @Override
+  public ListenableFuture<InternalChannelStats> getStats() {
+    SettableFuture<InternalChannelStats> ret = SettableFuture.create();
+    ret.set(channelTracer.getStats());
+    return ret;
   }
 }
