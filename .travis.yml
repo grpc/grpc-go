@@ -19,5 +19,6 @@ before_install:
 script:
   - if [[ -n "$RUN386" ]]; then export GOARCH=386; fi
   - if [[ "$TRAVIS_GO_VERSION" = 1.9* && "$GOARCH" != "386" ]]; then ./vet.sh || exit 1; fi
-  - make test || exit 1
+  - make deps
+  - for i in {1..100}; do go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc -run TestCloseConnectionWhenServerPrefaceNotReceived || exit 1; done
   - if [[ "$GOARCH" != "386" ]]; then make testrace; fi
