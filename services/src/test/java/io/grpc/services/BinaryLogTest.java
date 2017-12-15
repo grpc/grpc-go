@@ -27,7 +27,6 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link BinaryLog}. */
 @RunWith(JUnit4.class)
 public final class BinaryLogTest {
-  private static final BinaryLog NONE = new Builder().build();
   private static final BinaryLog HEADER_FULL = new Builder().header(Integer.MAX_VALUE).build();
   private static final BinaryLog HEADER_256 = new Builder().header(256).build();
   private static final BinaryLog MSG_FULL = new Builder().msg(Integer.MAX_VALUE).build();
@@ -73,7 +72,7 @@ public final class BinaryLogTest {
 
   @Test
   public void configBinLog_method_absent() throws Exception {
-    assertEquals(NONE, new FactoryImpl("p.s/m").getLog("p.s/absent"));
+    assertNull(new FactoryImpl("p.s/m").getLog("p.s/absent"));
   }
 
   @Test
@@ -95,7 +94,7 @@ public final class BinaryLogTest {
 
   @Test
   public void configBinLog_service_absent() throws Exception {
-    assertEquals(NONE, new FactoryImpl("p.s/*").getLog("p.other/m"));
+    assertNull(new FactoryImpl("p.s/*").getLog("p.other/m"));
   }
 
   @Test
@@ -157,7 +156,7 @@ public final class BinaryLogTest {
         "package.both256/*{h:256;m:256},"
         + "package.service1/both128{h:128;m:128},"
         + "package.service2/method_messageOnly{m}");
-    assertEquals(NONE, factory.getLog("otherpackage.service/method"));
+    assertNull(factory.getLog("otherpackage.service/method"));
 
     assertEquals(BOTH_256, factory.getLog("package.both256/method1"));
     assertEquals(BOTH_256, factory.getLog("package.both256/method2"));
@@ -166,11 +165,11 @@ public final class BinaryLogTest {
     assertEquals(
         new Builder().header(128).msg(128).build(), factory.getLog("package.service1/both128"));
     // no global config in effect
-    assertEquals(NONE, factory.getLog("package.service1/absent"));
+    assertNull(factory.getLog("package.service1/absent"));
 
     assertEquals(MSG_FULL, factory.getLog("package.service2/method_messageOnly"));
     // no global config in effect
-    assertEquals(NONE, factory.getLog("package.service2/absent"));
+    assertNull(factory.getLog("package.service2/absent"));
   }
 
   @Test

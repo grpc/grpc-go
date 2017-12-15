@@ -34,8 +34,6 @@ import javax.annotation.Nullable;
  */
 final class BinaryLog {
   private static final Logger logger = Logger.getLogger(BinaryLog.class.getName());
-  private static final BinaryLog NOOP_LOG =
-      new BinaryLog(/*maxHeaderBytes=*/ 0, /*maxMessageBytes=*/ 0);
   private final int maxHeaderBytes;
   private final int maxMessageBytes;
 
@@ -68,15 +66,10 @@ final class BinaryLog {
   }
 
   private static final Factory DEFAULT_FACTORY;
-  private static final Factory NOOP_FACTORY = new Factory() {
-    @Override
-    public BinaryLog getLog(String fullMethodName) {
-      return NOOP_LOG;
-    }
-  };
+  private static final Factory NULL_FACTORY = new NullFactory();
 
   static {
-    Factory defaultFactory = NOOP_FACTORY;
+    Factory defaultFactory = NULL_FACTORY;
     try {
       String configStr = System.getenv("GRPC_BINARY_LOG_CONFIG");
       if (configStr != null && configStr.length() > 0) {
@@ -84,7 +77,7 @@ final class BinaryLog {
       }
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Failed to initialize binary log. Disabling binary log.", t);
-      defaultFactory = NOOP_FACTORY;
+      defaultFactory = NULL_FACTORY;
     }
     DEFAULT_FACTORY = defaultFactory;
   }
@@ -98,6 +91,7 @@ final class BinaryLog {
   }
 
   interface Factory {
+    @Nullable
     BinaryLog getLog(String fullMethodName);
   }
 
@@ -167,7 +161,7 @@ final class BinaryLog {
           logger.info(String.format("Method binlog: method=%s log=%s", methodOrSvc, binLog));
         }
       }
-      this.globalLog = globalLog == null ? NOOP_LOG : globalLog;
+      this.globalLog = globalLog;
       this.perServiceLogs = Collections.unmodifiableMap(perServiceLogs);
       this.perMethodLogs = Collections.unmodifiableMap(perMethodLogs);
     }
@@ -241,6 +235,13 @@ final class BinaryLog {
      */
     static boolean isServiceGlob(String input) {
       return input.endsWith("/*");
+    }
+  }
+
+  private static final class NullFactory implements Factory {
+    @Override
+    public BinaryLog getLog(String fullMethodName) {
+      return null;
     }
   }
 }
