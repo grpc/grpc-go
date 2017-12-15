@@ -62,7 +62,7 @@ type lbManualResolver struct {
 	ccb balancer.ClientConn
 }
 
-func (r *lbManualResolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+func (r *lbManualResolver) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOption) (resolver.Resolver, error) {
 	r.ccr = cc
 	return r, nil
 }
