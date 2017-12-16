@@ -689,7 +689,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                50 * time.Millisecond,
-			Timeout:             50 * time.Millisecond,
+			Timeout:             1 * time.Second,
 			PermitWithoutStream: true,
 		},
 	}
@@ -697,7 +697,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	defer server.stop()
 	defer client.Close()
 
-	timeout := time.NewTimer(2 * time.Second)
+	timeout := time.NewTimer(10 * time.Second)
 	select {
 	case <-client.GoAway():
 		if !timeout.Stop() {
@@ -724,7 +724,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    50 * time.Millisecond,
-			Timeout: 50 * time.Millisecond,
+			Timeout: 1 * time.Second,
 		},
 	}
 	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
@@ -734,7 +734,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
 		t.Fatalf("Client failed to create stream.")
 	}
-	timeout := time.NewTimer(2 * time.Second)
+	timeout := time.NewTimer(10 * time.Second)
 	select {
 	case <-client.GoAway():
 		if !timeout.Stop() {
@@ -762,7 +762,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                101 * time.Millisecond,
-			Timeout:             50 * time.Millisecond,
+			Timeout:             1 * time.Second,
 			PermitWithoutStream: true,
 		},
 	}
@@ -771,7 +771,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	defer client.Close()
 
 	// Give keepalive enough time.
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	// Assert that connection is healthy.
 	ct := client.(*http2Client)
 	ct.mu.Lock()
@@ -790,7 +790,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    101 * time.Millisecond,
-			Timeout: 50 * time.Millisecond,
+			Timeout: 1 * time.Second,
 		},
 	}
 	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
@@ -802,7 +802,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	}
 
 	// Give keepalive enough time.
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	// Assert that connection is healthy.
 	ct := client.(*http2Client)
 	ct.mu.Lock()
@@ -1364,7 +1364,15 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
-	server, ct := setUp(t, 0, math.MaxUint32, suspended)
+	serverConfig := &ServerConfig{
+		InitialWindowSize:     defaultWindowSize,
+		InitialConnWindowSize: defaultWindowSize,
+	}
+	connectOptions := ConnectOptions{
+		InitialWindowSize:     defaultWindowSize,
+		InitialConnWindowSize: defaultWindowSize,
+	}
+	server, ct := setUpWithOptions(t, 0, serverConfig, suspended, connectOptions)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo",
