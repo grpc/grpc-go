@@ -121,7 +121,7 @@ type internal interface {
 	add(id int64, cn conn)
 	addTopChannel(id int64, cn conn)
 	addServer(id int64, cn conn)
-	deleteEntry(id int64)
+	removeEntry(id int64)
 	addChild(pid, cid int64, ref string)
 }
 
@@ -221,15 +221,15 @@ func (c *channelMap) addServer(id int64, cn conn) {
 	c.mu.Unlock()
 }
 
-func (c *channelMap) checkDelete(p conn, t entryType) {
+func (c *channelMap) checkDelete(p conn, pid int64, t entryType) {
 	switch t {
 	case topChannelT, subChannelT, nestedChannelT:
-		if p.(*channel).closeCalled && (p.(*channel).subChans)+len(p.(*channel).nestedChans)+len(p.(*channel).sockets) == 0 {
-			c.deleteEntry(p.(*channel).id)
+		if p.(*channel).closeCalled && len(p.(*channel).subChans)+len(p.(*channel).nestedChans)+len(p.(*channel).sockets) == 0 {
+			c.deleteEntry(pid)
 		}
 	case serverT:
 		if p.(*server).closeCalled && len(p.(*server).sockets)+len(p.(*server).listenSockets) == 0 {
-			c.deleteEntry(p.(*server).id)
+			c.deleteEntry(pid)
 		}
 	default:
 		// code should not reach here
@@ -275,7 +275,7 @@ func (c *channelMap) removeChild(pid, cid int64) {
 		grpclog.Error("socket cannot have child")
 		return
 	}
-	c.checkDelete(p, p.Type())
+	c.checkDelete(p, pid, p.Type())
 }
 
 // readyDelete should be called inside c.mu lock.
