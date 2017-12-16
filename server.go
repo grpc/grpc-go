@@ -468,7 +468,7 @@ func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credenti
 }
 
 type listenSocket struct {
-	s  net.Listener
+	net.Listener
 	id int64
 }
 
@@ -506,20 +506,20 @@ func (s *Server) Serve(lis net.Listener) error {
 		<-s.done
 	}()
 
-	s.lis[lis] = true
+	ls := &listenSocket{Listener: lis}
+	s.lis[ls] = true
 	s.mu.Unlock()
 
 	if channelz.IsOn() {
-		ls := &listenSocket{s: lis}
 		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
 		channelz.AddChild(s.id, ls.id, "<nil>")
 	}
 
 	defer func() {
 		s.mu.Lock()
-		if s.lis != nil && s.lis[lis] {
-			lis.Close()
-			delete(s.lis, lis)
+		if s.lis != nil && s.lis[ls] {
+			ls.Close()
+			delete(s.lis, ls)
 		}
 		s.mu.Unlock()
 	}()
@@ -1231,6 +1231,9 @@ func (s *Server) Stop() {
 	}()
 
 	s.mu.Lock()
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(s.id)
+	}
 	listeners := s.lis
 	s.lis = nil
 	st := s.conns
@@ -1272,6 +1275,10 @@ func (s *Server) GracefulStop() {
 	if s.conns == nil {
 		s.mu.Unlock()
 		return
+	}
+
+	if channelz.ChannelzOn {
+		channelz.RemoveEntry(s.id)
 	}
 	for lis := range s.lis {
 		lis.Close()
