@@ -507,6 +507,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	}()
 
 	s.lis[lis] = true
+	s.mu.Unlock()
 
 	if channelz.ChannelzOn {
 		ls := &listenSocket{s: lis}
@@ -514,7 +515,6 @@ func (s *Server) Serve(lis net.Listener) error {
 		channelz.AddChild(s.id, ls.id, "<nil>")
 	}
 
-	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		if s.lis != nil && s.lis[lis] {
