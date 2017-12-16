@@ -510,13 +510,6 @@ func (s *Server) Serve(lis net.Listener) error {
 	}()
 
 	s.lis[lis] = true
-
-	if channelz.ChannelzOn {
-		ls := &listenSocket{s: lis}
-		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
-		channelz.AddChild(s.id, ls.id, "<nil>")
-	}
-
 	s.mu.Unlock()
 
 	if channelz.IsOn() {

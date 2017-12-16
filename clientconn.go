@@ -806,10 +806,6 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	cc.conns[ac] = struct{}{}
-	if channelz.ChannelzOn {
-		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
-		channelz.AddChild(cc.id, ac.id, "<nil>")
-	}
 	cc.mu.Unlock()
 	if channelz.IsOn() {
 		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
