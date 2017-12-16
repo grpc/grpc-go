@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer"
 	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -112,7 +111,6 @@ func TestNestedChannelRegistration(t *testing.T) {
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
 	te := newTest(t, e)
-	balancer.Register(grpc.NewLBBuilder())
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
