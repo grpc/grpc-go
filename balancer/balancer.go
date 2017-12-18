@@ -109,6 +109,9 @@ type ClientConn interface {
 	// on the new picker to pick new SubConn.
 	UpdateBalancerState(s connectivity.State, p Picker)
 
+	// ResolveNow is called by balancer to notify gRPC to do a name resolving.
+	ResolveNow(resolver.ResolveNowOption)
+
 	// Target returns the dial target for this ClientConn.
 	Target() string
 }
