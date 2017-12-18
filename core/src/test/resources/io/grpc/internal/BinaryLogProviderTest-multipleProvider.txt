@@ -1,0 +1,3 @@
+io.grpc.internal.BinaryLogProviderTest$Provider5
+io.grpc.internal.BinaryLogProviderTest$Provider7
+io.grpc.internal.BinaryLogProviderTest$Provider0
