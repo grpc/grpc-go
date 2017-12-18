@@ -33,6 +33,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -55,8 +56,10 @@ var (
 )
 
 type routeGuideServer struct {
-	savedFeatures []*pb.Feature
-	routeNotes    map[string][]*pb.RouteNote
+	savedFeatures []*pb.Feature // read-only after initialized
+
+	mu         sync.Mutex // protects routeNotes
+	routeNotes map[string][]*pb.RouteNote
 }
 
 // GetFeature returns the feature at the given point.
@@ -130,12 +133,17 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 			return err
 		}
 		key := serialize(in.Location)
-		if _, present := s.routeNotes[key]; !present {
-			s.routeNotes[key] = []*pb.RouteNote{in}
-		} else {
-			s.routeNotes[key] = append(s.routeNotes[key], in)
-		}
-		for _, note := range s.routeNotes[key] {
+
+		s.mu.Lock()
+		s.routeNotes[key] = append(s.routeNotes[key], in)
+		// Note: this copy prevents blocking other clients while serving this one.
+		// We don't need to do a deep copy, because elements in the slice are
+		// insert-only and never modified.
+		rn := make([]*pb.RouteNote, len(s.routeNotes[key]))
+		copy(rn, s.routeNotes[key])
+		s.mu.Unlock()
+
+		for _, note := range rn {
 			if err := stream.Send(note); err != nil {
 				return err
 			}
@@ -201,9 +209,8 @@ func serialize(point *pb.Point) string {
 }
 
 func newServer() *routeGuideServer {
-	s := new(routeGuideServer)
+	s := &routeGuideServer{routeNotes: make(map[string][]*pb.RouteNote)}
 	s.loadFeatures(*jsonDBFile)
-	s.routeNotes = make(map[string][]*pb.RouteNote)
 	return s
 }
 
