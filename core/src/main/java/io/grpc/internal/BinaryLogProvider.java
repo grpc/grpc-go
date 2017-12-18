@@ -18,7 +18,6 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ClientInterceptor;
-import io.grpc.ManagedChannelProvider;
 import io.grpc.ServerInterceptor;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -148,7 +147,7 @@ public abstract class BinaryLogProvider {
     try {
       // Specify a class loader instead of null because we may be running under Robolectric
       Class.forName("android.app.Application", /*initialize=*/ false,
-          ManagedChannelProvider.class.getClassLoader());
+          BinaryLogProvider.class.getClassLoader());
       return true;
     } catch (Exception e) {
       // If Application isn't loaded, it might as well not be Android.
