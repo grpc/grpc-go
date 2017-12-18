@@ -241,7 +241,7 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 		dopts = append(dopts, withContextDialer(lb.opt.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
-	dopts = append(dopts, WithBalancerBuilder(newPickfirstBuilder()))
+	dopts = append(dopts, WithBalancerName(PickFirstBalancerName))
 	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
 	// Dial using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
