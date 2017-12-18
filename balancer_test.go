@@ -30,11 +30,12 @@ import (
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/naming"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/leakcheck"
 
 	// V1 balancer tests use passthrough resolver instead of dns.
 	// TODO(bar) remove this when removing v1 balaner entirely.
-	"google.golang.org/grpc/internal"
+
 	_ "google.golang.org/grpc/resolver/passthrough"
 )
 
@@ -253,7 +254,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); internal.Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}
@@ -301,7 +302,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	for {
 		var reply string
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); internal.Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}
@@ -512,7 +513,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); internal.Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}

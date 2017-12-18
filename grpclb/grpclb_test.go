@@ -34,8 +34,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/internal"
-
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -483,7 +481,7 @@ func TestDropRequest(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			// Even RPCs should fail, because the 2st backend has
 			// DropForLoadBalancing set to true.
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(failfast)); internal.Code(err) != codes.Unavailable {
+			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(failfast)); status.Code(err) != codes.Unavailable {
 				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
 			}
 			// Odd RPCs should succeed since they choose the non-drop-request

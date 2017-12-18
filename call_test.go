@@ -31,7 +31,6 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/transport"
@@ -234,7 +233,7 @@ func TestInvokeLargeErr(t *testing.T) {
 	if _, ok := status.FromError(err); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
-	if internal.Code(err) != codes.Internal || len(errorDesc(err)) != sizeLargeErr {
+	if status.Code(err) != codes.Internal || len(errorDesc(err)) != sizeLargeErr {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want an error of code %d and desc size %d", err, codes.Internal, sizeLargeErr)
 	}
 	cc.Close()
