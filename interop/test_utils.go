@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -231,7 +232,7 @@ func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOpt
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
-		if grpc.Code(err) == codes.DeadlineExceeded {
+		if internal.Code(err) == codes.DeadlineExceeded {
 			return
 		}
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
@@ -242,11 +243,11 @@ func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOpt
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		if grpc.Code(err) != codes.DeadlineExceeded {
+		if internal.Code(err) != codes.DeadlineExceeded {
 			grpclog.Fatalf("%v.Send(_) = %v", stream, err)
 		}
 	}
-	if _, err := stream.Recv(); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := stream.Recv(); internal.Code(err) != codes.DeadlineExceeded {
 		grpclog.Fatalf("%v.Recv() = _, %v, want error code %d", stream, err, codes.DeadlineExceeded)
 	}
 }
@@ -409,8 +410,8 @@ func DoCancelAfterBegin(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	}
 	cancel()
 	_, err = stream.CloseAndRecv()
-	if grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if internal.Code(err) != codes.Canceled {
+		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, internal.Code(err), codes.Canceled)
 	}
 }
 
@@ -439,8 +440,8 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient, args ...grpc.CallOp
 		grpclog.Fatalf("%v.Recv() = %v", stream, err)
 	}
 	cancel()
-	if _, err := stream.Recv(); grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if _, err := stream.Recv(); internal.Code(err) != codes.Canceled {
+		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, internal.Code(err), codes.Canceled)
 	}
 }
 
@@ -568,15 +569,15 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption
 // DoUnimplementedService attempts to call a method from an unimplemented service.
 func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
-	if grpc.Code(err) != codes.Unimplemented {
-		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unimplemented)
+	if internal.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, internal.Code(err), codes.Unimplemented)
 	}
 }
 
 // DoUnimplementedMethod attempts to call an unimplemented method.
 func DoUnimplementedMethod(cc *grpc.ClientConn) {
 	var req, reply proto.Message
-	if err := grpc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
+	if err := grpc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply, cc); err == nil || internal.Code(err) != codes.Unimplemented {
 		grpclog.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
 	}
 }

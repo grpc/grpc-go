@@ -19,9 +19,23 @@
 // the godoc of the top-level grpc package.
 package internal
 
+import (
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
 // TestingUseHandlerImpl enables the http.Handler-based server implementation.
 // It must be called before Serve and requires TLS credentials.
 //
 // The provided grpcServer must be of type *grpc.Server. It is untyped
 // for circular dependency reasons.
 var TestingUseHandlerImpl func(grpcServer interface{})
+
+// Code returns the error code for err if it was produced by the rpc system.
+// Otherwise, it returns codes.Unknown.
+func Code(err error) codes.Code {
+	if s, ok := status.FromError(err); ok {
+		return s.Code()
+	}
+	return codes.Unknown
+}
