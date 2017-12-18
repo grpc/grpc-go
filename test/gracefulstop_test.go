@@ -43,12 +43,9 @@ type delayListener struct {
 func (d *delayListener) Accept() (net.Conn, error) {
 	select {
 	case <-d.acceptCalled:
-		fmt.Println("acceptCalled 2nd time")
 		// On the second call, block until closed, then return an error.
 		<-d.closeCalled
-		fmt.Println("closeCalled")
 		<-d.allowCloseCh
-		fmt.Println("allowClose")
 		return nil, fmt.Errorf("listener is closed")
 	default:
 		close(d.acceptCalled)
@@ -77,7 +74,6 @@ func (d *delayListener) Dial(to time.Duration) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("connected")
 	d.cc = &delayConn{Conn: c, blockRead: make(chan struct{})}
 	return d.cc, nil
 }
@@ -113,7 +109,6 @@ func (d *delayConn) Write(b []byte) (n int, err error) {
 		d.writeCalled = nil
 	}
 	d.mu.Unlock()
-	fmt.Println("Writing: ", b[:10], "... (len: ", len(b), ")")
 	return d.Conn.Write(b)
 }
 
@@ -159,7 +154,6 @@ func TestGracefulStop(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		s.Serve(dlis)
-		fmt.Println("done serve")
 		wg.Done()
 	}()
 
@@ -169,7 +163,6 @@ func TestGracefulStop(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		s.GracefulStop()
-		fmt.Println("done gracefulstop")
 		wg.Done()
 	}()
 
@@ -192,18 +185,13 @@ func TestGracefulStop(t *testing.T) {
 
 	dlis.allowClose()
 
-	fmt.Println("connected; getting write chan")
 	wcch := dlis.clientWriteCalledChan()
 	go func() {
 		// 5. Allow the client to read the GoAway.  The RPC should complete
 		//    successfully.
 		<-wcch
-		fmt.Println("wrote client data; allowing reads")
 		dlis.allowClientRead()
 	}()
-
-	fmt.Println("calling RPC")
-	time.Sleep(time.Second)
 
 	// 4. Send an RPC on the new connection.
 	// The server would send a GOAWAY first, but we are delaying the server's
@@ -215,6 +203,5 @@ func TestGracefulStop(t *testing.T) {
 
 	// 5. happens above, then we finish the call.
 	cancel()
-	fmt.Println("waiting for things to exit")
 	wg.Wait()
 }

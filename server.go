@@ -517,9 +517,9 @@ func (s *Server) Serve(lis net.Listener) error {
 				select {
 				case <-timer.C:
 				case <-s.quit:
+					timer.Stop()
 					return nil
 				}
-				timer.Stop()
 				continue
 			}
 			s.mu.Lock()
@@ -659,7 +659,6 @@ var _ http.Handler = (*Server)(nil)
 //
 // conn is the *tls.Conn that's already been authenticated.
 func (s *Server) serveUsingHandler(conn net.Conn) {
-	defer s.removeConn(conn)
 	h2s := &http2.Server{
 		MaxConcurrentStreams: s.opts.maxConcurrentStreams,
 	}
