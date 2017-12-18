@@ -13,7 +13,8 @@ description = "gRPC: Services"
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
-    testCompile project(':grpc-testing')
+    testCompile project(':grpc-testing'),
+            libraries.netty_epoll // for DomainSocketAddress
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
 

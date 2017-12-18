@@ -19,7 +19,24 @@ package io.grpc.services;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.primitives.Bytes;
+import com.google.protobuf.ByteString;
+import io.grpc.InternalMetadata;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.binarylog.Message;
+import io.grpc.binarylog.Metadata.Builder;
+import io.grpc.binarylog.MetadataEntry;
+import io.grpc.binarylog.Peer;
+import io.grpc.binarylog.Peer.PeerType;
+import io.grpc.binarylog.Uint128;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +51,10 @@ import javax.annotation.Nullable;
  */
 final class BinaryLog {
   private static final Logger logger = Logger.getLogger(BinaryLog.class.getName());
+  private static final int IP_PORT_BYTES = 2;
+  private static final int IP_PORT_UPPER_MASK = 0xff00;
+  private static final int IP_PORT_LOWER_MASK = 0xff;
+
   private final int maxHeaderBytes;
   private final int maxMessageBytes;
 
@@ -243,5 +264,102 @@ final class BinaryLog {
     public BinaryLog getLog(String fullMethodName) {
       return null;
     }
+  }
+
+  /**
+   * Returns a {@link Uint128} by interpreting the first 8 bytes as the high int64 and the second
+   * 8 bytes as the low int64.
+   */
+  // TODO(zpencer): verify int64 representation with other gRPC languages
+  static Uint128 callIdToProto(byte[] bytes) {
+    Preconditions.checkArgument(bytes.length == 16);
+    ByteBuffer bb = ByteBuffer.wrap(bytes);
+    long high = bb.getLong();
+    long low = bb.getLong();
+    return Uint128.newBuilder().setHigh(high).setLow(low).build();
+  }
+
+  @VisibleForTesting
+  // TODO(zpencer): the binlog design does not specify how to actually express the peer bytes
+  static Peer socketToProto(SocketAddress address) {
+    PeerType peerType = null;
+    byte[] peerAddress = null;
+
+    if (address instanceof InetSocketAddress) {
+      InetAddress inetAddress = ((InetSocketAddress) address).getAddress();
+      if (inetAddress instanceof Inet4Address) {
+        peerType = PeerType.PEER_IPV4;
+      } else if (inetAddress instanceof Inet6Address) {
+        peerType = PeerType.PEER_IPV6;
+      } else {
+        logger.log(Level.SEVERE, "unknown type of InetSocketAddress: {}", address);
+      }
+      int port = ((InetSocketAddress) address).getPort();
+      byte[] portBytes = new byte[IP_PORT_BYTES];
+      portBytes[0] = (byte) (port & IP_PORT_UPPER_MASK);
+      portBytes[1] = (byte) (port & IP_PORT_LOWER_MASK);
+      peerAddress = Bytes.concat(inetAddress.getAddress(), portBytes);
+    } else if (address.getClass().getName().equals("io.netty.channel.unix.DomainSocketAddress")) {
+      // To avoid a compile time dependency on grpc-netty, we check against the runtime class name.
+      peerType = PeerType.PEER_UNIX;
+      // DomainSocketAddress.toString() is equivalent to DomainSocketAdddress.path()
+      peerAddress = address.toString().getBytes(Charset.defaultCharset());
+    }
+    Peer.Builder builder = Peer.newBuilder();
+    if (peerType != null) {
+      builder.setPeerType(peerType);
+    }
+    if (peerAddress != null) {
+      builder.setPeer(ByteString.copyFrom(peerAddress));
+    }
+    return builder.build();
+  }
+
+  @VisibleForTesting
+  static io.grpc.binarylog.Metadata metadataToProto(Metadata metadata, int maxHeaderBytes) {
+    Preconditions.checkState(maxHeaderBytes >= 0);
+    Builder builder = io.grpc.binarylog.Metadata.newBuilder();
+    if (maxHeaderBytes > 0) {
+      byte[][] serialized = InternalMetadata.serialize(metadata);
+      int written = 0;
+      // This code is tightly coupled with Metadata's implementation
+      for (int i = 0; i < serialized.length && written < maxHeaderBytes; i += 2) {
+        byte[] key = serialized[i];
+        byte[] value = serialized[i + 1];
+        if (written + key.length + value.length <= maxHeaderBytes) {
+          builder.addEntry(
+              MetadataEntry
+                  .newBuilder()
+                  .setKeyBytes(ByteString.copyFrom(key))
+                  .setValue(ByteString.copyFrom(value))
+                  .build());
+          written += key.length;
+          written += value.length;
+        }
+      }
+    }
+    return builder.build();
+  }
+
+  @VisibleForTesting
+  static Message messageToProto(byte[] message, boolean compressed, int maxMessageBytes) {
+    Preconditions.checkState(maxMessageBytes >= 0);
+    Message.Builder builder = Message
+        .newBuilder()
+        .setFlags(flagsForMessage(compressed))
+        .setLength(message.length);
+    if (maxMessageBytes > 0) {
+      int limit = Math.min(maxMessageBytes, message.length);
+      builder.setData(ByteString.copyFrom(message, 0, limit));
+    }
+    return builder.build();
+  }
+
+  /**
+   * Returns a flag based on the arguments.
+   */
+  @VisibleForTesting
+  static int flagsForMessage(boolean compressed) {
+    return compressed ? 1 : 0;
   }
 }

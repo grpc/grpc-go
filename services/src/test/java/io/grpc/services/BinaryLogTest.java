@@ -19,7 +19,19 @@ package io.grpc.services;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import com.google.common.primitives.Bytes;
+import com.google.protobuf.ByteString;
+import io.grpc.Metadata;
+import io.grpc.binarylog.Message;
+import io.grpc.binarylog.MetadataEntry;
+import io.grpc.binarylog.Peer;
+import io.grpc.binarylog.Uint128;
 import io.grpc.services.BinaryLog.FactoryImpl;
+import io.netty.channel.unix.DomainSocketAddress;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.charset.Charset;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -27,6 +39,7 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link BinaryLog}. */
 @RunWith(JUnit4.class)
 public final class BinaryLogTest {
+  private static final Charset US_ASCII = Charset.forName("US-ASCII");
   private static final BinaryLog HEADER_FULL = new Builder().header(Integer.MAX_VALUE).build();
   private static final BinaryLog HEADER_256 = new Builder().header(256).build();
   private static final BinaryLog MSG_FULL = new Builder().msg(Integer.MAX_VALUE).build();
@@ -34,7 +47,51 @@ public final class BinaryLogTest {
   private static final BinaryLog BOTH_256 = new Builder().header(256).msg(256).build();
   private static final BinaryLog BOTH_FULL =
       new Builder().header(Integer.MAX_VALUE).msg(Integer.MAX_VALUE).build();
-  
+
+  private static final byte[] CALL_ID = new byte[] {
+      0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+      0x19, 0x10, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
+
+  private static final Metadata.Key<String> KEY_A =
+      Metadata.Key.of("a", Metadata.ASCII_STRING_MARSHALLER);
+  private static final Metadata.Key<String> KEY_B =
+      Metadata.Key.of("b", Metadata.ASCII_STRING_MARSHALLER);
+  private static final Metadata.Key<String> KEY_C =
+      Metadata.Key.of("c", Metadata.ASCII_STRING_MARSHALLER);
+  private static final MetadataEntry ENTRY_A;
+  private static final MetadataEntry ENTRY_B;
+  private static final MetadataEntry ENTRY_C;
+  private static final Metadata metadata;
+  private static final boolean IS_COMPRESSED = true;
+  private static final boolean IS_UNCOMPRESSED = false;
+
+  static {
+    String dataA = "aaaaaaaaa";
+    String dataB = "bbbbbbbbb";
+    String dataC = "ccccccccc";
+    metadata = new Metadata();
+    metadata.put(KEY_A, dataA);
+    metadata.put(KEY_B, dataB);
+    metadata.put(KEY_C, dataC);
+    ENTRY_A =
+        MetadataEntry
+            .newBuilder()
+            .setKey(KEY_A.name())
+            .setValue(ByteString.copyFrom(dataA.getBytes(US_ASCII)))
+            .build();
+    ENTRY_B =
+        MetadataEntry
+            .newBuilder()
+            .setKey(KEY_B.name())
+            .setValue(ByteString.copyFrom(dataB.getBytes(US_ASCII)))
+            .build();
+    ENTRY_C =
+        MetadataEntry
+            .newBuilder()
+            .setKey(KEY_C.name())
+            .setValue(ByteString.copyFrom(dataC.getBytes(US_ASCII)))
+            .build();
+  }
 
   @Test
   public void configBinLog_global() throws Exception {
@@ -201,6 +258,192 @@ public final class BinaryLogTest {
     // Other
     assertEquals(HEADER_256, factory.getLog("p.other1/m"));
     assertEquals(HEADER_256, factory.getLog("p.other2/m"));
+  }
+
+  @Test
+  public void callIdToProto() {
+    assertEquals(
+        Uint128
+            .newBuilder()
+            .setHigh(0x1112131415161718L)
+            .setLow(0x19101a1b1c1d1e1fL)
+            .build(),
+        BinaryLog.callIdToProto(CALL_ID));
+
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void callIdToProto_invalid_shorter_len() {
+    BinaryLog.callIdToProto(new byte[14]);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void callIdToProto_invalid_longer_len() {
+    BinaryLog.callIdToProto(new byte[18]);
+  }
+
+  @Test
+  public void socketToProto_ipv4() throws Exception {
+    InetAddress address = InetAddress.getByName("127.0.0.1");
+    int port = 12345;
+    InetSocketAddress socketAddress = new InetSocketAddress(address, port);
+    byte[] addressBytes = address.getAddress();
+    byte[] portBytes = new byte[] {(byte) (port & 0xff00), (byte) (port & 0xff)};
+    assertEquals(
+        Peer
+            .newBuilder()
+            .setPeerType(Peer.PeerType.PEER_IPV4)
+            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portBytes)))
+            .build(),
+        BinaryLog.socketToProto(socketAddress));
+  }
+
+  @Test
+  public void socketToProto_ipv6() throws Exception {
+    // this is a ipv6 link local address
+    InetAddress address = InetAddress.getByName("fe:80:12:34:56:78:90:ab");
+    int port = 12345;
+    InetSocketAddress socketAddress = new InetSocketAddress(address, port);
+    byte[] addressBytes = address.getAddress();
+    byte[] portBytes = new byte[] {(byte) (port & 0xff00), (byte) (port & 0xff)};
+    assertEquals(
+        Peer
+            .newBuilder()
+            .setPeerType(Peer.PeerType.PEER_IPV6)
+            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portBytes)))
+            .build(),
+        BinaryLog.socketToProto(socketAddress));
+  }
+
+  @Test
+  public void socketToProto_unix() throws Exception {
+    String path = "/some/path";
+    DomainSocketAddress socketAddress = new DomainSocketAddress(path);
+    assertEquals(
+        Peer
+            .newBuilder()
+            .setPeerType(Peer.PeerType.PEER_UNIX)
+            .setPeer(ByteString.copyFrom(path.getBytes(US_ASCII)))
+            .build(),
+        BinaryLog.socketToProto(socketAddress)
+    );
+  }
+
+  @Test
+  public void socketToProto_unknown() throws Exception {
+    SocketAddress unknownSocket = new SocketAddress() { };
+    assertEquals(
+        Peer.newBuilder().build(),
+        BinaryLog.socketToProto(unknownSocket)
+    );
+  }
+
+  @Test
+  public void metadataToProto() throws Exception {
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .addEntry(ENTRY_B)
+            .addEntry(ENTRY_C)
+            .build(),
+        BinaryLog.metadataToProto(metadata, Integer.MAX_VALUE));
+  }
+
+  @Test
+  public void metadataToProto_truncated() throws Exception {
+    // 0 byte limit not enough for any metadata
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .build(),
+        BinaryLog.metadataToProto(metadata, 0));
+    // not enough bytes for first key value
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .build(),
+        BinaryLog.metadataToProto(metadata, 9));
+    // enough for first key value
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .build(),
+        BinaryLog.metadataToProto(metadata, 10));
+    // Test edge cases for >= 2 key values
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .build(),
+        BinaryLog.metadataToProto(metadata, 19));
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .addEntry(ENTRY_B)
+            .build(),
+        BinaryLog.metadataToProto(metadata, 20));
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .addEntry(ENTRY_B)
+            .build(),
+        BinaryLog.metadataToProto(metadata, 29));
+    assertEquals(
+        io.grpc.binarylog.Metadata
+            .newBuilder()
+            .addEntry(ENTRY_A)
+            .addEntry(ENTRY_B)
+            .addEntry(ENTRY_C)
+            .build(),
+        BinaryLog.metadataToProto(metadata, 30));
+  }
+
+  @Test
+  public void messageToProto() throws Exception {
+    byte[] bytes = "this is a long message: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        .getBytes(US_ASCII);
+    Message message = BinaryLog.messageToProto(bytes, false, Integer.MAX_VALUE);
+    assertEquals(
+        Message
+            .newBuilder()
+            .setData(ByteString.copyFrom(bytes))
+            .setFlags(0)
+            .setLength(bytes.length)
+            .build(),
+        message);
+  }
+
+  @Test
+  public void messageToProto_truncated() throws Exception {
+    byte[] bytes = "this is a long message: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        .getBytes(US_ASCII);
+    assertEquals(
+        Message
+            .newBuilder()
+            .setFlags(0)
+            .setLength(bytes.length)
+            .build(),
+        BinaryLog.messageToProto(bytes, false, 0));
+
+    int limit = 10;
+    assertEquals(
+        Message
+            .newBuilder()
+            .setData(ByteString.copyFrom(bytes, 0, limit))
+            .setFlags(0)
+            .setLength(bytes.length)
+            .build(),
+        BinaryLog.messageToProto(bytes, false, limit));
+  }
+
+  @Test
+  public void toFlag() throws Exception {
+    assertEquals(0, BinaryLog.flagsForMessage(IS_UNCOMPRESSED));
+    assertEquals(1, BinaryLog.flagsForMessage(IS_COMPRESSED));
   }
 
   /** A builder class to make unit test code more readable. */
