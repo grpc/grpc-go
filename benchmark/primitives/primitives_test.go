@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func BenchmarkSelectClosed(b *testing.B) {
@@ -184,6 +185,48 @@ func BenchmarkMutexWithoutDefer(b *testing.B) {
 	}
 	b.StopTimer()
 	if x != b.N {
+		b.Fatal("error")
+	}
+}
+
+func BenchmarkIncrAtomics(b *testing.B) {
+	var c int64
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		atomic.AddInt64(&c, 1)
+	}
+	b.StopTimer()
+	if c != int64(b.N) {
+		b.Fatal("error")
+	}
+}
+
+func BenchmarkIncrAtomicsValue(b *testing.B) {
+	var c atomic.Value
+	t := time.Now()
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(t)
+		x++
+	}
+	b.StopTimer()
+	if x != b.N {
+		b.Fatal("error")
+	}
+}
+
+func BenchmarkIncrMutex(b *testing.B) {
+	var c int64
+	mu := sync.Mutex{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		c++
+		mu.Unlock()
+	}
+	b.StopTimer()
+	if c != int64(b.N) {
 		b.Fatal("error")
 	}
 }
