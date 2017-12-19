@@ -189,7 +189,7 @@ func BenchmarkMutexWithoutDefer(b *testing.B) {
 	}
 }
 
-func BenchmarkIncrAtomics(b *testing.B) {
+func BenchmarkIncrInt64Atomics(b *testing.B) {
 	var c int64
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -201,7 +201,22 @@ func BenchmarkIncrAtomics(b *testing.B) {
 	}
 }
 
-func BenchmarkIncrAtomicsValue(b *testing.B) {
+func BenchmarkIncrInt64Mutex(b *testing.B) {
+	var c int64
+	mu := sync.Mutex{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		c++
+		mu.Unlock()
+	}
+	b.StopTimer()
+	if c != int64(b.N) {
+		b.Fatal("error")
+	}
+}
+
+func BenchmarkSetTimeAtomics(b *testing.B) {
 	var c atomic.Value
 	t := time.Now()
 	x := 0
@@ -216,17 +231,20 @@ func BenchmarkIncrAtomicsValue(b *testing.B) {
 	}
 }
 
-func BenchmarkIncrMutex(b *testing.B) {
-	var c int64
+func BenchmarkSetTimeMutex(b *testing.B) {
 	mu := sync.Mutex{}
+	t := time.Now()
+	x := 0
+	var tt time.Time
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		mu.Lock()
-		c++
+		tt = t
 		mu.Unlock()
+		x++
 	}
 	b.StopTimer()
-	if c != int64(b.N) {
+	if x != b.N || tt != t {
 		b.Fatal("error")
 	}
 }
