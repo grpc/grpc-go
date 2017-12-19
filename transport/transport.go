@@ -918,6 +918,10 @@ func (l *loopyWriter) run(ctxDone <-chan struct{}) {
 				errorf("transport: error while handling item. Err: %v", err)
 				return
 			}
+			if _, err := l.processData(); err != nil {
+				errorf("transport: error while processing data. Err: %v", err)
+				return
+			}
 		case <-ctxDone:
 			warningf("transport: loopy returning. Err: %v", ErrConnClosing)
 			return
@@ -931,10 +935,20 @@ func (l *loopyWriter) run(ctxDone <-chan struct{}) {
 					errorf("transport: error while handling item. Err: %v", err)
 					return
 				}
+				if _, err := l.processData(); err != nil {
+					errorf("transport: error while processing data. Err: %v", err)
+					return
+				}
 			case <-ctxDone:
 				warningf("transport: loopy returning. Err: %v", ErrConnClosing)
 				return
 			default:
+				if isEmpty, err := l.processData(); err != nil {
+					errorf("transport: error while processing data. Err: %v", err)
+					return
+				} else if !isEmpty {
+					continue
+				}
 				if !l.noFlush {
 					l.framer.writer.Flush()
 				}
@@ -952,7 +966,7 @@ func (l *loopyWriter) windowUpdateHandler(w *windowUpdate) error {
 	// Otherwise update the quota.
 	if w.streamID == 0 {
 		l.sendQuota += w.increment
-		return l.processData()
+		return nil
 	}
 	// Find the stream and update it.
 	if str, ok := l.allStreams[w.streamID]; ok {
@@ -960,7 +974,7 @@ func (l *loopyWriter) windowUpdateHandler(w *windowUpdate) error {
 		if str.st == waitingOnStreamQuota {
 			str.st = active
 			l.activeStreams.add(str)
-			return l.processData()
+			return nil
 		}
 	}
 	return nil
@@ -976,7 +990,7 @@ func (l *loopyWriter) settingsHandler(s *settings) error {
 	if err := l.framer.fr.WriteSettingsAck(); err != nil {
 		return err
 	}
-	return l.processData()
+	return nil
 }
 
 func (l *loopyWriter) headerHandler(h *headerFrame) error {
@@ -1080,7 +1094,7 @@ func (l *loopyWriter) dataHandler(df *dataFrame) error {
 	if str.st == empty {
 		str.st = active
 		l.activeStreams.add(str)
-		return l.processData()
+		return nil
 	}
 	return nil
 }
@@ -1191,98 +1205,99 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) error {
 	return nil
 }
 
-func (l *loopyWriter) processData() error {
+func (l *loopyWriter) processData() (bool, error) {
 	var str *outStream
-	for {
-		if l.sendQuota == 0 {
-			break
+	//for {
+	if l.sendQuota == 0 {
+		return true, nil
+	}
+	if str = l.activeStreams.remove(); str == nil {
+		return true, nil
+	}
+	l.noFlush = false
+	dataItem := str.itl.seek().(*dataFrame)
+	if len(dataItem.h) == 0 && len(dataItem.d) == 0 {
+		// Client sends out empty data frame with endStream = true
+		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
+			return false, err
 		}
-		if str = l.activeStreams.remove(); str == nil {
-			break
-		}
-		dataItem := str.itl.seek().(*dataFrame)
-		if len(dataItem.h) == 0 && len(dataItem.d) == 0 {
-			// Client sends out empty data frame with endStream = true
-			if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
-				return err
-			}
-			str.itl.remove()
-			if str.itl.isEmpty() {
-				str.st = empty
-			} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // the next item is trailers.
-				delete(l.allStreams, trailer.streamID)
-				if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite, false); err != nil {
-					return err
-				}
-
-			} else {
-				l.activeStreams.add(str)
-			}
-			continue
-		}
-		var (
-			idx int
-			buf []byte
-		)
-		if len(dataItem.h) != 0 { // data header has not been written out yet.
-			buf = dataItem.h
-		} else {
-			idx = 1
-			buf = dataItem.d
-		}
-		size := http2MaxFrameLen
-		if len(buf) < size {
-			size = len(buf)
-		}
-		if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota < size {
-			size = strQuota
-		}
-		if l.sendQuota < uint32(size) {
-			size = int(l.sendQuota)
-		}
-		if size > 0 {
-			// Now that outgoing flow controls are checked we can replenish str's write quota
-			str.wq.replenish(int32(size))
-			var endStream bool
-			// This last data message on this stream and all
-			// of it can be written in this go.
-			if dataItem.endStream && size == len(buf) {
-				// buf contains either data or it contians header but data is empty.
-				if idx == 1 || len(dataItem.d) == 0 {
-					endStream = true
-				}
-			}
-			if dataItem.onEachWrite != nil {
-				dataItem.onEachWrite()
-			}
-			if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
-				return err
-			}
-			buf = buf[size:]
-			str.bytesOutStanding += size
-			l.sendQuota -= uint32(size)
-			if idx == 0 {
-				dataItem.h = buf
-			} else {
-				dataItem.d = buf
-			}
-		}
-
-		if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
-			str.itl.remove()
-		}
+		str.itl.remove()
 		if str.itl.isEmpty() {
 			str.st = empty
-		} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // The next item is trailers.
+		} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // the next item is trailers.
 			delete(l.allStreams, trailer.streamID)
 			if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite, false); err != nil {
-				return err
+				return false, err
 			}
-		} else if int(l.oiws)-str.bytesOutStanding <= 0 { // Ran out of stream quota.
-			str.st = waitingOnStreamQuota
+
 		} else {
-			l.activeStreams.add(str) // Otherwise, add it to the back of list.
+			l.activeStreams.add(str)
+		}
+		return false, nil
+	}
+	var (
+		idx int
+		buf []byte
+	)
+	if len(dataItem.h) != 0 { // data header has not been written out yet.
+		buf = dataItem.h
+	} else {
+		idx = 1
+		buf = dataItem.d
+	}
+	size := http2MaxFrameLen
+	if len(buf) < size {
+		size = len(buf)
+	}
+	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota < size {
+		size = strQuota
+	}
+	if l.sendQuota < uint32(size) {
+		size = int(l.sendQuota)
+	}
+	if size > 0 {
+		// Now that outgoing flow controls are checked we can replenish str's write quota
+		str.wq.replenish(int32(size))
+		var endStream bool
+		// This last data message on this stream and all
+		// of it can be written in this go.
+		if dataItem.endStream && size == len(buf) {
+			// buf contains either data or it contians header but data is empty.
+			if idx == 1 || len(dataItem.d) == 0 {
+				endStream = true
+			}
+		}
+		if dataItem.onEachWrite != nil {
+			dataItem.onEachWrite()
+		}
+		if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
+			return false, err
+		}
+		buf = buf[size:]
+		str.bytesOutStanding += size
+		l.sendQuota -= uint32(size)
+		if idx == 0 {
+			dataItem.h = buf
+		} else {
+			dataItem.d = buf
 		}
 	}
-	return nil
+
+	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // All the data from that message was written out.
+		str.itl.remove()
+	}
+	if str.itl.isEmpty() {
+		str.st = empty
+	} else if trailer, ok := str.itl.seek().(*headerFrame); ok { // The next item is trailers.
+		delete(l.allStreams, trailer.streamID)
+		if err := l.headerWriter(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite, false); err != nil {
+			return false, err
+		}
+	} else if int(l.oiws)-str.bytesOutStanding <= 0 { // Ran out of stream quota.
+		str.st = waitingOnStreamQuota
+	} else {
+		l.activeStreams.add(str) // Otherwise, add it to the back of list.
+	}
+	//}
+	return false, nil
 }
