@@ -219,32 +219,25 @@ func BenchmarkIncrInt64Mutex(b *testing.B) {
 func BenchmarkSetTimeAtomics(b *testing.B) {
 	var c atomic.Value
 	t := time.Now()
-	x := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Store(t)
-		x++
 	}
 	b.StopTimer()
-	if x != b.N {
-		b.Fatal("error")
-	}
 }
 
 func BenchmarkSetTimeMutex(b *testing.B) {
 	mu := sync.Mutex{}
 	t := time.Now()
-	x := 0
 	var tt time.Time
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		mu.Lock()
 		tt = t
 		mu.Unlock()
-		x++
 	}
 	b.StopTimer()
-	if x != b.N || tt != t {
+	if tt != t {
 		b.Fatal("error")
 	}
 }
