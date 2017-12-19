@@ -27,6 +27,7 @@ import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ObjectPool;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,7 +105,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements InternalWithLogId {
     List<LbAddressGroup> newLbAddressGroups = new ArrayList<LbAddressGroup>();
     List<EquivalentAddressGroup> newBackendServers = new ArrayList<EquivalentAddressGroup>();
     for (EquivalentAddressGroup server : updatedServers) {
-      String lbAddrAuthority = server.getAttributes().get(GrpclbConstants.ATTR_LB_ADDR_AUTHORITY);
+      String lbAddrAuthority = server.getAttributes().get(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY);
       if (lbAddrAuthority != null) {
         newLbAddressGroups.add(new LbAddressGroup(server, lbAddrAuthority));
       } else {

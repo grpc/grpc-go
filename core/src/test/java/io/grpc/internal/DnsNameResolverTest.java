@@ -323,15 +323,25 @@ public class DnsNameResolverTest {
     DelegateResolver resolver = new DnsNameResolver.CompositeResolver(jdkDelegate, jndiDelegate);
 
     List<InetAddress> jdkAnswer = createAddressList(2);
-    jdkDelegate.addAnswer(jdkAnswer, Arrays.asList("jdktxt"));
+    jdkDelegate.addAnswer(
+        jdkAnswer,
+        Arrays.asList("jdktxt"),
+        Collections.<EquivalentAddressGroup>emptyList());
 
     List<InetAddress> jdniAnswer = createAddressList(2);
-    jndiDelegate.addAnswer(jdniAnswer, Arrays.asList("jnditxt"));
+    jndiDelegate.addAnswer(
+        jdniAnswer,
+        Arrays.asList("jnditxt"),
+        Collections.singletonList(
+            new EquivalentAddressGroup(
+                Collections.<SocketAddress>singletonList(new SocketAddress() {}),
+                Attributes.EMPTY)));
 
     ResolutionResults results = resolver.resolve("abc");
 
     assertThat(results.addresses).containsExactlyElementsIn(jdkAnswer).inOrder();
     assertThat(results.txtRecords).containsExactly("jnditxt");
+    assertThat(results.balancerAddresses).hasSize(1);
   }
 
   @Test
@@ -418,14 +428,19 @@ public class DnsNameResolverTest {
     private final Queue<String> invocations = new LinkedList<String>();
 
     MockResolver addAnswer(List<InetAddress> addresses) {
-      return addAnswer(addresses, null);
+      return addAnswer(addresses, null, null);
     }
 
-    MockResolver addAnswer(List<InetAddress> addresses, List<String> txtRecords) {
+    MockResolver addAnswer(
+        List<InetAddress> addresses,
+        List<String> txtRecords,
+        List<EquivalentAddressGroup> balancerAddresses) {
       answers.add(
           new ResolutionResults(
               addresses,
-              MoreObjects.firstNonNull(txtRecords, Collections.<String>emptyList())));
+              MoreObjects.firstNonNull(txtRecords, Collections.<String>emptyList()),
+              MoreObjects.firstNonNull(
+                  balancerAddresses, Collections.<EquivalentAddressGroup>emptyList())));
       return this;
     }
 

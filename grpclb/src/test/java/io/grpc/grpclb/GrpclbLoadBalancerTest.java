@@ -71,6 +71,7 @@ import io.grpc.grpclb.GrpclbState.RoundRobinPicker;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.internal.FakeClock;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.stub.StreamObserver;
@@ -1623,7 +1624,7 @@ public class GrpclbLoadBalancerTest {
 
   private static Attributes lbAttributes(String authority) {
     return Attributes.newBuilder()
-        .set(GrpclbConstants.ATTR_LB_ADDR_AUTHORITY, authority)
+        .set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, authority)
         .build();
   }
 

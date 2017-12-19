@@ -41,13 +41,6 @@ public final class GrpclbConstants {
       Attributes.Key.of("io.grpc.grpclb.lbPolicy");
 
   /**
-   * The naming authority of an LB server address.  It is an address-group-level attribute, present
-   * when the address group is a LoadBalancer.
-   */
-  public static final Attributes.Key<String> ATTR_LB_ADDR_AUTHORITY =
-      Attributes.Key.of("io.grpc.grpclb.lbAddrAuthority");
-
-  /**
    * The opaque token given by the remote balancer for each returned server address.  The client
    * will send this token with any requests sent to the associated server.
    */
