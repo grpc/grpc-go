@@ -221,6 +221,61 @@ func BenchmarkAtomicTimeValueStore(b *testing.B) {
 	b.StopTimer()
 }
 
+func atomicStore(a int) {
+	var wg sync.WaitGroup
+	var c atomic.Value
+	for i := 0; i < a; i++ {
+		wg.Add(1)
+		go func() {
+			c.Store(a)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+func mutexStore(a int) {
+	var wg sync.WaitGroup
+	mu := sync.Mutex{}
+	var c int
+	for i := 0; i < a; i++ {
+		wg.Add(1)
+		go func() {
+			mu.Lock()
+			c = a
+			mu.Unlock()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+func BenchmarkValueStoreWithContention(b *testing.B) {
+	benchmarks := []struct {
+		name string
+		n    int
+	}{
+		{"1", 1},
+		{"10", 10},
+		{"100", 100},
+		{"1000", 1000},
+		{"10000", 10000},
+		{"100000", 100000},
+	}
+	for _, bm := range benchmarks {
+		b.Run("Atomic/"+bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				atomicStore(bm.n)
+			}
+		})
+		b.Run("Mutex/"+bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				mutexStore(bm.n)
+			}
+		})
+	}
+}
+
 type myFooer struct{}
 
 func (myFooer) Foo() {}
