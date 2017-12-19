@@ -2,6 +2,7 @@ description = 'gRPC: Core'
 
 dependencies {
     compile project(':grpc-context'),
+            libraries.gson,
             libraries.guava,
             libraries.errorprone,
             libraries.jsr305
