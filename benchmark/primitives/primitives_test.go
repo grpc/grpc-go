@@ -77,7 +77,7 @@ func BenchmarkAtomicBool(b *testing.B) {
 	}
 }
 
-func BenchmarkAtomicValue(b *testing.B) {
+func BenchmarkAtomicValueLoad(b *testing.B) {
 	c := atomic.Value{}
 	c.Store(0)
 	x := 0
@@ -91,6 +91,16 @@ func BenchmarkAtomicValue(b *testing.B) {
 	if x != b.N {
 		b.Fatal("error")
 	}
+}
+
+func BenchmarkAtomicValueStore(b *testing.B) {
+	c := atomic.Value{}
+	v := 123
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(v)
+	}
+	b.StopTimer()
 }
 
 func BenchmarkMutex(b *testing.B) {
@@ -189,7 +199,7 @@ func BenchmarkMutexWithoutDefer(b *testing.B) {
 	}
 }
 
-func BenchmarkIncrInt64Atomics(b *testing.B) {
+func BenchmarkAtomicAddInt64(b *testing.B) {
 	var c int64
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -201,22 +211,7 @@ func BenchmarkIncrInt64Atomics(b *testing.B) {
 	}
 }
 
-func BenchmarkIncrInt64Mutex(b *testing.B) {
-	var c int64
-	mu := sync.Mutex{}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		mu.Lock()
-		c++
-		mu.Unlock()
-	}
-	b.StopTimer()
-	if c != int64(b.N) {
-		b.Fatal("error")
-	}
-}
-
-func BenchmarkSetTimeAtomics(b *testing.B) {
+func BenchmarkAtomicTimeValueStore(b *testing.B) {
 	var c atomic.Value
 	t := time.Now()
 	b.ResetTimer()
@@ -224,22 +219,6 @@ func BenchmarkSetTimeAtomics(b *testing.B) {
 		c.Store(t)
 	}
 	b.StopTimer()
-}
-
-func BenchmarkSetTimeMutex(b *testing.B) {
-	mu := sync.Mutex{}
-	t := time.Now()
-	var tt time.Time
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		mu.Lock()
-		tt = t
-		mu.Unlock()
-	}
-	b.StopTimer()
-	if tt != t {
-		b.Fatal("error")
-	}
 }
 
 type myFooer struct{}
