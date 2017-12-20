@@ -129,13 +129,20 @@ task runInteropTestRemote(dependsOn: 'appengineDeploy') {
 
     // Retry in case GAE is slow and times out
     int maxRetries = 5
-    def result = null
+    String result = null
+    Throwable caught = null
     for (int attempt = 0; attempt < maxRetries; attempt++) {
-      result = client.newCall(interopRequest).execute()
-      if (result.code() == 200) {
-        return
+      try {
+        def response = client.newCall(interopRequest).execute()
+        result = response.body().string()
+        if (response.code() == 200) {
+          return
+        }
+      } catch (Throwable t) {
+        caught = t
+        logger.log(LogLevel.ERROR, "caught exception. will retry if possible", t)
       }
     }
-    throw new GradleException("Interop test failed: " + result?.body()?.string())
+    throw new GradleException("Interop test failed:\nresponse: ${result}\nthrowable:${caught}")
   }
 }
