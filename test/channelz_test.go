@@ -63,7 +63,6 @@ func TestServerRegistration(t *testing.T) {
 		if len(ss) != c.length || end != c.end {
 			t.Fatalf("GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
-		te.tearDown()
 	}
 }
 
