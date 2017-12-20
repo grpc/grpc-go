@@ -58,7 +58,6 @@ func TestServerRegistration(t *testing.T) {
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
-		te.tearDown()
 
 		ss, end := db.GetServers(c.start)
 		if len(ss) != c.length || end != c.end {
@@ -66,6 +65,7 @@ func TestServerRegistration(t *testing.T) {
 		}
 		te.tearDown()
 	}
+	time.Sleep(time.Second)
 }
 
 func TestTopChannelRegistration(t *testing.T) {
@@ -102,6 +102,7 @@ func TestTopChannelRegistration(t *testing.T) {
 			cc.Close()
 		}
 	}
+	time.Sleep(time.Second)
 }
 
 func TestNestedChannelRegistration(t *testing.T) {
@@ -117,7 +118,6 @@ func TestNestedChannelRegistration(t *testing.T) {
 	r.InitialAddrs(resolvedAddrs)
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
-	r.NewServiceConfig(`{"loadBalancingPolicy": "grpclb"}`)
 	defer te.tearDown()
 	time.Sleep(10 * time.Millisecond)
 	tcs, _ := db.GetTopChannels(0)
@@ -127,6 +127,7 @@ func TestNestedChannelRegistration(t *testing.T) {
 	if len(tcs[0].NestedChans) != 1 {
 		t.Fatalf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 	}
+	time.Sleep(time.Second)
 }
 
 func TestClientSubChannelSocketRegistration(t *testing.T) {
@@ -167,6 +168,7 @@ func TestClientSubChannelSocketRegistration(t *testing.T) {
 	if count != num {
 		t.Fatalf("There should be %d sockets not %d", num, count)
 	}
+	time.Sleep(time.Second)
 }
 
 func TestServerSocketRegistration(t *testing.T) {
@@ -200,4 +202,5 @@ func TestServerSocketRegistration(t *testing.T) {
 	if len(ns) != num {
 		t.Fatalf("There should be %d normal sockets not %d", num, len(ns))
 	}
+	time.Sleep(time.Second)
 }
