@@ -1,3 +1,5 @@
+// +build go1.7
+
 /*
  *
  * Copyright 2017 gRPC authors.
@@ -96,7 +98,7 @@ func BenchmarkAtomicValueLoad(b *testing.B) {
 
 func BenchmarkAtomicValueStore(b *testing.B) {
 	c := atomic.Value{}
-	var v int = 123
+	v := 123
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Store(v)
@@ -285,6 +287,7 @@ func BenchmarkValueStoreWithContention(b *testing.B) {
 					wg.Done()
 				}()
 			}
+			_ = c
 			wg.Wait()
 		})
 	}
