@@ -32,7 +32,6 @@ import io.grpc.Status;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
 import javax.annotation.Nonnull;
@@ -64,9 +63,6 @@ final class DelayedClientTransport implements ManagedClientTransport {
   @Nonnull
   @GuardedBy("lock")
   private Collection<PendingStream> pendingStreams = new LinkedHashSet<PendingStream>();
-
-  @GuardedBy("lock")
-  private Collection<ClientStream> uncommittedRetriableStreams = new HashSet<ClientStream>();
 
   /**
    * When {@code shutdownStatus != null && !hasPendingStreams()}, then the transport is considered
@@ -243,21 +239,14 @@ final class DelayedClientTransport implements ManagedClientTransport {
     Runnable savedReportTransportTerminated;
     synchronized (lock) {
       savedPendingStreams = pendingStreams;
-      savedUncommittedRetriableStreams = uncommittedRetriableStreams;
       savedReportTransportTerminated = reportTransportTerminated;
       reportTransportTerminated = null;
       if (!pendingStreams.isEmpty()) {
         pendingStreams = Collections.<PendingStream>emptyList();
       }
-      if (!uncommittedRetriableStreams.isEmpty()) {
-        uncommittedRetriableStreams = Collections.<ClientStream>emptyList();
-      }
     }
     if (savedReportTransportTerminated != null) {
       for (PendingStream stream : savedPendingStreams) {
-        stream.cancel(status);
-      }
-      for (ClientStream stream : savedUncommittedRetriableStreams) {
         stream.cancel(status);
       }
       channelExecutor.executeLater(savedReportTransportTerminated).drain();
@@ -268,49 +257,14 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   public final boolean hasPendingStreams() {
     synchronized (lock) {
-      return !pendingStreams.isEmpty() || !uncommittedRetriableStreams.isEmpty();
+      return !pendingStreams.isEmpty();
     }
   }
 
   @VisibleForTesting
   final int getPendingStreamsCount() {
     synchronized (lock) {
-      return pendingStreams.size() + uncommittedRetriableStreams.size();
-    }
-  }
-
-  /**
-   * Registers a RetriableStream and return null if not shutdown, otherwise just returns the
-   * shutdown Status.
-   */
-  @Nullable
-  final Status addUncommittedRetriableStream(RetriableStream<?> retriableStream) {
-    synchronized (lock) {
-      if (shutdownStatus != null) {
-        return shutdownStatus;
-      }
-      uncommittedRetriableStreams.add(retriableStream);
-      if (getPendingStreamsCount() == 1) {
-        channelExecutor.executeLater(reportTransportInUse);
-      }
-      return null;
-    }
-  }
-
-  final void removeUncommittedRetriableStream(RetriableStream<?> retriableStream) {
-    synchronized (lock) {
-      uncommittedRetriableStreams.remove(retriableStream);
-      if (!hasPendingStreams()) {
-        channelExecutor.executeLater(reportTransportNotInUse);
-        if (shutdownStatus != null && reportTransportTerminated != null) {
-          channelExecutor.executeLater(reportTransportTerminated);
-          reportTransportTerminated = null;
-        } else {
-          // Because delayed transport is long-lived, we take this opportunity to down-size the
-          // hashmap.
-          uncommittedRetriableStreams = new HashSet<ClientStream>();
-        }
-      }
+      return pendingStreams.size();
     }
   }
 
