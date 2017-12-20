@@ -21,6 +21,7 @@
 package primitives_test
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -95,7 +96,7 @@ func BenchmarkAtomicValueLoad(b *testing.B) {
 
 func BenchmarkAtomicValueStore(b *testing.B) {
 	c := atomic.Value{}
-	v := 123
+	var v int = 123
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Store(v)
@@ -221,57 +222,70 @@ func BenchmarkAtomicTimeValueStore(b *testing.B) {
 	b.StopTimer()
 }
 
-func atomicStore(a int) {
-	var wg sync.WaitGroup
+func BenchmarkAtomic16BValueStore(b *testing.B) {
 	var c atomic.Value
-	for i := 0; i < a; i++ {
-		wg.Add(1)
-		go func() {
-			c.Store(a)
-			wg.Done()
-		}()
+	t := struct {
+		a int64
+		b int64
+	}{
+		123, 123,
 	}
-	wg.Wait()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(t)
+	}
+	b.StopTimer()
 }
 
-func mutexStore(a int) {
-	var wg sync.WaitGroup
-	mu := sync.Mutex{}
-	var c int
-	for i := 0; i < a; i++ {
-		wg.Add(1)
-		go func() {
-			mu.Lock()
-			c = a
-			mu.Unlock()
-			wg.Done()
-		}()
+func BenchmarkAtomic32BValueStore(b *testing.B) {
+	var c atomic.Value
+	t := struct {
+		a int64
+		b int64
+		c int64
+		d int64
+	}{
+		123, 123, 123, 123,
 	}
-	wg.Wait()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(t)
+	}
+	b.StopTimer()
 }
 
 func BenchmarkValueStoreWithContention(b *testing.B) {
-	benchmarks := []struct {
-		name string
-		n    int
-	}{
-		{"1", 1},
-		{"10", 10},
-		{"100", 100},
-		{"1000", 1000},
-		{"10000", 10000},
-		{"100000", 100000},
-	}
-	for _, bm := range benchmarks {
-		b.Run("Atomic/"+bm.name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				atomicStore(bm.n)
+	for _, n := range []int{10, 100, 1000, 10000, 100000} {
+		b.Run(fmt.Sprintf("Atomic/%v", n), func(b *testing.B) {
+			var wg sync.WaitGroup
+			var c atomic.Value
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func() {
+					for j := 0; j < b.N; j++ {
+						c.Store(j)
+					}
+					wg.Done()
+				}()
 			}
+			wg.Wait()
 		})
-		b.Run("Mutex/"+bm.name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				mutexStore(bm.n)
+		b.Run(fmt.Sprintf("Mutex/%v", n), func(b *testing.B) {
+			var wg sync.WaitGroup
+			var c int
+			mu := sync.Mutex{}
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func() {
+					for j := 0; j < b.N; j++ {
+						mu.Lock()
+						c = j
+						mu.Unlock()
+					}
+					wg.Done()
+				}()
 			}
+			wg.Wait()
 		})
 	}
 }
