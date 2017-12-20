@@ -164,10 +164,6 @@ public class CensusModulesTest {
   @Mock
   private ServerCall.Listener<String> mockServerCallListener;
   @Captor
-  private ArgumentCaptor<CallOptions> callOptionsCaptor;
-  @Captor
-  private ArgumentCaptor<ClientCall.Listener<String>> clientCallListenerCaptor;
-  @Captor
   private ArgumentCaptor<Status> statusCaptor;
   @Captor
   private ArgumentCaptor<NetworkEvent> networkEventCaptor;
