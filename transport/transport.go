@@ -503,6 +503,8 @@ type ConnectOptions struct {
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
 	ReadBufferSize int
+	// ParentID sets the addrConn id which initiate the creation of this client transport.
+	ParentID int64
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
