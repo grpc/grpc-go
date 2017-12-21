@@ -661,11 +661,6 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		channelz.AddChild(s.id, id, "<nil>")
 	}
 
-	if channelz.ChannelzOn {
-		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
-		st.(channelz.Socket).SetID(id)
-		channelz.AddChild(s.id, id, "<nil>")
-	}
 	return st
 }
 
@@ -1233,7 +1228,7 @@ func (s *Server) Stop() {
 	}()
 
 	s.mu.Lock()
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		channelz.RemoveEntry(s.id)
 	}
 	listeners := s.lis
@@ -1279,7 +1274,7 @@ func (s *Server) GracefulStop() {
 		return
 	}
 
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		channelz.RemoveEntry(s.id)
 	}
 	for lis := range s.lis {
