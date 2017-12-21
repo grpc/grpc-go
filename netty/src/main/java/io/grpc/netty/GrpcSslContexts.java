@@ -156,6 +156,9 @@ public class GrpcSslContexts {
         if (JettyTlsUtil.isJettyNpnConfigured()) {
           return NPN;
         }
+        if (JettyTlsUtil.isJava9AlpnAvailable()) {
+          return ALPN;
+        }
         // Use the ALPN cause since it is prefered.
         throw new IllegalArgumentException(
             "ALPN is not configured properly. See https://github.com/grpc/grpc-java/blob/master/SECURITY.md#troubleshooting"

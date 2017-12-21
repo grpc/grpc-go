@@ -16,6 +16,12 @@
 
 package io.grpc.netty;
 
+import java.lang.reflect.Method;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+
 /**
  * Utility class for determining support for Jetty TLS ALPN/NPN.
  */
@@ -25,6 +31,30 @@ final class JettyTlsUtil {
 
   private static Throwable jettyAlpnUnavailabilityCause;
   private static Throwable jettyNpnUnavailabilityCause;
+
+  private static class Java9AlpnUnavailabilityCauseHolder {
+
+    static final Throwable cause = checkAlpnAvailability();
+
+    static Throwable checkAlpnAvailability() {
+      try {
+        SSLContext context = SSLContext.getInstance("TLS");
+        context.init(null, null, null);
+        SSLEngine engine = context.createSSLEngine();
+        Method getApplicationProtocol =
+            AccessController.doPrivileged(new PrivilegedExceptionAction<Method>() {
+              @Override
+              public Method run() throws Exception {
+                return SSLEngine.class.getMethod("getApplicationProtocol");
+              }
+            });
+        getApplicationProtocol.invoke(engine);
+        return null;
+      } catch (Throwable t) {
+        return t;
+      }
+    }
+  }
 
   /**
    * Indicates whether or not the Jetty ALPN jar is installed in the boot classloader.
@@ -66,5 +96,16 @@ final class JettyTlsUtil {
       boolean discard = isJettyNpnConfigured();
     }
     return jettyNpnUnavailabilityCause;
+  }
+
+  /**
+   * Indicates whether Java 9 ALPN is available.
+   */
+  static boolean isJava9AlpnAvailable() {
+    return getJava9AlpnUnavailabilityCause() == null;
+  }
+
+  static Throwable getJava9AlpnUnavailabilityCause() {
+    return Java9AlpnUnavailabilityCauseHolder.cause;
   }
 }
