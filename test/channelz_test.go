@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /*
  *
  * Copyright 2017 gRPC authors.
@@ -28,7 +27,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/test/leakcheck"
 )
 
@@ -65,6 +63,7 @@ func TestServerRegistration(t *testing.T) {
 		if len(ss) != c.length || end != c.end {
 			t.Fatalf("GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
+		te.tearDown()
 	}
 }
 
@@ -84,7 +83,6 @@ func TestTopChannelRegistration(t *testing.T) {
 		db := grpc.RegisterChannelz()
 		e := tcpClearRREnv
 		te := newTest(t, e)
-		defer te.tearDown()
 		var ccs []*grpc.ClientConn
 		for i := 0; i < c.total; i++ {
 			cc := te.clientConn()
@@ -101,6 +99,7 @@ func TestTopChannelRegistration(t *testing.T) {
 		for _, cc := range ccs {
 			cc.Close()
 		}
+		te.tearDown()
 	}
 }
 
@@ -136,7 +135,6 @@ func TestClientSubChannelSocketRegistration(t *testing.T) {
 	te := newTest(t, e)
 	var svrAddrs []resolver.Address
 	te.startServers(&testServer{security: e.security}, num)
-	defer te.tearDown()
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	for _, a := range te.srvAddrs {
@@ -145,6 +143,7 @@ func TestClientSubChannelSocketRegistration(t *testing.T) {
 	r.InitialAddrs(svrAddrs)
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
+	defer te.tearDown()
 	// Here, we just wait for all sockets to be up. In the future, if we implement
 	// IDLE, we may need to make several rpc calls to create the sockets.
 	time.Sleep(100 * time.Millisecond)
