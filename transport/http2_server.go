@@ -1147,7 +1147,7 @@ func (t *http2Server) Close() error {
 	t.mu.Unlock()
 	t.cancel()
 	err := t.conn.Close()
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		channelz.RemoveEntry(t.id)
 	}
 	// Cancel all active streams.

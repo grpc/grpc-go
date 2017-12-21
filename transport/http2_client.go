@@ -100,8 +100,9 @@ type http2Client struct {
 	// connection was established.
 	onSuccess func()
 
-	id            int64          // channelz identification number
-	mu            sync.Mutex     // guard the following variables
+	mu sync.Mutex // guard the following variables
+	id int64      // channelz identification number
+
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
@@ -309,6 +310,18 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	}()
 	if t.kp.Time != infinity {
 		go t.keepalive()
+	}
+	if channelz.IsOn() {
+		t.mu.Lock()
+		if t.state != closing {
+			id := channelz.RegisterSocket(t, channelz.NormalSocketType)
+			t.SetID(id)
+			channelz.AddChild(opts.ParentID, id, "<nil>")
+			t.mu.Unlock()
+		} else {
+			t.mu.Unlock()
+		}
+
 	}
 	return t, nil
 }
@@ -602,10 +615,18 @@ func (t *http2Client) Close() error {
 	t.mu.Unlock()
 	t.cancel()
 	err := t.conn.Close()
-	t.mu.Lock()
-	if channelz.ChannelzOn {
-		channelz.RemoveEntry(t.id)
+
+	if channelz.IsOn() {
+		t.mu.Lock()
+		if t.id != 0 {
+			t.mu.Unlock()
+			channelz.RemoveEntry(t.id)
+		} else {
+			t.mu.Unlock()
+		}
 	}
+
+	t.mu.Lock()
 	streams := t.activeStreams
 	t.activeStreams = nil
 	t.mu.Unlock()

@@ -982,7 +982,7 @@ func (cc *ClientConn) Close() error {
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		channelz.RemoveEntry(cc.id)
 	}
 	return nil
@@ -1162,6 +1162,9 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		// Do not cancel in the success path because of
 		// this issue in Go1.6: https://github.com/golang/go/issues/15078.
 		connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
+		if channelz.IsOn() {
+			copts.ParentID = ac.id
+		}
 		newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt)
 		if err != nil {
 			cancel()
@@ -1183,11 +1186,6 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			ac.mu.Unlock()
 			grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 			continue
-		}
-		if channelz.IsOn() {
-			id := channelz.RegisterSocket(newTr.(channelz.Socket), channelz.NormalSocketType)
-			newTr.(channelz.Socket).SetID(id)
-			channelz.AddChild(ac.id, id, "<nil>")
 		}
 		if ac.dopts.waitForHandshake {
 			select {
@@ -1408,7 +1406,7 @@ func (ac *addrConn) tearDown(err error) {
 		close(ac.ready)
 		ac.ready = nil
 	}
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		channelz.RemoveEntry(ac.id)
 	}
 	return
