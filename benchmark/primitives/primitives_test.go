@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 func BenchmarkSelectClosed(b *testing.B) {
@@ -257,21 +258,21 @@ func BenchmarkAtomic32BValueStore(b *testing.B) {
 }
 
 func BenchmarkAtomicPointerStore(b *testing.B) {
-	var c atomic.Value
 	t := 123
+	var up unsafe.Pointer
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c.Store(&t)
+		atomic.StorePointer(&up, unsafe.Pointer(&t))
 	}
 	b.StopTimer()
 }
 
 func BenchmarkAtomicTimePointerStore(b *testing.B) {
-	var c atomic.Value
 	t := time.Now()
+	var up unsafe.Pointer
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c.Store(&t)
+		atomic.StorePointer(&up, unsafe.Pointer(&t))
 	}
 	b.StopTimer()
 }
@@ -293,14 +294,14 @@ func BenchmarkValueStoreWithContention(b *testing.B) {
 			}
 			wg.Wait()
 		})
-		b.Run(fmt.Sprintf("AtomicPointer/%v", n), func(b *testing.B) {
+		b.Run(fmt.Sprintf("AtomicStorePointer/%v", n), func(b *testing.B) {
 			var wg sync.WaitGroup
-			var c atomic.Value
+			var up unsafe.Pointer
 			for i := 0; i < n; i++ {
 				wg.Add(1)
 				go func() {
 					for j := 0; j < b.N; j++ {
-						c.Store(&t)
+						atomic.StorePointer(&up, unsafe.Pointer(&t))
 					}
 					wg.Done()
 				}()
