@@ -479,8 +479,12 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.serveWG.Add(1)
 	defer func() {
 		s.serveWG.Done()
-		// Block until Stop or GracefulStop is ready for us to return.
-		<-s.done
+		select {
+		// Stop or GracefulStop called; block until done and return nil.
+		case <-s.quit:
+			<-s.done
+		default:
+		}
 	}()
 
 	s.lis[lis] = true
@@ -526,7 +530,6 @@ func (s *Server) Serve(lis net.Listener) error {
 			s.printf("done serving; Accept = %v", err)
 			s.mu.Unlock()
 
-			// If Stop or GracefulStop is called, return nil.
 			select {
 			case <-s.quit:
 				return nil
