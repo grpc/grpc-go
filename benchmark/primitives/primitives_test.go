@@ -256,7 +256,28 @@ func BenchmarkAtomic32BValueStore(b *testing.B) {
 	b.StopTimer()
 }
 
+func BenchmarkAtomicPointerStore(b *testing.B) {
+	var c atomic.Value
+	t := 123
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(&t)
+	}
+	b.StopTimer()
+}
+
+func BenchmarkAtomicTimePointerStore(b *testing.B) {
+	var c atomic.Value
+	t := time.Now()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Store(&t)
+	}
+	b.StopTimer()
+}
+
 func BenchmarkValueStoreWithContention(b *testing.B) {
+	t := 123
 	for _, n := range []int{10, 100, 1000, 10000, 100000} {
 		b.Run(fmt.Sprintf("Atomic/%v", n), func(b *testing.B) {
 			var wg sync.WaitGroup
@@ -265,7 +286,21 @@ func BenchmarkValueStoreWithContention(b *testing.B) {
 				wg.Add(1)
 				go func() {
 					for j := 0; j < b.N; j++ {
-						c.Store(j)
+						c.Store(t)
+					}
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+		})
+		b.Run(fmt.Sprintf("AtomicPointer/%v", n), func(b *testing.B) {
+			var wg sync.WaitGroup
+			var c atomic.Value
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func() {
+					for j := 0; j < b.N; j++ {
+						c.Store(&t)
 					}
 					wg.Done()
 				}()
@@ -281,7 +316,7 @@ func BenchmarkValueStoreWithContention(b *testing.B) {
 				go func() {
 					for j := 0; j < b.N; j++ {
 						mu.Lock()
-						c = j
+						c = t
 						mu.Unlock()
 					}
 					wg.Done()
