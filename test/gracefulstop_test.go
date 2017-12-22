@@ -38,6 +38,7 @@ type delayListener struct {
 	acceptCalled chan struct{}
 	allowCloseCh chan struct{}
 	cc           *delayConn
+	dialed       bool
 }
 
 func (d *delayListener) Accept() (net.Conn, error) {
@@ -70,6 +71,13 @@ func (d *delayListener) allowClientRead() {
 }
 
 func (d *delayListener) Dial(to time.Duration) (net.Conn, error) {
+	if d.dialed {
+		// Only hand out one connection (net.Dial can return more even after the
+		// listener is closed).  This is not thread-safe, but Dial should never be
+		// called concurrently in this environment.
+		return nil, fmt.Errorf("no more conns")
+	}
+	d.dialed = true
 	c, err := net.DialTimeout("tcp", d.Listener.Addr().String(), to)
 	if err != nil {
 		return nil, err
