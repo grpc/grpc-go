@@ -91,10 +91,6 @@ func newLBBuilder() balancer.Builder {
 	return NewLBBuilderWithFallbackTimeout(defaultFallbackTimeout)
 }
 
-func init() {
-	balancer.Register(newLBBuilder())
-}
-
 // NewLBBuilderWithFallbackTimeout creates a grpclb builder with the given
 // fallbackTimeout. If no response is received from the remote balancer within
 // fallbackTimeout, the backend addresses from the resolved address list will be
