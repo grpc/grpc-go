@@ -28,12 +28,10 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.InternalChannelStats;
-import io.grpc.InternalLogId;
-import io.grpc.InternalWithLogId;
-import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
@@ -53,14 +51,13 @@ import javax.annotation.concurrent.ThreadSafe;
  * to its own RPC needs.
  */
 @ThreadSafe
-final class OobChannel extends ManagedChannel implements InternalWithLogId {
+final class OobChannel extends ManagedChannel {
   private static final Logger log = Logger.getLogger(OobChannel.class.getName());
 
   private InternalSubchannel subchannel;
   private AbstractSubchannel subchannelImpl;
   private SubchannelPicker subchannelPicker;
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final String authority;
   private final DelayedClientTransport delayedTransport;
   private final ObjectPool<? extends Executor> executorPool;
@@ -177,11 +174,6 @@ final class OobChannel extends ManagedChannel implements InternalWithLogId {
   @Override
   public String authority() {
     return authority;
-  }
-
-  @Override
-  public InternalLogId getLogId() {
-    return logId;
   }
 
   @Override
