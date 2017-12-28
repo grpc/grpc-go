@@ -68,11 +68,11 @@ final class DnsNameResolver extends NameResolver {
   // From https://github.com/grpc/proposal/blob/master/A5-grpclb-in-dns.md
   private static final String GRPCLB_NAME_PREFIX = "_grpclb._tcp.";
 
-  private static final String jndiProperty =
+  private static final String JNDI_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "false");
 
   @VisibleForTesting
-  static boolean enableJndi = Boolean.parseBoolean(jndiProperty);
+  static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
 
   private DelegateResolver delegateResolver = pickDelegateResolver();
 

@@ -74,30 +74,30 @@ public class ServiceConfigurationTest {
             Arrays.asList(
                 new MethodConfig(
                     Arrays.asList(new Name("SimpleService", "Foo")),
-                    /*waitForReady=*/ true,
-                    /*timeout=*/ null,
-                    /*maxRequestMessageBytes=*/ null,
-                    /*maxResponseMessageBytes=*/ null,
-                    /*retryPolicy=*/ null,
-                    /*hedgingPolicy=*/ null),
+                    /* waitForReady */ true,
+                    /* timeout */ null,
+                    /* maxRequestMessageBytes */ null,
+                    /* maxResponseMessageBytes */ null,
+                    /* retryPolicy */ null,
+                    /* hedgingPolicy */ null),
                 new MethodConfig(
                     Arrays.asList(new Name("SimpleService", "FooTwo")),
-                    /*waitForReady=*/ null,
-                    /*timeout=*/ null,
-                    /*maxRequestMessageBytes=*/ null,
-                    /*maxResponseMessageBytes=*/ null,
-                    /*retryPolicy=*/ null,
-                    /*hedgingPolicy=*/ null),
+                    /* waitForReady */ null,
+                    /* timeout */ null,
+                    /* maxRequestMessageBytes */ null,
+                    /* maxResponseMessageBytes */ null,
+                    /* retryPolicy */ null,
+                    /* hedgingPolicy */ null),
                 new MethodConfig(
                     Arrays.asList(new Name("SimpleService", "FooTwelve")),
-                    /*waitForReady=*/ false,
-                    /*timeout=*/ null,
-                    /*maxRequestMessageBytes=*/ null,
-                    /*maxResponseMessageBytes=*/ null,
-                    /*retryPolicy=*/ null,
-                    /*hedgingPolicy=*/ null)),
-            /*retryThrottlingPolicy=*/null);
+                    /* waitForReady */ false,
+                    /* timeout */ null,
+                    /* maxRequestMessageBytes */ null,
+                    /* maxResponseMessageBytes */ null,
+                    /* retryPolicy */ null,
+                    /* hedgingPolicy */ null)),
+            /* retryThrottlingPolicy */ null);
 
-    assertEquals(actual, expected);
+    assertEquals(expected, actual);
   }
 }
