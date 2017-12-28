@@ -83,5 +83,5 @@ echo "Cleaning out stale deploys from previous runs, it is ok if this part fails
 # Sometimes the trap based cleanup fails.
 # Delete all versions older than 1 hour. This expression is an ISO8601 relative date:
 # https://cloud.google.com/sdk/gcloud/reference/topic/datetimes
-gcloud app versions list --format="get(version.id)" --filter="version.createTime<'-p1h'" | xargs -i gcloud app services delete $KOKORO_GAE_SERVICE --version {} --quiet
+gcloud app versions list --format="get(version.id)" --filter="service=$KOKORO_GAE_SERVICE AND version.createTime<'-p1h'" | xargs -i gcloud app services delete $KOKORO_GAE_SERVICE --version {} --quiet
 exit 0
