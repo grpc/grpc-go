@@ -76,3 +76,11 @@ echo "<?xml version='1.0' encoding='utf-8'?>
 cat ./gae-interop-testing/gae-jdk7/src/main/webapp/WEB-INF/appengine-web.xml
 # Deploy and test the real app (jdk7)
 ./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$KOKORO_GAE_APP_VERSION :grpc-gae-interop-testing-jdk7:runInteropTestRemote
+
+set +e
+echo "Cleaning out stale deploys from previous runs, it is ok if this part fails"
+
+# Sometimes the trap based cleanup fails.
+# Delete all versions older than 1 day. This expression is an ISO8601 relative date:
+# https://cloud.google.com/sdk/gcloud/reference/topic/datetimes
+gcloud app versions list --format="get(version.id)" --filter="version.createTime<'-p1d'" | xargs -i gcloud app services delete $KOKORO_GAE_SERVICE --version {} --quiet
