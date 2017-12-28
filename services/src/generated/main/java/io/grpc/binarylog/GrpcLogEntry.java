@@ -155,56 +155,72 @@ private static final long serialVersionUID = 0L;
   public enum Type
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <code>SEND_INITIAL_METADATA = 0;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_TYPE = 0;</code>
      */
-    SEND_INITIAL_METADATA(0),
+    UNKNOWN_TYPE(0),
     /**
-     * <code>SEND_TRAILING_METADATA = 1;</code>
+     * <code>SEND_INITIAL_METADATA = 1;</code>
      */
-    SEND_TRAILING_METADATA(1),
+    SEND_INITIAL_METADATA(1),
     /**
-     * <code>SEND_MESSAGE = 2;</code>
+     * <code>SEND_TRAILING_METADATA = 2;</code>
      */
-    SEND_MESSAGE(2),
+    SEND_TRAILING_METADATA(2),
     /**
-     * <code>RECV_INITIAL_METADATA = 3;</code>
+     * <code>SEND_MESSAGE = 3;</code>
      */
-    RECV_INITIAL_METADATA(3),
+    SEND_MESSAGE(3),
     /**
-     * <code>RECV_TRAILING_METADATA = 4;</code>
+     * <code>RECV_INITIAL_METADATA = 4;</code>
      */
-    RECV_TRAILING_METADATA(4),
+    RECV_INITIAL_METADATA(4),
     /**
-     * <code>RECV_MESSAGE = 5;</code>
+     * <code>RECV_TRAILING_METADATA = 5;</code>
      */
-    RECV_MESSAGE(5),
+    RECV_TRAILING_METADATA(5),
+    /**
+     * <code>RECV_MESSAGE = 6;</code>
+     */
+    RECV_MESSAGE(6),
     UNRECOGNIZED(-1),
     ;
 
     /**
-     * <code>SEND_INITIAL_METADATA = 0;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_TYPE = 0;</code>
      */
-    public static final int SEND_INITIAL_METADATA_VALUE = 0;
+    public static final int UNKNOWN_TYPE_VALUE = 0;
     /**
-     * <code>SEND_TRAILING_METADATA = 1;</code>
+     * <code>SEND_INITIAL_METADATA = 1;</code>
      */
-    public static final int SEND_TRAILING_METADATA_VALUE = 1;
+    public static final int SEND_INITIAL_METADATA_VALUE = 1;
     /**
-     * <code>SEND_MESSAGE = 2;</code>
+     * <code>SEND_TRAILING_METADATA = 2;</code>
      */
-    public static final int SEND_MESSAGE_VALUE = 2;
+    public static final int SEND_TRAILING_METADATA_VALUE = 2;
     /**
-     * <code>RECV_INITIAL_METADATA = 3;</code>
+     * <code>SEND_MESSAGE = 3;</code>
      */
-    public static final int RECV_INITIAL_METADATA_VALUE = 3;
+    public static final int SEND_MESSAGE_VALUE = 3;
     /**
-     * <code>RECV_TRAILING_METADATA = 4;</code>
+     * <code>RECV_INITIAL_METADATA = 4;</code>
      */
-    public static final int RECV_TRAILING_METADATA_VALUE = 4;
+    public static final int RECV_INITIAL_METADATA_VALUE = 4;
     /**
-     * <code>RECV_MESSAGE = 5;</code>
+     * <code>RECV_TRAILING_METADATA = 5;</code>
      */
-    public static final int RECV_MESSAGE_VALUE = 5;
+    public static final int RECV_TRAILING_METADATA_VALUE = 5;
+    /**
+     * <code>RECV_MESSAGE = 6;</code>
+     */
+    public static final int RECV_MESSAGE_VALUE = 6;
 
 
     public final int getNumber() {
@@ -225,12 +241,13 @@ private static final long serialVersionUID = 0L;
 
     public static Type forNumber(int value) {
       switch (value) {
-        case 0: return SEND_INITIAL_METADATA;
-        case 1: return SEND_TRAILING_METADATA;
-        case 2: return SEND_MESSAGE;
-        case 3: return RECV_INITIAL_METADATA;
-        case 4: return RECV_TRAILING_METADATA;
-        case 5: return RECV_MESSAGE;
+        case 0: return UNKNOWN_TYPE;
+        case 1: return SEND_INITIAL_METADATA;
+        case 2: return SEND_TRAILING_METADATA;
+        case 3: return SEND_MESSAGE;
+        case 4: return RECV_INITIAL_METADATA;
+        case 5: return RECV_TRAILING_METADATA;
+        case 6: return RECV_MESSAGE;
         default: return null;
       }
     }
@@ -293,24 +310,40 @@ private static final long serialVersionUID = 0L;
   public enum Logger
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <code>CLIENT = 0;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_LOGGER = 0;</code>
      */
-    CLIENT(0),
+    UNKNOWN_LOGGER(0),
     /**
-     * <code>SERVER = 1;</code>
+     * <code>CLIENT = 1;</code>
      */
-    SERVER(1),
+    CLIENT(1),
+    /**
+     * <code>SERVER = 2;</code>
+     */
+    SERVER(2),
     UNRECOGNIZED(-1),
     ;
 
     /**
-     * <code>CLIENT = 0;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_LOGGER = 0;</code>
      */
-    public static final int CLIENT_VALUE = 0;
+    public static final int UNKNOWN_LOGGER_VALUE = 0;
     /**
-     * <code>SERVER = 1;</code>
+     * <code>CLIENT = 1;</code>
      */
-    public static final int SERVER_VALUE = 1;
+    public static final int CLIENT_VALUE = 1;
+    /**
+     * <code>SERVER = 2;</code>
+     */
+    public static final int SERVER_VALUE = 2;
 
 
     public final int getNumber() {
@@ -331,8 +364,9 @@ private static final long serialVersionUID = 0L;
 
     public static Logger forNumber(int value) {
       switch (value) {
-        case 0: return CLIENT;
-        case 1: return SERVER;
+        case 0: return UNKNOWN_LOGGER;
+        case 1: return CLIENT;
+        case 2: return SERVER;
         default: return null;
       }
     }
@@ -631,10 +665,10 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (type_ != io.grpc.binarylog.GrpcLogEntry.Type.SEND_INITIAL_METADATA.getNumber()) {
+    if (type_ != io.grpc.binarylog.GrpcLogEntry.Type.UNKNOWN_TYPE.getNumber()) {
       output.writeEnum(1, type_);
     }
-    if (logger_ != io.grpc.binarylog.GrpcLogEntry.Logger.CLIENT.getNumber()) {
+    if (logger_ != io.grpc.binarylog.GrpcLogEntry.Logger.UNKNOWN_LOGGER.getNumber()) {
       output.writeEnum(2, logger_);
     }
     if (callId_ != null) {
@@ -657,11 +691,11 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (type_ != io.grpc.binarylog.GrpcLogEntry.Type.SEND_INITIAL_METADATA.getNumber()) {
+    if (type_ != io.grpc.binarylog.GrpcLogEntry.Type.UNKNOWN_TYPE.getNumber()) {
       size += com.google.protobuf.CodedOutputStream
         .computeEnumSize(1, type_);
     }
-    if (logger_ != io.grpc.binarylog.GrpcLogEntry.Logger.CLIENT.getNumber()) {
+    if (logger_ != io.grpc.binarylog.GrpcLogEntry.Logger.UNKNOWN_LOGGER.getNumber()) {
       size += com.google.protobuf.CodedOutputStream
         .computeEnumSize(2, logger_);
     }

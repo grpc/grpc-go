@@ -26,18 +26,20 @@ option java_outer_classname = "BinaryLogProto";
 message GrpcLogEntry {
   // Enumerates the type of logs
   enum Type {
-    SEND_INITIAL_METADATA = 0;
-    SEND_TRAILING_METADATA = 1;
-    SEND_MESSAGE = 2;
-    RECV_INITIAL_METADATA = 3;
-    RECV_TRAILING_METADATA = 4;
-    RECV_MESSAGE = 5;
+    UNKNOWN_TYPE = 0; // TODO(zpencer): upstream this
+    SEND_INITIAL_METADATA = 1;
+    SEND_TRAILING_METADATA = 2;
+    SEND_MESSAGE = 3;
+    RECV_INITIAL_METADATA = 4;
+    RECV_TRAILING_METADATA = 5;
+    RECV_MESSAGE = 6;
   };
 
   // Enumerates the entity that generates the log entry
   enum Logger {
-    CLIENT = 0;
-    SERVER = 1;
+    UNKNOWN_LOGGER = 0; // TODO(zpencer): upstream this
+    CLIENT = 1;
+    SERVER = 2;
   }
 
   Type type = 1;      // One of the above Type enum
@@ -87,16 +89,17 @@ message Metadata {
 
 // A metadata key value pair
 message MetadataEntry {
-  string key = 1;
+  bytes key = 1; // TODO(zpencer): upstream this
   bytes value = 2;
 }
 
 // Peer information
 message Peer {
   enum PeerType {
-    PEER_IPV4 = 0;  // peer is struct sockaddr_in
-    PEER_IPV6 = 1;  // peer is struct sockaddr_in6
-    PEER_UNIX = 2;  // peer is struct sockaddr_un
+    UNKNOWN_PEERTYPE = 0; // TODO(zpencer): upstream this
+    PEER_IPV4 = 1;  // peer is struct sockaddr_in
+    PEER_IPV6 = 2;  // peer is struct sockaddr_in6
+    PEER_UNIX = 3;  // peer is struct sockaddr_un
   };
   PeerType peer_type = 1;
   bytes peer = 2;  // value depends on peer_type

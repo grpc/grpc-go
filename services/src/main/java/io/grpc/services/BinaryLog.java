@@ -272,7 +272,8 @@ final class BinaryLog {
    */
   // TODO(zpencer): verify int64 representation with other gRPC languages
   static Uint128 callIdToProto(byte[] bytes) {
-    Preconditions.checkArgument(bytes.length == 16);
+    Preconditions.checkArgument(
+        bytes.length == 16, "can only convert from 16 byte input, actual length =" + bytes.length);
     ByteBuffer bb = ByteBuffer.wrap(bytes);
     long high = bb.getLong();
     long low = bb.getLong();
@@ -282,7 +283,7 @@ final class BinaryLog {
   @VisibleForTesting
   // TODO(zpencer): the binlog design does not specify how to actually express the peer bytes
   static Peer socketToProto(SocketAddress address) {
-    PeerType peerType = null;
+    PeerType peerType = PeerType.UNKNOWN_PEERTYPE;
     byte[] peerAddress = null;
 
     if (address instanceof InetSocketAddress) {
@@ -296,23 +297,20 @@ final class BinaryLog {
       }
       int port = ((InetSocketAddress) address).getPort();
       byte[] portBytes = new byte[IP_PORT_BYTES];
-      portBytes[0] = (byte) (port & IP_PORT_UPPER_MASK);
+      portBytes[0] = (byte) ((port & IP_PORT_UPPER_MASK) >> 8);
       portBytes[1] = (byte) (port & IP_PORT_LOWER_MASK);
       peerAddress = Bytes.concat(inetAddress.getAddress(), portBytes);
     } else if (address.getClass().getName().equals("io.netty.channel.unix.DomainSocketAddress")) {
       // To avoid a compile time dependency on grpc-netty, we check against the runtime class name.
       peerType = PeerType.PEER_UNIX;
-      // DomainSocketAddress.toString() is equivalent to DomainSocketAdddress.path()
+    }
+    if (peerAddress == null) {
       peerAddress = address.toString().getBytes(Charset.defaultCharset());
     }
-    Peer.Builder builder = Peer.newBuilder();
-    if (peerType != null) {
-      builder.setPeerType(peerType);
-    }
-    if (peerAddress != null) {
-      builder.setPeer(ByteString.copyFrom(peerAddress));
-    }
-    return builder.build();
+    return Peer.newBuilder()
+        .setPeerType(peerType)
+        .setPeer(ByteString.copyFrom(peerAddress))
+        .build();
   }
 
   @VisibleForTesting
@@ -330,7 +328,7 @@ final class BinaryLog {
           builder.addEntry(
               MetadataEntry
                   .newBuilder()
-                  .setKeyBytes(ByteString.copyFrom(key))
+                  .setKey(ByteString.copyFrom(key))
                   .setValue(ByteString.copyFrom(value))
                   .build());
           written += key.length;

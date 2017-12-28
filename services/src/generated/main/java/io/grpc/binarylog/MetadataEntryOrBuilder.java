@@ -8,14 +8,13 @@ public interface MetadataEntryOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>string key = 1;</code>
+   * <pre>
+   * TODO(zpencer): upstream this
+   * </pre>
+   *
+   * <code>bytes key = 1;</code>
    */
-  java.lang.String getKey();
-  /**
-   * <code>string key = 1;</code>
-   */
-  com.google.protobuf.ByteString
-      getKeyBytes();
+  com.google.protobuf.ByteString getKey();
 
   /**
    * <code>bytes value = 2;</code>

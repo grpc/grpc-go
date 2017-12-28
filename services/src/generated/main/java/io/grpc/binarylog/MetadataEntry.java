@@ -20,7 +20,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private MetadataEntry() {
-    key_ = "";
+    key_ = com.google.protobuf.ByteString.EMPTY;
     value_ = com.google.protobuf.ByteString.EMPTY;
   }
 
@@ -56,9 +56,8 @@ private static final long serialVersionUID = 0L;
             break;
           }
           case 10: {
-            java.lang.String s = input.readStringRequireUtf8();
 
-            key_ = s;
+            key_ = input.readBytes();
             break;
           }
           case 18: {
@@ -91,37 +90,16 @@ private static final long serialVersionUID = 0L;
   }
 
   public static final int KEY_FIELD_NUMBER = 1;
-  private volatile java.lang.Object key_;
+  private com.google.protobuf.ByteString key_;
   /**
-   * <code>string key = 1;</code>
+   * <pre>
+   * TODO(zpencer): upstream this
+   * </pre>
+   *
+   * <code>bytes key = 1;</code>
    */
-  public java.lang.String getKey() {
-    java.lang.Object ref = key_;
-    if (ref instanceof java.lang.String) {
-      return (java.lang.String) ref;
-    } else {
-      com.google.protobuf.ByteString bs = 
-          (com.google.protobuf.ByteString) ref;
-      java.lang.String s = bs.toStringUtf8();
-      key_ = s;
-      return s;
-    }
-  }
-  /**
-   * <code>string key = 1;</code>
-   */
-  public com.google.protobuf.ByteString
-      getKeyBytes() {
-    java.lang.Object ref = key_;
-    if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
-          com.google.protobuf.ByteString.copyFromUtf8(
-              (java.lang.String) ref);
-      key_ = b;
-      return b;
-    } else {
-      return (com.google.protobuf.ByteString) ref;
-    }
+  public com.google.protobuf.ByteString getKey() {
+    return key_;
   }
 
   public static final int VALUE_FIELD_NUMBER = 2;
@@ -145,8 +123,8 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (!getKeyBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, key_);
+    if (!key_.isEmpty()) {
+      output.writeBytes(1, key_);
     }
     if (!value_.isEmpty()) {
       output.writeBytes(2, value_);
@@ -159,8 +137,9 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (!getKeyBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, key_);
+    if (!key_.isEmpty()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBytesSize(1, key_);
     }
     if (!value_.isEmpty()) {
       size += com.google.protobuf.CodedOutputStream
@@ -334,7 +313,7 @@ private static final long serialVersionUID = 0L;
     }
     public Builder clear() {
       super.clear();
-      key_ = "";
+      key_ = com.google.protobuf.ByteString.EMPTY;
 
       value_ = com.google.protobuf.ByteString.EMPTY;
 
@@ -403,9 +382,8 @@ private static final long serialVersionUID = 0L;
 
     public Builder mergeFrom(io.grpc.binarylog.MetadataEntry other) {
       if (other == io.grpc.binarylog.MetadataEntry.getDefaultInstance()) return this;
-      if (!other.getKey().isEmpty()) {
-        key_ = other.key_;
-        onChanged();
+      if (other.getKey() != com.google.protobuf.ByteString.EMPTY) {
+        setKey(other.getKey());
       }
       if (other.getValue() != com.google.protobuf.ByteString.EMPTY) {
         setValue(other.getValue());
@@ -437,43 +415,25 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private java.lang.Object key_ = "";
+    private com.google.protobuf.ByteString key_ = com.google.protobuf.ByteString.EMPTY;
     /**
-     * <code>string key = 1;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>bytes key = 1;</code>
      */
-    public java.lang.String getKey() {
-      java.lang.Object ref = key_;
-      if (!(ref instanceof java.lang.String)) {
-        com.google.protobuf.ByteString bs =
-            (com.google.protobuf.ByteString) ref;
-        java.lang.String s = bs.toStringUtf8();
-        key_ = s;
-        return s;
-      } else {
-        return (java.lang.String) ref;
-      }
+    public com.google.protobuf.ByteString getKey() {
+      return key_;
     }
     /**
-     * <code>string key = 1;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>bytes key = 1;</code>
      */
-    public com.google.protobuf.ByteString
-        getKeyBytes() {
-      java.lang.Object ref = key_;
-      if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
-            com.google.protobuf.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
-        key_ = b;
-        return b;
-      } else {
-        return (com.google.protobuf.ByteString) ref;
-      }
-    }
-    /**
-     * <code>string key = 1;</code>
-     */
-    public Builder setKey(
-        java.lang.String value) {
+    public Builder setKey(com.google.protobuf.ByteString value) {
       if (value == null) {
     throw new NullPointerException();
   }
@@ -483,25 +443,15 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>string key = 1;</code>
+     * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>bytes key = 1;</code>
      */
     public Builder clearKey() {
       
       key_ = getDefaultInstance().getKey();
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>string key = 1;</code>
-     */
-    public Builder setKeyBytes(
-        com.google.protobuf.ByteString value) {
-      if (value == null) {
-    throw new NullPointerException();
-  }
-  checkByteStringIsUtf8(value);
-      
-      key_ = value;
       onChanged();
       return this;
     }

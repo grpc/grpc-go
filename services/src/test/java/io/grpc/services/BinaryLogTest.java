@@ -18,6 +18,8 @@ package io.grpc.services;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
@@ -25,13 +27,17 @@ import io.grpc.Metadata;
 import io.grpc.binarylog.Message;
 import io.grpc.binarylog.MetadataEntry;
 import io.grpc.binarylog.Peer;
+import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
 import io.grpc.services.BinaryLog.FactoryImpl;
 import io.netty.channel.unix.DomainSocketAddress;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.Arrays;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -48,49 +54,43 @@ public final class BinaryLogTest {
   private static final BinaryLog BOTH_FULL =
       new Builder().header(Integer.MAX_VALUE).msg(Integer.MAX_VALUE).build();
 
-  private static final byte[] CALL_ID = new byte[] {
-      0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-      0x19, 0x10, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
-
+  private static final String dataA = "aaaaaaaaa";
+  private static final String dataB = "bbbbbbbbb";
+  private static final String dataC = "ccccccccc";
   private static final Metadata.Key<String> KEY_A =
       Metadata.Key.of("a", Metadata.ASCII_STRING_MARSHALLER);
   private static final Metadata.Key<String> KEY_B =
       Metadata.Key.of("b", Metadata.ASCII_STRING_MARSHALLER);
   private static final Metadata.Key<String> KEY_C =
       Metadata.Key.of("c", Metadata.ASCII_STRING_MARSHALLER);
-  private static final MetadataEntry ENTRY_A;
-  private static final MetadataEntry ENTRY_B;
-  private static final MetadataEntry ENTRY_C;
-  private static final Metadata metadata;
+  private static final MetadataEntry ENTRY_A =
+        MetadataEntry
+            .newBuilder()
+            .setKey(ByteString.copyFrom(KEY_A.name(), US_ASCII))
+            .setValue(ByteString.copyFrom(dataA.getBytes(US_ASCII)))
+            .build();
+  private static final MetadataEntry ENTRY_B =
+        MetadataEntry
+            .newBuilder()
+            .setKey(ByteString.copyFrom(KEY_B.name(), US_ASCII))
+            .setValue(ByteString.copyFrom(dataB.getBytes(US_ASCII)))
+            .build();
+  private static final MetadataEntry ENTRY_C =
+        MetadataEntry
+            .newBuilder()
+            .setKey(ByteString.copyFrom(KEY_C.name(), US_ASCII))
+            .setValue(ByteString.copyFrom(dataC.getBytes(US_ASCII)))
+            .build();
   private static final boolean IS_COMPRESSED = true;
   private static final boolean IS_UNCOMPRESSED = false;
 
-  static {
-    String dataA = "aaaaaaaaa";
-    String dataB = "bbbbbbbbb";
-    String dataC = "ccccccccc";
-    metadata = new Metadata();
+  private final Metadata metadata = new Metadata();
+
+  @Before
+  public void setUp() throws Exception {
     metadata.put(KEY_A, dataA);
     metadata.put(KEY_B, dataB);
     metadata.put(KEY_C, dataC);
-    ENTRY_A =
-        MetadataEntry
-            .newBuilder()
-            .setKey(KEY_A.name())
-            .setValue(ByteString.copyFrom(dataA.getBytes(US_ASCII)))
-            .build();
-    ENTRY_B =
-        MetadataEntry
-            .newBuilder()
-            .setKey(KEY_B.name())
-            .setValue(ByteString.copyFrom(dataB.getBytes(US_ASCII)))
-            .build();
-    ENTRY_C =
-        MetadataEntry
-            .newBuilder()
-            .setKey(KEY_C.name())
-            .setValue(ByteString.copyFrom(dataC.getBytes(US_ASCII)))
-            .build();
   }
 
   @Test
@@ -262,24 +262,39 @@ public final class BinaryLogTest {
 
   @Test
   public void callIdToProto() {
+    byte[] callId = new byte[] {
+      0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+      0x19, 0x10, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
     assertEquals(
         Uint128
             .newBuilder()
             .setHigh(0x1112131415161718L)
             .setLow(0x19101a1b1c1d1e1fL)
             .build(),
-        BinaryLog.callIdToProto(CALL_ID));
+        BinaryLog.callIdToProto(callId));
 
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void callIdToProto_invalid_shorter_len() {
-    BinaryLog.callIdToProto(new byte[14]);
+    try {
+      BinaryLog.callIdToProto(new byte[14]);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(
+          expected.getMessage().startsWith("can only convert from 16 byte input, actual length"));
+    }
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void callIdToProto_invalid_longer_len() {
-    BinaryLog.callIdToProto(new byte[18]);
+    try {
+      BinaryLog.callIdToProto(new byte[18]);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertTrue(
+          expected.getMessage().startsWith("can only convert from 16 byte input, actual length"));
+    }
   }
 
   @Test
@@ -288,12 +303,13 @@ public final class BinaryLogTest {
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
     byte[] addressBytes = address.getAddress();
-    byte[] portBytes = new byte[] {(byte) (port & 0xff00), (byte) (port & 0xff)};
+    byte[] portBytes = ByteBuffer.allocate(4).putInt(port).array();
+    byte[] portUnsignedBytes = Arrays.copyOfRange(portBytes, 2, 4);
     assertEquals(
         Peer
             .newBuilder()
             .setPeerType(Peer.PeerType.PEER_IPV4)
-            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portBytes)))
+            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
             .build(),
         BinaryLog.socketToProto(socketAddress));
   }
@@ -305,12 +321,13 @@ public final class BinaryLogTest {
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
     byte[] addressBytes = address.getAddress();
-    byte[] portBytes = new byte[] {(byte) (port & 0xff00), (byte) (port & 0xff)};
+    byte[] portBytes = ByteBuffer.allocate(4).putInt(port).array();
+    byte[] portUnsignedBytes = Arrays.copyOfRange(portBytes, 2, 4);
     assertEquals(
         Peer
             .newBuilder()
             .setPeerType(Peer.PeerType.PEER_IPV6)
-            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portBytes)))
+            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
             .build(),
         BinaryLog.socketToProto(socketAddress));
   }
@@ -333,9 +350,11 @@ public final class BinaryLogTest {
   public void socketToProto_unknown() throws Exception {
     SocketAddress unknownSocket = new SocketAddress() { };
     assertEquals(
-        Peer.newBuilder().build(),
-        BinaryLog.socketToProto(unknownSocket)
-    );
+        Peer.newBuilder()
+            .setPeerType(PeerType.UNKNOWN_PEERTYPE)
+            .setPeer(ByteString.copyFrom(unknownSocket.toString(), US_ASCII))
+            .build(),
+        BinaryLog.socketToProto(unknownSocket));
   }
 
   @Test

@@ -97,55 +97,71 @@ private static final long serialVersionUID = 0L;
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
      * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_PEERTYPE = 0;</code>
+     */
+    UNKNOWN_PEERTYPE(0),
+    /**
+     * <pre>
      * peer is struct sockaddr_in
      * </pre>
      *
-     * <code>PEER_IPV4 = 0;</code>
+     * <code>PEER_IPV4 = 1;</code>
      */
-    PEER_IPV4(0),
+    PEER_IPV4(1),
     /**
      * <pre>
      * peer is struct sockaddr_in6
      * </pre>
      *
-     * <code>PEER_IPV6 = 1;</code>
+     * <code>PEER_IPV6 = 2;</code>
      */
-    PEER_IPV6(1),
+    PEER_IPV6(2),
     /**
      * <pre>
      * peer is struct sockaddr_un
      * </pre>
      *
-     * <code>PEER_UNIX = 2;</code>
+     * <code>PEER_UNIX = 3;</code>
      */
-    PEER_UNIX(2),
+    PEER_UNIX(3),
     UNRECOGNIZED(-1),
     ;
 
     /**
      * <pre>
+     * TODO(zpencer): upstream this
+     * </pre>
+     *
+     * <code>UNKNOWN_PEERTYPE = 0;</code>
+     */
+    public static final int UNKNOWN_PEERTYPE_VALUE = 0;
+    /**
+     * <pre>
      * peer is struct sockaddr_in
      * </pre>
      *
-     * <code>PEER_IPV4 = 0;</code>
+     * <code>PEER_IPV4 = 1;</code>
      */
-    public static final int PEER_IPV4_VALUE = 0;
+    public static final int PEER_IPV4_VALUE = 1;
     /**
      * <pre>
      * peer is struct sockaddr_in6
      * </pre>
      *
-     * <code>PEER_IPV6 = 1;</code>
+     * <code>PEER_IPV6 = 2;</code>
      */
-    public static final int PEER_IPV6_VALUE = 1;
+    public static final int PEER_IPV6_VALUE = 2;
     /**
      * <pre>
      * peer is struct sockaddr_un
      * </pre>
      *
-     * <code>PEER_UNIX = 2;</code>
+     * <code>PEER_UNIX = 3;</code>
      */
-    public static final int PEER_UNIX_VALUE = 2;
+    public static final int PEER_UNIX_VALUE = 3;
 
 
     public final int getNumber() {
@@ -166,9 +182,10 @@ private static final long serialVersionUID = 0L;
 
     public static PeerType forNumber(int value) {
       switch (value) {
-        case 0: return PEER_IPV4;
-        case 1: return PEER_IPV6;
-        case 2: return PEER_UNIX;
+        case 0: return UNKNOWN_PEERTYPE;
+        case 1: return PEER_IPV4;
+        case 2: return PEER_IPV6;
+        case 3: return PEER_UNIX;
         default: return null;
       }
     }
@@ -262,7 +279,7 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (peerType_ != io.grpc.binarylog.Peer.PeerType.PEER_IPV4.getNumber()) {
+    if (peerType_ != io.grpc.binarylog.Peer.PeerType.UNKNOWN_PEERTYPE.getNumber()) {
       output.writeEnum(1, peerType_);
     }
     if (!peer_.isEmpty()) {
@@ -276,7 +293,7 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (peerType_ != io.grpc.binarylog.Peer.PeerType.PEER_IPV4.getNumber()) {
+    if (peerType_ != io.grpc.binarylog.Peer.PeerType.UNKNOWN_PEERTYPE.getNumber()) {
       size += com.google.protobuf.CodedOutputStream
         .computeEnumSize(1, peerType_);
     }
