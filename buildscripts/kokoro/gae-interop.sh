@@ -33,10 +33,20 @@ echo "<?xml version='1.0' encoding='utf-8'?>
 </appengine-web-app>
 " > ./gae-interop-testing/gae-jdk8/src/main/webapp/WEB-INF/appengine-web.xml
 cat ./gae-interop-testing/gae-jdk8/src/main/webapp/WEB-INF/appengine-web.xml
-# Deploy the dummy 'default' version. It doesn't matter if we race with other kokoro runs.
-# We only require that it exists when cleanup() is called.
-if [[ $(gcloud app versions describe $DUMMY_DEFAULT_VERSION  --service=$KOKORO_GAE_SERVICE) != 0 ]]; then
-  ./gradlew --stacktrace -DgaeDeployVersion=$DUMMY_DEFAULT_VERSION -DgaeStopPreviousVersion=false -DgaePromote=false -PskipCodegen=true :grpc-gae-interop-testing-jdk8:appengineDeploy
+
+GRADLE_FLAGS="--stacktrace -DgaeStopPreviousVersion=false -DgaePromote=false -PskipCodegen=true"
+DUMMY_EXISTS_CMD="gcloud app versions describe $DUMMY_DEFAULT_VERSION --service=$KOKORO_GAE_SERVICE"
+DEPLOY_DUMMY_CMD="./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$DUMMY_DEFAULT_VERSION :grpc-gae-interop-testing-jdk8:appengineDeploy"
+
+# Deploy the dummy 'default' version. We only require that it exists when cleanup() is called.
+set +e
+$DUMMY_EXISTS_CMD
+set -e
+
+if [[ $? != 0 ]]; then
+  $DEPLOY_DUMMY_CMD
+else
+  echo "default version already exists: $DUMMY_DEFAULT_VERSION"
 fi
 
 ##
@@ -51,7 +61,7 @@ echo "<?xml version='1.0' encoding='utf-8'?>
 " > ./gae-interop-testing/gae-jdk8/src/main/webapp/WEB-INF/appengine-web.xml
 cat ./gae-interop-testing/gae-jdk8/src/main/webapp/WEB-INF/appengine-web.xml
 # Deploy and test the real app (jdk8)
-./gradlew --stacktrace -DgaeDeployVersion=$KOKORO_GAE_APP_VERSION -DgaeStopPreviousVersion=false -DgaePromote=false -PskipCodegen=true :grpc-gae-interop-testing-jdk8:runInteropTestRemote
+./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$KOKORO_GAE_APP_VERSION :grpc-gae-interop-testing-jdk8:runInteropTestRemote
 
 ##
 ## Begin JDK7 test
@@ -65,4 +75,4 @@ echo "<?xml version='1.0' encoding='utf-8'?>
 " > ./gae-interop-testing/gae-jdk7/src/main/webapp/WEB-INF/appengine-web.xml
 cat ./gae-interop-testing/gae-jdk7/src/main/webapp/WEB-INF/appengine-web.xml
 # Deploy and test the real app (jdk7)
-./gradlew --stacktrace -DgaeDeployVersion=$KOKORO_GAE_APP_VERSION -DgaeStopPreviousVersion=false -DgaePromote=false -PskipCodegen=true :grpc-gae-interop-testing-jdk7:runInteropTestRemote
+./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$KOKORO_GAE_APP_VERSION :grpc-gae-interop-testing-jdk7:runInteropTestRemote
