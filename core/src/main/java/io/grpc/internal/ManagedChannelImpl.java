@@ -41,6 +41,7 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.InternalChannelStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
@@ -80,7 +81,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl extends ManagedChannel {
+public final class ManagedChannelImpl
+    extends ManagedChannel implements InternalInstrumented<InternalChannelStats> {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -106,6 +108,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
   static final Status SUBCHANNEL_SHUTDOWN_STATUS =
       Status.UNAVAILABLE.withDescription("Subchannel shutdown invoked");
 
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final String target;
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
@@ -270,6 +273,11 @@ public final class ManagedChannelImpl extends ManagedChannel {
     SettableFuture<InternalChannelStats> ret = SettableFuture.create();
     ret.set(channelTracer.getStats());
     return ret;
+  }
+
+  @Override
+  public InternalLogId getLogId() {
+    return logId;
   }
 
   // Run from channelExecutor

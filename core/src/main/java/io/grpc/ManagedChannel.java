@@ -16,8 +16,6 @@
 
 package io.grpc;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -25,10 +23,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * A {@link Channel} that provides lifecycle management.
  */
 @ThreadSafe
-public abstract class ManagedChannel
-    extends Channel implements InternalInstrumented<InternalChannelStats> {
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
-
+public abstract class ManagedChannel extends Channel {
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
    * cancelled.
@@ -88,14 +83,6 @@ public abstract class ManagedChannel
     throw new UnsupportedOperationException("Not implemented");
   }
 
-  @Internal
-  @Override
-  public ListenableFuture<InternalChannelStats> getStats() {
-    SettableFuture<InternalChannelStats> ret = SettableFuture.create();
-    ret.set(null);
-    return ret;
-  }
-
   /**
    * Registers a one-off callback that will be run if the connectivity state of the channel diverges
    * from the given {@code source}, which is typically what has just been returned by {@link
@@ -127,10 +114,4 @@ public abstract class ManagedChannel
    */
   @ExperimentalApi
   public void resetConnectBackoff() {}
-
-  @Internal
-  @Override
-  public final InternalLogId getLogId() {
-    return logId;
-  }
 }
