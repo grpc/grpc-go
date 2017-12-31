@@ -125,6 +125,8 @@ func (d *gzipDecompressor) Type() string {
 type callInfo struct {
 	compressorType        string
 	failFast              bool
+	headerNeeded          bool
+	trailerNeeded         bool
 	headerMD              metadata.MD
 	trailerMD             metadata.MD
 	peer                  *peer.Peer
@@ -168,20 +170,40 @@ type afterCall func(c *callInfo)
 func (o afterCall) before(c *callInfo) error { return nil }
 func (o afterCall) after(c *callInfo)        { o(c) }
 
+type beforeAfterCall struct {
+	beforeCall func(c *callInfo) error
+	afterCall  func(c *callInfo)
+}
+
+func (o beforeAfterCall) before(c *callInfo) error { return o.beforeCall(c) }
+func (o beforeAfterCall) after(c *callInfo)        { o.afterCall(c) }
+
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		*md = c.headerMD
-	})
+	return beforeAfterCall{
+		beforeCall: func(c *callInfo) error {
+			c.headerNeeded = true
+			return nil
+		},
+		afterCall: func(c *callInfo) {
+			*md = c.headerMD
+		},
+	}
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		*md = c.trailerMD
-	})
+	return beforeAfterCall{
+		beforeCall: func(c *callInfo) error {
+			c.trailerNeeded = true
+			return nil
+		},
+		afterCall: func(c *callInfo) {
+			*md = c.trailerMD
+		},
+	}
 }
 
 // Peer returns a CallOption that retrieves peer information for a

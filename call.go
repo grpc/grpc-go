@@ -47,9 +47,11 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 			}
 		}
 	}()
-	c.headerMD, err = stream.Header()
-	if err != nil {
-		return
+	if c.headerNeeded {
+		c.headerMD, err = stream.Header()
+		if err != nil {
+			return
+		}
 	}
 	p := &parser{r: stream}
 	var inPayload *stats.InPayload
@@ -84,7 +86,9 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		// Fix the order if necessary.
 		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
 	}
-	c.trailerMD = stream.Trailer()
+	if c.trailerNeeded {
+		c.trailerMD = stream.Trailer()
+	}
 	return nil
 }
 
