@@ -270,7 +270,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		done: done,
 		t:    t,
 		s:    s,
-		p:    &parser{r: s},
+		p:    &parser{r: s, reuseBuf: true},
 
 		tracing: EnableTracing,
 		trInfo:  trInfo,

@@ -266,6 +266,11 @@ type parser struct {
 	// The header of a gRPC message. Find more detail
 	// at https://grpc.io/docs/guides/wire.html.
 	header [5]byte
+
+	reuseBuf bool
+
+	// buf holds the memory large enough to read a message, so we don't need to allocate memory each time.
+	buf []byte
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -298,9 +303,13 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
-	// of making it for each message:
-	msg = make([]byte, int(length))
+	if p.reuseBuf {
+		p.reallocBuf(int(length))
+		msg = p.buf[:length]
+	} else {
+		msg = make([]byte, int(length))
+	}
+
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -308,6 +317,19 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 		return 0, nil, err
 	}
 	return pf, msg, nil
+}
+
+func (p *parser) reallocBuf(length int) {
+	if cap(p.buf) >= length {
+		return
+	}
+	allocLen := 8
+	for allocLen < length {
+		// This may allocate more memory than needed, but avoids allocating memory every time in the case when
+		// each message is slightly larger than the previous one.
+		allocLen *= 2
+	}
+	p.buf = make([]byte, allocLen)
 }
 
 // encode serializes msg and returns a buffer of message header and a buffer of msg.

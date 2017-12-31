@@ -161,6 +161,31 @@ func TestToRPCErr(t *testing.T) {
 	}
 }
 
+func TestBufferReuse(t *testing.T) {
+	for _, test := range []struct {
+		reuse   bool
+		sameBuf bool
+	}{
+		{true, true},
+		{false, false},
+	} {
+		data := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 1, 'a'}
+		p := &parser{r: bytes.NewReader(data), reuseBuf: test.reuse}
+		_, msg, err := p.recvMsg(1)
+		if err != nil {
+			t.Fatalf("parser{%v}.recvMsg(_) = _, _, %v", p, err)
+		}
+		_, msg2, err := p.recvMsg(1)
+		if err != nil {
+			t.Fatalf("parser{%v}.recvMsg(_) = _, _, %v", p, err)
+		}
+		sameBuffer := &msg[0] == &msg2[0]
+		if sameBuffer != test.sameBuf {
+			t.Fatalf("bufferReuse sameBuf = %v, want %v", sameBuffer, test.sameBuf)
+		}
+	}
+}
+
 // bmEncode benchmarks encoding a Protocol Buffer message containing mSize
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
