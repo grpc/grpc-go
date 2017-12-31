@@ -380,7 +380,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	for _, c := range t.creds {
 		data, err := c.GetRequestMetadata(ctx, audience)
 		if err != nil {
-			return nil, streamErrorf(codes.Internal, "transport: %v", err)
+			if _, ok := status.FromError(err); ok {
+				return nil, err
+			}
+
+			return nil, streamErrorf(codes.Unauthenticated, "transport: %v", err)
 		}
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
