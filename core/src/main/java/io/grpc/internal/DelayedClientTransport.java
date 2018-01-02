@@ -170,11 +170,6 @@ final class DelayedClientTransport implements ManagedClientTransport {
     }
   }
 
-  // TODO: API plumbing to enable retry.
-  private boolean retryEnabled() {
-    return false;
-  }
-
   /**
    * Caller must call {@code channelExecutor.drain()} outside of lock because this method may
    * schedule tasks on channelExecutor.
@@ -235,7 +230,6 @@ final class DelayedClientTransport implements ManagedClientTransport {
   public final void shutdownNow(Status status) {
     shutdown(status);
     Collection<PendingStream> savedPendingStreams;
-    Collection<ClientStream> savedUncommittedRetriableStreams;
     Runnable savedReportTransportTerminated;
     synchronized (lock) {
       savedPendingStreams = pendingStreams;
