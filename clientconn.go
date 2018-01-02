@@ -121,7 +121,7 @@ const (
 // channelz data storage for inquiry.
 // This is an EXPERIMENTAL API.
 func RegisterChannelz() channelz.DB {
-	channelz.ChannelzOn = true
+	channelz.TurnOn()
 	return channelz.NewChannelzStorage()
 }
 
@@ -428,7 +428,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		if v := ctx.Value(nestedChannel{}); v != nil {
 			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelType)
 		} else {
@@ -807,7 +807,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
 		channelz.AddChild(cc.id, ac.id, "<nil>")
 	}
@@ -1181,7 +1181,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 			continue
 		}
-		if channelz.ChannelzOn {
+		if channelz.IsOn() {
 			id := channelz.RegisterSocket(newTr.(channelz.Socket), channelz.NormalSocketType)
 			newTr.(channelz.Socket).SetID(id)
 			channelz.AddChild(ac.id, id, "<nil>")
