@@ -27,25 +27,53 @@ import (
 )
 
 var (
-	db    DB
+	db    dbWrapper
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries shown on a web page.
 	EntryPerPage = 50
-	// ChannelzOn indicates whether channelz service is turned on.
-	ChannelzOn bool
+	curState     int32
 )
+
+// TurnOn turns on channelz data collection.
+// This is an EXPERIMENTAL API.
+func TurnOn() {
+	atomic.StoreInt32(&curState, 1)
+}
+
+// IsOn returns whether channelz data collection is on.
+// This is an EXPERIMENTAL API.
+func IsOn() bool {
+	return atomic.LoadInt32(&curState) == 1
+}
+
+type dbWrapper struct {
+	mu sync.RWMutex
+	DB
+}
+
+func (d *dbWrapper) set(db DB) {
+	d.mu.Lock()
+	d.DB = db
+	d.mu.Unlock()
+}
+
+func (d *dbWrapper) get() DB {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.DB
+}
 
 // NewChannelzStorage initializes channelz data storage and unique id generator,
 // and returns pointer to the data storage for read-only access.
 // This is an EXPERIMENTAL API.
 func NewChannelzStorage() DB {
-	db = &channelMap{
+	db.set(&channelMap{
 		m:                make(map[int64]conn),
 		topLevelChannels: make(map[int64]struct{}),
 		servers:          make(map[int64]struct{}),
-	}
-	idGen = idGenerator{}
-	return db
+	})
+	idGen.reset()
+	return &db
 }
 
 // DB is the interface that groups the methods for channelz data storage and access
@@ -110,13 +138,13 @@ func RegisterChannel(c Channel, t ChannelType) int64 {
 	switch t {
 	case TopChannelType:
 		cn.t = topChannelT
-		db.addTopChannel(id, cn)
+		db.get().addTopChannel(id, cn)
 	case SubChannelType:
 		cn.t = subChannelT
-		db.add(id, cn)
+		db.get().add(id, cn)
 	case NestedChannelType:
 		cn.t = nestedChannelT
-		db.add(id, cn)
+		db.get().add(id, cn)
 	default:
 		grpclog.Errorf("register channel with undefined type %+v", t)
 		// Is returning 0 a good idea?
@@ -129,7 +157,7 @@ func RegisterChannel(c Channel, t ChannelType) int64 {
 // This is an EXPERIMENTAL API.
 func RegisterServer(s Server) int64 {
 	id := idGen.genID()
-	db.addServer(id, &server{s: s, sockets: make(map[int64]string), listenSockets: make(map[int64]string)})
+	db.get().addServer(id, &server{s: s, sockets: make(map[int64]string), listenSockets: make(map[int64]string)})
 	return id
 }
 
@@ -141,10 +169,10 @@ func RegisterSocket(s Socket, t SocketType) int64 {
 	switch t {
 	case NormalSocketType:
 		sk.t = normalSocketT
-		db.add(id, sk)
+		db.get().add(id, sk)
 	case ListenSocketType:
 		sk.t = listenSocketT
-		db.add(id, sk)
+		db.get().add(id, sk)
 	default:
 		grpclog.Errorf("register socket with undefined type %+v", t)
 		// Is returning 0 a good idea?
@@ -156,14 +184,14 @@ func RegisterSocket(s Socket, t SocketType) int64 {
 // RemoveEntry removes an entry with unique identification number id from db.
 // This is an EXPERIMENTAL API.
 func RemoveEntry(id int64) {
-	db.deleteEntry(id)
+	db.get().deleteEntry(id)
 }
 
 // AddChild adds a child to its parent's descendant set with ref as its reference
 // string, and set pid as its parent id.
 // This is an EXPERIMENTAL API.
 func AddChild(pid, cid int64, ref string) {
-	db.addChild(pid, cid, ref)
+	db.get().addChild(pid, cid, ref)
 }
 
 type channelMap struct {
@@ -475,6 +503,10 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 
 type idGenerator struct {
 	id int64
+}
+
+func (i *idGenerator) reset() {
+	atomic.StoreInt64(&i.id, 0)
 }
 
 func (i *idGenerator) genID() int64 {
