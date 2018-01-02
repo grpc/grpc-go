@@ -349,7 +349,7 @@ func NewServer(opt ...ServerOption) *Server {
 		s.events = trace.NewEventLog("grpc.Server", fmt.Sprintf("%s:%d", file, line))
 	}
 
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		s.id = channelz.RegisterServer(s)
 	}
 	return s
@@ -509,7 +509,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[lis] = true
 	s.mu.Unlock()
 
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		ls := &listenSocket{s: lis}
 		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
 		channelz.AddChild(s.id, ls.id, "<nil>")
@@ -653,7 +653,7 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		return nil
 	}
 
-	if channelz.ChannelzOn {
+	if channelz.IsOn() {
 		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
 		st.(channelz.Socket).SetID(id)
 		channelz.AddChild(s.id, id, "<nil>")
