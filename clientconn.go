@@ -797,12 +797,12 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		cc.mu.Unlock()
 		return nil, ErrClientConnClosing
 	}
-	cc.conns[ac] = struct{}{}
-	cc.mu.Unlock()
 	if channelz.IsOn() {
 		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
 		channelz.AddChild(cc.id, ac.id, "<nil>")
 	}
+	cc.conns[ac] = struct{}{}
+	cc.mu.Unlock()
 	return ac, nil
 }
 
