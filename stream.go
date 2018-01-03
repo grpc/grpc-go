@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
@@ -253,10 +252,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		break
 	}
 
-	// Set callInfo.peer object from stream's context.
-	if peer, ok := peer.FromContext(s.Context()); ok {
-		c.peer = peer
-	}
+	c.stream = s
 	cs := &clientStream{
 		opts:   opts,
 		c:      c,

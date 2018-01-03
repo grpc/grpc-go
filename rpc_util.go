@@ -125,9 +125,7 @@ func (d *gzipDecompressor) Type() string {
 type callInfo struct {
 	compressorType        string
 	failFast              bool
-	headerMD              metadata.MD
-	trailerMD             metadata.MD
-	peer                  *peer.Peer
+	stream                *transport.Stream
 	traceInfo             traceInfo // in trace.go
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
@@ -172,7 +170,9 @@ func (o afterCall) after(c *callInfo)        { o(c) }
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
-		*md = c.headerMD
+		if c.stream != nil {
+			*md, _ = c.stream.Header()
+		}
 	})
 }
 
@@ -180,16 +180,20 @@ func Header(md *metadata.MD) CallOption {
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
-		*md = c.trailerMD
+		if c.stream != nil {
+			*md = c.stream.Trailer()
+		}
 	})
 }
 
 // Peer returns a CallOption that retrieves peer information for a
 // unary RPC.
-func Peer(peer *peer.Peer) CallOption {
+func Peer(p *peer.Peer) CallOption {
 	return afterCall(func(c *callInfo) {
-		if c.peer != nil {
-			*peer = *c.peer
+		if c.stream != nil {
+			if x, ok := peer.FromContext(c.stream.Context()); ok {
+				*p = *x
+			}
 		}
 	})
 }
