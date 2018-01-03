@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
@@ -47,12 +46,6 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 			}
 		}
 	}()
-	if c.headerNeeded {
-		c.headerMD, err = stream.Header()
-		if err != nil {
-			return
-		}
-	}
 	p := &parser{r: stream}
 	var inPayload *stats.InPayload
 	if dopts.copts.StatsHandler != nil {
@@ -85,9 +78,6 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		// TODO in the current implementation, inTrailer may be handled before inPayload in some cases.
 		// Fix the order if necessary.
 		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
-	}
-	if c.trailerNeeded {
-		c.trailerMD = stream.Trailer()
 	}
 	return nil
 }
@@ -273,9 +263,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		if peer, ok := peer.FromContext(stream.Context()); ok {
-			c.peer = peer
-		}
+		c.stream = stream
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
