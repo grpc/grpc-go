@@ -481,6 +481,14 @@ func (l *listenSocket) SetID(id int64) {
 	l.id = id
 }
 
+func (l *listenSocket) Close() error {
+	err := l.Listener.Close()
+	if channelz.IsOn() {
+		channelz.RemoveEntry(l.id)
+	}
+	return err
+}
+
 // Serve accepts incoming connections on the listener lis, creating a new
 // ServerTransport and service goroutine for each. The service goroutines
 // read gRPC requests and then call the registered handlers to reply to them.
