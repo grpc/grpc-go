@@ -191,7 +191,7 @@ func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	}
 
 	r.NewAddress(svrAddrs[:len(svrAddrs)-1])
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	tcs, _ = db.GetTopChannels(0)
 	if len(tcs[0].SubChans) != num-1 {
 		t.Fatalf("There should be %d subchannel not %d", num-1, len(tcs[0].SubChans))
