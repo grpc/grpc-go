@@ -19,6 +19,7 @@
 package test
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	}
 }
 
-func TestServerRegistration(t *testing.T) {
+func TestServerRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
@@ -64,10 +65,14 @@ func TestServerRegistration(t *testing.T) {
 			t.Fatalf("GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
 		te.tearDown()
+		ss, end = db.GetServers(c.start)
+		if len(ss) != 0 || !end {
+			t.Fatalf("GetServers(0) = %+v (len of which: %d), end: %+v, want len(GetServers(0)) = 0, end: true", ss, len(ss), end)
+		}
 	}
 }
 
-func TestTopChannelRegistration(t *testing.T) {
+func TestTopChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
@@ -99,11 +104,16 @@ func TestTopChannelRegistration(t *testing.T) {
 		for _, cc := range ccs {
 			cc.Close()
 		}
+		tcs, end = db.GetTopChannels(c.start)
+		if len(tcs) != 0 || !end {
+			t.Fatalf("GetTopChannels(0) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(0)) = 0, end: true", tcs, len(tcs), end)
+		}
+
 		te.tearDown()
 	}
 }
 
-func TestNestedChannelRegistration(t *testing.T) {
+func TestNestedChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
@@ -125,9 +135,23 @@ func TestNestedChannelRegistration(t *testing.T) {
 	if len(tcs[0].NestedChans) != 1 {
 		t.Fatalf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 	}
+
+	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+
+	// wait for the shutdown of grpclb balancer
+	time.Sleep(10 * time.Millisecond)
+	tcs, _ = db.GetTopChannels(0)
+	if len(tcs) != 1 {
+		t.Fatalf("There should only be one top channel, not %d", len(tcs))
+	}
+	if len(tcs[0].NestedChans) != 0 {
+		t.Fatalf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+	}
+
 }
 
-func TestClientSubChannelSocketRegistration(t *testing.T) {
+func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
@@ -165,9 +189,28 @@ func TestClientSubChannelSocketRegistration(t *testing.T) {
 	if count != num {
 		t.Fatalf("There should be %d sockets not %d", num, count)
 	}
+
+	r.NewAddress(svrAddrs[:len(svrAddrs)-1])
+	time.Sleep(10 * time.Millisecond)
+	tcs, _ = db.GetTopChannels(0)
+	if len(tcs[0].SubChans) != num-1 {
+		t.Fatalf("There should be %d subchannel not %d", num-1, len(tcs[0].SubChans))
+	}
+	count = 0
+	for k := range tcs[0].SubChans {
+		sc := db.GetSubChannel(k)
+		if sc == nil {
+			t.Fatalf("got <nil> subchannel")
+		}
+		count += len(sc.Sockets)
+	}
+	if count != num-1 {
+		t.Fatalf("There should be %d sockets not %d", num-1, count)
+	}
+
 }
 
-func TestServerSocketRegistration(t *testing.T) {
+func TestServerSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	db := grpc.RegisterChannelz()
 	e := tcpClearRREnv
@@ -182,7 +225,7 @@ func TestServerSocketRegistration(t *testing.T) {
 		ccs = append(ccs, cc)
 	}
 	defer func() {
-		for _, c := range ccs {
+		for _, c := range ccs[:len(ccs)-1] {
 			c.Close()
 		}
 	}()
@@ -198,4 +241,41 @@ func TestServerSocketRegistration(t *testing.T) {
 	if len(ns) != num {
 		t.Fatalf("There should be %d normal sockets not %d", num, len(ns))
 	}
+
+	ccs[len(ccs)-1].Close()
+	time.Sleep(10 * time.Millisecond)
+	ns, _ = db.GetServerSockets(ss[0].ID, 0)
+	if len(ns) != num-1 {
+		t.Fatalf("There should be %d normal sockets not %d", num-1, len(ns))
+	}
+}
+
+func TestServerListenSocketDeletion(t *testing.T) {
+	defer leakcheck.Check(t)
+	db := grpc.RegisterChannelz()
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	go s.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
+	ss, _ := db.GetServers(0)
+	if len(ss) != 1 {
+		t.Fatalf("There should only be one server, not %d", len(ss))
+	}
+	if len(ss[0].ListenSockets) != 1 {
+		t.Fatalf("There should only be one server listen socket, not %d", len(ss[0].ListenSockets))
+	}
+
+	lis.Close()
+	time.Sleep(10 * time.Millisecond)
+	ss, _ = db.GetServers(0)
+	if len(ss) != 1 {
+		t.Fatalf("There should only be one server, not %d", len(ss))
+	}
+	if len(ss[0].ListenSockets) != 0 {
+		t.Fatalf("There should only be 0 server listen socket, not %d", len(ss[0].ListenSockets))
+	}
+	s.Stop()
 }
