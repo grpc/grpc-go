@@ -35,6 +35,7 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.PrototypeMarshaller;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.internal.GrpcUtil;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -223,6 +224,11 @@ public class ProtoLiteUtilsTest {
 
     Type result = marshaller.parse(new CustomKnownLengthInputStream(expect.toByteArray()));
     assertEquals(expect, result);
+  }
+
+  @Test
+  public void defaultMaxMessageSize() {
+    assertEquals(GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE, ProtoLiteUtils.DEFAULT_MAX_MESSAGE_SIZE);
   }
 
   private static class CustomKnownLengthInputStream extends InputStream implements KnownLength {

@@ -18,6 +18,7 @@ package io.grpc.protobuf.lite;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -29,7 +30,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.PrototypeMarshaller;
 import io.grpc.Status;
-import io.grpc.internal.GrpcUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -46,6 +46,12 @@ public class ProtoLiteUtils {
       ExtensionRegistryLite.getEmptyRegistry();
 
   private static final int BUF_SIZE = 8192;
+
+  /**
+   * The same value as {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
+   */
+  @VisibleForTesting
+  static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
 
   /**
    * Sets the global registry for proto marshalling shared across all servers and clients.
@@ -124,7 +130,7 @@ public class ProtoLiteUtils {
         try {
           if (stream instanceof KnownLength) {
             int size = stream.available();
-            if (size > 0 && size <= GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE) {
+            if (size > 0 && size <= DEFAULT_MAX_MESSAGE_SIZE) {
               // buf should not be used after this method has returned.
               byte[] buf = bufs.get().get();
               if (buf == null || buf.length < size) {
