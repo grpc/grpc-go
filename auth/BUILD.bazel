@@ -1,0 +1,13 @@
+java_library(
+    name = "auth",
+    srcs = glob([
+        "src/main/java/io/grpc/auth/*.java",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "@com_google_auth_google_auth_library_credentials//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_code_findbugs_jsr305//jar",
+    ],
+)
