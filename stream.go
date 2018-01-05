@@ -51,7 +51,7 @@ type StreamDesc struct {
 
 // Stream defines the common interface a client or server stream has to satisfy.
 //
-// All errors returned from Stream are status errors.
+// All errors returned from Stream are compatible with the status package.
 type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context

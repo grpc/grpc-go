@@ -139,7 +139,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 // Invoke sends the RPC request on the wire and returns after response is
 // received.  This is typically called by generated code.
 //
-// All errors returned by Invoke are status errors.
+// All errors returned by Invoke are compatible with the status package.
 func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
 	if cc.dopts.unaryInt != nil {
 		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
