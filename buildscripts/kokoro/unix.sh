@@ -7,7 +7,7 @@
 set -exu -o pipefail
 
 export GRADLE_OPTS=-Xmx512m
-export PROTOBUF_VERSION=3.5.0
+export PROTOBUF_VERSION=3.5.1
 export LDFLAGS=-L/tmp/protobuf/lib
 export CXXFLAGS=-I/tmp/protobuf/include
 export LD_LIBRARY_PATH=/tmp/protobuf/lib

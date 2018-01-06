@@ -98,8 +98,8 @@ subprojects {
 
         nettyVersion = '4.1.17.Final'
         guavaVersion = '19.0'
-        protobufVersion = '3.5.0'
-        protocVersion = protobufVersion
+        protobufVersion = '3.5.1'
+        protocVersion = '3.5.1-1'
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {
