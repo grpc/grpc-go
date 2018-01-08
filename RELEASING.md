@@ -101,30 +101,14 @@ would be used to create all `v1.7` tags (e.g. `v1.7.0`, `v1.7.1`).
      $(git log --pretty=format:%H --grep "^Start $MAJOR.$((MINOR+1)).0 development cycle$" upstream/master)^
    $ git push upstream v$MAJOR.$MINOR.x
    ```
-4. Make sure you are [logged in](https://grpc-testing.appspot.com/manage) to
-   Jenkins, then make a [new release
-   job](https://grpc-testing.appspot.com/view/Releases/newJob)
-   * _Name_: gRPC-Java-$MAJOR.$MINOR-Windows
-   * _Copy from_: gRPC-Java-master-windows
-   * Click _OK_ button
-   * Click _Advanced..._ in the _General_ area right above _Source Code Management_
-   * _Display Name_ under _Use custom workspace_ (not ~~Project
-     url~~): gRPC Java $MAJOR.$MINOR Windows
-   * Under _Source Code Management_, _Branches to build_'s
-   _Branch Specifier_: `*/v$MAJOR.$MINOR.x`
-   * Under _Build Triggers_, _Build periodically_: `H H * * H`
-   * Click _SAVE_ button
-   * Click _Build Now_
-   * Click on job #1, then _Console Output_. Verify the `git checkout` checked
-     out the correct commit
-5. Go to [Travis CI settings](https://travis-ci.org/grpc/grpc-java/settings) and
+4. Go to [Travis CI settings](https://travis-ci.org/grpc/grpc-java/settings) and
    add a _Cron Job_:
    * Branch: `v$MAJOR.$MINOR.x`
    * Interval: `weekly`
    * Options: `Do not run if there has been a build in the last 24h`
    * Click _Add_ button
-6. Continue with Google-internal steps at go/grpc/java/releasing.
-7. Move items out of the release milestone that didn't make the cut. Issues that
+5. Continue with Google-internal steps at go/grpc/java/releasing.
+6. Move items out of the release milestone that didn't make the cut. Issues that
    may be backported should stay in the release milestone. Treat issues with the
    'release blocker' label with special care.
 
