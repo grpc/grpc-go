@@ -42,10 +42,10 @@ import io.grpc.reflection.v1alpha.ServerReflectionResponse;
 import io.grpc.reflection.v1alpha.ServiceResponse;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -300,7 +300,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       FileDescriptorResponse.Builder fdRBuilder = FileDescriptorResponse.newBuilder();
 
       Set<String> seenFiles = new HashSet<String>();
-      Queue<FileDescriptor> frontier = new LinkedList<FileDescriptor>();
+      Queue<FileDescriptor> frontier = new ArrayDeque<FileDescriptor>();
       seenFiles.add(fd.getName());
       frontier.add(fd);
       while (!frontier.isEmpty()) {
@@ -408,7 +408,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         new HashMap<String, Map<Integer, FileDescriptor>>();
 
     FileDescriptorIndex(List<ServerServiceDefinition> services) {
-      Queue<FileDescriptor> fileDescriptorsToProcess = new LinkedList<FileDescriptor>();
+      Queue<FileDescriptor> fileDescriptorsToProcess = new ArrayDeque<FileDescriptor>();
       Set<String> seenFiles = new HashSet<String>();
       for (ServerServiceDefinition service : services) {
         io.grpc.ServiceDescriptor serviceDescriptor = service.getServiceDescriptor();

@@ -137,7 +137,7 @@ public class OpenLoopClient {
       stub = BenchmarkServiceGrpc.newStub(checkNotNull(channel, "channel"));
       this.request = checkNotNull(request, "request");
       this.targetQps = targetQps;
-      numRpcs = targetQps * duration;
+      numRpcs = (long) targetQps * duration;
       rnd = new Random();
     }
 

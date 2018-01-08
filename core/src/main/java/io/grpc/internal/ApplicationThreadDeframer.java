@@ -20,7 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Decompressor;
 import java.io.InputStream;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
 import java.util.Queue;
 import javax.annotation.Nullable;
 
@@ -41,7 +41,7 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
   private final TransportExecutor transportExecutor;
 
   /** Queue for messages returned by the deframer when deframing in the application thread. */
-  private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
+  private final Queue<InputStream> messageReadQueue = new ArrayDeque<InputStream>();
 
   ApplicationThreadDeframer(
       MessageDeframer.Listener listener,

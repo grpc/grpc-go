@@ -165,6 +165,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private Socket socket;
   @GuardedBy("lock")
   private int maxConcurrentStreams = 0;
+  @SuppressWarnings("JdkObsolete") // Usage is bursty; want low memory usage when empty
   @GuardedBy("lock")
   private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<OkHttpClientStream>();
   private final ConnectionSpec connectionSpec;

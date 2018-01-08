@@ -50,8 +50,8 @@ public class AbstractHttp2HeadersTest {
       } catch (InvocationTargetException ex) {
         assertEquals("For method: " + method,
             UnsupportedOperationException.class, ex.getCause().getClass());
-      } catch (Throwable t) {
-        throw new RuntimeException("Failure with method: " + method, t);
+      } catch (Exception ex) {
+        throw new AssertionError("Failure with method: " + method, ex);
       }
     }
   }

@@ -39,9 +39,9 @@ import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Random;
@@ -209,7 +209,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   @Override
   public StreamObserver<Messages.StreamingOutputCallRequest> halfDuplexCall(
       final StreamObserver<Messages.StreamingOutputCallResponse> responseObserver) {
-    final Queue<Chunk> chunks = new LinkedList<Chunk>();
+    final Queue<Chunk> chunks = new ArrayDeque<Chunk>();
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
       public void onNext(StreamingOutputCallRequest request) {
@@ -371,7 +371,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * Breaks down the request and creates a queue of response chunks for the given request.
    */
   public Queue<Chunk> toChunkQueue(StreamingOutputCallRequest request) {
-    Queue<Chunk> chunkQueue = new LinkedList<Chunk>();
+    Queue<Chunk> chunkQueue = new ArrayDeque<Chunk>();
     int offset = 0;
     boolean compressable = compressableResponse(request.getResponseType());
     for (ResponseParameters params : request.getResponseParametersList()) {

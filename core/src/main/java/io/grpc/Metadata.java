@@ -24,13 +24,13 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -347,7 +347,7 @@ public final class Metadata {
     List<T> ret = null;
     for (; readIdx < size; readIdx++) {
       if (bytesEqual(key.asciiName(), name(readIdx))) {
-        ret = ret != null ? ret : new LinkedList<T>();
+        ret = ret != null ? ret : new ArrayList<T>();
         ret.add(key.parseBytes(value(readIdx)));
         continue;
       }

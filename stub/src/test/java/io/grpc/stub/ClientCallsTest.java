@@ -557,7 +557,7 @@ public class ClientCallsTest {
     try {
       iter.next();
       fail("Should fail");
-    } catch (Throwable e) {
+    } catch (Exception e) {
       Status status = Status.fromThrowable(e);
       assertEquals(Status.INTERNAL, status);
       Metadata metadata = Status.trailersFromThrowable(e);

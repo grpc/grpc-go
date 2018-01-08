@@ -19,7 +19,8 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
@@ -39,7 +40,7 @@ final class ChannelExecutor {
   private final Object lock = new Object();
 
   @GuardedBy("lock")
-  private final LinkedList<Runnable> queue = new LinkedList<Runnable>();
+  private final Queue<Runnable> queue = new ArrayDeque<Runnable>();
   @GuardedBy("lock")
   private boolean draining;
 

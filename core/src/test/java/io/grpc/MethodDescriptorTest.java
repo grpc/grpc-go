@@ -21,7 +21,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import io.grpc.MethodDescriptor.MethodType;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -30,6 +32,9 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class MethodDescriptorTest {
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
+
   @Test
   public void createMethodDescriptor() {
     @SuppressWarnings("deprecation") // MethodDescriptor.create
@@ -80,7 +85,7 @@ public class MethodDescriptorTest {
     assertEquals("package.service/method", newDescriptor.getFullMethodName());
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void safeAndNonUnary() {
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
@@ -89,10 +94,8 @@ public class MethodDescriptorTest {
         .setResponseMarshaller(new StringMarshaller())
         .build();
 
-
-    MethodDescriptor<String, String> discard = descriptor.toBuilder().setSafe(true).build();
-    // Never reached
-    assert discard == null;
+    thrown.expect(IllegalArgumentException.class);
+    MethodDescriptor<String, String> unused = descriptor.toBuilder().setSafe(true).build();
   }
 
   @Test
