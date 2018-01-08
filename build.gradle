@@ -9,7 +9,8 @@ buildscript {
   dependencies {
     classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
     classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.4.0'
-    classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.11'
+    classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.13'
+    classpath 'net.ltgt.gradle:gradle-apt-plugin:0.13'
     classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.4"
     classpath 'me.champeau.gradle:japicmp-gradle-plugin:0.2.5'
   }
@@ -29,11 +30,13 @@ subprojects {
     apply plugin: "ru.vyarus.animalsniffer"
     if (!rootProject.hasProperty('errorProne') || rootProject.errorProne.toBoolean()) {
       apply plugin: "net.ltgt.errorprone"
+      apply plugin: "net.ltgt.apt"
 
       dependencies {
         // The ErrorProne plugin defaults to the latest, which would break our
         // build if error prone releases a new version with a new check
         errorprone 'com.google.errorprone:error_prone_core:2.0.21'
+        apt 'com.google.guava:guava-beta-checker:1.0'
       }
     } else {
       // Remove per-project error-prone checker config

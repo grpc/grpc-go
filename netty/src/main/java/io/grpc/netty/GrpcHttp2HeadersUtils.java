@@ -179,6 +179,7 @@ class GrpcHttp2HeadersUtils {
       return PlatformDependent.equals(bytes0, offset0, bytes1, offset1, length0);
     }
 
+    @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
     private static byte[] toBinaryValue(AsciiString name, AsciiString value) {
       return name.endsWith(binaryHeaderSuffix)
           ? BaseEncoding.base64().decode(value)

@@ -455,6 +455,7 @@ public final class Metadata {
     }
   }
 
+  @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder("Metadata(");

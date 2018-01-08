@@ -32,6 +32,11 @@ dependencies {
 
 configureProtoCompilation()
 
+compileJava {
+    // This isn't a library; it can use beta APIs
+    it.options.compilerArgs += ["-Xep:BetaApi:OFF"]
+}
+
 test {
     // For the automated tests, use Jetty ALPN.
     jvmArgs "-javaagent:" + configurations.alpnagent.asPath

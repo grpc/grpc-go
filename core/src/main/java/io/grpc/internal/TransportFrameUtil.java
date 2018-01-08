@@ -44,6 +44,7 @@ public final class TransportFrameUtil {
    *
    * @return the interleaved keys and values.
    */
+  @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
   public static byte[][] toHttp2Headers(Metadata headers) {
     byte[][] serializedHeaders = InternalMetadata.serialize(headers);
     // TODO(carl-mastrangelo): eventually remove this once all callers are updated.
@@ -89,6 +90,7 @@ public final class TransportFrameUtil {
    * @param http2Headers the interleaved keys and values of HTTP/2-compliant headers
    * @return the interleaved keys and values in the raw serialized format
    */
+  @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
   public static byte[][] toRawSerializedHeaders(byte[][] http2Headers) {
     for (int i = 0; i < http2Headers.length; i += 2) {
       byte[] key = http2Headers[i];

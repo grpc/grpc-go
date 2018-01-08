@@ -167,6 +167,7 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
     }
   }
 
+  @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
   private static Metadata toHeaders(@Nullable Map<String, List<String>> metadata) {
     Metadata headers = new Metadata();
     if (metadata != null) {

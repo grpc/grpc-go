@@ -41,7 +41,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
-import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
@@ -57,6 +56,7 @@ import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.InternalServer;
+import io.grpc.internal.IoUtils;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerStream;
@@ -1954,7 +1954,7 @@ public abstract class AbstractTransportTest {
     @Override
     public String parse(InputStream stream) {
       try {
-        return new String(ByteStreams.toByteArray(stream), UTF_8);
+        return new String(IoUtils.toByteArray(stream), UTF_8);
       } catch (IOException ex) {
         throw new RuntimeException(ex);
       }

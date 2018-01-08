@@ -126,6 +126,7 @@ class OkHttpClientStream extends AbstractClientStream {
   }
 
   class Sink implements AbstractClientStream.Sink {
+    @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
     @Override
     public void writeHeaders(Metadata metadata, byte[] payload) {
       String defaultPath = "/" + method.getFullMethodName();

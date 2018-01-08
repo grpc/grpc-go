@@ -371,6 +371,7 @@ final class DnsNameResolver extends NameResolver {
 
     private static final Pattern whitespace = Pattern.compile("\\s+");
 
+    @SuppressWarnings("BetaApi") // Verify is stable in Guava 23.5
     @Override
     ResolutionResults resolve(String host) throws NamingException {
       List<String> serviceConfigTxtRecords = Collections.emptyList();

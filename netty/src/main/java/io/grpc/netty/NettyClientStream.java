@@ -111,6 +111,7 @@ class NettyClientStream extends AbstractClientStream {
   }
 
   private class Sink implements AbstractClientStream.Sink {
+    @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
     @Override
     public void writeHeaders(Metadata headers, byte[] requestPayload) {
       // Convert the headers into Netty HTTP/2 headers.
