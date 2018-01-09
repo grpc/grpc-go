@@ -54,9 +54,9 @@ public final class BinaryLogTest {
   private static final BinaryLog BOTH_FULL =
       new Builder().header(Integer.MAX_VALUE).msg(Integer.MAX_VALUE).build();
 
-  private static final String dataA = "aaaaaaaaa";
-  private static final String dataB = "bbbbbbbbb";
-  private static final String dataC = "ccccccccc";
+  private static final String DATA_A = "aaaaaaaaa";
+  private static final String DATA_B = "bbbbbbbbb";
+  private static final String DATA_C = "ccccccccc";
   private static final Metadata.Key<String> KEY_A =
       Metadata.Key.of("a", Metadata.ASCII_STRING_MARSHALLER);
   private static final Metadata.Key<String> KEY_B =
@@ -67,19 +67,19 @@ public final class BinaryLogTest {
         MetadataEntry
             .newBuilder()
             .setKey(ByteString.copyFrom(KEY_A.name(), US_ASCII))
-            .setValue(ByteString.copyFrom(dataA.getBytes(US_ASCII)))
+            .setValue(ByteString.copyFrom(DATA_A.getBytes(US_ASCII)))
             .build();
   private static final MetadataEntry ENTRY_B =
         MetadataEntry
             .newBuilder()
             .setKey(ByteString.copyFrom(KEY_B.name(), US_ASCII))
-            .setValue(ByteString.copyFrom(dataB.getBytes(US_ASCII)))
+            .setValue(ByteString.copyFrom(DATA_B.getBytes(US_ASCII)))
             .build();
   private static final MetadataEntry ENTRY_C =
         MetadataEntry
             .newBuilder()
             .setKey(ByteString.copyFrom(KEY_C.name(), US_ASCII))
-            .setValue(ByteString.copyFrom(dataC.getBytes(US_ASCII)))
+            .setValue(ByteString.copyFrom(DATA_C.getBytes(US_ASCII)))
             .build();
   private static final boolean IS_COMPRESSED = true;
   private static final boolean IS_UNCOMPRESSED = false;
@@ -88,9 +88,9 @@ public final class BinaryLogTest {
 
   @Before
   public void setUp() throws Exception {
-    metadata.put(KEY_A, dataA);
-    metadata.put(KEY_B, dataB);
-    metadata.put(KEY_C, dataC);
+    metadata.put(KEY_A, DATA_A);
+    metadata.put(KEY_B, DATA_B);
+    metadata.put(KEY_C, DATA_C);
   }
 
   @Test
@@ -373,15 +373,11 @@ public final class BinaryLogTest {
   public void metadataToProto_truncated() throws Exception {
     // 0 byte limit not enough for any metadata
     assertEquals(
-        io.grpc.binarylog.Metadata
-            .newBuilder()
-            .build(),
+        io.grpc.binarylog.Metadata.getDefaultInstance(),
         BinaryLog.metadataToProto(metadata, 0));
     // not enough bytes for first key value
     assertEquals(
-        io.grpc.binarylog.Metadata
-            .newBuilder()
-            .build(),
+        io.grpc.binarylog.Metadata.getDefaultInstance(),
         BinaryLog.metadataToProto(metadata, 9));
     // enough for first key value
     assertEquals(
