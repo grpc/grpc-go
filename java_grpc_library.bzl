@@ -113,7 +113,7 @@ def java_grpc_library(name, srcs, deps, flavor=None,
       "@com_google_guava_guava//jar",
   ]
   if flavor == "normal":
-    added_deps += ["@com_google_protobuf_java//:protobuf_java"]
+    added_deps += ["@com_google_protobuf//:protobuf_java"]
   elif flavor == "lite":
     # TODO: This is currently blocked on https://github.com/google/protobuf/issues/2762
     added_deps += ["@com_google_protobuf_java_lite//:protobuf_java_lite"]

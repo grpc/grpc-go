@@ -45,8 +45,8 @@ def grpc_java_repositories(
     com_google_instrumentation_api()
   if not omit_com_google_protobuf:
     com_google_protobuf()
-  if not omit_com_google_protobuf_java:
-    com_google_protobuf_java()
+  if omit_com_google_protobuf_java:
+    fail("omit_com_google_protobuf_java is no longer supported and must be not be passed to grpc_java_repositories()")
   if not omit_com_google_protobuf_nano_protobuf_javanano:
     com_google_protobuf_nano_protobuf_javanano()
   if not omit_com_google_truth_truth:
@@ -148,16 +148,6 @@ def com_google_protobuf():
   # This statement defines the @com_google_protobuf repo.
   native.http_archive(
       name = "com_google_protobuf",
-      sha256 = "1f8b9b202e9a4e467ff0b0f25facb1642727cdf5e69092038f15b37c75b99e45",
-      strip_prefix = "protobuf-3.5.1",
-      urls = ["https://github.com/google/protobuf/archive/v3.5.1.zip"],
-  )
-
-def com_google_protobuf_java():
-  # java_proto_library rules implicitly depend on @com_google_protobuf_java//:java_toolchain,
-  # which is the Java proto runtime (base classes and common utilities).
-  native.http_archive(
-      name = "com_google_protobuf_java",
       sha256 = "1f8b9b202e9a4e467ff0b0f25facb1642727cdf5e69092038f15b37c75b99e45",
       strip_prefix = "protobuf-3.5.1",
       urls = ["https://github.com/google/protobuf/archive/v3.5.1.zip"],
