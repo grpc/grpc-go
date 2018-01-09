@@ -278,9 +278,9 @@ func BenchmarkAtomicTimePointerStore(b *testing.B) {
 
 func BenchmarkStoreContentionWithAtomic(b *testing.B) {
 	t := 123
+	var c unsafe.Pointer
 	b.SetParallelism(10000)
 	b.RunParallel(func(pb *testing.PB) {
-		var c unsafe.Pointer
 		for pb.Next() {
 			atomic.StorePointer(&c, unsafe.Pointer(&t))
 		}
@@ -289,16 +289,55 @@ func BenchmarkStoreContentionWithAtomic(b *testing.B) {
 
 func BenchmarkStoreContentionWithMutex(b *testing.B) {
 	t := 123
+	var mu sync.Mutex
+	var c int
 	b.SetParallelism(10000)
 	b.RunParallel(func(pb *testing.PB) {
-		var c int
-		var mu sync.Mutex
 		for pb.Next() {
 			mu.Lock()
 			c = t
 			mu.Unlock()
 		}
-		_ = c
+	})
+}
+
+type dummyStruct struct {
+	a int64
+	b time.Time
+}
+
+func BenchmarkStructStoreContentionWithAtomic(b *testing.B) {
+	d := dummyStruct{}
+	dp := unsafe.Pointer(&d)
+	b.SetParallelism(10000)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			t := time.Now()
+			for {
+				v := (*dummyStruct)(atomic.LoadPointer(&dp))
+				n := &dummyStruct{
+					a: v.a + 1,
+					b: t,
+				}
+				if atomic.CompareAndSwapPointer(&dp, unsafe.Pointer(v), unsafe.Pointer(n)) {
+					break
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkStructStoreContentionWithMutex(b *testing.B) {
+	d := dummyStruct{}
+	var mu sync.Mutex
+	b.SetParallelism(10000)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			mu.Lock()
+			d.a++
+			d.b = time.Now()
+			mu.Unlock()
+		}
 	})
 }
 
