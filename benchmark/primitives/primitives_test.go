@@ -23,7 +23,6 @@
 package primitives_test
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -277,56 +276,30 @@ func BenchmarkAtomicTimePointerStore(b *testing.B) {
 	b.StopTimer()
 }
 
-func BenchmarkValueStoreWithContention(b *testing.B) {
+func BenchmarkStoreContentionWithAtomic(b *testing.B) {
 	t := 123
-	for _, n := range []int{10, 100, 1000, 10000, 100000} {
-		b.Run(fmt.Sprintf("Atomic/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var c atomic.Value
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
-						c.Store(t)
-					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		})
-		b.Run(fmt.Sprintf("AtomicStorePointer/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var up unsafe.Pointer
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
-						atomic.StorePointer(&up, unsafe.Pointer(&t))
-					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		})
-		b.Run(fmt.Sprintf("Mutex/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var c int
-			mu := sync.Mutex{}
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
-						mu.Lock()
-						c = t
-						mu.Unlock()
-					}
-					wg.Done()
-				}()
-			}
-			_ = c
-			wg.Wait()
-		})
-	}
+	b.SetParallelism(10000)
+	b.RunParallel(func(pb *testing.PB) {
+		var c unsafe.Pointer
+		for pb.Next() {
+			atomic.StorePointer(&c, unsafe.Pointer(&t))
+		}
+	})
+}
+
+func BenchmarkStoreContentionWithMutex(b *testing.B) {
+	t := 123
+	b.SetParallelism(10000)
+	b.RunParallel(func(pb *testing.PB) {
+		var c int
+		var mu sync.Mutex
+		for pb.Next() {
+			mu.Lock()
+			c = t
+			mu.Unlock()
+		}
+		_ = c
+	})
 }
 
 type myFooer struct{}
