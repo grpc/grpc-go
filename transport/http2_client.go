@@ -649,6 +649,8 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	select {
 	case <-s.ctx.Done():
 		return ContextErr(s.ctx.Err())
+	case <-s.done:
+		return io.EOF
 	case <-t.ctx.Done():
 		return ErrConnClosing
 	default:
