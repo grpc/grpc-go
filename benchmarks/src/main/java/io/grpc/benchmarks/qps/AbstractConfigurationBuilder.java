@@ -212,7 +212,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
   private static String wordWrap(String text, int startPos, int maxPos) {
     StringBuilder builder = new StringBuilder();
     int pos = startPos;
-    String[] parts = text.split("\\n");
+    String[] parts = text.split("\\n", -1);
     boolean isBulleted = parts.length > 1;
     for (String part : parts) {
       int lineStart = startPos;

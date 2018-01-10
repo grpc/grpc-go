@@ -35,7 +35,7 @@ subprojects {
       dependencies {
         // The ErrorProne plugin defaults to the latest, which would break our
         // build if error prone releases a new version with a new check
-        errorprone 'com.google.errorprone:error_prone_core:2.1.3'
+        errorprone 'com.google.errorprone:error_prone_core:2.2.0'
         apt 'com.google.guava:guava-beta-checker:1.0'
       }
     } else {

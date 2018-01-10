@@ -1725,7 +1725,8 @@ public abstract class AbstractInteropTest {
     try {
       certificates = Arrays.asList(sslSession.getPeerCertificates());
     } catch (SSLPeerUnverifiedException e) {
-      fail("No cert");
+      // Should never happen
+      throw new AssertionError(e);
     }
 
     X509Certificate x509cert = (X509Certificate) certificates.get(0);
