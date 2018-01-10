@@ -17,7 +17,8 @@
 package io.grpc.examples.helloworld;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.spy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.stub.StreamObserver;
@@ -47,7 +48,8 @@ public class HelloWorldClientTest {
   @Rule
   public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
-  private final GreeterGrpc.GreeterImplBase serviceImpl = spy(new GreeterGrpc.GreeterImplBase() {});
+  private final GreeterGrpc.GreeterImplBase serviceImpl =
+      mock(GreeterGrpc.GreeterImplBase.class, delegatesTo(new GreeterGrpc.GreeterImplBase() {}));
   private HelloWorldClient client;
 
   @Before

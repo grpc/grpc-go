@@ -20,6 +20,7 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -119,7 +120,8 @@ public class ServerInterceptorsTest {
 
   @Test
   public void multipleInvocationsOfHandler() {
-    ServerInterceptor interceptor = Mockito.spy(new NoopInterceptor());
+    ServerInterceptor interceptor =
+        mock(ServerInterceptor.class, delegatesTo(new NoopInterceptor()));
     ServerServiceDefinition intercepted
         = ServerInterceptors.intercept(serviceDefinition, Arrays.asList(interceptor));
     assertSame(listener,

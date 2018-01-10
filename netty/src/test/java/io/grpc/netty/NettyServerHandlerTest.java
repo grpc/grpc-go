@@ -45,7 +45,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -121,7 +120,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Mock
   private ServerStreamTracer.Factory streamTracerFactory;
 
-  private final ServerTransportListener transportListener = spy(new ServerTransportListenerImpl());
+  private final ServerTransportListener transportListener =
+      mock(ServerTransportListener.class, delegatesTo(new ServerTransportListenerImpl()));
   private final TestServerStreamTracer streamTracer = new TestServerStreamTracer();
 
   private NettyServerStream stream;

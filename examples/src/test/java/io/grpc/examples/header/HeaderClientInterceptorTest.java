@@ -18,7 +18,8 @@ package io.grpc.examples.header;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.spy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.ClientInterceptors;
@@ -59,14 +60,14 @@ public class HeaderClientInterceptorTest {
   @Rule
   public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
-  private final ServerInterceptor mockServerInterceptor = spy(
+  private final ServerInterceptor mockServerInterceptor = mock(ServerInterceptor.class, delegatesTo(
       new ServerInterceptor() {
         @Override
         public <ReqT, RespT> Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
           return next.startCall(call, headers);
         }
-      });
+      }));
 
   @Test
   public void clientHeaderDeliveredToServer() {

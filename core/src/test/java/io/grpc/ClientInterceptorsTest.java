@@ -23,11 +23,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -92,7 +92,8 @@ public class ClientInterceptorsTest {
 
   @Test
   public void channelAndInterceptorCalled() {
-    ClientInterceptor interceptor = spy(new NoopInterceptor());
+    ClientInterceptor interceptor =
+        mock(ClientInterceptor.class, delegatesTo(new NoopInterceptor()));
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     CallOptions callOptions = CallOptions.DEFAULT;
     // First call
@@ -216,15 +217,16 @@ public class ClientInterceptorsTest {
     final CallOptions initialCallOptions = CallOptions.DEFAULT.withDeadlineAfter(100, NANOSECONDS);
     final CallOptions newCallOptions = initialCallOptions.withDeadlineAfter(300, NANOSECONDS);
     assertNotSame(initialCallOptions, newCallOptions);
-    ClientInterceptor interceptor = spy(new ClientInterceptor() {
-      @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-          MethodDescriptor<ReqT, RespT> method,
-          CallOptions callOptions,
-          Channel next) {
-        return next.newCall(method, newCallOptions);
-      }
-    });
+    ClientInterceptor interceptor =
+        mock(ClientInterceptor.class, delegatesTo(new ClientInterceptor() {
+          @Override
+          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+              MethodDescriptor<ReqT, RespT> method,
+              CallOptions callOptions,
+              Channel next) {
+            return next.newCall(method, newCallOptions);
+          }
+        }));
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     intercepted.newCall(method, initialCallOptions);
     verify(interceptor).interceptCall(
@@ -396,7 +398,8 @@ public class ClientInterceptorsTest {
     CallOptions.Key<String> customOption = CallOptions.Key.of("custom", null);
     CallOptions callOptions = CallOptions.DEFAULT.withOption(customOption, "value");
     ArgumentCaptor<CallOptions> passedOptions = ArgumentCaptor.forClass(CallOptions.class);
-    ClientInterceptor interceptor = spy(new NoopInterceptor());
+    ClientInterceptor interceptor =
+        mock(ClientInterceptor.class, delegatesTo(new NoopInterceptor()));
 
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
 

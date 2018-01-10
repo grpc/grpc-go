@@ -18,7 +18,8 @@ package io.grpc.examples.header;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.mockito.Mockito.spy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.CallOptions;
@@ -87,7 +88,7 @@ public class HeaderServerInterceptorTest {
           @Override
           public void start(Listener<RespT> responseListener, Metadata headers) {
             spyListener = responseListener =
-                spy(new SimpleForwardingClientCallListener(responseListener) {});
+                mock(ClientCall.Listener.class, delegatesTo(responseListener));
             super.start(responseListener, headers);
           }
         };
