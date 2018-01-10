@@ -179,7 +179,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
       public void onNext(StreamingOutputCallRequest request) {
         if (request.hasResponseStatus()) {
           dispatcher.cancel();
-          responseObserver.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
+          dispatcher.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
               .withDescription(request.getResponseStatus().getMessage())
               .asRuntimeException());
           return;
@@ -197,7 +197,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
 
       @Override
       public void onError(Throwable cause) {
-        responseObserver.onError(cause);
+        dispatcher.onError(cause);
       }
     };
   }
@@ -209,6 +209,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   @Override
   public StreamObserver<Messages.StreamingOutputCallRequest> halfDuplexCall(
       final StreamObserver<Messages.StreamingOutputCallResponse> responseObserver) {
+    final ResponseDispatcher dispatcher = new ResponseDispatcher(responseObserver);
     final Queue<Chunk> chunks = new ArrayDeque<Chunk>();
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
@@ -219,12 +220,12 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
       @Override
       public void onCompleted() {
         // Dispatch all of the chunks in one shot.
-        new ResponseDispatcher(responseObserver).enqueue(chunks).completeInput();
+        dispatcher.enqueue(chunks).completeInput();
       }
 
       @Override
       public void onError(Throwable cause) {
-        responseObserver.onError(cause);
+        dispatcher.onError(cause);
       }
     };
   }
@@ -269,6 +270,11 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
       }
     };
 
+    /**
+     * The {@link StreamObserver} will be used to send the queue of response chunks. Since calls to
+     * {@link StreamObserver} must be synchronized across threads, no further calls should be made
+     * directly on {@code responseStream} after it is provided to the {@link ResponseDispatcher}.
+     */
     public ResponseDispatcher(StreamObserver<StreamingOutputCallResponse> responseStream) {
       this.chunks = Queues.newLinkedBlockingQueue();
       this.responseStream = responseStream;
@@ -307,6 +313,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
 
     public synchronized boolean isCancelled() {
       return cancelled;
+    }
+
+    private synchronized void onError(Throwable cause) {
+      responseStream.onError(cause);
     }
 
     /**
