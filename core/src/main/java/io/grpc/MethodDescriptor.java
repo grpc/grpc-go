@@ -438,7 +438,8 @@ public final class MethodDescriptor<ReqT, RespT> {
         .setFullMethodName(fullMethodName)
         .setIdempotent(idempotent)
         .setSafe(safe)
-        .setSampledToLocalTracing(sampledToLocalTracing);
+        .setSampledToLocalTracing(sampledToLocalTracing)
+        .setSchemaDescriptor(schemaDescriptor);
   }
 
   /**
