@@ -205,7 +205,7 @@ subprojects {
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
                 protoc_lite: "com.google.protobuf:protoc-gen-javalite:3.0.0",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.1',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.3',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
 
                 netty: "io.netty:netty-codec-http2:[${nettyVersion}]",
