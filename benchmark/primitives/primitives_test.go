@@ -299,7 +299,7 @@ func BenchmarkStoreContentionWithMutex(b *testing.B) {
 			mu.Unlock()
 		}
 	})
-	_ := c
+	_ = c
 }
 
 type dummyStruct struct {
