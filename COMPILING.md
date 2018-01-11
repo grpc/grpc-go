@@ -21,6 +21,16 @@ project, run:
 $ ./gradlew install
 ```
 
+### Notes for IntelliJ
+Building in IntelliJ works best when you import the project as a Gradle project and delegate IDE 
+build/run actions to Gradle.
+
+You can find this setting at:
+```Settings -> Build, Execution, Deployment
+      -> Build Tools -> Gradle -> Runner
+      -> Delegate IDE build/run actions to gradle.
+```
+
 How to Build Code Generation Plugin
 -----------------------------------
 This section is only necessary if you are making changes to the code
