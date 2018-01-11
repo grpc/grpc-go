@@ -18,20 +18,29 @@ package io.grpc.netty;
 
 import io.grpc.Attributes;
 import io.grpc.Internal;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Settings;
+import javax.annotation.Nullable;
 
 /**
  * gRPC wrapper for {@link Http2ConnectionHandler}.
  */
 @Internal
 public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler {
-  public GrpcHttp2ConnectionHandler(Http2ConnectionDecoder decoder,
+
+  @Nullable
+  protected final ChannelPromise channelUnused;
+
+  public GrpcHttp2ConnectionHandler(
+      ChannelPromise channelUnused,
+      Http2ConnectionDecoder decoder,
       Http2ConnectionEncoder encoder,
       Http2Settings initialSettings) {
     super(decoder, encoder, initialSettings);
+    this.channelUnused = channelUnused;
   }
 
   /**
@@ -43,5 +52,15 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
    * @param attrs arbitrary attributes passed after protocol negotiation (eg. SSLSession).
    */
   public void handleProtocolNegotiationCompleted(Attributes attrs) {
+  }
+
+  /**
+   * Calling this method indicates that the channel will no longer be used.  This method is roughly
+   * the same as calling {@link #close} on the channel, but leaving the channel alive.  This is
+   * useful if the channel will soon be deregistered from the executor and used in a non-Netty
+   * context.
+   */
+  public void notifyUnused() {
+    channelUnused.setSuccess(null);
   }
 }

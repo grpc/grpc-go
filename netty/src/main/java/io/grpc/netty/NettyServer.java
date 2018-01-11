@@ -35,6 +35,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -156,6 +157,8 @@ class NettyServer implements InternalServer, InternalWithLogId {
       @Override
       public void initChannel(Channel ch) throws Exception {
 
+        ChannelPromise channelDone = ch.newPromise();
+
         long maxConnectionAgeInNanos = NettyServer.this.maxConnectionAgeInNanos;
         if (maxConnectionAgeInNanos != MAX_CONNECTION_AGE_NANOS_DISABLED) {
           // apply a random jitter of +/-10% to max connection age
@@ -165,13 +168,22 @@ class NettyServer implements InternalServer, InternalWithLogId {
 
         NettyServerTransport transport =
             new NettyServerTransport(
-                ch, protocolNegotiator, streamTracerFactories, transportTracerFactory.create(),
+                ch,
+                channelDone,
+                protocolNegotiator,
+                streamTracerFactories,
+                transportTracerFactory.create(),
                 maxStreamsPerConnection,
-                flowControlWindow, maxMessageSize, maxHeaderListSize,
-                keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+                flowControlWindow,
+                maxMessageSize,
+                maxHeaderListSize,
+                keepAliveTimeInNanos,
+                keepAliveTimeoutInNanos,
                 maxConnectionIdleInNanos,
-                maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
-                permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+                maxConnectionAgeInNanos,
+                maxConnectionAgeGraceInNanos,
+                permitKeepAliveWithoutCalls,
+                permitKeepAliveTimeInNanos);
         ServerTransportListener transportListener;
         // This is to order callbacks on the listener, not to guard access to channel.
         synchronized (NettyServer.this) {
@@ -185,13 +197,26 @@ class NettyServer implements InternalServer, InternalWithLogId {
           eventLoopReferenceCounter.retain();
           transportListener = listener.transportCreated(transport);
         }
-        transport.start(transportListener);
-        ch.closeFuture().addListener(new ChannelFutureListener() {
+
+        /**
+         * Releases the event loop if the channel is "done", possibly due to the channel closing.
+         */
+        final class LoopReleaser implements ChannelFutureListener {
+          boolean done;
+
           @Override
-          public void operationComplete(ChannelFuture future) {
-            eventLoopReferenceCounter.release();
+          public void operationComplete(ChannelFuture future) throws Exception {
+            if (!done) {
+              done = true;
+              eventLoopReferenceCounter.release();
+            }
           }
-        });
+        }
+
+        transport.start(transportListener);
+        ChannelFutureListener loopReleaser = new LoopReleaser();
+        channelDone.addListener(loopReleaser);
+        ch.closeFuture().addListener(loopReleaser);
       }
     });
     // Bind and start to accept incoming connections.

@@ -23,6 +23,7 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Except
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2Exception;
@@ -46,10 +47,12 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
   private static final ByteBuf payloadBuf =
       unreleasableBuffer(directBuffer(8).writeLong(BDP_MEASUREMENT_PING));
 
-  AbstractNettyHandler(Http2ConnectionDecoder decoder,
-                       Http2ConnectionEncoder encoder,
-                       Http2Settings initialSettings) {
-    super(decoder, encoder, initialSettings);
+  AbstractNettyHandler(
+      ChannelPromise channelUnused,
+      Http2ConnectionDecoder decoder,
+      Http2ConnectionEncoder encoder,
+      Http2Settings initialSettings) {
+    super(channelUnused, decoder, encoder, initialSettings);
 
     // During a graceful shutdown, wait until all streams are closed.
     gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_NO_TIMEOUT);

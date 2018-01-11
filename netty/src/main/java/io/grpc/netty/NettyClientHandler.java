@@ -208,7 +208,7 @@ class NettyClientHandler extends AbstractNettyHandler {
       Supplier<Stopwatch> stopwatchFactory,
       final Runnable tooManyPingsRunnable,
       TransportTracer transportTracer) {
-    super(decoder, encoder, settings);
+    super(/* channelUnused= */ null, decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
     this.keepAliveManager = keepAliveManager;
     this.stopwatchFactory = stopwatchFactory;

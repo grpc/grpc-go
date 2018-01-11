@@ -91,6 +91,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.DisableOnDebug;
+import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -107,7 +109,7 @@ import org.mockito.stubbing.Answer;
 public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHandler> {
 
   @Rule
-  public final Timeout globalTimeout = Timeout.seconds(1);
+  public final TestRule globalTimeout = new DisableOnDebug(Timeout.seconds(10));
 
   private static final int STREAM_ID = 3;
 
@@ -858,14 +860,23 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Override
   protected NettyServerHandler newHandler() {
     return NettyServerHandler.newHandler(
-        frameReader(), frameWriter(), transportListener,
-        Arrays.asList(streamTracerFactory), transportTracer,
-        maxConcurrentStreams, flowControlWindow,
-        maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
-        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        /* channelUnused= */ channel().newPromise(),
+        frameReader(),
+        frameWriter(),
+        transportListener,
+        Arrays.asList(streamTracerFactory),
+        transportTracer,
+        maxConcurrentStreams,
+        flowControlWindow,
+        maxHeaderListSize,
+        DEFAULT_MAX_MESSAGE_SIZE,
+        keepAliveTimeInNanos,
+        keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
-        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
-        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+        maxConnectionAgeInNanos,
+        maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls,
+        permitKeepAliveTimeInNanos);
   }
 
   @Override

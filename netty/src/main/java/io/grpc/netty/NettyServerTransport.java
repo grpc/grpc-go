@@ -32,6 +32,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelPromise;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,6 +54,7 @@ class NettyServerTransport implements ServerTransport {
 
   private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final Channel channel;
+  private final ChannelPromise channelUnused;
   private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreams;
   private ServerTransportListener listener;
@@ -71,15 +73,24 @@ class NettyServerTransport implements ServerTransport {
   private final TransportTracer transportTracer;
 
   NettyServerTransport(
-      Channel channel, ProtocolNegotiator protocolNegotiator,
+      Channel channel,
+      ChannelPromise channelUnused,
+      ProtocolNegotiator protocolNegotiator,
       List<ServerStreamTracer.Factory> streamTracerFactories,
-      TransportTracer transportTracer, int maxStreams,
-      int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-      long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+      TransportTracer transportTracer,
+      int maxStreams,
+      int flowControlWindow,
+      int maxMessageSize,
+      int maxHeaderListSize,
+      long keepAliveTimeInNanos,
+      long keepAliveTimeoutInNanos,
       long maxConnectionIdleInNanos,
-      long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
-      boolean permitKeepAliveWithoutCalls,long permitKeepAliveTimeInNanos) {
+      long maxConnectionAgeInNanos,
+      long maxConnectionAgeGraceInNanos,
+      boolean permitKeepAliveWithoutCalls,
+      long permitKeepAliveTimeInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
+    this.channelUnused = channelUnused;
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.streamTracerFactories =
         Preconditions.checkNotNull(streamTracerFactories, "streamTracerFactories");
@@ -102,16 +113,25 @@ class NettyServerTransport implements ServerTransport {
     this.listener = listener;
 
     // Create the Netty handler for the pipeline.
-    final NettyServerHandler grpcHandler = createHandler(listener);
+    final NettyServerHandler grpcHandler = createHandler(listener, channelUnused);
     NettyHandlerSettings.setAutoWindow(grpcHandler);
 
     // Notify when the channel closes.
-    channel.closeFuture().addListener(new ChannelFutureListener() {
+    final class TerminationNotifier implements ChannelFutureListener {
+      boolean done;
+
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        notifyTerminated(grpcHandler.connectionError());
+        if (!done) {
+          done = true;
+          notifyTerminated(grpcHandler.connectionError());
+        }
       }
-    });
+    }
+
+    ChannelFutureListener terminationNotifier = new TerminationNotifier();
+    channelUnused.addListener(terminationNotifier);
+    channel.closeFuture().addListener(terminationNotifier);
 
     ChannelHandler negotiationHandler = protocolNegotiator.newHandler(grpcHandler);
     channel.pipeline().addLast(negotiationHandler);
@@ -196,13 +216,23 @@ class NettyServerTransport implements ServerTransport {
   /**
    * Creates the Netty handler to be used in the channel pipeline.
    */
-  private NettyServerHandler createHandler(ServerTransportListener transportListener) {
+  private NettyServerHandler createHandler(
+      ServerTransportListener transportListener, ChannelPromise channelUnused) {
     return NettyServerHandler.newHandler(
-        transportListener, streamTracerFactories, transportTracer, maxStreams,
-        flowControlWindow, maxHeaderListSize, maxMessageSize,
-        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        transportListener,
+        channelUnused,
+        streamTracerFactories,
+        transportTracer,
+        maxStreams,
+        flowControlWindow,
+        maxHeaderListSize,
+        maxMessageSize,
+        keepAliveTimeInNanos,
+        keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
-        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
-        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+        maxConnectionAgeInNanos,
+        maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls,
+        permitKeepAliveTimeInNanos);
   }
 }

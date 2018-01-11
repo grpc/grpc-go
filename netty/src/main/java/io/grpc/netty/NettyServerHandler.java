@@ -126,6 +126,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   static NettyServerHandler newHandler(
       ServerTransportListener transportListener,
+      ChannelPromise channelUnused,
       List<ServerStreamTracer.Factory> streamTracerFactories,
       TransportTracer transportTracer,
       int maxStreams,
@@ -147,6 +148,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
     return newHandler(
+        channelUnused,
         frameReader,
         frameWriter,
         transportListener,
@@ -167,7 +169,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   @VisibleForTesting
   static NettyServerHandler newHandler(
-      Http2FrameReader frameReader, Http2FrameWriter frameWriter,
+      ChannelPromise channelUnused,
+      Http2FrameReader frameReader,
+      Http2FrameWriter frameWriter,
       ServerTransportListener transportListener,
       List<ServerStreamTracer.Factory> streamTracerFactories,
       TransportTracer transportTracer,
@@ -210,6 +214,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     settings.maxHeaderListSize(maxHeaderListSize);
 
     return new NettyServerHandler(
+        channelUnused,
         connection,
         transportListener,
         streamTracerFactories,
@@ -223,6 +228,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   private NettyServerHandler(
+      ChannelPromise channelUnused,
       final Http2Connection connection,
       ServerTransportListener transportListener,
       List<ServerStreamTracer.Factory> streamTracerFactories,
@@ -237,7 +243,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       long maxConnectionAgeInNanos,
       long maxConnectionAgeGraceInNanos,
       final KeepAliveEnforcer keepAliveEnforcer) {
-    super(decoder, encoder, settings);
+    super(channelUnused, decoder, encoder, settings);
 
     final MaxConnectionIdleManager maxConnectionIdleManager;
     if (maxConnectionIdleInNanos == MAX_CONNECTION_IDLE_NANOS_DISABLED) {
