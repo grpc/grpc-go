@@ -468,6 +468,7 @@ type ServerConfig struct {
 	InitialConnWindowSize int32
 	WriteBufferSize       int
 	ReadBufferSize        int
+	ChannelzParentID      int64
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error

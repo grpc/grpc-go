@@ -26,19 +26,29 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-type entryType int
+// EntryType defines six types of entity in channelz, they are TopChannelT, SubChannelT,
+// and NestedChannelT.
+type EntryType int
 
 const (
-	topChannelT entryType = iota
-	subChannelT
-	nestedChannelT
-	serverT
-	normalSocketT
-	listenSocketT
+	// TopChannelT is the type of channel which is the root.
+	TopChannelT EntryType = iota
+	// SubChannelT is the type of channel which is load balanced over.
+	SubChannelT
+	// NestedChannelT is the type of channel which is neither the root nor load balanced over,
+	// e.g. ClientConn used in grpclb.
+	NestedChannelT
+	// ServerT is the type of server.
+	ServerT
+	// NormalSocketT is the type of socket that is used for transmitting RPC.
+	NormalSocketT
+	// ListenSocketT is the type of socket that is used for listening for incoming
+	// connection on server side.
+	ListenSocketT
 )
 
 type conn interface {
-	Type() entryType
+	Type() EntryType
 	sync.Locker
 }
 
@@ -65,7 +75,7 @@ type Channel interface {
 }
 
 type channel struct {
-	t           entryType
+	t           EntryType
 	c           Channel
 	mu          sync.Mutex
 	closeCalled bool
@@ -75,7 +85,7 @@ type channel struct {
 	pid         int64
 }
 
-func (c *channel) Type() entryType {
+func (c *channel) Type() EntryType {
 	return c.t
 }
 
@@ -115,17 +125,16 @@ type Socket interface {
 	ChannelzMetrics() *SocketMetric
 	IncrMsgSent()
 	IncrMsgRecv()
-	SetID(int64)
 }
 
 type socket struct {
-	t    entryType
+	t    EntryType
 	name string
 	s    Socket
 	pid  int64
 }
 
-func (s *socket) Type() entryType {
+func (s *socket) Type() EntryType {
 	return s.t
 }
 
@@ -162,8 +171,8 @@ type server struct {
 	listenSockets map[int64]string
 }
 
-func (*server) Type() entryType {
-	return serverT
+func (*server) Type() EntryType {
+	return ServerT
 }
 
 func (s *server) Lock() {
