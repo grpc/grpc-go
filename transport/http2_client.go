@@ -32,7 +32,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	channelz "google.golang.org/grpc/channelz/base"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -314,9 +315,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if channelz.IsOn() {
 		t.mu.Lock()
 		if t.state != closing {
-			id := channelz.RegisterSocket(t, channelz.NormalSocketType)
-			t.SetID(id)
-			channelz.AddChild(opts.ParentID, id, "<nil>")
+			t.id = channelz.RegisterSocket(t, channelz.NormalSocketT, opts.ParentID, "")
 			t.mu.Unlock()
 		} else {
 			t.mu.Unlock()
@@ -1415,6 +1414,3 @@ func (t *http2Client) ChannelzMetrics() *channelz.SocketMetric {
 
 func (t *http2Client) IncrMsgSent() {}
 func (t *http2Client) IncrMsgRecv() {}
-func (t *http2Client) SetID(id int64) {
-	t.id = id
-}

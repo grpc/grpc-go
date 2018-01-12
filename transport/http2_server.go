@@ -35,7 +35,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	channelz "google.golang.org/grpc/channelz/base"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -233,6 +234,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	defer func() {
 		if err != nil {
 			t.Close()
+		} else if channelz.IsOn() {
+			t.id = channelz.RegisterSocket(t, channelz.NormalSocketT, config.ChannelzParentID, "")
 		}
 	}()
 

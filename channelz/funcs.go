@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -37,27 +38,28 @@ var (
 // TurnOn turns on channelz data collection.
 // This is an EXPERIMENTAL API.
 func TurnOn() {
+	NewChannelzStorage()
 	atomic.StoreInt32(&curState, 1)
 }
 
 // IsOn returns whether channelz data collection is on.
 // This is an EXPERIMENTAL API.
 func IsOn() bool {
-	return atomic.LoadInt32(&curState) == 1
+	return atomic.CompareAndSwapInt32(&curState, 1, 1)
 }
 
 type dbWrapper struct {
 	mu sync.RWMutex
-	DB
+	DB *channelMap
 }
 
-func (d *dbWrapper) set(db DB) {
+func (d *dbWrapper) set(db *channelMap) {
 	d.mu.Lock()
 	d.DB = db
 	d.mu.Unlock()
 }
 
-func (d *dbWrapper) get() DB {
+func (d *dbWrapper) get() *channelMap {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.DB
@@ -66,68 +68,66 @@ func (d *dbWrapper) get() DB {
 // NewChannelzStorage initializes channelz data storage and unique id generator,
 // and returns pointer to the data storage for read-only access.
 // This is an EXPERIMENTAL API.
-func NewChannelzStorage() DB {
+func NewChannelzStorage() {
 	db.set(&channelMap{
 		m:                make(map[int64]conn),
 		topLevelChannels: make(map[int64]struct{}),
 		servers:          make(map[int64]struct{}),
 	})
 	idGen.reset()
-	return &db
 }
 
-// DB is the interface that groups the methods for channelz data storage and access
-type DB interface {
-	Database
-	internal
-}
-
-// Database manages read-only access to channelz storage.
-type Database interface {
-	GetTopChannels(id int64) ([]*ChannelMetric, bool)
-	GetServers(id int64) ([]*ServerMetric, bool)
-	GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool)
-	GetChannel(id int64) *ChannelMetric
-	GetSubChannel(id int64) *ChannelMetric
-	GetSocket(id int64) *SocketMetric
-}
-
-// ChannelType defines three types of channel, they are TopChannelType, SubChannelType,
-// and NestedChannelType.
-type ChannelType int
-
-const (
-	// TopChannelType is the type of channel which is the root.
-	TopChannelType ChannelType = iota
-	// SubChannelType is the type of channel which is load balanced over.
-	SubChannelType
-	// NestedChannelType is the type of channel which is neither the root nor load balanced over,
-	// e.g. ClientConn used in grpclb.
-	NestedChannelType
-)
-
-// SocketType defines two types of socket, they are NormalSocketType and ListenSocketType.
-type SocketType int
-
-const (
-	// NormalSocketType is the type of socket that is used for transmitting RPC.
-	NormalSocketType SocketType = iota
-	// ListenSocketType is the type of socket that is used for listening for incoming
-	// connection on server side.
-	ListenSocketType
-)
-
-type internal interface {
-	add(id int64, cn conn)
-	addTopChannel(id int64, cn conn)
-	addServer(id int64, cn conn)
-	removeEntry(id int64)
-	addChild(pid, cid int64, ref string)
-}
-
-// RegisterChannel registers the given channel in db as ChannelType t.
+// GetTopChannels returns up to EntryPerPage number of top channel metric whose
+// identification number is larger than or equal to id, along with a boolean
+// indicating whether there is more top channels to be queried.
 // This is an EXPERIMENTAL API.
-func RegisterChannel(c Channel, t ChannelType) int64 {
+func GetTopChannels(id int64) ([]*ChannelMetric, bool) {
+	return db.get().GetTopChannels(id)
+}
+
+// GetServers returns up to EntryPerPage number of server metric whose
+// identification number is larger than or equal to id, along with a boolean
+// indicating whether there is more servers to be queried.
+// This is an EXPERIMENTAL API.
+func GetServers(id int64) ([]*ServerMetric, bool) {
+	return db.get().GetServers(id)
+}
+
+// GetServerSockets returns up to EntryPerPage number of SocketMetric who is a
+// child of server with identification number to be id and whose identification
+// number is larger than startID, along with a boolean indicating whether there
+// is more sockets to be queried.
+// This is an EXPERIMENTAL API.
+func GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool) {
+	return db.get().GetServerSockets(id, startID)
+}
+
+// GetChannel returns the ChannelMetric for the channel with identification number
+// to be id.
+// This is an EXPERIMENTAL API.
+func GetChannel(id int64) *ChannelMetric {
+	return db.get().GetChannel(id)
+}
+
+// GetSubChannel returns the ChannelMetric for the sub channel with identification
+// number to be id.
+// This is an EXPERIMENTAL API.
+func GetSubChannel(id int64) *ChannelMetric {
+	return db.get().GetSubChannel(id)
+}
+
+// GetSocket returns the SocketMetric for the socket with identification number
+// to be id.
+// This is an EXPERIMENTAL API.
+func GetSocket(id int64) *SocketMetric {
+	return db.get().GetSocket(id)
+}
+
+// RegisterChannel registers the given channel in db as EntryType t, with ref
+// as its reference name, and sets parent ID to be pid. zero-value pid means no
+// parent.
+// This is an EXPERIMENTAL API.
+func RegisterChannel(c Channel, t EntryType, pid int64, ref string) int64 {
 	id := idGen.genID()
 	cn := &channel{
 		c:           c,
@@ -136,19 +136,23 @@ func RegisterChannel(c Channel, t ChannelType) int64 {
 		sockets:     make(map[int64]string),
 	}
 	switch t {
-	case TopChannelType:
-		cn.t = topChannelT
+	case TopChannelT:
+		cn.t = TopChannelT
 		db.get().addTopChannel(id, cn)
-	case SubChannelType:
-		cn.t = subChannelT
+	case SubChannelT:
+		cn.t = SubChannelT
 		db.get().add(id, cn)
-	case NestedChannelType:
-		cn.t = nestedChannelT
+	case NestedChannelT:
+		cn.t = NestedChannelT
 		db.get().add(id, cn)
 	default:
 		grpclog.Errorf("register channel with undefined type %+v", t)
 		// Is returning 0 a good idea?
 		return 0
+	}
+
+	if pid != 0 {
+		db.get().addChild(pid, id, ref)
 	}
 	return id
 }
@@ -161,22 +165,27 @@ func RegisterServer(s Server) int64 {
 	return id
 }
 
-// RegisterSocket registers the given socket in db.
+// RegisterSocket registers the given socket in db as EntryType t, with ref as
+// its reference name, and sets pid as its parent ID.
 // This is an EXPERIMENTAL API.
-func RegisterSocket(s Socket, t SocketType) int64 {
+func RegisterSocket(s Socket, t EntryType, pid int64, ref string) int64 {
 	id := idGen.genID()
 	sk := &socket{s: s}
 	switch t {
-	case NormalSocketType:
-		sk.t = normalSocketT
+	case NormalSocketT:
+		sk.t = NormalSocketT
 		db.get().add(id, sk)
-	case ListenSocketType:
-		sk.t = listenSocketT
+	case ListenSocketT:
+		sk.t = ListenSocketT
 		db.get().add(id, sk)
 	default:
 		grpclog.Errorf("register socket with undefined type %+v", t)
 		// Is returning 0 a good idea?
 		return 0
+	}
+
+	if pid != 0 {
+		db.get().addChild(pid, id, ref)
 	}
 	return id
 }
@@ -185,13 +194,6 @@ func RegisterSocket(s Socket, t SocketType) int64 {
 // This is an EXPERIMENTAL API.
 func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
-}
-
-// AddChild adds a child to its parent's descendant set with ref as its reference
-// string, and set pid as its parent id.
-// This is an EXPERIMENTAL API.
-func AddChild(pid, cid int64, ref string) {
-	db.get().addChild(pid, cid, ref)
 }
 
 type channelMap struct {
@@ -221,13 +223,13 @@ func (c *channelMap) addServer(id int64, cn conn) {
 	c.mu.Unlock()
 }
 
-func (c *channelMap) checkDelete(p conn, pid int64, t entryType) {
+func (c *channelMap) checkDelete(p conn, pid int64, t EntryType) {
 	switch t {
-	case topChannelT, subChannelT, nestedChannelT:
+	case TopChannelT, SubChannelT, NestedChannelT:
 		if p.(*channel).closeCalled && len(p.(*channel).subChans)+len(p.(*channel).nestedChans)+len(p.(*channel).sockets) == 0 {
 			c.deleteEntry(pid)
 		}
-	case serverT:
+	case ServerT:
 		if p.(*server).closeCalled && len(p.(*server).sockets)+len(p.(*server).listenSockets) == 0 {
 			c.deleteEntry(pid)
 		}
@@ -249,29 +251,29 @@ func (c *channelMap) removeChild(pid, cid int64) {
 		return
 	}
 	switch p.Type() {
-	case topChannelT, subChannelT, nestedChannelT:
+	case TopChannelT, SubChannelT, NestedChannelT:
 		switch child.Type() {
-		case subChannelT:
+		case SubChannelT:
 			delete(p.(*channel).subChans, cid)
-		case nestedChannelT:
+		case NestedChannelT:
 			delete(p.(*channel).nestedChans, cid)
-		case normalSocketT:
+		case NormalSocketT:
 			delete(p.(*channel).sockets, cid)
 		default:
 			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
 			return
 		}
-	case serverT:
+	case ServerT:
 		switch child.Type() {
-		case normalSocketT:
+		case NormalSocketT:
 			delete(p.(*server).sockets, cid)
-		case listenSocketT:
+		case ListenSocketT:
 			delete(p.(*server).listenSockets, cid)
 		default:
 			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
 			return
 		}
-	case normalSocketT, listenSocketT:
+	case NormalSocketT, ListenSocketT:
 		grpclog.Error("socket cannot have child")
 		return
 	}
@@ -282,9 +284,9 @@ func (c *channelMap) removeChild(pid, cid int64) {
 func (c *channelMap) readyDelete(id int64) bool {
 	if v, ok := c.m[id]; ok {
 		switch v.Type() {
-		case normalSocketT, listenSocketT:
+		case NormalSocketT, ListenSocketT:
 			return true
-		case topChannelT, subChannelT, nestedChannelT:
+		case TopChannelT, SubChannelT, NestedChannelT:
 			v.(*channel).Lock()
 			defer v.(*channel).Unlock()
 			if len(v.(*channel).subChans)+len(v.(*channel).nestedChans)+len(v.(*channel).sockets) > 0 {
@@ -292,7 +294,7 @@ func (c *channelMap) readyDelete(id int64) bool {
 				return false
 			}
 			return true
-		case serverT:
+		case ServerT:
 			v.(*server).Lock()
 			defer v.(*server).Unlock()
 			// TODO: should we take listenSockets into accounts?
@@ -330,11 +332,11 @@ func (c *channelMap) deleteEntry(id int64) {
 	// Delete itself from the descendants map of its parent.
 	if v, ok := c.m[id]; ok {
 		switch v.Type() {
-		case normalSocketT, listenSocketT:
+		case NormalSocketT, ListenSocketT:
 			if v.(*socket).pid != 0 {
 				c.removeChild(v.(*socket).pid, id)
 			}
-		case subChannelT, nestedChannelT:
+		case SubChannelT, NestedChannelT:
 			if v.(*channel).pid != 0 {
 				c.removeChild(v.(*channel).pid, id)
 			}
@@ -360,32 +362,32 @@ func (c *channelMap) addChild(pid, cid int64, ref string) {
 		return
 	}
 	switch p.Type() {
-	case topChannelT, subChannelT, nestedChannelT:
+	case TopChannelT, SubChannelT, NestedChannelT:
 		switch child.Type() {
-		case topChannelT, serverT, listenSocketT:
+		case TopChannelT, ServerT, ListenSocketT:
 			grpclog.Errorf("%+v cannot be the child of a channel", child.Type())
-		case subChannelT:
+		case SubChannelT:
 			p.(*channel).subChans[cid] = ref
 			child.(*channel).pid = pid
-		case nestedChannelT:
+		case NestedChannelT:
 			p.(*channel).nestedChans[cid] = ref
 			child.(*channel).pid = pid
-		case normalSocketT:
+		case NormalSocketT:
 			p.(*channel).sockets[cid] = ref
 			child.(*socket).pid = pid
 		}
-	case serverT:
+	case ServerT:
 		switch child.Type() {
-		case topChannelT, subChannelT, nestedChannelT, serverT:
+		case TopChannelT, SubChannelT, NestedChannelT, ServerT:
 			grpclog.Errorf("%+v cannot be the child of a server", child.Type())
-		case normalSocketT:
+		case NormalSocketT:
 			p.(*server).sockets[cid] = ref
 			child.(*socket).pid = pid
-		case listenSocketT:
+		case ListenSocketT:
 			p.(*server).listenSockets[cid] = ref
 			child.(*socket).pid = pid
 		}
-	case listenSocketT, normalSocketT:
+	case ListenSocketT, NormalSocketT:
 		grpclog.Errorf("socket cannot have children, id: %d", pid)
 		return
 	}
@@ -406,6 +408,7 @@ func copyMap(m map[int64]string) map[int64]string {
 }
 
 func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	var t []*ChannelMetric
@@ -479,7 +482,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 	var s []*SocketMetric
 	var cn conn
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != serverT {
+	if cn, ok = c.m[id]; !ok || cn.Type() != ServerT {
 		// server with id doesn't exist.
 		return nil, true
 	}
@@ -517,7 +520,7 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	defer c.mu.RUnlock()
 	var cn conn
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != topChannelT || cn.Type() != nestedChannelT {
+	if cn, ok = c.m[id]; !ok || cn.Type() != TopChannelT || cn.Type() != NestedChannelT {
 		// channel with id doesn't exist.
 		return nil
 	}
@@ -533,7 +536,7 @@ func (c *channelMap) GetSubChannel(id int64) *ChannelMetric {
 	defer c.mu.RUnlock()
 	var cn conn
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != subChannelT {
+	if cn, ok = c.m[id]; !ok || cn.Type() != SubChannelT {
 		// subchannel with id doesn't exist.
 		return nil
 	}
@@ -549,7 +552,7 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 	defer c.mu.RUnlock()
 	var cn conn
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != normalSocketT || cn.Type() != listenSocketT {
+	if cn, ok = c.m[id]; !ok || cn.Type() != NormalSocketT || cn.Type() != ListenSocketT {
 		// socket with id doesn't exist.
 		return nil
 	}
@@ -566,4 +569,23 @@ func (i *idGenerator) reset() {
 
 func (i *idGenerator) genID() int64 {
 	return atomic.AddInt64(&i.id, 1)
+}
+
+// nestedChannel is the context key for indicating whether this ClientConn is a
+// nested channel. Its corresponding value is the parent's ID.
+type nestedChannel struct{}
+
+// WithParentID stores the specified ID in the given context, and returns the new
+// context.
+func WithParentID(ctx context.Context, pid int64) context.Context {
+	return context.WithValue(ctx, nestedChannel{}, pid)
+}
+
+// ParentID returns the ID stored in the given context, and returns 0 if it doesn't
+// exist.
+func ParentID(ctx context.Context) int64 {
+	if v := ctx.Value(nestedChannel{}); v != nil {
+		return v.(int64)
+	}
+	return 0
 }
