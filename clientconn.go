@@ -32,7 +32,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
-	channelz "google.golang.org/grpc/channelz/base"
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -117,12 +117,10 @@ const (
 	defaultClientMaxSendMessageSize    = math.MaxInt32
 )
 
-// RegisterChannelz registers channelz service, and returns a pointer to the
-// channelz data storage for inquiry.
+// RegisterChannelz turns on channelz service.
 // This is an EXPERIMENTAL API.
-func RegisterChannelz() channelz.DB {
+func RegisterChannelz() {
 	channelz.TurnOn()
-	return channelz.NewChannelzStorage()
 }
 
 // DialOption configures how we set up the connection.
@@ -429,10 +427,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	if channelz.IsOn() {
-		if v := ctx.Value(nestedChannel{}); v != nil {
-			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelType)
+		if pid := channelz.ParentID(ctx); pid != 0 {
+			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelT, pid, "")
 		} else {
-			cc.id = channelz.RegisterChannel(cc, channelz.TopChannelType)
+			cc.id = channelz.RegisterChannel(cc, channelz.TopChannelT, 0, "")
 		}
 	}
 
@@ -536,9 +534,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		credsClone = creds.Clone()
 	}
 	cc.balancerBuildOpts = balancer.BuildOptions{
-		DialCreds: credsClone,
-		Dialer:    cc.dopts.copts.Dialer,
-		Pid:       cc.id,
+		DialCreds:        credsClone,
+		Dialer:           cc.dopts.copts.Dialer,
+		ChannelzParentID: cc.id,
 	}
 
 	// Build the resolver.
@@ -806,8 +804,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
-		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelType)
-		channelz.AddChild(cc.id, ac.id, "<nil>")
+		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelT, cc.id, "")
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()

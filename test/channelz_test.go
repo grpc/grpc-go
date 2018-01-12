@@ -24,7 +24,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	channelz "google.golang.org/grpc/channelz/base"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -41,7 +42,7 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	}
 }
 
-func TestServerRegistrationAndDeletion(t *testing.T) {
+func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
@@ -55,24 +56,24 @@ func TestServerRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		db := grpc.RegisterChannelz()
+		grpc.RegisterChannelz()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
 
-		ss, end := db.GetServers(c.start)
+		ss, end := channelz.GetServers(c.start)
 		if len(ss) != c.length || end != c.end {
 			t.Fatalf("GetServers(%d) = %+v (len of which: %d), end: %+v, want len(GetServers(%d)) = %d, end: %+v", c.start, ss, len(ss), end, c.start, c.length, c.end)
 		}
 		te.tearDown()
-		ss, end = db.GetServers(c.start)
+		ss, end = channelz.GetServers(c.start)
 		if len(ss) != 0 || !end {
 			t.Fatalf("GetServers(0) = %+v (len of which: %d), end: %+v, want len(GetServers(0)) = 0, end: true", ss, len(ss), end)
 		}
 	}
 }
 
-func TestTopChannelRegistrationAndDeletion(t *testing.T) {
+func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
 		total  int
@@ -85,7 +86,7 @@ func TestTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		db := grpc.RegisterChannelz()
+		grpc.RegisterChannelz()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		var ccs []*grpc.ClientConn
@@ -97,14 +98,14 @@ func TestTopChannelRegistrationAndDeletion(t *testing.T) {
 			ccs = append(ccs, cc)
 		}
 		time.Sleep(10 * time.Millisecond)
-		tcs, end := db.GetTopChannels(c.start)
+		tcs, end := channelz.GetTopChannels(c.start)
 		if len(tcs) != c.length || end != c.end {
 			t.Fatalf("GetTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)
 		}
 		for _, cc := range ccs {
 			cc.Close()
 		}
-		tcs, end = db.GetTopChannels(c.start)
+		tcs, end = channelz.GetTopChannels(c.start)
 		if len(tcs) != 0 || !end {
 			t.Fatalf("GetTopChannels(0) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(0)) = 0, end: true", tcs, len(tcs), end)
 		}
@@ -113,9 +114,9 @@ func TestTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestNestedChannelRegistrationAndDeletion(t *testing.T) {
+func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	db := grpc.RegisterChannelz()
+	grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -128,7 +129,7 @@ func TestNestedChannelRegistrationAndDeletion(t *testing.T) {
 	te.clientConn()
 	defer te.tearDown()
 	time.Sleep(10 * time.Millisecond)
-	tcs, _ := db.GetTopChannels(0)
+	tcs, _ := channelz.GetTopChannels(0)
 	if len(tcs) != 1 {
 		t.Fatalf("There should only be one top channel, not %d", len(tcs))
 	}
@@ -141,7 +142,7 @@ func TestNestedChannelRegistrationAndDeletion(t *testing.T) {
 
 	// wait for the shutdown of grpclb balancer
 	time.Sleep(10 * time.Millisecond)
-	tcs, _ = db.GetTopChannels(0)
+	tcs, _ = channelz.GetTopChannels(0)
 	if len(tcs) != 1 {
 		t.Fatalf("There should only be one top channel, not %d", len(tcs))
 	}
@@ -151,9 +152,9 @@ func TestNestedChannelRegistrationAndDeletion(t *testing.T) {
 
 }
 
-func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
+func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	db := grpc.RegisterChannelz()
+	grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -171,7 +172,7 @@ func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	// Here, we just wait for all sockets to be up. In the future, if we implement
 	// IDLE, we may need to make several rpc calls to create the sockets.
 	time.Sleep(100 * time.Millisecond)
-	tcs, _ := db.GetTopChannels(0)
+	tcs, _ := channelz.GetTopChannels(0)
 	if len(tcs) != 1 {
 		t.Fatalf("There should only be one top channel, not %d", len(tcs))
 	}
@@ -180,7 +181,7 @@ func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	}
 	count := 0
 	for k := range tcs[0].SubChans {
-		sc := db.GetSubChannel(k)
+		sc := channelz.GetSubChannel(k)
 		if sc == nil {
 			t.Fatalf("got <nil> subchannel")
 		}
@@ -192,13 +193,13 @@ func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 
 	r.NewAddress(svrAddrs[:len(svrAddrs)-1])
 	time.Sleep(100 * time.Millisecond)
-	tcs, _ = db.GetTopChannels(0)
+	tcs, _ = channelz.GetTopChannels(0)
 	if len(tcs[0].SubChans) != num-1 {
 		t.Fatalf("There should be %d subchannel not %d", num-1, len(tcs[0].SubChans))
 	}
 	count = 0
 	for k := range tcs[0].SubChans {
-		sc := db.GetSubChannel(k)
+		sc := channelz.GetSubChannel(k)
 		if sc == nil {
 			t.Fatalf("got <nil> subchannel")
 		}
@@ -210,9 +211,9 @@ func TestClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 
 }
 
-func TestServerSocketRegistrationAndDeletion(t *testing.T) {
+func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	db := grpc.RegisterChannelz()
+	grpc.RegisterChannelz()
 	e := tcpClearRREnv
 	num := 3 // number of clients
 	te := newTest(t, e)
@@ -230,29 +231,29 @@ func TestServerSocketRegistrationAndDeletion(t *testing.T) {
 		}
 	}()
 	time.Sleep(10 * time.Millisecond)
-	ss, _ := db.GetServers(0)
+	ss, _ := channelz.GetServers(0)
 	if len(ss) != 1 {
 		t.Fatalf("There should only be one server, not %d", len(ss))
 	}
 	if len(ss[0].ListenSockets) != 1 {
 		t.Fatalf("There should only be one server listen socket, not %d", len(ss[0].ListenSockets))
 	}
-	ns, _ := db.GetServerSockets(ss[0].ID, 0)
+	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 	if len(ns) != num {
 		t.Fatalf("There should be %d normal sockets not %d", num, len(ns))
 	}
 
 	ccs[len(ccs)-1].Close()
 	time.Sleep(10 * time.Millisecond)
-	ns, _ = db.GetServerSockets(ss[0].ID, 0)
+	ns, _ = channelz.GetServerSockets(ss[0].ID, 0)
 	if len(ns) != num-1 {
 		t.Fatalf("There should be %d normal sockets not %d", num-1, len(ns))
 	}
 }
 
-func TestServerListenSocketDeletion(t *testing.T) {
+func TestCZServerListenSocketDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	db := grpc.RegisterChannelz()
+	grpc.RegisterChannelz()
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -260,7 +261,7 @@ func TestServerListenSocketDeletion(t *testing.T) {
 	}
 	go s.Serve(lis)
 	time.Sleep(10 * time.Millisecond)
-	ss, _ := db.GetServers(0)
+	ss, _ := channelz.GetServers(0)
 	if len(ss) != 1 {
 		t.Fatalf("There should only be one server, not %d", len(ss))
 	}
@@ -270,7 +271,7 @@ func TestServerListenSocketDeletion(t *testing.T) {
 
 	lis.Close()
 	time.Sleep(10 * time.Millisecond)
-	ss, _ = db.GetServers(0)
+	ss, _ = channelz.GetServers(0)
 	if len(ss) != 1 {
 		t.Fatalf("There should only be one server, not %d", len(ss))
 	}

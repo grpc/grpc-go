@@ -37,7 +37,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
-	channelz "google.golang.org/grpc/channelz/base"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
@@ -521,8 +522,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[ls] = true
 
 	if channelz.IsOn() {
-		ls.SetID(channelz.RegisterSocket(ls, channelz.ListenSocketType))
-		channelz.AddChild(s.id, ls.id, "<nil>")
+		ls.id = channelz.RegisterSocket(ls, channelz.ListenSocketT, s.id, "")
 	}
 	s.mu.Unlock()
 
@@ -652,6 +652,7 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
 		WriteBufferSize:       s.opts.writeBufferSize,
 		ReadBufferSize:        s.opts.readBufferSize,
+		ChannelzParentID:      s.id,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
@@ -661,12 +662,6 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		c.Close()
 		grpclog.Warningln("grpc: Server.Serve failed to create ServerTransport: ", err)
 		return nil
-	}
-
-	if channelz.IsOn() {
-		id := channelz.RegisterSocket(st.(channelz.Socket), channelz.NormalSocketType)
-		st.(channelz.Socket).SetID(id)
-		channelz.AddChild(s.id, id, "<nil>")
 	}
 
 	return st
