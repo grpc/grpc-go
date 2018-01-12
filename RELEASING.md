@@ -108,7 +108,8 @@ would be used to create all `v1.7` tags (e.g. `v1.7.0`, `v1.7.1`).
    * Options: `Do not run if there has been a build in the last 24h`
    * Click _Add_ button
 5. Continue with Google-internal steps at go/grpc/java/releasing.
-6. Move items out of the release milestone that didn't make the cut. Issues that
+6. Create a milestone for the next release.
+7. Move items out of the release milestone that didn't make the cut. Issues that
    may be backported should stay in the release milestone. Treat issues with the
    'release blocker' label with special care.
 
@@ -158,6 +159,7 @@ Tagging the Release
    $ git push upstream v$MAJOR.$MINOR.$PATCH
    $ git push upstream v$MAJOR.$MINOR.x
    ```
+6. Close the release milestone.
 
 Setup Build Environment
 ---------------------------
