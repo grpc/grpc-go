@@ -89,6 +89,13 @@ public abstract class ManagedChannel extends Channel {
    * #getState}.  If the states are already different, the callback will be called immediately.  The
    * callback is run in the same executor that runs Call listeners.
    *
+   * <p>There is an inherent race between the notification to {@code callback} and any call to
+   * {@code getState()}. There is a similar race between {@code getState()} and a call to {@code
+   * notifyWhenStateChanged()}. The state can change during those races, so there is not a way to
+   * see every state transition. "Transitions" to the same state are possible, because intermediate
+   * states may not have been observed. The API is only reliable in tracking the <em>current</em>
+   * state.
+   *
    * @param source the assumed current state, typically just returned by {@link #getState}
    * @param callback the one-off callback
    * @throws UnsupportedOperationException if not supported by implementation
