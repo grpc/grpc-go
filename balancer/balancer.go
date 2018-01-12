@@ -126,8 +126,8 @@ type BuildOptions struct {
 	// to a remote load balancer server. The Balancer implementations
 	// can ignore this if it doesn't need to talk to remote balancer.
 	Dialer func(context.Context, string) (net.Conn, error)
-	// Pid is the root ClientConn's channelz unique identification number.
-	Pid int64
+	// ChannelzParentID is the entity parent's channelz unique identification number.
+	ChannelzParentID int64
 }
 
 // Builder creates a balancer.
