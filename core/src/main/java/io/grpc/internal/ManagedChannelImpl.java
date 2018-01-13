@@ -113,6 +113,7 @@ public final class ManagedChannelImpl
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
   private final LoadBalancer.Factory loadBalancerFactory;
+
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
   private final ObjectPool<? extends Executor> executorPool;
@@ -459,8 +460,11 @@ public final class ManagedChannelImpl
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
-    this.loadBalancerFactory =
-        checkNotNull(builder.loadBalancerFactory, "loadBalancerFactory");
+    if (builder.loadBalancerFactory == null) {
+      this.loadBalancerFactory = new AutoConfiguredLoadBalancerFactory();
+    } else {
+      this.loadBalancerFactory = builder.loadBalancerFactory;
+    }
     this.executorPool = checkNotNull(builder.executorPool, "executorPool");
     this.oobExecutorPool = checkNotNull(oobExecutorPool, "oobExecutorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -983,11 +987,9 @@ public final class ManagedChannelImpl
   }
 
   private class NameResolverListenerImpl implements NameResolver.Listener {
-    final LoadBalancer balancer;
-    final LoadBalancer.Helper helper;
+    final LbHelperImpl helper;
 
     NameResolverListenerImpl(LbHelperImpl helperImpl) {
-      this.balancer = helperImpl.lb;
       this.helper = helperImpl;
     }
 
@@ -1002,6 +1004,7 @@ public final class ManagedChannelImpl
             new Object[]{getLogId(), servers, config});
       }
 
+
       final class NamesResolved implements Runnable {
         @Override
         public void run() {
@@ -1010,13 +1013,13 @@ public final class ManagedChannelImpl
             return;
           }
           try {
-            balancer.handleResolvedAddressGroups(servers, config);
+            helper.lb.handleResolvedAddressGroups(servers, config);
           } catch (Throwable e) {
             logger.log(
                 Level.WARNING, "[" + getLogId() + "] Unexpected exception from LoadBalancer", e);
             // It must be a bug! Push the exception back to LoadBalancer in the hope that it may
             // be propagated to the application.
-            balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
+            helper.lb.handleNameResolutionError(Status.INTERNAL.withCause(e)
                 .withDescription("Thrown from handleResolvedAddresses(): " + e));
           }
         }
@@ -1037,7 +1040,7 @@ public final class ManagedChannelImpl
             if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
               return;
             }
-            balancer.handleNameResolutionError(error);
+            lbHelper.lb.handleNameResolutionError(error);
           }
         }).drain();
     }
