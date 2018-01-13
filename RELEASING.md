@@ -65,6 +65,7 @@ $ VERSION_FILES=(
   build.gradle
   android-interop-testing/app/build.gradle
   core/src/main/java/io/grpc/internal/GrpcUtil.java
+  cronet/build.gradle
   examples/build.gradle
   examples/pom.xml
   examples/android/helloworld/app/build.gradle

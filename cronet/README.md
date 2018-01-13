@@ -44,3 +44,11 @@ ExperimentalCronetEngine engine =
     new ExperimentalCronetEngine.Builder(context /* Android Context */).build();
 ManagedChannel channel = CronetChannelBuilder.forAddress("localhost", 8080, engine).build();
 ```
+
+## Running the tests with Gradle
+
+To run the gRPC Cronet tests with the included `gradle.build` file, you will
+need to first download the Cronet jars and place them in the `libs/` directory.
+The included script, `cronet_deps.sh`, will do this automatically but requires
+the [gsutil](https://cloud.google.com/storage/docs/gsutil) tool to access files
+from Google Cloud Storage.
