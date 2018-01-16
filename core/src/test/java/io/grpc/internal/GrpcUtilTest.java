@@ -117,7 +117,7 @@ public class GrpcUtilTest {
 
   @Test
   public void grpcUserAgent() {
-    assertTrue(GrpcUtil.getGrpcUserAgent("netty", null).startsWith("grpc-java-netty"));
+    assertTrue(GrpcUtil.getGrpcUserAgent("netty", null).startsWith("grpc-java-netty/"));
     assertTrue(GrpcUtil.getGrpcUserAgent("okhttp", "libfoo/1.0")
         .startsWith("libfoo/1.0 grpc-java-okhttp"));
   }

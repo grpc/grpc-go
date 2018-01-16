@@ -433,6 +433,7 @@ public final class GrpcUtil {
     }
     builder.append("grpc-java-");
     builder.append(transportName);
+    builder.append('/');
     builder.append(IMPLEMENTATION_VERSION);
     return builder.toString();
   }
