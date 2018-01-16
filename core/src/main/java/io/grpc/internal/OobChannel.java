@@ -70,6 +70,7 @@ final class OobChannel
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
   private final ChannelTracer channelTracer;
+  private final ChannelTracer subchannelTracer;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -90,7 +91,7 @@ final class OobChannel
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
       ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
-      ChannelTracer channelTracer) {
+      ChannelTracer.Factory channelTracerFactory) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -118,7 +119,8 @@ final class OobChannel
           // Don't care
         }
       });
-    this.channelTracer = channelTracer;
+    this.channelTracer = channelTracerFactory.create();
+    this.subchannelTracer = channelTracerFactory.create();
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -150,7 +152,18 @@ final class OobChannel
         public Attributes getAttributes() {
           return Attributes.EMPTY;
         }
-      };
+
+        @Override
+        public ListenableFuture<InternalChannelStats> getStats() {
+          SettableFuture<InternalChannelStats> ret = SettableFuture.create();
+          InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+          subchannelTracer.updateBuilder(builder);
+          builder.setTarget(authority)
+              .setState(subchannel.getState());
+          ret.set(builder.build());
+          return ret;
+        }
+    };
 
     subchannelPicker = new SubchannelPicker() {
         final PickResult result = PickResult.withSubchannel(subchannelImpl);
@@ -246,7 +259,11 @@ final class OobChannel
   @Override
   public ListenableFuture<InternalChannelStats> getStats() {
     SettableFuture<InternalChannelStats> ret = SettableFuture.create();
-    ret.set(channelTracer.getStats());
+    InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+    channelTracer.updateBuilder(builder);
+    builder.setTarget(authority)
+        .setState(subchannel.getState());
+    ret.set(builder.build());
     return ret;
   }
 

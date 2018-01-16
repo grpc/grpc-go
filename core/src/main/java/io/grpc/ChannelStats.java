@@ -24,13 +24,22 @@ import javax.annotation.concurrent.Immutable;
 // Not final so that InternalChannelStats can make this class visible outside of io.grpc
 @Immutable
 class ChannelStats {
+  public final String target;
+  public final ConnectivityState state;
   public final long callsStarted;
   public final long callsSucceeded;
   public final long callsFailed;
   public final long lastCallStartedMillis;
 
   ChannelStats(
-      long callsStarted, long callsSucceeded, long callsFailed, long lastCallStartedMillis) {
+      String target,
+      ConnectivityState state,
+      long callsStarted,
+      long callsSucceeded,
+      long callsFailed,
+      long lastCallStartedMillis) {
+    this.target = target;
+    this.state = state;
     this.callsStarted = callsStarted;
     this.callsSucceeded = callsSucceeded;
     this.callsFailed = callsFailed;

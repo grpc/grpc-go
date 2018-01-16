@@ -1661,6 +1661,49 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void channelsAndSubchannels_instrumented_name() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    assertEquals(target, getStats(channel).target);
+
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    assertEquals(target, getStats((AbstractSubchannel) subchannel).target);
+  }
+
+  @Test
+  public void channelsAndSubchannels_instrumented_state() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    helper = helperCaptor.getValue();
+
+    assertEquals(IDLE, getStats(channel).state);
+    helper.updateBalancingState(CONNECTING, mockPicker);
+    assertEquals(CONNECTING, getStats(channel).state);
+
+    AbstractSubchannel subchannel =
+        (AbstractSubchannel) helper.createSubchannel(addressGroup, Attributes.EMPTY);
+
+    assertEquals(IDLE, getStats(subchannel).state);
+    subchannel.requestConnection();
+    assertEquals(CONNECTING, getStats(subchannel).state);
+
+    MockClientTransportInfo transportInfo = transports.poll();
+
+    assertEquals(CONNECTING, getStats(subchannel).state);
+    transportInfo.listener.transportReady();
+    assertEquals(READY, getStats(subchannel).state);
+
+    assertEquals(CONNECTING, getStats(channel).state);
+    helper.updateBalancingState(READY, mockPicker);
+    assertEquals(READY, getStats(channel).state);
+
+    channel.shutdownNow();
+    assertEquals(SHUTDOWN, getStats(channel).state);
+    assertEquals(SHUTDOWN, getStats(subchannel).state);
+  }
+
+  @Test
   public void channelStat_callStarted() throws Exception {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
@@ -1796,6 +1839,39 @@ public class ManagedChannelImplTest {
     assertEquals(0, getStats(channel).callsSucceeded);
     assertEquals(0, getStats(channel).callsFailed);
   }
+
+  @Test
+  public void channelsAndSubchannels_oob_instrumented_name() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    String authority = "oobauthority";
+    OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, authority);
+    assertEquals(authority, getStats(oobChannel).target);
+  }
+
+  @Test
+  public void channelsAndSubchannels_oob_instrumented_state() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "oobauthority");
+    assertEquals(IDLE, getStats(oobChannel).state);
+
+    oobChannel.getSubchannel().requestConnection();
+    assertEquals(CONNECTING, getStats(oobChannel).state);
+
+    MockClientTransportInfo transportInfo = transports.poll();
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+
+    transportListener.transportReady();
+    assertEquals(READY, getStats(oobChannel).state);
+
+    // oobchannel state is separate from the ManagedChannel
+    assertEquals(IDLE, getStats(channel).state);
+    channel.shutdownNow();
+    assertEquals(SHUTDOWN, getStats(channel).state);
+    assertEquals(SHUTDOWN, getStats(oobChannel).state);
+  }
+
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
     @Override

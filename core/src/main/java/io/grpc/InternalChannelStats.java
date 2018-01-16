@@ -22,10 +22,56 @@ package io.grpc;
 @Internal
 public final class InternalChannelStats extends ChannelStats {
   public InternalChannelStats(
+      String name,
+      ConnectivityState state,
       long callsStarted,
       long callsSucceeded,
       long callsFailed,
       long lastCallStartedMillis) {
-    super(callsStarted, callsSucceeded, callsFailed, lastCallStartedMillis);
+    super(name, state, callsStarted, callsSucceeded, callsFailed, lastCallStartedMillis);
+  }
+
+  public static final class Builder {
+    private String target;
+    private ConnectivityState state;
+    private long callsStarted;
+    private long callsSucceeded;
+    private long callsFailed;
+    private long lastCallStartedMillis;
+
+    public Builder setTarget(String target) {
+      this.target = target;
+      return this;
+    }
+
+    public Builder setState(ConnectivityState state) {
+      this.state = state;
+      return this;
+    }
+
+    public Builder setCallsStarted(long callsStarted) {
+      this.callsStarted = callsStarted;
+      return this;
+    }
+
+    public Builder setCallsSucceeded(long callsSucceeded) {
+      this.callsSucceeded = callsSucceeded;
+      return this;
+    }
+
+    public Builder setCallsFailed(long callsFailed) {
+      this.callsFailed = callsFailed;
+      return this;
+    }
+
+    public Builder setLastCallStartedMillis(long lastCallStartedMillis) {
+      this.lastCallStartedMillis = lastCallStartedMillis;
+      return this;
+    }
+
+    public InternalChannelStats build() {
+      return new InternalChannelStats(
+          target, state, callsStarted,  callsSucceeded,  callsFailed,  lastCallStartedMillis);
+    }
   }
 }

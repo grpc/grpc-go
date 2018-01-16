@@ -272,7 +272,11 @@ public final class ManagedChannelImpl
   @Override
   public ListenableFuture<InternalChannelStats> getStats() {
     SettableFuture<InternalChannelStats> ret = SettableFuture.create();
-    ret.set(channelTracer.getStats());
+    InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+    channelTracer.updateBuilder(builder);
+    builder.setTarget(target)
+        .setState(channelStateManager.getState());
+    ret.set(builder.build());
     return ret;
   }
 
@@ -832,7 +836,7 @@ public final class ManagedChannelImpl
       checkNotNull(attrs, "attrs");
       // TODO(ejona): can we be even stricter? Like loadBalancer == null?
       checkState(!terminated, "Channel is terminated");
-      final SubchannelImpl subchannel = new SubchannelImpl(attrs);
+      final SubchannelImpl subchannel = new SubchannelImpl(attrs, channelTracerFactory.create());
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
             addressGroup, authority(), userAgent, backoffPolicyProvider, transportFactory,
             transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -926,7 +930,7 @@ public final class ManagedChannelImpl
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, channelTracerFactory.create());
+          channelExecutor, channelTracerFactory);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -1051,14 +1055,16 @@ public final class ManagedChannelImpl
     InternalSubchannel subchannel;
     final Object shutdownLock = new Object();
     final Attributes attrs;
+    final ChannelTracer subchannelTracer;
 
     @GuardedBy("shutdownLock")
     boolean shutdownRequested;
     @GuardedBy("shutdownLock")
     ScheduledFuture<?> delayedShutdownTask;
 
-    SubchannelImpl(Attributes attrs) {
+    SubchannelImpl(Attributes attrs, ChannelTracer subchannelTracer) {
       this.attrs = checkNotNull(attrs, "attrs");
+      this.subchannelTracer = subchannelTracer;
     }
 
     @Override
@@ -1125,6 +1131,17 @@ public final class ManagedChannelImpl
     @Override
     public String toString() {
       return subchannel.getLogId().toString();
+    }
+
+    @Override
+    public ListenableFuture<InternalChannelStats> getStats() {
+      SettableFuture<InternalChannelStats> ret = SettableFuture.create();
+      InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+      subchannelTracer.updateBuilder(builder);
+      builder.setTarget(target)
+          .setState(subchannel.getState());
+      ret.set(builder.build());
+      return ret;
     }
   }
 
