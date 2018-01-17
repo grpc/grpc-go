@@ -65,6 +65,7 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -300,6 +301,8 @@ func init() {
 		kbps = []int{network.Kbps}
 		mtu = []int{network.MTU}
 	}
+	grpc.RegisterChannelz()
+	fmt.Println(channelz.IsOn())
 }
 
 func setMode(name string) []bool {

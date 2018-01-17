@@ -408,7 +408,6 @@ func copyMap(m map[int64]string) map[int64]string {
 }
 
 func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
-
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	var t []*ChannelMetric
