@@ -1,0 +1,40 @@
+load("//:java_grpc_library.bzl", "java_grpc_library")
+
+java_library(
+    name = "grpclb",
+    srcs = glob([
+        "src/main/java/io/grpc/grpclb/*.java",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "//core:internal",
+        "//core:util",
+        "//stub",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@com_google_guava_guava//jar",
+        "@com_google_code_findbugs_jsr305//jar",
+        ":load_balancer_java_proto",
+        ":load_balancer_java_grpc",
+    ],
+)
+
+proto_library(
+    name = "load_balancer_proto",
+    srcs = ["src/main/proto/load_balancer.proto"],
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+        "@com_google_protobuf//:duration_proto",
+    ],
+)
+
+java_proto_library(
+    name = "load_balancer_java_proto",
+    deps = [":load_balancer_proto"],
+)
+
+java_grpc_library(
+    name = "load_balancer_java_grpc",
+    srcs = [":load_balancer_proto"],
+    deps = [":load_balancer_java_proto"],
+)
