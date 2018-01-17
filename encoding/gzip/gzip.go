@@ -30,6 +30,9 @@ import (
 	"google.golang.org/grpc/encoding"
 )
 
+// Name is the name registered for the gzip compressor.
+const Name = "gzip"
+
 func init() {
 	c := &compressor{}
 	c.poolCompressor.New = func() interface{} {
@@ -84,7 +87,7 @@ func (z *reader) Read(p []byte) (n int, err error) {
 }
 
 func (c *compressor) Name() string {
-	return "gzip"
+	return Name
 }
 
 type compressor struct {
