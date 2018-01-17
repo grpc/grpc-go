@@ -140,10 +140,10 @@ public class ManagedChannelImplTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private final FakeClock oobExecutor = new FakeClock();
-  private final ChannelTracer.Factory channelStatsFactory = new ChannelTracer.Factory() {
+  private final CallTracer.Factory channelStatsFactory = new CallTracer.Factory() {
     @Override
-    public ChannelTracer create() {
-      return new ChannelTracer(new ChannelTracer.TimeProvider() {
+    public CallTracer create() {
+      return new CallTracer(new CallTracer.TimeProvider() {
         @Override
         public long currentTimeMillis() {
           return executor.currentTimeMillis();

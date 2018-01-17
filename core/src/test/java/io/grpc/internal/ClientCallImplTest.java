@@ -89,7 +89,7 @@ public class ClientCallImplTest {
   private final FakeClock fakeClock = new FakeClock();
   private final ScheduledExecutorService deadlineCancellationExecutor =
       fakeClock.getScheduledExecutorService();
-  private final ChannelTracer channelTracer = ChannelTracer.getDefaultFactory().create();
+  private final CallTracer channelCallTracer = CallTracer.getDefaultFactory().create();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance().with(new Codec.Gzip(), true);
   private final MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
@@ -151,7 +151,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -172,7 +172,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -208,7 +208,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -242,7 +242,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -275,7 +275,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -298,7 +298,7 @@ public class ClientCallImplTest {
         baseCallOptions.withAuthority("overridden-authority"),
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -314,7 +314,7 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
         .setDecompressorRegistry(decompressorRegistry);
     final Metadata metadata = new Metadata();
 
@@ -332,7 +332,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -501,7 +501,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     Context.ROOT.attach();
@@ -575,7 +575,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -604,7 +604,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
         .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -648,7 +648,7 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
     verify(transport, times(0))
@@ -671,7 +671,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     Metadata headers = new Metadata();
 
@@ -699,7 +699,7 @@ public class ClientCallImplTest {
         callOpts,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     Metadata headers = new Metadata();
 
@@ -727,7 +727,7 @@ public class ClientCallImplTest {
         callOpts,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     Metadata headers = new Metadata();
 
@@ -753,7 +753,7 @@ public class ClientCallImplTest {
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     call.start(callListener, new Metadata());
 
@@ -777,7 +777,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     call.start(callListener, new Metadata());
 
@@ -797,7 +797,7 @@ public class ClientCallImplTest {
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     call.start(callListener, new Metadata());
     call.cancel("canceled", null);
 
@@ -821,7 +821,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
 
     Metadata headers = new Metadata();
 
@@ -838,7 +838,7 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer);
+        channelCallTracer);
     final Exception cause = new Exception();
     ClientCall.Listener<Void> callListener =
         new ClientCall.Listener<Void>() {
@@ -875,7 +875,7 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelTracer)
+        channelCallTracer)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -888,7 +888,7 @@ public class ClientCallImplTest {
   public void getAttributes() {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method, MoreExecutors.directExecutor(), baseCallOptions, provider,
-        deadlineCancellationExecutor, channelTracer);
+        deadlineCancellationExecutor, channelCallTracer);
     Attributes attrs =
         Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
     when(stream.getAttributes()).thenReturn(attrs);

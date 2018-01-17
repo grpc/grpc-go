@@ -197,8 +197,8 @@ public final class ManagedChannelImpl
 
   private final ManagedChannelReference phantom;
 
-  private final ChannelTracer.Factory channelTracerFactory; // new tracer for each oobchannel
-  private final ChannelTracer channelTracer;
+  private final CallTracer.Factory callTracerFactory;
+  private final CallTracer channelCallTracer;
 
   // Called from channelExecutor
   private final ManagedClientTransport.Listener delayedTransportListener =
@@ -273,9 +273,8 @@ public final class ManagedChannelImpl
   public ListenableFuture<InternalChannelStats> getStats() {
     SettableFuture<InternalChannelStats> ret = SettableFuture.create();
     InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
-    channelTracer.updateBuilder(builder);
-    builder.setTarget(target)
-        .setState(channelStateManager.getState());
+    channelCallTracer.updateBuilder(builder);
+    builder.setTarget(target).setState(channelStateManager.getState());
     ret.set(builder.build());
     return ret;
   }
@@ -459,7 +458,7 @@ public final class ManagedChannelImpl
       Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors,
       ProxyDetector proxyDetector,
-      ChannelTracer.Factory channelTracerFactory) {
+      CallTracer.Factory callTracerFactory) {
     this.target = checkNotNull(builder.target, "target");
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
@@ -495,8 +494,8 @@ public final class ManagedChannelImpl
     this.proxyDetector = proxyDetector;
 
     phantom = new ManagedChannelReference(this);
-    this.channelTracerFactory = channelTracerFactory;
-    channelTracer = channelTracerFactory.create();
+    this.callTracerFactory = callTracerFactory;
+    channelCallTracer = callTracerFactory.create();
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
 
@@ -648,7 +647,7 @@ public final class ManagedChannelImpl
               callOptions,
               transportProvider,
               terminated ? null : transportFactory.getScheduledExecutorService(),
-          channelTracer)
+          channelCallTracer)
           .setFullStreamDecompression(fullStreamDecompression)
           .setDecompressorRegistry(decompressorRegistry)
           .setCompressorRegistry(compressorRegistry);
@@ -836,7 +835,7 @@ public final class ManagedChannelImpl
       checkNotNull(attrs, "attrs");
       // TODO(ejona): can we be even stricter? Like loadBalancer == null?
       checkState(!terminated, "Channel is terminated");
-      final SubchannelImpl subchannel = new SubchannelImpl(attrs, channelTracerFactory.create());
+      final SubchannelImpl subchannel = new SubchannelImpl(attrs, callTracerFactory.create());
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
             addressGroup, authority(), userAgent, backoffPolicyProvider, transportFactory,
             transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -930,7 +929,7 @@ public final class ManagedChannelImpl
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, channelTracerFactory);
+          channelExecutor, callTracerFactory);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -1055,16 +1054,16 @@ public final class ManagedChannelImpl
     InternalSubchannel subchannel;
     final Object shutdownLock = new Object();
     final Attributes attrs;
-    final ChannelTracer subchannelTracer;
+    final CallTracer subchannelCallTracer;
 
     @GuardedBy("shutdownLock")
     boolean shutdownRequested;
     @GuardedBy("shutdownLock")
     ScheduledFuture<?> delayedShutdownTask;
 
-    SubchannelImpl(Attributes attrs, ChannelTracer subchannelTracer) {
+    SubchannelImpl(Attributes attrs, CallTracer subchannelCallTracer) {
       this.attrs = checkNotNull(attrs, "attrs");
-      this.subchannelTracer = subchannelTracer;
+      this.subchannelCallTracer = subchannelCallTracer;
     }
 
     @Override
@@ -1137,9 +1136,8 @@ public final class ManagedChannelImpl
     public ListenableFuture<InternalChannelStats> getStats() {
       SettableFuture<InternalChannelStats> ret = SettableFuture.create();
       InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
-      subchannelTracer.updateBuilder(builder);
-      builder.setTarget(target)
-          .setState(subchannel.getState());
+      subchannelCallTracer.updateBuilder(builder);
+      builder.setTarget(target).setState(subchannel.getState());
       ret.set(builder.build());
       return ret;
     }
