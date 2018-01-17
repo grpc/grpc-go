@@ -20,12 +20,14 @@ package grpc
 
 import (
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func newTestBalancerBuilder() *testBalancerBuilder {
@@ -40,11 +42,24 @@ type testBalancerBuilder struct {
 	pickfirstBuilder
 
 	name     string
+	mu       sync.Mutex
 	buildOpt balancer.BuildOptions
 }
 
+func (r *testBalancerBuilder) setBuildOptions(o balancer.BuildOptions) {
+	r.mu.Lock()
+	r.buildOpt = o
+	r.mu.Unlock()
+}
+func (r *testBalancerBuilder) buildOptions() (o balancer.BuildOptions) {
+	r.mu.Lock()
+	o = r.buildOpt
+	r.mu.Unlock()
+	return
+}
+
 func (r *testBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	r.buildOpt = opts
+	r.setBuildOptions(opts)
 	return r.pickfirstBuilder.Build(cc, opts)
 }
 func (r *testBalancerBuilder) Name() string {
@@ -53,6 +68,7 @@ func (r *testBalancerBuilder) Name() string {
 
 // Tests that options in WithBalancerUserOptions are passed to balancer.Build().
 func TestBalancerUserOptions(t *testing.T) {
+	defer leakcheck.Check(t)
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
@@ -60,24 +76,25 @@ func TestBalancerUserOptions(t *testing.T) {
 	balancer.Register(b)
 
 	userOpt := "testUserOpt"
-	_, err := Dial(r.Scheme()+":///test.server", WithInsecure(),
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(),
 		WithBalancerName(b.Name()),
 		WithBalancerUserOptions(userOpt),
 	)
 	if err != nil {
 		t.Fatalf("Dial returned error %v, want <nil>", err)
 	}
+	defer cc.Close()
 
 	// An update from resolver will trigger balancer Build().
 	r.NewAddress([]resolver.Address{{Addr: "no.such.backend"}})
 
 	for i := 0; i < 1000; i++ {
-		if b.buildOpt.UserOptions != nil {
+		if b.buildOptions().UserOptions != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if b.buildOpt.UserOptions != userOpt {
-		t.Fatalf("buildOpt.UserOptions = %T %+v, want %v", b.buildOpt.UserOptions, b.buildOpt.UserOptions, userOpt)
+	if b.buildOptions().UserOptions != userOpt {
+		t.Fatalf("buildOpt.UserOptions = %T %+v, want %v", b.buildOptions().UserOptions, b.buildOptions().UserOptions, userOpt)
 	}
 }
