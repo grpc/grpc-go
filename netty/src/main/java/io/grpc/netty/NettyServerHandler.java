@@ -31,6 +31,7 @@ import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAU
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import io.grpc.Attributes;
 import io.grpc.InternalMetadata;
 import io.grpc.InternalStatus;
@@ -710,7 +711,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {
     return Http2Exception.streamError(
-        streamId, Http2Error.INTERNAL_ERROR, cause, cause.getMessage());
+        streamId, Http2Error.INTERNAL_ERROR, cause, Strings.nullToEmpty(cause.getMessage()));
   }
 
   private class FrameListener extends Http2FrameAdapter {
