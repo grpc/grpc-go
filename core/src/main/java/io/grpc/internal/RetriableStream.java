@@ -56,37 +56,48 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     this.method = method;
   }
 
-  private boolean commit(Substream winningSubstream) {
-    if (commit0(winningSubstream)) {
-      postCommit();
-      return true;
-    }
-    return false;
-  }
-
-  private boolean commit0(Substream winningSubstream) {
-    Collection<Substream> savedDrainedSubstreams;
+  @Nullable // null if already committed
+  @CheckReturnValue
+  private Runnable commit(final Substream winningSubstream) {
     synchronized (lock) {
       if (state.winningSubstream != null) {
-        return false;
+        return null;
       }
-
-      savedDrainedSubstreams = state.drainedSubstreams;
+      final Collection<Substream> savedDrainedSubstreams = state.drainedSubstreams;
 
       state = state.committed(winningSubstream);
-    }
 
-    // For hedging only, not needed for normal retry
-    // TODO(zdapeng): also cancel all the scheduled hedges.
-    for (Substream substream : savedDrainedSubstreams) {
-      if (substream != winningSubstream) {
-        substream.stream.cancel(CANCELLED_BECAUSE_COMMITTED);
+      class CommitTask implements Runnable {
+        @Override
+        public void run() {
+          // For hedging only, not needed for normal retry
+          // TODO(zdapeng): also cancel all the scheduled hedges.
+          for (Substream substream : savedDrainedSubstreams) {
+            if (substream != winningSubstream) {
+              substream.stream.cancel(CANCELLED_BECAUSE_COMMITTED);
+            }
+          }
+
+          postCommit();
+        }
       }
+
+      return new CommitTask();
     }
-    return true;
   }
 
   abstract void postCommit();
+
+  /**
+   * Calls commit() and if successful runs the post commit task.
+   */
+  private void commitAndRun(Substream winningSubstream) {
+    Runnable postCommitTask = commit(winningSubstream);
+
+    if (postCommitTask != null) {
+      postCommitTask.run();
+    }
+  }
 
   private void retry() {
     Substream substream = createSubstream();
@@ -199,9 +210,11 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   public final void cancel(Status reason) {
     Substream noopSubstream = new Substream();
     noopSubstream.stream = new NoopClientStream();
-    if (commit0(noopSubstream)) {
+    Runnable runnable = commit(noopSubstream);
+
+    if (runnable != null) {
       masterListener.closed(reason, new Metadata());
-      postCommit();
+      runnable.run();
       return;
     }
 
@@ -427,7 +440,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     @Override
     public void headersRead(Metadata headers) {
-      if (commit(substream)) {
+      commitAndRun(substream);
+      if (state.winningSubstream == substream) {
         masterListener.headersRead(headers);
       }
     }
@@ -444,7 +458,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
         // TODO(zdapeng): backoff and schedule; retry() should run in an executor
         retry();
       } else if (!hasHedging()) {
-        commit(substream);
+        commitAndRun(substream);
         if (state.winningSubstream == substream) {
           masterListener.closed(status, trailers);
         }
