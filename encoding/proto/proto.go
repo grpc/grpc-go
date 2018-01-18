@@ -30,12 +30,11 @@ import (
 const Name = "proto"
 
 func init() {
-	encoding.RegisterCodec(protoCodec{})
+	encoding.RegisterCodec(codec{})
 }
 
-// protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
-type protoCodec struct {
-}
+// codec is a Codec implementation with protobuf. It is the default codec for gRPC.
+type codec struct{}
 
 type cachedProtoBuffer struct {
 	lastMarshaledSize uint32
@@ -49,7 +48,7 @@ func capToMaxInt32(val int) uint32 {
 	return uint32(val)
 }
 
-func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
+func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
 
@@ -63,14 +62,14 @@ func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error
 	return out, nil
 }
 
-func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+func (codec) Marshal(v interface{}) ([]byte, error) {
 	if pm, ok := v.(proto.Marshaler); ok {
 		// object can marshal itself, no need for buffer
 		return pm.Marshal()
 	}
 
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	out, err := p.marshal(v, cb)
+	out, err := marshal(v, cb)
 
 	// put back buffer and lose the ref to the slice
 	cb.SetBuf(nil)
@@ -78,7 +77,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	return out, err
 }
 
-func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
+func (codec) Unmarshal(data []byte, v interface{}) error {
 	protoMsg := v.(proto.Message)
 	protoMsg.Reset()
 
@@ -95,7 +94,7 @@ func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
 	return err
 }
 
-func (protoCodec) Name() string {
+func (codec) Name() string {
 	return Name
 }
 
