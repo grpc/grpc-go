@@ -26,12 +26,17 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
+	channelz "google.golang.org/grpc/channelz/base"
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
+
+// NestedChannel is the context key for indicating whether this ClientConn is a
+// nested channel.
+type nestedChannel struct{}
 
 // processServerList updates balaner's internal state, create/remove SubConns
 // and regenerates picker using the received serverList.
@@ -243,11 +248,15 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerName(PickFirstBalancerName))
 	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
-	// Dial using manualResolver.Scheme, which is a random scheme generated
+
+	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	cc, err := Dial("grpclb:///grpclb.server", dopts...)
+	cc, err := DialContext(context.WithValue(context.Background(), nestedChannel{}, struct{}{}), "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
+	}
+	if channelz.IsOn() {
+		channelz.AddChild(lb.opt.Pid, cc.id, "<nil>")
 	}
 	lb.ccRemoteLB = cc
 	go lb.watchRemoteBalancer()
