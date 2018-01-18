@@ -90,15 +90,12 @@ type service struct {
 type Server struct {
 	opts options
 
-	mu    sync.Mutex // guards following
-	lis   map[net.Listener]bool
-	conns map[io.Closer]bool
-	serve bool
-	drain bool
-	cv    *sync.Cond // signaled when connections close for GracefulStop
-
-	id int64 // channelz unique identification number
-
+	mu     sync.Mutex // guards following
+	lis    map[net.Listener]bool
+	conns  map[io.Closer]bool
+	serve  bool
+	drain  bool
+	cv     *sync.Cond          // signaled when connections close for GracefulStop
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
 
@@ -107,6 +104,8 @@ type Server struct {
 	quitOnce sync.Once
 	doneOnce sync.Once
 	serveWG  sync.WaitGroup // counts active Serve goroutines for GracefulStop
+
+	id int64 // channelz unique identification number
 }
 
 type options struct {

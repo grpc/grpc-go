@@ -620,8 +620,6 @@ type ClientConn struct {
 	resolverWrapper   *ccResolverWrapper
 	blockingpicker    *pickerWrapper
 
-	id int64 // channelz unique identification number
-
 	mu    sync.RWMutex
 	sc    ServiceConfig
 	scRaw string
@@ -632,6 +630,8 @@ type ClientConn struct {
 	preBalancerName string // previous balancer name.
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
+
+	id int64 // channelz unique identification number
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -996,13 +996,10 @@ type addrConn struct {
 	events trace.EventLog
 	acbw   balancer.SubConn
 
-	id int64 // channelz unique identification number
-
 	mu           sync.Mutex
 	curAddr      resolver.Address
 	reconnectIdx int // The index in addrs list to start reconnecting from.
 	state        connectivity.State
-
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready     chan struct{}
@@ -1018,6 +1015,8 @@ type addrConn struct {
 	// connectDeadline is the time by which all connection
 	// negotiations must complete.
 	connectDeadline time.Time
+
+	id int64 // channelz unique identification number
 }
 
 // adjustParams updates parameters used to create transports upon
