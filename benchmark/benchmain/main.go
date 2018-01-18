@@ -65,7 +65,6 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -341,8 +340,9 @@ func init() {
 		kbps = []int{network.Kbps}
 		mtu = []int{network.MTU}
 	}
+
+	// TODO(yuxuanli): for benchmarking convenience, delete before PR is merged.
 	grpc.RegisterChannelz()
-	fmt.Println(channelz.IsOn())
 }
 
 func setMode(name string) []bool {

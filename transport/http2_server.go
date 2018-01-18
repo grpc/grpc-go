@@ -95,7 +95,8 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
-	id int64      // channelz unique identification number
+	id int64 // channelz unique identification number
+
 	mu sync.Mutex // guard the following
 
 	// drainChan is initialized when drain(...) is called the first time.
