@@ -50,7 +50,7 @@ type pickfirstBalancer struct {
 
 func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	if err != nil {
-		grpclog.Infof("pickfirstBalancer: HandleResolvedAddrs called with error %v", err)
+		grpclog.Debugf("pickfirstBalancer: HandleResolvedAddrs called with error %v", err)
 		return
 	}
 	if b.sc == nil {
@@ -68,9 +68,9 @@ func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err er
 }
 
 func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
+	grpclog.Debugf("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
 	if b.sc != sc {
-		grpclog.Infof("pickfirstBalancer: ignored state change because sc is not recognized")
+		grpclog.Debugf("pickfirstBalancer: ignored state change because sc is not recognized")
 		return
 	}
 	if s == connectivity.Shutdown {
