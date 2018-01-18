@@ -776,9 +776,10 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // Caller needs to make sure len(addrs) > 0.
 func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	ac := &addrConn{
-		cc:    cc,
-		addrs: addrs,
-		dopts: cc.dopts,
+		cc:         cc,
+		addrs:      addrs,
+		fatalAddrs: make(map[resolver.Address]error),
+		dopts:      cc.dopts,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -827,7 +828,7 @@ func (ac *addrConn) connect() error {
 	// Start a goroutine connecting to the server asynchronously.
 	go func() {
 		if err := ac.resetTransport(); err != nil {
-			grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
+			grpclog.Warningf("Failed to dial to addresses %+v: %v; please retry.", ac.addrs, err)
 			if err != errConnClosing {
 				// Keep this ac in cc.conns, to get the reason it's torn down.
 				ac.tearDown(err)
@@ -851,6 +852,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	grpclog.Infof("addrConn: tryUpdateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
 	if ac.state == connectivity.Shutdown {
 		ac.addrs = addrs
+		ac.fatalAddrs = make(map[resolver.Address]error)
 		return true
 	}
 
@@ -864,6 +866,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	grpclog.Infof("addrConn: tryUpdateAddrs curAddrFound: %v", curAddrFound)
 	if curAddrFound {
 		ac.addrs = addrs
+		ac.fatalAddrs = make(map[resolver.Address]error)
 		ac.reconnectIdx = 0 // Start reconnecting from beginning in the new list.
 	}
 
@@ -970,11 +973,12 @@ type addrConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cc     *ClientConn
-	addrs  []resolver.Address
-	dopts  dialOptions
-	events trace.EventLog
-	acbw   balancer.SubConn
+	cc         *ClientConn
+	addrs      []resolver.Address
+	fatalAddrs map[resolver.Address]error // Addresses with fatal errors. Will be ignored when retrying.
+	dopts      dialOptions
+	events     trace.EventLog
+	acbw       balancer.SubConn
 
 	mu           sync.Mutex
 	curAddr      resolver.Address
@@ -1092,9 +1096,14 @@ func (ac *addrConn) resetTransport() error {
 			ac.state = connectivity.Connecting
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
-		// copy ac.addrs in case of race
-		addrsIter := make([]resolver.Address, len(ac.addrs))
-		copy(addrsIter, ac.addrs)
+		// Copy ac.addrs in case of race. Only copy non-fatal addresses.
+		addrsIter := make([]resolver.Address, 0, len(ac.addrs))
+		for _, a := range ac.addrs {
+			if _, ok := ac.fatalAddrs[a]; !ok {
+				// Ignore addresses with fatal errors.
+				addrsIter = append(addrsIter, a)
+			}
+		}
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 		connected, err := ac.createTransport(connectRetryNum, ridx, backoffDeadline, connectDeadline, addrsIter, copts)
@@ -1110,6 +1119,7 @@ func (ac *addrConn) resetTransport() error {
 // createTransport creates a connection to one of the backends in addrs.
 // It returns true if a connection was established.
 func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions) (bool, error) {
+	var clientFatalError error
 	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
 		target := transport.TargetInfo{
@@ -1140,13 +1150,14 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		if err != nil {
 			cancel()
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+				// When the error creating transport is fatal, we should still
+				// try the other addresses instead of just stopping here. But we
+				// need to remember this address got a fatal error, and don't
+				// try on it in the future reconnecting.
+				clientFatalError = err
 				ac.mu.Lock()
-				if ac.state != connectivity.Shutdown {
-					ac.state = connectivity.TransientFailure
-					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-				}
+				ac.fatalAddrs[addr] = e
 				ac.mu.Unlock()
-				return false, err
 			}
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
@@ -1206,7 +1217,18 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		close(ac.ready)
 		ac.ready = nil
 	}
+	addrsCount := len(ac.addrs) - len(ac.fatalAddrs)
 	ac.mu.Unlock()
+	// When addrsCount == 0, which means all addresses got fatal errors, there's
+	// no point retrying on this addrConn.
+	if addrsCount <= 0 {
+		if clientFatalError == nil {
+			grpclog.Errorf("addrsCount == 0 while clientFatalError == nil")
+			return false, fmt.Errorf("no address is available for retrying")
+		}
+		grpclog.Warningf("grpc: addrConn stops retrying because of non-temporary error: %v", clientFatalError)
+		return false, clientFatalError
+	}
 	timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 	select {
 	case <-timer.C:
