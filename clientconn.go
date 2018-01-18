@@ -407,6 +407,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // cancel or expire the pending connection. Once this function returns, the
 // cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
 // to terminate all the pending operations after this function returns.
+//
+// The target name syntax is defined in
+// https://github.com/grpc/grpc/blob/master/doc/naming.md.
+// e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
