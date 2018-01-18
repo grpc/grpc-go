@@ -101,9 +101,7 @@ type http2Client struct {
 	// connection was established.
 	onSuccess func()
 
-	mu sync.Mutex // guard the following variables
-	id int64      // channelz identification number
-
+	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
@@ -115,6 +113,8 @@ type http2Client struct {
 	// goAwayReason records the http2.ErrCode and debug data received with the
 	// GoAway frame.
 	goAwayReason GoAwayReason
+
+	id int64 // channelz identification number
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
