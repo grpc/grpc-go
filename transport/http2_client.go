@@ -1116,12 +1116,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}()
 
 	s.mu.Lock()
-	if !endStream {
-		s.recvCompress = state.encoding
-	}
 	if !s.headerDone {
-		if !endStream && len(state.mdata) > 0 {
-			s.header = state.mdata
+		// Headers frame is not actually a trailers-only frame.
+		if !endStream {
+			s.recvCompress = state.encoding
+			if len(state.mdata) > 0 {
+				s.header = state.mdata
+			}
 		}
 		close(s.headerChan)
 		s.headerDone = true
