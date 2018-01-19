@@ -311,8 +311,8 @@ func BenchmarkStructStoreContention(b *testing.B) {
 	d := dummyStruct{}
 	dp := unsafe.Pointer(&d)
 	t := time.Now()
-	for _, i := range []int{100000, 10} {
-		for _, j := range []int{100000000, 10000, 0} {
+	for _, j := range []int{100000000, 10000, 0} {
+		for _, i := range []int{100000, 10} {
 			b.Run(fmt.Sprintf("CAS/%v/%v", j, i), func(b *testing.B) {
 				b.SetParallelism(i)
 				b.RunParallel(func(pb *testing.PB) {
@@ -337,8 +337,8 @@ func BenchmarkStructStoreContention(b *testing.B) {
 	}
 
 	var mu sync.Mutex
-	for _, i := range []int{100000, 10} {
-		for _, j := range []int{100000000, 10000, 0} {
+	for _, j := range []int{100000000, 10000, 0} {
+		for _, i := range []int{100000, 10} {
 			b.Run(fmt.Sprintf("Mutex/%v/%v", j, i), func(b *testing.B) {
 				b.SetParallelism(i)
 				b.RunParallel(func(pb *testing.PB) {
