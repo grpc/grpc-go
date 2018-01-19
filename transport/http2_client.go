@@ -1114,7 +1114,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}()
 
 	s.mu.Lock()
-	if !endStream {
+	if !endStream && !s.headerDone {
 		s.recvCompress = state.encoding
 	}
 	if !s.headerDone {
