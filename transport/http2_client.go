@@ -584,6 +584,10 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		rstStream = true
 		rstError = http2.ErrCodeCancel
 	}
+	if err != nil && !rstStream {
+		rstStream = true
+		rstError = http2.ErrCodeProtocol
+	}
 }
 
 // Close kicks off the shutdown process of the transport. This should be called
