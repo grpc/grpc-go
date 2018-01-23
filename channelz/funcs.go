@@ -38,8 +38,10 @@ var (
 // TurnOn turns on channelz data collection.
 // This is an EXPERIMENTAL API.
 func TurnOn() {
-	NewChannelzStorage()
-	atomic.StoreInt32(&curState, 1)
+	if !IsOn() {
+		NewChannelzStorage()
+		atomic.StoreInt32(&curState, 1)
+	}
 }
 
 // IsOn returns whether channelz data collection is on.
@@ -48,6 +50,8 @@ func IsOn() bool {
 	return atomic.CompareAndSwapInt32(&curState, 1, 1)
 }
 
+// dbWarpper wraps around a reference to internal channelz data storage, and
+// provide synchronized functionality to set and get the reference.
 type dbWrapper struct {
 	mu sync.RWMutex
 	DB *channelMap
@@ -67,10 +71,11 @@ func (d *dbWrapper) get() *channelMap {
 
 // NewChannelzStorage initializes channelz data storage and unique id generator,
 // and returns pointer to the data storage for read-only access.
+// Note: For testing purpose only. User should not call it in most cases.
 // This is an EXPERIMENTAL API.
 func NewChannelzStorage() {
 	db.set(&channelMap{
-		m:                make(map[int64]conn),
+		entries:          make(map[int64]entry),
 		topLevelChannels: make(map[int64]struct{}),
 		servers:          make(map[int64]struct{}),
 	})
@@ -141,10 +146,10 @@ func RegisterChannel(c Channel, t EntryType, pid int64, ref string) int64 {
 		db.get().addTopChannel(id, cn)
 	case SubChannelT:
 		cn.t = SubChannelT
-		db.get().add(id, cn)
+		db.get().addNonRootEntry(id, cn)
 	case NestedChannelT:
 		cn.t = NestedChannelT
-		db.get().add(id, cn)
+		db.get().addNonRootEntry(id, cn)
 	default:
 		grpclog.Errorf("register channel with undefined type %+v", t)
 		// Is returning 0 a good idea?
@@ -152,7 +157,7 @@ func RegisterChannel(c Channel, t EntryType, pid int64, ref string) int64 {
 	}
 
 	if pid != 0 {
-		db.get().addChild(pid, id, ref)
+		db.get().addChildToParent(pid, id, ref)
 	}
 	return id
 }
@@ -174,10 +179,10 @@ func RegisterSocket(s Socket, t EntryType, pid int64, ref string) int64 {
 	switch t {
 	case NormalSocketT:
 		sk.t = NormalSocketT
-		db.get().add(id, sk)
+		db.get().addNonRootEntry(id, sk)
 	case ListenSocketT:
 		sk.t = ListenSocketT
-		db.get().add(id, sk)
+		db.get().addNonRootEntry(id, sk)
 	default:
 		grpclog.Errorf("register socket with undefined type %+v", t)
 		// Is returning 0 a good idea?
@@ -185,7 +190,7 @@ func RegisterSocket(s Socket, t EntryType, pid int64, ref string) int64 {
 	}
 
 	if pid != 0 {
-		db.get().addChild(pid, id, ref)
+		db.get().addChildToParent(pid, id, ref)
 	}
 	return id
 }
@@ -196,62 +201,84 @@ func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
 
+// channelMap is the storage data structure for channelz.
 type channelMap struct {
 	mu               sync.RWMutex
-	m                map[int64]conn
+	entries          map[int64]entry
 	topLevelChannels map[int64]struct{}
 	servers          map[int64]struct{}
 }
 
-func (c *channelMap) add(id int64, cn conn) {
+func (c *channelMap) addNonRootEntry(id int64, cn entry) {
 	c.mu.Lock()
-	c.m[id] = cn
+	c.entries[id] = cn
 	c.mu.Unlock()
 }
 
-func (c *channelMap) addTopChannel(id int64, cn conn) {
+func (c *channelMap) addTopChannel(id int64, cn entry) {
 	c.mu.Lock()
-	c.m[id] = cn
+	c.entries[id] = cn
 	c.topLevelChannels[id] = struct{}{}
 	c.mu.Unlock()
 }
 
-func (c *channelMap) addServer(id int64, cn conn) {
+func (c *channelMap) addServer(id int64, cn entry) {
 	c.mu.Lock()
-	c.m[id] = cn
+	c.entries[id] = cn
 	c.servers[id] = struct{}{}
 	c.mu.Unlock()
 }
 
-func (c *channelMap) checkDelete(p conn, pid int64, t EntryType) {
-	switch t {
+func (c *channelMap) removeEntry(id int64) {
+	c.mu.Lock()
+	c.recursivelyDeleteEntry(id)
+	c.mu.Unlock()
+}
+
+// recursivelyDeleteEntry should be called inside c.mu lock.
+func (c *channelMap) markCloseCalled(cn entry) {
+	switch cn.Type() {
 	case TopChannelT, SubChannelT, NestedChannelT:
-		if p.(*channel).closeCalled && len(p.(*channel).subChans)+len(p.(*channel).nestedChans)+len(p.(*channel).sockets) == 0 {
-			c.deleteEntry(pid)
-		}
+		cn.(*channel).closeCalled = true
 	case ServerT:
-		if p.(*server).closeCalled && len(p.(*server).sockets)+len(p.(*server).listenSockets) == 0 {
-			c.deleteEntry(pid)
-		}
-	default:
-		// code should not reach here
+		cn.(*server).closeCalled = true
 	}
 }
 
-// removeChild must be called where lock on channelMap is already held.
-func (c *channelMap) removeChild(pid, cid int64) {
-	p, ok := c.m[pid]
+// readyDelete should be called inside c.mu lock.
+func (c *channelMap) readyDelete(cn entry) bool {
+	switch cn.Type() {
+	case NormalSocketT, ListenSocketT:
+		return true
+	case TopChannelT, SubChannelT, NestedChannelT:
+		if len(cn.(*channel).subChans)+len(cn.(*channel).nestedChans)+len(cn.(*channel).sockets) == 0 {
+			return true
+		}
+	case ServerT:
+		// TODO: should we take listenSockets into accounts?
+		if len(cn.(*server).sockets)+len(cn.(*server).listenSockets) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// removeChildFromParent must be called where lock on channelMap is already held.
+func (c *channelMap) removeChildFromParent(pid, cid int64) {
+	p, ok := c.entries[pid]
 	if !ok {
-		grpclog.Info("parent has been deleted.")
+		grpclog.Infof("parent (id: %d) has been deleted.", pid)
 		return
 	}
-	child, ok := c.m[cid]
+	child, ok := c.entries[cid]
 	if !ok {
-		grpclog.Info("child has been deleted.")
+		grpclog.Infof("child (id: %d), has been deleted.", cid)
 		return
 	}
+	var closeCalledPreviously bool
 	switch p.Type() {
 	case TopChannelT, SubChannelT, NestedChannelT:
+		closeCalledPreviously = p.(*channel).closeCalled
 		switch child.Type() {
 		case SubChannelT:
 			delete(p.(*channel).subChans, cid)
@@ -260,66 +287,44 @@ func (c *channelMap) removeChild(pid, cid int64) {
 		case NormalSocketT:
 			delete(p.(*channel).sockets, cid)
 		default:
-			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
+			grpclog.Errorf("%+v cannot have a child of type %+v", p.Type(), child.Type())
 			return
 		}
 	case ServerT:
+		closeCalledPreviously = p.(*server).closeCalled
 		switch child.Type() {
 		case NormalSocketT:
 			delete(p.(*server).sockets, cid)
 		case ListenSocketT:
 			delete(p.(*server).listenSockets, cid)
 		default:
-			grpclog.Error("%+v cannot have a child of type %+v", p.Type(), child.Type())
+			grpclog.Errorf("%+v cannot have a child of type %+v", p.Type(), child.Type())
 			return
 		}
 	case NormalSocketT, ListenSocketT:
 		grpclog.Error("socket cannot have child")
 		return
 	}
-	c.checkDelete(p, pid, p.Type())
-}
 
-// readyDelete should be called inside c.mu lock.
-func (c *channelMap) readyDelete(id int64) bool {
-	if v, ok := c.m[id]; ok {
-		switch v.Type() {
-		case NormalSocketT, ListenSocketT:
-			return true
-		case TopChannelT, SubChannelT, NestedChannelT:
-			v.(*channel).Lock()
-			defer v.(*channel).Unlock()
-			if len(v.(*channel).subChans)+len(v.(*channel).nestedChans)+len(v.(*channel).sockets) > 0 {
-				v.(*channel).closeCalled = true
-				return false
-			}
-			return true
-		case ServerT:
-			v.(*server).Lock()
-			defer v.(*server).Unlock()
-			// TODO: should we take listenSockets into accounts?
-			if len(v.(*server).sockets)+len(v.(*server).listenSockets) > 0 {
-				v.(*server).closeCalled = true
-				return false
-			}
-			return true
-		}
+	if closeCalledPreviously {
+		c.recursivelyDeleteEntry(pid)
 	}
-	return false
 }
 
-func (c *channelMap) removeEntry(id int64) {
-	c.mu.Lock()
-	c.deleteEntry(id)
-	c.mu.Unlock()
-}
-
-//TODO: optimize channelMap access here
-// deleteEntry should be called inside c.mu lock.
-func (c *channelMap) deleteEntry(id int64) {
-	if !c.readyDelete(id) {
+// TODO: optimize channelMap access here
+// recursivelyDeleteEntry should be called inside c.mu lock.
+func (c *channelMap) recursivelyDeleteEntry(id int64) {
+	v, ok := c.entries[id]
+	if !ok {
+		grpclog.Infof("entry with id: %d doesn't not exist", id)
 		return
 	}
+
+	c.markCloseCalled(v)
+	if !c.readyDelete(v) {
+		return
+	}
+
 	// Delete itself from topLevelChannels if it is there.
 	if _, ok := c.topLevelChannels[id]; ok {
 		delete(c.topLevelChannels, id)
@@ -330,33 +335,33 @@ func (c *channelMap) deleteEntry(id int64) {
 	}
 
 	// Delete itself from the descendants map of its parent.
-	if v, ok := c.m[id]; ok {
-		switch v.Type() {
-		case NormalSocketT, ListenSocketT:
-			if v.(*socket).pid != 0 {
-				c.removeChild(v.(*socket).pid, id)
-			}
-		case SubChannelT, NestedChannelT:
-			if v.(*channel).pid != 0 {
-				c.removeChild(v.(*channel).pid, id)
-			}
+	switch v.Type() {
+	case NormalSocketT, ListenSocketT:
+		if v.(*socket).pid != 0 {
+			c.removeChildFromParent(v.(*socket).pid, id)
 		}
+	case SubChannelT, NestedChannelT:
+		if v.(*channel).pid != 0 {
+			c.removeChildFromParent(v.(*channel).pid, id)
+		}
+	default:
+		// TopChannel and Server cannot have parent
 	}
 
-	// Delete itself from the map
-	delete(c.m, id)
+	// Delete itself from the entries map
+	delete(c.entries, id)
 }
 
 //TODO: optimize channelMap access here
-func (c *channelMap) addChild(pid, cid int64, ref string) {
+func (c *channelMap) addChildToParent(pid, cid int64, ref string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	p, ok := c.m[pid]
+	p, ok := c.entries[pid]
 	if !ok {
 		grpclog.Warningf("parent has been deleted, pid %d, cid %d", pid, cid)
 		return
 	}
-	child, ok := c.m[cid]
+	child, ok := c.entries[cid]
 	if !ok {
 		grpclog.Warningf("child has been deleted, pid %d, cid %d", pid, cid)
 		return
@@ -419,7 +424,7 @@ func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 	c.mu.RLock()
 	l := len(c.topLevelChannels)
 	ids := make([]int64, 0, l)
-	cns := make([]conn, 0, min(l, EntryPerPage))
+	cns := make([]entry, 0, min(l, EntryPerPage))
 
 	for k := range c.topLevelChannels {
 		ids = append(ids, k)
@@ -434,7 +439,7 @@ func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 		if v < id {
 			continue
 		}
-		if cn, ok := c.m[v]; ok {
+		if cn, ok := c.entries[v]; ok {
 			cns = append(cns, cn)
 			count++
 		}
@@ -465,7 +470,7 @@ func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 	c.mu.RLock()
 	l := len(c.servers)
 	ids := make([]int64, 0, l)
-	ss := make([]conn, 0, min(l, EntryPerPage))
+	ss := make([]entry, 0, min(l, EntryPerPage))
 	for k := range c.servers {
 		ids = append(ids, k)
 	}
@@ -479,7 +484,7 @@ func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 		if v < id {
 			continue
 		}
-		if cn, ok := c.m[v]; ok {
+		if cn, ok := c.entries[v]; ok {
 			ss = append(ss, cn)
 			count++
 		}
@@ -505,10 +510,10 @@ func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 
 func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool) {
 	var s []*SocketMetric
-	var cn conn
+	var cn entry
 	var ok bool
 	c.mu.RLock()
-	if cn, ok = c.m[id]; !ok || cn.Type() != ServerT {
+	if cn, ok = c.entries[id]; !ok || cn.Type() != ServerT {
 		// server with id doesn't exist.
 		c.mu.RUnlock()
 		return nil, true
@@ -516,7 +521,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 	sm := cn.(*server).sockets
 	l := len(sm)
 	ids := make([]int64, 0, l)
-	sks := make([]conn, 0, min(l, EntryPerPage))
+	sks := make([]entry, 0, min(l, EntryPerPage))
 	for k := range sm {
 		ids = append(ids, k)
 	}
@@ -530,7 +535,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 		if v < startID {
 			continue
 		}
-		if cn, ok := c.m[v]; ok {
+		if cn, ok := c.entries[v]; ok {
 			sks = append(sks, cn)
 			count++
 		}
@@ -553,9 +558,9 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 
 func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	c.mu.RLock()
-	var cn conn
+	var cn entry
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != TopChannelT || cn.Type() != NestedChannelT {
+	if cn, ok = c.entries[id]; !ok || cn.Type() != TopChannelT || cn.Type() != NestedChannelT {
 		// channel with id doesn't exist.
 		c.mu.RUnlock()
 		return nil
@@ -572,9 +577,9 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 
 func (c *channelMap) GetSubChannel(id int64) *ChannelMetric {
 	c.mu.RLock()
-	var cn conn
+	var cn entry
 	var ok bool
-	if cn, ok = c.m[id]; !ok || cn.Type() != SubChannelT {
+	if cn, ok = c.entries[id]; !ok || cn.Type() != SubChannelT {
 		// subchannel with id doesn't exist.
 		c.mu.RUnlock()
 		return nil
@@ -590,10 +595,10 @@ func (c *channelMap) GetSubChannel(id int64) *ChannelMetric {
 }
 
 func (c *channelMap) GetSocket(id int64) *SocketMetric {
-	var cn conn
+	var cn entry
 	var ok bool
 	c.mu.RLock()
-	if cn, ok = c.m[id]; !ok || cn.Type() != NormalSocketT || cn.Type() != ListenSocketT {
+	if cn, ok = c.entries[id]; !ok || cn.Type() != NormalSocketT || cn.Type() != ListenSocketT {
 		// socket with id doesn't exist.
 		c.mu.RUnlock()
 		return nil
