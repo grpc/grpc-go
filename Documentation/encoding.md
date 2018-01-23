@@ -140,4 +140,7 @@ On the server-side, using a `Compressor` is as simple as registering it into the
 global registry (i.e. `import`ing it).  If a message is compressed with the
 content coding supported by a registered `Compressor`, it will be used
 automatically for decompressing the request and compressing the response.
-Otherwise, the request will be rejected with status code `Unimplemented`.
+Otherwise, for backward-compatibility reasons, gRPC will attempt to use the
+"proto" codec.  In an upcoming change (tracked in [this
+issue](https://github.com/grpc/grpc-go/issues/1824)), such requests will be
+rejected with status code `Unimplemented` instead.

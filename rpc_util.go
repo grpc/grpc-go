@@ -284,9 +284,11 @@ func CallContentSubtype(contentSubtype string) CallOption {
 // used for all request and response messages for a call. The result of calling
 // String() will be used as the content-subtype in a case-insensitive manner.
 //
-// See Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
-// details. Also see the documentation on RegisterCodec and CallContentSubtype
-// for more details on the interaction between Codec and content-subtype.
+// See Content-Type on
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details. Also see the documentation on RegisterCodec and
+// CallContentSubtype for more details on the interaction between Codec and
+// content-subtype.
 //
 // This function is provided for advanced users; prefer to use only
 // CallContentSubtype to select a registered codec instead.
@@ -312,8 +314,8 @@ type parser struct {
 	// error types.
 	r io.Reader
 
-	// The header of a gRPC message. Find more detail
-	// at https://grpc.io/docs/guides/wire.html.
+	// The header of a gRPC message. Find more detail at
+	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
 }
 

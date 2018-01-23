@@ -46,10 +46,11 @@ const (
 	// http2IOBufSize specifies the buffer size for sending frames.
 	defaultWriteBufSize = 32 * 1024
 	defaultReadBufSize  = 32 * 1024
-	// baseContentType is the base content-type for gRPC.
-	// This is a valid content-type on it's own, but can also include a
-	// content-subtype such as "proto" as a suffix after "+" or ";".
-	// See https://grpc.io/docs/guides/wire.html#requests for more details.
+	// baseContentType is the base content-type for gRPC.  This is a valid
+	// content-type on it's own, but can also include a content-subtype such as
+	// "proto" as a suffix after "+" or ";".  See
+	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
+	// for more details.
 	baseContentType = "application/grpc"
 )
 
@@ -155,11 +156,12 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 	}
 }
 
-// contentSubtype returns the content-subtype for the given content-type.
-// The given content-type must be a valid content-type that starts with
-// "application/grpc". A content-subtype will follow "application/grpc"
-// after a "+" or ";". See https://grpc.io/docs/guides/wire.html#requests
-// for more details.
+// contentSubtype returns the content-subtype for the given content-type.  The
+// given content-type must be a valid content-type that starts with
+// "application/grpc". A content-subtype will follow "application/grpc" after a
+// "+" or ";". See
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details.
 //
 // If contentType is not a valid content-type for gRPC, the boolean
 // will be false, otherwise true. If content-type == "application/grpc",
