@@ -251,11 +251,11 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	// when init grpclb. The target name is not important.
 	var err error
 	var cc *ClientConn
+	ctx := context.Background()
 	if channelz.IsOn() {
-		cc, err = DialContext(channelz.WithParentID(context.Background(), lb.opt.ChannelzParentID), "grpclb:///grpclb.server", dopts...)
-	} else {
-		cc, err = Dial("grpclb:///grpclb.server", dopts...)
+		ctx = channelz.WithParentID(ctx, lb.opt.ChannelzParentID)
 	}
+	cc, err = DialContext(ctx, "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
