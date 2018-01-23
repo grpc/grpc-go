@@ -235,9 +235,10 @@ type Stream struct {
 	header        metadata.MD   // the received header metadata.
 	trailer       metadata.MD   // the key-value map of trailer metadata.
 
-	mu       sync.RWMutex // guard the following
-	headerOk bool         // becomes true from the first header is about to send
-	state    streamState
+	mu          sync.RWMutex // guard the following
+	headerOk    bool         // becomes true from the first header is about to send
+	state       streamState
+	rstReceived bool
 
 	status *status.Status // the status error received from the server
 

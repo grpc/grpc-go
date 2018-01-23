@@ -570,6 +570,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.mu.Lock()
 	rstStream = s.rstStream
 	rstError = s.rstError
+	rstRecv := s.rstReceived
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
@@ -580,13 +581,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if _, ok := err.(StreamError); ok {
+	if err != nil && !rstStream && !rstRecv {
 		rstStream = true
 		rstError = http2.ErrCodeCancel
-	}
-	if err != nil && !rstStream {
-		rstStream = true
-		rstError = http2.ErrCodeProtocol
 	}
 }
 
@@ -920,6 +917,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		statusCode = codes.Unknown
 	}
 	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
+	s.rstReceived = true
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
