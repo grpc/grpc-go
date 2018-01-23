@@ -155,7 +155,7 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 	}
 }
 
-// getContentSubtype returns the content-subtype for the given content-type.
+// contentSubtype returns the content-subtype for the given content-type.
 // The given content-type must be a valid content-type that starts with
 // "application/grpc". A content-subtype will follow "application/grpc"
 // after a "+" or ";". See https://grpc.io/docs/guides/wire.html#requests
@@ -167,7 +167,7 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 // but no content-subtype will be returned.
 //
 // contentType is assumed to be lowercase already.
-func getContentSubtype(contentType string) (string, bool) {
+func contentSubtype(contentType string) (string, bool) {
 	if contentType == baseContentType {
 		return "", true
 	}
@@ -187,7 +187,7 @@ func getContentSubtype(contentType string) (string, bool) {
 }
 
 // contentSubtype is assumed to be lowercase
-func getContentTypeForSubtype(contentSubtype string) string {
+func contentType(contentSubtype string) string {
 	if contentSubtype == "" {
 		return baseContentType
 	}
@@ -279,7 +279,7 @@ func (d *decodeState) addMetadata(k, v string) {
 func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	switch f.Name {
 	case "content-type":
-		contentSubtype, validContentType := getContentSubtype(f.Value)
+		contentSubtype, validContentType := contentSubtype(f.Value)
 		if !validContentType {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}

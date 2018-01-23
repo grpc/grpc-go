@@ -55,7 +55,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 	}
 	contentType := r.Header.Get("Content-Type")
 	// TODO: do we assume contentType is lowercase? we did before
-	contentSubtype, validContentType := getContentSubtype(contentType)
+	contentSubtype, validContentType := contentSubtype(contentType)
 	if !validContentType {
 		return nil, errors.New("invalid gRPC request content-type")
 	}

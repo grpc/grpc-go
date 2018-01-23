@@ -125,16 +125,15 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	compressorType                          string
-	failFast                                bool
-	stream                                  *transport.Stream
-	traceInfo                               traceInfo // in trace.go
-	maxReceiveMessageSize                   *int
-	maxSendMessageSize                      *int
-	creds                                   credentials.PerRPCCredentials
-	contentSubtype                          string
-	codec                                   baseCodec
-	useResponseContentSubtypeForCodecLookup bool
+	compressorType        string
+	failFast              bool
+	stream                *transport.Stream
+	traceInfo             traceInfo // in trace.go
+	maxReceiveMessageSize *int
+	maxSendMessageSize    *int
+	creds                 credentials.PerRPCCredentials
+	contentSubtype        string
+	codec                 baseCodec
 }
 
 func defaultCallInfo() *callInfo {
@@ -258,11 +257,11 @@ func UseCompressor(name string) CallOption {
 }
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
-// for a call. For example, if content-subtype is "json", the Content-Type
-// over the wire will be "application/grpc+json". The content-subtype is
-// converted to lowercase before being included in Content-Type. See
-// Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
-// details.
+// for a call. For example, if content-subtype is "json", the Content-Type over
+// the wire will be "application/grpc+json". The content-subtype is converted
+// to lowercase before being included in Content-Type. See Content-Type on
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details.
 //
 // If CallCustomCodec is not also used, the content-subtype will be used to
 // look up the Codec to use in the registry controlled by RegisterCodec. See
@@ -535,22 +534,23 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return status.Errorf(c, format, a...)
 }
 
-// setCallInfoContentSubtypeAndCodec should only be called after CallOptions
-// have been applied.
-func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
-	if c.contentSubtype != "" {
-		if c.codec == nil {
-			// c.contentSubtype is already lowercased in CallContentSubtype
-			codec := encoding.GetCodec(c.contentSubtype)
-			if codec == nil {
-				return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
-			}
-			c.codec = codec
-		}
-	} else {
-		if c.codec == nil {
-			c.codec = encoding.GetCodec(proto.Name)
-		}
+// setCallInfoCodec should only be called after CallOptions have been applied.
+func setCallInfoCodec(c *callInfo) error {
+	if c.codec != nil {
+		// codec was already set by a CallOption; use it.
+		return nil
+	}
+
+	if c.contentSubtype == "" {
+		// No codec specified in CallOptions; use proto by default.
+		c.codec = encoding.GetCodec(proto.Name)
+		return nil
+	}
+
+	// c.contentSubtype is already lowercased in CallContentSubtype
+	c.codec = encoding.GetCodec(c.contentSubtype)
+	if c.codec == nil {
+		return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 	}
 	return nil
 }

@@ -87,10 +87,10 @@ var registeredCodecs = make(map[string]Codec, 0)
 // RegisterCodec registers the provided Codec for use with all gRPC clients and
 // servers.
 //
-// The Codec will be stored and looked up by result of its String() method,
+// The Codec will be stored and looked up by result of its Name() method,
 // which should match the content-subtype of the encoding handled by the Codec.
 // This is case-insensitive, and is stored and looked up as lowercase.  If the
-// result of calling String() is an empty string, RegisterCodec will panic. See
+// result of calling Name() is an empty string, RegisterCodec will panic. See
 // Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
 // details.
 //

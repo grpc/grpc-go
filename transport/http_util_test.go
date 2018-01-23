@@ -72,7 +72,7 @@ func TestTimeoutDecode(t *testing.T) {
 	}
 }
 
-func TestGetContentSubtype(t *testing.T) {
+func TestContentSubtype(t *testing.T) {
 	tests := []struct {
 		contentType string
 		want        string
@@ -88,9 +88,9 @@ func TestGetContentSubtype(t *testing.T) {
 		{"application/grp", "", false},
 	}
 	for _, tt := range tests {
-		got, gotValid := getContentSubtype(tt.contentType)
+		got, gotValid := contentSubtype(tt.contentType)
 		if got != tt.want || gotValid != tt.wantValid {
-			t.Errorf("getContentSubtype(%q) = (%v, %v); want (%v, %v)", tt.contentType, got, gotValid, tt.want, tt.wantValid)
+			t.Errorf("contentSubtype(%q) = (%v, %v); want (%v, %v)", tt.contentType, got, gotValid, tt.want, tt.wantValid)
 		}
 	}
 }
