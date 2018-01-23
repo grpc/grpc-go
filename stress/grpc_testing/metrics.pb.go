@@ -49,7 +49,9 @@ func (m *GaugeResponse) String() string            { return proto.CompactTextStr
 func (*GaugeResponse) ProtoMessage()               {}
 func (*GaugeResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-type isGaugeResponse_Value interface{ isGaugeResponse_Value() }
+type isGaugeResponse_Value interface {
+	isGaugeResponse_Value()
+}
 
 type GaugeResponse_LongValue struct {
 	LongValue int64 `protobuf:"varint,2,opt,name=long_value,json=longValue,oneof"`
