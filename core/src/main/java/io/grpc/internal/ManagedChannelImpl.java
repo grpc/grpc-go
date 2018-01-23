@@ -433,7 +433,8 @@ public final class ManagedChannelImpl
         final Metadata headers,
         final Context context) {
       return new RetriableStream<ReqT>(
-          method, channelBufferUsed, perRpcBufferLimit, channelBufferLimit) {
+          method, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
+          getCallExecutor(callOptions), transportFactory.getScheduledExecutorService()) {
         @Override
         Status prestart() {
           return uncommittedRetriableStreamsRegistry.add(this);
@@ -647,17 +648,21 @@ public final class ManagedChannelImpl
     return interceptorChannel.authority();
   }
 
+  private Executor getCallExecutor(CallOptions callOptions) {
+    Executor executor = callOptions.getExecutor();
+    if (executor == null) {
+      executor = this.executor;
+    }
+    return executor;
+  }
+
   private class RealChannel extends Channel {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
-      Executor executor = callOptions.getExecutor();
-      if (executor == null) {
-        executor = ManagedChannelImpl.this.executor;
-      }
       return new ClientCallImpl<ReqT, RespT>(
               method,
-              executor,
+              getCallExecutor(callOptions),
               callOptions,
               transportProvider,
               terminated ? null : transportFactory.getScheduledExecutorService(),

@@ -34,6 +34,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -45,6 +49,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       Status.CANCELLED.withDescription("Stream thrown away because RetriableStream committed");
 
   private final MethodDescriptor<ReqT, ?> method;
+  private final Executor callExecutor;
+  private final ScheduledExecutorService scheduledExecutorService;
 
   /** Must be held when updating state, accessing state.buffer, or certain substream attributes. */
   private final Object lock = new Object();
@@ -62,14 +68,18 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   private long perRpcBufferUsed;
 
   private ClientStreamListener masterListener;
+  private Future<?> scheduledRetry;
 
   RetriableStream(
       MethodDescriptor<ReqT, ?> method, ChannelBufferMeter channelBufferUsed,
-      long perRpcBufferLimit, long channelBufferLimit) {
+      long perRpcBufferLimit, long channelBufferLimit,
+      Executor callExecutor, ScheduledExecutorService scheduledExecutorService) {
     this.method = method;
     this.channelBufferUsed = channelBufferUsed;
     this.perRpcBufferLimit = perRpcBufferLimit;
     this.channelBufferLimit = channelBufferLimit;
+    this.callExecutor = callExecutor;
+    this.scheduledExecutorService = scheduledExecutorService;
   }
 
   @Nullable // null if already committed
@@ -240,6 +250,11 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     Runnable runnable = commit(noopSubstream);
 
     if (runnable != null) {
+      Future<?> savedScheduledRetry = scheduledRetry;
+      if (savedScheduledRetry != null) {
+        savedScheduledRetry.cancel(false);
+        scheduledRetry = null;
+      }
       masterListener.closed(reason, new Metadata());
       runnable.run();
       return;
@@ -492,8 +507,23 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       if (state.winningSubstream == null && shouldRetry()) {
         // The check state.winningSubstream == null, checking if is not already committed, is racy,
         // but is still safe b/c the retry will also handle committed/cancellation
-        // TODO(zdapeng): backoff and schedule; retry() should run in an executor
-        retry();
+        // TODO(zdapeng): compute backoff
+        long backoffInMillis = 0L;
+        scheduledRetry = scheduledExecutorService.schedule(
+            new Runnable() {
+              @Override
+              public void run() {
+                scheduledRetry = null;
+                callExecutor.execute(new Runnable() {
+                  @Override
+                  public void run() {
+                    retry();
+                  }
+                });
+              }
+            },
+            backoffInMillis,
+            TimeUnit.MILLISECONDS);
       } else if (!hasHedging()) {
         commitAndRun(substream);
         if (state.winningSubstream == substream) {
