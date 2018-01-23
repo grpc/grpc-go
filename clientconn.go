@@ -420,9 +420,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if channelz.IsOn() {
 		if pid := channelz.ParentID(ctx); pid != 0 {
-			cc.id = channelz.RegisterChannel(cc, channelz.NestedChannelT, pid, "")
+			cc.channelzID = channelz.RegisterChannel(cc, channelz.NestedChannelT, pid, "")
 		} else {
-			cc.id = channelz.RegisterChannel(cc, channelz.TopChannelT, 0, "")
+			cc.channelzID = channelz.RegisterChannel(cc, channelz.TopChannelT, 0, "")
 		}
 	}
 
@@ -528,7 +528,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.balancerBuildOpts = balancer.BuildOptions{
 		DialCreds:        credsClone,
 		Dialer:           cc.dopts.copts.Dialer,
-		ChannelzParentID: cc.id,
+		ChannelzParentID: cc.channelzID,
 	}
 
 	// Build the resolver.
@@ -631,7 +631,7 @@ type ClientConn struct {
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
 
-	id int64 // channelz unique identification number
+	channelzID int64 // channelz unique identification number
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -796,7 +796,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
-		ac.id = channelz.RegisterChannel(ac, channelz.SubChannelT, cc.id, "")
+		ac.channelzID = channelz.RegisterChannel(ac, channelz.SubChannelT, cc.channelzID, "")
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -816,9 +816,9 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	ac.tearDown(err)
 }
 
-// ChannelzMetrics returns ChannelMetric of current ClientConn.
+// ChannelzMetric returns ChannelMetric of current ClientConn.
 // This is an EXPERIMENTAL API.
-func (cc *ClientConn) ChannelzMetrics() *channelz.ChannelMetric {
+func (cc *ClientConn) ChannelzMetric() *channelz.ChannelMetric {
 	return &channelz.ChannelMetric{}
 }
 
@@ -980,7 +980,7 @@ func (cc *ClientConn) Close() error {
 		ac.tearDown(ErrClientConnClosing)
 	}
 	if channelz.IsOn() {
-		channelz.RemoveEntry(cc.id)
+		channelz.RemoveEntry(cc.channelzID)
 	}
 	return nil
 }
@@ -1016,7 +1016,7 @@ type addrConn struct {
 	// negotiations must complete.
 	connectDeadline time.Time
 
-	id int64 // channelz unique identification number
+	channelzID int64 // channelz unique identification number
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1159,7 +1159,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		// this issue in Go1.6: https://github.com/golang/go/issues/15078.
 		connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
 		if channelz.IsOn() {
-			copts.ParentID = ac.id
+			copts.ParentID = ac.channelzID
 		}
 		newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt)
 		if err != nil {
@@ -1403,7 +1403,7 @@ func (ac *addrConn) tearDown(err error) {
 		ac.ready = nil
 	}
 	if channelz.IsOn() {
-		channelz.RemoveEntry(ac.id)
+		channelz.RemoveEntry(ac.channelzID)
 	}
 	return
 }
@@ -1414,8 +1414,8 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) ChannelzMetrics() *channelz.ChannelMetric {
-	return &channelz.ChannelMetric{ID: ac.id}
+func (ac *addrConn) ChannelzMetric() *channelz.ChannelMetric {
+	return &channelz.ChannelMetric{ID: ac.channelzID}
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the

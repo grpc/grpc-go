@@ -105,7 +105,7 @@ type Server struct {
 	doneOnce sync.Once
 	serveWG  sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	id int64 // channelz unique identification number
+	channelzID int64 // channelz unique identification number
 }
 
 type options struct {
@@ -349,7 +349,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 
 	if channelz.IsOn() {
-		s.id = channelz.RegisterServer(s)
+		s.channelzID = channelz.RegisterServer(s)
 	}
 	return s
 }
@@ -468,23 +468,17 @@ func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credenti
 
 type listenSocket struct {
 	net.Listener
-	id int64
+	channelzID int64
 }
 
-func (l *listenSocket) ChannelzMetrics() *channelz.SocketMetric {
+func (l *listenSocket) ChannelzMetric() *channelz.SocketMetric {
 	return &channelz.SocketMetric{}
-}
-
-func (*listenSocket) IncrMsgSent() {}
-func (*listenSocket) IncrMsgRecv() {}
-func (l *listenSocket) SetID(id int64) {
-	l.id = id
 }
 
 func (l *listenSocket) Close() error {
 	err := l.Listener.Close()
 	if channelz.IsOn() {
-		channelz.RemoveEntry(l.id)
+		channelz.RemoveEntry(l.channelzID)
 	}
 	return err
 }
@@ -521,7 +515,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[ls] = true
 
 	if channelz.IsOn() {
-		ls.id = channelz.RegisterSocket(ls, channelz.ListenSocketT, s.id, "")
+		ls.channelzID = channelz.RegisterSocket(ls, channelz.ListenSocketT, s.channelzID, "")
 	}
 	s.mu.Unlock()
 
@@ -651,7 +645,7 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
 		WriteBufferSize:       s.opts.writeBufferSize,
 		ReadBufferSize:        s.opts.readBufferSize,
-		ChannelzParentID:      s.id,
+		ChannelzParentID:      s.channelzID,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
@@ -790,10 +784,10 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
-// ChannelzMetrics returns ServerMetric of current server.
+// ChannelzMetric returns ServerMetric of current server.
 // This is an EXPERIMENTAL API.
-func (s *Server) ChannelzMetrics() *channelz.ServerMetric {
-	return &channelz.ServerMetric{ID: s.id}
+func (s *Server) ChannelzMetric() *channelz.ServerMetric {
+	return &channelz.ServerMetric{ID: s.channelzID}
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
@@ -1231,7 +1225,7 @@ func (s *Server) Stop() {
 
 	s.mu.Lock()
 	if channelz.IsOn() {
-		channelz.RemoveEntry(s.id)
+		channelz.RemoveEntry(s.channelzID)
 	}
 	listeners := s.lis
 	s.lis = nil
@@ -1277,7 +1271,7 @@ func (s *Server) GracefulStop() {
 	}
 
 	if channelz.IsOn() {
-		channelz.RemoveEntry(s.id)
+		channelz.RemoveEntry(s.channelzID)
 	}
 	for lis := range s.lis {
 		lis.Close()

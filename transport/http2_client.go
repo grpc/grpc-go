@@ -114,7 +114,7 @@ type http2Client struct {
 	// GoAway frame.
 	goAwayReason GoAwayReason
 
-	id int64 // channelz identification number
+	channelzID int64 // channelz unique identification number
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -271,6 +271,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		}
 		t.statsHandler.HandleConn(t.ctx, connBegin)
 	}
+	if channelz.IsOn() {
+		t.channelzID = channelz.RegisterSocket(t, channelz.NormalSocketT, opts.ParentID, "")
+	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
 	// dispatches the frame to the corresponding stream entity.
@@ -311,16 +314,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	}()
 	if t.kp.Time != infinity {
 		go t.keepalive()
-	}
-	if channelz.IsOn() {
-		t.mu.Lock()
-		if t.state != closing {
-			t.id = channelz.RegisterSocket(t, channelz.NormalSocketT, opts.ParentID, "")
-			t.mu.Unlock()
-		} else {
-			t.mu.Unlock()
-		}
-
 	}
 	return t, nil
 }
@@ -614,17 +607,9 @@ func (t *http2Client) Close() error {
 	t.mu.Unlock()
 	t.cancel()
 	err := t.conn.Close()
-
 	if channelz.IsOn() {
-		t.mu.Lock()
-		if t.id != 0 {
-			t.mu.Unlock()
-			channelz.RemoveEntry(t.id)
-		} else {
-			t.mu.Unlock()
-		}
+		channelz.RemoveEntry(t.channelzID)
 	}
-
 	t.mu.Lock()
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -1408,7 +1393,7 @@ func (t *http2Client) GoAway() <-chan struct{} {
 	return t.goAway
 }
 
-func (t *http2Client) ChannelzMetrics() *channelz.SocketMetric {
+func (t *http2Client) ChannelzMetric() *channelz.SocketMetric {
 	return &channelz.SocketMetric{}
 }
 

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ type ChannelMetric struct {
 // Channel is the interface implemented by grpc.ClientConn and grpc.addrConn
 // that reports ChannelMetric.
 type Channel interface {
-	ChannelzMetrics() *ChannelMetric
+	ChannelzMetric() *ChannelMetric
 }
 
 type channel struct {
@@ -122,9 +122,7 @@ type SocketMetric struct {
 
 // Socket is the interface implemented by transport.http2Client and transport.http2Server.
 type Socket interface {
-	ChannelzMetrics() *SocketMetric
-	IncrMsgSent()
-	IncrMsgRecv()
+	ChannelzMetric() *SocketMetric
 }
 
 type socket struct {
@@ -159,7 +157,7 @@ type ServerMetric struct {
 
 // Server is the interface implemented by grpc.Server that reports ServerMetric.
 type Server interface {
-	ChannelzMetrics() *ServerMetric
+	ChannelzMetric() *ServerMetric
 }
 
 type server struct {
