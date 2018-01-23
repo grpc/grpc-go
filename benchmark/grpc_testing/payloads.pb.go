@@ -81,9 +81,7 @@ func (m *PayloadConfig) String() string            { return proto.CompactTextStr
 func (*PayloadConfig) ProtoMessage()               {}
 func (*PayloadConfig) Descriptor() ([]byte, []int) { return fileDescriptor2, []int{3} }
 
-type isPayloadConfig_Payload interface {
-	isPayloadConfig_Payload()
-}
+type isPayloadConfig_Payload interface{ isPayloadConfig_Payload() }
 
 type PayloadConfig_BytebufParams struct {
 	BytebufParams *ByteBufferParams `protobuf:"bytes,1,opt,name=bytebuf_params,json=bytebufParams,oneof"`

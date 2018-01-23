@@ -242,9 +242,7 @@ func (m *LoadParams) String() string            { return proto.CompactTextString
 func (*LoadParams) ProtoMessage()               {}
 func (*LoadParams) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
-type isLoadParams_Load interface {
-	isLoadParams_Load()
-}
+type isLoadParams_Load interface{ isLoadParams_Load() }
 
 type LoadParams_ClosedLoop struct {
 	ClosedLoop *ClosedLoopParams `protobuf:"bytes,1,opt,name=closed_loop,json=closedLoop,oneof"`
@@ -624,9 +622,7 @@ func (m *ClientArgs) String() string            { return proto.CompactTextString
 func (*ClientArgs) ProtoMessage()               {}
 func (*ClientArgs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
-type isClientArgs_Argtype interface {
-	isClientArgs_Argtype()
-}
+type isClientArgs_Argtype interface{ isClientArgs_Argtype() }
 
 type ClientArgs_Setup struct {
 	Setup *ClientConfig `protobuf:"bytes,1,opt,name=setup,oneof"`
@@ -814,9 +810,7 @@ func (m *ServerArgs) String() string            { return proto.CompactTextString
 func (*ServerArgs) ProtoMessage()               {}
 func (*ServerArgs) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
-type isServerArgs_Argtype interface {
-	isServerArgs_Argtype()
-}
+type isServerArgs_Argtype interface{ isServerArgs_Argtype() }
 
 type ServerArgs_Setup struct {
 	Setup *ServerConfig `protobuf:"bytes,1,opt,name=setup,oneof"`

@@ -60,9 +60,7 @@ func (m *ServerReflectionRequest) String() string            { return proto.Comp
 func (*ServerReflectionRequest) ProtoMessage()               {}
 func (*ServerReflectionRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-type isServerReflectionRequest_MessageRequest interface {
-	isServerReflectionRequest_MessageRequest()
-}
+type isServerReflectionRequest_MessageRequest interface{ isServerReflectionRequest_MessageRequest() }
 
 type ServerReflectionRequest_FileByFilename struct {
 	FileByFilename string `protobuf:"bytes,3,opt,name=file_by_filename,json=fileByFilename,oneof"`
@@ -297,9 +295,7 @@ func (m *ServerReflectionResponse) String() string            { return proto.Com
 func (*ServerReflectionResponse) ProtoMessage()               {}
 func (*ServerReflectionResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-type isServerReflectionResponse_MessageResponse interface {
-	isServerReflectionResponse_MessageResponse()
-}
+type isServerReflectionResponse_MessageResponse interface{ isServerReflectionResponse_MessageResponse() }
 
 type ServerReflectionResponse_FileDescriptorResponse struct {
 	FileDescriptorResponse *FileDescriptorResponse `protobuf:"bytes,4,opt,name=file_descriptor_response,json=fileDescriptorResponse,oneof"`
