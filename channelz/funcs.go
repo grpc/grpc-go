@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -305,7 +305,7 @@ func (c *channelMap) readyDelete(id int64) bool {
 			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (c *channelMap) removeEntry(id int64) {
@@ -449,7 +449,7 @@ func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 	}
 
 	for _, cn := range cns {
-		cm := cn.(*channel).c.ChannelzMetrics()
+		cm := cn.(*channel).c.ChannelzMetric()
 		c.mu.RLock()
 		cm.NestedChans = copyMap(cn.(*channel).nestedChans)
 		cm.SubChans = copyMap(cn.(*channel).subChans)
@@ -494,7 +494,7 @@ func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 	}
 
 	for _, cn := range ss {
-		cm := cn.(*server).s.ChannelzMetrics()
+		cm := cn.(*server).s.ChannelzMetric()
 		c.mu.RLock()
 		cm.ListenSockets = copyMap(cn.(*server).listenSockets)
 		c.mu.RUnlock()
@@ -545,7 +545,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 	}
 
 	for _, cn := range sks {
-		cm := cn.(*socket).s.ChannelzMetrics()
+		cm := cn.(*socket).s.ChannelzMetric()
 		s = append(s, cm)
 	}
 	return s, ok
@@ -561,7 +561,7 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 		return nil
 	}
 	c.mu.RUnlock()
-	cm := cn.(*channel).c.ChannelzMetrics()
+	cm := cn.(*channel).c.ChannelzMetric()
 	c.mu.RLock()
 	cm.NestedChans = copyMap(cn.(*channel).nestedChans)
 	cm.SubChans = copyMap(cn.(*channel).subChans)
@@ -580,7 +580,7 @@ func (c *channelMap) GetSubChannel(id int64) *ChannelMetric {
 		return nil
 	}
 	c.mu.RUnlock()
-	cm := cn.(*channel).c.ChannelzMetrics()
+	cm := cn.(*channel).c.ChannelzMetric()
 	c.mu.RLock()
 	cm.NestedChans = copyMap(cn.(*channel).nestedChans)
 	cm.SubChans = copyMap(cn.(*channel).subChans)
@@ -598,7 +598,7 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 		c.mu.RUnlock()
 		return nil
 	}
-	return cn.(*socket).s.ChannelzMetrics()
+	return cn.(*socket).s.ChannelzMetric()
 }
 
 type idGenerator struct {
