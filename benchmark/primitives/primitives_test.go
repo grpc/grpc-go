@@ -277,55 +277,82 @@ func BenchmarkAtomicTimePointerStore(b *testing.B) {
 	b.StopTimer()
 }
 
-func BenchmarkValueStoreWithContention(b *testing.B) {
+func BenchmarkStoreContentionWithAtomic(b *testing.B) {
 	t := 123
-	for _, n := range []int{10, 100, 1000, 10000, 100000} {
-		b.Run(fmt.Sprintf("Atomic/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var c atomic.Value
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
-						c.Store(t)
+	var c unsafe.Pointer
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			atomic.StorePointer(&c, unsafe.Pointer(&t))
+		}
+	})
+}
+
+func BenchmarkStoreContentionWithMutex(b *testing.B) {
+	t := 123
+	var mu sync.Mutex
+	var c int
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			mu.Lock()
+			c = t
+			mu.Unlock()
+		}
+	})
+	_ = c
+}
+
+type dummyStruct struct {
+	a int64
+	b time.Time
+}
+
+func BenchmarkStructStoreContention(b *testing.B) {
+	d := dummyStruct{}
+	dp := unsafe.Pointer(&d)
+	t := time.Now()
+	for _, j := range []int{100000000, 10000, 0} {
+		for _, i := range []int{100000, 10} {
+			b.Run(fmt.Sprintf("CAS/%v/%v", j, i), func(b *testing.B) {
+				b.SetParallelism(i)
+				b.RunParallel(func(pb *testing.PB) {
+					n := &dummyStruct{
+						b: t,
 					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		})
-		b.Run(fmt.Sprintf("AtomicStorePointer/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var up unsafe.Pointer
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
-						atomic.StorePointer(&up, unsafe.Pointer(&t))
+					for pb.Next() {
+						for y := 0; y < j; y++ {
+						}
+						for {
+							v := (*dummyStruct)(atomic.LoadPointer(&dp))
+							n.a = v.a + 1
+							if atomic.CompareAndSwapPointer(&dp, unsafe.Pointer(v), unsafe.Pointer(n)) {
+								n = v
+								break
+							}
+						}
 					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		})
-		b.Run(fmt.Sprintf("Mutex/%v", n), func(b *testing.B) {
-			var wg sync.WaitGroup
-			var c int
-			mu := sync.Mutex{}
-			for i := 0; i < n; i++ {
-				wg.Add(1)
-				go func() {
-					for j := 0; j < b.N; j++ {
+				})
+			})
+		}
+	}
+
+	var mu sync.Mutex
+	for _, j := range []int{100000000, 10000, 0} {
+		for _, i := range []int{100000, 10} {
+			b.Run(fmt.Sprintf("Mutex/%v/%v", j, i), func(b *testing.B) {
+				b.SetParallelism(i)
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						for y := 0; y < j; y++ {
+						}
 						mu.Lock()
-						c = t
+						d.a++
+						d.b = t
 						mu.Unlock()
 					}
-					wg.Done()
-				}()
-			}
-			_ = c
-			wg.Wait()
-		})
+				})
+			})
+		}
 	}
 }
 
