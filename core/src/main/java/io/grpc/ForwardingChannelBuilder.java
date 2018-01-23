@@ -163,6 +163,18 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  @Override
+  public T retryBufferSize(long bytes) {
+    delegate().retryBufferSize(bytes);
+    return thisT();
+  }
+
+  @Override
+  public T perRpcBufferLimit(long bytes) {
+    delegate().perRpcBufferLimit(bytes);
+    return thisT();
+  }
+
   /**
    * Returns the {@link ManagedChannel} built by the delegate by default. Overriding method can
    * return different value.

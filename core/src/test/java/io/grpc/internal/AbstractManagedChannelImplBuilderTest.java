@@ -330,6 +330,36 @@ public class AbstractManagedChannelImplBuilderTest {
     assertEquals(TimeUnit.SECONDS.toMillis(30), builder.getIdleTimeoutMillis());
   }
 
+  @Test
+  public void retryBufferSize() {
+    Builder builder = new Builder("target");
+    assertEquals(1L << 24, builder.retryBufferSize);
+
+    builder.retryBufferSize(3456L);
+    assertEquals(3456L, builder.retryBufferSize);
+  }
+
+  @Test
+  public void perRpcBufferLimit() {
+    Builder builder = new Builder("target");
+    assertEquals(1L << 20, builder.perRpcBufferLimit);
+
+    builder.perRpcBufferLimit(3456L);
+    assertEquals(3456L, builder.perRpcBufferLimit);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void retryBufferSizeInvalidArg() {
+    Builder builder = new Builder("target");
+    builder.retryBufferSize(0L);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void perRpcBufferLimitInvalidArg() {
+    Builder builder = new Builder("target");
+    builder.perRpcBufferLimit(0L);
+  }
+
   static class Builder extends AbstractManagedChannelImplBuilder<Builder> {
     Builder(String target) {
       super(target);

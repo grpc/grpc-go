@@ -328,6 +328,39 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the retry buffer size in bytes. If the buffer limit is exceeded, no RPC
+   * could retry at the moment, and in hedging case all hedges but one of the same RPC will cancel.
+   * The implementation may only estimate the buffer size being used rather than count the
+   * exact physical memory allocated. The method does not have any effect if retry is disabled by
+   * the client.
+   *
+   * <p>This method may not work as expected for the current release because retry is not fully
+   * implemented yet.
+   *
+   * @since 1.10.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3982")
+  public T retryBufferSize(long bytes) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Sets the per RPC buffer limit in bytes used for retry. The RPC is not retriable if its buffer
+   * limit is exceeded. The implementation may only estimate the buffer size being used rather than
+   * count the exact physical memory allocated. It does not have any effect if retry is disabled by
+   * the client.
+   *
+   * <p>This method may not work as expected for the current release because retry is not fully
+   * implemented yet.
+   *
+   * @since 1.10.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3982")
+  public T perRpcBufferLimit(long bytes) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    *
    * @since 1.0.0

@@ -31,6 +31,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import io.grpc.CallOptions;
+import io.grpc.ClientStreamTracer;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
@@ -39,6 +41,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -61,6 +64,8 @@ public class RetriableStreamTest {
       DecompressorRegistry.getDefaultInstance();
   private static final int MAX_INBOUND_MESSAGE_SIZE = 1234;
   private static final int MAX_OUTNBOUND_MESSAGE_SIZE = 5678;
+  private static final long PER_RPC_BUFFER_LIMIT = 1000;
+  private static final long CHANNEL_BUFFER_LIMIT = 2000;
   private final RetriableStreamRecorder retriableStreamRecorder =
       mock(RetriableStreamRecorder.class);
   private final ClientStreamListener masterListener = mock(ClientStreamListener.class);
@@ -71,15 +76,19 @@ public class RetriableStreamTest {
           .setRequestMarshaller(new StringMarshaller())
           .setResponseMarshaller(new StringMarshaller())
           .build();
+  private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
   private final RetriableStream<String> retriableStream =
-      new RetriableStream<String>(method) {
+      new RetriableStream<String>(
+          method, channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT) {
         @Override
         void postCommit() {
           retriableStreamRecorder.postCommit();
         }
 
         @Override
-        ClientStream newStream() {
+        ClientStream newStream(ClientStreamTracer.Factory tracerFactory) {
+          bufferSizeTracer =
+              tracerFactory.newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
           return retriableStreamRecorder.newSubstream();
         }
 
@@ -93,6 +102,8 @@ public class RetriableStreamTest {
           return retriableStreamRecorder.shouldRetry();
         }
       };
+
+  private ClientStreamTracer bufferSizeTracer;
 
   @Test
   public void retry_everythingDrained() {
@@ -726,6 +737,46 @@ public class RetriableStreamTest {
     verify(mockStream1, never()).request(1);
     verify(mockStream2, never()).request(1);
     verify(mockStream3).request(1);
+  }
+
+  // TODO(zdapeng): test buffer limit exceeded during backoff
+  @Test
+  public void perRpcBufferLimitExceeded() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+
+    retriableStream.start(masterListener);
+
+    bufferSizeTracer.outboundWireSize(PER_RPC_BUFFER_LIMIT);
+
+    assertEquals(PER_RPC_BUFFER_LIMIT, channelBufferUsed.addAndGet(0));
+
+    verify(retriableStreamRecorder, never()).postCommit();
+    bufferSizeTracer.outboundWireSize(2);
+    verify(retriableStreamRecorder).postCommit();
+
+    // verify channel buffer is adjusted
+    assertEquals(0, channelBufferUsed.addAndGet(0));
+  }
+
+  @Test
+  public void channelBufferLimitExceeded() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+
+    retriableStream.start(masterListener);
+
+    bufferSizeTracer.outboundWireSize(100);
+
+    assertEquals(100, channelBufferUsed.addAndGet(0));
+
+    channelBufferUsed.addAndGet(CHANNEL_BUFFER_LIMIT - 200);
+    verify(retriableStreamRecorder, never()).postCommit();
+    bufferSizeTracer.outboundWireSize(100 + 1);
+    verify(retriableStreamRecorder).postCommit();
+
+    // verify channel buffer is adjusted
+    assertEquals(CHANNEL_BUFFER_LIMIT - 200, channelBufferUsed.addAndGet(0));
   }
 
   /**

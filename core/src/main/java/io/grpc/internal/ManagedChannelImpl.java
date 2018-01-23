@@ -34,6 +34,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
+import io.grpc.ClientStreamTracer;
 import io.grpc.CompressorRegistry;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -53,6 +54,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
+import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
@@ -199,6 +201,12 @@ public final class ManagedChannelImpl
 
   private final CallTracer.Factory callTracerFactory;
   private final CallTracer channelCallTracer;
+
+  // One instance per channel.
+  private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
+
+  private final long perRpcBufferLimit;
+  private final long channelBufferLimit;
 
   // Called from channelExecutor
   private final ManagedClientTransport.Listener delayedTransportListener =
@@ -424,7 +432,8 @@ public final class ManagedChannelImpl
         final CallOptions callOptions,
         final Metadata headers,
         final Context context) {
-      return new RetriableStream<ReqT>(method) {
+      return new RetriableStream<ReqT>(
+          method, channelBufferUsed, perRpcBufferLimit, channelBufferLimit) {
         @Override
         Status prestart() {
           return uncommittedRetriableStreamsRegistry.add(this);
@@ -436,12 +445,14 @@ public final class ManagedChannelImpl
         }
 
         @Override
-        ClientStream newStream() {
+        ClientStream newStream(ClientStreamTracer.Factory tracerFactory) {
+          // TODO(zdapeng): only add tracer when retry is enabled.
+          CallOptions newOptions = callOptions.withStreamTracerFactory(tracerFactory);
           ClientTransport transport =
-              get(new PickSubchannelArgsImpl(method, headers, callOptions));
+              get(new PickSubchannelArgsImpl(method, headers, newOptions));
           Context origContext = context.attach();
           try {
-            return transport.newStream(method, headers, callOptions);
+            return transport.newStream(method, headers, newOptions);
           } finally {
             context.detach(origContext);
           }
@@ -492,6 +503,9 @@ public final class ManagedChannelImpl
     this.compressorRegistry = checkNotNull(builder.compressorRegistry, "compressorRegistry");
     this.userAgent = builder.userAgent;
     this.proxyDetector = proxyDetector;
+
+    this.channelBufferLimit = builder.retryBufferSize;
+    this.perRpcBufferLimit = builder.perRpcBufferLimit;
 
     phantom = new ManagedChannelReference(this);
     this.callTracerFactory = callTracerFactory;

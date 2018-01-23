@@ -90,6 +90,9 @@ public abstract class AbstractManagedChannelImplBuilder
   private static final CompressorRegistry DEFAULT_COMPRESSOR_REGISTRY =
       CompressorRegistry.getDefaultInstance();
 
+  private static final long DEFAULT_RETRY_BUFFER_SIZE_IN_BYTES = 1L << 24;  // 16M
+  private static final long DEFAULT_PER_RPC_BUFFER_LIMIT_IN_BYTES = 1L << 20; // 1M
+
   ObjectPool<? extends Executor> executorPool = DEFAULT_EXECUTOR_POOL;
 
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
@@ -118,6 +121,9 @@ public abstract class AbstractManagedChannelImplBuilder
   CompressorRegistry compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
 
   long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
+
+  long retryBufferSize = DEFAULT_RETRY_BUFFER_SIZE_IN_BYTES;
+  long perRpcBufferLimit = DEFAULT_PER_RPC_BUFFER_LIMIT_IN_BYTES;
 
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
@@ -270,6 +276,20 @@ public abstract class AbstractManagedChannelImplBuilder
     } else {
       this.idleTimeoutMillis = Math.max(unit.toMillis(value), IDLE_MODE_MIN_TIMEOUT_MILLIS);
     }
+    return thisT();
+  }
+
+  @Override
+  public final T retryBufferSize(long bytes) {
+    checkArgument(bytes > 0L, "retry buffer size must be positive");
+    retryBufferSize = bytes;
+    return thisT();
+  }
+
+  @Override
+  public final T perRpcBufferLimit(long bytes) {
+    checkArgument(bytes > 0L, "per RPC buffer limit must be positive");
+    perRpcBufferLimit = bytes;
     return thisT();
   }
 
