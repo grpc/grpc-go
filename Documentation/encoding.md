@@ -67,8 +67,11 @@ codec and sent along with headers indicating the codec (`content-type` set to
 On the server-side, using a `Codec` is as simple as registering it into the
 global registry (i.e. `import`ing it).  If a message is encoded with the content
 sub-type supported by a registered `Codec`, it will be used automatically for
-decoding the request and encoding the response.  Otherwise, the request will be
-rejected with status code `Unimplemented`.
+decoding the request and encoding the response.  Otherwise, for
+backward-compatibility reasons, gRPC will attempt to use the "proto" codec.  In
+an upcoming change (tracked in [this
+issue](https://github.com/grpc/grpc-go/issues/1824)), such requests will be
+rejected with status code `Unimplemented` instead.
 
 ## Compressors (Compression and Decompression)
 
@@ -140,7 +143,4 @@ On the server-side, using a `Compressor` is as simple as registering it into the
 global registry (i.e. `import`ing it).  If a message is compressed with the
 content coding supported by a registered `Compressor`, it will be used
 automatically for decompressing the request and compressing the response.
-Otherwise, for backward-compatibility reasons, gRPC will attempt to use the
-"proto" codec.  In an upcoming change (tracked in [this
-issue](https://github.com/grpc/grpc-go/issues/1824)), such requests will be
-rejected with status code `Unimplemented` instead.
+Otherwise, the request will be rejected with status code `Unimplemented`.
