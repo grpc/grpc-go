@@ -105,6 +105,7 @@ subprojects {
         protobufVersion = '3.5.1'
         protocVersion = '3.5.1-1'
         protobufNanoVersion = '3.0.0-alpha-5'
+        opencensusVersion = '0.11.0'
 
         configureProtoCompilation = {
           String generatedSourcePath = "${projectDir}/src/generated"
@@ -196,10 +197,10 @@ subprojects {
                 google_auth_credentials: 'com.google.auth:google-auth-library-credentials:0.9.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.13.0',
-                opencensus_api: 'io.opencensus:opencensus-api:0.10.0',
-                opencensus_contrib_grpc_metrics: 'io.opencensus:opencensus-contrib-grpc-metrics:0.10.0',
-                opencensus_impl: 'io.opencensus:opencensus-impl:0.10.0',
-                opencensus_impl_lite: 'io.opencensus:opencensus-impl-lite:0.10.0',
+                opencensus_api: "io.opencensus:opencensus-api:${opencensusVersion}",
+                opencensus_contrib_grpc_metrics: "io.opencensus:opencensus-contrib-grpc-metrics:${opencensusVersion}",
+                opencensus_impl: "io.opencensus:opencensus-impl:${opencensusVersion}",
+                opencensus_impl_lite: "io.opencensus:opencensus-impl-lite:${opencensusVersion}",
                 instrumentation_api: 'com.google.instrumentation:instrumentation-api:0.4.3',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",

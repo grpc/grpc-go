@@ -31,6 +31,5 @@ java_library(
     deps = [
         "//core",
         "//core:internal",
-        "@com_google_instrumentation_instrumentation_api//jar",
     ],
 )

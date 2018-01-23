@@ -13,6 +13,12 @@ description = "gRPC: Services"
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
+    compile (libraries.instrumentation_api) {
+        // prefer 2.0.19 from libraries instead of 2.0.11
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        // we'll always be more up-to-date
+        exclude group: 'io.grpc', module: 'grpc-context'
+    }
     testCompile project(':grpc-testing'),
             libraries.netty_epoll // for DomainSocketAddress
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
