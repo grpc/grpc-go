@@ -67,7 +67,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		} else if rc != "" && rc != encoding.Identity {
 			comp = encoding.GetCompressor(rc)
 		}
-		if err = recv(p, dopts.codec, stream, dc, reply, *c.maxReceiveMessageSize, inPayload, comp); err != nil {
+		if err = recv(p, c.codec, stream, dc, reply, *c.maxReceiveMessageSize, inPayload, comp); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -111,7 +111,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			return status.Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", ct)
 		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, outPayload, comp)
+	hdr, data, err := encode(c.codec, args, compressor, outPayload, comp)
 	if err != nil {
 		return err
 	}
@@ -182,6 +182,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
 	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	if err := setCallInfoCodec(c); err != nil {
+		return err
+	}
 
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)

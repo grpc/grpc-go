@@ -142,6 +142,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
 	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	if err := setCallInfoCodec(c); err != nil {
+		return nil, err
+	}
 
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
@@ -150,7 +153,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		// so we don't flush the header.
 		// If it's client streaming, the user may never send a request or send it any
 		// time soon, so we ask the transport to flush the header.
-		Flush: desc.ClientStreams,
+		Flush:          desc.ClientStreams,
+		ContentSubtype: c.contentSubtype,
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
@@ -259,7 +263,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		opts:   opts,
 		c:      c,
 		desc:   desc,
-		codec:  cc.dopts.codec,
+		codec:  c.codec,
 		cp:     cp,
 		dc:     cc.dopts.dc,
 		comp:   comp,
@@ -311,7 +315,7 @@ type clientStream struct {
 	p    *parser
 	desc *StreamDesc
 
-	codec     Codec
+	codec     baseCodec
 	cp        Compressor
 	dc        Decompressor
 	comp      encoding.Compressor
@@ -591,7 +595,7 @@ type serverStream struct {
 	t     transport.ServerTransport
 	s     *transport.Stream
 	p     *parser
-	codec Codec
+	codec baseCodec
 
 	cp     Compressor
 	dc     Decompressor
