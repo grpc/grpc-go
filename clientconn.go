@@ -1167,7 +1167,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		// this issue in Go1.6: https://github.com/golang/go/issues/15078.
 		connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
 		if channelz.IsOn() {
-			copts.ParentID = ac.channelzID
+			copts.ChannelzParentID = ac.channelzID
 		}
 		newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt)
 		if err != nil {

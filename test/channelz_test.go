@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,11 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	}
 }
 
+func turnOnChannelzAndClearPreviousChannelzData() {
+	grpc.RegisterChannelz()
+	channelz.NewChannelzStorage()
+}
+
 func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
@@ -56,7 +61,7 @@ func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		grpc.RegisterChannelz()
+		turnOnChannelzAndClearPreviousChannelzData()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
@@ -86,7 +91,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		grpc.RegisterChannelz()
+		turnOnChannelzAndClearPreviousChannelzData()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		var ccs []*grpc.ClientConn
@@ -116,7 +121,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 
 func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	grpc.RegisterChannelz()
+	turnOnChannelzAndClearPreviousChannelzData()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -154,7 +159,7 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 
 func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	grpc.RegisterChannelz()
+	turnOnChannelzAndClearPreviousChannelzData()
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -213,7 +218,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 
 func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	grpc.RegisterChannelz()
+	turnOnChannelzAndClearPreviousChannelzData()
 	e := tcpClearRREnv
 	num := 3 // number of clients
 	te := newTest(t, e)
@@ -253,7 +258,7 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 
 func TestCZServerListenSocketDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	grpc.RegisterChannelz()
+	turnOnChannelzAndClearPreviousChannelzData()
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -279,4 +284,67 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 		t.Fatalf("There should only be 0 server listen socket, not %d", len(ss[0].ListenSockets))
 	}
 	s.Stop()
+}
+
+type dummyChannel struct{}
+
+func (d *dummyChannel) ChannelzMetric() *channelz.ChannelMetric {
+	return &channelz.ChannelMetric{}
+}
+
+type dummySocket struct{}
+
+func (d *dummySocket) ChannelzMetric() *channelz.SocketMetric {
+	return &channelz.SocketMetric{}
+}
+
+func TestCZRecusivelyDeletionOfEntry(t *testing.T) {
+	//           +--+TopChan+---+
+	//           |              |
+	//           v              v
+	//    +-+SubChan1+--+   SubChan2
+	//    |             |
+	//    v             v
+	// Socket1       Socket2
+	channelz.NewChannelzStorage()
+	topChanID := channelz.RegisterChannel(&dummyChannel{}, channelz.TopChannelT, 0, "")
+	subChanID1 := channelz.RegisterChannel(&dummyChannel{}, channelz.SubChannelT, topChanID, "")
+	subChanID2 := channelz.RegisterChannel(&dummyChannel{}, channelz.SubChannelT, topChanID, "")
+	sktID1 := channelz.RegisterSocket(&dummySocket{}, channelz.NormalSocketT, subChanID1, "")
+	sktID2 := channelz.RegisterSocket(&dummySocket{}, channelz.NormalSocketT, subChanID1, "")
+
+	tcs, _ := channelz.GetTopChannels(0)
+	if tcs == nil || len(tcs) != 1 {
+		t.Fatalf("There should be one TopChannel entry")
+	}
+	if len(tcs[0].SubChans) != 2 {
+		t.Fatalf("There should be two SubChannel entries")
+	}
+	sc := channelz.GetSubChannel(subChanID1)
+	if sc == nil || len(sc.Sockets) != 2 {
+		t.Fatalf("There should be two Socket entries")
+	}
+
+	channelz.RemoveEntry(topChanID)
+	tcs, _ = channelz.GetTopChannels(0)
+	if tcs == nil || len(tcs) != 1 {
+		t.Fatalf("There should be one TopChannel entry")
+	}
+
+	channelz.RemoveEntry(subChanID1)
+	channelz.RemoveEntry(subChanID2)
+	tcs, _ = channelz.GetTopChannels(0)
+	if tcs == nil || len(tcs) != 1 {
+		t.Fatalf("There should be one TopChannel entry")
+	}
+	if len(tcs[0].SubChans) != 1 {
+		t.Fatalf("There should be one SubChannel entry")
+	}
+
+	channelz.RemoveEntry(sktID1)
+	channelz.RemoveEntry(sktID2)
+	tcs, _ = channelz.GetTopChannels(0)
+	if tcs != nil {
+		t.Fatalf("There should be no TopChannel entry")
+	}
 }
