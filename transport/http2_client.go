@@ -272,7 +272,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.statsHandler.HandleConn(t.ctx, connBegin)
 	}
 	if channelz.IsOn() {
-		t.channelzID = channelz.RegisterSocket(t, channelz.NormalSocketT, opts.ParentID, "")
+		t.channelzID = channelz.RegisterSocket(t, channelz.NormalSocketT, opts.ChannelzParentID, "")
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it

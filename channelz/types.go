@@ -47,7 +47,7 @@ const (
 	ListenSocketT
 )
 
-type conn interface {
+type entry interface {
 	Type() EntryType
 	sync.Locker
 }

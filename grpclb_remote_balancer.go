@@ -249,13 +249,11 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 
 	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	var err error
-	var cc *ClientConn
 	ctx := context.Background()
 	if channelz.IsOn() {
 		ctx = channelz.WithParentID(ctx, lb.opt.ChannelzParentID)
 	}
-	cc, err = DialContext(ctx, "grpclb:///grpclb.server", dopts...)
+	cc, err := DialContext(ctx, "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
