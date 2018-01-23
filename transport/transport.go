@@ -597,6 +597,12 @@ type ClientTransport interface {
 
 	// GetGoAwayReason returns the reason why GoAway frame was received.
 	GetGoAwayReason() GoAwayReason
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -630,6 +636,12 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain()
+
+	// IncrMsgSent increments the number of message sent through this transport.
+	IncrMsgSent()
+
+	// IncrMsgRecv increments the number of message received through this transport.
+	IncrMsgRecv()
 }
 
 // streamErrorf creates an StreamError with the specified error code and description.

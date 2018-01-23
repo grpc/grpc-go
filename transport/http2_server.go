@@ -95,7 +95,7 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
-	id int64 // channelz unique identification number
+	channelzID int64 // channelz unique identification number
 
 	mu sync.Mutex // guard the following
 
@@ -230,13 +230,14 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		connBegin := &stats.ConnBegin{}
 		t.stats.HandleConn(t.ctx, connBegin)
 	}
+	if channelz.IsOn() {
+		t.channelzID = channelz.RegisterSocket(t, channelz.NormalSocketT, config.ChannelzParentID, "")
+	}
 	t.framer.writer.Flush()
 
 	defer func() {
 		if err != nil {
 			t.Close()
-		} else if channelz.IsOn() {
-			t.id = channelz.RegisterSocket(t, channelz.NormalSocketT, config.ChannelzParentID, "")
 		}
 	}()
 
@@ -1155,7 +1156,7 @@ func (t *http2Server) Close() error {
 	t.cancel()
 	err := t.conn.Close()
 	if channelz.IsOn() {
-		channelz.RemoveEntry(t.id)
+		channelz.RemoveEntry(t.channelzID)
 	}
 	// Cancel all active streams.
 	for _, s := range streams {
@@ -1211,15 +1212,12 @@ func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true})
 }
 
-func (t *http2Server) ChannelzMetrics() *channelz.SocketMetric {
+func (t *http2Server) ChannelzMetric() *channelz.SocketMetric {
 	return &channelz.SocketMetric{}
 }
 
 func (t *http2Server) IncrMsgSent() {}
 func (t *http2Server) IncrMsgRecv() {}
-func (t *http2Server) SetID(id int64) {
-	t.id = id
-}
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
