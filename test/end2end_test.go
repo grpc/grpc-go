@@ -4261,7 +4261,7 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 		defer close(recvErr)
 		_, err := stream.Recv()
 		if err != nil {
-			return err
+			return status.Errorf(codes.Internal, "stream.Recv() got error: %v, want <nil>", err)
 		}
 		// create a payload that's larger than the default flow control window.
 		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
