@@ -22,6 +22,21 @@ same compression method specified by the client.  If the corresponding
 compressor has not been registered, an `Unimplemented` status will be returned
 to the client.
 
+## Example
+
+Server-side you can just import the `gzip` package and its `init()` function will
+register itself.
+
+    import _ "google.golang.org/grpc/encoding/gzip"
+
+Client-side:
+
+    import "google.golang.org/grpc/encoding/gzip"
+    
+    ...
+    
+    conn, err := grpc.Dial(addr, grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
+
 ## Deprecated API
 
 There is a deprecated API for setting compression as well.  It is not
