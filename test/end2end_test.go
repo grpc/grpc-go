@@ -4257,29 +4257,34 @@ func TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
 func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 	te := newTest(t, e)
 	recvErr := make(chan error, 1)
-	timeoutErr := errors.New("1s timeout reached")
 	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+		defer close(recvErr)
 		_, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("expecting <nil> error, got %v", err)
-		}
-		// create a payload that's larger than the default flow control window.
-		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1048576)
 		if err != nil {
 			return err
 		}
-
+		// create a payload that's larger than the default flow control window.
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
+		if err != nil {
+			return err
+		}
+		resp := &testpb.StreamingOutputCallResponse{
+			Payload: payload,
+		}
 		ce := make(chan error)
 		go func() {
-			err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: payload,
-			})
+			var err error
+			for {
+				if err = stream.Send(resp); err != nil {
+					break
+				}
+			}
 			ce <- err
 		}()
 		select {
 		case err = <-ce:
-		case <-time.After(time.Second):
-			err = timeoutErr
+		case <-time.After(10 * time.Second):
+			err = errors.New("10s timeout reached")
 		}
 		recvErr <- err
 		return err
@@ -4302,9 +4307,7 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 	if _, err := stream.Recv(); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
-	select {
-	case err = <-recvErr:
-	}
+	err = <-recvErr
 	if status.Code(err) != codes.Canceled {
 		t.Fatalf("server got error %v, want error code: %s", err, codes.Canceled)
 	}

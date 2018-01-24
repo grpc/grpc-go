@@ -235,15 +235,15 @@ type Stream struct {
 	header        metadata.MD   // the received header metadata.
 	trailer       metadata.MD   // the key-value map of trailer metadata.
 
-	mu          sync.RWMutex // guard the following
-	headerOk    bool         // becomes true from the first header is about to send
-	state       streamState
-	rstReceived bool
+	mu       sync.RWMutex // guard the following
+	headerOk bool         // becomes true from the first header is about to send
+	state    streamState
 
 	status *status.Status // the status error received from the server
 
-	rstStream bool          // indicates whether a RST_STREAM frame needs to be sent
-	rstError  http2.ErrCode // the error that needs to be sent along with the RST_STREAM frame
+	rstStream   bool          // indicates whether a RST_STREAM frame needs to be sent
+	rstError    http2.ErrCode // the error that needs to be sent along with the RST_STREAM frame
+	rstReceived bool          // indicates whether a RST_STREAM frame has been received from the other endpoint
 
 	bytesReceived bool // indicates whether any bytes have been received on this stream
 	unprocessed   bool // set if the server sends a refused stream or GOAWAY including this stream
