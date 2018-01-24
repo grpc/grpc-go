@@ -241,8 +241,9 @@ type Stream struct {
 
 	status *status.Status // the status error received from the server
 
-	rstStream bool          // indicates whether a RST_STREAM frame needs to be sent
-	rstError  http2.ErrCode // the error that needs to be sent along with the RST_STREAM frame
+	rstStream   bool          // indicates whether a RST_STREAM frame needs to be sent
+	rstError    http2.ErrCode // the error that needs to be sent along with the RST_STREAM frame
+	rstReceived bool          // indicates whether a RST_STREAM frame has been received from the other endpoint
 
 	bytesReceived bool // indicates whether any bytes have been received on this stream
 	unprocessed   bool // set if the server sends a refused stream or GOAWAY including this stream

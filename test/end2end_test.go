@@ -4099,6 +4099,7 @@ type funcServer struct {
 	testpb.TestServiceServer
 	unaryCall          func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	streamingInputCall func(stream testpb.TestService_StreamingInputCallServer) error
+	fullDuplexCall     func(stream testpb.TestService_FullDuplexCallServer) error
 }
 
 func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -4107,6 +4108,10 @@ func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
 	return s.streamingInputCall(stream)
+}
+
+func (s *funcServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+	return s.fullDuplexCall(stream)
 }
 
 func TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
@@ -4228,6 +4233,76 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 			t.Errorf("error = %#v; want error code %s", got, codes.Canceled)
 		}
 	})
+}
+
+func TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			// httpHanlder write won't be blocked on flow control window.
+			continue
+		}
+		testClientResourceExhaustedCancelFullDuplex(t, e)
+	}
+}
+
+func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
+	te := newTest(t, e)
+	recvErr := make(chan error, 1)
+	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+		defer close(recvErr)
+		_, err := stream.Recv()
+		if err != nil {
+			return status.Errorf(codes.Internal, "stream.Recv() got error: %v, want <nil>", err)
+		}
+		// create a payload that's larger than the default flow control window.
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
+		if err != nil {
+			return err
+		}
+		resp := &testpb.StreamingOutputCallResponse{
+			Payload: payload,
+		}
+		ce := make(chan error)
+		go func() {
+			var err error
+			for {
+				if err = stream.Send(resp); err != nil {
+					break
+				}
+			}
+			ce <- err
+		}()
+		select {
+		case err = <-ce:
+		case <-time.After(10 * time.Second):
+			err = errors.New("10s timeout reached")
+		}
+		recvErr <- err
+		return err
+	}}
+	te.startServer(ts)
+	defer te.tearDown()
+	// set a low limit on receive message size to error with Resource Exhausted on
+	// client side when server send a large message.
+	te.maxClientReceiveMsgSize = newInt(10)
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	req := &testpb.StreamingOutputCallRequest{}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	if _, err := stream.Recv(); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+	err = <-recvErr
+	if status.Code(err) != codes.Canceled {
+		t.Fatalf("server got error %v, want error code: %s", err, codes.Canceled)
+	}
 }
 
 type clientTimeoutCreds struct {
