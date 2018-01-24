@@ -35,7 +35,7 @@ import java.lang.annotation.Target;
  * </ol>
  */
 @Internal
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 @Target({
     ElementType.ANNOTATION_TYPE,
     ElementType.CONSTRUCTOR,
