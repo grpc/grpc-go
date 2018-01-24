@@ -328,6 +328,7 @@ type clientStream struct {
 
 	mu       sync.Mutex
 	done     func(balancer.DoneInfo)
+	sentLast bool // sent an end stream
 	closed   bool
 	finished bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
@@ -406,7 +407,10 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if len(data) > *cs.c.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
 	}
-	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: false})
+	if !cs.desc.ClientStreams {
+		cs.sentLast = true
+	}
+	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: cs.sentLast})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
@@ -494,6 +498,10 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) CloseSend() (err error) {
+	if cs.sentLast {
+		return nil
+	}
+	cs.sentLast = true
 	err = cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
 	defer func() {
 		if err != nil {
