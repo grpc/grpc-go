@@ -101,12 +101,12 @@ func runRecordRoute(client pb.RouteGuideClient) {
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
 func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
-		{&pb.Point{Latitude: 0, Longitude: 1}, "First message"},
-		{&pb.Point{Latitude: 0, Longitude: 2}, "Second message"},
-		{&pb.Point{Latitude: 0, Longitude: 3}, "Third message"},
-		{&pb.Point{Latitude: 0, Longitude: 1}, "Fourth message"},
-		{&pb.Point{Latitude: 0, Longitude: 2}, "Fifth message"},
-		{&pb.Point{Latitude: 0, Longitude: 3}, "Sixth message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "First message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Second message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Third message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "Fourth message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Fifth message"},
+		{Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Sixth message"},
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
