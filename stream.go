@@ -388,11 +388,10 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			return
 		}
 		if err == io.EOF {
-			// Specialize the process for server streaming. SendMsg is only called
-			// once when creating the stream object. io.EOF needs to be skipped when
-			// the rpc is early finished (before the stream object is created.).
-			// TODO: It is probably better to move this into the generated code.
-			if !cs.desc.ClientStreams && cs.desc.ServerStreams {
+			// SendMsg is only called once for non-client-streams. io.EOF needs to be
+			// skipped when the rpc is early finished (before the stream object is
+			// created.).
+			if !cs.desc.ClientStreams {
 				err = nil
 			}
 			return
@@ -473,10 +472,10 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		if inPayload != nil {
 			cs.statsHandler.HandleRPC(cs.statsCtx, inPayload)
 		}
-		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
+		if cs.desc.ServerStreams {
 			return
 		}
-		// Special handling for client streaming rpc.
+		// Special handling for non-server-stream rpcs.
 		// This recv expects EOF or errors, so we don't collect inPayload.
 		if cs.c.maxReceiveMessageSize == nil {
 			return status.Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
@@ -524,8 +523,7 @@ func (cs *clientStream) CloseSend() (err error) {
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.closeTransportStream(err)
 	}
-	err = toRPCErr(err)
-	return
+	return toRPCErr(err)
 }
 
 func (cs *clientStream) closeTransportStream(err error) {
