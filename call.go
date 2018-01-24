@@ -44,7 +44,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 func invoke(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	sd := &StreamDesc{ServerStreams: false, ClientStreams: false}
 	// TODO: implement retries in clientStream and make this simply
-	// newClientStream, SendMsg, CloseSend, RecvMsg.
+	// newClientStream, SendMsg, RecvMsg.
 	firstAttempt := true
 	for {
 		csInt, err := newClientStream(ctx, sd, cc, method, opts...)
@@ -53,14 +53,6 @@ func invoke(ctx context.Context, method string, req, reply interface{}, cc *Clie
 		}
 		cs := csInt.(*clientStream)
 		if err := cs.SendMsg(req); err != nil {
-			if !cs.c.failFast && cs.s.Unprocessed() && firstAttempt {
-				// TODO: Add a field to header for grpc-transparent-retry-attempts
-				firstAttempt = false
-				continue
-			}
-			return err
-		}
-		if err := cs.CloseSend(); err != nil {
 			if !cs.c.failFast && cs.s.Unprocessed() && firstAttempt {
 				// TODO: Add a field to header for grpc-transparent-retry-attempts
 				firstAttempt = false
