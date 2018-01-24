@@ -433,7 +433,7 @@ public final class ManagedChannelImpl
         final Metadata headers,
         final Context context) {
       return new RetriableStream<ReqT>(
-          method, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
+          method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
           getCallExecutor(callOptions), transportFactory.getScheduledExecutorService()) {
         @Override
         Status prestart() {
@@ -446,14 +446,14 @@ public final class ManagedChannelImpl
         }
 
         @Override
-        ClientStream newStream(ClientStreamTracer.Factory tracerFactory) {
+        ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata newHeaders) {
           // TODO(zdapeng): only add tracer when retry is enabled.
           CallOptions newOptions = callOptions.withStreamTracerFactory(tracerFactory);
           ClientTransport transport =
-              get(new PickSubchannelArgsImpl(method, headers, newOptions));
+              get(new PickSubchannelArgsImpl(method, newHeaders, newOptions));
           Context origContext = context.attach();
           try {
-            return transport.newStream(method, headers, newOptions);
+            return transport.newStream(method, newHeaders, newOptions);
           } finally {
             context.detach(origContext);
           }

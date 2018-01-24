@@ -17,11 +17,15 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.RetriableStream.GRPC_PREVIOUS_RPC_ATTEMPTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -81,7 +85,7 @@ public class RetriableStreamTest {
   private final FakeClock fakeClock = new FakeClock();
   private final RetriableStream<String> retriableStream =
       new RetriableStream<String>(
-          method, channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
+          method, new Metadata(),channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
           MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService()) {
         @Override
         void postCommit() {
@@ -89,10 +93,12 @@ public class RetriableStreamTest {
         }
 
         @Override
-        ClientStream newStream(ClientStreamTracer.Factory tracerFactory) {
+        ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata metadata) {
           bufferSizeTracer =
               tracerFactory.newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
-          return retriableStreamRecorder.newSubstream();
+          int actualPreviousRpcAttemptsInHeader = metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS) == null
+              ? 0 : Integer.valueOf(metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
+          return retriableStreamRecorder.newSubstream(actualPreviousRpcAttemptsInHeader);
         }
 
         @Override
@@ -111,7 +117,7 @@ public class RetriableStreamTest {
   @Test
   public void retry_everythingDrained() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder, masterListener, mockStream1);
 
     // stream settings before start
@@ -131,7 +137,7 @@ public class RetriableStreamTest {
     retriableStream.start(masterListener);
 
     inOrder.verify(retriableStreamRecorder).prestart();
-    inOrder.verify(retriableStreamRecorder).newSubstream();
+    inOrder.verify(retriableStreamRecorder).newSubstream(0);
 
     inOrder.verify(mockStream1).setAuthority(AUTHORITY);
     inOrder.verify(mockStream1).setCompressor(COMPRESSOR);
@@ -165,7 +171,7 @@ public class RetriableStreamTest {
 
     // retry1
     ClientStream mockStream2 = mock(ClientStream.class);
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     inOrder = inOrder(retriableStreamRecorder, masterListener, mockStream1, mockStream2);
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
@@ -173,7 +179,7 @@ public class RetriableStreamTest {
     inOrder.verify(retriableStreamRecorder).shouldRetry();
     // TODO(zdapeng): send more messages during backoff, then forward backoff ticker w/ right amount
     fakeClock.forwardNanos(0L);
-    inOrder.verify(retriableStreamRecorder).newSubstream();
+    inOrder.verify(retriableStreamRecorder).newSubstream(1);
     inOrder.verify(mockStream2).setAuthority(AUTHORITY);
     inOrder.verify(mockStream2).setCompressor(COMPRESSOR);
     inOrder.verify(mockStream2).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
@@ -204,7 +210,7 @@ public class RetriableStreamTest {
 
     // retry2
     ClientStream mockStream3 = mock(ClientStream.class);
-    doReturn(mockStream3).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream3).when(retriableStreamRecorder).newSubstream(2);
     inOrder =
         inOrder(retriableStreamRecorder, masterListener, mockStream1, mockStream2, mockStream3);
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
@@ -213,7 +219,7 @@ public class RetriableStreamTest {
     inOrder.verify(retriableStreamRecorder).shouldRetry();
     // TODO(zdapeng): send more messages during backoff, then forward backoff ticker w/ right amount
     fakeClock.forwardNanos(0L);
-    inOrder.verify(retriableStreamRecorder).newSubstream();
+    inOrder.verify(retriableStreamRecorder).newSubstream(2);
     inOrder.verify(mockStream3).setAuthority(AUTHORITY);
     inOrder.verify(mockStream3).setCompressor(COMPRESSOR);
     inOrder.verify(mockStream3).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
@@ -248,7 +254,7 @@ public class RetriableStreamTest {
   @Test
   public void headersRead_cancel() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -269,7 +275,7 @@ public class RetriableStreamTest {
   @Test
   public void retry_headersRead_cancel() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -282,7 +288,7 @@ public class RetriableStreamTest {
     // TODO(zdapeng): forward backoff ticker w/ right amount
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
     ClientStream mockStream2 = mock(ClientStream.class);
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
 
@@ -305,7 +311,7 @@ public class RetriableStreamTest {
   @Test
   public void headersRead_closed() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -329,7 +335,7 @@ public class RetriableStreamTest {
   @Test
   public void retry_headersRead_closed() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -342,7 +348,7 @@ public class RetriableStreamTest {
     // TODO(zdapeng): forward backoff ticker w/ right amount
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
     ClientStream mockStream2 = mock(ClientStream.class);
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
 
@@ -369,7 +375,7 @@ public class RetriableStreamTest {
   @Test
   public void cancel_closed() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -399,7 +405,7 @@ public class RetriableStreamTest {
   @Test
   public void retry_cancel_closed() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -412,7 +418,7 @@ public class RetriableStreamTest {
     // TODO(zdapeng): forward backoff ticker w/ right amount
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
     ClientStream mockStream2 = mock(ClientStream.class);
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
 
@@ -441,7 +447,7 @@ public class RetriableStreamTest {
   @Test
   public void unretriableClosed_cancel() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -466,7 +472,7 @@ public class RetriableStreamTest {
   @Test
   public void retry_unretriableClosed_cancel() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     InOrder inOrder = inOrder(retriableStreamRecorder);
 
     retriableStream.start(masterListener);
@@ -480,7 +486,7 @@ public class RetriableStreamTest {
     fakeClock.forwardNanos(0L);
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
     ClientStream mockStream2 = mock(ClientStream.class);
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
 
@@ -557,7 +563,7 @@ public class RetriableStreamTest {
 
     InOrder inOrder = inOrder(retriableStreamRecorder, mockStream1, mockStream2);
 
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     retriableStream.start(masterListener);
 
     inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
@@ -574,7 +580,7 @@ public class RetriableStreamTest {
     // retry
     // TODO(zdapeng): send more messages during backoff, then forward backoff ticker w/ right amount
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     sublistenerCaptor1.getValue().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
 
@@ -607,7 +613,7 @@ public class RetriableStreamTest {
 
     InOrder inOrder = inOrder(retriableStreamRecorder, mockStream1);
 
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     retriableStream.start(masterListener);
 
     // drained
@@ -626,7 +632,7 @@ public class RetriableStreamTest {
   public void isReady_whenDrained() {
     ClientStream mockStream1 = mock(ClientStream.class);
 
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     retriableStream.start(masterListener);
 
     assertFalse(retriableStream.isReady());
@@ -674,7 +680,7 @@ public class RetriableStreamTest {
                   }
                 }));
 
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
     retriableStream.start(masterListener);
 
     verify(mockStream1).start(sublistenerCaptor1.get());
@@ -683,7 +689,7 @@ public class RetriableStreamTest {
     // retry
     // TODO(zdapeng): send more messages during backoff, then forward backoff ticker w/ right amount
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
-    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
     doReturn(false).when(mockStream1).isReady(); // mockStream1 closed, so isReady false
     sublistenerCaptor1.get().closed(Status.UNAVAILABLE, new Metadata());
     fakeClock.forwardNanos(0L);
@@ -697,7 +703,7 @@ public class RetriableStreamTest {
   @Test
   public void messageAvailable() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
 
     retriableStream.start(masterListener);
 
@@ -729,7 +735,8 @@ public class RetriableStreamTest {
     final ClientStream mockStream3 = mock(ClientStream.class);
 
     doReturn(true).when(retriableStreamRecorder).shouldRetry();
-    when(retriableStreamRecorder.newSubstream()).thenReturn(mockStream1, mockStream2, mockStream3);
+    when(retriableStreamRecorder.newSubstream(anyInt()))
+        .thenReturn(mockStream1, mockStream2, mockStream3);
 
     retriableStream.start(masterListener);
     retriableStream.sendMessage("msg1");
@@ -756,7 +763,7 @@ public class RetriableStreamTest {
   @Test
   public void perRpcBufferLimitExceeded() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
 
     retriableStream.start(masterListener);
 
@@ -775,7 +782,7 @@ public class RetriableStreamTest {
   @Test
   public void channelBufferLimitExceeded() {
     ClientStream mockStream1 = mock(ClientStream.class);
-    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream();
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
 
     retriableStream.start(masterListener);
 
@@ -792,6 +799,17 @@ public class RetriableStreamTest {
     assertEquals(CHANNEL_BUFFER_LIMIT - 200, channelBufferUsed.addAndGet(0));
   }
 
+  @Test
+  public void updateHeaders() {
+    Metadata originalHeaders = new Metadata();
+    Metadata headers = retriableStream.updateHeaders(originalHeaders, 0);
+    assertSame(originalHeaders, headers);
+
+    headers = retriableStream.updateHeaders(originalHeaders, 345);
+    assertEquals("345", headers.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
+    assertNull(originalHeaders.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
+  }
+
   /**
    * Used to stub a retriable stream as well as to record methods of the retriable stream being
    * called.
@@ -799,7 +817,7 @@ public class RetriableStreamTest {
   private interface RetriableStreamRecorder {
     void postCommit();
 
-    ClientStream newSubstream();
+    ClientStream newSubstream(int previousAttempts);
 
     Status prestart();
 
