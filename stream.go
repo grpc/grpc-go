@@ -289,29 +289,31 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		statsCtx:     ctx,
 		statsHandler: cc.dopts.copts.StatsHandler,
 	}
-	// Listen on s.Context().Done() to detect cancellation and s.Done() to detect
-	// normal termination when there is no pending I/O operations on this stream.
-	go func() {
-		select {
-		case <-t.Error():
-			// Incur transport error, simply exit.
-		case <-cc.ctx.Done():
-			cs.finish(ErrClientConnClosing)
-			cs.closeTransportStream(ErrClientConnClosing)
-		case <-s.Done():
-			// TODO: The trace of the RPC is terminated here when there is no pending
-			// I/O, which is probably not the optimal solution.
-			cs.finish(s.Status().Err())
-			cs.closeTransportStream(nil)
-		case <-s.GoAway():
-			cs.finish(errConnDrain)
-			cs.closeTransportStream(errConnDrain)
-		case <-s.Context().Done():
-			err := s.Context().Err()
-			cs.finish(err)
-			cs.closeTransportStream(transport.ContextErr(err))
-		}
-	}()
+	if desc.ClientStreams || desc.ServerStreams {
+		// Listen on s.Context().Done() to detect cancellation and s.Done() to detect
+		// normal termination when there is no pending I/O operations on this stream.
+		go func() {
+			select {
+			case <-t.Error():
+				// Incur transport error, simply exit.
+			case <-cc.ctx.Done():
+				cs.finish(ErrClientConnClosing)
+				cs.closeTransportStream(ErrClientConnClosing)
+			case <-s.Done():
+				// TODO: The trace of the RPC is terminated here when there is no pending
+				// I/O, which is probably not the optimal solution.
+				cs.finish(s.Status().Err())
+				cs.closeTransportStream(nil)
+			case <-s.GoAway():
+				cs.finish(errConnDrain)
+				cs.closeTransportStream(errConnDrain)
+			case <-s.Context().Done():
+				err := s.Context().Err()
+				cs.finish(err)
+				cs.closeTransportStream(transport.ContextErr(err))
+			}
+		}()
+	}
 	return cs, nil
 }
 
