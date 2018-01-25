@@ -361,6 +361,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) SendMsg(m interface{}) (err error) {
+	// TODO: Check cs.sentLast and error if we already ended the stream.
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.trInfo.tr != nil {
