@@ -611,7 +611,7 @@ public final class ProtocolNegotiators {
 
     BufferUntilTlsNegotiatedHandler(
         ChannelHandler bootstrapHandler, GrpcHttp2ConnectionHandler grpcHandler) {
-      super(bootstrapHandler, grpcHandler);
+      super(bootstrapHandler);
       this.grpcHandler = grpcHandler;
     }
 
@@ -629,6 +629,10 @@ public final class ProtocolNegotiators {
           if (NEXT_PROTOCOL_VERSIONS.contains(handler.applicationProtocol())) {
             // Successfully negotiated the protocol.
             logSslEngineDetails(Level.FINER, ctx, "TLS negotiation succeeded.", null);
+
+            // Wait until negotiation is complete to add gRPC.   If added too early, HTTP/2 writes
+            // will fail before we see the userEvent, and the channel is closed down prematurely.
+            ctx.pipeline().addBefore(ctx.name(), null, grpcHandler);
 
             // Successfully negotiated the protocol.
             // Notify about completion and pass down SSLSession in attributes.
