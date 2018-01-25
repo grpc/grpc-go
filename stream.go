@@ -421,7 +421,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if !cs.desc.ClientStreams {
 		cs.sentLast = true
 	}
-	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: cs.sentLast})
+	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: !cs.desc.ClientStreams})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
