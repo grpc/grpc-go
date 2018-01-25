@@ -1808,6 +1808,74 @@ func TestServiceConfigMaxMsgSize(t *testing.T) {
 	}
 }
 
+// Reading from a streaming RPC may fail with context canceled if timeout was
+// set by service config (https://github.com/grpc/grpc-go/issues/1818). This
+// test makes sure read from streaming RPC doesn't fail in this case.
+func TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
+	te := testServiceConfigSetup(t, tcpClearRREnv)
+	te.startServer(&testServer{security: tcpClearRREnv.security})
+	defer te.tearDown()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	te.resolverScheme = r.Scheme()
+	te.nonBlockingDial = true
+	fmt.Println("1")
+	cc := te.clientConn()
+	fmt.Println("10")
+	tc := testpb.NewTestServiceClient(cc)
+
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
+	    "methodConfig": [
+	        {
+	            "name": [
+	                {
+	                    "service": "grpc.testing.TestService",
+	                    "method": "FullDuplexCall"
+	                }
+	            ],
+	            "waitForReady": true,
+	            "timeout": "10s"
+	        }
+	    ]
+	}`)
+	// Make sure service config has been processed by grpc.
+	for {
+		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 0)
+	if err != nil {
+		t.Fatalf("failed to newPayload: %v", err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: []*testpb.ResponseParameters{{Size: 0}},
+		Payload:            payload,
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("stream.Send(%v) = %v, want <nil>", req, err)
+	}
+	stream.CloseSend()
+	time.Sleep(time.Second)
+	// Sleep 1 second before recv to make sure the final status is received
+	// before the recv.
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv = _, %v, want _, <nil>", err)
+	}
+}
+
 func TestMaxMsgSizeClientDefault(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
