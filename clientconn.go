@@ -1223,7 +1223,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 	// no point retrying on this addrConn.
 	if addrsCount <= 0 {
 		if clientFatalError == nil {
-			grpclog.Errorf("addrsCount == 0 while clientFatalError == nil")
+			grpclog.Errorf("addrsCount is 0 while clientFatalError is nil, the ac was created with empty slice")
 			return false, fmt.Errorf("no address is available for retrying")
 		}
 		grpclog.Warningf("grpc: addrConn stops retrying because of non-temporary error: %v", clientFatalError)
