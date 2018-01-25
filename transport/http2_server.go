@@ -843,10 +843,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 
 	var writeHeaderFrame bool
 	s.mu.Lock()
-	if s.state == streamDone {
-		s.mu.Unlock()
-		return streamErrorf(codes.Unknown, "the stream has been done")
-	}
 	if !s.headerOk {
 		writeHeaderFrame = true
 	}
