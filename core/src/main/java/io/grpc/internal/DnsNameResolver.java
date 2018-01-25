@@ -312,6 +312,9 @@ final class DnsNameResolver extends NameResolver {
   @VisibleForTesting
   @SuppressWarnings("LiteralClassName")
   static boolean jndiAvailable() {
+    if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
+      return false;
+    }
     try {
       Class.forName("javax.naming.directory.InitialDirContext");
       Class.forName("com.sun.jndi.dns.DnsContextFactory");
