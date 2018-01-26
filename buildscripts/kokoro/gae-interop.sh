@@ -41,9 +41,10 @@ DEPLOY_DUMMY_CMD="./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$DUMMY_DEFAULT_VERS
 # Deploy the dummy 'default' version. We only require that it exists when cleanup() is called.
 set +e
 $DUMMY_EXISTS_CMD
+EXIST=$?
 set -e
 
-if [[ $? != 0 ]]; then
+if [[ $EXIST != 0 ]]; then
   $DEPLOY_DUMMY_CMD
 else
   echo "default version already exists: $DUMMY_DEFAULT_VERSION"
