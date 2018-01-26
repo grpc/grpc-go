@@ -126,8 +126,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	if mc.Timeout != nil && *mc.Timeout >= 0 {
-		// The cancel function for this context will NEVER be called once the
-		// stream is returned (https://github.com/grpc/grpc-go/issues/1818).
+		// The cancel function for this context will NEVER be called because of
+		// https://github.com/grpc/grpc-go/issues/1818.
 		//
 		// Possible situations (context leaks):
 		//  - If no timeout was specified by service config, this won't happen.
@@ -271,13 +271,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	c.stream = s
 	cs := &clientStream{
-		opts:  opts,
-		c:     c,
-		desc:  desc,
-		codec: c.codec,
-		cp:    cp,
-		dc:    cc.dopts.dc,
-		comp:  comp,
+		opts:   opts,
+		c:      c,
+		desc:   desc,
+		codec:  c.codec,
+		cp:     cp,
+		dc:     cc.dopts.dc,
+		comp:   comp,
+		cancel: cancel,
 
 		done: done,
 		t:    t,
@@ -331,6 +332,10 @@ type clientStream struct {
 	comp      encoding.Compressor
 	decomp    encoding.Compressor
 	decompSet bool
+
+	// cancel is never called because of
+	// https://github.com/grpc/grpc-go/issues/1818.
+	cancel context.CancelFunc
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -531,6 +536,8 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
+	// Do not call cs.cancel because of
+	// https://github.com/grpc/grpc-go/issues/1818.
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.finished {
