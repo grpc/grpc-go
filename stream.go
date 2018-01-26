@@ -489,6 +489,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 				return se
 			}
 			cs.finish(err)
+			cs.cancel()
 			return nil
 		}
 		return toRPCErr(err)
