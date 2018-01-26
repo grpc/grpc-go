@@ -1874,6 +1874,12 @@ func TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("stream.Recv = _, %v, want _, <nil>", err)
 	}
+	// Keep reading to drain the stream.
+	for {
+		if _, err := stream.Recv(); err != nil {
+			break
+		}
+	}
 }
 
 func TestMaxMsgSizeClientDefault(t *testing.T) {

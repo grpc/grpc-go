@@ -126,17 +126,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	if mc.Timeout != nil && *mc.Timeout >= 0 {
-		// The cancel function for this context will NEVER be called because of
-		// https://github.com/grpc/grpc-go/issues/1818.
+		// The cancel function for this context will only be called when RecvMsg
+		// returns non-nil error, which means the stream finishes with error or
+		// io.EOF. https://github.com/grpc/grpc-go/issues/1818.
 		//
-		// Possible situations (context leaks):
-		//  - If no timeout was specified by service config, this won't happen.
-		//  There's no context leak.
-		//  - If user's context is not Background, this ctx will be freed when
-		//  the user ctx timeout/is canceled. There's no leak if user is
-		//  handling their ctx appropriately.
-		//  - If user's context is Background, this ctx will be leaked after the
-		//  stream is done, until the service config timeout happens.
+		// Possible context leak:
+		// - If user provided context is Background, and the user doesn't call
+		// RecvMsg() for the final status, this ctx will be leaked after the
+		// stream is done, until the service config timeout happens.
 		ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
 		defer func() {
 			if err != nil {
@@ -333,8 +330,8 @@ type clientStream struct {
 	decomp    encoding.Compressor
 	decompSet bool
 
-	// cancel is never called because of
-	// https://github.com/grpc/grpc-go/issues/1818.
+	// cancel is only called when RecvMsg() returns non-nil error, which means
+	// the stream finishes with error or with io.EOF.
 	cancel context.CancelFunc
 
 	tracing bool // set to EnableTracing when the clientStream is created.
@@ -459,6 +456,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
 			cs.finish(err)
+			cs.cancel()
 		}
 	}()
 	if err == nil {
@@ -536,7 +534,8 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
-	// Do not call cs.cancel because of
+	// Do not call cs.cancel in this function. Only call it when RecvMag()
+	// returns non-nil error because of
 	// https://github.com/grpc/grpc-go/issues/1818.
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
