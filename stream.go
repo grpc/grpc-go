@@ -90,8 +90,9 @@ type ClientStream interface {
 	// Stream.SendMsg() may return a non-nil error when something wrong happens sending
 	// the request. The returned error indicates the status of this sending, not the final
 	// status of the RPC.
-	// Always call Stream.RecvMsg() to get the final status if you care about the status of
-	// the RPC.
+	//
+	// Always call Stream.RecvMsg() to drain the stream and get the final
+	// status, otherwise there could be leaked context.
 	Stream
 }
 
