@@ -163,11 +163,10 @@ func TestToRPCErr(t *testing.T) {
 
 func TestBufferReuse(t *testing.T) {
 	for _, test := range []struct {
-		reuse   bool
-		sameBuf bool
+		reuse bool
 	}{
-		{true, true},
-		{false, false},
+		{true},
+		{false},
 	} {
 		data := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 1, 'a'}
 		p := &parser{r: bytes.NewReader(data), reuseBuf: test.reuse}
@@ -180,8 +179,8 @@ func TestBufferReuse(t *testing.T) {
 			t.Fatalf("parser{%v}.recvMsg(_) = _, _, %v", p, err)
 		}
 		sameBuffer := &msg[0] == &msg2[0]
-		if sameBuffer != test.sameBuf {
-			t.Fatalf("bufferReuse sameBuf = %v, want %v", sameBuffer, test.sameBuf)
+		if sameBuffer != test.reuse {
+			t.Fatalf("bufferReuse sameBuffer %v should be equal to reuse %v.", sameBuffer, test.reuse)
 		}
 	}
 }
