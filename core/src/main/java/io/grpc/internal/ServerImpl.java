@@ -32,9 +32,7 @@ import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
-import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
-import io.grpc.InternalWithLogId;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
@@ -72,11 +70,11 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public final class ServerImpl extends io.grpc.Server implements InternalWithLogId {
+public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private static final Logger log = Logger.getLogger(ServerImpl.class.getName());
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final ObjectPool<? extends Executor> executorPool;
   /** Executor for application processing. Safe to read after {@link #start()}. */
   private Executor executor;
@@ -529,7 +527,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalWithLogI
   }
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 

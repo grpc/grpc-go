@@ -42,8 +42,6 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.InternalChannelStats;
-import io.grpc.InternalInstrumented;
-import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -84,7 +82,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
 public final class ManagedChannelImpl
-    extends ManagedChannel implements InternalInstrumented<InternalChannelStats> {
+    extends ManagedChannel implements Instrumented<InternalChannelStats> {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -110,7 +108,7 @@ public final class ManagedChannelImpl
   static final Status SUBCHANNEL_SHUTDOWN_STATUS =
       Status.UNAVAILABLE.withDescription("Subchannel shutdown invoked");
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final String target;
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
@@ -288,7 +286,7 @@ public final class ManagedChannelImpl
   }
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 
@@ -1177,7 +1175,7 @@ public final class ManagedChannelImpl
         Boolean.parseBoolean(System.getProperty(ALLOCATION_SITE_PROPERTY_NAME, "true"));
     private static final RuntimeException missingCallSite = missingCallSite();
 
-    private final InternalLogId logId;
+    private final LogId logId;
     private final String target;
     private final Reference<RuntimeException> allocationSite;
     private volatile boolean shutdown;

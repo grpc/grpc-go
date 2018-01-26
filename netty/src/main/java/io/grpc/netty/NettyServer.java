@@ -21,14 +21,14 @@ import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
-import io.grpc.InternalLogId;
-import io.grpc.InternalWithLogId;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
+import io.grpc.internal.LogId;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.TransportTracer;
+import io.grpc.internal.WithLogId;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -54,10 +54,10 @@ import javax.annotation.Nullable;
 /**
  * Netty-based server implementation.
  */
-class NettyServer implements InternalServer, InternalWithLogId {
+class NettyServer implements InternalServer, WithLogId {
   private static final Logger log = Logger.getLogger(InternalServer.class.getName());
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
   private final Map<ChannelOption<?>, ?> channelOptions;
@@ -263,7 +263,7 @@ class NettyServer implements InternalServer, InternalWithLogId {
   }
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 

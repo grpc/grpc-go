@@ -17,8 +17,6 @@
 package io.grpc.internal;
 
 import io.grpc.InternalChannelStats;
-import io.grpc.InternalInstrumented;
-import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import javax.annotation.Nullable;
 
@@ -27,8 +25,8 @@ import javax.annotation.Nullable;
  * io.grpc.LoadBalancer.Helper#createSubchannel}.
  */
 abstract class AbstractSubchannel extends LoadBalancer.Subchannel
-    implements InternalInstrumented<InternalChannelStats> {
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+    implements Instrumented<InternalChannelStats> {
+  private final LogId logId = LogId.allocate(getClass().getName());
 
   /**
    * Same as {@link InternalSubchannel#obtainActiveTransport}.
@@ -37,7 +35,7 @@ abstract class AbstractSubchannel extends LoadBalancer.Subchannel
   abstract ClientTransport obtainActiveTransport();
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 }

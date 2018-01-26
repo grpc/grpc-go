@@ -29,7 +29,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
-import io.grpc.InternalLogId;
 import io.grpc.InternalMetadata;
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
 import io.grpc.InternalTransportStats;
@@ -684,7 +683,7 @@ public final class GrpcUtil {
         }
 
         @Override
-        public InternalLogId getLogId() {
+        public LogId getLogId() {
           return transport.getLogId();
         }
 

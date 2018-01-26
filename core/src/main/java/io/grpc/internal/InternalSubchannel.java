@@ -30,8 +30,6 @@ import com.google.errorprone.annotations.ForOverride;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.InternalLogId;
-import io.grpc.InternalWithLogId;
 import io.grpc.Status;
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -50,10 +48,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * Transports for a single {@link SocketAddress}.
  */
 @ThreadSafe
-final class InternalSubchannel implements InternalWithLogId {
+final class InternalSubchannel implements WithLogId {
   private static final Logger log = Logger.getLogger(InternalSubchannel.class.getName());
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final String authority;
   private final String userAgent;
   private final BackoffPolicy.Provider backoffPolicyProvider;
@@ -434,7 +432,7 @@ final class InternalSubchannel implements InternalWithLogId {
   }
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 

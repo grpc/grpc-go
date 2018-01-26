@@ -61,8 +61,6 @@ import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
 import io.grpc.InternalChannelStats;
-import io.grpc.InternalInstrumented;
-import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
@@ -1611,7 +1609,7 @@ public class ManagedChannelImplTest {
         false, // Don't create a transport, Helper maintains a ref to the channel.
         ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
     assertNotNull(channel);
-    InternalLogId logId = channel.getLogId();
+    LogId logId = channel.getLogId();
 
     // Try to capture the log output but without causing terminal noise.  Adding the filter must
     // be done before clearing the ref or else it might be missed.
@@ -1987,7 +1985,7 @@ public class ManagedChannelImplTest {
   }
 
   private static InternalChannelStats getStats(
-      InternalInstrumented<InternalChannelStats> instrumented) throws Exception {
+      Instrumented<InternalChannelStats> instrumented) throws Exception {
     return instrumented.getStats().get();
   }
 }

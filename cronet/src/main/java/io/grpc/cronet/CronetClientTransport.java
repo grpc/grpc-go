@@ -26,13 +26,13 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
-import io.grpc.InternalLogId;
-import io.grpc.InternalWithLogId;
 import io.grpc.InternalTransportStats;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
+import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -44,8 +44,8 @@ import javax.annotation.concurrent.GuardedBy;
 /**
  * A cronet-based {@link ConnectionClientTransport} implementation.
  */
-class CronetClientTransport implements ConnectionClientTransport, InternalWithLogId {
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+class CronetClientTransport implements ConnectionClientTransport {
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final InetSocketAddress address;
   private final String authority;
   private final String userAgent;
@@ -226,7 +226,7 @@ class CronetClientTransport implements ConnectionClientTransport, InternalWithLo
   }
 
   @Override
-  public InternalLogId getLogId() {
+  public LogId getLogId() {
     return logId;
   }
 
