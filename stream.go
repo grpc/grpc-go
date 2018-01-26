@@ -92,7 +92,7 @@ type ClientStream interface {
 	// status of the RPC.
 	//
 	// Always call Stream.RecvMsg() to drain the stream and get the final
-	// status, otherwise there could be leaked context.
+	// status, otherwise there could be leaked resources.
 	Stream
 }
 
