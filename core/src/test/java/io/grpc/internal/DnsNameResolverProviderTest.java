@@ -22,6 +22,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.grpc.Attributes;
+import io.grpc.InternalNameResolverProvider;
+import io.grpc.InternalServiceProviders;
 import io.grpc.NameResolverProvider;
 import java.net.URI;
 import org.junit.Test;
@@ -36,7 +38,8 @@ public class DnsNameResolverProviderTest {
   @Test
   public void provided() {
     for (NameResolverProvider current
-        : NameResolverProvider.getCandidatesViaServiceLoader(getClass().getClassLoader())) {
+        : InternalServiceProviders.getCandidatesViaServiceLoader(
+            NameResolverProvider.class, getClass().getClassLoader())) {
       if (current instanceof DnsNameResolverProvider) {
         return;
       }
@@ -46,7 +49,8 @@ public class DnsNameResolverProviderTest {
 
   @Test
   public void providedHardCoded() {
-    for (NameResolverProvider current : NameResolverProvider.getCandidatesViaHardCoded()) {
+    for (NameResolverProvider current : InternalServiceProviders.getCandidatesViaHardCoded(
+        NameResolverProvider.class, InternalNameResolverProvider.HARDCODED_CLASSES)) {
       if (current instanceof DnsNameResolverProvider) {
         return;
       }
