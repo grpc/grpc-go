@@ -26,7 +26,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
-import io.grpc.InternalTransportStats;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.LogId;
@@ -95,8 +95,8 @@ class CronetClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ListenableFuture<InternalTransportStats> getStats() {
-    SettableFuture<InternalTransportStats> f = SettableFuture.create();
+  public ListenableFuture<TransportStats> getStats() {
+    SettableFuture<TransportStats> f = SettableFuture.create();
     f.set(null);
     return f;
   }

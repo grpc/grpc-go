@@ -60,7 +60,6 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
-import io.grpc.InternalChannelStats;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
@@ -75,6 +74,7 @@ import io.grpc.NameResolver;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.ManagedChannelImpl.ManagedChannelReference;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import java.net.SocketAddress;
@@ -1984,8 +1984,8 @@ public class ManagedChannelImplTest {
     }
   }
 
-  private static InternalChannelStats getStats(
-      Instrumented<InternalChannelStats> instrumented) throws Exception {
+  private static ChannelStats getStats(
+      Instrumented<ChannelStats> instrumented) throws Exception {
     return instrumented.getStats().get();
   }
 }

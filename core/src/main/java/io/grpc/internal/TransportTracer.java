@@ -18,7 +18,7 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import io.grpc.InternalTransportStats;
+import io.grpc.internal.Channelz.TransportStats;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -59,12 +59,12 @@ public final class TransportTracer {
   /**
    * Returns a read only set of current stats.
    */
-  public InternalTransportStats getStats() {
+  public TransportStats getStats() {
     long localFlowControlWindow =
         flowControlWindowReader == null ? -1 : flowControlWindowReader.read().localBytes;
     long remoteFlowControlWindow =
         flowControlWindowReader == null ? -1 : flowControlWindowReader.read().remoteBytes;
-    return new InternalTransportStats(
+    return new TransportStats(
         streamsStarted,
         lastStreamCreatedTimeNanos,
         streamsSucceeded,

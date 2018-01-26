@@ -21,9 +21,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-import io.grpc.InternalTransportStats;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
@@ -195,8 +195,8 @@ class NettyServerTransport implements ServerTransport {
   }
 
   @Override
-  public ListenableFuture<InternalTransportStats> getStats() {
-    final SettableFuture<InternalTransportStats> result = SettableFuture.create();
+  public ListenableFuture<TransportStats> getStats() {
+    final SettableFuture<TransportStats> result = SettableFuture.create();
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.

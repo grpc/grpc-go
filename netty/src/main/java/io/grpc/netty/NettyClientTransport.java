@@ -25,10 +25,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
-import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.FailingClientStream;
@@ -311,8 +311,8 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ListenableFuture<InternalTransportStats> getStats() {
-    final SettableFuture<InternalTransportStats> result = SettableFuture.create();
+  public ListenableFuture<TransportStats> getStats() {
+    final SettableFuture<TransportStats> result = SettableFuture.create();
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.

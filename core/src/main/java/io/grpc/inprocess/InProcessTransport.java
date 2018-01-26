@@ -26,11 +26,11 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Grpc;
-import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ConnectionClientTransport;
@@ -225,9 +225,9 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   }
 
   @Override
-  public ListenableFuture<InternalTransportStats> getStats() {
+  public ListenableFuture<TransportStats> getStats() {
     // TODO(zpencer): add transport tracing to in-process server
-    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
+    SettableFuture<TransportStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
   }

@@ -16,8 +16,8 @@
 
 package io.grpc.internal;
 
-import io.grpc.InternalChannelStats;
 import io.grpc.LoadBalancer;
+import io.grpc.internal.Channelz.ChannelStats;
 import javax.annotation.Nullable;
 
 /**
@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
  * io.grpc.LoadBalancer.Helper#createSubchannel}.
  */
 abstract class AbstractSubchannel extends LoadBalancer.Subchannel
-    implements Instrumented<InternalChannelStats> {
+    implements Instrumented<ChannelStats> {
   private final LogId logId = LogId.allocate(getClass().getName());
 
   /**

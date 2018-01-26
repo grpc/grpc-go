@@ -17,7 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.grpc.InternalChannelStats;
+import io.grpc.internal.Channelz.ChannelStats;
 
 /**
  * A collection of call stats for channelz.
@@ -46,7 +46,7 @@ final class CallTracer {
     }
   }
 
-  void updateBuilder(InternalChannelStats.Builder builder) {
+  void updateBuilder(ChannelStats.Builder builder) {
     builder
         .setCallsStarted(callsStarted.value())
         .setCallsSucceeded(callsSucceeded.value())

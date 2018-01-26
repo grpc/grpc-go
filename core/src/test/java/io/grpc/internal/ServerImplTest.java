@@ -51,7 +51,6 @@ import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
-import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -63,6 +62,7 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.ServerImpl.JumpToApplicationThreadServerStreamListener;
 import io.grpc.internal.testing.SingleMessageProducer;
 import io.grpc.internal.testing.TestServerStreamTracer;
@@ -1274,8 +1274,8 @@ public class ServerImplTest {
     }
 
     @Override
-    public ListenableFuture<InternalTransportStats> getStats() {
-      SettableFuture<InternalTransportStats> ret = SettableFuture.create();
+    public ListenableFuture<TransportStats> getStats() {
+      SettableFuture<TransportStats> ret = SettableFuture.create();
       ret.set(null);
       return ret;
     }

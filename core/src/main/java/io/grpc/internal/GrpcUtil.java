@@ -31,12 +31,12 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.InternalMetadata;
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
-import io.grpc.InternalTransportStats;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.IOException;
@@ -688,7 +688,7 @@ public final class GrpcUtil {
         }
 
         @Override
-        public ListenableFuture<InternalTransportStats> getStats() {
+        public ListenableFuture<TransportStats> getStats() {
           return transport.getStats();
         }
       };

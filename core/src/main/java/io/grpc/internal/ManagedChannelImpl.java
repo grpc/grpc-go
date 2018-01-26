@@ -41,7 +41,6 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.InternalChannelStats;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -51,6 +50,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import java.lang.ref.Reference;
@@ -81,8 +81,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl
-    extends ManagedChannel implements Instrumented<InternalChannelStats> {
+public final class ManagedChannelImpl extends ManagedChannel implements Instrumented<ChannelStats> {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -276,9 +275,9 @@ public final class ManagedChannelImpl
       };
 
   @Override
-  public ListenableFuture<InternalChannelStats> getStats() {
-    SettableFuture<InternalChannelStats> ret = SettableFuture.create();
-    InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+  public ListenableFuture<ChannelStats> getStats() {
+    SettableFuture<ChannelStats> ret = SettableFuture.create();
+    ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
     channelCallTracer.updateBuilder(builder);
     builder.setTarget(target).setState(channelStateManager.getState());
     ret.set(builder.build());
@@ -1150,9 +1149,9 @@ public final class ManagedChannelImpl
     }
 
     @Override
-    public ListenableFuture<InternalChannelStats> getStats() {
-      SettableFuture<InternalChannelStats> ret = SettableFuture.create();
-      InternalChannelStats.Builder builder = new InternalChannelStats.Builder();
+    public ListenableFuture<ChannelStats> getStats() {
+      SettableFuture<ChannelStats> ret = SettableFuture.create();
+      ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
       subchannelCallTracer.updateBuilder(builder);
       builder.setTarget(target).setState(subchannel.getState());
       ret.set(builder.build());

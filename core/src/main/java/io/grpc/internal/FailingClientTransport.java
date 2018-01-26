@@ -21,10 +21,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
-import io.grpc.InternalTransportStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.TransportStats;
 import java.util.concurrent.Executor;
 
 /**
@@ -55,8 +55,8 @@ class FailingClientTransport implements ClientTransport {
   }
 
   @Override
-  public ListenableFuture<InternalTransportStats> getStats() {
-    SettableFuture<InternalTransportStats> ret = SettableFuture.create();
+  public ListenableFuture<TransportStats> getStats() {
+    SettableFuture<TransportStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
   }

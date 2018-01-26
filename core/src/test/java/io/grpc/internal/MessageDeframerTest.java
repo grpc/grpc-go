@@ -35,9 +35,9 @@ import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 import io.grpc.Codec;
-import io.grpc.InternalTransportStats;
 import io.grpc.StatusRuntimeException;
 import io.grpc.StreamTracer;
+import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.MessageDeframer.Listener;
 import io.grpc.internal.MessageDeframer.SizeEnforcingInputStream;
 import io.grpc.internal.testing.TestStreamTracer.TestBaseStreamTracer;
@@ -483,7 +483,7 @@ public class MessageDeframerTest {
    * @param sizes in the format {wire0, uncompressed0, wire1, uncompressed1, ...}
    */
   private static void checkStats(
-      TestBaseStreamTracer tracer, InternalTransportStats transportStats, long... sizes) {
+      TestBaseStreamTracer tracer, TransportStats transportStats, long... sizes) {
     assertEquals(0, sizes.length % 2);
     int count = sizes.length / 2;
     long expectedWireSize = 0;
