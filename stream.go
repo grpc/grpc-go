@@ -457,7 +457,9 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
 			cs.finish(err)
-			cs.cancel()
+			if cs.cancel != nil {
+				cs.cancel()
+			}
 		}
 	}()
 	if err == nil {
@@ -489,7 +491,9 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 				return se
 			}
 			cs.finish(err)
-			cs.cancel()
+			if cs.cancel != nil {
+				cs.cancel()
+			}
 			return nil
 		}
 		return toRPCErr(err)
