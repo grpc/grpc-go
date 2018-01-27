@@ -40,13 +40,14 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
 
 // NewServerHandlerTransport returns a ServerTransport handling gRPC
 // from inside an http.Handler. It requires that the http Server
 // supports HTTP/2.
-func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTransport, error) {
+func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats stats.Handler) (ServerTransport, error) {
 	if r.ProtoMajor != 2 {
 		return nil, errors.New("gRPC requires HTTP/2")
 	}
@@ -73,6 +74,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 		writes:         make(chan func()),
 		contentType:    contentType,
 		contentSubtype: contentSubtype,
+		stats:          stats,
 	}
 
 	if v := r.Header.Get("grpc-timeout"); v != "" {
@@ -137,6 +139,8 @@ type serverHandlerTransport struct {
 	// we store both contentType and contentSubtype so we don't keep recreating them
 	// TODO make sure this is consistent across handler_server and http2_server
 	contentSubtype string
+
+	stats stats.Handler
 }
 
 func (ht *serverHandlerTransport) Close() error {
@@ -227,6 +231,9 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 				}
 			}
 		}
+		if ht.stats != nil {
+			ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
+		}
 	})
 
 	if err == nil { // transport has not been closed
@@ -289,6 +296,9 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 		}
 		ht.rw.WriteHeader(200)
 		ht.rw.(http.Flusher).Flush()
+		if ht.stats != nil {
+			ht.stats.HandleRPC(s.Context(), &stats.OutHeader{})
+		}
 	})
 }
 
@@ -342,6 +352,17 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	ctx = peer.NewContext(ctx, pr)
 	s.ctx = newContextWithStream(ctx, s)
+	if ht.stats != nil {
+		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
+		inHeader := &stats.InHeader{
+			FullMethod: s.method,
+			RemoteAddr: ht.RemoteAddr(),
+			//LocalAddr:
+			Compression: s.recvCompress,
+			//WireLength:
+		}
+		ht.stats.HandleRPC(s.ctx, inHeader)
+	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, recv: s.buf},
 		windowHandler: func(int) {},
