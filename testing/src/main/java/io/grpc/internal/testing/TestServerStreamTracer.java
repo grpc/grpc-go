@@ -16,7 +16,6 @@
 
 package io.grpc.internal.testing;
 
-import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import java.util.concurrent.TimeUnit;
@@ -27,8 +26,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class TestServerStreamTracer extends ServerStreamTracer implements TestStreamTracer {
   private final TestBaseStreamTracer delegate = new TestBaseStreamTracer();
-  protected final AtomicReference<ServerCall<?,?>> serverCall =
-      new AtomicReference<ServerCall<?,?>>();
+  protected final AtomicReference<ServerCallInfo<?, ?>> serverCallInfo =
+      new AtomicReference<ServerCallInfo<?, ?>>();
 
   @Override
   public void await() throws InterruptedException {
@@ -43,8 +42,8 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   /**
    * Returns the ServerCall passed to {@link ServerStreamTracer#serverCallStarted}.
    */
-  public ServerCall<?, ?> getServerCall() {
-    return serverCall.get();
+  public ServerCallInfo<?, ?> getServerCallInfo() {
+    return serverCallInfo.get();
   }
 
   @Override
@@ -145,8 +144,8 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
-  public void serverCallStarted(ServerCall<?, ?> call) {
-    if (!serverCall.compareAndSet(null, call) && delegate.failDuplicateCallbacks.get()) {
+  public void serverCallStarted(ServerCallInfo<?, ?> callInfo) {
+    if (!serverCallInfo.compareAndSet(null, callInfo) && delegate.failDuplicateCallbacks.get()) {
       throw new AssertionError("serverCallStarted called more than once");
     }
   }

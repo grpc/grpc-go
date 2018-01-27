@@ -30,7 +30,6 @@ import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
 import io.grpc.StreamTracer;
 import io.opencensus.trace.EndSpanOptions;
@@ -308,8 +307,8 @@ final class CensusTracingModule {
     }
 
     @Override
-    public void serverCallStarted(ServerCall<?, ?> call) {
-      isSampledToLocalTracing = call.getMethodDescriptor().isSampledToLocalTracing();
+    public void serverCallStarted(ServerCallInfo<?, ?> callInfo) {
+      isSampledToLocalTracing = callInfo.getMethodDescriptor().isSampledToLocalTracing();
     }
 
     /**

@@ -23,8 +23,8 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Context;
 import io.grpc.Metadata;
-import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
+import io.grpc.ServerStreamTracer.ServerCallInfo;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
 import java.util.ArrayList;
@@ -129,9 +129,9 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
-  public void serverCallStarted(ServerCall<?, ?> call) {
+  public void serverCallStarted(ServerCallInfo<?, ?> callInfo) {
     for (StreamTracer tracer : tracers) {
-      ((ServerStreamTracer) tracer).serverCallStarted(call);
+      ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
     }
   }
 

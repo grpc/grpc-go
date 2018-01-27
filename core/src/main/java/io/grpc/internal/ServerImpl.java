@@ -513,7 +513,12 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           stream, methodDef.getMethodDescriptor(), headers, context,
           decompressorRegistry, compressorRegistry);
       ServerCallHandler<ReqT, RespT> callHandler = methodDef.getServerCallHandler();
-      statsTraceCtx.serverCallStarted(call);
+      statsTraceCtx.serverCallStarted(
+          new ServerCallInfoImpl<ReqT, RespT>(
+              methodDef.getMethodDescriptor(),
+              call.getAttributes(),
+              call.getAuthority()));
+
       for (ServerInterceptor interceptor : interceptors) {
         callHandler = InternalServerInterceptors.interceptCallHandler(interceptor, callHandler);
       }

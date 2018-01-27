@@ -581,7 +581,7 @@ public abstract class AbstractTransportTest {
         any(CallOptions.class), any(Metadata.class));
     assertSame(shutdownReason, clientStreamTracer1.getStatus());
     // Assert no interactions
-    assertNull(serverStreamTracer1.getServerCall());
+    assertNull(serverStreamTracer1.getServerCallInfo());
   }
 
   @Test
