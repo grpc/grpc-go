@@ -68,4 +68,9 @@ abstract class PartialForwardingServerCall<ReqT, RespT> extends ServerCall<ReqT,
   public Attributes getAttributes() {
     return delegate().getAttributes();
   }
+
+  @Override
+  public String getAuthority() {
+    return delegate().getAuthority();
+  }
 }
