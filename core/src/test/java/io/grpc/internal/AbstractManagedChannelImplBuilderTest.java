@@ -117,7 +117,7 @@ public class AbstractManagedChannelImplBuilderTest {
 
   @Test
   public void loadBalancerFactory_default() {
-    assertNull(builder.loadBalancerFactory);
+    assertNotNull(builder.loadBalancerFactory);
   }
 
   @Test

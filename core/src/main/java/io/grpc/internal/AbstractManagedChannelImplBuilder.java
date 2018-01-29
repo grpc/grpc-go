@@ -31,6 +31,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
+import io.grpc.PickFirstBalancerFactory;
 import io.opencensus.trace.Tracing;
 import java.net.SocketAddress;
 import java.net.URI;
@@ -84,6 +85,9 @@ public abstract class AbstractManagedChannelImplBuilder
   private static final NameResolver.Factory DEFAULT_NAME_RESOLVER_FACTORY =
       NameResolverProvider.asFactory();
 
+  private static final LoadBalancer.Factory DEFAULT_LOAD_BALANCER_FACTORY =
+      PickFirstBalancerFactory.getInstance();
+
   private static final DecompressorRegistry DEFAULT_DECOMPRESSOR_REGISTRY =
       DecompressorRegistry.getDefaultInstance();
 
@@ -112,7 +116,8 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   String authorityOverride;
 
-  @Nullable LoadBalancer.Factory loadBalancerFactory;
+
+  LoadBalancer.Factory loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
 
   boolean fullStreamDecompression;
 
@@ -224,7 +229,11 @@ public abstract class AbstractManagedChannelImplBuilder
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancer.Factory",
         directServerAddress);
-    this.loadBalancerFactory = loadBalancerFactory;
+    if (loadBalancerFactory != null) {
+      this.loadBalancerFactory = loadBalancerFactory;
+    } else {
+      this.loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
+    }
     return thisT();
   }
 

@@ -16,8 +16,8 @@
 
 package io.grpc.internal;
 
-import com.google.gson.JsonObject;
 import io.grpc.Attributes;
+import java.util.List;
 
 /**
  * Special attributes that are only useful to gRPC.
@@ -26,8 +26,8 @@ public final class GrpcAttributes {
   /**
    * Attribute key TXT DNS records.
    */
-  public static final Attributes.Key<JsonObject> NAME_RESOLVER_ATTR_SERVICE_CONFIG =
-      Attributes.Key.of("service-config");
+  public static final Attributes.Key<List<String>> NAME_RESOLVER_ATTR_DNS_TXT =
+      Attributes.Key.of("dns-txt");
 
   /**
    * The naming authority of a gRPC LB server address.  It is an address-group-level attribute,
@@ -35,6 +35,7 @@ public final class GrpcAttributes {
    */
   public static final Attributes.Key<String> ATTR_LB_ADDR_AUTHORITY =
       Attributes.Key.of("io.grpc.grpclb.lbAddrAuthority");
+
 
   private GrpcAttributes() {}
 }

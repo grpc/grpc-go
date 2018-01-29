@@ -194,13 +194,9 @@ final class DnsNameResolver extends NameResolver {
 
           Attributes.Builder attrs = Attributes.newBuilder();
           if (!resolvedInetAddrs.txtRecords.isEmpty()) {
-            // TODO(carl-mastrangelo): re enable this
-            /*
             attrs.set(
-                GrpcAttributes.NAME_RESOLVER_ATTR_SERVICE_CONFIG,
+                GrpcAttributes.NAME_RESOLVER_ATTR_DNS_TXT,
                 Collections.unmodifiableList(new ArrayList<String>(resolvedInetAddrs.txtRecords)));
-            */
-
           }
           savedListener.onAddresses(servers, attrs.build());
         } finally {

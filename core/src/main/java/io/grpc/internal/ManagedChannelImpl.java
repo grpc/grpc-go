@@ -112,7 +112,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
   private final LoadBalancer.Factory loadBalancerFactory;
-
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
   private final ObjectPool<? extends Executor> executorPool;
@@ -472,11 +471,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
-    if (builder.loadBalancerFactory == null) {
-      this.loadBalancerFactory = new AutoConfiguredLoadBalancerFactory();
-    } else {
-      this.loadBalancerFactory = builder.loadBalancerFactory;
-    }
+    this.loadBalancerFactory =
+        checkNotNull(builder.loadBalancerFactory, "loadBalancerFactory");
     this.executorPool = checkNotNull(builder.executorPool, "executorPool");
     this.oobExecutorPool = checkNotNull(oobExecutorPool, "oobExecutorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -1006,9 +1002,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   }
 
   private class NameResolverListenerImpl implements NameResolver.Listener {
-    final LbHelperImpl helper;
+    final LoadBalancer balancer;
+    final LoadBalancer.Helper helper;
 
     NameResolverListenerImpl(LbHelperImpl helperImpl) {
+      this.balancer = helperImpl.lb;
       this.helper = helperImpl;
     }
 
@@ -1023,7 +1021,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
             new Object[]{getLogId(), servers, config});
       }
 
-
       final class NamesResolved implements Runnable {
         @Override
         public void run() {
@@ -1032,13 +1029,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
             return;
           }
           try {
-            helper.lb.handleResolvedAddressGroups(servers, config);
+            balancer.handleResolvedAddressGroups(servers, config);
           } catch (Throwable e) {
             logger.log(
                 Level.WARNING, "[" + getLogId() + "] Unexpected exception from LoadBalancer", e);
             // It must be a bug! Push the exception back to LoadBalancer in the hope that it may
             // be propagated to the application.
-            helper.lb.handleNameResolutionError(Status.INTERNAL.withCause(e)
+            balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
                 .withDescription("Thrown from handleResolvedAddresses(): " + e));
           }
         }
@@ -1059,7 +1056,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
             if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
               return;
             }
-            lbHelper.lb.handleNameResolutionError(error);
+            balancer.handleNameResolutionError(error);
           }
         }).drain();
     }
