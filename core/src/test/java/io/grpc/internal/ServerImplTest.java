@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
@@ -97,7 +98,6 @@ import org.mockito.Captor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.Spy;
 
 /** Unit tests for {@link ServerImpl}. */
 @RunWith(JUnit4.class)
@@ -149,19 +149,20 @@ public class ServerImplTest {
   private ObjectPool<Executor> executorPool;
   private Builder builder = new Builder();
   private MutableHandlerRegistry mutableFallbackRegistry = new MutableHandlerRegistry();
-  @Spy
-  private HandlerRegistry fallbackRegistry = new HandlerRegistry() {
-    @Override
-    public ServerMethodDefinition<?, ?> lookupMethod(
-        String methodName, @Nullable String authority) {
-      return mutableFallbackRegistry.lookupMethod(methodName, authority);
-    }
+  private HandlerRegistry fallbackRegistry = mock(
+      HandlerRegistry.class,
+      delegatesTo(new HandlerRegistry() {
+        @Override
+        public ServerMethodDefinition<?, ?> lookupMethod(
+            String methodName, @Nullable String authority) {
+          return mutableFallbackRegistry.lookupMethod(methodName, authority);
+        }
 
-    @Override
-    public List<ServerServiceDefinition> getServices() {
-      return mutableFallbackRegistry.getServices();
-    }
-  };
+        @Override
+        public List<ServerServiceDefinition> getServices() {
+          return mutableFallbackRegistry.getServices();
+        }
+      }));
   private SimpleServer transportServer = new SimpleServer();
   private ServerImpl server;
 
