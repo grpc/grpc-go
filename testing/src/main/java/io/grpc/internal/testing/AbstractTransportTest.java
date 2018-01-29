@@ -685,7 +685,6 @@ public abstract class AbstractTransportTest {
     assertTrue(clientStream.isReady());
     clientStream.writeMessage(methodDescriptor.streamRequest("Hello!"));
     assertThat(clientStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
-    assertThat(clientStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage()");
 
     clientStream.flush();
     InputStream message = serverStreamListener.messageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -701,7 +700,6 @@ public abstract class AbstractTransportTest {
       assertThat(clientStreamTracer1.getOutboundUncompressedSize()).isEqualTo(0L);
     }
     assertThat(serverStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage(0)");
-    assertThat(serverStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage()");
     assertNull("no additional message expected", serverStreamListener.messageQueue.poll());
 
     clientStream.halfClose();
@@ -739,7 +737,6 @@ public abstract class AbstractTransportTest {
     assertTrue(serverStream.isReady());
     serverStream.writeMessage(methodDescriptor.streamResponse("Hi. Who are you?"));
     assertThat(serverStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
-    assertThat(serverStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage()");
 
     serverStream.flush();
     message = clientStreamListener.messageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -755,7 +752,6 @@ public abstract class AbstractTransportTest {
     }
     assertTrue(clientStreamTracer1.getInboundHeaders());
     assertThat(clientStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage(0)");
-    assertThat(clientStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage()");
     assertEquals("Hi. Who are you?", methodDescriptor.parseResponse(message));
     assertThat(clientStreamTracer1.nextInboundEvent())
         .matches("inboundMessageRead\\(0, -?[0-9]+, -?[0-9]+\\)");

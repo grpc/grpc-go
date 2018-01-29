@@ -154,11 +154,9 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  @SuppressWarnings("deprecation")
   public void outboundMessage(int seqNo) {
     for (StreamTracer tracer : tracers) {
       tracer.outboundMessage(seqNo);
-      tracer.outboundMessage();
     }
   }
 
@@ -167,11 +165,9 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  @SuppressWarnings("deprecation")
   public void inboundMessage(int seqNo) {
     for (StreamTracer tracer : tracers) {
       tracer.inboundMessage(seqNo);
-      tracer.inboundMessage();
     }
   }
 

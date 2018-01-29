@@ -164,20 +164,8 @@ public interface TestStreamTracer {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
-    public void inboundMessage() {
-      inboundEvents.add("inboundMessage()");
-    }
-
-    @Override
     public void inboundMessage(int seqNo) {
       inboundEvents.add("inboundMessage(" + seqNo + ")");
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public void outboundMessage() {
-      outboundEvents.add("outboundMessage()");
     }
 
     @Override

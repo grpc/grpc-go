@@ -350,7 +350,6 @@ public class AbstractClientStreamTest {
         .writeFrame(
             any(WritableBuffer.class), any(Boolean.class), any(Boolean.class), any(Integer.class));
     assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
-    assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage()");
     assertThat(tracer.nextOutboundEvent()).matches("outboundMessageSent\\(0, [0-9]+, [0-9]+\\)");
     assertNull(tracer.nextOutboundEvent());
     assertNull(tracer.nextInboundEvent());

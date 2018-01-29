@@ -490,7 +490,6 @@ public class MessageDeframerTest {
     long expectedUncompressedSize = 0;
     for (int i = 0; i < count; i++) {
       assertEquals("inboundMessage(" + i + ")", tracer.nextInboundEvent());
-      assertEquals("inboundMessage()", tracer.nextInboundEvent());
       assertEquals(
           String.format("inboundMessageRead(%d, %d, -1)", i, sizes[i * 2]),
           tracer.nextInboundEvent());

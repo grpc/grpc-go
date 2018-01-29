@@ -382,7 +382,6 @@ public class MessageFramerTest {
     long expectedUncompressedSize = 0;
     for (int i = 0; i < count; i++) {
       assertEquals("outboundMessage(" + i + ")", tracer.nextOutboundEvent());
-      assertEquals("outboundMessage()", tracer.nextOutboundEvent());
       assertEquals(
           String.format("outboundMessageSent(%d, %d, %d)", i, sizes[i * 2], sizes[i * 2 + 1]),
           tracer.nextOutboundEvent());

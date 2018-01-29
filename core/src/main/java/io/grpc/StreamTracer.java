@@ -37,32 +37,10 @@ public abstract class StreamTracer {
    * about the message, but doesn't have further guarantee such as whether the message is serialized
    * or not.
    *
-   * @deprecated use {@link #outboundMessage(int)}
-   */
-  @Deprecated
-  public void outboundMessage() {
-  }
-
-  /**
-   * An outbound message has been passed to the stream.  This is called as soon as the stream knows
-   * about the message, but doesn't have further guarantee such as whether the message is serialized
-   * or not.
-   *
    * @param seqNo the sequential number of the message within the stream, starting from 0.  It can
    *              be used to correlate with {@link #outboundMessageSent} for the same message.
    */
   public void outboundMessage(int seqNo) {
-  }
-
-  /**
-   * An inbound message has been received by the stream.  This is called as soon as the stream knows
-   * about the message, but doesn't have further guarantee such as whether the message is
-   * deserialized or not.
-   *
-   * @deprecated use {@link #inboundMessage(int)}
-   */
-  @Deprecated
-  public void inboundMessage() {
   }
 
   /**

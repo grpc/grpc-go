@@ -1912,7 +1912,6 @@ public abstract class AbstractInteropTest {
     int seqNo = 0;
     for (MessageLite msg : sentMessages) {
       assertThat(tracer.nextOutboundEvent()).isEqualTo(String.format("outboundMessage(%d)", seqNo));
-      assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage()");
       assertThat(tracer.nextOutboundEvent()).matches(
           String.format("outboundMessageSent\\(%d, -?[0-9]+, -?[0-9]+\\)", seqNo));
       seqNo++;
@@ -1923,7 +1922,6 @@ public abstract class AbstractInteropTest {
     seqNo = 0;
     for (MessageLite msg : receivedMessages) {
       assertThat(tracer.nextInboundEvent()).isEqualTo(String.format("inboundMessage(%d)", seqNo));
-      assertThat(tracer.nextInboundEvent()).isEqualTo("inboundMessage()");
       assertThat(tracer.nextInboundEvent()).matches(
           String.format("inboundMessageRead\\(%d, -?[0-9]+, -?[0-9]+\\)", seqNo)); 
       uncompressedReceivedSize += msg.getSerializedSize();

@@ -112,20 +112,8 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
-  @SuppressWarnings("deprecation")
-  public void inboundMessage() {
-    delegate.inboundMessage();
-  }
-
-  @Override
   public void inboundMessage(int seqNo) {
     delegate.inboundMessage(seqNo);
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
-  public void outboundMessage() {
-    delegate.outboundMessage();
   }
 
   @Override
