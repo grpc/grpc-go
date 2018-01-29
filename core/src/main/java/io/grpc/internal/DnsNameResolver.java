@@ -21,11 +21,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
@@ -39,12 +34,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map.Entry;
-import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -72,21 +62,14 @@ final class DnsNameResolver extends NameResolver {
   private static final Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
 
   private static final boolean JNDI_AVAILABLE = jndiAvailable();
-  private static final String LOCAL_HOST_NAME = getHostName();
 
   // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
   private static final String SERVICE_CONFIG_NAME_PREFIX = "_grpc_config.";
   // From https://github.com/grpc/proposal/blob/master/A5-grpclb-in-dns.md
   private static final String GRPCLB_NAME_PREFIX = "_grpclb._tcp.";
-  // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
-  private static final String SERVICE_CONFIG_PREFIX = "_grpc_config=";
-  private static final Set<String> SERVICE_CONFIG_CHOICE_KEYS =
-      Collections.unmodifiableSet(
-          new HashSet<String>(
-              Arrays.asList("clientLanguage", "percentage", "clientHostname", "serviceConfig")));
 
   private static final String JNDI_PROPERTY =
-      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "true");
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "false");
 
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
@@ -111,8 +94,6 @@ final class DnsNameResolver extends NameResolver {
   private boolean resolving;
   @GuardedBy("this")
   private Listener listener;
-
-  private final Random random = new Random();
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
       Resource<ScheduledExecutorService> timerServiceResource,
@@ -213,29 +194,13 @@ final class DnsNameResolver extends NameResolver {
 
           Attributes.Builder attrs = Attributes.newBuilder();
           if (!resolvedInetAddrs.txtRecords.isEmpty()) {
-            JsonObject serviceConfig = null;
-            try {
-              JsonArray allServiceConfigChoices = parseTxtResults(resolvedInetAddrs.txtRecords);
-              for (JsonElement serviceConfigChoice : allServiceConfigChoices) {
-                try {
-                  serviceConfig = maybeChooseServiceConfig(
-                      serviceConfigChoice.getAsJsonObject(), random, LOCAL_HOST_NAME);
-                  if (serviceConfig != null) {
-                    break;
-                  }
-                } catch (RuntimeException e) {
-                  logger.log(Level.WARNING, "Bad service config choice " + serviceConfigChoice, e);
-                }
-              }
-              if (serviceConfig != null) {
-                attrs.set(GrpcAttributes.NAME_RESOLVER_ATTR_SERVICE_CONFIG, serviceConfig);
-              }
+            // TODO(carl-mastrangelo): re enable this
+            /*
+            attrs.set(
+                GrpcAttributes.NAME_RESOLVER_ATTR_SERVICE_CONFIG,
+                Collections.unmodifiableList(new ArrayList<String>(resolvedInetAddrs.txtRecords)));
+            */
 
-            } catch (RuntimeException e) {
-              logger.log(Level.WARNING, "Can't parse service Configs", e);
-            }
-          } else {
-            logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
           }
           savedListener.onAddresses(servers, attrs.build());
         } finally {
@@ -425,6 +390,7 @@ final class DnsNameResolver extends NameResolver {
       try {
         serviceConfigTxtRecords = getAllRecords("TXT", "dns:///" + serviceConfigHostname);
       } catch (NamingException e) {
+
         if (logger.isLoggable(Level.FINE)) {
           logger.log(Level.FINE, "Unable to look up " + serviceConfigHostname, e);
         }
@@ -488,7 +454,7 @@ final class DnsNameResolver extends NameResolver {
           NamingEnumeration<?> rrValues = rrEntry.getAll();
           try {
             while (rrValues.hasMore()) {
-              records.add(unquote(String.valueOf(rrValues.next())));
+              records.add(String.valueOf(rrValues.next()));
             }
           } finally {
             rrValues.close();
@@ -498,126 +464,6 @@ final class DnsNameResolver extends NameResolver {
         rrGroups.close();
       }
       return records;
-    }
-  }
-
-  @VisibleForTesting
-  static JsonArray parseTxtResults(List<String> txtRecords) {
-    JsonArray serviceConfigs = new JsonArray();
-    Gson gson = new Gson();
-
-    for (String txtRecord : txtRecords) {
-      if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
-        JsonArray choices;
-        try {
-          choices =
-              gson.fromJson(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()), JsonArray.class);
-        } catch (JsonSyntaxException e) {
-          logger.log(Level.WARNING, "Bad service config: " + txtRecord, e);
-          continue;
-        }
-        serviceConfigs.addAll(choices);
-      } else {
-        logger.log(Level.FINE, "Ignoring non service config {0}", new Object[]{txtRecord});
-      }
-    }
-
-    return serviceConfigs;
-  }
-
-  /**
-   * Determines if a given Service Config choice applies, and if so, returns it.
-   *
-   * @see <a href="https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md">
-   *   Service Config in DNS</a>
-   * @param choice The service config choice.
-   * @return The service config object or {@code null} if this choice does not apply.
-   */
-  @VisibleForTesting
-  @Nullable
-  @SuppressWarnings("BetaApi") // Verify isn't all that beta
-  static JsonObject maybeChooseServiceConfig(JsonObject choice, Random random, String hostname) {
-    for (Entry<String, ?> entry : choice.entrySet()) {
-      Verify.verify(SERVICE_CONFIG_CHOICE_KEYS.contains(entry.getKey()), "Bad key: %s", entry);
-    }
-    if (choice.has("clientLanguage")) {
-      JsonArray clientLanguages = choice.get("clientLanguage").getAsJsonArray();
-      if (clientLanguages.size() != 0) {
-        boolean javaPresent = false;
-        for (JsonElement clientLanguage : clientLanguages) {
-          String lang = clientLanguage.getAsString().toLowerCase(Locale.ROOT);
-          if ("java".equals(lang)) {
-            javaPresent = true;
-            break;
-          }
-        }
-        if (!javaPresent) {
-          return null;
-        }
-      }
-    }
-    if (choice.has("percentage")) {
-      int pct = choice.get("percentage").getAsInt();
-      Verify.verify(pct >= 0 && pct <= 100, "Bad percentage", choice.get("percentage"));
-      if (pct == 0) {
-        return null;
-      } else if (pct != 100 && pct < random.nextInt(100)) {
-        return null;
-      }
-    }
-    if (choice.has("clientHostname")) {
-      JsonArray clientHostnames = choice.get("clientHostname").getAsJsonArray();
-      if (clientHostnames.size() != 0) {
-        boolean hostnamePresent = false;
-        for (JsonElement clientHostname : clientHostnames) {
-          if (clientHostname.getAsString().equals(hostname)) {
-            hostnamePresent = true;
-            break;
-          }
-        }
-        if (!hostnamePresent) {
-          return null;
-        }
-      }
-    }
-    return choice.getAsJsonObject("serviceConfig");
-  }
-
-  /**
-   * Undo the quoting done in {@link com.sun.jndi.dns.ResourceRecord#decodeTxt}.
-   */
-  @VisibleForTesting
-  static String unquote(String txtRecord) {
-    StringBuilder sb = new StringBuilder(txtRecord.length());
-    boolean inquote = false;
-    for (int i = 0; i < txtRecord.length(); i++) {
-      char c = txtRecord.charAt(i);
-      if (!inquote) {
-        if (c == ' ') {
-          continue;
-        } else if (c == '"') {
-          inquote = true;
-          continue;
-        }
-      } else {
-        if (c == '"') {
-          inquote = false;
-          continue;
-        } else if (c == '\\') {
-          c = txtRecord.charAt(++i);
-          assert c == '"' || c == '\\';
-        }
-      }
-      sb.append(c);
-    }
-    return sb.toString();
-  }
-
-  private static final String getHostName() {
-    try {
-      return InetAddress.getLocalHost().getHostName();
-    } catch (UnknownHostException e) {
-      throw new RuntimeException(e);
     }
   }
 }
