@@ -705,7 +705,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
 	}
 	if te.customCodec != nil {
-		opts = append(opts, grpc.WithCodec(te.customCodec))
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(te.customCodec)))
 	}
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
@@ -2607,6 +2607,7 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 		delete(header, "trailer") // RFC 2616 says server SHOULD (but optional) declare trailers
 		delete(header, "date")    // the Date header is also optional
 		delete(header, "user-agent")
+		delete(header, "content-type")
 	}
 	if !reflect.DeepEqual(header, testMetadata) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
@@ -2723,6 +2724,7 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2767,6 +2769,7 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2810,6 +2813,7 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <non-nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2854,6 +2858,7 @@ func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2917,6 +2922,7 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2975,6 +2981,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3335,6 +3342,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
+		delete(headerMD, "content-type")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -3342,6 +3350,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		headerMD, err = stream.Header()
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
+		delete(headerMD, "content-type")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -3807,23 +3816,6 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: 31415,
-		},
-	}
-	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	if err := stream.Send(sreq); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
-	}
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.Unimplemented {
 		t.Fatalf("%v.Recv() = %v, want error code %s", stream, err, codes.Unimplemented)
 	}
@@ -4107,6 +4099,7 @@ type funcServer struct {
 	testpb.TestServiceServer
 	unaryCall          func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	streamingInputCall func(stream testpb.TestService_StreamingInputCallServer) error
+	fullDuplexCall     func(stream testpb.TestService_FullDuplexCallServer) error
 }
 
 func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -4115,6 +4108,10 @@ func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
 	return s.streamingInputCall(stream)
+}
+
+func (s *funcServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+	return s.fullDuplexCall(stream)
 }
 
 func TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
@@ -4236,6 +4233,76 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 			t.Errorf("error = %#v; want error code %s", got, codes.Canceled)
 		}
 	})
+}
+
+func TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			// httpHanlder write won't be blocked on flow control window.
+			continue
+		}
+		testClientResourceExhaustedCancelFullDuplex(t, e)
+	}
+}
+
+func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
+	te := newTest(t, e)
+	recvErr := make(chan error, 1)
+	ts := &funcServer{fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+		defer close(recvErr)
+		_, err := stream.Recv()
+		if err != nil {
+			return status.Errorf(codes.Internal, "stream.Recv() got error: %v, want <nil>", err)
+		}
+		// create a payload that's larger than the default flow control window.
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
+		if err != nil {
+			return err
+		}
+		resp := &testpb.StreamingOutputCallResponse{
+			Payload: payload,
+		}
+		ce := make(chan error)
+		go func() {
+			var err error
+			for {
+				if err = stream.Send(resp); err != nil {
+					break
+				}
+			}
+			ce <- err
+		}()
+		select {
+		case err = <-ce:
+		case <-time.After(10 * time.Second):
+			err = errors.New("10s timeout reached")
+		}
+		recvErr <- err
+		return err
+	}}
+	te.startServer(ts)
+	defer te.tearDown()
+	// set a low limit on receive message size to error with Resource Exhausted on
+	// client side when server send a large message.
+	te.maxClientReceiveMsgSize = newInt(10)
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	req := &testpb.StreamingOutputCallRequest{}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	if _, err := stream.Recv(); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+	err = <-recvErr
+	if status.Code(err) != codes.Canceled {
+		t.Fatalf("server got error %v, want error code: %s", err, codes.Canceled)
+	}
 }
 
 type clientTimeoutCreds struct {
@@ -4924,6 +4991,36 @@ func TestTapTimeout(t *testing.T) {
 			t.Fatalf("ss.client.EmptyCall(context.Background(), _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
 		}
 	}
+
+}
+
+func TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
+	ss := &stubServer{
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			return status.Errorf(codes.Internal, "")
+		},
+	}
+	sopts := []grpc.ServerOption{}
+	if err := ss.Start(sopts); err != nil {
+		t.Fatalf("Error starting endpoing server: %v", err)
+	}
+	defer ss.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := ss.client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Error while creating stream: %v", err)
+	}
+	for {
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err == nil {
+			time.Sleep(5 * time.Millisecond)
+		} else if err == io.EOF {
+			break // Success.
+		} else {
+			t.Fatalf("stream.Send(_) = %v, want io.EOF", err)
+		}
+	}
+
 }
 
 type windowSizeConfig struct {
