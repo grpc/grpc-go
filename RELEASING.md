@@ -90,6 +90,8 @@ would be used to create all `v1.7` tags (e.g. `v1.7.0`, `v1.7.1`).
    # Change version to next minor (and keep -SNAPSHOT)
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
      "${VERSION_FILES[@]}"
+   $ sed -i s/$MAJOR.$MINOR.$PATCH/$MAJOR.$((MINOR+1)).0/ \
+     compiler/src/test{,Lite,Nano}/golden/TestService.java.txt
    $ ./gradlew build
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
