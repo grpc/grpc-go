@@ -16,6 +16,7 @@
 
 package io.grpc.clientcacheexample;
 
+import android.app.Activity;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -41,16 +42,17 @@ import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.stub.ClientCalls;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
 
 public final class ClientCacheExampleActivity extends AppCompatActivity {
   private static final int CACHE_SIZE_IN_BYTES = 1 * 1024 * 1024; // 1MB
   private static final String TAG = "grpcCacheExample";
-  private Button mSendButton;
-  private EditText mHostEdit;
-  private EditText mPortEdit;
-  private EditText mMessageEdit;
-  private TextView mResultText;
+  private Button sendButton;
+  private EditText hostEdit;
+  private EditText portEdit;
+  private EditText messageEdit;
+  private TextView resultText;
   private CheckBox getCheckBox;
   private CheckBox noCacheCheckBox;
   private CheckBox onlyIfCachedCheckBox;
@@ -60,70 +62,79 @@ public final class ClientCacheExampleActivity extends AppCompatActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_clientcacheexample);
-    mSendButton = (Button) findViewById(R.id.send_button);
-    mHostEdit = (EditText) findViewById(R.id.host_edit_text);
-    mPortEdit = (EditText) findViewById(R.id.port_edit_text);
-    mMessageEdit = (EditText) findViewById(R.id.message_edit_text);
+    sendButton = (Button) findViewById(R.id.send_button);
+    hostEdit = (EditText) findViewById(R.id.host_edit_text);
+    portEdit = (EditText) findViewById(R.id.port_edit_text);
+    messageEdit = (EditText) findViewById(R.id.message_edit_text);
     getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
     noCacheCheckBox = (CheckBox) findViewById(R.id.no_cache_checkbox);
     onlyIfCachedCheckBox = (CheckBox) findViewById(R.id.only_if_cached_checkbox);
-    mResultText = (TextView) findViewById(R.id.grpc_response_text);
-    mResultText.setMovementMethod(new ScrollingMovementMethod());
-
+    resultText = (TextView) findViewById(R.id.grpc_response_text);
+    resultText.setMovementMethod(new ScrollingMovementMethod());
     cache = SafeMethodCachingInterceptor.newLruCache(CACHE_SIZE_IN_BYTES);
   }
 
   /** Sends RPC. Invoked when app button is pressed. */
   public void sendMessage(View view) {
     ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))
-        .hideSoftInputFromWindow(mHostEdit.getWindowToken(), 0);
-    mSendButton.setEnabled(false);
-    new GrpcTask().execute();
+        .hideSoftInputFromWindow(hostEdit.getWindowToken(), 0);
+    sendButton.setEnabled(false);
+    resultText.setText("");
+    new GrpcTask(this, cache)
+        .execute(
+            hostEdit.getText().toString(),
+            messageEdit.getText().toString(),
+            portEdit.getText().toString(),
+            getCheckBox.isChecked(),
+            noCacheCheckBox.isChecked(),
+            onlyIfCachedCheckBox.isChecked());
   }
 
-  private class GrpcTask extends AsyncTask<Void, Void, String> {
-    private String host;
-    private String message;
-    private int port;
+  private static class GrpcTask extends AsyncTask<Object, Void, String> {
+    private final WeakReference<Activity> activityReference;
+    private final SafeMethodCachingInterceptor.Cache cache;
     private ManagedChannel channel;
 
-    @Override
-    protected void onPreExecute() {
-      host = mHostEdit.getText().toString();
-      message = mMessageEdit.getText().toString();
-      String portStr = mPortEdit.getText().toString();
-      port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
-      mResultText.setText("");
+    private GrpcTask(Activity activity, SafeMethodCachingInterceptor.Cache cache) {
+      this.activityReference = new WeakReference<Activity>(activity);
+      this.cache = cache;
     }
 
     @Override
-    protected String doInBackground(Void... nothing) {
+    protected String doInBackground(Object... params) {
+      String host = (String) params[0];
+      String message = (String) params[1];
+      String portStr = (String) params[2];
+      boolean useGet = (boolean) params[3];
+      boolean noCache = (boolean) params[4];
+      boolean onlyIfCached = (boolean) params[5];
+      int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
       try {
         channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
         Channel channelToUse =
             ClientInterceptors.intercept(
                 channel, SafeMethodCachingInterceptor.newSafeMethodCachingInterceptor(cache));
-        HelloRequest message = HelloRequest.newBuilder().setName(this.message).build();
+        HelloRequest request = HelloRequest.newBuilder().setName(message).build();
         HelloReply reply;
-        if (getCheckBox.isChecked()) {
+        if (useGet) {
           MethodDescriptor<HelloRequest, HelloReply> safeCacheableUnaryCallMethod =
               GreeterGrpc.getSayHelloMethod().toBuilder().setSafe(true).build();
           CallOptions callOptions = CallOptions.DEFAULT;
-          if (noCacheCheckBox.isChecked()) {
+          if (noCache) {
             callOptions =
                 callOptions.withOption(SafeMethodCachingInterceptor.NO_CACHE_CALL_OPTION, true);
           }
-          if (onlyIfCachedCheckBox.isChecked()) {
+          if (onlyIfCached) {
             callOptions =
                 callOptions.withOption(
                     SafeMethodCachingInterceptor.ONLY_IF_CACHED_CALL_OPTION, true);
           }
           reply =
               ClientCalls.blockingUnaryCall(
-                  channelToUse, safeCacheableUnaryCallMethod, callOptions, message);
+                  channelToUse, safeCacheableUnaryCallMethod, callOptions, request);
         } else {
           GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channelToUse);
-          reply = stub.sayHello(message);
+          reply = stub.sayHello(request);
         }
         return reply.getMessage();
       } catch (Exception e) {
@@ -145,8 +156,14 @@ public final class ClientCacheExampleActivity extends AppCompatActivity {
           Thread.currentThread().interrupt();
         }
       }
-      mResultText.setText(result);
-      mSendButton.setEnabled(true);
+      Activity activity = activityReference.get();
+      if (activity == null) {
+        return;
+      }
+      TextView resultText = (TextView) activity.findViewById(R.id.grpc_response_text);
+      Button sendButton = (Button) activity.findViewById(R.id.send_button);
+      resultText.setText(result);
+      sendButton.setEnabled(true);
     }
   }
 }

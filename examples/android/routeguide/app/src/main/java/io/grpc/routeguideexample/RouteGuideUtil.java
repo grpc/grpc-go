@@ -16,36 +16,22 @@
 
 package io.grpc.routeguideexample;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.net.URL;
-import java.util.List;
 
-/**
- * Common utilities for the RouteGuide demo.
- */
+/** Common utilities for the RouteGuide demo. */
 public class RouteGuideUtil {
   private static final double COORD_FACTOR = 1e7;
 
-  /**
-   * Gets the latitude for the given point.
-   */
+  /** Gets the latitude for the given point. */
   public static double getLatitude(Point location) {
     return location.getLatitude() / COORD_FACTOR;
   }
 
-  /**
-   * Gets the longitude for the given point.
-   */
+  /** Gets the longitude for the given point. */
   public static double getLongitude(Point location) {
     return location.getLongitude() / COORD_FACTOR;
   }
 
-  /**
-   * Indicates whether the given feature exists (i.e. has a valid name).
-   */
+  /** Indicates whether the given feature exists (i.e. has a valid name). */
   public static boolean exists(Feature feature) {
     return feature != null && !feature.getName().isEmpty();
   }

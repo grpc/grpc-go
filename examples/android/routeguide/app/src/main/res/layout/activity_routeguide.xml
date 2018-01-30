@@ -23,18 +23,18 @@
                 android:hint="Enter Port" />
     </LinearLayout>
 
-    <LinearLayout
+    <LinearLayout style="?android:buttonBarStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-        <Button
+        <Button style="?android:buttonBarButtonStyle"
             android:id="@+id/start_route_guide_button"
             android:layout_weight="1"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:onClick="startRouteGuide"
             android:text="Start Route Guide" />
-        <Button
+        <Button style="?android:buttonBarButtonStyle"
             android:id="@+id/exit_route_guide_button"
             android:layout_weight="1"
             android:layout_width="0dp"

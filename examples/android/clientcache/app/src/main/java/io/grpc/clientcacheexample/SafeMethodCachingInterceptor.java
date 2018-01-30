@@ -14,6 +14,7 @@ import io.grpc.ForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -199,7 +200,7 @@ final class SafeMethodCachingInterceptor implements ClientInterceptor {
                       } else if (directive.equalsIgnoreCase("no-transform")) {
                         cacheResponse = false;
                         break;
-                      } else if (directive.toLowerCase().startsWith("max-age")) {
+                      } else if (directive.toLowerCase(Locale.US).startsWith("max-age")) {
                         String[] parts = directive.split("=");
                         if (parts.length == 2) {
                           try {

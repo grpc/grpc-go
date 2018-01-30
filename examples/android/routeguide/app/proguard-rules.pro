@@ -11,6 +11,7 @@
 
 -dontwarn sun.misc.Unsafe
 -dontwarn com.google.common.**
+-dontwarn javax.naming.**
 -dontwarn okio.**
 # Ignores: can't find referenced class javax.lang.model.element.Modifier
 -dontwarn com.google.errorprone.annotations.**
