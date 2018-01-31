@@ -45,11 +45,14 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
+import io.grpc.Status.Code;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
+import io.grpc.internal.RetriableStream.RetryPolicy;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
@@ -86,7 +89,8 @@ public class RetriableStreamTest {
   private final RetriableStream<String> retriableStream =
       new RetriableStream<String>(
           method, new Metadata(),channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
-          MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService()) {
+          MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(),
+          new RetryPolicy(4, 100D, 300D, 2D, Arrays.asList(Code.UNAVAILABLE, Code.DATA_LOSS))) {
         @Override
         void postCommit() {
           retriableStreamRecorder.postCommit();

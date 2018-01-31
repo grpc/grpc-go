@@ -16,10 +16,12 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Objects;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
@@ -43,6 +45,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.Immutable;
 
 /** A logical {@link ClientStream} that is retriable. */
 abstract class RetriableStream<ReqT> implements ClientStream {
@@ -58,6 +61,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   private final ScheduledExecutorService scheduledExecutorService;
   // Must not modify it.
   private final Metadata headers;
+  // TODO(zdapeng): add and use its business logic
+  private final RetryPolicy retryPolicy;
 
   /** Must be held when updating state, accessing state.buffer, or certain substream attributes. */
   private final Object lock = new Object();
@@ -80,7 +85,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   RetriableStream(
       MethodDescriptor<ReqT, ?> method, Metadata headers,
       ChannelBufferMeter channelBufferUsed, long perRpcBufferLimit, long channelBufferLimit,
-      Executor callExecutor, ScheduledExecutorService scheduledExecutorService) {
+      Executor callExecutor, ScheduledExecutorService scheduledExecutorService,
+      RetryPolicy retryPolicy) {
     this.method = method;
     this.channelBufferUsed = channelBufferUsed;
     this.perRpcBufferLimit = perRpcBufferLimit;
@@ -88,6 +94,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     this.callExecutor = callExecutor;
     this.scheduledExecutorService = scheduledExecutorService;
     this.headers = headers;
+    this.retryPolicy = checkNotNull(retryPolicy, "retryPolicy");
   }
 
   @Nullable // null if already committed
@@ -775,6 +782,59 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     public long addAndGet(long newBytesUsed) {
       return bufferUsed.addAndGet(newBytesUsed);
+    }
+  }
+
+  @Immutable
+  static final class RetryPolicy {
+    private final int maxAttempts;
+    private final double initialBackoffInSeconds;
+    private final double maxBackoffInSeconds;
+    private final double backoffMultiplier;
+    private final Collection<Status.Code> retryableStatusCodes;
+
+    RetryPolicy(
+        int maxAttempts, double initialBackoffInSeconds, double maxBackoffInSeconds,
+        double backoffMultiplier, Collection<Status.Code> retryableStatusCodes) {
+      checkArgument(maxAttempts >= 1, "maxAttempts");
+      this.maxAttempts = maxAttempts;
+      checkArgument(initialBackoffInSeconds >= 0D, "initialBackoffInSeconds");
+      this.initialBackoffInSeconds = initialBackoffInSeconds;
+      checkArgument(
+          maxBackoffInSeconds >= initialBackoffInSeconds,
+          "maxBackoffInSeconds should be at least initialBackoffInSeconds");
+      this.maxBackoffInSeconds = maxBackoffInSeconds;
+      checkArgument(backoffMultiplier > 0D, "backoffMultiplier");
+      this.backoffMultiplier = backoffMultiplier;
+      this.retryableStatusCodes = Collections.unmodifiableSet(
+          new HashSet<Status.Code>(checkNotNull(retryableStatusCodes, "retryableStatusCodes")));
+    }
+
+    /** No retry. */
+    static final RetryPolicy DEFAULT =
+        new RetryPolicy(1, 0, 0, 1, Collections.<Status.Code>emptyList());
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof RetryPolicy)) {
+        return false;
+      }
+      RetryPolicy that = (RetryPolicy) o;
+      return maxAttempts == that.maxAttempts
+          && Double.compare(backoffMultiplier, that.backoffMultiplier) == 0
+          && Double.compare(initialBackoffInSeconds, that.initialBackoffInSeconds) == 0
+          && Double.compare(maxBackoffInSeconds, that.maxBackoffInSeconds) == 0
+          && Objects.equal(retryableStatusCodes, that.retryableStatusCodes);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(
+          maxAttempts, initialBackoffInSeconds, maxBackoffInSeconds, backoffMultiplier,
+          retryableStatusCodes);
     }
   }
 }
