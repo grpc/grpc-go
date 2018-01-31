@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import okio.Buffer;
@@ -62,15 +61,24 @@ import okio.Buffer;
 public class Platform {
   public static final Logger logger = Logger.getLogger(Platform.class.getName());
 
+  public enum TlsExtensionType {
+    ALPN_AND_NPN,
+    NPN,
+    NONE,
+  }
+
   /**
-   * List of security providers to use in order of preference.
+   * List of recognized security providers. The first recognized security provider according to the
+   * preference order returned by {@link Security#getProviders} will be selected.
    */
-  private static final String[] ANDROID_SECURITY_PROVIDERS = new String[]{
-      // See https://developer.android.com/training/articles/security-gms-provider.html
-      "com.google.android.gms.org.conscrypt.OpenSSLProvider",
-      "com.android.org.conscrypt.OpenSSLProvider",
-      "org.conscrypt.OpenSSLProvider",
-      "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider"};
+  private static final String[] ANDROID_SECURITY_PROVIDERS =
+      new String[] {
+        // See https://developer.android.com/training/articles/security-gms-provider.html
+        "com.google.android.gms.org.conscrypt.OpenSSLProvider",
+        "org.conscrypt.OpenSSLProvider",
+        "com.android.org.conscrypt.OpenSSLProvider",
+        "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider"
+      };
 
   private static final Platform PLATFORM = findPlatform();
 
@@ -103,6 +111,11 @@ public class Platform {
     return sslProvider;
   }
 
+  /** Returns the TLS extension type available (ALPN and NPN, NPN, or None). */
+  public TlsExtensionType getTlsExtensionType() {
+    return TlsExtensionType.NONE;
+  }
+
   /**
    * Configure TLS extensions on {@code sslSocket} for {@code route}.
    *
@@ -132,10 +145,9 @@ public class Platform {
 
   /** Attempt to match the host runtime to a capable Platform implementation. */
   private static Platform findPlatform() {
-    Provider sslProvider = GrpcUtil.IS_RESTRICTED_APPENGINE ?
-        getAppEngineProvider()
-        : getAndroidSecurityProvider();
-    if (sslProvider != null) {
+    Provider androidOrAppEngineProvider =
+        GrpcUtil.IS_RESTRICTED_APPENGINE ? getAppEngineProvider() : getAndroidSecurityProvider();
+    if (androidOrAppEngineProvider != null) {
       // Attempt to find Android 2.3+ APIs.
       OptionalMethod<Socket> setUseSessionTickets
           = new OptionalMethod<Socket>(null, "setUseSessionTickets", boolean.class);
@@ -156,9 +168,31 @@ public class Platform {
       } catch (ClassNotFoundException ignored) {
       } catch (NoSuchMethodException ignored) {
       }
-      return new Android(setUseSessionTickets, setHostname, trafficStatsTagSocket,
-          trafficStatsUntagSocket, getAlpnSelectedProtocol, setAlpnProtocols, sslProvider);
+
+      TlsExtensionType tlsExtensionType;
+      if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
+        tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
+      } else if (androidOrAppEngineProvider.getName().equals("GmsCore_OpenSSL")
+          || androidOrAppEngineProvider.getName().equals("Conscrypt")) {
+        tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
+      } else if (isAtLeastAndroid5()) {
+        tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
+      } else if (isAtLeastAndroid41()) {
+        tlsExtensionType = TlsExtensionType.NPN;
+      } else {
+        tlsExtensionType = TlsExtensionType.NONE;
+      }
+      return new Android(
+          setUseSessionTickets,
+          setHostname,
+          trafficStatsTagSocket,
+          trafficStatsUntagSocket,
+          getAlpnSelectedProtocol,
+          setAlpnProtocols,
+          androidOrAppEngineProvider,
+          tlsExtensionType);
     }
+    Provider sslProvider;
     try {
       sslProvider = SSLContext.getDefault().getProvider();
     } catch (NoSuchAlgorithmException nsae) {
@@ -182,7 +216,32 @@ public class Platform {
     } catch (NoSuchMethodException ignored) {
     }
 
+    // TODO(ericgribkoff) Return null here
     return new Platform(sslProvider);
+  }
+
+  private static boolean isAtLeastAndroid5() {
+    try {
+      Platform.class
+          .getClassLoader()
+          .loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
+      return true;
+    } catch (ClassNotFoundException e) {
+      logger.log(Level.FINE, "Can't find class", e);
+    }
+    return false;
+  }
+
+  private static boolean isAtLeastAndroid41() {
+    try {
+      Platform.class
+          .getClassLoader()
+          .loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
+      return true;
+    } catch (ClassNotFoundException e) {
+      logger.log(Level.FINE, "Can't find class", e);
+    }
+    return false;
   }
 
   /**
@@ -199,13 +258,13 @@ public class Platform {
   }
 
   /**
-   * Select from the available security providers in preference order. If a preferred provider
-   * is not found then warn but continue.
+   * Select the first recognized security provider according to the preference order returned by
+   * {@link Security#getProviders}. If a recognized provider is not found then warn but continue.
    */
   private static Provider getAndroidSecurityProvider() {
-    for (String providerClassName : ANDROID_SECURITY_PROVIDERS) {
-      Provider[] providers = Security.getProviders();
-      for (Provider availableProvider : providers) {
+    Provider[] providers = Security.getProviders();
+    for (Provider availableProvider : providers) {
+      for (String providerClassName : ANDROID_SECURITY_PROVIDERS) {
         if (providerClassName.equals(availableProvider.getClass().getName())) {
           logger.log(Level.FINE, "Found registered provider {0}", providerClassName);
           return availableProvider;
@@ -216,7 +275,7 @@ public class Platform {
     return null;
   }
 
-  /** Android 2.3 or better. */
+  /** Android 2.3 or better, or AppEngine with Conscrypt. */
   private static class Android extends Platform {
 
     private final OptionalMethod<Socket> setUseSessionTickets;
@@ -230,10 +289,17 @@ public class Platform {
     private final OptionalMethod<Socket> getAlpnSelectedProtocol;
     private final OptionalMethod<Socket> setAlpnProtocols;
 
-    public Android(OptionalMethod<Socket> setUseSessionTickets, OptionalMethod<Socket> setHostname,
-        Method trafficStatsTagSocket, Method trafficStatsUntagSocket,
-        OptionalMethod<Socket> getAlpnSelectedProtocol, OptionalMethod<Socket> setAlpnProtocols,
-        Provider provider) {
+    private final TlsExtensionType tlsExtensionType;
+
+    public Android(
+        OptionalMethod<Socket> setUseSessionTickets,
+        OptionalMethod<Socket> setHostname,
+        Method trafficStatsTagSocket,
+        Method trafficStatsUntagSocket,
+        OptionalMethod<Socket> getAlpnSelectedProtocol,
+        OptionalMethod<Socket> setAlpnProtocols,
+        Provider provider,
+        TlsExtensionType tlsExtensionType) {
       super(provider);
       this.setUseSessionTickets = setUseSessionTickets;
       this.setHostname = setHostname;
@@ -241,6 +307,12 @@ public class Platform {
       this.trafficStatsUntagSocket = trafficStatsUntagSocket;
       this.getAlpnSelectedProtocol = getAlpnSelectedProtocol;
       this.setAlpnProtocols = setAlpnProtocols;
+      this.tlsExtensionType = tlsExtensionType;
+    }
+
+    @Override
+    public TlsExtensionType getTlsExtensionType() {
+      return tlsExtensionType;
     }
 
     @Override public void connectSocket(Socket socket, InetSocketAddress address,
@@ -321,6 +393,11 @@ public class Platform {
       this.removeMethod = removeMethod;
       this.clientProviderClass = clientProviderClass;
       this.serverProviderClass = serverProviderClass;
+    }
+
+    @Override
+    public TlsExtensionType getTlsExtensionType() {
+      return TlsExtensionType.ALPN_AND_NPN;
     }
 
     @Override public void configureTlsExtensions(

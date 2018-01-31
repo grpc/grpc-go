@@ -10,11 +10,37 @@ On Android, use the [Play Services Provider](#tls-on-android). For non-Android s
 
 ## TLS on Android
 
-On Android we recommend the use of the [Play Services Dynamic Security Provider](http://appfoundry.be/blog/2014/11/18/Google-Play-Services-Dynamic-Security-Provider) to ensure your application has an up-to-date OpenSSL library with the necessary ciper-suites and a reliable ALPN implementation.
+On Android we recommend the use of the [Play Services Dynamic Security
+Provider](https://www.appfoundry.be/blog/2014/11/18/Google-Play-Services-Dynamic-Security-Provider/)
+to ensure your application has an up-to-date OpenSSL library with the necessary
+ciper-suites and a reliable ALPN implementation. This requires [updating the
+security provider at
+runtime](https://developer.android.com/training/articles/security-gms-provider.html).
 
-You may need to [update the security provider](https://developer.android.com/training/articles/security-gms-provider.html) to enable ALPN support, especially for Android versions < 5.0. If the provider fails to update, ALPN may not work.
+Although ALPN mostly works on newer Android releases (especially since 5.0),
+there are bugs and discovered security vulnerabilities that are only fixed by
+upgrading the security provider. Thus, we recommend using the Play Service
+Dynamic Security Provider for all Android versions.
 
 *Note: The Dynamic Security Provider must be installed **before** creating a gRPC OkHttp channel. gRPC's OkHttpProtocolNegotiator statically initializes the security protocol(s) available to gRPC, which means that changes to the security provider after the first channel is created will not be picked up by gRPC.*
+
+### Bundling Conscrypt
+
+If depending on Play Services is not an option for your app, then you may bundle
+[Conscrypt](https://conscrypt.org) with your application. Binaries are available
+on [Maven
+Central](https://search.maven.org/#search%7Cga%7C1%7Cg%3Aorg.conscrypt%20a%3Aconscrypt-android).
+
+Like the Play Services Dynamic Security Provider, you must still "install"
+Conscrypt before use.
+
+```java
+import org.conscrypt.Conscrypt;
+import java.security.Security;
+...
+
+Security.insertProviderAt(Conscrypt.newProvider(), 1);
+```
 
 ## TLS with OpenSSL
 

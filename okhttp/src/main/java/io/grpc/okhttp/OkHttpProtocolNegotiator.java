@@ -21,12 +21,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.okhttp.internal.OptionalMethod;
 import io.grpc.okhttp.internal.Platform;
+import io.grpc.okhttp.internal.Platform.TlsExtensionType;
 import io.grpc.okhttp.internal.Protocol;
 import io.grpc.okhttp.internal.Util;
 import java.io.IOException;
 import java.net.Socket;
-import java.security.Provider;
-import java.security.Security;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -42,7 +41,7 @@ class OkHttpProtocolNegotiator {
   private static OkHttpProtocolNegotiator NEGOTIATOR =
       createNegotiator(OkHttpProtocolNegotiator.class.getClassLoader());
 
-  private final Platform platform;
+  protected final Platform platform;
 
   @VisibleForTesting
   OkHttpProtocolNegotiator(Platform platform) {
@@ -73,7 +72,7 @@ class OkHttpProtocolNegotiator {
       }
     }
     return android
-        ? new AndroidNegotiator(DEFAULT_PLATFORM, AndroidNegotiator.DEFAULT_TLS_EXTENSION_TYPE)
+        ? new AndroidNegotiator(DEFAULT_PLATFORM)
         : new OkHttpProtocolNegotiator(DEFAULT_PLATFORM);
   }
 
@@ -134,19 +133,8 @@ class OkHttpProtocolNegotiator {
     private static final OptionalMethod<Socket> SET_NPN_PROTOCOLS =
         new OptionalMethod<Socket>(null, "setNpnProtocols", byte[].class);
 
-    private static final TlsExtensionType DEFAULT_TLS_EXTENSION_TYPE =
-        pickTlsExtensionType(AndroidNegotiator.class.getClassLoader());
-
-    enum TlsExtensionType {
-      ALPN_AND_NPN,
-      NPN,
-    }
-
-    private final TlsExtensionType tlsExtensionType;
-
-    AndroidNegotiator(Platform platform, TlsExtensionType tlsExtensionType) {
+    AndroidNegotiator(Platform platform) {
       super(platform);
-      this.tlsExtensionType = checkNotNull(tlsExtensionType, "Unable to pick a TLS extension");
     }
 
     @Override
@@ -175,11 +163,11 @@ class OkHttpProtocolNegotiator {
       }
 
       Object[] parameters = {Platform.concatLengthPrefixed(protocols)};
-      if (tlsExtensionType == TlsExtensionType.ALPN_AND_NPN) {
+      if (platform.getTlsExtensionType() == TlsExtensionType.ALPN_AND_NPN) {
         SET_ALPN_PROTOCOLS.invokeWithoutCheckedException(sslSocket, parameters);
       }
 
-      if (tlsExtensionType != null) {
+      if (platform.getTlsExtensionType() != TlsExtensionType.NONE) {
         SET_NPN_PROTOCOLS.invokeWithoutCheckedException(sslSocket, parameters);
       } else {
         throw new RuntimeException("We can not do TLS handshake on this Android version, please"
@@ -189,7 +177,7 @@ class OkHttpProtocolNegotiator {
 
     @Override
     public String getSelectedProtocol(SSLSocket socket) {
-      if (tlsExtensionType == TlsExtensionType.ALPN_AND_NPN) {
+      if (platform.getTlsExtensionType() == TlsExtensionType.ALPN_AND_NPN) {
         try {
           byte[] alpnResult =
               (byte[]) GET_ALPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
@@ -202,7 +190,7 @@ class OkHttpProtocolNegotiator {
         }
       }
 
-      if (tlsExtensionType != null) {
+      if (platform.getTlsExtensionType() != TlsExtensionType.NONE) {
         try {
           byte[] npnResult =
               (byte[]) GET_NPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
@@ -214,41 +202,6 @@ class OkHttpProtocolNegotiator {
           // exception.
         }
       }
-      return null;
-    }
-
-    @VisibleForTesting
-    static TlsExtensionType pickTlsExtensionType(ClassLoader loader) {
-      // Decide which TLS Extension (APLN and NPN) we will use, follow the rules:
-      // 1. If Google Play Services Security Provider is installed, use both
-      // 2. If on Android 5.0 or later, use both, else
-      // 3. If on Android 4.1 or later, use NPN, else
-      // 4. Fail.
-      // TODO(madongfly): Logging.
-
-      // Check if Google Play Services Security Provider is installed.
-      Provider provider = Security.getProvider("GmsCore_OpenSSL");
-      if (provider != null) {
-        return TlsExtensionType.ALPN_AND_NPN;
-      }
-
-      // Check if on Android 5.0 or later.
-      try {
-        loader.loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
-        return TlsExtensionType.ALPN_AND_NPN;
-      } catch (ClassNotFoundException e) {
-        logger.log(Level.FINE, "Can't find class", e);
-      }
-
-      // Check if on Android 4.1 or later.
-      try {
-        loader.loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
-        return TlsExtensionType.NPN;
-      } catch (ClassNotFoundException e) {
-        logger.log(Level.FINE, "Can't find class", e);
-      }
-
-      // This will be caught by the constructor.
       return null;
     }
   }
