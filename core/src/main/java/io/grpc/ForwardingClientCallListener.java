@@ -20,30 +20,17 @@ package io.grpc;
  * A {@link ClientCall.Listener} which forwards all of its methods to another {@link
  * ClientCall.Listener}.
  */
-public abstract class ForwardingClientCallListener<RespT> extends ClientCall.Listener<RespT> {
+public abstract class ForwardingClientCallListener<RespT>
+    extends PartialForwardingClientCallListener<RespT> {
   /**
    * Returns the delegated {@code ClientCall.Listener}.
    */
-  protected abstract ClientCall.Listener<RespT> delegate();
-
   @Override
-  public void onHeaders(Metadata headers) {
-    delegate().onHeaders(headers);
-  }
+  protected abstract ClientCall.Listener<RespT> delegate();
 
   @Override
   public void onMessage(RespT message) {
     delegate().onMessage(message);
-  }
-
-  @Override
-  public void onClose(Status status, Metadata trailers) {
-    delegate().onClose(status, trailers);
-  }
-
-  @Override
-  public void onReady() {
-    delegate().onReady();
   }
 
   /**

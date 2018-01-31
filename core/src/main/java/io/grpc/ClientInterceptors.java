@@ -17,6 +17,8 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
+import io.grpc.MethodDescriptor.Marshaller;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,6 +89,56 @@ public class ClientInterceptors {
       channel = new InterceptorChannel(channel, interceptor);
     }
     return channel;
+  }
+
+  /**
+   * Creates a new ClientInterceptor that transforms requests into {@code WReqT} and responses into
+   * {@code WRespT} before passing them into the {@code interceptor}.
+   */
+  static <WReqT, WRespT> ClientInterceptor wrapClientInterceptor(
+      final ClientInterceptor interceptor,
+      final Marshaller<WReqT> reqMarshaller,
+      final Marshaller<WRespT> respMarshaller) {
+    return new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+        final MethodDescriptor<WReqT, WRespT> wrappedMethod =
+            method.toBuilder(reqMarshaller, respMarshaller).build();
+        final ClientCall<WReqT, WRespT> wrappedCall =
+            interceptor.interceptCall(wrappedMethod, callOptions, next);
+        return new PartialForwardingClientCall<ReqT, RespT>() {
+          @Override
+          public void start(final Listener<RespT> responseListener, Metadata headers) {
+            wrappedCall.start(new PartialForwardingClientCallListener<WRespT>() {
+              @Override
+              public void onMessage(WRespT wMessage) {
+                InputStream bytes = respMarshaller.stream(wMessage);
+                RespT message = method.getResponseMarshaller().parse(bytes);
+                responseListener.onMessage(message);
+              }
+
+              @Override
+              protected Listener<?> delegate() {
+                return responseListener;
+              }
+            }, headers);
+          }
+
+          @Override
+          public void sendMessage(ReqT message) {
+            InputStream bytes = method.getRequestMarshaller().stream(message);
+            WReqT wReq = reqMarshaller.parse(bytes);
+            wrappedCall.sendMessage(wReq);
+          }
+
+          @Override
+          protected ClientCall<?, ?> delegate() {
+            return wrappedCall;
+          }
+        };
+      }
+    };
   }
 
   private static class InterceptorChannel extends Channel {

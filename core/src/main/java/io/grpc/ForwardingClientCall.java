@@ -16,15 +16,15 @@
 
 package io.grpc;
 
-import javax.annotation.Nullable;
-
 /**
  * A {@link ClientCall} which forwards all of it's methods to another {@link ClientCall}.
  */
-public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT, RespT> {
+public abstract class ForwardingClientCall<ReqT, RespT>
+    extends PartialForwardingClientCall<ReqT, RespT> {
   /**
    * Returns the delegated {@code ClientCall}.
    */
+  @Override
   protected abstract ClientCall<ReqT, RespT> delegate();
 
   @Override
@@ -33,38 +33,8 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
   }
 
   @Override
-  public void request(int numMessages) {
-    delegate().request(numMessages);
-  }
-
-  @Override
-  public void cancel(@Nullable String message, @Nullable Throwable cause) {
-    delegate().cancel(message, cause);
-  }
-
-  @Override
-  public void halfClose() {
-    delegate().halfClose();
-  }
-
-  @Override
   public void sendMessage(ReqT message) {
     delegate().sendMessage(message);
-  }
-
-  @Override
-  public void setMessageCompression(boolean enabled) {
-    delegate().setMessageCompression(enabled);
-  }
-
-  @Override
-  public boolean isReady() {
-    return delegate().isReady();
-  }
-
-  @Override
-  public Attributes getAttributes() {
-    return delegate().getAttributes();
   }
 
   /**

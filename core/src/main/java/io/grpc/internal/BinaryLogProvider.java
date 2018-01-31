@@ -17,8 +17,16 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
+import io.grpc.InternalClientInterceptors;
+import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.ServerInterceptor;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -32,15 +40,25 @@ import javax.annotation.Nullable;
 
 public abstract class BinaryLogProvider {
   private static final Logger logger = Logger.getLogger(BinaryLogProvider.class.getName());
-  private static final BinaryLogProvider NULL_PROVIDER = new NullProvider();
   private static final BinaryLogProvider PROVIDER = load(BinaryLogProvider.class.getClassLoader());
+  @VisibleForTesting
+  static final Marshaller<InputStream> IDENTITY_MARSHALLER = new IdentityMarshaller();
+
+  private final ClientInterceptor binaryLogShim = new BinaryLogShim();
 
   /**
-   * Always returns a {@code BinaryLogProvider}, even if the provider always returns null
-   * interceptors.
+   * Returns a {@code BinaryLogProvider}, or {@code null} if there is no provider.
    */
+  @Nullable
   public static BinaryLogProvider provider() {
     return PROVIDER;
+  }
+
+  /**
+   * Wraps a channel to provide binary logging on {@link ClientCall}s as needed.
+   */
+  Channel wrapChannel(Channel channel) {
+    return ClientInterceptors.intercept(channel, binaryLogShim);
   }
 
   @VisibleForTesting
@@ -50,13 +68,13 @@ public abstract class BinaryLogProvider {
     } catch (Throwable t) {
       logger.log(
           Level.SEVERE, "caught exception loading BinaryLogProvider, will disable binary log", t);
-      return NULL_PROVIDER;
+      return null;
     }
   }
 
   private static BinaryLogProvider loadHelper(ClassLoader classLoader) {
     if (isAndroid()) {
-      return NULL_PROVIDER;
+      return null;
     }
 
     Iterator<BinaryLogProvider> iter = getCandidatesViaServiceLoader(classLoader).iterator();
@@ -70,7 +88,7 @@ public abstract class BinaryLogProvider {
       }
     }
     if (list.isEmpty()) {
-      return NULL_PROVIDER;
+      return null;
     } else {
       return Collections.max(list, new Comparator<BinaryLogProvider>() {
         @Override
@@ -94,19 +112,21 @@ public abstract class BinaryLogProvider {
 
   /**
    * Returns a {@link ServerInterceptor} for binary logging. gRPC is free to cache the interceptor,
-   * so the interceptor must be reusable across server calls. At runtime, the request and response
-   * types passed into the interceptor is always {@link java.io.InputStream}.
+   * so the interceptor must be reusable across calls. At runtime, the request and response
+   * marshallers are always {@code Marshaller<InputStream>}.
    * Returns {@code null} if this method is not binary logged.
    */
+  // TODO(zpencer): ensure the interceptor properly handles retries and hedging
   @Nullable
   public abstract ServerInterceptor getServerInterceptor(String fullMethodName);
 
   /**
    * Returns a {@link ClientInterceptor} for binary logging. gRPC is free to cache the interceptor,
-   * so the interceptor must be reusable across server calls. At runtime, the request and response
-   * types passed into the interceptor is always {@link java.io.InputStream}.
+   * so the interceptor must be reusable across calls. At runtime, the request and response
+   * marshallers are always {@code Marshaller<InputStream>}.
    * Returns {@code null} if this method is not binary logged.
    */
+  // TODO(zpencer): ensure the interceptor properly handles retries and hedging
   @Nullable
   public abstract ClientInterceptor getClientInterceptor(String fullMethodName);
 
@@ -152,6 +172,46 @@ public abstract class BinaryLogProvider {
     } catch (Exception e) {
       // If Application isn't loaded, it might as well not be Android.
       return false;
+    }
+  }
+
+  // Creating a named class makes debugging easier
+  private static final class IdentityMarshaller implements Marshaller<InputStream> {
+    @Override
+    public InputStream stream(InputStream value) {
+      return value;
+    }
+
+    @Override
+    public InputStream parse(InputStream stream) {
+      return stream;
+
+    }
+  }
+
+  /**
+   * The pipeline of interceptors is hard coded when the {@link ManagedChannelImpl} is created.
+   * This shim interceptor should always be installed as a placeholder. When a call starts,
+   * this interceptor checks with the {@link BinaryLogProvider} to see if logging should happen
+   * for this particular {@link ClientCall}'s method.
+   */
+  private final class BinaryLogShim implements ClientInterceptor {
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method,
+        CallOptions callOptions,
+        Channel next) {
+      ClientInterceptor binlogInterceptor = getClientInterceptor(method.getFullMethodName());
+      if (binlogInterceptor == null) {
+        return next.newCall(method, callOptions);
+      } else {
+        return InternalClientInterceptors
+            .wrapClientInterceptor(
+                binlogInterceptor,
+                IDENTITY_MARSHALLER,
+                IDENTITY_MARSHALLER)
+            .interceptCall(method, callOptions, next);
+      }
     }
   }
 }
