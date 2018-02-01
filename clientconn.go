@@ -97,7 +97,9 @@ type dialOptions struct {
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
-	// This is to support grpclb.
+	// Custom user options for balancer.Build.
+	balancerBuildUserOptions interface{}
+	// This is for withResolverBuilder() which is only used by grpclb.
 	resolverBuilder resolver.Builder
 	// Custom user options for resolver.Build.
 	resolverBuildUserOptions interface{}
@@ -225,6 +227,14 @@ func WithBalancerName(balancerName string) DialOption {
 	}
 	return func(o *dialOptions) {
 		o.balancerBuilder = builder
+	}
+}
+
+// WithBalancerUserOptions returns a DialOption which sets the UserOptions
+// field of balancer's BuildOption.
+func WithBalancerUserOptions(userOpt interface{}) DialOption {
+	return func(o *dialOptions) {
+		o.balancerBuildUserOptions = userOpt
 	}
 }
 
@@ -520,8 +530,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		credsClone = creds.Clone()
 	}
 	cc.balancerBuildOpts = balancer.BuildOptions{
-		DialCreds: credsClone,
-		Dialer:    cc.dopts.copts.Dialer,
+		DialCreds:   credsClone,
+		Dialer:      cc.dopts.copts.Dialer,
+		UserOptions: cc.dopts.balancerBuildUserOptions,
 	}
 
 	// Build the resolver.

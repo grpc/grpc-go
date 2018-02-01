@@ -126,6 +126,9 @@ type BuildOptions struct {
 	// to a remote load balancer server. The Balancer implementations
 	// can ignore this if it doesn't need to talk to remote balancer.
 	Dialer func(context.Context, string) (net.Conn, error)
+	// UserOptions can be used to pass configuration between DialOptions and the
+	// balancer.
+	UserOptions interface{}
 }
 
 // Builder creates a balancer.
