@@ -4239,7 +4239,7 @@ func TestClientResourceExhaustedCancelFullDuplex(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		if e.httpHandler {
-			// httpHanlder write won't be blocked on flow control window.
+			// httpHandler write won't be blocked on flow control window.
 			continue
 		}
 		testClientResourceExhaustedCancelFullDuplex(t, e)
