@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
@@ -67,6 +68,7 @@ import io.netty.channel.socket.SocketChannelConfig;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
+import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 import io.netty.util.AsciiString;
@@ -83,6 +85,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javax.net.ssl.SSLHandshakeException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -266,6 +269,42 @@ public class NettyClientTransportTest {
       fail("expected exception");
     } catch (ExecutionException ex) {
       assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
+    }
+  }
+
+  @Test
+  public void tlsNegotiationFailurePropagatesToStatus() throws Exception {
+    File serverCert = TestUtils.loadCert("server1.pem");
+    File serverKey = TestUtils.loadCert("server1.key");
+    // Don't trust ca.pem, so that client auth fails
+    SslContext sslContext = GrpcSslContexts.forServer(serverCert, serverKey)
+        .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
+        .clientAuth(ClientAuth.REQUIRE)
+        .build();
+    negotiator = ProtocolNegotiators.serverTls(sslContext);
+    startServer();
+
+    File caCert = TestUtils.loadCert("ca.pem");
+    File clientCert = TestUtils.loadCert("client.pem");
+    File clientKey = TestUtils.loadCert("client.key");
+    SslContext clientContext = GrpcSslContexts.forClient()
+        .trustManager(caCert)
+        .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
+        .keyManager(clientCert, clientKey)
+        .build();
+    ProtocolNegotiator negotiator = ProtocolNegotiators.tls(clientContext, authority);
+    final NettyClientTransport transport = newTransport(negotiator);
+    callMeMaybe(transport.start(clientTransportListener));
+
+    Rpc rpc = new Rpc(transport).halfClose();
+    try {
+      rpc.waitForClose();
+      fail("expected exception");
+    } catch (ExecutionException ex) {
+      StatusException sre = (StatusException) ex.getCause();
+      assertEquals(Status.Code.UNAVAILABLE, sre.getStatus().getCode());
+      assertThat(sre.getCause()).isInstanceOf(SSLHandshakeException.class);
+      assertThat(sre.getCause().getMessage()).contains("SSLV3_ALERT_HANDSHAKE_FAILURE");
     }
   }
 
@@ -521,8 +560,8 @@ public class NettyClientTransportTest {
   }
 
   private ProtocolNegotiator newNegotiator() throws IOException {
-    File clientCert = TestUtils.loadCert("ca.pem");
-    SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert)
+    File caCert = TestUtils.loadCert("ca.pem");
+    SslContext clientContext = GrpcSslContexts.forClient().trustManager(caCert)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     return ProtocolNegotiators.tls(clientContext, authority);
   }
