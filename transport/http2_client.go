@@ -464,7 +464,22 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if b := stats.OutgoingTrace(ctx); b != nil {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
 	}
-	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+
+	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+		var k string
+		for _, vv := range added {
+			for i, v := range vv {
+				if i%2 == 0 {
+					k = v
+					continue
+				}
+				// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
+				if isReservedHeader(k) {
+					continue
+				}
+				headerFields = append(headerFields, hpack.HeaderField{Name: strings.ToLower(k), Value: encodeMetadataHeader(k, v)})
+			}
+		}
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
 			if isReservedHeader(k) {
