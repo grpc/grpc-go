@@ -651,7 +651,7 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 
 	actual, ok := status.FromError(st.Error)
 	if !ok {
-		t.Fatalf("expected st.Error to be a statusError, got %T", st.Error)
+		t.Fatalf("expected st.Error to be a statusError, got %v (type %T)", st.Error, st.Error)
 	}
 
 	expectedStatus, _ := status.FromError(e.err)
@@ -1217,20 +1217,6 @@ func TestClientStatsFullDuplexRPCError(t *testing.T) {
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
-		inTrailer:  {checkInTrailer, 1},
-		end:        {checkEnd, 1},
-	})
-}
-
-// If the user doesn't call the last recv() on clientStream.
-func TestClientStatsFullDuplexRPCNotCallingLastRecv(t *testing.T) {
-	count := 1
-	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC, noLastRecv: true}, map[int]*checkFuncWithCount{
-		begin:      {checkBegin, 1},
-		outHeader:  {checkOutHeader, 1},
-		outPayload: {checkOutPayload, count},
-		inHeader:   {checkInHeader, 1},
-		inPayload:  {checkInPayload, count},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
 	})
