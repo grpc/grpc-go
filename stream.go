@@ -246,14 +246,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if done != nil {
-				doneInfo := balancer.DoneInfo{Err: err}
-				if _, ok := err.(transport.ConnectionError); ok {
-					// If error is connection error, transport was sending data on wire,
-					// and we are not sure if anything has been sent on wire.
-					// If error is not connection error, we are sure nothing has been sent.
-					doneInfo.BytesSent = true
-				}
-				done(doneInfo)
+				done(balancer.DoneInfo{Err: err})
 				done = nil
 			}
 			// In the event of any error from NewStream, we never attempted to write
@@ -289,29 +282,33 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		statsCtx:     ctx,
 		statsHandler: cc.dopts.copts.StatsHandler,
 	}
-	// Listen on s.Context().Done() to detect cancellation and s.Done() to detect
-	// normal termination when there is no pending I/O operations on this stream.
-	go func() {
-		select {
-		case <-t.Error():
-			// Incur transport error, simply exit.
-		case <-cc.ctx.Done():
-			cs.finish(ErrClientConnClosing)
-			cs.closeTransportStream(ErrClientConnClosing)
-		case <-s.Done():
-			// TODO: The trace of the RPC is terminated here when there is no pending
-			// I/O, which is probably not the optimal solution.
-			cs.finish(s.Status().Err())
-			cs.closeTransportStream(nil)
-		case <-s.GoAway():
-			cs.finish(errConnDrain)
-			cs.closeTransportStream(errConnDrain)
-		case <-s.Context().Done():
-			err := s.Context().Err()
-			cs.finish(err)
-			cs.closeTransportStream(transport.ContextErr(err))
-		}
-	}()
+	if desc != unaryStreamDesc {
+		// Listen on s.Context().Done() to detect cancellation and s.Done() to
+		// detect normal termination when there is no pending I/O operations on
+		// this stream.  Not necessary for "unary" streams, since we are guaranteed
+		// to always be in stream functions.
+		go func() {
+			select {
+			case <-t.Error():
+				// Incur transport error, simply exit.
+			case <-cc.ctx.Done():
+				cs.finish(ErrClientConnClosing)
+				cs.closeTransportStream(ErrClientConnClosing)
+			case <-s.Done():
+				// TODO: The trace of the RPC is terminated here when there is no pending
+				// I/O, which is probably not the optimal solution.
+				cs.finish(s.Status().Err())
+				cs.closeTransportStream(nil)
+			case <-s.GoAway():
+				cs.finish(errConnDrain)
+				cs.closeTransportStream(errConnDrain)
+			case <-s.Context().Done():
+				err := s.Context().Err()
+				cs.finish(err)
+				cs.closeTransportStream(transport.ContextErr(err))
+			}
+		}()
+	}
 	return cs, nil
 }
 
@@ -339,6 +336,7 @@ type clientStream struct {
 
 	mu       sync.Mutex
 	done     func(balancer.DoneInfo)
+	sentLast bool // sent an end stream
 	closed   bool
 	finished bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
@@ -371,6 +369,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) SendMsg(m interface{}) (err error) {
+	// TODO: Check cs.sentLast and error if we already ended the stream.
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.trInfo.tr != nil {
@@ -381,18 +380,15 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	// TODO Investigate how to signal the stats handling party.
 	// generate error stats if err != nil && err != io.EOF?
 	defer func() {
-		if err != nil {
-			cs.finish(err)
-		}
 		if err == nil {
 			return
 		}
+		cs.finish(err)
 		if err == io.EOF {
-			// Specialize the process for server streaming. SendMsg is only called
-			// once when creating the stream object. io.EOF needs to be skipped when
-			// the rpc is early finished (before the stream object is created.).
-			// TODO: It is probably better to move this into the generated code.
-			if !cs.desc.ClientStreams && cs.desc.ServerStreams {
+			// SendMsg is only called once for non-client-streams. io.EOF needs to be
+			// skipped when the rpc is early finished (before the stream object is
+			// created.).
+			if !cs.desc.ClientStreams {
 				err = nil
 			}
 			return
@@ -418,7 +414,10 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if len(data) > *cs.c.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
 	}
-	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: false})
+	if !cs.desc.ClientStreams {
+		cs.sentLast = true
+	}
+	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: !cs.desc.ClientStreams})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
@@ -427,6 +426,15 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
+	defer func() {
+		// err != nil indicates the termination of the stream.
+		if err != nil {
+			cs.finish(err)
+			if cs.cancel != nil {
+				cs.cancel()
+			}
+		}
+	}()
 	var inPayload *stats.InPayload
 	if cs.statsHandler != nil {
 		inPayload = &stats.InPayload{
@@ -453,71 +461,55 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		cs.decompSet = true
 	}
 	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, inPayload, cs.decomp)
-	defer func() {
-		// err != nil indicates the termination of the stream.
-		if err != nil {
-			cs.finish(err)
-			if cs.cancel != nil {
-				cs.cancel()
-			}
-		}
-	}()
-	if err == nil {
-		if cs.tracing {
-			cs.mu.Lock()
-			if cs.trInfo.tr != nil {
-				cs.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
-			}
-			cs.mu.Unlock()
-		}
-		if inPayload != nil {
-			cs.statsHandler.HandleRPC(cs.statsCtx, inPayload)
-		}
-		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
-			return
-		}
-		// Special handling for client streaming rpc.
-		// This recv expects EOF or errors, so we don't collect inPayload.
-		if cs.c.maxReceiveMessageSize == nil {
-			return status.Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
-		}
-		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil, cs.decomp)
-		cs.closeTransportStream(err)
-		if err == nil {
-			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
+	if err != nil {
+		if _, ok := err.(transport.ConnectionError); !ok {
+			cs.closeTransportStream(err)
 		}
 		if err == io.EOF {
-			if se := cs.s.Status().Err(); se != nil {
-				return se
+			if statusErr := cs.s.Status().Err(); statusErr != nil {
+				return statusErr
 			}
-			cs.finish(err)
-			if cs.cancel != nil {
-				cs.cancel()
-			}
-			return nil
+			return io.EOF // indicates end of stream.
 		}
 		return toRPCErr(err)
 	}
-	if _, ok := err.(transport.ConnectionError); !ok {
-		cs.closeTransportStream(err)
+	if cs.tracing {
+		cs.mu.Lock()
+		if cs.trInfo.tr != nil {
+			cs.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+		}
+		cs.mu.Unlock()
+	}
+	if inPayload != nil {
+		cs.statsHandler.HandleRPC(cs.statsCtx, inPayload)
+	}
+	if cs.desc.ServerStreams {
+		return nil
+	}
+
+	// Special handling for non-server-stream rpcs.
+	// This recv expects EOF or errors, so we don't collect inPayload.
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil, cs.decomp)
+	cs.closeTransportStream(err)
+	if err == nil {
+		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
 	if err == io.EOF {
-		if statusErr := cs.s.Status().Err(); statusErr != nil {
-			return statusErr
+		if se := cs.s.Status().Err(); se != nil {
+			return se
 		}
-		// Returns io.EOF to indicate the end of the stream.
-		return
+		cs.finish(err)
+		return nil
 	}
 	return toRPCErr(err)
 }
 
-func (cs *clientStream) CloseSend() (err error) {
-	err = cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
-	defer func() {
-		if err != nil {
-			cs.finish(err)
-		}
-	}()
+func (cs *clientStream) CloseSend() error {
+	if cs.sentLast {
+		return nil
+	}
+	cs.sentLast = true
+	err := cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
 	if err == nil || err == io.EOF {
 		return nil
 	}
@@ -525,7 +517,10 @@ func (cs *clientStream) CloseSend() (err error) {
 		cs.closeTransportStream(err)
 	}
 	err = toRPCErr(err)
-	return
+	if err != nil {
+		cs.finish(err)
+	}
+	return err
 }
 
 func (cs *clientStream) closeTransportStream(err error) {
