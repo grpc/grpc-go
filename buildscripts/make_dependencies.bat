@@ -12,10 +12,13 @@ goto :eof
 
 :installProto
 
+where /q cmake
+if not ERRORLEVEL 1 goto :hasCmake
 if not exist "%CMAKE_NAME%" (
   call :installCmake
 )
 set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
+:hasCmake
 powershell -command "& { iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
 powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('protobuf.zip', '.') }"
 del protobuf.zip
