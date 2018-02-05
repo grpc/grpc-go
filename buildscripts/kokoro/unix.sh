@@ -5,6 +5,7 @@
 
 # This script assumes `set -e`. Removing it may lead to undefined behavior.
 set -exu -o pipefail
+cat /VERSION
 
 export GRADLE_OPTS=-Xmx512m
 export PROTOBUF_VERSION=3.5.1

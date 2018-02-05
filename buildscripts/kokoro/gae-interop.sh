@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -exu -o pipefail
+cat /VERSION
 
 KOKORO_GAE_SERVICE="java-gae-interop-test"
 
