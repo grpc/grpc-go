@@ -700,7 +700,6 @@ var (
 	// errStreamDrain indicates that the stream is rejected because the
 	// connection is draining. This could be caused by goaway or balancer
 	// removing the address.
-	// TODO: delete this error; it is no longer necessary.
 	errStreamDrain = streamErrorf(codes.Unavailable, "the connection is draining")
 	// StatusGoAway indicates that the server sent a GOAWAY that included this
 	// stream's ID in unprocessed RPCs.
