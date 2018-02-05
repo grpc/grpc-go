@@ -37,19 +37,20 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ServiceProvidersTest {
   private static final List<Class<?>> NO_HARDCODED = Collections.emptyList();
-  private static final PriorityAccessor<FooProvider> ACCESSOR =
-      new PriorityAccessor<FooProvider>() {
+  private static final PriorityAccessor<ServiceProvidersTestAbstractProvider> ACCESSOR =
+      new PriorityAccessor<ServiceProvidersTestAbstractProvider>() {
         @Override
-        public boolean isAvailable(FooProvider provider) {
+        public boolean isAvailable(ServiceProvidersTestAbstractProvider provider) {
           return provider.isAvailable();
         }
 
         @Override
-        public int getPriority(FooProvider provider) {
+        public int getPriority(ServiceProvidersTestAbstractProvider provider) {
           return provider.priority();
         }
       };
-  private final String serviceFile = "META-INF/services/io.grpc.ServiceProvidersTest$FooProvider";
+  private final String serviceFile =
+      "META-INF/services/io.grpc.ServiceProvidersTestAbstractProvider";
 
   @Test
   public void contextClassLoaderProvider() {
@@ -58,17 +59,18 @@ public class ServiceProvidersTest {
       ClassLoader cl = new ReplacingClassLoader(
           getClass().getClassLoader(),
           serviceFile,
-          "io/grpc/ServiceProvidersTest$FooProvider-multipleProvider.txt");
+          "io/grpc/ServiceProvidersTestAbstractProvider-multipleProvider.txt");
 
       // test that the context classloader is used as fallback
       ClassLoader rcll = new ReplacingClassLoader(
           getClass().getClassLoader(),
           serviceFile,
-          "io/grpc/ServiceProvidersTest$FooProvider-empty.txt");
+          "io/grpc/ServiceProvidersTestAbstractProvider-empty.txt");
       Thread.currentThread().setContextClassLoader(rcll);
       assertEquals(
           Available7Provider.class,
-          ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
+          ServiceProviders.load(
+              ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
     } finally {
       Thread.currentThread().setContextClassLoader(ccl);
     }
@@ -81,9 +83,10 @@ public class ServiceProvidersTest {
       ClassLoader cl = new ReplacingClassLoader(
           getClass().getClassLoader(),
           serviceFile,
-          "io/grpc/ServiceProvidersTest$FooProvider-doesNotExist.txt");
+          "io/grpc/ServiceProvidersTestAbstractProvider-doesNotExist.txt");
       Thread.currentThread().setContextClassLoader(cl);
-      assertNull(ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR));
+      assertNull(ServiceProviders.load(
+          ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR));
     } finally {
       Thread.currentThread().setContextClassLoader(ccl);
     }
@@ -92,13 +95,14 @@ public class ServiceProvidersTest {
   @Test
   public void multipleProvider() throws Exception {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-multipleProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-multipleProvider.txt");
     assertSame(
         Available7Provider.class,
-        ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
+        ServiceProviders.load(
+            ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
 
-    List<FooProvider> providers = ServiceProviders.loadAll(
-          FooProvider.class, NO_HARDCODED, cl, ACCESSOR);
+    List<ServiceProvidersTestAbstractProvider> providers = ServiceProviders.loadAll(
+        ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR);
     assertEquals(3, providers.size());
     assertEquals(Available7Provider.class, providers.get(0).getClass());
     assertEquals(Available5Provider.class, providers.get(1).getClass());
@@ -109,18 +113,20 @@ public class ServiceProvidersTest {
   public void unavailableProvider() {
     // tries to load Available7 and UnavailableProvider, which has priority 10
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-unavailableProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-unavailableProvider.txt");
     assertEquals(
         Available7Provider.class,
-        ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
+        ServiceProviders.load(
+            ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR).getClass());
   }
 
   @Test
   public void unknownClassProvider() {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-unknownClassProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-unknownClassProvider.txt");
     try {
-      FooProvider ignored = ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR);
+      ServiceProvidersTestAbstractProvider ignored = ServiceProviders.load(
+          ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR);
       fail("Exception expected");
     } catch (ServiceConfigurationError e) {
       // noop
@@ -130,11 +136,12 @@ public class ServiceProvidersTest {
   @Test
   public void exceptionSurfacedToCaller_failAtInit() {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-failAtInitProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-failAtInitProvider.txt");
     try {
       // Even though there is a working provider, if any providers fail then we should fail
       // completely to avoid returning something unexpected.
-      FooProvider ignored = ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR);
+      ServiceProvidersTestAbstractProvider ignored = ServiceProviders.load(
+          ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR);
       fail("Expected exception");
     } catch (ServiceConfigurationError expected) {
       // noop
@@ -144,10 +151,11 @@ public class ServiceProvidersTest {
   @Test
   public void exceptionSurfacedToCaller_failAtPriority() {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-failAtPriorityProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-failAtPriorityProvider.txt");
     try {
       // The exception should be surfaced to the caller
-      FooProvider ignored = ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR);
+      ServiceProvidersTestAbstractProvider ignored = ServiceProviders.load(
+          ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR);
       fail("Expected exception");
     } catch (FailAtPriorityProvider.PriorityException expected) {
       // noop
@@ -157,10 +165,11 @@ public class ServiceProvidersTest {
   @Test
   public void exceptionSurfacedToCaller_failAtAvailable() {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/ServiceProvidersTest$FooProvider-failAtAvailableProvider.txt");
+        "io/grpc/ServiceProvidersTestAbstractProvider-failAtAvailableProvider.txt");
     try {
       // The exception should be surfaced to the caller
-      FooProvider ignored = ServiceProviders.load(FooProvider.class, NO_HARDCODED, cl, ACCESSOR);
+      ServiceProvidersTestAbstractProvider ignored = ServiceProviders.load(
+          ServiceProvidersTestAbstractProvider.class, NO_HARDCODED, cl, ACCESSOR);
       fail("Expected exception");
     } catch (FailAtAvailableProvider.AvailableException expected) {
       // noop
@@ -169,12 +178,13 @@ public class ServiceProvidersTest {
 
   @Test
   public void getCandidatesViaHardCoded_multipleProvider() throws Exception {
-    Iterator<FooProvider> candidates = ServiceProviders.getCandidatesViaHardCoded(
-        FooProvider.class,
-        ImmutableList.<Class<?>>of(
-            Available7Provider.class,
-            Available0Provider.class))
-        .iterator();
+    Iterator<ServiceProvidersTestAbstractProvider> candidates =
+        ServiceProviders.getCandidatesViaHardCoded(
+            ServiceProvidersTestAbstractProvider.class,
+            ImmutableList.<Class<?>>of(
+                Available7Provider.class,
+                Available0Provider.class))
+            .iterator();
     assertEquals(Available7Provider.class, candidates.next().getClass());
     assertEquals(Available0Provider.class, candidates.next().getClass());
     assertFalse(candidates.hasNext());
@@ -183,9 +193,10 @@ public class ServiceProvidersTest {
   @Test
   public void getCandidatesViaHardCoded_failAtInit() throws Exception {
     try {
-      Iterable<FooProvider> ignored = ServiceProviders.getCandidatesViaHardCoded(
-          FooProvider.class,
-          Collections.<Class<?>>singletonList(FailAtInitProvider.class));
+      Iterable<ServiceProvidersTestAbstractProvider> ignored =
+          ServiceProviders.getCandidatesViaHardCoded(
+              ServiceProvidersTestAbstractProvider.class,
+              Collections.<Class<?>>singletonList(FailAtInitProvider.class));
       fail("Expected exception");
     } catch (ServiceConfigurationError expected) {
       // noop
@@ -195,9 +206,10 @@ public class ServiceProvidersTest {
   @Test
   public void getCandidatesViaHardCoded_failAtInit_moreCandidates() throws Exception {
     try {
-      Iterable<FooProvider> ignored = ServiceProviders.getCandidatesViaHardCoded(
-          FooProvider.class,
-          ImmutableList.<Class<?>>of(FailAtInitProvider.class, Available0Provider.class));
+      Iterable<ServiceProvidersTestAbstractProvider> ignored =
+          ServiceProviders.getCandidatesViaHardCoded(
+              ServiceProvidersTestAbstractProvider.class,
+              ImmutableList.<Class<?>>of(FailAtInitProvider.class, Available0Provider.class));
       fail("Expected exception");
     } catch (ServiceConfigurationError expected) {
       // noop
@@ -209,7 +221,8 @@ public class ServiceProvidersTest {
     class PrivateClass {}
 
     try {
-      FooProvider ignored = ServiceProviders.create(FooProvider.class, PrivateClass.class);
+      ServiceProvidersTestAbstractProvider ignored = ServiceProviders.create(
+          ServiceProvidersTestAbstractProvider.class, PrivateClass.class);
       fail("Expected exception");
     } catch (ServiceConfigurationError expected) {
       assertTrue("Expected ClassCastException cause: " + expected.getCause(),
@@ -217,16 +230,7 @@ public class ServiceProvidersTest {
     }
   }
 
-  /**
-   * A provider class for this unit test.
-   */
-  public abstract static class FooProvider {
-    abstract boolean isAvailable();
-
-    abstract int priority();
-  }
-
-  private static class BaseProvider extends FooProvider {
+  private static class BaseProvider extends ServiceProvidersTestAbstractProvider {
     private final boolean isAvailable;
     private final int priority;
 
@@ -270,7 +274,7 @@ public class ServiceProvidersTest {
     }
   }
 
-  public static final class FailAtInitProvider extends FooProvider {
+  public static final class FailAtInitProvider extends ServiceProvidersTestAbstractProvider {
     public FailAtInitProvider() {
       throw new RuntimeException("intentionally broken");
     }
@@ -286,7 +290,7 @@ public class ServiceProvidersTest {
     }
   }
 
-  public static final class FailAtPriorityProvider extends FooProvider {
+  public static final class FailAtPriorityProvider extends ServiceProvidersTestAbstractProvider {
     @Override
     public boolean isAvailable() {
       return true;
@@ -300,7 +304,7 @@ public class ServiceProvidersTest {
     public static final class PriorityException extends RuntimeException {}
   }
 
-  public static final class FailAtAvailableProvider extends FooProvider {
+  public static final class FailAtAvailableProvider extends ServiceProvidersTestAbstractProvider {
     @Override
     public boolean isAvailable() {
       throw new AvailableException();
