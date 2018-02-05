@@ -32,7 +32,6 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
-import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
