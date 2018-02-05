@@ -504,12 +504,12 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	return toRPCErr(err)
 }
 
-func (cs *clientStream) CloseSend() (err error) {
+func (cs *clientStream) CloseSend() error {
 	if cs.sentLast {
 		return nil
 	}
 	cs.sentLast = true
-	err = cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
+	err := cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
 	if err == nil || err == io.EOF {
 		return nil
 	}
