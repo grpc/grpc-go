@@ -231,12 +231,12 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 				}
 			}
 		}
-		if ht.stats != nil {
-			ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
-		}
 	})
 
 	if err == nil { // transport has not been closed
+		if ht.stats != nil {
+			ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
+		}
 		ht.Close()
 		close(ht.writes)
 	}
@@ -281,7 +281,7 @@ func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts
 }
 
 func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
-	return ht.do(func() {
+	err := ht.do(func() {
 		ht.writeCommonHeaders(s)
 		h := ht.rw.Header()
 		for k, vv := range md {
@@ -296,10 +296,14 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 		}
 		ht.rw.WriteHeader(200)
 		ht.rw.(http.Flusher).Flush()
+	})
+
+	if err == nil {
 		if ht.stats != nil {
 			ht.stats.HandleRPC(s.Context(), &stats.OutHeader{})
 		}
-	})
+	}
+	return err
 }
 
 func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), traceCtx func(context.Context, string) context.Context) {
@@ -355,11 +359,9 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	if ht.stats != nil {
 		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{
-			FullMethod: s.method,
-			RemoteAddr: ht.RemoteAddr(),
-			//LocalAddr:
+			FullMethod:  s.method,
+			RemoteAddr:  ht.RemoteAddr(),
 			Compression: s.recvCompress,
-			//WireLength:
 		}
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
