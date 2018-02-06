@@ -125,6 +125,7 @@ type options struct {
 	writeBufferSize       int
 	readBufferSize        int
 	connectionTimeout     time.Duration
+	disableReqBuf         bool
 }
 
 var defaultServerOptions = options{
@@ -320,6 +321,14 @@ func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 func ConnectionTimeout(d time.Duration) ServerOption {
 	return func(o *options) {
 		o.connectionTimeout = d
+	}
+}
+
+// DisableRequestBuffer returns a ServerOption that disables the request buffer.
+// The request buffer improves the performance but may consume much more memory in certain cases.
+func DisableRequestBuffer() ServerOption {
+	return func(o *options) {
+		o.disableReqBuf = true
 	}
 }
 
@@ -994,7 +1003,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	ss := &serverStream{
 		t:     t,
 		s:     stream,
-		p:     &parser{r: stream},
+		p:     &parser{r: stream, reuseBuf: !s.opts.disableReqBuf},
 		codec: s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
