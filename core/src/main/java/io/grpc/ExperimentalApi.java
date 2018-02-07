@@ -33,8 +33,10 @@ import java.lang.annotation.Target;
  * to an existing API is considered API-breaking.</li>
  * <li>Removing this annotation from an API gives it stable status.</li>
  * </ol>
+ *
+ * <p>Note: This annotation is intended only for gRPC library code. Users should not attach this
+ * annotation to their own code.
  */
-@Internal
 @Retention(RetentionPolicy.CLASS)
 @Target({
     ElementType.ANNOTATION_TYPE,

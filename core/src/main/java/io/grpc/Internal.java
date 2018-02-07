@@ -30,8 +30,10 @@ import java.lang.annotation.Target;
  * anything else that will be wired into gRPC library, you may use the internal parts.  Please
  * consult the gRPC team first, because internal APIs don't have the same API stability guarantee as
  * the public APIs do.
+ *
+ * <p>Note: This annotation is intended only for gRPC library code. Users should not attach this
+ * annotation to their own code.
  */
-@Internal
 @Retention(RetentionPolicy.CLASS)
 @Target({
     ElementType.ANNOTATION_TYPE,
