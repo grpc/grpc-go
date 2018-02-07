@@ -551,7 +551,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		defer blockCtxCancel()
 		errCh := make(chan error, 1)
 		// Create goroutine to check connectivity state.
-		go func() {
+		go func() (retErr error) {
+			defer func() {
+				select {
+				case errCh <- retErr:
+				default:
+				}
+			}()
 			for {
 				s := cc.GetState()
 				if s == connectivity.Ready {
@@ -559,33 +565,26 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 				}
 				if !cc.WaitForStateChange(blockCtx, s) {
 					// ctx got timeout or canceled.
-					select {
-					case errCh <- blockCtx.Err():
-					default:
-					}
-					return
+					return blockCtx.Err()
 				}
 			}
-			select {
-			case errCh <- nil:
-			default:
-			}
+			return nil
 		}()
 		// Create goroutine to check non-temporary error if the dial option was
 		// set.
 		if cc.dopts.abortOnNonTempError {
-			go func() {
+			go func() (retErr error) {
+				defer func() {
+					select {
+					case errCh <- retErr:
+					default:
+					}
+				}()
 				select {
 				case <-blockCtx.Done():
-					select {
-					case errCh <- blockCtx.Err():
-					default:
-					}
+					return blockCtx.Err()
 				case err := <-cc.fatalErrorCh:
-					select {
-					case errCh <- err:
-					default:
-					}
+					return err
 				}
 			}()
 		}
