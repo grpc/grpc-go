@@ -6028,9 +6028,12 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 		err  error
 		opts []grpc.DialOption
 	)
-	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
-	te.cc, err = grpc.Dial(te.srvAddr, opts...)
+	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock(), grpc.WithAbortOnNonTempError())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	te.cc, err = grpc.DialContext(ctx, te.srvAddr, opts...)
 	if err != errClientAlwaysFailCred {
 		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, errClientAlwaysFailCred)
 	}
 }
+

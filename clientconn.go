@@ -85,17 +85,18 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt    UnaryClientInterceptor
-	streamInt   StreamClientInterceptor
-	cp          Compressor
-	dc          Decompressor
-	bs          backoffStrategy
-	block       bool
-	insecure    bool
-	timeout     time.Duration
-	scChan      <-chan ServiceConfig
-	copts       transport.ConnectOptions
-	callOptions []CallOption
+	unaryInt            UnaryClientInterceptor
+	streamInt           StreamClientInterceptor
+	cp                  Compressor
+	dc                  Decompressor
+	bs                  backoffStrategy
+	block               bool
+	abortOnNonTempError bool
+	insecure            bool
+	timeout             time.Duration
+	scChan              <-chan ServiceConfig
+	copts               transport.ConnectOptions
+	callOptions         []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
@@ -272,12 +273,24 @@ func withBackoff(bs backoffStrategy) DialOption {
 	}
 }
 
-// WithBlock returns a DialOption which makes caller of Dial blocks until the underlying
-// connection is up. Without this, Dial returns immediately and connecting the server
-// happens in background.
+// WithBlock returns a DialOption which makes caller of Dial blocks until the
+// connectivity state becomes READY. Without this, Dial returns immediately and
+// connecting the server happens in background.
 func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
+	}
+}
+
+// WithAbortOnNonTempError makes the Dial abort if there's a non-temporary
+// connection error.
+//
+// This only works when WithBlock() is also set. The blocking dial will return
+// error only if the non-temporary error happens before a connection becomes
+// READY.
+func WithAbortOnNonTempError() DialOption {
+	return func(o *dialOptions) {
+		o.abortOnNonTempError = true
 	}
 }
 
@@ -548,14 +561,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 			return nil
 		})
-		g.Go(func() error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case err := <-cc.fatalErrorCh:
-				return err
-			}
-		})
+		if cc.dopts.abortOnNonTempError {
+			g.Go(func() error {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case err := <-cc.fatalErrorCh:
+					return err
+				}
+			})
+		}
 		if err := g.Wait(); err != nil {
 			return nil, err
 		}
