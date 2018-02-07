@@ -30,7 +30,6 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
@@ -545,33 +544,52 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// resolverWrapper.
 	cc.resolverWrapper.start()
 
-	// A blocking dial blocks until the clientConn is ready.
+	// A blocking dial blocks until the clientConn is ready or a non-temporary
+	// error happens.
 	if cc.dopts.block {
-		g, ctx := errgroup.WithContext(ctx)
-		g.Go(func() error {
+		blockCtx, blockCtxCancel := context.WithCancel(ctx)
+		defer blockCtxCancel()
+		errCh := make(chan error, 1)
+		// Create goroutine to check connectivity state.
+		go func() {
 			for {
 				s := cc.GetState()
 				if s == connectivity.Ready {
 					break
 				}
-				if !cc.WaitForStateChange(ctx, s) {
+				if !cc.WaitForStateChange(blockCtx, s) {
 					// ctx got timeout or canceled.
-					return ctx.Err()
+					select {
+					case errCh <- blockCtx.Err():
+					default:
+					}
+					return
 				}
 			}
-			return nil
-		})
+			select {
+			case errCh <- nil:
+			default:
+			}
+		}()
+		// Create goroutine to check non-temporary error if the dial option was
+		// set.
 		if cc.dopts.abortOnNonTempError {
-			g.Go(func() error {
+			go func() {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-blockCtx.Done():
+					select {
+					case errCh <- blockCtx.Err():
+					default:
+					}
 				case err := <-cc.fatalErrorCh:
-					return err
+					select {
+					case errCh <- err:
+					default:
+					}
 				}
-			})
+			}()
 		}
-		if err := g.Wait(); err != nil {
+		if err := <-errCh; err != nil {
 			return nil, err
 		}
 	}
