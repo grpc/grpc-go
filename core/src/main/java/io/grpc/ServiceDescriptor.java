@@ -19,6 +19,7 @@ package io.grpc;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.MoreObjects;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -203,5 +204,15 @@ public final class ServiceDescriptor {
     public ServiceDescriptor build() {
       return new ServiceDescriptor(this);
     }
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("name", name)
+        .add("schemaDescriptor", schemaDescriptor)
+        .add("methods", methods)
+        .omitNullValues()
+        .toString();
   }
 }

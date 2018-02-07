@@ -16,6 +16,8 @@
 
 package io.grpc;
 
+import static org.junit.Assert.assertTrue;
+
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.testing.TestMethodDescriptors;
 import java.util.Arrays;
@@ -63,13 +65,13 @@ public class ServiceDescriptorTest {
 
   @Test
   public void failsOnNonMatchingNames() {
-    @SuppressWarnings("deprecation") // MethodDescriptor.create
     List<MethodDescriptor<?, ?>> descriptors = Collections.<MethodDescriptor<?, ?>>singletonList(
-        MethodDescriptor.create(
-            MethodType.UNARY,
-            MethodDescriptor.generateFullMethodName("wrongservice", "method"),
-            TestMethodDescriptors.voidMarshaller(),
-            TestMethodDescriptors.voidMarshaller()));
+        MethodDescriptor.<Void, Void>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName(MethodDescriptor.generateFullMethodName("wrongservice", "method"))
+          .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+          .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+          .build());
 
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("service names");
@@ -79,22 +81,49 @@ public class ServiceDescriptorTest {
 
   @Test
   public void failsOnNonDuplicateNames() {
-    @SuppressWarnings("deprecation") // MethodDescriptor.create
     List<MethodDescriptor<?, ?>> descriptors = Arrays.<MethodDescriptor<?, ?>>asList(
-        MethodDescriptor.create(
-            MethodType.UNARY,
-            MethodDescriptor.generateFullMethodName("name", "method"),
-            TestMethodDescriptors.voidMarshaller(),
-            TestMethodDescriptors.voidMarshaller()),
-        MethodDescriptor.create(
-            MethodType.UNARY,
-            MethodDescriptor.generateFullMethodName("name", "method"),
-            TestMethodDescriptors.voidMarshaller(),
-            TestMethodDescriptors.voidMarshaller()));
+        MethodDescriptor.<Void, Void>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName(MethodDescriptor.generateFullMethodName("name", "method"))
+          .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+          .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+          .build(),
+        MethodDescriptor.<Void, Void>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName(MethodDescriptor.generateFullMethodName("name", "method"))
+          .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+          .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+          .build());
 
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("duplicate");
 
     new ServiceDescriptor("name", descriptors);
+  }
+
+  @Test
+  public void toStringTest() {
+    ServiceDescriptor descriptor = new ServiceDescriptor("package.service",
+        Arrays.<MethodDescriptor<?, ?>>asList(
+        MethodDescriptor.<Void, Void>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName(MethodDescriptor.generateFullMethodName("package.service",
+            "methodOne"))
+          .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+          .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+          .build(),
+        MethodDescriptor.<Void, Void>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName(MethodDescriptor.generateFullMethodName("package.service",
+            "methodTwo"))
+          .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+          .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+          .build()));
+
+    String toString = descriptor.toString();
+    assertTrue(toString.contains("ServiceDescriptor"));
+    assertTrue(toString.contains("name=package.service"));
+    assertTrue(toString.contains("package.service/methodOne"));
+    assertTrue(toString.contains("package.service/methodTwo"));
   }
 }

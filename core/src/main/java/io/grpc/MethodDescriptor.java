@@ -18,6 +18,7 @@ package io.grpc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import java.io.InputStream;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -571,5 +572,20 @@ public final class MethodDescriptor<ReqT, RespT> {
           safe,
           sampledToLocalTracing);
     }
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+      .add("fullMethodName", fullMethodName)
+      .add("type", type)
+      .add("idempotent", idempotent)
+      .add("safe", safe)
+      .add("sampledToLocalTracing", sampledToLocalTracing)
+      .add("requestMarshaller", requestMarshaller)
+      .add("responseMarshaller", responseMarshaller)
+      .add("schemaDescriptor", schemaDescriptor)
+      .omitNullValues()
+      .toString();
   }
 }

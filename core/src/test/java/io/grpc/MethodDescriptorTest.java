@@ -39,10 +39,13 @@ public class MethodDescriptorTest {
 
   @Test
   public void createMethodDescriptor() {
-    @SuppressWarnings("deprecation") // MethodDescriptor.create
-    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>create(
-        MethodType.CLIENT_STREAMING, "package.service/method", new StringMarshaller(),
-        new StringMarshaller());
+    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.CLIENT_STREAMING)
+        .setFullMethodName("package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .build();
+
     assertEquals(MethodType.CLIENT_STREAMING, descriptor.getType());
     assertEquals("package.service/method", descriptor.getFullMethodName());
     assertFalse(descriptor.isIdempotent());
@@ -169,5 +172,30 @@ public class MethodDescriptorTest {
     assertEquals(md1.isIdempotent(), md2.isIdempotent());
     assertEquals(md1.isSafe(), md2.isSafe());
     assertSame(md1.getSchemaDescriptor(), md2.getSchemaDescriptor());
+  }
+
+  @Test
+  public void toStringTest() {
+    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.UNARY)
+        .setFullMethodName("package.service/method")
+        .setRequestMarshaller(StringMarshaller.INSTANCE)
+        .setResponseMarshaller(StringMarshaller.INSTANCE)
+        .setSampledToLocalTracing(true)
+        .setIdempotent(true)
+        .setSafe(true)
+        .setSchemaDescriptor(new Object())
+        .build();
+
+    String toString = descriptor.toString();
+    assertTrue(toString.contains("MethodDescriptor"));
+    assertTrue(toString.contains("fullMethodName=package.service/method"));
+    assertTrue(toString.contains("type=UNARY"));
+    assertTrue(toString.contains("idempotent=true"));
+    assertTrue(toString.contains("safe=true"));
+    assertTrue(toString.contains("sampledToLocalTracing=true"));
+    assertTrue(toString.contains("requestMarshaller=io.grpc.StringMarshaller"));
+    assertTrue(toString.contains("responseMarshaller=io.grpc.StringMarshaller"));
+    assertTrue(toString.contains("schemaDescriptor=java.lang.Object"));
   }
 }
