@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
@@ -408,6 +409,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[*addrConn]struct{}),
 
 		blockingpicker: newPickerWrapper(),
+
+		fatalErrorCh: make(chan error, 1),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
@@ -531,15 +534,30 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// A blocking dial blocks until the clientConn is ready.
 	if cc.dopts.block {
-		for {
-			s := cc.GetState()
-			if s == connectivity.Ready {
-				break
+		g, ctx := errgroup.WithContext(ctx)
+		g.Go(func() error {
+			for {
+				s := cc.GetState()
+				if s == connectivity.Ready {
+					break
+				}
+				if !cc.WaitForStateChange(ctx, s) {
+					// ctx got timeout or canceled.
+					return ctx.Err()
+				}
 			}
-			if !cc.WaitForStateChange(ctx, s) {
-				// ctx got timeout or canceled.
-				return nil, ctx.Err()
+			return nil
+		})
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case err := <-cc.fatalErrorCh:
+				return err
 			}
+		})
+		if err := g.Wait(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -603,6 +621,11 @@ type ClientConn struct {
 	balancerBuildOpts balancer.BuildOptions
 	resolverWrapper   *ccResolverWrapper
 	blockingpicker    *pickerWrapper
+
+	// This channel contains one fatal error happened in one of the addrConns.
+	// Only Dial checks this channel. A blocking dial will fail immediately when
+	// there's a fatal error.
+	fatalErrorCh chan error
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -1130,6 +1153,10 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		if err != nil {
 			cancel()
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+				select {
+				case ac.cc.fatalErrorCh <- e.Origin():
+				default:
+				}
 				ac.mu.Lock()
 				if ac.state != connectivity.Shutdown {
 					ac.state = connectivity.TransientFailure
