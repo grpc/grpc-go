@@ -244,8 +244,8 @@ def io_netty_resolver():
 def io_netty_tcnative_boringssl_static():
   native.maven_jar(
       name = "io_netty_netty_tcnative_boringssl_static",
-      artifact = "io.netty:netty-tcnative-boringssl-static:2.0.5.Final",
-      sha1 = "321c1239ceb3faec04531ffcdeb1bc8e85408b12",
+      artifact = "io.netty:netty-tcnative-boringssl-static:2.0.7.Final",
+      sha1 = "a8ec0f0ee612fa89c709bdd3881c3f79fa00431d",
   )
 
 def io_opencensus_api():

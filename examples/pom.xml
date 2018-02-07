@@ -12,6 +12,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <grpc.version>1.11.0-SNAPSHOT</grpc.version><!-- CURRENT_GRPC_VERSION -->
+    <netty.tcnative.version>2.0.7.Final</netty.tcnative.version>
   </properties>
   <dependencies>
     <dependency>
@@ -34,6 +35,11 @@
       <artifactId>grpc-testing</artifactId>
       <version>${grpc.version}</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-tcnative-boringssl-static</artifactId>
+      <version>${netty.tcnative.version}</version>
     </dependency>
     <dependency>
       <groupId>com.google.api.grpc</groupId>
