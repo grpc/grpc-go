@@ -6020,6 +6020,7 @@ func (c clientAlwaysFailCred) OverrideServerName(s string) error {
 }
 
 func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
+	defer leakcheck.Check(t)
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: "v1"})
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
@@ -6036,4 +6037,3 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, errClientAlwaysFailCred)
 	}
 }
-
