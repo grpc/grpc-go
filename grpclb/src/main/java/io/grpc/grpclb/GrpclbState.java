@@ -101,7 +101,7 @@ final class GrpclbState {
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
 
-  // Reset to null when timer expires or cancelled.
+  // Scheduled only once.  Never reset.
   @Nullable
   private FallbackModeTask fallbackTimer;
   private List<EquivalentAddressGroup> fallbackBackendList = Collections.emptyList();
@@ -146,7 +146,7 @@ final class GrpclbState {
       subchannel.requestConnection();
     }
     subchannel.getAttributes().get(STATE_INFO).set(newState);
-    maybeStartFallbackTimer();
+    maybeUseFallbackBackends();
     maybeUpdatePicker();
   }
 
@@ -171,7 +171,12 @@ final class GrpclbState {
       startLbRpc();
     }
     fallbackBackendList = newBackendServers;
-    maybeStartFallbackTimer();
+    // Start the fallback timer if it's never started
+    if (fallbackTimer == null) {
+      logger.log(Level.FINE, "[{0}] Starting fallback timer.", new Object[] {logId});
+      fallbackTimer = new FallbackModeTask();
+      fallbackTimer.schedule();
+    }
     if (usingFallbackBackends) {
       // Populate the new fallback backends to round-robin list.
       useFallbackBackends();
@@ -179,20 +184,14 @@ final class GrpclbState {
     maybeUpdatePicker();
   }
 
-  /**
-   * Start the fallback timer if it's not already started and all connections are lost.
-   */
-  private void maybeStartFallbackTimer() {
-    if (fallbackTimer != null) {
-      return;
-    }
-    if (fallbackBackendList.isEmpty()) {
-      return;
-    }
+  private void maybeUseFallbackBackends() {
     if (balancerWorking) {
       return;
     }
     if (usingFallbackBackends) {
+      return;
+    }
+    if (fallbackTimer != null && !fallbackTimer.discarded) {
       return;
     }
     int numReadySubchannels = 0;
@@ -204,9 +203,8 @@ final class GrpclbState {
     if (numReadySubchannels > 0) {
       return;
     }
-    logger.log(Level.FINE, "[{0}] Starting fallback timer.", new Object[] {logId});
-    fallbackTimer = new FallbackModeTask();
-    fallbackTimer.schedule();
+    // Fallback contiditions met
+    useFallbackBackends();
   }
 
   /**
@@ -275,7 +273,6 @@ final class GrpclbState {
   private void cancelFallbackTimer() {
     if (fallbackTimer != null) {
       fallbackTimer.cancel();
-      fallbackTimer = null;
     }
   }
 
@@ -358,28 +355,24 @@ final class GrpclbState {
   @VisibleForTesting
   class FallbackModeTask implements Runnable {
     private ScheduledFuture<?> scheduledFuture;
-    // If the scheduledFuture is cancelled after the task has made it into the ChannelExecutor, the
-    // task will be started anyway.  Use this boolean to signal that the task should not be run.
-    private boolean cancelled;
+    private boolean discarded;
 
     @Override
     public void run() {
       helper.runSerialized(new Runnable() {
           @Override
           public void run() {
-            if (!cancelled) {
-              checkState(fallbackTimer == FallbackModeTask.this, "fallback timer mismatch");
-              fallbackTimer = null;
-              useFallbackBackends();
-              maybeUpdatePicker();
-            }
+            checkState(fallbackTimer == FallbackModeTask.this, "fallback timer mismatch");
+            discarded = true;
+            maybeUseFallbackBackends();
+            maybeUpdatePicker();
           }
         });
     }
 
     void cancel() {
+      discarded = true;
       scheduledFuture.cancel(false);
-      cancelled = true;
     }
 
     void schedule() {
@@ -556,7 +549,8 @@ final class GrpclbState {
       cleanUp();
       propagateError(error);
       balancerWorking = false;
-      maybeStartFallbackTimer();
+      maybeUseFallbackBackends();
+      maybeUpdatePicker();
       startLbRpc();
     }
 
