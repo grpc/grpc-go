@@ -407,8 +407,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
-		if err != nil {
-			// err != nil indicates the termination of the stream.
+		if err != nil || !cs.desc.ServerStreams {
+			// err != nil or non-server-streaming indicates end of stream.
 			cs.finish(err)
 		}
 	}()
@@ -466,11 +466,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 	}
 	if err == io.EOF {
-		if statusErr := cs.s.Status().Err(); statusErr != nil {
-			return statusErr
-		}
-		cs.finish(nil) // defer will not finish() when returning nil.
-		return nil     // non-server streaming Recv returns nil on success
+		return cs.s.Status().Err() // non-server streaming Recv returns nil on success
 	}
 	return toRPCErr(err)
 }
