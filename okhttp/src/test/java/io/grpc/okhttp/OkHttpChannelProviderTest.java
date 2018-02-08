@@ -20,6 +20,8 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import io.grpc.InternalManagedChannelProvider;
+import io.grpc.InternalServiceProviders;
 import io.grpc.ManagedChannelProvider;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,7 +35,8 @@ public class OkHttpChannelProviderTest {
   @Test
   public void provided() {
     for (ManagedChannelProvider current
-        : ManagedChannelProvider.getCandidatesViaServiceLoader(getClass().getClassLoader())) {
+        : InternalServiceProviders.getCandidatesViaServiceLoader(
+            ManagedChannelProvider.class, getClass().getClassLoader())) {
       if (current instanceof OkHttpChannelProvider) {
         return;
       }
@@ -43,7 +46,8 @@ public class OkHttpChannelProviderTest {
 
   @Test
   public void providedHardCoded() {
-    for (ManagedChannelProvider current : ManagedChannelProvider.getCandidatesViaHardCoded()) {
+    for (ManagedChannelProvider current : InternalServiceProviders.getCandidatesViaHardCoded(
+        ManagedChannelProvider.class, InternalManagedChannelProvider.HARDCODED_CLASSES)) {
       if (current instanceof OkHttpChannelProvider) {
         return;
       }

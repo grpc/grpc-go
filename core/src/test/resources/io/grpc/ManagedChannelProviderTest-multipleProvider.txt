@@ -1,3 +1,0 @@
-io.grpc.ManagedChannelProviderTest$Available5Provider
-io.grpc.ManagedChannelProviderTest$Available7Provider
-io.grpc.ManagedChannelProviderTest$Available0Provider

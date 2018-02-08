@@ -16,9 +16,9 @@
 
 package io.grpc;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ManagedChannelProvider.ProviderNotFoundException;
-import java.util.ServiceLoader;
+import io.grpc.ServiceProviders.PriorityAccessor;
+import java.util.Collections;
 
 /**
  * Provider of servers for transport agnostic consumption.
@@ -29,32 +29,21 @@ import java.util.ServiceLoader;
  */
 @Internal
 public abstract class ServerProvider {
-  private static final ServerProvider provider =
-      load(ServerProvider.class.getClassLoader());
+  private static final ServerProvider provider = ServiceProviders.load(
+      ServerProvider.class,
+      Collections.<Class<?>>emptyList(),
+      ServerProvider.class.getClassLoader(),
+      new PriorityAccessor<ServerProvider>() {
+        @Override
+        public boolean isAvailable(ServerProvider provider) {
+          return provider.isAvailable();
+        }
 
-  @VisibleForTesting
-  static final ServerProvider load(ClassLoader cl) {
-    ServiceLoader<ServerProvider> providers = ServiceLoader.load(ServerProvider.class, cl);
-
-    // Attempt to load using the context class loader and ServiceLoader.
-    // This allows frameworks like http://aries.apache.org/modules/spi-fly.html to plug in.
-    if (!providers.iterator().hasNext()) {
-      providers = ServiceLoader.load(ServerProvider.class);
-    }
-
-    ServerProvider best = null;
-
-    for (ServerProvider current : providers) {
-      if (!current.isAvailable()) {
-        continue;
-      } else if (best == null) {
-        best = current;
-      } else if (current.priority() > best.priority()) {
-        best = current;
-      }
-    }
-    return best;
-  }
+        @Override
+        public int getPriority(ServerProvider provider) {
+          return provider.priority();
+        }
+      });
 
   /**
    * Returns the ClassLoader-wide default server.

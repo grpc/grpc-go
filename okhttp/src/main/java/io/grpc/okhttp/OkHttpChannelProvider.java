@@ -17,6 +17,7 @@
 package io.grpc.okhttp;
 
 import io.grpc.Internal;
+import io.grpc.InternalServiceProviders;
 import io.grpc.ManagedChannelProvider;
 import io.grpc.internal.GrpcUtil;
 
@@ -33,7 +34,8 @@ public final class OkHttpChannelProvider extends ManagedChannelProvider {
 
   @Override
   public int priority() {
-    return (GrpcUtil.IS_RESTRICTED_APPENGINE || isAndroid()) ? 8 : 3;
+    return (GrpcUtil.IS_RESTRICTED_APPENGINE
+        || InternalServiceProviders.isAndroid(getClass().getClassLoader())) ? 8 : 3;
   }
 
   @Override

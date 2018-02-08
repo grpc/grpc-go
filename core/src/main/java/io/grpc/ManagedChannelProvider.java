@@ -17,12 +17,10 @@
 package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.ServiceProviders.PriorityAccessor;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
-import java.util.ServiceConfigurationError;
-import java.util.ServiceLoader;
 
 /**
  * Provider of managed channels for transport agnostic consumption.
@@ -33,86 +31,24 @@ import java.util.ServiceLoader;
  */
 @Internal
 public abstract class ManagedChannelProvider {
-  private static final ManagedChannelProvider provider
-      = load(ManagedChannelProvider.class.getClassLoader());
-
   @VisibleForTesting
-  static ManagedChannelProvider load(ClassLoader classLoader) {
-    Iterable<ManagedChannelProvider> candidates;
-    if (isAndroid()) {
-      candidates = getCandidatesViaHardCoded();
-    } else {
-      candidates = getCandidatesViaServiceLoader(classLoader);
-    }
-    List<ManagedChannelProvider> list = new ArrayList<ManagedChannelProvider>();
-    for (ManagedChannelProvider current : candidates) {
-      if (!current.isAvailable()) {
-        continue;
-      }
-      list.add(current);
-    }
-    if (list.isEmpty()) {
-      return null;
-    } else {
-      return Collections.max(list, new Comparator<ManagedChannelProvider>() {
+  static final Iterable<Class<?>> HARDCODED_CLASSES = new HardcodedClasses();
+
+  private static final ManagedChannelProvider provider = ServiceProviders.load(
+      ManagedChannelProvider.class,
+      HARDCODED_CLASSES,
+      ManagedChannelProvider.class.getClassLoader(),
+      new PriorityAccessor<ManagedChannelProvider>() {
         @Override
-        public int compare(ManagedChannelProvider f1, ManagedChannelProvider f2) {
-          return f1.priority() - f2.priority();
+        public boolean isAvailable(ManagedChannelProvider provider) {
+          return provider.isAvailable();
+        }
+
+        @Override
+        public int getPriority(ManagedChannelProvider provider) {
+          return provider.priority();
         }
       });
-    }
-  }
-
-  /**
-   * Loads service providers for the {@link ManagedChannelProvider} service using
-   * {@link ServiceLoader}.
-   */
-  @VisibleForTesting
-  public static Iterable<ManagedChannelProvider> getCandidatesViaServiceLoader(
-      ClassLoader classLoader) {
-    Iterable<ManagedChannelProvider> i
-        = ServiceLoader.load(ManagedChannelProvider.class, classLoader);
-    // Attempt to load using the context class loader and ServiceLoader.
-    // This allows frameworks like http://aries.apache.org/modules/spi-fly.html to plug in.
-    if (!i.iterator().hasNext()) {
-      i = ServiceLoader.load(ManagedChannelProvider.class);
-    }
-    return i;
-  }
-
-  /**
-   * Load providers from a hard-coded list. This avoids using getResource(), which has performance
-   * problems on Android (see https://github.com/grpc/grpc-java/issues/2037). Any provider that may
-   * be used on Android is free to be added here.
-   */
-  @VisibleForTesting
-  public static Iterable<ManagedChannelProvider> getCandidatesViaHardCoded() {
-    // Class.forName(String) is used to remove the need for ProGuard configuration. Note that
-    // ProGuard does not detect usages of Class.forName(String, boolean, ClassLoader):
-    // https://sourceforge.net/p/proguard/bugs/418/
-    List<ManagedChannelProvider> list = new ArrayList<ManagedChannelProvider>();
-    try {
-      list.add(create(Class.forName("io.grpc.okhttp.OkHttpChannelProvider")));
-    } catch (ClassNotFoundException ex) {
-      // ignore
-    }
-    try {
-      list.add(create(Class.forName("io.grpc.netty.NettyChannelProvider")));
-    } catch (ClassNotFoundException ex) {
-      // ignore
-    }
-    return list;
-  }
-
-  @VisibleForTesting
-  static ManagedChannelProvider create(Class<?> rawClass) {
-    try {
-      return rawClass.asSubclass(ManagedChannelProvider.class).getConstructor().newInstance();
-    } catch (Throwable t) {
-      throw new ServiceConfigurationError(
-          "Provider " + rawClass.getName() + " could not be instantiated: " + t, t);
-    }
-  }
 
   /**
    * Returns the ClassLoader-wide default channel.
@@ -125,21 +61,6 @@ public abstract class ManagedChannelProvider {
           + "Try adding a dependency on the grpc-okhttp or grpc-netty artifact");
     }
     return provider;
-  }
-
-  /**
-   * Returns whether current platform is Android.
-   */
-  protected static boolean isAndroid() {
-    try {
-      // Specify a class loader instead of null because we may be running under Robolectric
-      Class.forName("android.app.Application", /*initialize=*/ false,
-          ManagedChannelProvider.class.getClassLoader());
-      return true;
-    } catch (Exception e) {
-      // If Application isn't loaded, it might as well not be Android.
-      return false;
-    }
   }
 
   /**
@@ -174,6 +95,24 @@ public abstract class ManagedChannelProvider {
 
     public ProviderNotFoundException(String msg) {
       super(msg);
+    }
+  }
+
+  private static final class HardcodedClasses implements Iterable<Class<?>> {
+    @Override
+    public Iterator<Class<?>> iterator() {
+      List<Class<?>> list = new ArrayList<Class<?>>();
+      try {
+        list.add(Class.forName("io.grpc.okhttp.OkHttpChannelProvider"));
+      } catch (ClassNotFoundException ex) {
+        // ignore
+      }
+      try {
+        list.add(Class.forName("io.grpc.netty.NettyChannelProvider"));
+      } catch (ClassNotFoundException ex) {
+        // ignore
+      }
+      return list.iterator();
     }
   }
 }
