@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
@@ -52,6 +53,9 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   @VisibleForTesting
   static final Metadata.Key<String> GRPC_PREVIOUS_RPC_ATTEMPTS =
       Metadata.Key.of("grpc-previous-rpc-attempts", Metadata.ASCII_STRING_MARSHALLER);
+  @VisibleForTesting
+  static final Metadata.Key<String> GRPC_RETRY_PUSHBACK_MS =
+      Metadata.Key.of("grpc-retry-pushback-ms", Metadata.ASCII_STRING_MARSHALLER);
 
   private static final Status CANCELLED_BECAUSE_COMMITTED =
       Status.CANCELLED.withDescription("Stream thrown away because RetriableStream committed");
@@ -81,6 +85,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
   private ClientStreamListener masterListener;
   private Future<?> scheduledRetry;
+  private double nextBackoffIntervalInSeconds;
 
   RetriableStream(
       MethodDescriptor<ReqT, ?> method, Metadata headers,
@@ -95,6 +100,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     this.scheduledExecutorService = scheduledExecutorService;
     this.headers = headers;
     this.retryPolicy = checkNotNull(retryPolicy, "retryPolicy");
+    nextBackoffIntervalInSeconds = retryPolicy.initialBackoffInSeconds;
   }
 
   @Nullable // null if already committed
@@ -485,11 +491,11 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     return Attributes.EMPTY;
   }
 
-  // TODO(zdapeng): implement retry policy.
-  // Retry policy is obtained from the combination of the name resolver plus channel builder, and
-  // passed all the way down to this class.
-  boolean shouldRetry() {
-    return false;
+  private static Random random = new Random();
+
+  @VisibleForTesting
+  static void setRandom(Random random) {
+    RetriableStream.random = random;
   }
 
   boolean hasHedging() {
@@ -532,34 +538,80 @@ abstract class RetriableStream<ReqT> implements ClientStream {
         return;
       }
 
-      if (state.winningSubstream == null && shouldRetry()) {
-        // The check state.winningSubstream == null, checking if is not already committed, is racy,
-        // but is still safe b/c the retry will also handle committed/cancellation
-        // TODO(zdapeng): compute backoff
-        long backoffInMillis = 0L;
-        scheduledRetry = scheduledExecutorService.schedule(
-            new Runnable() {
-              @Override
-              public void run() {
-                scheduledRetry = null;
-                callExecutor.execute(new Runnable() {
-                  @Override
-                  public void run() {
-                    retry(substream.previousAttempts + 1);
-                  }
-                });
-              }
-            },
-            backoffInMillis,
-            TimeUnit.MILLISECONDS);
-      } else if (!hasHedging()) {
+      if (state.winningSubstream == null) {
+        RetryPlan retryPlan = makeRetryDecision(retryPolicy, status, trailers);
+        if (retryPlan.shouldRetry) {
+          // The check state.winningSubstream == null, checking if is not already committed, is
+          // racy, but is still safe b/c the retry will also handle committed/cancellation
+          scheduledRetry = scheduledExecutorService.schedule(
+              new Runnable() {
+                @Override
+                public void run() {
+                  scheduledRetry = null;
+                  callExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                      retry(substream.previousAttempts + 1);
+                    }
+                  });
+                }
+              },
+              retryPlan.backoffInMillis,
+              TimeUnit.MILLISECONDS);
+          return;
+        }
+      }
+
+      if (!hasHedging()) {
         commitAndRun(substream);
         if (state.winningSubstream == substream) {
           masterListener.closed(status, trailers);
         }
       }
+
       // TODO(zdapeng): in hedge case, if this is a fatal status, cancel all the other attempts, and
       // close the masterListener.
+    }
+
+    /**
+     * Decides in current situation whether or not the RPC should retry and if it should retry how
+     * long the backoff should be. The decision does not take the commitment status into account, so
+     * caller should check it separately.
+     */
+    // TODO(zdapeng): add HedgingPolicy as param
+    private RetryPlan makeRetryDecision(RetryPolicy retryPolicy, Status status, Metadata trailer) {
+      boolean shouldRetry = false;
+      long backoffInMillis = 0L;
+
+      if (retryPolicy.maxAttempts > substream.previousAttempts + 1) {
+        String pushbackStr = trailer.get(GRPC_RETRY_PUSHBACK_MS);
+        if (pushbackStr == null) {
+          if (retryPolicy.retryableStatusCodes.contains(status.getCode())) {
+            shouldRetry = true;
+            backoffInMillis = (long) (nextBackoffIntervalInSeconds * 1000D * random.nextDouble());
+            nextBackoffIntervalInSeconds = Math.min(
+                nextBackoffIntervalInSeconds * retryPolicy.backoffMultiplier,
+                retryPolicy.maxBackoffInSeconds);
+          } // else no retry
+        } else {
+          int pushback;
+          try {
+            pushback = Integer.parseInt(pushbackStr);
+          } catch (NumberFormatException e) {
+            pushback = -1;
+          }
+          if (pushback >= 0) {
+            shouldRetry = true;
+            backoffInMillis = pushback;
+            nextBackoffIntervalInSeconds = retryPolicy.initialBackoffInSeconds;
+          } // else no retry
+        }
+      }
+
+      // TODO(zdapeng): transparent retry
+      // TODO(zdapeng): hedging
+      // TODO(zdapeng): throttling
+      return new RetryPlan(shouldRetry, backoffInMillis);
     }
 
     @Override
@@ -772,7 +824,6 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     }
   }
 
-
   /**
    *  Used to keep track of the total amount of memory used to buffer retryable or hedged RPCs for
    *  the Channel. There should be a single instance of it for each channel.
@@ -835,6 +886,17 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       return Objects.hashCode(
           maxAttempts, initialBackoffInSeconds, maxBackoffInSeconds, backoffMultiplier,
           retryableStatusCodes);
+    }
+  }
+
+  private static final class RetryPlan {
+    final boolean shouldRetry;
+    // TODO(zdapeng) boolean hasHedging
+    final long backoffInMillis;
+
+    RetryPlan(boolean shouldRetry, long backoffInMillis) {
+      this.shouldRetry = shouldRetry;
+      this.backoffInMillis = backoffInMillis;
     }
   }
 }
