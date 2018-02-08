@@ -1164,10 +1164,22 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
-	if err := stream.Send(req); err == nil {
-		if _, err := stream.Recv(); err == nil {
-			t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	sendStart := time.Now()
+	for {
+		if err := stream.Send(req); err == io.EOF {
+			// stream.Send should eventually send io.EOF
+			break
+		} else if err != nil {
+			// Send should never return a transport-level error.
+			t.Fatalf("stream.Send(%v) = %v; want <nil or io.EOF>", req, err)
 		}
+		if time.Since(sendStart) > 2*time.Second {
+			t.Fatalf("stream.Send(_) did not return io.EOF after 2s")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := stream.Recv(); err == nil || err == io.EOF {
+		t.Fatalf("%v.Recv() = _, %v, want _, <non-nil, non-EOF>", stream, err)
 	}
 	<-ch
 	awaitNewConnLogOutput()
@@ -1190,7 +1202,9 @@ func testClientConnCloseAfterGoAwayWithActiveStream(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	if _, err := tc.FullDuplexCall(context.Background()); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, err := tc.FullDuplexCall(ctx); err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
 	}
 	done := make(chan struct{})
@@ -2332,24 +2346,6 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 		t.Fatalf("Got the serving status %v, want NOT_SERVING", out.Status)
 	}
 
-}
-
-func TestErrorChanNoIO(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testErrorChanNoIO(t, e)
-	}
-}
-
-func testErrorChanNoIO(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	tc := testpb.NewTestServiceClient(te.clientConn())
-	if _, err := tc.FullDuplexCall(context.Background()); err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
 }
 
 func TestEmptyUnaryWithUserAgent(t *testing.T) {
@@ -3811,22 +3807,24 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.StreamingInputCall(context.Background()); err != nil {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, err := tc.StreamingInputCall(ctx); err != nil {
+		t.Fatalf("tc.StreamingInputCall(_) = _, %v, want _, <nil>", err)
 	}
 	// Loop until the new max stream setting is effective.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
 		_, err := tc.StreamingInputCall(ctx)
+		cancel()
 		if err == nil {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 			continue
 		}
 		if status.Code(err) == codes.DeadlineExceeded {
 			break
 		}
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
+		t.Fatalf("tc.StreamingInputCall(_) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
 	var wg sync.WaitGroup
@@ -3848,11 +3846,19 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			defer cancel()
 			if _, err := tc.UnaryCall(ctx, req, grpc.FailFast(false)); status.Code(err) != codes.DeadlineExceeded {
-				t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+				t.Errorf("tc.UnaryCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 			}
 		}()
 	}
 	wg.Wait()
+
+	cancel()
+	// A new stream should be allowed after canceling the first one.
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.StreamingInputCall(ctx); err != nil {
+		t.Fatalf("tc.StreamingInputCall(_) = _, %v, want _, %v", err, nil)
+	}
 }
 
 func TestCompressServerHasNoSupport(t *testing.T) {
