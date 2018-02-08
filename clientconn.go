@@ -1129,15 +1129,6 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt)
 		if err != nil {
 			cancel()
-			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-				ac.mu.Lock()
-				if ac.state != connectivity.Shutdown {
-					ac.state = connectivity.TransientFailure
-					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-				}
-				ac.mu.Unlock()
-				return false, err
-			}
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				// ac.tearDown(...) has been invoked.
