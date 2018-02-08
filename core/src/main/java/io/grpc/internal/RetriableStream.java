@@ -679,14 +679,14 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     }
 
     @CheckReturnValue
-    @GuardedBy("lock")
+    // GuardedBy RetriableStream.lock
     State cancelled() {
       return new State(buffer, drainedSubstreams, winningSubstream, true, passThrough);
     }
 
     /** The given substream is drained. */
     @CheckReturnValue
-    @GuardedBy("lock")
+    // GuardedBy RetriableStream.lock
     State substreamDrained(Substream substream) {
       checkState(!passThrough, "Already passThrough");
 
@@ -710,7 +710,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
     /** The given substream is closed. */
     @CheckReturnValue
-    @GuardedBy("lock")
+    // GuardedBy RetriableStream.lock
     State substreamClosed(Substream substream) {
       substream.closed = true;
       if (this.drainedSubstreams.contains(substream)) {
@@ -723,7 +723,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     }
 
     @CheckReturnValue
-    @GuardedBy("lock")
+    // GuardedBy RetriableStream.lock
     State committed(Substream winningSubstream) {
       checkState(this.winningSubstream == null, "Already committed");
 
