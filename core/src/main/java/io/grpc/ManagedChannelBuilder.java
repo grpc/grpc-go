@@ -328,6 +328,40 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets max number of retry attempts. The total number of retry attempts for each RPC will not
+   * exceed this number even if service config may allow a higher number. Setting this number to
+   * zero is not effectively the same as {@code disableRetry()} because the former does not disable
+   * <a
+   * href="https://github.com/grpc/proposal/blob/master/A6-client-retries.md#transparent-retries">
+   * transparent retry</a>.
+   *
+   * <p>This method may not work as expected for the current release because retry is not fully
+   * implemented yet.
+   *
+   * @return this
+   * @since 1.11.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3982")
+  public T maxRetryAttempts(int maxRetryAttempts) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Sets max number of hedged attempts. The total number of hedged attempts for each RPC will not
+   * exceed this number even if service config may allow a higher number.
+   *
+   * <p>This method may not work as expected for the current release because retry is not fully
+   * implemented yet.
+   *
+   * @return this
+   * @since 1.11.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3982")
+  public T maxHedgedAttempts(int maxHedgedAttempts) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Sets the retry buffer size in bytes. If the buffer limit is exceeded, no RPC
    * could retry at the moment, and in hedging case all hedges but one of the same RPC will cancel.
    * The implementation may only estimate the buffer size being used rather than count the

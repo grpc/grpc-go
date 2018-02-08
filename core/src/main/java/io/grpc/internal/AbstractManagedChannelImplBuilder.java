@@ -127,6 +127,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
   long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
 
+  int maxRetryAttempts = 5;
+  int maxHedgedAttempts = 5;
   long retryBufferSize = DEFAULT_RETRY_BUFFER_SIZE_IN_BYTES;
   long perRpcBufferLimit = DEFAULT_PER_RPC_BUFFER_LIMIT_IN_BYTES;
   boolean retryDisabled = true; // TODO(zdapeng): default to false
@@ -288,6 +290,18 @@ public abstract class AbstractManagedChannelImplBuilder
     } else {
       this.idleTimeoutMillis = Math.max(unit.toMillis(value), IDLE_MODE_MIN_TIMEOUT_MILLIS);
     }
+    return thisT();
+  }
+
+  @Override
+  public final T maxRetryAttempts(int maxRetryAttempts) {
+    this.maxRetryAttempts = maxRetryAttempts;
+    return thisT();
+  }
+
+  @Override
+  public final T maxHedgedAttempts(int maxHedgedAttempts) {
+    this.maxHedgedAttempts = maxHedgedAttempts;
     return thisT();
   }
 

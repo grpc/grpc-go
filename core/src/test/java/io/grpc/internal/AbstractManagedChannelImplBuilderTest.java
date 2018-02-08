@@ -331,6 +331,24 @@ public class AbstractManagedChannelImplBuilderTest {
   }
 
   @Test
+  public void maxRetryAttempts() {
+    Builder builder = new Builder("target");
+    assertEquals(5, builder.maxRetryAttempts);
+
+    builder.maxRetryAttempts(3);
+    assertEquals(3, builder.maxRetryAttempts);
+  }
+
+  @Test
+  public void maxHedgedAttempts() {
+    Builder builder = new Builder("target");
+    assertEquals(5, builder.maxHedgedAttempts);
+
+    builder.maxHedgedAttempts(3);
+    assertEquals(3, builder.maxHedgedAttempts);
+  }
+
+  @Test
   public void retryBufferSize() {
     Builder builder = new Builder("target");
     assertEquals(1L << 24, builder.retryBufferSize);

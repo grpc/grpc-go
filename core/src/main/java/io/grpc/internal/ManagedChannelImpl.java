@@ -205,6 +205,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
 
+  private final int maxRetryAttempts;
+  private final int maxHedgedAttempts;
   private final long perRpcBufferLimit;
   private final long channelBufferLimit;
 
@@ -512,6 +514,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     this.userAgent = builder.userAgent;
     this.proxyDetector = proxyDetector;
 
+    this.maxRetryAttempts = builder.maxRetryAttempts;
+    this.maxHedgedAttempts = builder.maxHedgedAttempts;
     this.channelBufferLimit = builder.retryBufferSize;
     this.perRpcBufferLimit = builder.perRpcBufferLimit;
     this.retryEnabled = !builder.retryDisabled;
@@ -1090,6 +1094,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     }
   }
 
+  // TODO(zdapeng): take client provided maxAttempts into account.
   // TODO(zdapeng): implement it once the Gson dependency issue is resolved.
   // TODO(zdapeng): test retryEnabled = true/flase really works as expected.
   private static RetryPolicies getRetryPolicies(Attributes config) {
