@@ -73,6 +73,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private volatile ScheduledFuture<?> deadlineCancellationFuture;
   private final boolean unaryRequest;
   private final CallOptions callOptions;
+  private final boolean retryEnabled;
   private ClientStream stream;
   private volatile boolean cancelListenersShouldBeRemoved;
   private boolean cancelCalled;
@@ -88,7 +89,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       MethodDescriptor<ReqT, RespT> method, Executor executor, CallOptions callOptions,
       ClientTransportProvider clientTransportProvider,
       ScheduledExecutorService deadlineCancellationExecutor,
-      CallTracer channelCallsTracer) {
+      CallTracer channelCallsTracer,
+      boolean retryEnabled) {
     this.method = method;
     // If we know that the executor is a direct executor, we don't need to wrap it with a
     // SerializingExecutor. This is purely for performance reasons.
@@ -104,6 +106,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     this.callOptions = callOptions;
     this.clientTransportProvider = clientTransportProvider;
     this.deadlineCancellationExecutor = deadlineCancellationExecutor;
+    this.retryEnabled = retryEnabled;
   }
 
   private final class ContextCancellationListener implements CancellationListener {
@@ -232,7 +235,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     if (!deadlineExceeded) {
       updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
           context.getDeadline(), headers);
-      if (retryEnabled()) {
+      if (retryEnabled) {
         stream = clientTransportProvider.newRetriableStream(method, callOptions, headers, context);
       } else {
         ClientTransport transport = clientTransportProvider.get(
@@ -283,11 +286,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       // was cancelled.
       removeContextListenerAndCancelDeadlineFuture();
     }
-  }
-
-  // TODO: API plumbing to enable retry.
-  private boolean retryEnabled() {
-    return false;
   }
 
   /**

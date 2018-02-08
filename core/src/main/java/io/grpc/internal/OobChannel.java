@@ -181,7 +181,8 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
         callOptions.getExecutor() == null ? executor : callOptions.getExecutor(),
-        callOptions, transportProvider, deadlineCancellationExecutor, channelCallsTracer);
+        callOptions, transportProvider, deadlineCancellationExecutor, channelCallsTracer,
+        false /* retryEnabled */);
   }
 
   @Override

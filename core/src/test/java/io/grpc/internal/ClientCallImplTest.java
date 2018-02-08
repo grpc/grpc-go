@@ -151,7 +151,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -172,7 +173,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -208,7 +210,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -242,7 +245,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     call.start(callListener, new Metadata());
     verify(stream).start(listenerArgumentCaptor.capture());
     final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
@@ -275,7 +279,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -298,7 +303,8 @@ public class ClientCallImplTest {
         baseCallOptions.withAuthority("overridden-authority"),
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -314,7 +320,8 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
         .setDecompressorRegistry(decompressorRegistry);
     final Metadata metadata = new Metadata();
 
@@ -332,7 +339,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -501,7 +509,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     Context.ROOT.attach();
@@ -575,7 +584,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -604,7 +614,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
         .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
@@ -648,7 +659,8 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
     verify(transport, times(0))
@@ -671,7 +683,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     Metadata headers = new Metadata();
 
@@ -699,7 +712,8 @@ public class ClientCallImplTest {
         callOpts,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     Metadata headers = new Metadata();
 
@@ -727,7 +741,8 @@ public class ClientCallImplTest {
         callOpts,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     Metadata headers = new Metadata();
 
@@ -753,7 +768,8 @@ public class ClientCallImplTest {
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     call.start(callListener, new Metadata());
 
@@ -777,7 +793,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     call.start(callListener, new Metadata());
 
@@ -797,7 +814,8 @@ public class ClientCallImplTest {
         baseCallOptions.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     call.start(callListener, new Metadata());
     call.cancel("canceled", null);
 
@@ -821,7 +839,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
 
     Metadata headers = new Metadata();
 
@@ -838,7 +857,8 @@ public class ClientCallImplTest {
         baseCallOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer);
+        channelCallTracer,
+        false /* retryEnabled */);
     final Exception cause = new Exception();
     ClientCall.Listener<Void> callListener =
         new ClientCall.Listener<Void>() {
@@ -875,7 +895,8 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor,
-        channelCallTracer)
+        channelCallTracer,
+        false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
@@ -888,7 +909,7 @@ public class ClientCallImplTest {
   public void getAttributes() {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method, MoreExecutors.directExecutor(), baseCallOptions, provider,
-        deadlineCancellationExecutor, channelCallTracer);
+        deadlineCancellationExecutor, channelCallTracer, false /* retryEnabled */);
     Attributes attrs =
         Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
     when(stream.getAttributes()).thenReturn(attrs);

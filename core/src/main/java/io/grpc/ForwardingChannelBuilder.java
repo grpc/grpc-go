@@ -175,6 +175,18 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  @Override
+  public T disableRetry() {
+    delegate().disableRetry();
+    return thisT();
+  }
+
+  @Override
+  public T enableRetry() {
+    delegate().enableRetry();
+    return thisT();
+  }
+
   /**
    * Returns the {@link ManagedChannel} built by the delegate by default. Overriding method can
    * return different value.

@@ -210,7 +210,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
 
   private RetryPolicies retryPolicies;
   // Temporary false flag that can skip the retry code path.
-  private boolean retryEnabled;
+  private final boolean retryEnabled;
 
   // Called from channelExecutor
   private final ManagedClientTransport.Listener delayedTransportListener =
@@ -436,6 +436,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
         final CallOptions callOptions,
         final Metadata headers,
         final Context context) {
+      checkState(retryEnabled, "retry should be enabled");
       RetryPolicy retryPolicy = retryPolicies == null ? DEFAULT : retryPolicies.get(method);
       return new RetriableStream<ReqT>(
           method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
@@ -453,7 +454,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
 
         @Override
         ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata newHeaders) {
-          // TODO(zdapeng): only add tracer when retry is enabled.
           CallOptions newOptions = callOptions.withStreamTracerFactory(tracerFactory);
           ClientTransport transport =
               get(new PickSubchannelArgsImpl(method, newHeaders, newOptions));
@@ -514,6 +514,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
 
     this.channelBufferLimit = builder.retryBufferSize;
     this.perRpcBufferLimit = builder.perRpcBufferLimit;
+    this.retryEnabled = !builder.retryDisabled;
 
     phantom = new ManagedChannelReference(this);
     this.callTracerFactory = callTracerFactory;
@@ -673,7 +674,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
               callOptions,
               transportProvider,
               terminated ? null : transportFactory.getScheduledExecutorService(),
-          channelCallTracer)
+              channelCallTracer,
+              retryEnabled)
           .setFullStreamDecompression(fullStreamDecompression)
           .setDecompressorRegistry(decompressorRegistry)
           .setCompressorRegistry(compressorRegistry);
@@ -1089,6 +1091,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   }
 
   // TODO(zdapeng): implement it once the Gson dependency issue is resolved.
+  // TODO(zdapeng): test retryEnabled = true/flase really works as expected.
   private static RetryPolicies getRetryPolicies(Attributes config) {
     return new RetryPolicies() {
       @Override

@@ -129,6 +129,7 @@ public abstract class AbstractManagedChannelImplBuilder
 
   long retryBufferSize = DEFAULT_RETRY_BUFFER_SIZE_IN_BYTES;
   long perRpcBufferLimit = DEFAULT_PER_RPC_BUFFER_LIMIT_IN_BYTES;
+  boolean retryDisabled = true; // TODO(zdapeng): default to false
 
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
@@ -301,6 +302,18 @@ public abstract class AbstractManagedChannelImplBuilder
   public final T perRpcBufferLimit(long bytes) {
     checkArgument(bytes > 0L, "per RPC buffer limit must be positive");
     perRpcBufferLimit = bytes;
+    return thisT();
+  }
+
+  @Override
+  public final T disableRetry() {
+    retryDisabled = true;
+    return thisT();
+  }
+
+  @Override
+  public final T enableRetry() {
+    retryDisabled = false;
     return thisT();
   }
 

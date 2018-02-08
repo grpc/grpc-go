@@ -360,6 +360,23 @@ public class AbstractManagedChannelImplBuilderTest {
     builder.perRpcBufferLimit(0L);
   }
 
+  @Test
+  public void disableRetry() {
+    Builder builder = new Builder("target");
+
+    builder.enableRetry();
+    assertFalse(builder.retryDisabled);
+
+    builder.disableRetry();
+    assertTrue(builder.retryDisabled);
+
+    builder.enableRetry();
+    assertFalse(builder.retryDisabled);
+
+    builder.disableRetry();
+    assertTrue(builder.retryDisabled);
+  }
+
   static class Builder extends AbstractManagedChannelImplBuilder<Builder> {
     Builder(String target) {
       super(target);
