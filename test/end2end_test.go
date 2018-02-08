@@ -6075,6 +6075,7 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial(_) = %v, want %v", err, nil)
 	}
+	defer cc.Close()
 
 	tc := testpb.NewTestServiceClient(cc)
 	for i := 0; i < 1000; i++ {
