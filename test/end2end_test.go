@@ -6078,9 +6078,10 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 
 	tc := testpb.NewTestServiceClient(cc)
 	for i := 0; i < 1000; i++ {
-		// This loop runs for at most 1 second.
-		// The first several RPCs will fail with Unavailable because the connection hasn't started.
-		// When the first connection failed with creds error, the next RPC should also fail with the expected error.
+		// This loop runs for at most 1 second. The first several RPCs will fail
+		// with Unavailable because the connection hasn't started. When the
+		// first connection failed with creds error, the next RPC should also
+		// fail with the expected error.
 		if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
 			return
 		}
