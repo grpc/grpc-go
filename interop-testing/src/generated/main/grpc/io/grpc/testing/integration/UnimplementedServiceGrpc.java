@@ -34,7 +34,7 @@ public final class UnimplementedServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getUnimplementedCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethod();
+      com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod;
@@ -42,6 +42,11 @@ public final class UnimplementedServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod() {
+    return getUnimplementedCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
+      com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethodHelper() {
     io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod;
     if ((getUnimplementedCallMethod = UnimplementedServiceGrpc.getUnimplementedCallMethod) == null) {
       synchronized (UnimplementedServiceGrpc.class) {
@@ -102,13 +107,13 @@ public final class UnimplementedServiceGrpc {
      */
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnimplementedCallMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnimplementedCallMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getUnimplementedCallMethod(),
+            getUnimplementedCallMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 com.google.protobuf.EmptyProtos.Empty,
@@ -148,7 +153,7 @@ public final class UnimplementedServiceGrpc {
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -181,7 +186,7 @@ public final class UnimplementedServiceGrpc {
      */
     public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getUnimplementedCallMethod(), getCallOptions(), request);
+          getChannel(), getUnimplementedCallMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -215,7 +220,7 @@ public final class UnimplementedServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request);
+          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -303,7 +308,7 @@ public final class UnimplementedServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new UnimplementedServiceFileDescriptorSupplier())
-              .addMethod(getUnimplementedCallMethod())
+              .addMethod(getUnimplementedCallMethodHelper())
               .build();
         }
       }

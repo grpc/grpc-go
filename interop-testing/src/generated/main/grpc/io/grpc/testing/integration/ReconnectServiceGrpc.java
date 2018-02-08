@@ -33,7 +33,7 @@ public final class ReconnectServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStartMethod()} instead. 
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> METHOD_START = getStartMethod();
+      com.google.protobuf.EmptyProtos.Empty> METHOD_START = getStartMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> getStartMethod;
@@ -41,6 +41,11 @@ public final class ReconnectServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> getStartMethod() {
+    return getStartMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
+      com.google.protobuf.EmptyProtos.Empty> getStartMethodHelper() {
     io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty> getStartMethod;
     if ((getStartMethod = ReconnectServiceGrpc.getStartMethod) == null) {
       synchronized (ReconnectServiceGrpc.class) {
@@ -65,7 +70,7 @@ public final class ReconnectServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStopMethod()} instead. 
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP = getStopMethod();
+      io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP = getStopMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> getStopMethod;
@@ -73,6 +78,11 @@ public final class ReconnectServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> getStopMethod() {
+    return getStopMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
+      io.grpc.testing.integration.Messages.ReconnectInfo> getStopMethodHelper() {
     io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty, io.grpc.testing.integration.Messages.ReconnectInfo> getStopMethod;
     if ((getStopMethod = ReconnectServiceGrpc.getStopMethod) == null) {
       synchronized (ReconnectServiceGrpc.class) {
@@ -129,27 +139,27 @@ public final class ReconnectServiceGrpc {
      */
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(getStartMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getStartMethodHelper(), responseObserver);
     }
 
     /**
      */
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
-      asyncUnimplementedUnaryCall(getStopMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getStopMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getStartMethod(),
+            getStartMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 com.google.protobuf.EmptyProtos.Empty,
                 com.google.protobuf.EmptyProtos.Empty>(
                   this, METHODID_START)))
           .addMethod(
-            getStopMethod(),
+            getStopMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 com.google.protobuf.EmptyProtos.Empty,
@@ -185,7 +195,7 @@ public final class ReconnectServiceGrpc {
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getStartMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getStartMethodHelper(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -193,7 +203,7 @@ public final class ReconnectServiceGrpc {
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getStopMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getStopMethodHelper(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -222,14 +232,14 @@ public final class ReconnectServiceGrpc {
      */
     public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getStartMethod(), getCallOptions(), request);
+          getChannel(), getStartMethodHelper(), getCallOptions(), request);
     }
 
     /**
      */
     public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getStopMethod(), getCallOptions(), request);
+          getChannel(), getStopMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -259,7 +269,7 @@ public final class ReconnectServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> start(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getStartMethod(), getCallOptions()), request);
+          getChannel().newCall(getStartMethodHelper(), getCallOptions()), request);
     }
 
     /**
@@ -267,7 +277,7 @@ public final class ReconnectServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.ReconnectInfo> stop(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getStopMethod(), getCallOptions()), request);
+          getChannel().newCall(getStopMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -360,8 +370,8 @@ public final class ReconnectServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new ReconnectServiceFileDescriptorSupplier())
-              .addMethod(getStartMethod())
-              .addMethod(getStopMethod())
+              .addMethod(getStartMethodHelper())
+              .addMethod(getStopMethodHelper())
               .build();
         }
       }

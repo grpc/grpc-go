@@ -30,7 +30,7 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getUnaryCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
-      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_UNARY_CALL = getUnaryCallMethod();
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_UNARY_CALL = getUnaryCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getUnaryCallMethod;
@@ -38,6 +38,11 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getUnaryCallMethod() {
+    return getUnaryCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> getUnaryCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse> getUnaryCallMethod;
     if ((getUnaryCallMethod = BenchmarkServiceGrpc.getUnaryCallMethod) == null) {
       synchronized (BenchmarkServiceGrpc.class) {
@@ -62,7 +67,7 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
-      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_CALL = getStreamingCallMethod();
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_CALL = getStreamingCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingCallMethod;
@@ -70,6 +75,11 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingCallMethod() {
+    return getStreamingCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingCallMethod;
     if ((getStreamingCallMethod = BenchmarkServiceGrpc.getStreamingCallMethod) == null) {
       synchronized (BenchmarkServiceGrpc.class) {
@@ -94,7 +104,7 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingFromClientMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
-      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_FROM_CLIENT = getStreamingFromClientMethod();
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_FROM_CLIENT = getStreamingFromClientMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromClientMethod;
@@ -102,6 +112,11 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromClientMethod() {
+    return getStreamingFromClientMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromClientMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromClientMethod;
     if ((getStreamingFromClientMethod = BenchmarkServiceGrpc.getStreamingFromClientMethod) == null) {
       synchronized (BenchmarkServiceGrpc.class) {
@@ -126,7 +141,7 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingFromServerMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
-      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_FROM_SERVER = getStreamingFromServerMethod();
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_FROM_SERVER = getStreamingFromServerMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromServerMethod;
@@ -134,6 +149,11 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromServerMethod() {
+    return getStreamingFromServerMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromServerMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingFromServerMethod;
     if ((getStreamingFromServerMethod = BenchmarkServiceGrpc.getStreamingFromServerMethod) == null) {
       synchronized (BenchmarkServiceGrpc.class) {
@@ -158,7 +178,7 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingBothWaysMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
-      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_BOTH_WAYS = getStreamingBothWaysMethod();
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_BOTH_WAYS = getStreamingBothWaysMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingBothWaysMethod;
@@ -166,6 +186,11 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingBothWaysMethod() {
+    return getStreamingBothWaysMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
+      io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingBothWaysMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse> getStreamingBothWaysMethod;
     if ((getStreamingBothWaysMethod = BenchmarkServiceGrpc.getStreamingBothWaysMethod) == null) {
       synchronized (BenchmarkServiceGrpc.class) {
@@ -223,7 +248,7 @@ public final class BenchmarkServiceGrpc {
      */
     public void unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnaryCallMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnaryCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -235,7 +260,7 @@ public final class BenchmarkServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getStreamingCallMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getStreamingCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -246,7 +271,7 @@ public final class BenchmarkServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingFromClient(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getStreamingFromClientMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getStreamingFromClientMethodHelper(), responseObserver);
     }
 
     /**
@@ -257,7 +282,7 @@ public final class BenchmarkServiceGrpc {
      */
     public void streamingFromServer(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getStreamingFromServerMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getStreamingFromServerMethodHelper(), responseObserver);
     }
 
     /**
@@ -268,41 +293,41 @@ public final class BenchmarkServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingBothWays(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getStreamingBothWaysMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getStreamingBothWaysMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getUnaryCallMethod(),
+            getUnaryCallMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Messages.SimpleRequest,
                 io.grpc.benchmarks.proto.Messages.SimpleResponse>(
                   this, METHODID_UNARY_CALL)))
           .addMethod(
-            getStreamingCallMethod(),
+            getStreamingCallMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Messages.SimpleRequest,
                 io.grpc.benchmarks.proto.Messages.SimpleResponse>(
                   this, METHODID_STREAMING_CALL)))
           .addMethod(
-            getStreamingFromClientMethod(),
+            getStreamingFromClientMethodHelper(),
             asyncClientStreamingCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Messages.SimpleRequest,
                 io.grpc.benchmarks.proto.Messages.SimpleResponse>(
                   this, METHODID_STREAMING_FROM_CLIENT)))
           .addMethod(
-            getStreamingFromServerMethod(),
+            getStreamingFromServerMethodHelper(),
             asyncServerStreamingCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Messages.SimpleRequest,
                 io.grpc.benchmarks.proto.Messages.SimpleResponse>(
                   this, METHODID_STREAMING_FROM_SERVER)))
           .addMethod(
-            getStreamingBothWaysMethod(),
+            getStreamingBothWaysMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Messages.SimpleRequest,
@@ -339,7 +364,7 @@ public final class BenchmarkServiceGrpc {
     public void unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -352,7 +377,7 @@ public final class BenchmarkServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getStreamingCallMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getStreamingCallMethodHelper(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -364,7 +389,7 @@ public final class BenchmarkServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingFromClient(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
       return asyncClientStreamingCall(
-          getChannel().newCall(getStreamingFromClientMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getStreamingFromClientMethodHelper(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -376,7 +401,7 @@ public final class BenchmarkServiceGrpc {
     public void streamingFromServer(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
       asyncServerStreamingCall(
-          getChannel().newCall(getStreamingFromServerMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getStreamingFromServerMethodHelper(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -388,7 +413,7 @@ public final class BenchmarkServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingBothWays(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getStreamingBothWaysMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getStreamingBothWaysMethodHelper(), getCallOptions()), responseObserver);
     }
   }
 
@@ -418,7 +443,7 @@ public final class BenchmarkServiceGrpc {
      */
     public io.grpc.benchmarks.proto.Messages.SimpleResponse unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel(), getUnaryCallMethod(), getCallOptions(), request);
+          getChannel(), getUnaryCallMethodHelper(), getCallOptions(), request);
     }
 
     /**
@@ -430,7 +455,7 @@ public final class BenchmarkServiceGrpc {
     public java.util.Iterator<io.grpc.benchmarks.proto.Messages.SimpleResponse> streamingFromServer(
         io.grpc.benchmarks.proto.Messages.SimpleRequest request) {
       return blockingServerStreamingCall(
-          getChannel(), getStreamingFromServerMethod(), getCallOptions(), request);
+          getChannel(), getStreamingFromServerMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -461,7 +486,7 @@ public final class BenchmarkServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Messages.SimpleResponse> unaryCall(
         io.grpc.benchmarks.proto.Messages.SimpleRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request);
+          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -566,11 +591,11 @@ public final class BenchmarkServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new BenchmarkServiceFileDescriptorSupplier())
-              .addMethod(getUnaryCallMethod())
-              .addMethod(getStreamingCallMethod())
-              .addMethod(getStreamingFromClientMethod())
-              .addMethod(getStreamingFromServerMethod())
-              .addMethod(getStreamingBothWaysMethod())
+              .addMethod(getUnaryCallMethodHelper())
+              .addMethod(getStreamingCallMethodHelper())
+              .addMethod(getStreamingFromClientMethodHelper())
+              .addMethod(getStreamingFromServerMethodHelper())
+              .addMethod(getStreamingBothWaysMethodHelper())
               .build();
         }
       }

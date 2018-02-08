@@ -30,7 +30,7 @@ public final class LoadBalancerGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getBalanceLoadMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
-      io.grpc.grpclb.LoadBalanceResponse> METHOD_BALANCE_LOAD = getBalanceLoadMethod();
+      io.grpc.grpclb.LoadBalanceResponse> METHOD_BALANCE_LOAD = getBalanceLoadMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
       io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod;
@@ -38,6 +38,11 @@ public final class LoadBalancerGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
       io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod() {
+    return getBalanceLoadMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
+      io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest, io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod;
     if ((getBalanceLoadMethod = LoadBalancerGrpc.getBalanceLoadMethod) == null) {
       synchronized (LoadBalancerGrpc.class) {
@@ -94,13 +99,13 @@ public final class LoadBalancerGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getBalanceLoadMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getBalanceLoadMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getBalanceLoadMethod(),
+            getBalanceLoadMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.grpclb.LoadBalanceRequest,
@@ -136,7 +141,7 @@ public final class LoadBalancerGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getBalanceLoadMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getBalanceLoadMethodHelper(), getCallOptions()), responseObserver);
     }
   }
 
@@ -261,7 +266,7 @@ public final class LoadBalancerGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new LoadBalancerFileDescriptorSupplier())
-              .addMethod(getBalanceLoadMethod())
+              .addMethod(getBalanceLoadMethodHelper())
               .build();
         }
       }

@@ -30,7 +30,7 @@ public final class ReportQpsScenarioServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getReportScenarioMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
-      io.grpc.benchmarks.proto.Control.Void> METHOD_REPORT_SCENARIO = getReportScenarioMethod();
+      io.grpc.benchmarks.proto.Control.Void> METHOD_REPORT_SCENARIO = getReportScenarioMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
       io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod;
@@ -38,6 +38,11 @@ public final class ReportQpsScenarioServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
       io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod() {
+    return getReportScenarioMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
+      io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult, io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod;
     if ((getReportScenarioMethod = ReportQpsScenarioServiceGrpc.getReportScenarioMethod) == null) {
       synchronized (ReportQpsScenarioServiceGrpc.class) {
@@ -94,13 +99,13 @@ public final class ReportQpsScenarioServiceGrpc {
      */
     public void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver) {
-      asyncUnimplementedUnaryCall(getReportScenarioMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getReportScenarioMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getReportScenarioMethod(),
+            getReportScenarioMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.benchmarks.proto.Control.ScenarioResult,
@@ -136,7 +141,7 @@ public final class ReportQpsScenarioServiceGrpc {
     public void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getReportScenarioMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getReportScenarioMethodHelper(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -165,7 +170,7 @@ public final class ReportQpsScenarioServiceGrpc {
      */
     public io.grpc.benchmarks.proto.Control.Void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request) {
       return blockingUnaryCall(
-          getChannel(), getReportScenarioMethod(), getCallOptions(), request);
+          getChannel(), getReportScenarioMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -195,7 +200,7 @@ public final class ReportQpsScenarioServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Control.Void> reportScenario(
         io.grpc.benchmarks.proto.Control.ScenarioResult request) {
       return futureUnaryCall(
-          getChannel().newCall(getReportScenarioMethod(), getCallOptions()), request);
+          getChannel().newCall(getReportScenarioMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -283,7 +288,7 @@ public final class ReportQpsScenarioServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new ReportQpsScenarioServiceFileDescriptorSupplier())
-              .addMethod(getReportScenarioMethod())
+              .addMethod(getReportScenarioMethodHelper())
               .build();
         }
       }

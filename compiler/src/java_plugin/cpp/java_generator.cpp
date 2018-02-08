@@ -78,6 +78,10 @@ static inline string MethodPropertiesGetterName(const MethodDescriptor* method) 
   return MixedLower("get_" + method->name() + "_method");
 }
 
+static inline string MethodPropertiesGetterHelperName(const MethodDescriptor* method) {
+  return MixedLower("get_" + method->name() + "_method_helper");
+}
+
 static inline string MethodIdFieldName(const MethodDescriptor* method) {
   return "METHODID_" + ToAllUpperCase(method->name());
 }
@@ -319,6 +323,7 @@ static void PrintMethodFields(
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
     (*vars)["method_new_field_name"] = MethodPropertiesGetterName(method);
     (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
+    (*vars)["method_method_name_helper"] = MethodPropertiesGetterHelperName(method);
     bool client_streaming = method->client_streaming();
     bool server_streaming = method->server_streaming();
     if (client_streaming) {
@@ -346,7 +351,7 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "@$Deprecated$ // Use {@link #$method_method_name$()} instead. \n"
           "public static final $MethodDescriptor$<$input_type$,\n"
-          "    $output_type$> $method_field_name$ = $method_method_name$();\n"
+          "    $output_type$> $method_field_name$ = $method_method_name_helper$();\n"
           "\n"
           "private static volatile $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_new_field_name$;\n"
@@ -354,6 +359,11 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_method_name$() {\n"
+          "  return $method_method_name_helper$();\n"
+          "}\n"
+          "\n"
+          "private static $MethodDescriptor$<$input_type$,\n"
+          "    $output_type$> $method_method_name_helper$() {\n"
           "  $MethodDescriptor$<$input_type$, $output_type$> $method_new_field_name$;\n"
           "  if (($method_new_field_name$ = $service_class_name$.$method_new_field_name$) == null) {\n"
           "    synchronized ($service_class_name$.class) {\n"
@@ -385,7 +395,7 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "@$Deprecated$ // Use {@link #$method_method_name$()} instead. \n"
           "public static final $MethodDescriptor$<$input_type$,\n"
-          "    $output_type$> $method_field_name$ = $method_method_name$();\n"
+          "    $output_type$> $method_field_name$ = $method_method_name_helper$();\n"
           "\n"
           "private static volatile $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_new_field_name$;\n"
@@ -393,6 +403,11 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_method_name$() {\n"
+          "  return $method_method_name_helper$();\n"
+          "}\n"
+          "\n"
+          "private static $MethodDescriptor$<$input_type$,\n"
+          "    $output_type$> $method_method_name_helper$() {\n"
           "  $MethodDescriptor$<$input_type$, $output_type$> $method_new_field_name$;\n"
           "  if (($method_new_field_name$ = $service_class_name$.$method_new_field_name$) == null) {\n"
           "    synchronized ($service_class_name$.class) {\n"
@@ -597,7 +612,7 @@ static void PrintStub(
     (*vars)["output_type"] = MessageFullJavaName(generate_nano,
                                                  method->output_type());
     (*vars)["lower_method_name"] = LowerMethodName(method);
-    (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
+    (*vars)["method_method_name_helper"] = MethodPropertiesGetterHelperName(method);
     bool client_streaming = method->client_streaming();
     bool server_streaming = method->server_streaming();
 
@@ -677,11 +692,11 @@ static void PrintStub(
           if (client_streaming) {
             p->Print(
                 *vars,
-                "return asyncUnimplementedStreamingCall($method_method_name$(), responseObserver);\n");
+                "return asyncUnimplementedStreamingCall($method_method_name_helper$(), responseObserver);\n");
           } else {
             p->Print(
                 *vars,
-                "asyncUnimplementedUnaryCall($method_method_name$(), responseObserver);\n");
+                "asyncUnimplementedUnaryCall($method_method_name_helper$(), responseObserver);\n");
           }
           break;
         default:
@@ -702,7 +717,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    getChannel(), $method_method_name$(), getCallOptions(), $params$);\n");
+              "    getChannel(), $method_method_name_helper$(), getCallOptions(), $params$);\n");
           break;
         case ASYNC_CALL:
           if (server_streaming) {
@@ -726,7 +741,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "$last_line_prefix$$calls_method$(\n"
-              "    getChannel().newCall($method_method_name$(), getCallOptions()), $params$);\n");
+              "    getChannel().newCall($method_method_name_helper$(), getCallOptions()), $params$);\n");
           break;
         case FUTURE_CALL:
           GRPC_CODEGEN_CHECK(!client_streaming && !server_streaming)
@@ -737,7 +752,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    getChannel().newCall($method_method_name$(), getCallOptions()), request);\n");
+              "    getChannel().newCall($method_method_name_helper$(), getCallOptions()), request);\n");
           break;
       }
     }
@@ -961,8 +976,8 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   }
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
-    (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
-    p->Print(*vars, "\n.addMethod($method_method_name$())");
+    (*vars)["method_method_name_helper"] = MethodPropertiesGetterHelperName(method);
+    p->Print(*vars, "\n.addMethod($method_method_name_helper$())");
   }
   p->Print("\n.build();\n");
   p->Outdent();
@@ -993,7 +1008,7 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["lower_method_name"] = LowerMethodName(method);
-    (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
+    (*vars)["method_method_name_helper"] = MethodPropertiesGetterHelperName(method);
     (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
     (*vars)["output_type"] = MessageFullJavaName(generate_nano,
@@ -1018,7 +1033,7 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
     p->Indent();
     p->Print(
         *vars,
-        "$method_method_name$(),\n"
+        "$method_method_name_helper$(),\n"
         "$calls_method$(\n");
     p->Indent();
     p->Print(

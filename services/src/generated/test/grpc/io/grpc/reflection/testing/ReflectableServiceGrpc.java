@@ -30,7 +30,7 @@ public final class ReflectableServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getMethodMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request,
-      io.grpc.reflection.testing.Reply> METHOD_METHOD = getMethodMethod();
+      io.grpc.reflection.testing.Reply> METHOD_METHOD = getMethodMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request,
       io.grpc.reflection.testing.Reply> getMethodMethod;
@@ -38,6 +38,11 @@ public final class ReflectableServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request,
       io.grpc.reflection.testing.Reply> getMethodMethod() {
+    return getMethodMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request,
+      io.grpc.reflection.testing.Reply> getMethodMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request, io.grpc.reflection.testing.Reply> getMethodMethod;
     if ((getMethodMethod = ReflectableServiceGrpc.getMethodMethod) == null) {
       synchronized (ReflectableServiceGrpc.class) {
@@ -91,13 +96,13 @@ public final class ReflectableServiceGrpc {
      */
     public void method(io.grpc.reflection.testing.Request request,
         io.grpc.stub.StreamObserver<io.grpc.reflection.testing.Reply> responseObserver) {
-      asyncUnimplementedUnaryCall(getMethodMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getMethodMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getMethodMethod(),
+            getMethodMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.reflection.testing.Request,
@@ -130,7 +135,7 @@ public final class ReflectableServiceGrpc {
     public void method(io.grpc.reflection.testing.Request request,
         io.grpc.stub.StreamObserver<io.grpc.reflection.testing.Reply> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getMethodMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getMethodMethodHelper(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -156,7 +161,7 @@ public final class ReflectableServiceGrpc {
      */
     public io.grpc.reflection.testing.Reply method(io.grpc.reflection.testing.Request request) {
       return blockingUnaryCall(
-          getChannel(), getMethodMethod(), getCallOptions(), request);
+          getChannel(), getMethodMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -183,7 +188,7 @@ public final class ReflectableServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.reflection.testing.Reply> method(
         io.grpc.reflection.testing.Request request) {
       return futureUnaryCall(
-          getChannel().newCall(getMethodMethod(), getCallOptions()), request);
+          getChannel().newCall(getMethodMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -271,7 +276,7 @@ public final class ReflectableServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new ReflectableServiceFileDescriptorSupplier())
-              .addMethod(getMethodMethod())
+              .addMethod(getMethodMethodHelper())
               .build();
         }
       }

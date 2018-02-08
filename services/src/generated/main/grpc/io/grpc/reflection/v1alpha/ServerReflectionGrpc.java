@@ -30,7 +30,7 @@ public final class ServerReflectionGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getServerReflectionInfoMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest,
-      io.grpc.reflection.v1alpha.ServerReflectionResponse> METHOD_SERVER_REFLECTION_INFO = getServerReflectionInfoMethod();
+      io.grpc.reflection.v1alpha.ServerReflectionResponse> METHOD_SERVER_REFLECTION_INFO = getServerReflectionInfoMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest,
       io.grpc.reflection.v1alpha.ServerReflectionResponse> getServerReflectionInfoMethod;
@@ -38,6 +38,11 @@ public final class ServerReflectionGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest,
       io.grpc.reflection.v1alpha.ServerReflectionResponse> getServerReflectionInfoMethod() {
+    return getServerReflectionInfoMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest,
+      io.grpc.reflection.v1alpha.ServerReflectionResponse> getServerReflectionInfoMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest, io.grpc.reflection.v1alpha.ServerReflectionResponse> getServerReflectionInfoMethod;
     if ((getServerReflectionInfoMethod = ServerReflectionGrpc.getServerReflectionInfoMethod) == null) {
       synchronized (ServerReflectionGrpc.class) {
@@ -95,13 +100,13 @@ public final class ServerReflectionGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionRequest> serverReflectionInfo(
         io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getServerReflectionInfoMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getServerReflectionInfoMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getServerReflectionInfoMethod(),
+            getServerReflectionInfoMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.reflection.v1alpha.ServerReflectionRequest,
@@ -138,7 +143,7 @@ public final class ServerReflectionGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionRequest> serverReflectionInfo(
         io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getServerReflectionInfoMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getServerReflectionInfoMethodHelper(), getCallOptions()), responseObserver);
     }
   }
 
@@ -263,7 +268,7 @@ public final class ServerReflectionGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new ServerReflectionFileDescriptorSupplier())
-              .addMethod(getServerReflectionInfoMethod())
+              .addMethod(getServerReflectionInfoMethodHelper())
               .build();
         }
       }

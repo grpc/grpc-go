@@ -37,7 +37,7 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getUnaryCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
-      io.grpc.testing.integration.nano.Test.SimpleResponse> METHOD_UNARY_CALL = getUnaryCallMethod();
+      io.grpc.testing.integration.nano.Test.SimpleResponse> METHOD_UNARY_CALL = getUnaryCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
       io.grpc.testing.integration.nano.Test.SimpleResponse> getUnaryCallMethod;
@@ -45,6 +45,11 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
       io.grpc.testing.integration.nano.Test.SimpleResponse> getUnaryCallMethod() {
+    return getUnaryCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
+      io.grpc.testing.integration.nano.Test.SimpleResponse> getUnaryCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest, io.grpc.testing.integration.nano.Test.SimpleResponse> getUnaryCallMethod;
     if ((getUnaryCallMethod = TestServiceGrpc.getUnaryCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -70,7 +75,7 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingOutputCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL = getStreamingOutputCallMethod();
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL = getStreamingOutputCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod;
@@ -78,6 +83,11 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod() {
+    return getStreamingOutputCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getStreamingOutputCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest, io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod;
     if ((getStreamingOutputCallMethod = TestServiceGrpc.getStreamingOutputCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -103,7 +113,7 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getStreamingInputCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
-      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL = getStreamingInputCallMethod();
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL = getStreamingInputCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getStreamingInputCallMethod;
@@ -111,6 +121,11 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getStreamingInputCallMethod() {
+    return getStreamingInputCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getStreamingInputCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest, io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getStreamingInputCallMethod;
     if ((getStreamingInputCallMethod = TestServiceGrpc.getStreamingInputCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -136,7 +151,7 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getFullBidiCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL = getFullBidiCallMethod();
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL = getFullBidiCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getFullBidiCallMethod;
@@ -144,6 +159,11 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getFullBidiCallMethod() {
+    return getFullBidiCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getFullBidiCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest, io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getFullBidiCallMethod;
     if ((getFullBidiCallMethod = TestServiceGrpc.getFullBidiCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -169,7 +189,7 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getHalfBidiCallMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL = getHalfBidiCallMethod();
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL = getHalfBidiCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getHalfBidiCallMethod;
@@ -177,6 +197,11 @@ public final class TestServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getHalfBidiCallMethod() {
+    return getHalfBidiCallMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getHalfBidiCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest, io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> getHalfBidiCallMethod;
     if ((getHalfBidiCallMethod = TestServiceGrpc.getHalfBidiCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -287,7 +312,7 @@ public final class TestServiceGrpc {
      */
     public void unaryCall(io.grpc.testing.integration.nano.Test.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnaryCallMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnaryCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -298,7 +323,7 @@ public final class TestServiceGrpc {
      */
     public void streamingOutputCall(io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getStreamingOutputCallMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getStreamingOutputCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -309,7 +334,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getStreamingInputCallMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getStreamingInputCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -321,7 +346,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> fullBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getFullBidiCallMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getFullBidiCallMethodHelper(), responseObserver);
     }
 
     /**
@@ -334,41 +359,41 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getHalfBidiCallMethod(), responseObserver);
+      return asyncUnimplementedStreamingCall(getHalfBidiCallMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getUnaryCallMethod(),
+            getUnaryCallMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.nano.Test.SimpleRequest,
                 io.grpc.testing.integration.nano.Test.SimpleResponse>(
                   this, METHODID_UNARY_CALL)))
           .addMethod(
-            getStreamingOutputCallMethod(),
+            getStreamingOutputCallMethodHelper(),
             asyncServerStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(
                   this, METHODID_STREAMING_OUTPUT_CALL)))
           .addMethod(
-            getStreamingInputCallMethod(),
+            getStreamingInputCallMethodHelper(),
             asyncClientStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
                 io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>(
                   this, METHODID_STREAMING_INPUT_CALL)))
           .addMethod(
-            getFullBidiCallMethod(),
+            getFullBidiCallMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(
                   this, METHODID_FULL_BIDI_CALL)))
           .addMethod(
-            getHalfBidiCallMethod(),
+            getHalfBidiCallMethodHelper(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
@@ -408,7 +433,7 @@ public final class TestServiceGrpc {
     public void unaryCall(io.grpc.testing.integration.nano.Test.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -420,7 +445,7 @@ public final class TestServiceGrpc {
     public void streamingOutputCall(io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
       asyncServerStreamingCall(
-          getChannel().newCall(getStreamingOutputCallMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getStreamingOutputCallMethodHelper(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -432,7 +457,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
       return asyncClientStreamingCall(
-          getChannel().newCall(getStreamingInputCallMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getStreamingInputCallMethodHelper(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -445,7 +470,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> fullBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getFullBidiCallMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getFullBidiCallMethodHelper(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -459,7 +484,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getHalfBidiCallMethod(), getCallOptions()), responseObserver);
+          getChannel().newCall(getHalfBidiCallMethodHelper(), getCallOptions()), responseObserver);
     }
   }
 
@@ -492,7 +517,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.testing.integration.nano.Test.SimpleResponse unaryCall(io.grpc.testing.integration.nano.Test.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel(), getUnaryCallMethod(), getCallOptions(), request);
+          getChannel(), getUnaryCallMethodHelper(), getCallOptions(), request);
     }
 
     /**
@@ -504,7 +529,7 @@ public final class TestServiceGrpc {
     public java.util.Iterator<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> streamingOutputCall(
         io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request) {
       return blockingServerStreamingCall(
-          getChannel(), getStreamingOutputCallMethod(), getCallOptions(), request);
+          getChannel(), getStreamingOutputCallMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -538,7 +563,7 @@ public final class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.nano.Test.SimpleResponse> unaryCall(
         io.grpc.testing.integration.nano.Test.SimpleRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request);
+          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -607,11 +632,11 @@ public final class TestServiceGrpc {
         result = serviceDescriptor;
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
-              .addMethod(getUnaryCallMethod())
-              .addMethod(getStreamingOutputCallMethod())
-              .addMethod(getStreamingInputCallMethod())
-              .addMethod(getFullBidiCallMethod())
-              .addMethod(getHalfBidiCallMethod())
+              .addMethod(getUnaryCallMethodHelper())
+              .addMethod(getStreamingOutputCallMethodHelper())
+              .addMethod(getStreamingInputCallMethodHelper())
+              .addMethod(getFullBidiCallMethodHelper())
+              .addMethod(getHalfBidiCallMethodHelper())
               .build();
         }
       }

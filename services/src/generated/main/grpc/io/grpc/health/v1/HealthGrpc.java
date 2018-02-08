@@ -30,7 +30,7 @@ public final class HealthGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getCheckMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
-      io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK = getCheckMethod();
+      io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK = getCheckMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
       io.grpc.health.v1.HealthCheckResponse> getCheckMethod;
@@ -38,6 +38,11 @@ public final class HealthGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
       io.grpc.health.v1.HealthCheckResponse> getCheckMethod() {
+    return getCheckMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
+      io.grpc.health.v1.HealthCheckResponse> getCheckMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest, io.grpc.health.v1.HealthCheckResponse> getCheckMethod;
     if ((getCheckMethod = HealthGrpc.getCheckMethod) == null) {
       synchronized (HealthGrpc.class) {
@@ -91,13 +96,13 @@ public final class HealthGrpc {
      */
     public void check(io.grpc.health.v1.HealthCheckRequest request,
         io.grpc.stub.StreamObserver<io.grpc.health.v1.HealthCheckResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getCheckMethod(), responseObserver);
+      asyncUnimplementedUnaryCall(getCheckMethodHelper(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getCheckMethod(),
+            getCheckMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.health.v1.HealthCheckRequest,
@@ -130,7 +135,7 @@ public final class HealthGrpc {
     public void check(io.grpc.health.v1.HealthCheckRequest request,
         io.grpc.stub.StreamObserver<io.grpc.health.v1.HealthCheckResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getCheckMethod(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getCheckMethodHelper(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -156,7 +161,7 @@ public final class HealthGrpc {
      */
     public io.grpc.health.v1.HealthCheckResponse check(io.grpc.health.v1.HealthCheckRequest request) {
       return blockingUnaryCall(
-          getChannel(), getCheckMethod(), getCallOptions(), request);
+          getChannel(), getCheckMethodHelper(), getCallOptions(), request);
     }
   }
 
@@ -183,7 +188,7 @@ public final class HealthGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.health.v1.HealthCheckResponse> check(
         io.grpc.health.v1.HealthCheckRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(getCheckMethod(), getCallOptions()), request);
+          getChannel().newCall(getCheckMethodHelper(), getCallOptions()), request);
     }
   }
 
@@ -271,7 +276,7 @@ public final class HealthGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new HealthFileDescriptorSupplier())
-              .addMethod(getCheckMethod())
+              .addMethod(getCheckMethodHelper())
               .build();
         }
       }
