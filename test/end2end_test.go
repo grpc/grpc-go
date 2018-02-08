@@ -1164,9 +1164,19 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
-	if err := stream.Send(req); err != nil && err != io.EOF {
-		// Send should never return a transport-level error.
-		t.Fatalf("stream.Send(%v) = %v; want <nil or io.EOF>", req, err)
+	sendStart := time.Now()
+	for {
+		if err := stream.Send(req); err == io.EOF {
+			// stream.Send should eventually send io.EOF
+			break
+		} else if err != nil {
+			// Send should never return a transport-level error.
+			t.Fatalf("stream.Send(%v) = %v; want <nil or io.EOF>", req, err)
+		}
+		if time.Since(sendStart) > 2*time.Second {
+			t.Fatalf("stream.Send(_) did not return io.EOF after 2s")
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if _, err := stream.Recv(); err == nil || err == io.EOF {
 		t.Fatalf("%v.Recv() = _, %v, want _, <non-nil, non-EOF>", stream, err)
@@ -3798,6 +3808,7 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	if _, err := tc.StreamingInputCall(ctx); err != nil {
 		t.Fatalf("tc.StreamingInputCall(_) = _, %v, want _, <nil>", err)
 	}
@@ -3844,10 +3855,10 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 	cancel()
 	// A new stream should be allowed after canceling the first one.
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	if _, err := tc.StreamingInputCall(ctx); err != nil {
 		t.Fatalf("tc.StreamingInputCall(_) = _, %v, want _, %v", err, nil)
 	}
-	cancel()
 }
 
 func TestCompressServerHasNoSupport(t *testing.T) {
