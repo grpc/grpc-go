@@ -355,7 +355,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         || t instanceof Http2ChannelClosedException) {
       Status shutdownStatus = lifecycleManager.getShutdownStatus();
       if (shutdownStatus == null) {
-        return Status.UNKNOWN.withDescription("Channel closed but for unknown reason");
+        return Status.UNKNOWN.withDescription("Channel closed but for unknown reason")
+            .withCause(new ClosedChannelException().initCause(t));
       }
       return shutdownStatus;
     }
