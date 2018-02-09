@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -42,13 +43,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.common.truth.Truth;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.ClientInterceptor;
 import io.grpc.Compressor;
 import io.grpc.Context;
+import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
+import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
@@ -74,6 +77,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -443,15 +447,23 @@ public class ServerImplTest {
   @Test
   public void basicExchangeSuccessful() throws Exception {
     createAndStartServer();
+    basicExchangeHelper(METHOD, "Lots of pizza, please", 314, 50);
+  }
+
+  private void basicExchangeHelper(
+      MethodDescriptor<String, Integer> method,
+      String request,
+      int firstResponse,
+      Integer extraResponse) throws Exception {
     final Metadata.Key<String> metadataKey
         = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
     final AtomicReference<ServerCall<String, Integer>> callReference
         = new AtomicReference<ServerCall<String, Integer>>();
     final AtomicReference<Context> callContextReference = new AtomicReference<Context>();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", METHOD))
+        new ServiceDescriptor("Waiter", method))
         .addMethod(
-            METHOD,
+            method,
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -497,10 +509,9 @@ public class ServerImplTest {
     assertNotNull(callContext);
     assertEquals("context added by tracer", SERVER_TRACER_ADDED_KEY.get(callContext));
 
-    String order = "Lots of pizza, please";
-    streamListener.messagesAvailable(new SingleMessageProducer(STRING_MARSHALLER.stream(order)));
+    streamListener.messagesAvailable(new SingleMessageProducer(STRING_MARSHALLER.stream(request)));
     assertEquals(1, executor.runDueTasks());
-    verify(callListener).onMessage(order);
+    verify(callListener).onMessage(request);
 
     Metadata responseHeaders = new Metadata();
     responseHeaders.put(metadataKey, "response value");
@@ -508,20 +519,23 @@ public class ServerImplTest {
     verify(stream).writeHeaders(responseHeaders);
     verify(stream).setCompressor(isA(Compressor.class));
 
-    call.sendMessage(314);
+    call.sendMessage(firstResponse);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
     verify(stream).writeMessage(inputCaptor.capture());
     verify(stream).flush();
-    assertEquals(314, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
+    assertEquals(firstResponse, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
 
     streamListener.halfClosed(); // All full; no dessert.
     assertEquals(1, executor.runDueTasks());
     verify(callListener).onHalfClose();
 
-    call.sendMessage(50);
-    verify(stream, times(2)).writeMessage(inputCaptor.capture());
-    verify(stream, times(2)).flush();
-    assertEquals(50, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
+    if (extraResponse != null) {
+      call.sendMessage(extraResponse);
+      verify(stream, times(2)).writeMessage(inputCaptor.capture());
+      verify(stream, times(2)).flush();
+      assertEquals(
+          (int) extraResponse, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
+    }
 
     Metadata trailers = new Metadata();
     trailers.put(metadataKey, "another value");
@@ -1019,7 +1033,7 @@ public class ServerImplTest {
     };
     createAndStartServer();
 
-    Truth.assertThat(server.getPort()).isEqualTo(65535);
+    assertThat(server.getPort()).isEqualTo(65535);
   }
 
   @Test
@@ -1214,6 +1228,139 @@ public class ServerImplTest {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
+  }
+
+  @Test
+  public void binaryLogInterceptor_eventOrdering() throws Exception {
+    // Ensure binlog interceptor is the first to see incoming events, last to see outgoing events
+    final List<ServerInterceptor> recvInitialMetadata = new ArrayList<ServerInterceptor>();
+    final List<ServerInterceptor> sendInitialMetadata = new ArrayList<ServerInterceptor>();
+    final List<ServerInterceptor> recvReq = new ArrayList<ServerInterceptor>();
+    final List<ServerInterceptor> sendResp = new ArrayList<ServerInterceptor>();
+    final List<ServerInterceptor> sendTrailingMetadata = new ArrayList<ServerInterceptor>();
+    final class TracingServerInterceptor implements ServerInterceptor {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          final ServerCall<ReqT, RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        final ServerInterceptor marker = this;
+        recvInitialMetadata.add(marker);
+        ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendMessage(RespT message) {
+            sendResp.add(marker);
+            super.sendMessage(message);
+          }
+
+          @Override
+          public void sendHeaders(Metadata headers) {
+            sendInitialMetadata.add(marker);
+            super.sendHeaders(headers);
+          }
+
+          @Override
+          public void close(Status status, Metadata trailers) {
+            sendTrailingMetadata.add(marker);
+            super.close(status, trailers);
+          }
+        };
+        return new SimpleForwardingServerCallListener<ReqT>(next.startCall(wCall, headers)) {
+          @Override
+          public void onMessage(ReqT message) {
+            recvReq.add(marker);
+            super.onMessage(message);
+          }
+        };
+      }
+    }
+
+    TracingServerInterceptor userInterceptor = new TracingServerInterceptor();
+    final TracingServerInterceptor binlogInterceptor = new TracingServerInterceptor();
+    builder.intercept(userInterceptor);
+    builder.binlogProvider = new BinaryLogProvider() {
+      @Override
+      public ServerInterceptor getServerInterceptor(String fullMethodName) {
+        return binlogInterceptor;
+      }
+
+      @Nullable
+      @Override
+      public ClientInterceptor getClientInterceptor(String fullMethodName) {
+        return null;
+      }
+
+      @Override
+      protected int priority() {
+        return 0;
+      }
+    };
+    createAndStartServer();
+
+    // Begin: basic exchange
+    String request = "Lots of pizza, please";
+    int response = 314;
+    basicExchangeHelper(METHOD, request, response, null);
+    // End: basic exchange
+
+    assertThat(recvInitialMetadata).containsExactly(binlogInterceptor, userInterceptor).inOrder();
+    assertThat(sendInitialMetadata).containsExactly(userInterceptor, binlogInterceptor).inOrder();
+    assertThat(recvReq).containsExactly(binlogInterceptor, userInterceptor).inOrder();
+    assertThat(sendResp).containsExactly(userInterceptor, binlogInterceptor).inOrder();
+    assertThat(sendTrailingMetadata).containsExactly(userInterceptor, binlogInterceptor);
+  }
+
+  @Test
+  public void binaryLogInterceptor_intercept_reqResp() throws Exception {
+    final class TestInterceptor implements ServerInterceptor {
+      private final List<MethodDescriptor<?, ?>> interceptedMethods =
+          new ArrayList<MethodDescriptor<?, ?>>();
+
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          final ServerCall<ReqT, RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        interceptedMethods.add(call.getMethodDescriptor());
+        return next.startCall(call, headers);
+      }
+    }
+
+    TestInterceptor userInterceptor = new TestInterceptor();
+    builder.intercept(userInterceptor);
+    builder.binlogProvider = new BinaryLogProvider() {
+      @Override
+      public ServerInterceptor getServerInterceptor(String fullMethodName) {
+        return new TestInterceptor();
+      }
+
+      @Nullable
+      @Override
+      public ClientInterceptor getClientInterceptor(String fullMethodName) {
+        return null;
+      }
+
+      @Override
+      protected int priority() {
+        return 0;
+      }
+    };
+    createAndStartServer();
+
+    // Begin: basic exchange
+    String request = "Lots of pizza, please";
+    int response = 314;
+    basicExchangeHelper(METHOD, request, response, null);
+    // End: basic exchange
+
+    // The user supplied interceptor must still operate on the original message types
+    assertThat(userInterceptor.interceptedMethods).hasSize(1);
+    assertSame(
+        METHOD.getRequestMarshaller(),
+        userInterceptor.interceptedMethods.get(0).getRequestMarshaller());
+    assertSame(
+        METHOD.getResponseMarshaller(),
+        userInterceptor.interceptedMethods.get(0).getResponseMarshaller());
   }
 
   private void createAndStartServer() throws IOException {
