@@ -369,9 +369,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     lbHelper.lb.shutdown();
     lbHelper = null;
     subchannelPicker = null;
-    if (!channelStateManager.isDisabled()) {
-      channelStateManager.gotoState(IDLE);
-    }
+    channelStateManager.gotoState(IDLE);
   }
 
   // Must be run from channelExecutor
@@ -596,9 +594,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
-        if (!channelStateManager.isDisabled()) {
-          channelStateManager.gotoState(SHUTDOWN);
-        }
+        channelStateManager.gotoState(SHUTDOWN);
       }
     });
 

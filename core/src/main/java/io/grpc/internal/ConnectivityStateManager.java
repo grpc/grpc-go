@@ -17,14 +17,12 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import java.util.ArrayList;
 import java.util.concurrent.Executor;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -63,11 +61,6 @@ final class ConnectivityStateManager {
    */
   void gotoState(@Nonnull ConnectivityState newState) {
     checkNotNull(newState, "newState");
-    checkState(!isDisabled(), "ConnectivityStateManager is already disabled");
-    gotoNullableState(newState);
-  }
-
-  private void gotoNullableState(@Nullable ConnectivityState newState) {
     if (state != newState && state != ConnectivityState.SHUTDOWN) {
       state = newState;
       if (listeners.isEmpty()) {
@@ -92,21 +85,6 @@ final class ConnectivityStateManager {
       throw new UnsupportedOperationException("Channel state API is not implemented");
     }
     return stateCopy;
-  }
-
-  /**
-   * Call this method when the channel learns from the load balancer that channel state API is not
-   * supported.
-   */
-  void disable() {
-    gotoNullableState(null);
-  }
-
-  /**
-   * This method is threadsafe.
-   */
-  boolean isDisabled() {
-    return state == null;
   }
 
   private static final class Listener {

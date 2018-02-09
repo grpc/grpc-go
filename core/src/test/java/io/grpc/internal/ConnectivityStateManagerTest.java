@@ -22,7 +22,6 @@ import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ConnectivityState;
@@ -232,36 +231,6 @@ public class ConnectivityStateManagerTest {
     state.gotoState(READY);
     assertEquals(1, sink.size());
     assertEquals(READY, sink.poll());
-  }
-
-  @Test
-  public void disable() {
-    state.disable();
-    assertTrue(state.isDisabled());
-
-    thrown.expect(UnsupportedOperationException.class);
-    thrown.expectMessage("Channel state API is not implemented");
-    state.getState();
-  }
-
-  @Test
-  public void disableThenDisable() {
-    state.disable();
-    state.disable();
-    assertTrue(state.isDisabled());
-
-    thrown.expect(UnsupportedOperationException.class);
-    thrown.expectMessage("Channel state API is not implemented");
-    state.getState();
-  }
-
-  @Test
-  public void disableThenGotoReady() {
-    state.disable();
-
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("ConnectivityStateManager is already disabled");
-    state.gotoState(READY);
   }
 
   @Test
