@@ -121,18 +121,6 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 }
 
 func isTemporary(err error) bool {
-	switch err {
-	case io.EOF:
-		// Connection closures may be resolved upon retry, and are thus
-		// treated as temporary.
-		return true
-	case context.DeadlineExceeded:
-		// In Go 1.7, context.DeadlineExceeded implements Timeout(), and this
-		// special case is not needed. Until then, we need to keep this
-		// clause.
-		return true
-	}
-
 	switch err := err.(type) {
 	case interface {
 		Temporary() bool
@@ -145,7 +133,7 @@ func isTemporary(err error) bool {
 		// temporary.
 		return err.Timeout()
 	}
-	return false
+	return true
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -181,10 +169,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		scheme = "https"
 		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Authority, conn)
 		if err != nil {
-			// Credentials handshake errors are typically considered permanent
-			// to avoid retrying on e.g. bad certificates.
-			temp := isTemporary(err)
-			return nil, connectionErrorf(temp, err, "transport: authentication handshake failed: %v", err)
+			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
 		isSecure = true
 	}
