@@ -19,6 +19,8 @@ package io.grpc;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
+import java.lang.reflect.Method;
+import java.util.Collections;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,51 +28,32 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+/**
+ * Unit tests for {@link ForwardingServerCallListener}.
+ */
 @RunWith(JUnit4.class)
 public class ForwardingServerCallListenerTest {
 
-  @Mock private ServerCall.Listener<Void> serverCallListener;
-  private ForwardingServerCallListener<Void> forwarder;
+  @Mock private ServerCall.Listener<Integer> serverCallListener;
+  private ForwardingServerCallListener<Integer> forwarder;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    forwarder = new SimpleForwardingServerCallListener<Void>(serverCallListener) {};
+    forwarder = new SimpleForwardingServerCallListener<Integer>(serverCallListener) {};
+  }
+
+  @Test
+  public void allMethodsForwarded() throws Exception {
+    ForwardingTestUtil.testMethodsForwarded(
+        ServerCall.Listener.class, serverCallListener, forwarder, Collections.<Method>emptyList());
   }
 
   @Test
   public void onMessage() {
-    forwarder.onMessage(null);
+    forwarder.onMessage(12345);
 
-    verify(serverCallListener).onMessage(null);
-  }
-
-  @Test
-  public void onHalfClose() {
-    forwarder.onHalfClose();
-
-    verify(serverCallListener).onHalfClose();
-  }
-
-  @Test
-  public void onCancel() {
-    forwarder.onCancel();
-
-    verify(serverCallListener).onCancel();
-  }
-
-  @Test
-  public void onComplete() {
-    forwarder.onComplete();
-
-    verify(serverCallListener).onComplete();
-  }
-
-  @Test
-  public void onReady() {
-    forwarder.onReady();
-
-    verify(serverCallListener).onReady();
+    verify(serverCallListener).onMessage(12345);
   }
 }
 

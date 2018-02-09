@@ -19,11 +19,11 @@ package io.grpc;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 import com.google.common.base.Defaults;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Collections;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -45,20 +45,12 @@ public class ForwardingChannelBuilderTest {
   }
 
   @Test
-  public void allBuilderMethodsForwarded() throws Exception {
-    for (Method method : ManagedChannelBuilder.class.getDeclaredMethods()) {
-      if (Modifier.isStatic(method.getModifiers()) || Modifier.isPrivate(method.getModifiers())) {
-        continue;
-      }
-      Class<?>[] argTypes = method.getParameterTypes();
-      Object[] args = new Object[argTypes.length];
-      for (int i = 0; i < argTypes.length; i++) {
-        args[i] = Defaults.defaultValue(argTypes[i]);
-      }
-
-      method.invoke(testChannelBuilder, args);
-      method.invoke(verify(mockDelegate), args);
-    }
+  public void allMethodsForwarded() throws Exception {
+    ForwardingTestUtil.testMethodsForwarded(
+        ManagedChannelBuilder.class,
+        mockDelegate,
+        testChannelBuilder,
+        Collections.<Method>emptyList());
   }
 
   @Test
