@@ -26,11 +26,17 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.errorprone.annotations.ForOverride;
+import io.grpc.CallOptions;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.ChannelStats;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,7 +54,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * Transports for a single {@link SocketAddress}.
  */
 @ThreadSafe
-final class InternalSubchannel implements WithLogId {
+final class InternalSubchannel implements Instrumented<ChannelStats> {
   private static final Logger log = Logger.getLogger(InternalSubchannel.class.getName());
 
   private final LogId logId = LogId.allocate(getClass().getName());
@@ -58,6 +64,7 @@ final class InternalSubchannel implements WithLogId {
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
   private final ScheduledExecutorService scheduledExecutor;
+  private final CallTracer callsTracer;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
   private final Object lock = new Object();
@@ -152,7 +159,7 @@ final class InternalSubchannel implements WithLogId {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      ProxyDetector proxyDetector) {
+      ProxyDetector proxyDetector, CallTracer callsTracer) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -163,6 +170,7 @@ final class InternalSubchannel implements WithLogId {
     this.channelExecutor = channelExecutor;
     this.callback = callback;
     this.proxyDetector = proxyDetector;
+    this.callsTracer = callsTracer;
   }
 
   /**
@@ -206,7 +214,9 @@ final class InternalSubchannel implements WithLogId {
 
     ProxyParameters proxy = proxyDetector.proxyFor(address);
     ConnectionClientTransport transport =
-        transportFactory.newClientTransport(address, authority, userAgent, proxy);
+        new CallTracingTransport(
+            transportFactory.newClientTransport(address, authority, userAgent, proxy),
+            callsTracer);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {logId, transport.getLogId(), address});
@@ -436,6 +446,19 @@ final class InternalSubchannel implements WithLogId {
     return logId;
   }
 
+
+  @Override
+  public ListenableFuture<ChannelStats> getStats() {
+    SettableFuture<ChannelStats> ret = SettableFuture.create();
+    ChannelStats.Builder builder = new ChannelStats.Builder();
+    synchronized (lock) {
+      builder.setTarget(addressGroup.toString()).setState(getState());
+    }
+    callsTracer.updateBuilder(builder);
+    ret.set(builder.build());
+    return ret;
+  }
+
   @VisibleForTesting
   ConnectivityState getState() {
     try {
@@ -581,5 +604,50 @@ final class InternalSubchannel implements WithLogId {
      */
     @ForOverride
     void onNotInUse(InternalSubchannel is) { }
+  }
+
+  @VisibleForTesting
+  static final class CallTracingTransport extends ForwardingConnectionClientTransport {
+    private final ConnectionClientTransport delegate;
+    private final CallTracer callTracer;
+
+    private CallTracingTransport(ConnectionClientTransport delegate, CallTracer callTracer) {
+      this.delegate = delegate;
+      this.callTracer = callTracer;
+    }
+
+    @Override
+    protected ConnectionClientTransport delegate() {
+      return delegate;
+    }
+
+    @Override
+    public ClientStream newStream(
+        MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
+      final ClientStream streamDelegate = super.newStream(method, headers, callOptions);
+      return new ForwardingClientStream() {
+        @Override
+        protected ClientStream delegate() {
+          return streamDelegate;
+        }
+
+        @Override
+        public void start(final ClientStreamListener listener) {
+          callTracer.reportCallStarted();
+          super.start(new ForwardingClientStreamListener() {
+            @Override
+            protected ClientStreamListener delegate() {
+              return listener;
+            }
+
+            @Override
+            public void closed(Status status, Metadata trailers) {
+              callTracer.reportCallEnded(status.isOk());
+              super.closed(status, trailers);
+            }
+          });
+        }
+      };
+    }
   }
 }

@@ -1671,7 +1671,7 @@ public class ManagedChannelImplTest {
     assertEquals(target, getStats(channel).target);
 
     Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
-    assertEquals(target, getStats((AbstractSubchannel) subchannel).target);
+    assertEquals(addressGroup.toString(), getStats((AbstractSubchannel) subchannel).target);
   }
 
   @Test
@@ -1719,128 +1719,142 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void channelStat_callEndSuccess() throws Exception {
-    // set up
-    Metadata headers = new Metadata();
-    ClientStream mockStream = mock(ClientStream.class);
+  public void channelsAndSubChannels_instrumented_success() throws Exception {
+    channelsAndSubchannels_instrumented0(true);
+  }
+
+  @Test
+  public void channelsAndSubChannels_instrumented_fail() throws Exception {
+    channelsAndSubchannels_instrumented0(false);
+  }
+
+  private void channelsAndSubchannels_instrumented0(boolean success) throws Exception {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
 
-    // Start a call with a call executor
-    CallOptions options =
-        CallOptions.DEFAULT.withExecutor(executor.getScheduledExecutorService());
-    ClientCall<String, Integer> call = channel.newCall(method, options);
-    call.start(mockCallListener, headers);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
 
-    // Make the transport available
-    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    // Channel stat bumped when ClientCall.start() called
+    assertEquals(0, getStats(channel).callsStarted);
+    call.start(mockCallListener, new Metadata());
+    assertEquals(1, getStats(channel).callsStarted);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    ClientStreamTracer.Factory factory = mock(ClientStreamTracer.Factory.class);
+    AbstractSubchannel subchannel =
+        (AbstractSubchannel) helper.createSubchannel(addressGroup, Attributes.EMPTY);
     subchannel.requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
-    ConnectionClientTransport mockTransport = transportInfo.transport;
-    ManagedClientTransport.Listener transportListener = transportInfo.listener;
-    when(mockTransport.newStream(same(method), same(headers), any(CallOptions.class)))
+    transportInfo.listener.transportReady();
+    ClientTransport mockTransport = transportInfo.transport;
+    when(mockTransport.newStream(
+            any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class)))
         .thenReturn(mockStream);
-    transportListener.transportReady();
-    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
-        .thenReturn(PickResult.withSubchannel(subchannel));
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
+        PickResult.withSubchannel(subchannel, factory));
+
+    // subchannel stat bumped when call gets assigned to it
+    assertEquals(0, getStats(subchannel).callsStarted);
     helper.updateBalancingState(READY, mockPicker);
-
-    executor.runDueTasks();
+    assertEquals(1, executor.runDueTasks());
     verify(mockStream).start(streamListenerCaptor.capture());
-    // end set up
+    assertEquals(1, getStats(subchannel).callsStarted);
 
-    // the actual test
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     call.halfClose();
+
+    // closing stream listener affects subchannel stats immediately
+    assertEquals(0, getStats(subchannel).callsSucceeded);
+    assertEquals(0, getStats(subchannel).callsFailed);
+    streamListener.closed(success ? Status.OK : Status.UNKNOWN, new Metadata());
+    if (success) {
+      assertEquals(1, getStats(subchannel).callsSucceeded);
+      assertEquals(0, getStats(subchannel).callsFailed);
+    } else {
+      assertEquals(0, getStats(subchannel).callsSucceeded);
+      assertEquals(1, getStats(subchannel).callsFailed);
+    }
+
+    // channel stats bumped when the ClientCall.Listener is notified
     assertEquals(0, getStats(channel).callsSucceeded);
     assertEquals(0, getStats(channel).callsFailed);
-    streamListener.closed(Status.OK, new Metadata());
     executor.runDueTasks();
-    assertEquals(1, getStats(channel).callsSucceeded);
-    assertEquals(0, getStats(channel).callsFailed);
+    if (success) {
+      assertEquals(1, getStats(channel).callsSucceeded);
+      assertEquals(0, getStats(channel).callsFailed);
+    } else {
+      assertEquals(0, getStats(channel).callsSucceeded);
+      assertEquals(1, getStats(channel).callsFailed);
+    }
   }
 
   @Test
-  public void channelStat_callEndFail() throws Exception {
-    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
-    call.start(mockCallListener, new Metadata());
-    call.cancel("msg", null);
-
-    assertEquals(0, getStats(channel).callsSucceeded);
-    assertEquals(0, getStats(channel).callsFailed);
-    executor.runDueTasks();
-    verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
-    assertEquals(0, getStats(channel).callsSucceeded);
-    assertEquals(1, getStats(channel).callsFailed);
+  public void channelsAndSubchannels_oob_instrumented_success() throws Exception {
+    channelsAndSubchannels_oob_instrumented0(true);
   }
 
   @Test
-  public void channelStat_callStarted_oob() throws Exception {
-    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    OobChannel oob1 = (OobChannel) helper.createOobChannel(addressGroup, "oob1authority");
-    ClientCall<String, Integer> call = oob1.newCall(method, CallOptions.DEFAULT);
-
-    assertEquals(0, getStats(channel).callsStarted);
-    call.start(mockCallListener, new Metadata());
-    // only oob channel stats updated
-    assertEquals(1, getStats(oob1).callsStarted);
-    assertEquals(0, getStats(channel).callsStarted);
-    assertEquals(executor.currentTimeMillis(), getStats(oob1).lastCallStartedMillis);
+  public void channelsAndSubchannels_oob_instrumented_fail() throws Exception {
+    channelsAndSubchannels_oob_instrumented0(false);
   }
 
-  @Test
-  public void channelStat_callEndSuccess_oob() throws Exception {
+  private void channelsAndSubchannels_oob_instrumented0(boolean success) throws Exception {
     // set up
     ClientStream mockStream = mock(ClientStream.class);
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
 
     OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "oobauthority");
+    AbstractSubchannel oobSubchannel = (AbstractSubchannel) oobChannel.getSubchannel();
     FakeClock callExecutor = new FakeClock();
     CallOptions options =
         CallOptions.DEFAULT.withExecutor(callExecutor.getScheduledExecutorService());
     ClientCall<String, Integer> call = oobChannel.newCall(method, options);
     Metadata headers = new Metadata();
+
+    // Channel stat bumped when ClientCall.start() called
+    assertEquals(0, getStats(oobChannel).callsStarted);
     call.start(mockCallListener, headers);
+    assertEquals(1, getStats(oobChannel).callsStarted);
 
     MockClientTransportInfo transportInfo = transports.poll();
     ConnectionClientTransport mockTransport = transportInfo.transport;
     ManagedClientTransport.Listener transportListener = transportInfo.listener;
     when(mockTransport.newStream(same(method), same(headers), any(CallOptions.class)))
         .thenReturn(mockStream);
+
+    // subchannel stat bumped when call gets assigned to it
+    assertEquals(0, getStats(oobSubchannel).callsStarted);
     transportListener.transportReady();
     callExecutor.runDueTasks();
     verify(mockStream).start(streamListenerCaptor.capture());
-    // end set up
+    assertEquals(1, getStats(oobSubchannel).callsStarted);
 
-    // the actual test
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     call.halfClose();
+
+    // closing stream listener affects subchannel stats immediately
+    assertEquals(0, getStats(oobSubchannel).callsSucceeded);
+    assertEquals(0, getStats(oobSubchannel).callsFailed);
+    streamListener.closed(success ? Status.OK : Status.UNKNOWN, new Metadata());
+    if (success) {
+      assertEquals(1, getStats(oobSubchannel).callsSucceeded);
+      assertEquals(0, getStats(oobSubchannel).callsFailed);
+    } else {
+      assertEquals(0, getStats(oobSubchannel).callsSucceeded);
+      assertEquals(1, getStats(oobSubchannel).callsFailed);
+    }
+
+    // channel stats bumped when the ClientCall.Listener is notified
     assertEquals(0, getStats(oobChannel).callsSucceeded);
     assertEquals(0, getStats(oobChannel).callsFailed);
-    streamListener.closed(Status.OK, new Metadata());
     callExecutor.runDueTasks();
-    // only oob channel stats updated
-    assertEquals(1, getStats(oobChannel).callsSucceeded);
-    assertEquals(0, getStats(oobChannel).callsFailed);
-    assertEquals(0, getStats(channel).callsSucceeded);
-    assertEquals(0, getStats(channel).callsFailed);
-  }
-
-  @Test
-  public void channelStat_callEndFail_oob() throws Exception {
-    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    OobChannel oob1 = (OobChannel) helper.createOobChannel(addressGroup, "oob1authority");
-    ClientCall<String, Integer> call = oob1.newCall(method, CallOptions.DEFAULT);
-    call.start(mockCallListener, new Metadata());
-    call.cancel("msg", null);
-
-    assertEquals(0, getStats(channel).callsSucceeded);
-    assertEquals(0, getStats(channel).callsFailed);
-    oobExecutor.runDueTasks();
-    // only oob channel stats updated
-    verify(mockCallListener).onClose(any(Status.class), any(Metadata.class));
-    assertEquals(0, getStats(oob1).callsSucceeded);
-    assertEquals(1, getStats(oob1).callsFailed);
+    if (success) {
+      assertEquals(1, getStats(oobChannel).callsSucceeded);
+      assertEquals(0, getStats(oobChannel).callsFailed);
+    } else {
+      assertEquals(0, getStats(oobChannel).callsSucceeded);
+      assertEquals(1, getStats(oobChannel).callsFailed);
+    }
+    // oob channel is separate from the original channel
     assertEquals(0, getStats(channel).callsSucceeded);
     assertEquals(0, getStats(channel).callsFailed);
   }
@@ -2055,6 +2069,10 @@ public class ManagedChannelImplTest {
     public String getDefaultScheme() {
       return "fake";
     }
+  }
+
+  private static ChannelStats getStats(AbstractSubchannel subchannel) throws Exception {
+    return subchannel.getStats().get();
   }
 
   private static ChannelStats getStats(

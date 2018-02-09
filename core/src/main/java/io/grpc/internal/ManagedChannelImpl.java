@@ -867,7 +867,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
       checkNotNull(attrs, "attrs");
       // TODO(ejona): can we be even stricter? Like loadBalancer == null?
       checkState(!terminated, "Channel is terminated");
-      final SubchannelImpl subchannel = new SubchannelImpl(attrs, callTracerFactory.create());
+      final SubchannelImpl subchannel = new SubchannelImpl(attrs);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
             addressGroup, authority(), userAgent, backoffPolicyProvider, transportFactory,
             transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -898,7 +898,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
                 inUseStateAggregator.updateObjectInUse(is, false);
               }
             },
-            proxyDetector);
+            proxyDetector,
+            callTracerFactory.create());
       subchannel.subchannel = internalSubchannel;
       logger.log(Level.FINE, "[{0}] {1} created for {2}",
           new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroup});
@@ -961,7 +962,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, callTracerFactory);
+          channelExecutor, callTracerFactory.create());
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -980,7 +981,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
               oobChannel.handleSubchannelStateChange(newState);
             }
           },
-          proxyDetector);
+          proxyDetector,
+          callTracerFactory.create());
       oobChannel.setSubchannel(internalSubchannel);
       runSerialized(new Runnable() {
           @Override
@@ -1111,21 +1113,24 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     InternalSubchannel subchannel;
     final Object shutdownLock = new Object();
     final Attributes attrs;
-    final CallTracer subchannelCallTracer;
 
     @GuardedBy("shutdownLock")
     boolean shutdownRequested;
     @GuardedBy("shutdownLock")
     ScheduledFuture<?> delayedShutdownTask;
 
-    SubchannelImpl(Attributes attrs, CallTracer subchannelCallTracer) {
+    SubchannelImpl(Attributes attrs) {
       this.attrs = checkNotNull(attrs, "attrs");
-      this.subchannelCallTracer = subchannelCallTracer;
     }
 
     @Override
     ClientTransport obtainActiveTransport() {
       return subchannel.obtainActiveTransport();
+    }
+
+    @Override
+    ListenableFuture<ChannelStats> getStats() {
+      return subchannel.getStats();
     }
 
     @Override
@@ -1187,16 +1192,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     @Override
     public String toString() {
       return subchannel.getLogId().toString();
-    }
-
-    @Override
-    public ListenableFuture<ChannelStats> getStats() {
-      SettableFuture<ChannelStats> ret = SettableFuture.create();
-      ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
-      subchannelCallTracer.updateBuilder(builder);
-      builder.setTarget(target).setState(subchannel.getState());
-      ret.set(builder.build());
-      return ret;
     }
   }
 

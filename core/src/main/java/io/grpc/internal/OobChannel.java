@@ -67,7 +67,6 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
   private final CallTracer channelCallsTracer;
-  private final CallTracer subchannelCallsTracer;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -88,7 +87,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
       ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
-      CallTracer.Factory callTracerFactory) {
+      CallTracer callsTracer) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -116,8 +115,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
           // Don't care
         }
       });
-    this.channelCallsTracer = callTracerFactory.create();
-    this.subchannelCallsTracer = callTracerFactory.create();
+    this.channelCallsTracer = callsTracer;
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -136,6 +134,11 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
         }
 
         @Override
+        ListenableFuture<ChannelStats> getStats() {
+          return subchannel.getStats();
+        }
+
+        @Override
         public void requestConnection() {
           subchannel.obtainActiveTransport();
         }
@@ -148,16 +151,6 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
         @Override
         public Attributes getAttributes() {
           return Attributes.EMPTY;
-        }
-
-        @Override
-        public ListenableFuture<ChannelStats> getStats() {
-          SettableFuture<ChannelStats> ret = SettableFuture.create();
-          ChannelStats.Builder builder = new ChannelStats.Builder();
-          subchannelCallsTracer.updateBuilder(builder);
-          builder.setTarget(authority).setState(subchannel.getState());
-          ret.set(builder.build());
-          return ret;
         }
     };
 

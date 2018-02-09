@@ -41,6 +41,7 @@ import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
+import io.grpc.internal.InternalSubchannel.CallTracingTransport;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -205,7 +206,9 @@ public class InternalSubchannelTest {
     transports.peek().listener.transportReady();
     assertExactCallbackInvokes("onStateChange:READY");
     assertEquals(READY, internalSubchannel.getState());
-    assertSame(transports.peek().transport, internalSubchannel.obtainActiveTransport());
+    assertSame(
+        transports.peek().transport,
+        ((CallTracingTransport) internalSubchannel.obtainActiveTransport()).delegate());
 
     // Close the READY transport, will enter IDLE state.
     assertNoCallbackInvoke();
@@ -323,7 +326,9 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:READY");
     assertEquals(READY, internalSubchannel.getState());
 
-    assertSame(transports.peek().transport, internalSubchannel.obtainActiveTransport());
+    assertSame(
+        transports.peek().transport,
+        ((CallTracingTransport) internalSubchannel.obtainActiveTransport()).delegate());
     // Then close it.
     assertNoCallbackInvoke();
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -952,7 +957,7 @@ public class InternalSubchannelTest {
     internalSubchannel = new InternalSubchannel(addressGroup, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), channelExecutor, mockInternalSubchannelCallback,
-        proxyDetector);
+        proxyDetector, CallTracer.getDefaultFactory().create());
   }
 
   private void assertNoCallbackInvoke() {
