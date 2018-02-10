@@ -40,6 +40,13 @@ final class PersistentHashArrayMappedTrie<K,V> {
     this.root = root;
   }
 
+  public int size() {
+    if (root == null) {
+      return 0;
+    }
+    return root.size();
+  }
+
   /**
    * Returns the value with the specified key, or {@code null} if it does not exist.
    */
@@ -70,6 +77,11 @@ final class PersistentHashArrayMappedTrie<K,V> {
     public Leaf(K key, V value) {
       this.key = key;
       this.value = value;
+    }
+
+    @Override
+    public int size() {
+      return 1;
     }
 
     @Override
@@ -122,6 +134,11 @@ final class PersistentHashArrayMappedTrie<K,V> {
     private CollisionLeaf(K[] keys, V[] values) {
       this.keys = keys;
       this.values = values;
+    }
+
+    @Override
+    public int size() {
+      return values.length;
     }
 
     @Override
@@ -188,10 +205,17 @@ final class PersistentHashArrayMappedTrie<K,V> {
 
     final int bitmap;
     final Node<K,V>[] values;
+    private final int size;
 
-    private CompressedIndex(int bitmap, Node<K,V>[] values) {
+    private CompressedIndex(int bitmap, Node<K,V>[] values, int size) {
       this.bitmap = bitmap;
       this.values = values;
+      this.size = size;
+    }
+
+    @Override
+    public int size() {
+      return size;
     }
 
     @Override
@@ -221,13 +245,16 @@ final class PersistentHashArrayMappedTrie<K,V> {
             newValues,
             compressedIndex + 1,
             values.length - compressedIndex);
-        return new CompressedIndex<K,V>(newBitmap, newValues);
+        return new CompressedIndex<K,V>(newBitmap, newValues, size() + 1);
       } else {
         // Replace
         Node<K,V>[] newValues = Arrays.copyOf(values, values.length);
         newValues[compressedIndex] =
             values[compressedIndex].put(key, value, hash, bitsConsumed + BITS);
-        return new CompressedIndex<K,V>(bitmap, newValues);
+        int newSize = size();
+        newSize += newValues[compressedIndex].size();
+        newSize -= values[compressedIndex].size();
+        return new CompressedIndex<K,V>(bitmap, newValues, newSize);
       }
     }
 
@@ -240,7 +267,7 @@ final class PersistentHashArrayMappedTrie<K,V> {
         Node<K,V> node = combine(node1, hash1, node2, hash2, bitsConsumed + BITS);
         @SuppressWarnings("unchecked")
         Node<K,V>[] values = (Node<K,V>[]) new Node<?,?>[] {node};
-        return new CompressedIndex<K,V>(indexBit1, values);
+        return new CompressedIndex<K,V>(indexBit1, values, node.size());
       } else {
         // Make node1 the smallest
         if (uncompressedIndex(hash1, bitsConsumed) > uncompressedIndex(hash2, bitsConsumed)) {
@@ -250,7 +277,7 @@ final class PersistentHashArrayMappedTrie<K,V> {
         }
         @SuppressWarnings("unchecked")
         Node<K,V>[] values = (Node<K,V>[]) new Node<?,?>[] {node1, node2};
-        return new CompressedIndex<K,V>(indexBit1 | indexBit2, values);
+        return new CompressedIndex<K,V>(indexBit1 | indexBit2, values, node1.size() + node2.size());
       }
     }
 
@@ -283,5 +310,7 @@ final class PersistentHashArrayMappedTrie<K,V> {
     V get(K key, int hash, int bitsConsumed);
 
     Node<K,V> put(K key, V value, int hash, int bitsConsumed);
+
+    int size();
   }
 }

@@ -41,6 +41,9 @@ public class PersistentHashArrayMappedTrieTest {
     assertSame(value2, ret.get(key, key.hashCode(), 0));
 
     assertSame(value1, leaf.get(key, key.hashCode(), 0));
+
+    assertEquals(1, leaf.size());
+    assertEquals(1, ret.size());
   }
 
   @Test
@@ -57,6 +60,9 @@ public class PersistentHashArrayMappedTrieTest {
 
     assertSame(value1, leaf.get(key1, key1.hashCode(), 0));
     assertSame(null, leaf.get(key2, key2.hashCode(), 0));
+
+    assertEquals(1, leaf.size());
+    assertEquals(2, ret.size());
   }
 
   @Test
@@ -73,6 +79,9 @@ public class PersistentHashArrayMappedTrieTest {
 
     assertSame(value1, leaf.get(key1, key1.hashCode(), 0));
     assertSame(null, leaf.get(key2, key2.hashCode(), 0));
+
+    assertEquals(1, leaf.size());
+    assertEquals(2, ret.size());
   }
 
   @Test(expected = AssertionError.class)
@@ -106,6 +115,9 @@ public class PersistentHashArrayMappedTrieTest {
     assertSame(value1, leaf.get(key1, key1.hashCode(), 0));
     assertSame(value2, leaf.get(key2, key2.hashCode(), 0));
     assertSame(null, leaf.get(insertKey, insertKey.hashCode(), 0));
+
+    assertEquals(2, leaf.size());
+    assertEquals(3, ret.size());
   }
 
   @Test
@@ -124,6 +136,9 @@ public class PersistentHashArrayMappedTrieTest {
 
     assertSame(value, leaf.get(key, key.hashCode(), 0));
     assertSame(originalValue, leaf.get(replaceKey, replaceKey.hashCode(), 0));
+
+    assertEquals(2, leaf.size());
+    assertEquals(2, ret.size());
   }
 
   @Test
@@ -146,6 +161,9 @@ public class PersistentHashArrayMappedTrieTest {
     assertSame(value1, leaf.get(key1, key1.hashCode(), 0));
     assertSame(value2, leaf.get(key2, key2.hashCode(), 0));
     assertSame(null, leaf.get(key3, key3.hashCode(), 0));
+
+    assertEquals(2, leaf.size());
+    assertEquals(3, ret.size());
   }
 
   @Test
@@ -166,12 +184,17 @@ public class PersistentHashArrayMappedTrieTest {
 
         assertSame(value1, ret.get(key1, key1.hashCode(), 0));
         assertSame(value2, ret.get(key2, key2.hashCode(), 0));
+
+        assertEquals(2, ret.size());
       }
     }
 
     Verifier verifier = new Verifier();
     verifier.verify(CompressedIndex.combine(leaf1, key1.hashCode(), leaf2, key2.hashCode(), 0));
     verifier.verify(CompressedIndex.combine(leaf2, key2.hashCode(), leaf1, key1.hashCode(), 0));
+
+    assertEquals(1, leaf1.size());
+    assertEquals(1, leaf2.size());
   }
 
   @Test
@@ -192,12 +215,17 @@ public class PersistentHashArrayMappedTrieTest {
         assertEquals((1 << 31) | (1 << 17), collisionLeaf.bitmap);
         assertSame(value1, ret.get(key1, key1.hashCode(), 0));
         assertSame(value2, ret.get(key2, key2.hashCode(), 0));
+
+        assertEquals(2, ret.size());
       }
     }
 
     Verifier verifier = new Verifier();
     verifier.verify(CompressedIndex.combine(leaf1, key1.hashCode(), leaf2, key2.hashCode, 0));
     verifier.verify(CompressedIndex.combine(leaf2, key2.hashCode(), leaf1, key1.hashCode, 0));
+
+    assertEquals(1, leaf1.size());
+    assertEquals(1, leaf2.size());
   }
 
   /**
