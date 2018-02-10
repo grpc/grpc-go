@@ -23,7 +23,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -69,8 +68,7 @@ func (d *dbWrapper) get() *channelMap {
 	return d.DB
 }
 
-// NewChannelzStorage initializes channelz data storage and unique id generator,
-// and returns pointer to the data storage for read-only access.
+// NewChannelzStorage initializes channelz data storage and unique id generator.
 // Note: For testing purpose only. User should not call it in most cases.
 // This is an EXPERIMENTAL API.
 func NewChannelzStorage() {
@@ -616,23 +614,4 @@ func (i *idGenerator) reset() {
 
 func (i *idGenerator) genID() int64 {
 	return atomic.AddInt64(&i.id, 1)
-}
-
-// nestedChannel is the context key for indicating whether this ClientConn is a
-// nested channel. Its corresponding value is the parent's ID.
-type nestedChannel struct{}
-
-// WithParentID stores the specified ID in the given context, and returns the new
-// context.
-func WithParentID(ctx context.Context, pid int64) context.Context {
-	return context.WithValue(ctx, nestedChannel{}, pid)
-}
-
-// ParentID returns the ID stored in the given context, and returns 0 if it doesn't
-// exist.
-func ParentID(ctx context.Context) int64 {
-	if v := ctx.Value(nestedChannel{}); v != nil {
-		return v.(int64)
-	}
-	return 0
 }
