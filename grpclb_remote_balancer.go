@@ -246,14 +246,13 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerName(PickFirstBalancerName))
 	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
+	if channelz.IsOn() {
+		dopts = append(dopts, WithChannelzParentID(lb.opt.ChannelzParentID))
+	}
 
 	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	ctx := context.Background()
-	if channelz.IsOn() {
-		ctx = channelz.WithParentID(ctx, lb.opt.ChannelzParentID)
-	}
-	cc, err := DialContext(ctx, "grpclb:///grpclb.server", dopts...)
+	cc, err := DialContext(context.Background(), "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
