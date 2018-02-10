@@ -110,6 +110,7 @@ type dialOptions struct {
 	// This is to support grpclb.
 	resolverBuilder  resolver.Builder
 	waitForHandshake bool
+	channelzParentID int64
 }
 
 const (
@@ -403,6 +404,14 @@ func WithAuthority(a string) DialOption {
 	}
 }
 
+// WithChannelzParentID returns a DialOption that specifies the channelz ID of current ClientConn's
+// parent. This function is used in nested channel creation (e.g. grpclb dial).
+func WithChannelzParentID(id int64) DialOption {
+	return func(o *dialOptions) {
+		o.channelzParentID = id
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
@@ -426,16 +435,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
+	for _, opt := range opts {
+		opt(&cc.dopts)
+	}
+
 	if channelz.IsOn() {
-		if pid := channelz.ParentID(ctx); pid != 0 {
-			cc.channelzID = channelz.RegisterChannel(cc, channelz.NestedChannelT, pid, "")
+		if cc.dopts.channelzParentID != 0 {
+			cc.channelzID = channelz.RegisterChannel(cc, channelz.NestedChannelT, cc.dopts.channelzParentID, "")
 		} else {
 			cc.channelzID = channelz.RegisterChannel(cc, channelz.TopChannelT, 0, "")
 		}
-	}
-
-	for _, opt := range opts {
-		opt(&cc.dopts)
 	}
 
 	if !cc.dopts.insecure {

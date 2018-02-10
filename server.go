@@ -1223,10 +1223,10 @@ func (s *Server) Stop() {
 		})
 	}()
 
-	s.mu.Lock()
 	if channelz.IsOn() {
 		channelz.RemoveEntry(s.channelzID)
 	}
+	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
 	st := s.conns
@@ -1264,15 +1264,15 @@ func (s *Server) GracefulStop() {
 		})
 	}()
 
+	if channelz.IsOn() {
+		channelz.RemoveEntry(s.channelzID)
+	}
 	s.mu.Lock()
 	if s.conns == nil {
 		s.mu.Unlock()
 		return
 	}
 
-	if channelz.IsOn() {
-		channelz.RemoveEntry(s.channelzID)
-	}
 	for lis := range s.lis {
 		lis.Close()
 	}
