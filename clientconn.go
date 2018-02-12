@@ -84,17 +84,18 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt    UnaryClientInterceptor
-	streamInt   StreamClientInterceptor
-	cp          Compressor
-	dc          Decompressor
-	bs          backoffStrategy
-	block       bool
-	insecure    bool
-	timeout     time.Duration
-	scChan      <-chan ServiceConfig
-	copts       transport.ConnectOptions
-	callOptions []CallOption
+	unaryInt            UnaryClientInterceptor
+	streamInt           StreamClientInterceptor
+	cp                  Compressor
+	dc                  Decompressor
+	bs                  backoffStrategy
+	block               bool
+	abortOnNonTempError bool
+	insecure            bool
+	timeout             time.Duration
+	scChan              <-chan ServiceConfig
+	copts               transport.ConnectOptions
+	callOptions         []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
@@ -271,12 +272,24 @@ func withBackoff(bs backoffStrategy) DialOption {
 	}
 }
 
-// WithBlock returns a DialOption which makes caller of Dial blocks until the underlying
-// connection is up. Without this, Dial returns immediately and connecting the server
-// happens in background.
+// WithBlock returns a DialOption which makes caller of Dial blocks until the
+// connectivity state becomes READY. Without this, Dial returns immediately and
+// connecting the server happens in background.
 func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
+	}
+}
+
+// WithAbortOnNonTempError makes the Dial abort if there's a non-temporary
+// connection error.
+//
+// This only works when WithBlock() is also set. The blocking dial will return
+// error only if the non-temporary error happens before a connection becomes
+// READY.
+func WithAbortOnNonTempError() DialOption {
+	return func(o *dialOptions) {
+		o.abortOnNonTempError = true
 	}
 }
 
@@ -408,6 +421,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[*addrConn]struct{}),
 
 		blockingpicker: newPickerWrapper(),
+
+		fatalErrorCh: make(chan error, 1),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
@@ -529,17 +544,52 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// resolverWrapper.
 	cc.resolverWrapper.start()
 
-	// A blocking dial blocks until the clientConn is ready.
+	// A blocking dial blocks until the clientConn is ready or a non-temporary
+	// error happens.
 	if cc.dopts.block {
-		for {
-			s := cc.GetState()
-			if s == connectivity.Ready {
-				break
+		blockCtx, blockCtxCancel := context.WithCancel(ctx)
+		defer blockCtxCancel()
+		errCh := make(chan error, 1)
+		// Create goroutine to check connectivity state.
+		go func() (retErr error) {
+			defer func() {
+				select {
+				case errCh <- retErr:
+				default:
+				}
+			}()
+			for {
+				s := cc.GetState()
+				if s == connectivity.Ready {
+					break
+				}
+				if !cc.WaitForStateChange(blockCtx, s) {
+					// ctx got timeout or canceled.
+					return blockCtx.Err()
+				}
 			}
-			if !cc.WaitForStateChange(ctx, s) {
-				// ctx got timeout or canceled.
-				return nil, ctx.Err()
-			}
+			return nil
+		}()
+		// Create goroutine to check non-temporary error if the dial option was
+		// set.
+		if cc.dopts.abortOnNonTempError {
+			go func() (retErr error) {
+				defer func() {
+					select {
+					case errCh <- retErr:
+					default:
+					}
+				}()
+				select {
+				case <-blockCtx.Done():
+					return blockCtx.Err()
+				case err := <-cc.fatalErrorCh:
+					return err
+				}
+			}()
+		}
+		if err := <-errCh; err != nil {
+			return nil, err
 		}
 	}
 
@@ -603,6 +653,11 @@ type ClientConn struct {
 	balancerBuildOpts balancer.BuildOptions
 	resolverWrapper   *ccResolverWrapper
 	blockingpicker    *pickerWrapper
+
+	// This channel contains one fatal error happened in one of the addrConns.
+	// Only Dial checks this channel. A blocking dial will fail immediately when
+	// there's a fatal error.
+	fatalErrorCh chan error
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -1130,6 +1185,10 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		if err != nil {
 			cancel()
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+				select {
+				case ac.cc.fatalErrorCh <- e.Origin():
+				default:
+				}
 				ac.mu.Lock()
 				if ac.state != connectivity.Shutdown {
 					ac.state = connectivity.TransientFailure

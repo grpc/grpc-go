@@ -5996,3 +5996,44 @@ func TestServeExitsWhenListenerClosed(t *testing.T) {
 		t.Fatalf("Serve did not return after %v", timeout)
 	}
 }
+
+const clientAlwaysFailCredErrorMsg = "clientAlwaysFailCred always fails"
+
+var errClientAlwaysFailCred = errors.New(clientAlwaysFailCredErrorMsg)
+
+type clientAlwaysFailCred struct{}
+
+func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, errClientAlwaysFailCred
+}
+func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c clientAlwaysFailCred) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (c clientAlwaysFailCred) OverrideServerName(s string) error {
+	return nil
+}
+
+func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
+	defer leakcheck.Check(t)
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: "v1"})
+	te.startServer(&testServer{security: te.e.security})
+	defer te.tearDown()
+
+	var (
+		err  error
+		opts []grpc.DialOption
+	)
+	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock(), grpc.WithAbortOnNonTempError())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	te.cc, err = grpc.DialContext(ctx, te.srvAddr, opts...)
+	if err != errClientAlwaysFailCred {
+		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, errClientAlwaysFailCred)
+	}
+}
