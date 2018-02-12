@@ -716,6 +716,8 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			}
 			ltq, _, err := t.localSendQuota.get(size, s.waiters)
 			if err != nil {
+				// Add the acquired quota back to transport.
+				t.sendQuotaPool.add(tq)
 				return err
 			}
 			// even if ltq is smaller than size we don't adjust size since
