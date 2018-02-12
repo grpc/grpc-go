@@ -5996,3 +5996,47 @@ func TestServeExitsWhenListenerClosed(t *testing.T) {
 		t.Fatalf("Serve did not return after %v", timeout)
 	}
 }
+
+func TestClientDoesntDeadlockWhileWritingErrornousLargeMessages(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			continue
+		}
+		testClientDoesntDeadlockWhileWritingErrornousLargeMessages(t, e)
+	}
+}
+
+func testClientDoesntDeadlockWhileWritingErrornousLargeMessages(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	smallSize := 1024
+	te.maxServerReceiveMsgSize = &smallSize
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1048576)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		Payload:      payload,
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+				defer cancel()
+				if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.ResourceExhausted {
+					t.Errorf("TestService/UnaryCall(_,_) = _. %v, want code: %s", err, codes.ResourceExhausted)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
