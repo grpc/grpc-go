@@ -595,8 +595,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManager_pingTimeout() throws Exception {
-    keepAliveTimeInNanos = TimeUnit.NANOSECONDS.toNanos(123L);
-    keepAliveTimeoutInNanos = TimeUnit.NANOSECONDS.toNanos(456L);
+    keepAliveTimeInNanos = 123L /* nanoseconds */;
+    keepAliveTimeoutInNanos = 456L /* nanoseconds */;
     manualSetUp();
 
     fakeClock().forwardNanos(keepAliveTimeInNanos);
