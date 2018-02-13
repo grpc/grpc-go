@@ -116,6 +116,7 @@ type dialOptions struct {
 	waitForHandshake     bool
 	channelzParentID     int64
 	disableServiceConfig bool
+	disableRetry         bool
 }
 
 const (
@@ -435,6 +436,17 @@ func WithDisableServiceConfig() DialOption {
 	}
 }
 
+// WithDisableRetry returns a DialOption that disables retries, even if the
+// service config enables them.  This does not impact transparent retries,
+// which will happen automatically if no data is written to the wire.
+//
+// This API is EXPERIMENTAL.
+func WithDisableRetry() DialOption {
+	return func(o *dialOptions) {
+		o.disableRetry = true
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
@@ -534,7 +546,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.setSC(&sc)
 				scSet = true
 			}
 		default:
@@ -580,7 +592,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.setSC(&sc)
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -706,6 +718,9 @@ type ClientConn struct {
 	callsSucceeded      int64
 	callsFailed         int64
 	lastCallStartedTime time.Time
+
+	retryMu     sync.Mutex
+	retryTokens float64 // TODO(dfawley): replace with atomic and remove lock.
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -740,7 +755,7 @@ func (cc *ClientConn) scWatcher() {
 			cc.mu.Lock()
 			// TODO: load balance policy runtime change is ignored.
 			// We may revist this decision in the future.
-			cc.sc = sc
+			cc.setSC(&sc)
 			cc.scRaw = ""
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
@@ -1020,6 +1035,16 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 	return t, done, nil
 }
 
+func (cc *ClientConn) setSC(sc *ServiceConfig) {
+	postProcessSC(sc)
+	cc.sc = *sc
+	if sc.RetryThrottling != nil {
+		cc.retryMu.Lock()
+		cc.retryTokens = sc.RetryThrottling.MaxTokens
+		cc.retryMu.Unlock()
+	}
+}
+
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
@@ -1032,7 +1057,7 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 	cc.mu.Lock()
 	cc.scRaw = js
-	cc.sc = sc
+	cc.setSC(&sc)
 	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
 		if cc.curBalancerName == grpclbName {
 			// If current balancer is grpclb, there's at least one grpclb
@@ -1592,6 +1617,42 @@ func (ac *addrConn) incrCallsFailed() {
 	ac.czmu.Lock()
 	ac.callsFailed++
 	ac.czmu.Unlock()
+}
+
+// throttleRetry subtracts a retry token from the pool and returns whether a
+// retry should be throttled (disallowed) based upon the retry throttling policy
+// in the service config.
+func (cc *ClientConn) throttleRetry() bool {
+	rtp := cc.sc.RetryThrottling
+	if cc.dopts.disableRetry {
+		return true
+	}
+	if rtp == nil {
+		return false
+	}
+	cc.retryMu.Lock()
+	defer cc.retryMu.Unlock()
+	cc.retryTokens--
+	if cc.retryTokens < 0 {
+		cc.retryTokens = 0
+	}
+	if cc.retryTokens <= rtp.MaxTokens/2 {
+		return true
+	}
+	return false
+}
+
+func (cc *ClientConn) successfulRPC() {
+	rtp := cc.sc.RetryThrottling
+	if cc.dopts.disableRetry || rtp == nil {
+		return
+	}
+	cc.retryMu.Lock()
+	cc.retryTokens += rtp.TokenRatio
+	if cc.retryTokens > rtp.MaxTokens {
+		cc.retryTokens = rtp.MaxTokens
+	}
+	cc.retryMu.Unlock()
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
