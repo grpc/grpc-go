@@ -311,21 +311,21 @@ subprojects {
 
     uploadArchives.repositories.mavenDeployer {
         beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-        String stagingUrl
-        if (rootProject.hasProperty('repositoryId')) {
-          stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
-              rootProject.repositoryId
-        } else {
-          stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-        }
-        def configureAuth = {
-          if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
-            authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
-          }
-        }
         if (rootProject.hasProperty('repositoryDir')) {
           repository(url: new File(rootProject.repositoryDir).toURI())
         } else {
+          String stagingUrl
+          if (rootProject.hasProperty('repositoryId')) {
+            stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
+               rootProject.repositoryId
+          } else {
+            stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+          }
+          def configureAuth = {
+            if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
+              authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
+            }
+          }
           repository(url: stagingUrl, configureAuth)
           snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
         }
