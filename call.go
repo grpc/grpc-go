@@ -54,7 +54,7 @@ func invoke(ctx context.Context, method string, req, reply interface{}, cc *Clie
 		}
 		cs := csInt.(*clientStream)
 		if err := cs.SendMsg(req); err != nil {
-			if !cs.c.failFast && cs.s.Unprocessed() && firstAttempt {
+			if !cs.c.failFast && cs.attempt.s.Unprocessed() && firstAttempt {
 				// TODO: Add a field to header for grpc-transparent-retry-attempts
 				firstAttempt = false
 				continue
@@ -62,7 +62,7 @@ func invoke(ctx context.Context, method string, req, reply interface{}, cc *Clie
 			return err
 		}
 		if err := cs.RecvMsg(reply); err != nil {
-			if !cs.c.failFast && cs.s.Unprocessed() && firstAttempt {
+			if !cs.c.failFast && cs.attempt.s.Unprocessed() && firstAttempt {
 				// TODO: Add a field to header for grpc-transparent-retry-attempts
 				firstAttempt = false
 				continue
