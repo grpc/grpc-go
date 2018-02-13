@@ -339,6 +339,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
     EventLoop eventLoop = mock(EventLoop.class);
     when(ctx.executor()).thenReturn(eventLoop);
+    when(ctx.channel()).thenReturn(channel);
     return ctx;
   }
 

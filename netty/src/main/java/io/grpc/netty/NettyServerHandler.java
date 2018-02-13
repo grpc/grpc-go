@@ -263,7 +263,7 @@ class NettyServerHandler extends AbstractNettyHandler {
           try {
             NettyServerHandler.this.close(ctx, ctx.newPromise());
           } catch (Exception e) {
-            onError(ctx, e);
+            onError(ctx, /* outbound= */ true, e);
           }
         }
       };
@@ -340,7 +340,7 @@ class NettyServerHandler extends AbstractNettyHandler {
                     TimeUnit.NANOSECONDS.toMillis(maxConnectionAgeGraceInNanos));
                 close(ctx, ctx.newPromise());
               } catch (Exception e) {
-                onError(ctx, e);
+                onError(ctx, /* outbound= */ true, e);
               } finally {
                 gracefulShutdownTimeoutMillis(savedGracefulShutdownTime);
               }
@@ -502,15 +502,15 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   @Override
-  protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
+  protected void onConnectionError(ChannelHandlerContext ctx, boolean outbound, Throwable cause,
       Http2Exception http2Ex) {
     logger.log(Level.FINE, "Connection Error", cause);
     connectionError = cause;
-    super.onConnectionError(ctx, cause, http2Ex);
+    super.onConnectionError(ctx, outbound, cause, http2Ex);
   }
 
   @Override
-  protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
+  protected void onStreamError(ChannelHandlerContext ctx, boolean outbound, Throwable cause,
       StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
     NettyServerStream.TransportState serverStream = serverStream(
@@ -520,7 +520,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
     // TODO(ejona): Abort the stream by sending headers to help the client with debugging.
     // Delegate to the base class to send a RST_STREAM.
-    super.onStreamError(ctx, cause, http2Ex);
+    super.onStreamError(ctx, outbound, cause, http2Ex);
   }
 
   @Override
@@ -774,7 +774,7 @@ class NettyServerHandler extends AbstractNettyHandler {
         try {
           forcefulClose(ctx, new ForcefulCloseCommand(status), ctx.newPromise());
         } catch (Exception ex) {
-          onError(ctx, ex);
+          onError(ctx, /* outbound= */ true, ex);
         }
       }
     }

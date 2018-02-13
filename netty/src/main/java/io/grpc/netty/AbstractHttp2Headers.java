@@ -266,6 +266,11 @@ abstract class AbstractHttp2Headers implements Http2Headers {
   }
 
   @Override
+  public boolean contains(CharSequence name, CharSequence value, boolean caseInsensitive) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public boolean containsObject(CharSequence name, Object value) {
     throw new UnsupportedOperationException();
   }

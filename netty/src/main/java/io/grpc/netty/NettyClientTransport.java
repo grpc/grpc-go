@@ -217,8 +217,8 @@ class NettyClientTransport implements ConnectionClientTransport {
      */
     b.handler(negotiationHandler);
     ChannelFuture regFuture = b.register();
-    channel = regFuture.channel();
-    if (channel == null) {
+    if (regFuture.isDone() && !regFuture.isSuccess()) {
+      channel = null;
       // Initialization has failed badly. All new streams should be made to fail.
       Throwable t = regFuture.cause();
       if (t == null) {
@@ -238,6 +238,7 @@ class NettyClientTransport implements ConnectionClientTransport {
         }
       };
     }
+    channel = regFuture.channel();
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
     // This write will have no effect, yet it will only complete once the negotiationHandler

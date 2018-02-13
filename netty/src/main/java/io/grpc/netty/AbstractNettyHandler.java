@@ -83,7 +83,7 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
     if (embedded == null) {
       // There was no embedded Http2Exception, assume it's a connection error. Subclasses are
       // responsible for storing the appropriate status and shutting down the connection.
-      onError(ctx, cause);
+      onError(ctx, /* outbound= */ false, cause);
     } else {
       super.exceptionCaught(ctx, cause);
     }
