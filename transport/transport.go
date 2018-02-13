@@ -534,6 +534,8 @@ type CallHdr struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
 	// for more details.
 	ContentSubtype string
+
+	PreviousAttempts int // value of grpc-previous-rpc-attempts header to set
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport
