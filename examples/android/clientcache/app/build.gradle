@@ -5,7 +5,7 @@ android {
     compileSdkVersion 27
 
     defaultConfig {
-        applicationId "io.grpc.android.clientcacheexample"
+        applicationId "io.grpc.clientcacheexample"
         minSdkVersion 19
         targetSdkVersion 27
         multiDexEnabled true
