@@ -26,7 +26,7 @@ else
   pushd $DOWNLOAD_DIR/protobuf-${PROTOBUF_VERSION}
   ./autogen.sh
   # install here so we don't need sudo
-  ./configure --prefix="$INSTALL_DIR"
+  ./configure --disable-shared --prefix="$INSTALL_DIR"
   make -j$NUM_CPU
   make install
   popd
