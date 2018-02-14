@@ -941,18 +941,17 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	start := time.Now()
-	success := false
+	errored := false
 	for time.Since(start) < time.Second {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
 		cancel()
 		if err != nil {
-			success = true
+			errored = true
 			break
 		}
 	}
-	// Don't bother stopping the timer; it will have no effect past here.
-	if !success {
+	if !errored {
 		t.Fatalf("GoAway never received by client")
 	}
 	respParam := []*testpb.ResponseParameters{{Size: 1}}
