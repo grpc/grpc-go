@@ -386,8 +386,7 @@ public class ServerImplTest {
     builder.handshakeTimeout(60, TimeUnit.SECONDS);
     createAndStartServer();
     ShutdownRecordingTransport serverTransport = new ShutdownRecordingTransport();
-    ServerTransportListener transportListener
-        = transportServer.registerNewServerTransport(serverTransport);
+    transportServer.registerNewServerTransport(serverTransport);
     timer.forwardTime(59, TimeUnit.SECONDS);
     assertNull("shutdownNow status", serverTransport.shutdownNowStatus);
     // Don't call transportReady() in time
