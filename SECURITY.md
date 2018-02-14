@@ -327,12 +327,13 @@ If you are developing for Android and have a dependency on `grpc-netty`, you sho
 
 Find the dependency tree (e.g., `mvn dependency:tree`), and look for versions of:
  - `io.grpc:grpc-netty`
- - `io.netty:netty-codec-http2`
+ - `io.netty:netty-handler` (really, make sure all of io.netty except for
+   netty-tcnative has the same version)
  - `io.netty:netty-tcnative-boringssl-static:jar` 
 
 If `netty-tcnative-boringssl-static` is missing, then you either need to add it as a dependency, or use alternative methods of providing ALPN capability by reading the *Transport Security (TLS)* section carefully.
 
-If you have both `netty-codec-http2` and `netty-tcnative-boringssl-static` dependencies, then check the versions carefully. These versions could've been overridden by dependency management from another BOM. You would receive the "ALPN is not configured properly" exception if you are using incompatible versions.
+If you have both `netty-handler` and `netty-tcnative-boringssl-static` dependencies, then check the versions carefully. These versions could've been overridden by dependency management from another BOM. You would receive the "ALPN is not configured properly" exception if you are using incompatible versions.
 
 If you have other `netty` dependencies, such as `netty-all`, that are pulled in from other libraries, then ultimately you should make sure only one `netty` dependency is used to avoid classpath conflict. The easiest way is to exclude transitive Netty dependencies from all the immediate dependencies, e.g., in Maven use `<exclusions>`, and then add an explict Netty dependency in your project along with the corresponding `tcnative` versions. See the versions table below.
 
@@ -344,16 +345,16 @@ If you are running inside of an embedded Tomcat runtime (e.g., Spring Boot), the
 
 Below are known to work version combinations:
 
-grpc-netty version | netty-codec-http2 version | netty-tcnative-boringssl-static version
------------------- | ------------------------- | ---------------------------------------
-1.0.0-1.0.1        | 4.1.3.Final               | 1.1.33.Fork19
-1.0.2-1.0.3        | 4.1.6.Final               | 1.1.33.Fork23
-1.1.x-1.3.x        | 4.1.8.Final               | 1.1.33.Fork26
-1.4.x              | 4.1.11.Final              | 2.0.1.Final
-1.5.x              | 4.1.12.Final              | 2.0.5.Final
-1.6.x              | 4.1.14.Final              | 2.0.5.Final
-1.7.x-1.8.x        | 4.1.16.Final              | 2.0.6.Final
-1.9.x-             | 4.1.17.Final              | 2.0.7.Final
+grpc-netty version | netty-handler version | netty-tcnative-boringssl-static version
+------------------ | --------------------- | ---------------------------------------
+1.0.0-1.0.1        | 4.1.3.Final           | 1.1.33.Fork19
+1.0.2-1.0.3        | 4.1.6.Final           | 1.1.33.Fork23
+1.1.x-1.3.x        | 4.1.8.Final           | 1.1.33.Fork26
+1.4.x              | 4.1.11.Final          | 2.0.1.Final
+1.5.x              | 4.1.12.Final          | 2.0.5.Final
+1.6.x              | 4.1.14.Final          | 2.0.5.Final
+1.7.x-1.8.x        | 4.1.16.Final          | 2.0.6.Final
+1.9.x-             | 4.1.17.Final          | 2.0.7.Final
 
 ### OkHttp
 If you are using gRPC on Android devices, you are most likely using `grpc-okhttp` transport.
