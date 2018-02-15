@@ -50,8 +50,17 @@ export LD_LIBRARY_PATH=/tmp/protobuf/lib
 export LDFLAGS=-L/tmp/protobuf/lib
 export CXXFLAGS="-I/tmp/protobuf/include"
 
-# Run tests
+# Ensure all *.proto changes include *.java generated code
 ./gradlew assemble generateTestProto install $GRADLE_FLAGS
+
+if [[ -z "${SKIP_CLEAN_CHECK:-}" && ! -z $(git status --porcelain) ]]; then
+  git status
+  echo "Error Working directory is not clean. Forget to commit generated files?"
+  exit 1
+fi
+
+# Run tests
+./gradlew build
 pushd examples
 ./gradlew build $GRADLE_FLAGS
 # --batch-mode reduces log spam
