@@ -49,14 +49,18 @@ import io.grpc.Status.Code;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.RetryPolicy;
+import io.grpc.internal.RetriableStream.Throttle;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -114,31 +118,49 @@ public class RetriableStreamTest {
           .build();
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
   private final FakeClock fakeClock = new FakeClock();
+
+  private final class RecordedRetriableStream extends RetriableStream<String> {
+    RecordedRetriableStream(MethodDescriptor<String, ?> method, Metadata headers,
+        ChannelBufferMeter channelBufferUsed, long perRpcBufferLimit, long channelBufferLimit,
+        Executor callExecutor,
+        ScheduledExecutorService scheduledExecutorService,
+        RetryPolicy retryPolicy,
+        @Nullable Throttle throttle) {
+      super(method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit, callExecutor,
+          scheduledExecutorService, retryPolicy, throttle);
+    }
+
+    @Override
+    void postCommit() {
+      retriableStreamRecorder.postCommit();
+    }
+
+    @Override
+    ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata metadata) {
+      bufferSizeTracer =
+          tracerFactory.newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+      int actualPreviousRpcAttemptsInHeader = metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS) == null
+          ? 0 : Integer.valueOf(metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
+      return retriableStreamRecorder.newSubstream(actualPreviousRpcAttemptsInHeader);
+    }
+
+    @Override
+    Status prestart() {
+      return retriableStreamRecorder.prestart();
+    }
+  }
+
   private final RetriableStream<String> retriableStream =
-      new RetriableStream<String>(
-          method, new Metadata(),channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
-          MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(), RETRY_POLICY) {
-        @Override
-        void postCommit() {
-          retriableStreamRecorder.postCommit();
-        }
-
-        @Override
-        ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata metadata) {
-          bufferSizeTracer =
-              tracerFactory.newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
-          int actualPreviousRpcAttemptsInHeader = metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS) == null
-              ? 0 : Integer.valueOf(metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
-          return retriableStreamRecorder.newSubstream(actualPreviousRpcAttemptsInHeader);
-        }
-
-        @Override
-        Status prestart() {
-          return retriableStreamRecorder.prestart();
-        }
-      };
+      newThrottledRetriableStream(null /* throttle */);
 
   private ClientStreamTracer bufferSizeTracer;
+
+  private RetriableStream<String> newThrottledRetriableStream(Throttle throttle) {
+    return new RecordedRetriableStream(
+        method, new Metadata(), channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
+        MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(), RETRY_POLICY,
+        throttle);
+  }
 
   @After
   public void tearDown() {
@@ -1141,6 +1163,204 @@ public class RetriableStreamTest {
 
     verify(retriableStreamRecorder, never()).newSubstream(1);
     verify(retriableStreamRecorder).postCommit();
+  }
+
+  @Test
+  public void throttle() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    assertTrue(throttle.isAboveThreshold());
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 3
+    assertTrue(throttle.isAboveThreshold());
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 2
+    assertFalse(throttle.isAboveThreshold());
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 1
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 0
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 0
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 0
+    assertFalse(throttle.isAboveThreshold());
+
+    throttle.onSuccess(); // token = 0.8
+    assertFalse(throttle.isAboveThreshold());
+    throttle.onSuccess(); // token = 1.6
+    assertFalse(throttle.isAboveThreshold());
+    throttle.onSuccess(); // token = 3.2
+    assertTrue(throttle.isAboveThreshold());
+    throttle.onSuccess(); // token = 4
+    assertTrue(throttle.isAboveThreshold());
+    throttle.onSuccess(); // token = 4
+    assertTrue(throttle.isAboveThreshold());
+    throttle.onSuccess(); // token = 4
+    assertTrue(throttle.isAboveThreshold());
+
+    assertTrue(throttle.isAboveThreshold());
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 3
+    assertTrue(throttle.isAboveThreshold());
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // token = 2
+    assertFalse(throttle.isAboveThreshold());
+  }
+
+  @Test
+  public void throttledStream_FailWithRetriableStatusCode_WithoutPushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    sublistenerCaptor.getValue().closed(Status.fromCode(RETRIABLE_STATUS_CODE_1), new Metadata());
+    verify(retriableStreamRecorder).postCommit();
+    assertFalse(throttle.isAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttledStream_FailWithNonRetriableStatusCode_WithoutPushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    sublistenerCaptor.getValue().closed(Status.fromCode(NON_RETRIABLE_STATUS_CODE), new Metadata());
+    verify(retriableStreamRecorder).postCommit();
+    assertTrue(throttle.isAboveThreshold()); // count = 3
+
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttledStream_FailWithRetriableStatusCode_WithRetriablePushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    int pushbackInMillis = 123;
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "" + pushbackInMillis);
+    sublistenerCaptor.getValue().closed(Status.fromCode(RETRIABLE_STATUS_CODE_1), headers);
+    verify(retriableStreamRecorder).postCommit();
+    assertFalse(throttle.isAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttledStream_FailWithNonRetriableStatusCode_WithRetriablePushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    int pushbackInMillis = 123;
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "" + pushbackInMillis);
+    sublistenerCaptor.getValue().closed(Status.fromCode(NON_RETRIABLE_STATUS_CODE), headers);
+    verify(retriableStreamRecorder, never()).postCommit();
+    assertTrue(throttle.isAboveThreshold()); // count = 3
+
+    // drain pending retry
+    fakeClock.forwardTime(pushbackInMillis, TimeUnit.MILLISECONDS);
+
+    assertTrue(throttle.isAboveThreshold()); // count = 3
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttledStream_FailWithRetriableStatusCode_WithNonRetriablePushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "");
+    sublistenerCaptor.getValue().closed(Status.fromCode(RETRIABLE_STATUS_CODE_1), headers);
+    verify(retriableStreamRecorder).postCommit();
+    assertFalse(throttle.isAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttledStream_FailWithNonRetriableStatusCode_WithNonRetriablePushback() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "");
+    sublistenerCaptor.getValue().closed(Status.fromCode(NON_RETRIABLE_STATUS_CODE), headers);
+    verify(retriableStreamRecorder).postCommit();
+    assertFalse(throttle.isAboveThreshold()); // count = 2
+  }
+
+  @Test
+  public void throttleStream_Succeed() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> retriableStream = newThrottledRetriableStream(throttle);
+
+    ClientStream mockStream = mock(ClientStream.class);
+    doReturn(mockStream).when(retriableStreamRecorder).newSubstream(anyInt());
+    retriableStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(sublistenerCaptor.capture());
+
+    // mimic some other calls in the channel trigger throttle countdowns
+    assertTrue(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 3
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 2
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 1
+
+    sublistenerCaptor.getValue().headersRead(new Metadata());
+    verify(retriableStreamRecorder).postCommit();
+    assertFalse(throttle.isAboveThreshold());  // count = 1.8
+
+    // mimic some other call in the channel triggers a success
+    throttle.onSuccess();
+    assertTrue(throttle.isAboveThreshold()); // count = 2.6
   }
 
   /**

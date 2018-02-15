@@ -55,6 +55,7 @@ import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.RetryPolicy;
+import io.grpc.internal.RetriableStream.Throttle;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
@@ -204,6 +205,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
 
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
+
+  private Throttle throttle;
 
   private final int maxRetryAttempts;
   private final int maxHedgedAttempts;
@@ -447,7 +450,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
       return new RetriableStream<ReqT>(
           method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
           getCallExecutor(callOptions), transportFactory.getScheduledExecutorService(),
-          retryPolicy) {
+          retryPolicy, throttle) {
         @Override
         Status prestart() {
           return uncommittedRetriableStreamsRegistry.add(this);
@@ -1072,6 +1075,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
           try {
             if (retryEnabled) {
               retryPolicies = getRetryPolicies(config);
+              throttle = getThrottle(config);
             }
           } catch (RuntimeException re) {
             logger.log(
@@ -1124,6 +1128,12 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
         return RetryPolicy.DEFAULT;
       }
     };
+  }
+
+  // TODO(zdapeng): implement it once the Gson dependency issue is resolved.
+  @Nullable
+  private static Throttle getThrottle(Attributes config) {
+    return null;
   }
 
   private final class SubchannelImpl extends AbstractSubchannel {
