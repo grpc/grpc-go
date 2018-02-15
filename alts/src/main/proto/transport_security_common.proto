@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package grpc.gcp;
+
+option java_package = "io.grpc.alts";
+
+// The security level of the created channel. The list is sorted in increasing
+// level of security. This order must always be maintained.
+enum SecurityLevel {
+  SECURITY_NONE = 0;
+  INTEGRITY_ONLY = 1;
+  INTEGRITY_AND_PRIVACY = 2;
+}
+
+// Max and min supported RPC protocol versions.
+message RpcProtocolVersions {
+  // RPC version contains a major version and a minor version.
+  message Version {
+    uint32 major = 1;
+    uint32 minor = 2;
+  }
+  // Maximum supported RPC version.
+  Version max_rpc_version = 1;
+  // Minimum supported RPC version.
+  Version min_rpc_version = 2;
+}

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "transport_security_common.proto";
+
+package grpc.gcp;
+
+option java_package = "io.grpc.alts";
+
+message AltsContext {
+  // The application protocol negotiated for this connection.
+  string application_protocol = 1;
+
+  // The record protocol negotiated for this connection.
+  string record_protocol = 2;
+
+  // The security level of the created secure channel.
+  SecurityLevel security_level = 3;
+
+  // The peer service account.
+  string peer_service_account = 4;
+
+  // The local service account.
+  string local_service_account = 5;
+
+  // The RPC protocol versions supported by the peer.
+  RpcProtocolVersions peer_rpc_versions = 6;
+}

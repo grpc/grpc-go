@@ -1,0 +1,41 @@
+description = "gRPC: ALTS"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
+dependencies {
+    compile project(':grpc-core'),
+            project(':grpc-netty'),
+            project(':grpc-protobuf'),
+            project(':grpc-stub'),
+            libraries.lang,
+            libraries.protobuf
+    testCompile libraries.guava_testlib,
+                libraries.junit,
+                libraries.mockito,
+                libraries.truth
+}
+
+configureProtoCompilation()
+
+[compileJava, compileTestJava].each() {
+    // ALTS retuns a lot of futures that we mostly don't care about.
+    // protobuf calls valueof. Will be fixed in next release (google/protobuf#4046)
+    it.options.compilerArgs += ["-Xlint:-deprecation", "-Xep:FutureReturnValueIgnored:OFF"]
+}
+
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+    }
+}

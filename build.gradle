@@ -208,6 +208,7 @@ subprojects {
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.3',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
+                lang: "org.apache.commons:commons-lang3:3.5",
 
                 netty: "io.netty:netty-codec-http2:[${nettyVersion}]",
                 netty_epoll: "io.netty:netty-transport-native-epoll:${nettyVersion}" + epoll_suffix,
@@ -218,6 +219,7 @@ subprojects {
                 junit: 'junit:junit:4.12',
                 mockito: 'org.mockito:mockito-core:1.9.5',
                 truth: 'com.google.truth:truth:0.36',
+                guava_testlib: 'com.google.guava:guava-testlib:19.0',
 
                 // Benchmark dependencies
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.10',
@@ -391,6 +393,8 @@ subprojects {
 // Run with: ./gradlew japicmp --continue
 def baselineGrpcVersion = '1.6.1'
 def publicApiSubprojects = [
+        // TODO: uncomment after grpc-alts artifact is published.
+        // ':grpc-alts',
         ':grpc-auth',
         ':grpc-context',
         ':grpc-core',

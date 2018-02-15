@@ -27,6 +27,7 @@ def nettyTcNativeVersion = '2.0.7.Final'
 
 dependencies {
   compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
+  compile "io.grpc:grpc-alts:${grpcVersion}"
   compile "io.grpc:grpc-netty:${grpcVersion}"
   compile "io.grpc:grpc-protobuf:${grpcVersion}"
   compile "io.grpc:grpc-stub:${grpcVersion}"
@@ -101,6 +102,20 @@ task helloWorldClient(type: CreateStartScripts) {
   classpath = jar.outputs.files + project.configurations.runtime
 }
 
+task helloWorldAltsServer(type: CreateStartScripts) {
+  mainClassName = 'io.grpc.examples.alts.HelloWorldAltsServer'
+  applicationName = 'hello-world-alts-server'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task helloWorldAltsClient(type: CreateStartScripts) {
+  mainClassName = 'io.grpc.examples.alts.HelloWorldAltsClient'
+  applicationName = 'hello-world-alts-client'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
+}
+
 task helloWorldTlsServer(type: CreateStartScripts) {
   mainClassName = 'io.grpc.examples.helloworldtls.HelloWorldServerTls'
   applicationName = 'hello-world-tls-server'
@@ -127,6 +142,8 @@ applicationDistribution.into('bin') {
   from(routeGuideClient)
   from(helloWorldServer)
   from(helloWorldClient)
+  from(helloWorldAltsServer)
+  from(helloWorldAltsClient)
   from(helloWorldTlsServer)
   from(helloWorldTlsClient)
   from(compressingHelloWorldClient)

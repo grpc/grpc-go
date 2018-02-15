@@ -26,7 +26,8 @@ def grpc_java_repositories(
     omit_io_netty_tcnative_boringssl_static=False,
     omit_io_opencensus_api=False,
     omit_io_opencensus_grpc_metrics=False,
-    omit_junit_junit=False):
+    omit_junit_junit=False,
+    omit_org_apache_commons_lang3=False):
   """Imports dependencies for grpc-java."""
   if not omit_com_google_api_grpc_google_common_protos:
     com_google_api_grpc_google_common_protos()
@@ -80,6 +81,8 @@ def grpc_java_repositories(
     io_opencensus_grpc_metrics()
   if not omit_junit_junit:
     junit_junit()
+  if not omit_org_apache_commons_lang3:
+    org_apache_commons_lang3()
 
   native.bind(
     name = "guava",
@@ -267,4 +270,11 @@ def junit_junit():
       name = "junit_junit",
       artifact = "junit:junit:4.12",
       sha1 = "2973d150c0dc1fefe998f834810d68f278ea58ec",
+  )
+
+def org_apache_commons_lang3():
+  native.maven_jar(
+    name = "org_apache_commons_commons_lang3",
+    artifact = "org.apache.commons:commons-lang3:3.5",
+    sha1 = "6c6c702c89bfff3cd9e80b04d668c5e190d588c6"
   )

@@ -1,0 +1,82 @@
+load("//:java_grpc_library.bzl", "java_grpc_library")
+
+java_library(
+    name = "alts_tsi",
+    srcs = glob([
+        "src/main/java/io/grpc/alts/transportsecurity/*.java",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "//core:internal",
+        "//stub",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@io_netty_netty_buffer//jar",
+        "@io_netty_netty_common//jar",
+        ":handshaker_java_proto",
+        ":handshaker_java_grpc",
+    ],
+)
+
+java_library(
+    name = "alts",
+    srcs = glob([
+        "src/main/java/io/grpc/alts/*.java",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "//core:internal",
+        "//netty",
+        "//stub",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@io_netty_netty_buffer//jar",
+        "@io_netty_netty_codec//jar",
+        "@io_netty_netty_common//jar",
+        "@io_netty_netty_transport//jar",
+        "@org_apache_commons_commons_lang3//jar",
+        ":alts_tsi",
+        ":handshaker_java_proto",
+        ":handshaker_java_grpc",
+    ],
+)
+
+# bazel only accepts proto import with absolute path.
+genrule(
+    name = "protobuf_imports",
+    srcs = glob(["src/main/proto/*.proto"]),
+    outs = [
+        "protobuf_out/altscontext.proto",
+        "protobuf_out/handshaker.proto",
+        "protobuf_out/transport_security_common.proto",
+    ],
+    cmd = "for fname in $(SRCS); do " +
+          "sed 's,import \",import \"alts/protobuf_out/,g' $$fname > " +
+          "$(@D)/protobuf_out/$$(basename $$fname); done",
+)
+
+proto_library(
+    name = "handshaker_proto",
+    srcs = [
+        "protobuf_out/altscontext.proto",
+        "protobuf_out/handshaker.proto",
+        "protobuf_out/transport_security_common.proto",
+    ],
+)
+
+java_proto_library(
+    name = "handshaker_java_proto",
+    deps = [":handshaker_proto"],
+)
+
+java_grpc_library(
+    name = "handshaker_java_grpc",
+    srcs = [":handshaker_proto"],
+    deps = [":handshaker_java_proto"],
+)
