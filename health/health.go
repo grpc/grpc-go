@@ -60,7 +60,7 @@ func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*h
 			Status: status,
 		}, nil
 	}
-	return nil, status.Error(codes.NotFound, "unknown service")
+	return nil, status.Error(codes.Unknown, "unknown service")
 }
 
 // SetServingStatus is called when need to reset the serving status of a service
