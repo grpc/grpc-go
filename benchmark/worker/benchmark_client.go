@@ -118,7 +118,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	case testpb.ClientType_SYNC_CLIENT:
 	case testpb.ClientType_ASYNC_CLIENT:
 	default:
-		return nil, nil, status.Errorf(codes.InvalidArgument, "unknow client type: %v", config.ClientType)
+		return nil, nil, status.Errorf(codes.InvalidArgument, "unknown client type: %v", config.ClientType)
 	}
 
 	// Check and set security options.
@@ -142,7 +142,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 			opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(byteBufCodec{})))
 		case *testpb.PayloadConfig_SimpleParams:
 		default:
-			return nil, nil, status.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "unknown payload config: %v", config.PayloadConfig)
 		}
 	}
 
@@ -177,7 +177,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 			payloadRespSize = int(c.SimpleParams.RespSize)
 			payloadType = "protobuf"
 		default:
-			return status.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
+			return status.Errorf(codes.InvalidArgument, "unknown payload config: %v", config.PayloadConfig)
 		}
 	}
 
