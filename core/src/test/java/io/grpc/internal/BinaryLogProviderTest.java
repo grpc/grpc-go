@@ -83,21 +83,25 @@ public class BinaryLogProviderTest {
   private final List<byte[]> binlogReq = new ArrayList<byte[]>();
   private final List<byte[]> binlogResp = new ArrayList<byte[]>();
   private final BinaryLogProvider binlogProvider = new BinaryLogProvider() {
-      @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return new TestBinaryLogServerInterceptor();
-      }
+    @Override
+    public ServerInterceptor getServerInterceptor(String fullMethodName) {
+      return new TestBinaryLogServerInterceptor();
+    }
 
-      @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
-        return new TestBinaryLogClientInterceptor();
-      }
+    @Override
+    public ClientInterceptor getClientInterceptor(String fullMethodName) {
+      return new TestBinaryLogClientInterceptor();
+    }
 
-      @Override
-      protected int priority() {
-        return 0;
-      }
-    };
+    @Override
+    public void close() { }
+
+
+    @Override
+    protected int priority() {
+      return 0;
+    }
+  };
 
   @Test
   public void noProvider() {

@@ -25,12 +25,15 @@ import com.google.protobuf.ByteString;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.binarylog.GrpcLogEntry;
+import io.grpc.binarylog.GrpcLogEntry.Type;
 import io.grpc.binarylog.Message;
 import io.grpc.binarylog.Metadata.Builder;
 import io.grpc.binarylog.MetadataEntry;
 import io.grpc.binarylog.Peer;
 import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
+import java.io.InputStream;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -46,23 +49,113 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A binary log class that is configured for a specific {@link MethodDescriptor}.
  */
+// TODO(zpencer): this is really a per-method logger class, make the class name more clear.
+@ThreadSafe
 final class BinaryLog {
   private static final Logger logger = Logger.getLogger(BinaryLog.class.getName());
   private static final int IP_PORT_BYTES = 2;
   private static final int IP_PORT_UPPER_MASK = 0xff00;
   private static final int IP_PORT_LOWER_MASK = 0xff;
 
-  private final int maxHeaderBytes;
-  private final int maxMessageBytes;
+  private final BinaryLogSink sink;
+  @VisibleForTesting
+  final int maxHeaderBytes;
+  @VisibleForTesting
+  final int maxMessageBytes;
 
   @VisibleForTesting
-  BinaryLog(int maxHeaderBytes, int maxMessageBytes) {
+  BinaryLog(BinaryLogSink sink, int maxHeaderBytes, int maxMessageBytes) {
+    this.sink = sink;
     this.maxHeaderBytes = maxHeaderBytes;
     this.maxMessageBytes = maxMessageBytes;
+  }
+
+  /**
+   * Logs the sending of initial metadata. This method logs the appropriate number of bytes
+   * as determined by the binary logging configuration.
+   */
+  public void logSendInitialMetadata(
+      Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket) {
+    GrpcLogEntry entry = GrpcLogEntry
+        .newBuilder()
+        .setType(Type.SEND_INITIAL_METADATA)
+        .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
+        .setCallId(callIdToProto(callId))
+        .setPeer(socketToProto(peerSocket))
+        .setMetadata(metadataToProto(metadata, maxHeaderBytes))
+        .build();
+    sink.write(entry);
+  }
+
+  /**
+   * Logs the receiving of initial metadata. This method logs the appropriate number of bytes
+   * as determined by the binary logging configuration.
+   */
+  public void logRecvInitialMetadata(
+      Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket) {
+    GrpcLogEntry entry = GrpcLogEntry
+        .newBuilder()
+        .setType(Type.RECV_INITIAL_METADATA)
+        .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
+        .setCallId(callIdToProto(callId))
+        .setPeer(socketToProto(peerSocket))
+        .setMetadata(metadataToProto(metadata, maxHeaderBytes))
+        .build();
+    sink.write(entry);
+  }
+
+  /**
+   * Logs the trailing metadata. This method logs the appropriate number of bytes
+   * as determined by the binary logging configuration.
+   */
+  public void logTrailingMetadata(Metadata metadata, boolean isServer, byte[] callId) {
+    GrpcLogEntry entry = GrpcLogEntry
+        .newBuilder()
+        .setType(isServer ? Type.SEND_TRAILING_METADATA : Type.RECV_TRAILING_METADATA)
+        .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
+        .setCallId(callIdToProto(callId))
+        .setMetadata(metadataToProto(metadata, maxHeaderBytes))
+        .build();
+    sink.write(entry);
+  }
+
+  /**
+   * Logs the outbound message. This method logs the appropriate number of bytes from
+   * {@code message}, and returns an {@link InputStream} that contains the original message.
+   * The number of bytes logged is determined by the binary logging configuration.
+   */
+  public void logOutboundMessage(
+      ByteBuffer message, boolean compressed, boolean isServer, byte[] callId) {
+    GrpcLogEntry entry = GrpcLogEntry
+        .newBuilder()
+        .setType(Type.SEND_MESSAGE)
+        .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
+        .setCallId(callIdToProto(callId))
+        .setMessage(messageToProto(message, compressed, maxMessageBytes))
+        .build();
+    sink.write(entry);
+  }
+
+  /**
+   * Logs the inbound message. This method logs the appropriate number of bytes from
+   * {@code message}, and returns an {@link InputStream} that contains the original message.
+   * The number of bytes logged is determined by the binary logging configuration.
+   */
+  public void logInboundMessage(
+      ByteBuffer message, boolean compressed, boolean isServer, byte[] callId) {
+    GrpcLogEntry entry = GrpcLogEntry
+        .newBuilder()
+        .setType(Type.RECV_MESSAGE)
+        .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
+        .setCallId(callIdToProto(callId))
+        .setMessage(messageToProto(message, compressed, maxMessageBytes))
+        .build();
+    sink.write(entry);
   }
 
   @Override
@@ -72,7 +165,8 @@ final class BinaryLog {
     }
     BinaryLog that = (BinaryLog) o;
     return this.maxHeaderBytes == that.maxHeaderBytes
-        && this.maxMessageBytes == that.maxMessageBytes;
+        && this.maxMessageBytes == that.maxMessageBytes
+        && this.sink.equals(that.sink);
   }
 
   @Override
@@ -84,7 +178,9 @@ final class BinaryLog {
   public String toString() {
     return getClass().getSimpleName() + '['
         + "maxHeaderBytes=" + maxHeaderBytes + ", "
-        + "maxMessageBytes=" + maxMessageBytes + "]";
+        + "maxMessageBytes=" + maxMessageBytes
+        + "sink=" + sink
+        + "]";
   }
 
   private static final Factory DEFAULT_FACTORY;
@@ -94,8 +190,10 @@ final class BinaryLog {
     Factory defaultFactory = NULL_FACTORY;
     try {
       String configStr = System.getenv("GRPC_BINARY_LOG_CONFIG");
-      if (configStr != null && configStr.length() > 0) {
-        defaultFactory = new FactoryImpl(configStr);
+      // TODO(zpencer): make BinaryLog.java implement isAvailable, and put this check there
+      BinaryLogSink sink = BinaryLogSinkProvider.provider();
+      if (sink != null && configStr != null && configStr.length() > 0) {
+        defaultFactory = new FactoryImpl(sink, configStr);
       }
     } catch (Throwable t) {
       logger.log(Level.SEVERE, "Failed to initialize binary log. Disabling binary log.", t);
@@ -140,7 +238,7 @@ final class BinaryLog {
      * Accepts a string in the format specified by the binary log spec.
      */
     @VisibleForTesting
-    FactoryImpl(String configurationString) {
+    FactoryImpl(BinaryLogSink sink, String configurationString) {
       Preconditions.checkState(configurationString != null && configurationString.length() > 0);
       BinaryLog globalLog = null;
       Map<String, BinaryLog> perServiceLogs = new HashMap<String, BinaryLog>();
@@ -153,7 +251,7 @@ final class BinaryLog {
         }
         String methodOrSvc = configMatcher.group(1);
         String binlogOptionStr = configMatcher.group(2);
-        BinaryLog binLog = createBinaryLog(binlogOptionStr);
+        BinaryLog binLog = createBinaryLog(sink, binlogOptionStr);
         if (binLog == null) {
           continue;
         }
@@ -215,9 +313,9 @@ final class BinaryLog {
      */
     @VisibleForTesting
     @Nullable
-    static BinaryLog createBinaryLog(@Nullable String logConfig) {
+    static BinaryLog createBinaryLog(BinaryLogSink sink, @Nullable String logConfig) {
       if (logConfig == null) {
-        return new BinaryLog(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return new BinaryLog(sink, Integer.MAX_VALUE, Integer.MAX_VALUE);
       }
       try {
         Matcher headerMatcher;
@@ -244,7 +342,7 @@ final class BinaryLog {
           logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
           return null;
         }
-        return new BinaryLog(maxHeaderBytes, maxMsgBytes);
+        return new BinaryLog(sink, maxHeaderBytes, maxMsgBytes);
       } catch (NumberFormatException e) {
         logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
         return null;
@@ -341,15 +439,17 @@ final class BinaryLog {
   }
 
   @VisibleForTesting
-  static Message messageToProto(byte[] message, boolean compressed, int maxMessageBytes) {
-    Preconditions.checkState(maxMessageBytes >= 0);
+  static Message messageToProto(ByteBuffer message, boolean compressed, int maxMessageBytes) {
+    int messageSize = message.remaining();
     Message.Builder builder = Message
         .newBuilder()
         .setFlags(flagsForMessage(compressed))
-        .setLength(message.length);
+        .setLength(messageSize);
     if (maxMessageBytes > 0) {
-      int limit = Math.min(maxMessageBytes, message.length);
-      builder.setData(ByteString.copyFrom(message, 0, limit));
+      int desiredRemaining = Math.min(maxMessageBytes, messageSize);
+      ByteBuffer dup = message.duplicate();
+      dup.limit(dup.position() + desiredRemaining);
+      builder.setData(ByteString.copyFrom(dup));
     }
     return builder.build();
   }

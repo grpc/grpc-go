@@ -29,6 +29,8 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
+import java.io.Closeable;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,7 +43,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
-public abstract class BinaryLogProvider {
+public abstract class BinaryLogProvider implements Closeable {
   private static final Logger logger = Logger.getLogger(BinaryLogProvider.class.getName());
   private static final BinaryLogProvider PROVIDER = load(BinaryLogProvider.class.getClassLoader());
   @VisibleForTesting
@@ -157,6 +159,12 @@ public abstract class BinaryLogProvider {
   // TODO(zpencer): ensure the interceptor properly handles retries and hedging
   @Nullable
   public abstract ClientInterceptor getClientInterceptor(String fullMethodName);
+
+  @Override
+  public void close() throws IOException {
+    // default impl: noop
+    // TODO(zpencer): make BinaryLogProvider provide a BinaryLog, and this method belongs there
+  }
 
   /**
    * A priority, from 0 to 10 that this provider should be used, taking the current environment into
