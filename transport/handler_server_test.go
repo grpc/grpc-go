@@ -315,7 +315,7 @@ func TestHandlerTransport_HandleStreams_Unimplemented(t *testing.T) {
 
 // Tests that codes.InvalidArgument will close the body, per comment in handler_server.go.
 func TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
-	handleStreamCloseBodyTest(t, codes.InvalidArgument, "bad arg")
+	handleStreamCloseBodyTest(t, codes.Internal, "bad arg")
 }
 
 func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) {

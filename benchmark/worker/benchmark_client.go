@@ -118,7 +118,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	case testpb.ClientType_SYNC_CLIENT:
 	case testpb.ClientType_ASYNC_CLIENT:
 	default:
-		return nil, nil, status.Errorf(codes.InvalidArgument, "unknow client type: %v", config.ClientType)
+		return nil, nil, status.Errorf(codes.Internal, "unknow client type: %v", config.ClientType)
 	}
 
 	// Check and set security options.
@@ -128,7 +128,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 		}
 		creds, err := credentials.NewClientTLSFromFile(*caFile, config.SecurityParams.ServerHostOverride)
 		if err != nil {
-			return nil, nil, status.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
+			return nil, nil, status.Errorf(codes.Internal, "failed to create TLS credentials %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
@@ -142,7 +142,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 			opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(byteBufCodec{})))
 		case *testpb.PayloadConfig_SimpleParams:
 		default:
-			return nil, nil, status.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
+			return nil, nil, status.Errorf(codes.Internal, "unknow payload config: %v", config.PayloadConfig)
 		}
 	}
 
@@ -177,7 +177,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 			payloadRespSize = int(c.SimpleParams.RespSize)
 			payloadType = "protobuf"
 		default:
-			return status.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
+			return status.Errorf(codes.Internal, "unknow payload config: %v", config.PayloadConfig)
 		}
 	}
 
@@ -187,7 +187,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 	case *testpb.LoadParams_Poisson:
 		return status.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	default:
-		return status.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
+		return status.Errorf(codes.Internal, "unknown load params: %v", config.LoadParams)
 	}
 
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
@@ -200,7 +200,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
 		// TODO open loop.
 	default:
-		return status.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
+		return status.Errorf(codes.Internal, "unknown rpc type: %v", config.RpcType)
 	}
 
 	return nil
