@@ -60,7 +60,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   public static void loadConscrypt() throws Exception {
     // Load conscrypt if it is available. Either Conscrypt or Jetty ALPN needs to be available for
     // OkHttp to negotiate.
-    Util.installConscryptIfAvailable();
+    TestUtils.installConscryptIfAvailable();
   }
 
   @Override

@@ -26,7 +26,6 @@ import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -53,7 +52,6 @@ public class Http2NettyTest extends AbstractInteropTest {
               .clientAuth(ClientAuth.REQUIRE)
               .trustManager(TestUtils.loadCert("ca.pem"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
-              .sslProvider(SslProvider.OPENSSL)
               .build());
     } catch (IOException ex) {
       throw new RuntimeException(ex);
@@ -72,7 +70,6 @@ public class Http2NettyTest extends AbstractInteropTest {
               .keyManager(TestUtils.loadCert("client.pem"), TestUtils.loadCert("client.key"))
               .trustManager(TestUtils.loadX509Cert("ca.pem"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
-              .sslProvider(SslProvider.OPENSSL)
               .build());
       io.grpc.internal.TestingAccessor.setStatsImplementation(
           builder, createClientCensusStatsModule());

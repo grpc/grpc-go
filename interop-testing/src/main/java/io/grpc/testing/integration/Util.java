@@ -19,10 +19,6 @@ package io.grpc.testing.integration;
 import com.google.protobuf.MessageLite;
 import io.grpc.Metadata;
 import io.grpc.protobuf.ProtoUtils;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.security.Provider;
-import java.security.Security;
 import java.util.List;
 import org.junit.Assert;
 
@@ -65,42 +61,5 @@ public class Util {
         assertEquals(expected.get(i), actual.get(i));
       }
     }
-  }
-
-  private static boolean conscryptInstallAttempted;
-
-  /**
-   * Add Conscrypt to the list of security providers, if it is available. If it appears to be
-   * available but fails to load, this method will throw an exception. Since the list of security
-   * providers is static, this method does nothing if the provider is not available or succeeded
-   * previously.
-   */
-  public static void installConscryptIfAvailable() {
-    if (conscryptInstallAttempted) {
-      return;
-    }
-    Class<?> conscrypt;
-    try {
-      conscrypt = Class.forName("org.conscrypt.Conscrypt");
-    } catch (ClassNotFoundException ex) {
-      conscryptInstallAttempted = true;
-      return;
-    }
-    Method newProvider;
-    try {
-      newProvider = conscrypt.getMethod("newProvider");
-    } catch (NoSuchMethodException ex) {
-      throw new RuntimeException("Could not find newProvider method on Conscrypt", ex);
-    }
-    Provider provider;
-    try {
-      provider = (Provider) newProvider.invoke(null);
-    } catch (IllegalAccessException ex) {
-      throw new RuntimeException("Could not invoke Conscrypt.newProvider", ex);
-    } catch (InvocationTargetException ex) {
-      throw new RuntimeException("Could not invoke Conscrypt.newProvider", ex);
-    }
-    Security.addProvider(provider);
-    conscryptInstallAttempted = true;
   }
 }

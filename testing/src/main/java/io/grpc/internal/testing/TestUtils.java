@@ -24,12 +24,15 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -140,6 +143,43 @@ public class TestUtils {
     } finally {
       in.close();
     }
+  }
+
+  private static boolean conscryptInstallAttempted;
+
+  /**
+   * Add Conscrypt to the list of security providers, if it is available. If it appears to be
+   * available but fails to load, this method will throw an exception. Since the list of security
+   * providers is static, this method does nothing if the provider is not available or succeeded
+   * previously.
+   */
+  public static void installConscryptIfAvailable() {
+    if (conscryptInstallAttempted) {
+      return;
+    }
+    Class<?> conscrypt;
+    try {
+      conscrypt = Class.forName("org.conscrypt.Conscrypt");
+    } catch (ClassNotFoundException ex) {
+      conscryptInstallAttempted = true;
+      return;
+    }
+    Method newProvider;
+    try {
+      newProvider = conscrypt.getMethod("newProvider");
+    } catch (NoSuchMethodException ex) {
+      throw new RuntimeException("Could not find newProvider method on Conscrypt", ex);
+    }
+    Provider provider;
+    try {
+      provider = (Provider) newProvider.invoke(null);
+    } catch (IllegalAccessException ex) {
+      throw new RuntimeException("Could not invoke Conscrypt.newProvider", ex);
+    } catch (InvocationTargetException ex) {
+      throw new RuntimeException("Could not invoke Conscrypt.newProvider", ex);
+    }
+    Security.addProvider(provider);
+    conscryptInstallAttempted = true;
   }
 
   /**

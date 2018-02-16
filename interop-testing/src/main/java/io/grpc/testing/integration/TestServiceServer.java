@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 public class TestServiceServer {
   /** The main application allowing this server to be launched from the command line. */
   public static void main(String[] args) throws Exception {
+    // Let Netty use Conscrypt if it is available.
+    TestUtils.installConscryptIfAvailable();
     final TestServiceServer server = new TestServiceServer();
     server.parseArgs(args);
     if (server.useTls) {

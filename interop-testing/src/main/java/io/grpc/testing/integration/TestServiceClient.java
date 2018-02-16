@@ -46,8 +46,8 @@ public class TestServiceClient {
    * The main application allowing this client to be launched from the command line.
    */
   public static void main(String[] args) throws Exception {
-    // Let OkHttp use Conscrypt if it is available.
-    Util.installConscryptIfAvailable();
+    // Let Netty or OkHttp use Conscrypt if it is available.
+    TestUtils.installConscryptIfAvailable();
     final TestServiceClient client = new TestServiceClient();
     client.parseArgs(args);
     client.setUp();
