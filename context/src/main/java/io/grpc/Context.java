@@ -17,16 +17,13 @@
 package io.grpc;
 
 import java.io.Closeable;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -102,55 +99,6 @@ public class Context {
 
   private static final PersistentHashArrayMappedTrie<Key<?>, Object> EMPTY_ENTRIES =
       new PersistentHashArrayMappedTrie<Key<?>, Object>();
-
-  static final AtomicLongArray withValueCounts;
-  /**
-   * Counts how many times a unique value added to the context.
-   */
-  static final AtomicLongArray withValueUniqueCounts;
-  static final AtomicLongArray getCounts;
-  private static final Method threadLocalRandomCurrent;
-
-  static {
-    Method localThreadLocalRandomCurrent = null;
-    try {
-      Class<?> cls = Class.forName("java.util.concurrent.ThreadLocalRandom");
-      localThreadLocalRandomCurrent = cls.getMethod("current");
-      // call it once just to check.
-      localThreadLocalRandomCurrent.invoke(null);
-    } catch (Throwable t) {
-      log.log(Level.FINE, "Can't find TLR, skipping", t);
-      localThreadLocalRandomCurrent = null;
-    }
-    if (localThreadLocalRandomCurrent != null) {
-      withValueCounts = new AtomicLongArray(100);
-      withValueUniqueCounts = new AtomicLongArray(100);
-      getCounts = new AtomicLongArray(100);
-      threadLocalRandomCurrent = localThreadLocalRandomCurrent;
-    } else {
-      withValueCounts = new AtomicLongArray(0);
-      withValueUniqueCounts = new AtomicLongArray(0);
-      getCounts = new AtomicLongArray(0);
-      threadLocalRandomCurrent = null;
-    }
-  }
-
-  private static boolean shouldSample() {
-    if (threadLocalRandomCurrent == null) {
-      return false;
-    }
-    Random r;
-    try {
-      r = (Random) threadLocalRandomCurrent.invoke(null);
-    } catch (Exception e) {
-      log.log(Level.FINE, "Can't get TLR", e);
-      return false;
-    }
-    if (r.nextInt(256) != 0) {
-      return false;
-    }
-    return true;
-  }
 
   // Long chains of contexts are suspicious and usually indicate a misuse of Context.
   // The threshold is arbitrarily chosen.
@@ -369,13 +317,6 @@ public class Context {
    */
   public <V> Context withValue(Key<V> k1, V v1) {
     PersistentHashArrayMappedTrie<Key<?>, Object> newKeyValueEntries = keyValueEntries.put(k1, v1);
-    if (shouldSample()) {
-      withValueUniqueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueUniqueCounts.length() - 1),
-          newKeyValueEntries.size() - keyValueEntries.size());
-      withValueCounts.incrementAndGet(
-          Math.min(keyValueEntries.size(), withValueCounts.length() - 1));
-    }
     return new Context(this, newKeyValueEntries);
   }
 
@@ -386,14 +327,6 @@ public class Context {
   public <V1, V2> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2) {
     PersistentHashArrayMappedTrie<Key<?>, Object> newKeyValueEntries =
         keyValueEntries.put(k1, v1).put(k2, v2);
-    if (shouldSample()) {
-      withValueUniqueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueUniqueCounts.length() - 1),
-          newKeyValueEntries.size() - keyValueEntries.size());
-      withValueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueCounts.length() - 1),
-          2);
-    }
     return new Context(this, newKeyValueEntries);
   }
 
@@ -404,14 +337,6 @@ public class Context {
   public <V1, V2, V3> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2, Key<V3> k3, V3 v3) {
     PersistentHashArrayMappedTrie<Key<?>, Object> newKeyValueEntries =
         keyValueEntries.put(k1, v1).put(k2, v2).put(k3, v3);
-    if (shouldSample()) {
-      withValueUniqueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueUniqueCounts.length() - 1),
-          newKeyValueEntries.size() - keyValueEntries.size());
-      withValueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueCounts.length() - 1),
-          3);
-    }
     return new Context(this, newKeyValueEntries);
   }
 
@@ -423,14 +348,6 @@ public class Context {
       Key<V3> k3, V3 v3, Key<V4> k4, V4 v4) {
     PersistentHashArrayMappedTrie<Key<?>, Object> newKeyValueEntries =
         keyValueEntries.put(k1, v1).put(k2, v2).put(k3, v3).put(k4, v4);
-    if (shouldSample()) {
-      withValueUniqueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueUniqueCounts.length() - 1),
-          newKeyValueEntries.size() - keyValueEntries.size());
-      withValueCounts.addAndGet(
-          Math.min(keyValueEntries.size(), withValueCounts.length() - 1),
-          4);
-    }
     return new Context(this, newKeyValueEntries);
   }
 
@@ -740,9 +657,6 @@ public class Context {
    * Lookup the value for a key in the context inheritance chain.
    */
   private Object lookup(Key<?> key) {
-    if (shouldSample()) {
-      getCounts.incrementAndGet(Math.min(keyValueEntries.size(), getCounts.length() - 1));
-    }
     return keyValueEntries.get(key);
   }
 
