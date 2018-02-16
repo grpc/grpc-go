@@ -154,7 +154,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 	}
 	initReq := req.GetInitialRequest()
 	if initReq.Name != beServerName {
-		return status.Errorf(codes.InvalidArgument, "invalid service name: %v", initReq.Name)
+		return status.Errorf(codes.Internal, "invalid service name: %v", initReq.Name)
 	}
 	resp := &lbmpb.LoadBalanceResponse{
 		LoadBalanceResponseType: &lbmpb.LoadBalanceResponse_InitialResponse{
