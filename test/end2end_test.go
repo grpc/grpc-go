@@ -154,7 +154,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
 		if _, exists := md[":authority"]; !exists {
-			return nil, status.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+			return nil, status.Errorf(codes.Internal, "expected an :authority metadata: %v", md)
 		}
 		if s.setAndSendHeader {
 			if err := grpc.SetHeader(ctx, md); err != nil {
@@ -186,10 +186,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.DataLoss, "failed to get peer from ctx")
+		return nil, status.Error(codes.Unknown, "failed to get peer from ctx")
 	}
 	if pr.Addr == net.Addr(nil) {
-		return nil, status.Error(codes.DataLoss, "failed to get peer address")
+		return nil, status.Error(codes.Unknown, "failed to get peer address")
 	}
 	if s.security != "" {
 		// Check Auth info
@@ -224,12 +224,12 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		if _, exists := md[":authority"]; !exists {
-			return status.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+			return status.Errorf(codes.Internal, "expected an :authority metadata: %v", md)
 		}
 		// For testing purpose, returns an error if user-agent is failAppUA.
 		// To test that client gets the correct error.
 		if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
-			return status.Error(codes.DataLoss, "error for testing: "+failAppUA)
+			return status.Error(codes.Unknown, "error for testing: "+failAppUA)
 		}
 	}
 	cs := args.GetResponseParameters()
@@ -3549,7 +3549,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
-	wantErr := status.Error(codes.DataLoss, "error for testing: "+failAppUA)
+	wantErr := status.Error(codes.Unknown, "error for testing: "+failAppUA)
 	if _, err := stream.Recv(); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, wantErr)
 	}

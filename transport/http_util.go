@@ -283,7 +283,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	case "content-type":
 		contentSubtype, validContentType := contentSubtype(f.Value)
 		if !validContentType {
-			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
+			return streamErrorf(codes.Internal, "transport: received the unexpected content-type %q", f.Value)
 		}
 		d.contentSubtype = contentSubtype
 		// TODO: do we want to propagate the whole content-type in the metadata,
