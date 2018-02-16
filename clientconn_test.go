@@ -22,6 +22,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -172,10 +173,10 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	mctBkp := minConnectTimeout
 	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
-		minConnectTimeout = mctBkp
+		atomic.StoreInt64((*int64)(&minConnectTimeout), int64(mctBkp))
 	}()
 	defer leakcheck.Check(t)
-	minConnectTimeout = time.Millisecond * 500
+	atomic.StoreInt64((*int64)(&minConnectTimeout), int64(time.Millisecond*500))
 	server, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
