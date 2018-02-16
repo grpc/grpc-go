@@ -267,7 +267,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 		p := in.GetPayload().GetBody()
 		sum += len(p)
 		if s.earlyFail {
-			return status.Error(codes.NotFound, "not found")
+			return status.Error(codes.Unknown, "not found")
 		}
 	}
 }
@@ -2325,9 +2325,9 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
-	wantErr := status.Error(codes.NotFound, "unknown service")
+	wantErr := status.Error(codes.Unknown, "unknown service")
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.NotFound)
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, wantErr)
 	}
 	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
 	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
@@ -3739,8 +3739,8 @@ func testClientStreamingError(t *testing.T, e env) {
 		if err := stream.Send(req); err != io.EOF {
 			continue
 		}
-		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.NotFound {
-			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
+		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Unknown {
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Unknown)
 		}
 		break
 	}
@@ -4030,7 +4030,7 @@ func TestUnaryClientInterceptor(t *testing.T) {
 func failOkayRPC(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	if err == nil {
-		return status.Error(codes.NotFound, "")
+		return status.Error(codes.Unknown, "")
 	}
 	return err
 }
@@ -4043,8 +4043,8 @@ func testUnaryClientInterceptor(t *testing.T, e env) {
 	defer te.tearDown()
 
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) != codes.NotFound {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.NotFound)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) != codes.Unknown {
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.Unknown)
 	}
 }
 
@@ -4058,7 +4058,7 @@ func TestStreamClientInterceptor(t *testing.T) {
 func failOkayStream(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err == nil {
-		return nil, status.Error(codes.NotFound, "")
+		return nil, status.Error(codes.Unknown, "")
 	}
 	return s, nil
 }
@@ -4084,8 +4084,8 @@ func testStreamClientInterceptor(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
-	if _, err := tc.StreamingOutputCall(context.Background(), req); status.Code(err) != codes.NotFound {
-		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", tc, err, codes.NotFound)
+	if _, err := tc.StreamingOutputCall(context.Background(), req); status.Code(err) != codes.Unknown {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", tc, err, codes.Unknown)
 	}
 }
 

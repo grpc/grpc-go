@@ -152,11 +152,11 @@ func TestStatus_ErrorDetails(t *testing.T) {
 		details []proto.Message
 	}{
 		{
-			code:    codes.NotFound,
+			code:    codes.Unknown,
 			details: nil,
 		},
 		{
-			code: codes.NotFound,
+			code: codes.Unknown,
 			details: []proto.Message{
 				&epb.ResourceInfo{
 					ResourceType: "book",
