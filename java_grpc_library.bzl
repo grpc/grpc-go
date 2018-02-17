@@ -58,7 +58,7 @@ _gensource = rule(
             cfg = "host",
         ),
         "_java_plugin": attr.label(
-            default = Label("@grpc_java//compiler:grpc_java_plugin"),
+            default = Label("//compiler:grpc_java_plugin"),
             executable = True,
             cfg = "host",
         ),
@@ -107,9 +107,9 @@ def java_grpc_library(name, srcs, deps, flavor=None,
   )
 
   added_deps = [
-      "@grpc_java//core",
-      "@grpc_java//stub",
-      "@grpc_java//protobuf",
+      "//core",
+      "//stub",
+      "//protobuf",
       "@com_google_guava_guava//jar",
   ]
   if flavor == "normal":
