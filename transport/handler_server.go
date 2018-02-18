@@ -98,7 +98,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 		for _, v := range vv {
 			v, err := decodeMetadataHeader(k, v)
 			if err != nil {
-				return nil, streamErrorf(codes.InvalidArgument, "malformed binary metadata: %v", err)
+				return nil, streamErrorf(codes.Internal, "malformed binary metadata: %v", err)
 			}
 			metakv = append(metakv, k, v)
 		}
