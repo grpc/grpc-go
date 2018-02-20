@@ -19,7 +19,7 @@ package io.grpc.services;
 import com.google.protobuf.MessageLite;
 import java.io.Closeable;
 
-public abstract class BinaryLogSink implements Closeable {
+abstract class BinaryLogSink implements Closeable {
   /**
    * Writes the {@code message} to the destination.
    */
