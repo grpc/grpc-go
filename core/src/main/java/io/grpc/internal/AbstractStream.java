@@ -48,8 +48,12 @@ public abstract class AbstractStream implements Stream {
   @Override
   public final void writeMessage(InputStream message) {
     checkNotNull(message, "message");
-    if (!framer().isClosed()) {
-      framer().writePayload(message);
+    try {
+      if (!framer().isClosed()) {
+        framer().writePayload(message);
+      }
+    } finally {
+      GrpcUtil.closeQuietly(message);
     }
   }
 

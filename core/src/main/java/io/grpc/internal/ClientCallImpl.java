@@ -431,9 +431,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         RetriableStream<ReqT> retriableStream = ((RetriableStream<ReqT>) stream);
         retriableStream.sendMessage(message);
       } else {
-        // TODO(notcarl): Find out if messageIs needs to be closed.
-        InputStream messageIs = method.streamRequest(message);
-        stream.writeMessage(messageIs);
+        stream.writeMessage(method.streamRequest(message));
       }
     } catch (RuntimeException e) {
       stream.cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));

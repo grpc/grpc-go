@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -281,6 +282,14 @@ public class AbstractServerStreamTest {
     stream.flush();
 
     verify(sink).writeFrame(any(WritableBuffer.class), eq(true), eq(1));
+  }
+
+  @Test
+  public void writeMessage_closesStream() throws Exception {
+    stream.writeHeaders(new Metadata());
+    InputStream input = mock(InputStream.class, delegatesTo(new ByteArrayInputStream(new byte[1])));
+    stream.writeMessage(input);
+    verify(input).close();
   }
 
   @Test

@@ -45,6 +45,9 @@ public interface Stream {
    * <p>It is recommended that the caller consult {@link #isReady()} before calling this method to
    * avoid excessive buffering in the transport.
    *
+   * <p>This method takes ownership of the InputStream, and implementations are responsible for
+   * calling {@link InputStream#close}.
+   *
    * @param message stream containing the serialized message to be sent
    */
   void writeMessage(InputStream message);

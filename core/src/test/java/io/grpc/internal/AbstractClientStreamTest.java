@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -39,6 +40,8 @@ import io.grpc.internal.AbstractClientStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import io.grpc.internal.testing.TestClientStreamTracer;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -355,6 +358,24 @@ public class AbstractClientStreamTest {
     assertNull(tracer.nextInboundEvent());
     assertEquals(1, tracer.getOutboundWireSize());
     assertEquals(1, tracer.getOutboundUncompressedSize());
+  }
+
+  @Test
+  public void writeMessage_closesStream() throws IOException {
+    AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
+    final TestClientStreamTracer tracer = new TestClientStreamTracer();
+    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
+    AbstractClientStream stream = new BaseAbstractClientStream(
+        allocator,
+        new BaseTransportState(statsTraceCtx, transportTracer),
+        sink,
+        statsTraceCtx,
+        transportTracer,
+        true);
+    stream.start(mockListener);
+    InputStream input = mock(InputStream.class, delegatesTo(new ByteArrayInputStream(new byte[1])));
+    stream.writeMessage(input);
+    verify(input).close();
   }
 
   /**

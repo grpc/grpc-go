@@ -56,12 +56,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
  * Common utilities for GRPC.
  */
 public final class GrpcUtil {
+
+  private static final Logger log = Logger.getLogger(GrpcUtil.class.getName());
 
   public static final Charset US_ASCII = Charset.forName("US-ASCII");
 
@@ -707,12 +711,19 @@ public final class GrpcUtil {
     }
   }
 
-  /** Closes an InputStream, ignoring IOExceptions. */
-  static void closeQuietly(InputStream message) {
+  /**
+   * Closes an InputStream, ignoring IOExceptions.
+   * This method exists because Guava's {@code Closeables.closeQuietly()} is beta.
+   */
+  static void closeQuietly(@Nullable InputStream message) {
+    if (message == null) {
+      return;
+    }
     try {
       message.close();
     } catch (IOException ioException) {
-      // do nothing
+      // do nothing except log
+      log.log(Level.WARNING, "exception caught in closeQuietly", ioException);
     }
   }
 
