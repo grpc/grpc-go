@@ -143,8 +143,7 @@ public abstract class AbstractStream implements Stream {
           Codec.Identity.NONE,
           maxMessageSize,
           statsTraceCtx,
-          transportTracer,
-          getClass().getName());
+          transportTracer);
     }
 
     protected void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {

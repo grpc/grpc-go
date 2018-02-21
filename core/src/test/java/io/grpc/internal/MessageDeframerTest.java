@@ -94,7 +94,7 @@ public class MessageDeframerTest {
     private TransportTracer transportTracer = new TransportTracer();
 
     private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
-            DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer, "test");
+            DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer);
 
     private ArgumentCaptor<StreamListener.MessageProducer> producer =
             ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
@@ -189,7 +189,7 @@ public class MessageDeframerTest {
 
       // Create new deframer to allow writing bytes directly to the GzipInflatingBuffer
       MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
-              DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer, "test");
+              DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer);
       deframer.setFullStreamDecompressor(new GzipInflatingBuffer());
       deframer.request(1);
       deframer.deframe(buffer(new byte[1]));
@@ -283,7 +283,7 @@ public class MessageDeframerTest {
     @Test
     public void compressed() {
       deframer = new MessageDeframer(listener, new Codec.Gzip(), DEFAULT_MAX_MESSAGE_SIZE,
-              statsTraceCtx, transportTracer, "test");
+              statsTraceCtx, transportTracer);
       deframer.request(1);
 
       byte[] payload = compress(new byte[1000]);
@@ -333,7 +333,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readByteBelowLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx);
 
       while (stream.read() != -1) {
       }
@@ -346,7 +346,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readByteAtLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx);
 
       while (stream.read() != -1) {
       }
@@ -359,11 +359,11 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readByteAboveLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx);
 
       try {
         thrown.expect(StatusRuntimeException.class);
-        thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
+        thrown.expectMessage("RESOURCE_EXHAUSTED: Compressed gRPC message exceeds");
 
         while (stream.read() != -1) {
         }
@@ -376,7 +376,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readBelowLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx);
       byte[] buf = new byte[10];
 
       int read = stream.read(buf, 0, buf.length);
@@ -390,7 +390,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readAtLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx);
       byte[] buf = new byte[10];
 
       int read = stream.read(buf, 0, buf.length);
@@ -404,12 +404,12 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_readAboveLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx);
       byte[] buf = new byte[10];
 
       try {
         thrown.expect(StatusRuntimeException.class);
-        thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
+        thrown.expectMessage("RESOURCE_EXHAUSTED: Compressed gRPC message exceeds");
 
         stream.read(buf, 0, buf.length);
       } finally {
@@ -421,7 +421,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_skipBelowLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 4, statsTraceCtx);
 
       long skipped = stream.skip(4);
 
@@ -435,7 +435,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_skipAtLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx);
 
       long skipped = stream.skip(4);
 
@@ -448,11 +448,11 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_skipAboveLimit() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx);
 
       try {
         thrown.expect(StatusRuntimeException.class);
-        thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
+        thrown.expectMessage("RESOURCE_EXHAUSTED: Compressed gRPC message exceeds");
 
         stream.skip(4);
       } finally {
@@ -464,7 +464,7 @@ public class MessageDeframerTest {
     public void sizeEnforcingInputStream_markReset() throws IOException {
       ByteArrayInputStream in = new ByteArrayInputStream("foo".getBytes(Charsets.UTF_8));
       SizeEnforcingInputStream stream =
-              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx, "test");
+              new MessageDeframer.SizeEnforcingInputStream(in, 3, statsTraceCtx);
       // stream currently looks like: |foo
       stream.skip(1); // f|oo
       stream.mark(10); // any large number will work.

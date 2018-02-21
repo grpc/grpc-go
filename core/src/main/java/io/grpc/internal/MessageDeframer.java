@@ -89,7 +89,6 @@ public class MessageDeframer implements Closeable, Deframer {
   private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
   private final TransportTracer transportTracer;
-  private final String debugString;
   private Decompressor decompressor;
   private GzipInflatingBuffer fullStreamDecompressor;
   private byte[] inflatedBuffer;
@@ -114,21 +113,18 @@ public class MessageDeframer implements Closeable, Deframer {
    * @param decompressor the compression used if a compressed frame is encountered, with
    *  {@code NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
-   * @param debugString a string that will appear on errors statuses
    */
   public MessageDeframer(
       Listener listener,
       Decompressor decompressor,
       int maxMessageSize,
       StatsTraceContext statsTraceCtx,
-      TransportTracer transportTracer,
-      String debugString) {
+      TransportTracer transportTracer) {
     this.listener = checkNotNull(listener, "sink");
     this.decompressor = checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.transportTracer = checkNotNull(transportTracer, "transportTracer");
-    this.debugString = debugString;
   }
 
   void setListener(Listener listener) {
@@ -377,7 +373,7 @@ public class MessageDeframer implements Closeable, Deframer {
     int type = nextFrame.readUnsignedByte();
     if ((type & RESERVED_MASK) != 0) {
       throw Status.INTERNAL.withDescription(
-          debugString + ": Frame header malformed: reserved bits not zero")
+          "gRPC frame header malformed: reserved bits not zero")
           .asRuntimeException();
     }
     compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -386,8 +382,8 @@ public class MessageDeframer implements Closeable, Deframer {
     requiredLength = nextFrame.readInt();
     if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
       throw Status.RESOURCE_EXHAUSTED.withDescription(
-          String.format("%s: Frame size %d exceeds maximum: %d. ",
-              debugString, requiredLength, maxInboundMessageSize))
+          String.format("gRPC message exceeds maximum size %d: %d",
+              maxInboundMessageSize, requiredLength))
           .asRuntimeException();
     }
 
@@ -424,7 +420,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private InputStream getCompressedBody() {
     if (decompressor == Codec.Identity.NONE) {
       throw Status.INTERNAL.withDescription(
-          debugString + ": Can't decode compressed frame as compression not configured.")
+          "Can't decode compressed gRPC message as compression not configured")
           .asRuntimeException();
     }
 
@@ -433,7 +429,7 @@ public class MessageDeframer implements Closeable, Deframer {
       InputStream unlimitedStream =
           decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
       return new SizeEnforcingInputStream(
-          unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
+          unlimitedStream, maxInboundMessageSize, statsTraceCtx);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -446,17 +442,14 @@ public class MessageDeframer implements Closeable, Deframer {
   static final class SizeEnforcingInputStream extends FilterInputStream {
     private final int maxMessageSize;
     private final StatsTraceContext statsTraceCtx;
-    private final String debugString;
     private long maxCount;
     private long count;
     private long mark = -1;
 
-    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx,
-        String debugString) {
+    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(in);
       this.maxMessageSize = maxMessageSize;
       this.statsTraceCtx = statsTraceCtx;
-      this.debugString = debugString;
     }
 
     @Override
@@ -520,8 +513,8 @@ public class MessageDeframer implements Closeable, Deframer {
     private void verifySize() {
       if (count > maxMessageSize) {
         throw Status.RESOURCE_EXHAUSTED.withDescription(String.format(
-                "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
-                debugString, maxMessageSize, count)).asRuntimeException();
+                "Compressed gRPC message exceeds maximum size %d: %d bytes read",
+                maxMessageSize, count)).asRuntimeException();
       }
     }
   }
