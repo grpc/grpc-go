@@ -254,7 +254,7 @@ public abstract class AbstractManagedChannelImplBuilder
       this.decompressorRegistry = registry;
     } else {
       this.decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
-    } 
+    }
     return thisT();
   }
 
@@ -398,11 +398,15 @@ public abstract class AbstractManagedChannelImplBuilder
         CallTracer.getDefaultFactory());
   }
 
+  // Temporarily disable retry when stats or tracing is enabled to avoid breakage, until we know
+  // what should be the desired behavior for retry + stats/tracing.
+  // TODO(zdapeng): FIX IT
   @VisibleForTesting
   final List<ClientInterceptor> getEffectiveInterceptors() {
     List<ClientInterceptor> effectiveInterceptors =
         new ArrayList<ClientInterceptor>(this.interceptors);
     if (statsEnabled) {
+      retryDisabled = true;
       CensusStatsModule censusStats = this.censusStatsOverride;
       if (censusStats == null) {
         censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
@@ -413,6 +417,7 @@ public abstract class AbstractManagedChannelImplBuilder
           0, censusStats.getClientInterceptor(recordStartedRpcs, recordFinishedRpcs));
     }
     if (tracingEnabled) {
+      retryDisabled = true;
       CensusTracingModule censusTracing =
           new CensusTracingModule(Tracing.getTracer(),
               Tracing.getPropagationComponent().getBinaryFormat());
