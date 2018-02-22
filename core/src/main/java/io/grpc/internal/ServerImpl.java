@@ -629,8 +629,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
      * Like {@link ServerCall#close(Status, Metadata)}, but thread-safe for internal use.
      */
     private void internalClose() {
-      // TODO(ejona86): this is not thread-safe :)
-      stream.close(Status.UNKNOWN, new Metadata());
+      stream.cancel(Status.INTERNAL);
     }
 
     @Override

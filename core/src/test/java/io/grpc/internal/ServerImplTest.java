@@ -1108,7 +1108,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1133,7 +1133,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1156,7 +1156,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1179,7 +1179,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1202,7 +1202,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1225,7 +1225,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateNotLeaked();
+      ensureServerStateIsCancelled();
     }
   }
 
@@ -1394,6 +1394,12 @@ public class ServerImplTest {
     assertEquals(Status.UNKNOWN, statusCaptor.getValue());
     assertNull(statusCaptor.getValue().getCause());
     assertTrue(metadataCaptor.getValue().keys().isEmpty());
+  }
+
+  private void ensureServerStateIsCancelled() {
+    verify(stream).cancel(statusCaptor.capture());
+    assertEquals(Status.INTERNAL, statusCaptor.getValue());
+    assertNull(statusCaptor.getValue().getCause());
   }
 
   private static class SimpleServer implements io.grpc.internal.InternalServer {

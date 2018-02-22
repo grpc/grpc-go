@@ -37,6 +37,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 import java.io.InputStream;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
@@ -205,7 +206,8 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
    * on.
    */
   private void internalClose(Status internalError) {
-    stream.close(internalError, new Metadata());
+    log.log(Level.WARNING, "Cancelling the stream with status {0}", new Object[] {internalError});
+    stream.cancel(internalError);
   }
 
   /**

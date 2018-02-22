@@ -192,10 +192,9 @@ public class ServerCallImplTest {
     verify(stream, times(1)).writeMessage(any(InputStream.class));
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(stream, times(1)).close(statusCaptor.capture(), metadataCaptor.capture());
+    verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
     assertEquals(ServerCallImpl.TOO_MANY_RESPONSES, statusCaptor.getValue().getDescription());
-    assertTrue(metadataCaptor.getValue().keys().isEmpty());
   }
 
   @Test
@@ -221,7 +220,7 @@ public class ServerCallImplTest {
     serverCall.sendMessage(1L);
     serverCall.sendMessage(1L);
     verify(stream, times(1)).writeMessage(any(InputStream.class));
-    verify(stream, times(1)).close(any(Status.class), any(Metadata.class));
+    verify(stream, times(1)).cancel(any(Status.class));
 
     // App runs to completion but everything is ignored
     serverCall.sendMessage(1L);
@@ -255,11 +254,9 @@ public class ServerCallImplTest {
         CompressorRegistry.getDefaultInstance());
     serverCall.close(Status.OK, new Metadata());
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(stream, times(1)).close(statusCaptor.capture(), metadataCaptor.capture());
+    verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
     assertEquals(ServerCallImpl.MISSING_RESPONSE, statusCaptor.getValue().getDescription());
-    assertTrue(metadataCaptor.getValue().keys().isEmpty());
   }
 
   @Test

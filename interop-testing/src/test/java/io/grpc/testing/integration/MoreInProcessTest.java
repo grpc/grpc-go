@@ -247,7 +247,7 @@ public class MoreInProcessTest {
         .onNext(StreamingInputCallRequest.getDefaultInstance());
 
     assertTrue(finishLatch.await(900, TimeUnit.MILLISECONDS));
-    assertEquals(Status.UNKNOWN, Status.fromThrowable(throwableRef.get()));
+    assertEquals(Status.CANCELLED.getCode(), Status.fromThrowable(throwableRef.get()).getCode());
     assertNull(responseRef.get());
   }
 }
