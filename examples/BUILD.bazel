@@ -1,4 +1,4 @@
-load("@grpc_java//:java_grpc_library.bzl", "java_grpc_library")
+load("@io_grpc_grpc_java//:java_grpc_library.bzl", "java_grpc_library")
 
 proto_library(
     name = "helloworld_proto",
@@ -71,11 +71,11 @@ java_library(
         "@com_google_guava_guava//jar",
         "@com_google_protobuf//:protobuf_java",
         "@com_google_protobuf//:protobuf_java_util",
-        "@grpc_java//alts",
-        "@grpc_java//core",
-        "@grpc_java//netty",
-        "@grpc_java//protobuf",
-        "@grpc_java//stub",
+        "@io_grpc_grpc_java//alts",
+        "@io_grpc_grpc_java//core",
+        "@io_grpc_grpc_java//netty",
+        "@io_grpc_grpc_java//protobuf",
+        "@io_grpc_grpc_java//stub",
         "@io_netty_netty_handler//jar",
     ],
 )
@@ -104,8 +104,8 @@ java_binary(
     main_class = "io.grpc.examples.alts.HelloWorldAltsClient",
     runtime_deps = [
         ":examples",
-        "@grpc_java//alts",
-        "@grpc_java//netty",
+        "@io_grpc_grpc_java//alts",
+        "@io_grpc_grpc_java//netty",
     ],
 )
 
@@ -115,10 +115,9 @@ java_binary(
     main_class = "io.grpc.examples.alts.HelloWorldAltsServer",
     runtime_deps = [
         ":examples",
-        "@grpc_java//alts",
-        "@grpc_java//netty",
+        "@io_grpc_grpc_java//alts",
+        "@io_grpc_grpc_java//netty",
     ],
-
 )
 
 java_binary(
