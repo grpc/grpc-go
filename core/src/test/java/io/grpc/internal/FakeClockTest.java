@@ -189,9 +189,9 @@ public class FakeClockTest {
     assertEquals(2, fakeClock.getPendingTasks().size());
     assertEquals(1, fakeClock.getPendingTasks(filter).size());
     assertSame(selectedRunnable, fakeClock.getPendingTasks(filter).iterator().next().command);
-    assertEquals(1, fakeClock.runDueTasks(filter));
+    assertEquals(2, fakeClock.runDueTasks());
     assertTrue(selectedDone.get());
-    assertFalse(ignoredDone.get());
+    assertTrue(ignoredDone.get());
   }
 
   private Runnable newRunnable() {

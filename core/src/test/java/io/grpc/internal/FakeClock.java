@@ -214,33 +214,18 @@ public final class FakeClock {
    * @return the number of tasks run by this call
    */
   public int runDueTasks() {
-    return runDueTasks(ACCEPT_ALL_FILTER);
-  }
-
-  /**
-   * Run all due tasks that match the {@link TaskFilter}.
-   *
-   * @return the number of tasks run by this call
-   */
-  public int runDueTasks(TaskFilter filter) {
     int count = 0;
-    List<ScheduledTask> putBack = new ArrayList<ScheduledTask>();
     while (true) {
       ScheduledTask task = tasks.peek();
       if (task == null || task.dueTimeNanos > currentTimeNanos) {
         break;
       }
       if (tasks.remove(task)) {
-        if (filter.shouldAccept(task.command)) {
-          task.command.run();
-          task.complete();
-          count++;
-        } else {
-          putBack.add(task);
-        }
+        task.command.run();
+        task.complete();
+        count++;
       }
     }
-    tasks.addAll(putBack);
     return count;
   }
 

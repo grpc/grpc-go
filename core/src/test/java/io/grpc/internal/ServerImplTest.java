@@ -919,8 +919,8 @@ public class ServerImplTest {
     assertTrue(onHalfCloseCalled.get());
 
     streamListener.closed(Status.CANCELLED);
-    assertEquals(1, executor.runDueTasks(CONTEXT_CLOSER_TASK_FITLER));
-    assertEquals(1, executor.runDueTasks());
+    assertEquals(1, executor.numPendingTasks(CONTEXT_CLOSER_TASK_FITLER));
+    assertEquals(2, executor.runDueTasks());
     assertTrue(onCancelCalled.get());
 
     // Close should never be called if asserts in listener pass.
@@ -990,11 +990,10 @@ public class ServerImplTest {
     assertFalse(callReference.get().isCancelled());
     assertFalse(context.get().isCancelled());
     streamListener.closed(Status.CANCELLED);
-    assertEquals(1, executor.runDueTasks(CONTEXT_CLOSER_TASK_FITLER));
+    assertEquals(1, executor.numPendingTasks(CONTEXT_CLOSER_TASK_FITLER));
+    assertEquals(2, executor.runDueTasks());
     assertTrue(callReference.get().isCancelled());
     assertTrue(context.get().isCancelled());
-
-    assertEquals(1, executor.runDueTasks());
     assertTrue(contextCancelled.get());
   }
 
