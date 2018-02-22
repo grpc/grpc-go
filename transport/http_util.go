@@ -70,7 +70,7 @@ var (
 		http2.ErrCodeConnect:            codes.Internal,
 		http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
 		http2.ErrCodeInadequateSecurity: codes.PermissionDenied,
-		http2.ErrCodeHTTP11Required:     codes.FailedPrecondition,
+		http2.ErrCodeHTTP11Required:     codes.Internal,
 	}
 	statusCodeConvTab = map[codes.Code]http2.ErrCode{
 		codes.Internal:          http2.ErrCodeInternal,
@@ -283,7 +283,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	case "content-type":
 		contentSubtype, validContentType := contentSubtype(f.Value)
 		if !validContentType {
-			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
+			return streamErrorf(codes.Internal, "transport: received the unexpected content-type %q", f.Value)
 		}
 		d.contentSubtype = contentSubtype
 		// TODO: do we want to propagate the whole content-type in the metadata,
