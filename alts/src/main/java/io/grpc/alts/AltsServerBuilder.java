@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
-  final NettyServerBuilder delegate;
+  private final NettyServerBuilder delegate;
   private boolean enableUntrustedAlts;
 
   private AltsServerBuilder(NettyServerBuilder nettyDelegate) {
