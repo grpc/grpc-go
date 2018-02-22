@@ -28,7 +28,6 @@ import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
-import static io.netty.buffer.Unpooled.directBuffer;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -545,9 +544,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void keepAliveManagerOnDataReceived_pingRead() throws Exception {
     manualSetUp();
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1234L);
-    channelRead(pingFrame(false /* isAck */, payload));
+    channelRead(pingFrame(false /* isAck */, 1234L));
 
     verify(spyKeepAliveManager).onDataReceived();
     verify(spyKeepAliveManager, never()).onTransportTermination();
@@ -556,9 +553,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void keepAliveManagerOnDataReceived_pingActRead() throws Exception {
     manualSetUp();
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1234L);
-    channelRead(pingFrame(true /* isAck */, payload));
+    channelRead(pingFrame(true /* isAck */, 1234L));
 
     verify(spyKeepAliveManager).onDataReceived();
     verify(spyKeepAliveManager, never()).onTransportTermination();
@@ -574,7 +569,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManager_pingSent() throws Exception {
-    ByteBuf pingBuf = directBuffer(8).writeLong(0xDEADL);
     keepAliveTimeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     keepAliveTimeoutInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
@@ -583,13 +577,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     fakeClock().forwardNanos(keepAliveTimeInNanos);
     assertEquals(1, transportTracer.getStats().keepAlivesSent);
 
-    verifyWrite().writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
+    verifyWrite().writePing(eq(ctx()), eq(false), eq(0xDEADL), any(ChannelPromise.class));
 
     spyKeepAliveManager.onDataReceived();
     fakeClock().forwardTime(10L, TimeUnit.MILLISECONDS);
 
     verifyWrite(times(2))
-        .writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
+        .writePing(eq(ctx()), eq(false), eq(0xDEADL), any(ChannelPromise.class));
     assertTrue(channel().isOpen());
   }
 
@@ -614,12 +608,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);
     manualSetUp();
 
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1);
     for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
-      channelRead(pingFrame(false /* isAck */, payload.slice()));
+      channelRead(pingFrame(false /* isAck */, 1L));
     }
-    payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(0), eq(Http2Error.ENHANCE_YOUR_CALM.code()),
         any(ByteBuf.class), any(ChannelPromise.class));
     assertFalse(channel().isActive());
@@ -636,16 +627,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     ChannelFuture future = enqueue(
         SendResponseHeadersCommand.createHeaders(stream.transportState(), headers));
     future.get();
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1);
     for (int i = 0; i < 10; i++) {
       future = enqueue(
           new SendGrpcFrameCommand(stream.transportState(), content().retainedSlice(), false));
       future.get();
       channel().releaseOutbound();
-      channelRead(pingFrame(false /* isAck */, payload.slice()));
+      channelRead(pingFrame(false /* isAck */, 1L));
     }
-    payload.release();
     verifyWrite(never()).writeGoAway(eq(ctx()), eq(STREAM_ID),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
   }
@@ -656,12 +644,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     permitKeepAliveTimeInNanos = 0;
     manualSetUp();
 
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1);
     for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
-      channelRead(pingFrame(false /* isAck */, payload.slice()));
+      channelRead(pingFrame(false /* isAck */, 1L));
     }
-    payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(0),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
     assertFalse(channel().isActive());
@@ -674,12 +659,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     manualSetUp();
 
     createStream();
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1);
     for (int i = 0; i < 10; i++) {
-      channelRead(pingFrame(false /* isAck */, payload.slice()));
+      channelRead(pingFrame(false /* isAck */, 1L));
     }
-    payload.release();
     verifyWrite(never()).writeGoAway(eq(ctx()), eq(STREAM_ID),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
   }
@@ -692,12 +674,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     createStream();
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    ByteBuf payload = handler().ctx().alloc().buffer(8);
-    payload.writeLong(1);
     for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
-      channelRead(pingFrame(false /* isAck */, payload.slice()));
+      channelRead(pingFrame(false /* isAck */, 1L));
     }
-    payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(STREAM_ID),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
     assertFalse(channel().isActive());

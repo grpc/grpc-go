@@ -16,12 +16,9 @@
 
 package io.grpc.netty;
 
-import static io.netty.buffer.Unpooled.directBuffer;
-import static io.netty.buffer.Unpooled.unreleasableBuffer;
 import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
@@ -43,9 +40,7 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
   private ChannelHandlerContext ctx;
   private final FlowControlPinger flowControlPing = new FlowControlPinger();
 
-  private static final int BDP_MEASUREMENT_PING = 1234;
-  private static final ByteBuf payloadBuf =
-      unreleasableBuffer(directBuffer(8).writeLong(BDP_MEASUREMENT_PING));
+  private static final long BDP_MEASUREMENT_PING = 1234;
 
   AbstractNettyHandler(
       ChannelPromise channelUnused,
@@ -130,7 +125,7 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
     private float lastBandwidth; // bytes per second
     private long lastPingTime;
 
-    public int payload() {
+    public long payload() {
       return BDP_MEASUREMENT_PING;
     }
 
@@ -187,7 +182,7 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
     private void sendPing(ChannelHandlerContext ctx) {
       setDataSizeSincePing(0);
       lastPingTime = System.nanoTime();
-      encoder().writePing(ctx, false, payloadBuf.slice(), ctx.newPromise());
+      encoder().writePing(ctx, false, BDP_MEASUREMENT_PING, ctx.newPromise());
       pingCount++;
     }
 

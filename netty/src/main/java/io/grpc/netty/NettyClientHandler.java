@@ -559,14 +559,12 @@ class NettyClientHandler extends AbstractNettyHandler {
     promise = ctx().newPromise();
     // set outstanding operation
     long data = USER_PING_PAYLOAD;
-    ByteBuf buffer = ctx.alloc().buffer(8);
-    buffer.writeLong(data);
     Stopwatch stopwatch = stopwatchFactory.get();
     stopwatch.start();
     ping = new Http2Ping(data, stopwatch);
     ping.addCallback(callback, executor);
     // and then write the ping
-    encoder().writePing(ctx, false, buffer, promise);
+    encoder().writePing(ctx, false, USER_PING_PAYLOAD, promise);
     ctx.flush();
     final Http2Ping finalPing = ping;
     promise.addListener(new ChannelFutureListener() {
@@ -726,16 +724,15 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
 
     @Override
-    public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    public void onPingAckRead(ChannelHandlerContext ctx, long ackPayload) throws Http2Exception {
       Http2Ping p = ping;
-      if (data.getLong(data.readerIndex()) == flowControlPing().payload()) {
+      if (ackPayload == flowControlPing().payload()) {
         flowControlPing().updateWindow();
         if (logger.isLoggable(Level.FINE)) {
           logger.log(Level.FINE, String.format("Window: %d",
               decoder().flowController().initialWindowSize(connection().connectionStream())));
         }
       } else if (p != null) {
-        long ackPayload = data.readLong();
         if (p.payload() == ackPayload) {
           p.complete();
           ping = null;
@@ -752,7 +749,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
 
     @Override
-    public void onPingRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    public void onPingRead(ChannelHandlerContext ctx, long data) throws Http2Exception {
       if (keepAliveManager != null) {
         keepAliveManager.onDataReceived();
       }

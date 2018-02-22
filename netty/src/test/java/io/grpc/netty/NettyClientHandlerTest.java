@@ -522,14 +522,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     sendPing(callback2);
     assertEquals(1, transportTracer.getStats().keepAlivesSent);
 
-    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
+    ArgumentCaptor<Long> captor = ArgumentCaptor.forClass(long.class);
     verifyWrite().writePing(eq(ctx()), eq(false), captor.capture(),
         any(ChannelPromise.class));
 
     // getting a bad ack won't cause the callback to be invoked
-    ByteBuf pingPayload = captor.getValue();
+    long pingPayload = captor.getValue();
     // to compute bad payload, read the good payload and subtract one
-    ByteBuf badPingPayload = Unpooled.copyLong(pingPayload.slice().readLong() - 1);
+    long badPingPayload = pingPayload - 1;
 
     channelRead(pingFrame(true, badPingPayload));
     // operation not complete because ack was wrong
@@ -581,14 +581,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertEquals(0, transportTracer.getStats().keepAlivesSent);
     sendPing(callback);
     assertEquals(1, transportTracer.getStats().keepAlivesSent);
-    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
+    ArgumentCaptor<Long> captor = ArgumentCaptor.forClass(long.class);
     verifyWrite().writePing(eq(ctx()), eq(false), captor.capture(), any(ChannelPromise.class));
-    ByteBuf payload = captor.getValue();
+    long payload = captor.getValue();
     channelRead(grpcDataFrame(3, false, contentAsArray()));
     long pingData = handler().flowControlPing().payload();
-    ByteBuf buffer = handler().ctx().alloc().buffer(8);
-    buffer.writeLong(pingData);
-    channelRead(pingFrame(true, buffer));
+    channelRead(pingFrame(true, pingData));
 
     assertEquals(1, handler().flowControlPing().getPingReturn());
     assertEquals(0, callback.invocationCount);

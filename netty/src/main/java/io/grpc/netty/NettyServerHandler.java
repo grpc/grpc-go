@@ -25,8 +25,6 @@ import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
-import static io.netty.buffer.Unpooled.directBuffer;
-import static io.netty.buffer.Unpooled.unreleasableBuffer;
 import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -97,8 +95,7 @@ import javax.annotation.Nullable;
  */
 class NettyServerHandler extends AbstractNettyHandler {
   private static final Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
-  private static final ByteBuf KEEPALIVE_PING_BUF =
-      unreleasableBuffer(directBuffer(8).writeLong(0xDEADL));
+  private static final long KEEPALIVE_PING = 0xDEADL;
 
   private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
@@ -767,7 +764,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
 
     @Override
-    public void onPingRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    public void onPingRead(ChannelHandlerContext ctx, long data) throws Http2Exception {
       if (keepAliveManager != null) {
         keepAliveManager.onDataReceived();
       }
@@ -785,17 +782,17 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
 
     @Override
-    public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    public void onPingAckRead(ChannelHandlerContext ctx, long data) throws Http2Exception {
       if (keepAliveManager != null) {
         keepAliveManager.onDataReceived();
       }
-      if (data.getLong(data.readerIndex()) == flowControlPing().payload()) {
+      if (data == flowControlPing().payload()) {
         flowControlPing().updateWindow();
         if (logger.isLoggable(Level.FINE)) {
           logger.log(Level.FINE, String.format("Window: %d",
               decoder().flowController().initialWindowSize(connection().connectionStream())));
         }
-      } else if (!KEEPALIVE_PING_BUF.equals(data)) {
+      } else if (data != KEEPALIVE_PING) {
         logger.warning("Received unexpected ping ack. No ping outstanding");
       }
     }
@@ -811,8 +808,8 @@ class NettyServerHandler extends AbstractNettyHandler {
     @Override
     public void ping() {
       ChannelFuture pingFuture = encoder().writePing(
-          // slice KEEPALIVE_PING_BUF because tls handler may modify the reader index
-          ctx, false /* isAck */, KEEPALIVE_PING_BUF.slice(), ctx.newPromise());
+          // slice KEEPALIVE_PING because tls handler may modify the reader index
+          ctx, false /* isAck */, KEEPALIVE_PING, ctx.newPromise());
       ctx.flush();
       if (transportTracer != null) {
         pingFuture.addListener(new ChannelFutureListener() {

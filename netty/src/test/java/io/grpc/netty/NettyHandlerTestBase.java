@@ -276,10 +276,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     return captureWrite(ctx);
   }
 
-  protected final ByteBuf pingFrame(boolean ack, ByteBuf payload) {
-    // Need to retain the content since the frameWriter releases it.
-    payload.retain();
-
+  protected final ByteBuf pingFrame(boolean ack, long payload) {
     ChannelHandlerContext ctx = newMockContext();
     new DefaultHttp2FrameWriter().writePing(ctx, ack, payload, newPromise());
     return captureWrite(ctx);
@@ -381,9 +378,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
     channelRead(dataFrame(3, false, content()));
     long pingData = handler.flowControlPing().payload();
-    ByteBuf payload = handler.ctx().alloc().buffer(8);
-    payload.writeLong(pingData);
-    channelRead(pingFrame(true, payload));
+    channelRead(pingFrame(true, pingData));
 
     assertEquals(1, handler.flowControlPing().getPingCount());
     assertEquals(1, handler.flowControlPing().getPingReturn());
@@ -430,9 +425,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
       accumulator += length;
     }
     long pingData = handler.flowControlPing().payload();
-    ByteBuf buffer = handler.ctx().alloc().buffer(8);
-    buffer.writeLong(pingData);
-    channelRead(pingFrame(true, buffer));
+    channelRead(pingFrame(true, pingData));
 
     assertEquals(accumulator, handler.flowControlPing().getDataSincePing());
     assertEquals(2 * accumulator, localFlowController.initialWindowSize(connectionStream));
@@ -449,10 +442,8 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     int maxWindow = handler.flowControlPing().maxWindow();
 
     handler.flowControlPing().setDataSizeSincePing(maxWindow);
-    int payload = handler.flowControlPing().payload();
-    ByteBuf buffer = handler.ctx().alloc().buffer(8);
-    buffer.writeLong(payload);
-    channelRead(pingFrame(true, buffer));
+    long payload = handler.flowControlPing().payload();
+    channelRead(pingFrame(true, payload));
 
     assertEquals(maxWindow, localFlowController.initialWindowSize(connectionStream));
   }
