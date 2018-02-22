@@ -25,6 +25,7 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static io.grpc.internal.RetriableStream.RetryPolicy.DEFAULT;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -56,10 +57,6 @@ import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.RetryPolicy;
 import io.grpc.internal.RetriableStream.Throttle;
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.SoftReference;
-import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -67,15 +64,12 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.annotation.Nonnull;
@@ -85,7 +79,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl extends ManagedChannel implements Instrumented<ChannelStats> {
+final class ManagedChannelImpl extends ManagedChannel implements Instrumented<ChannelStats> {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -207,8 +201,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   // Must be mutated from channelExecutor
   private volatile boolean terminated;
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
-
-  private final ManagedChannelReference phantom;
 
   private final CallTracer.Factory callTracerFactory;
   private final CallTracer channelCallTracer;
@@ -543,7 +535,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     this.perRpcBufferLimit = builder.perRpcBufferLimit;
     this.retryEnabled = !builder.retryDisabled;
 
-    phantom = new ManagedChannelReference(this);
     this.callTracerFactory = callTracerFactory;
     channelCallTracer = callTracerFactory.create();
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
@@ -604,7 +595,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     if (!shutdown.compareAndSet(false, true)) {
       return this;
     }
-    phantom.shutdown = true;
 
     // Put gotoState(SHUTDOWN) as early into the channelExecutor's queue as possible.
     // delayedTransport.shutdown() may also add some tasks into the queue. But some things inside
@@ -637,7 +627,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   public ManagedChannelImpl shutdownNow() {
     logger.log(Level.FINE, "[{0}] shutdownNow() called", getLogId());
     shutdown();
-    phantom.shutdownNow = true;
     uncommittedRetriableStreamsRegistry.onShutdownNow(SHUTDOWN_NOW_STATUS);
     channelExecutor.executeLater(new Runnable() {
         @Override
@@ -753,8 +742,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     if (shutdown.get() && subchannels.isEmpty() && oobChannels.isEmpty()) {
       logger.log(Level.FINE, "[{0}] Terminated", getLogId());
       terminated = true;
-      phantom.terminated = true;
-      phantom.clear();
       terminatedLatch.countDown();
       executorPool.returnObject(executor);
       // Release the transport factory so that it can deallocate any resources.
@@ -1259,101 +1246,16 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   }
 
   @VisibleForTesting
-  static final class ManagedChannelReference extends WeakReference<ManagedChannelImpl> {
-    private static final ReferenceQueue<ManagedChannelImpl> refQueue =
-        new ReferenceQueue<ManagedChannelImpl>();
-    // Retain the References so they don't get GC'd
-    private static final ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs =
-        new ConcurrentHashMap<ManagedChannelReference, ManagedChannelReference>();
-
-    private static final String ALLOCATION_SITE_PROPERTY_NAME =
-        "io.grpc.ManagedChannel.enableAllocationTracking";
-
-    private static final boolean ENABLE_ALLOCATION_TRACKING =
-        Boolean.parseBoolean(System.getProperty(ALLOCATION_SITE_PROPERTY_NAME, "true"));
-    private static final RuntimeException missingCallSite = missingCallSite();
-
-    private final LogId logId;
-    private final String target;
-    private final Reference<RuntimeException> allocationSite;
-    private volatile boolean shutdown;
-    private volatile boolean shutdownNow;
-    private volatile boolean terminated;
-
-    ManagedChannelReference(ManagedChannelImpl chan) {
-      super(chan, refQueue);
-      allocationSite = new SoftReference<RuntimeException>(
-          ENABLE_ALLOCATION_TRACKING
-              ? new RuntimeException("ManagedChannel allocation site")
-              : missingCallSite);
-      logId = chan.getLogId();
-      target = chan.target;
-      refs.put(this, this);
-      cleanQueue();
-    }
-
-    /**
-     * This clear() is *not* called automatically by the JVM.  As this is a weak ref, the reference
-     * will be cleared automatically by the JVM, but will not be removed from {@link #refs}.
-     * We do it here to avoid this ending up on the reference queue.
-     */
-    @Override
-    public void clear() {
-      clearInternal();
-      // We run this here to periodically clean up the queue if at least some of the channels are
-      // being shutdown properly.
-      cleanQueue();
-    }
-
-    // avoid reentrancy
-    private void clearInternal() {
-      super.clear();
-      refs.remove(this);
-      allocationSite.clear();
-    }
-
-    @VisibleForTesting
-    static int cleanQueue() {
-      ManagedChannelReference ref;
-      int orphanedChannels = 0;
-      while ((ref = (ManagedChannelReference) refQueue.poll()) != null) {
-        RuntimeException maybeAllocationSite = ref.allocationSite.get();
-        ref.clearInternal(); // technically the reference is gone already.
-        if (!(ref.shutdown && ref.terminated)) {
-          orphanedChannels++;
-          Level level = ref.shutdownNow ? Level.FINE : Level.SEVERE;
-          if (logger.isLoggable(level)) {
-            String fmt = new StringBuilder()
-                .append("*~*~*~ Channel {0} for target {1} was not ")
-                // Prefer to complain about shutdown if neither has been called.
-                .append(!ref.shutdown ? "shutdown" : "terminated")
-                .append(" properly!!! ~*~*~*")
-                .append(System.getProperty("line.separator"))
-                .append("    Make sure to call shutdown()/shutdownNow() and awaitTermination().")
-                .toString();
-            LogRecord lr = new LogRecord(level, fmt);
-            lr.setLoggerName(logger.getName());
-            lr.setParameters(new Object[]{ref.logId, ref.target});
-            lr.setThrown(maybeAllocationSite);
-            logger.log(lr);
-          }
-        }
-      }
-      return orphanedChannels;
-    }
-
-    private static RuntimeException missingCallSite() {
-      RuntimeException e = new RuntimeException(
-          "ManagedChannel allocation site not recorded.  Set -D"
-              + ALLOCATION_SITE_PROPERTY_NAME + "=true to enable it");
-      e.setStackTrace(new StackTraceElement[0]);
-      return e;
-    }
-  }
-
-  @VisibleForTesting
   interface RetryPolicies {
     @Nonnull
     RetryPolicy get(MethodDescriptor<?, ?> method);
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId)
+        .add("target", target)
+        .toString();
   }
 }

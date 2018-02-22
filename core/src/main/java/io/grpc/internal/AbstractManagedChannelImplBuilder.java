@@ -386,7 +386,7 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Override
   public ManagedChannel build() {
-    return new ManagedChannelImpl(
+    return new ManagedChannelOrphanWrapper(new ManagedChannelImpl(
         this,
         buildTransportFactory(),
         // TODO(carl-mastrangelo): Allow clients to pass this in
@@ -395,7 +395,7 @@ public abstract class AbstractManagedChannelImplBuilder
         GrpcUtil.STOPWATCH_SUPPLIER,
         getEffectiveInterceptors(),
         GrpcUtil.getProxyDetector(),
-        CallTracer.getDefaultFactory());
+        CallTracer.getDefaultFactory()));
   }
 
   // Temporarily disable retry when stats or tracing is enabled to avoid breakage, until we know
