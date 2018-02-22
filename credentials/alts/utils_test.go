@@ -51,16 +51,16 @@ func TestIsRunningOnGCP(t *testing.T) {
 
 func setup(testOS string, testReader io.Reader) func() {
 	tmpOS := runningOS
-	tmpReader := readerFunc
+	tmpReader := manufacturerReader
 
 	// Set test OS and reader function.
 	runningOS = testOS
-	readerFunc = func() (io.Reader, error) {
+	manufacturerReader = func() (io.Reader, error) {
 		return testReader, nil
 	}
 
 	return func() {
 		runningOS = tmpOS
-		readerFunc = tmpReader
+		manufacturerReader = tmpReader
 	}
 }
