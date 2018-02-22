@@ -20,6 +20,7 @@
 // encapsulates all the state needed by a client to authenticate with a server
 // using ALTS and make various assertions, e.g., about the client's identity,
 // role, or whether it is authorized to make a particular call.
+// This package is experimental.
 package alts
 
 import (
@@ -27,6 +28,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -51,6 +53,15 @@ const (
 
 var (
 	enableUntrustedALTS = flag.Bool("enable_untrusted_alts", false, "Enables ALTS in untrusted mode. Enabling this mode is risky since we cannot ensure that the application is running on GCP with a trusted handshaker service.")
+	once                sync.Once
+	maxRPCVersion       = &altspb.RpcProtocolVersions_Version{
+		Major: protocolVersionMaxMajor,
+		Minor: protocolVersionMaxMinor,
+	}
+	minRPCVersion = &altspb.RpcProtocolVersions_Version{
+		Major: protocolVersionMinMajor,
+		Minor: protocolVersionMinMinor,
+	}
 	// ErrUntrustedPlatform is returned from ClientHandshake and
 	// ServerHandshake is running on a platform where the trustworthiness of
 	// the handshaker service is not guaranteed.
@@ -58,7 +69,10 @@ var (
 )
 
 // AuthInfo exposes security information from the ALTS handshake to the
-// application.
+// application. This interface is to be implemented by ALTS. Users should not
+// need a brand new implementation of this interface. For situations like
+// testing, any new implementation should embed this interface. This allows
+// ALTS to add new methods to this interface.
 type AuthInfo interface {
 	// ApplicationProtocol returns application protocol negotiated for the
 	// ALTS connection.
@@ -77,8 +91,8 @@ type AuthInfo interface {
 	PeerRPCVersions() *altspb.RpcProtocolVersions
 }
 
-// altsTC is the credentials required for authenticating a connection using Google
-// Transport Security. It implements credentials.TransportCredentials interface.
+// altsTC is the credentials required for authenticating a connection using ALTS.
+// It implements credentials.TransportCredentials interface.
 type altsTC struct {
 	info     *credentials.ProtocolInfo
 	hsAddr   string
@@ -97,6 +111,11 @@ func NewServerALTS() credentials.TransportCredentials {
 }
 
 func newALTS(side core.Side, accounts []string) credentials.TransportCredentials {
+	// Make sure flags are parsed before accessing enableUntrustedALTS.
+	once.Do(func() {
+		flag.Parse()
+		vmOnGCP = isRunningOnGCP()
+	})
 	if *enableUntrustedALTS {
 		grpclog.Warning("untrusted ALTS mode is enabled and we cannot guarantee the trustworthiness of the ALTS handshaker service.")
 	}
@@ -124,19 +143,29 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 	}
 	// Do not close hsConn since it is shared with other handshakes.
 
+	// Possible context leak:
+	// The cancel function for the child context we create will only be
+	// called a non-nil error is returned.
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
 	opts := handshaker.DefaultClientHandshakerOptions()
 	opts.TargetServiceAccounts = g.accounts
 	opts.RPCVersions = &altspb.RpcProtocolVersions{
-		MaxRpcVersion: &altspb.RpcProtocolVersions_Version{
-			Major: protocolVersionMaxMajor,
-			Minor: protocolVersionMaxMinor,
-		},
-		MinRpcVersion: &altspb.RpcProtocolVersions_Version{
-			Major: protocolVersionMinMajor,
-			Minor: protocolVersionMinMinor,
-		},
+		MaxRpcVersion: maxRPCVersion,
+		MinRpcVersion: minRPCVersion,
 	}
 	chs, err := handshaker.NewClientHandshaker(ctx, hsConn, rawConn, opts)
+	defer func() {
+		if err != nil {
+			chs.Close()
+		}
+	}()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -171,16 +200,15 @@ func (g *altsTC) ServerHandshake(rawConn net.Conn) (_ net.Conn, _ credentials.Au
 	defer cancel()
 	opts := handshaker.DefaultServerHandshakerOptions()
 	opts.RPCVersions = &altspb.RpcProtocolVersions{
-		MaxRpcVersion: &altspb.RpcProtocolVersions_Version{
-			Major: protocolVersionMaxMajor,
-			Minor: protocolVersionMaxMinor,
-		},
-		MinRpcVersion: &altspb.RpcProtocolVersions_Version{
-			Major: protocolVersionMinMajor,
-			Minor: protocolVersionMinMinor,
-		},
+		MaxRpcVersion: maxRPCVersion,
+		MinRpcVersion: minRPCVersion,
 	}
 	shs, err := handshaker.NewServerHandshaker(ctx, hsConn, rawConn, opts)
+	defer func() {
+		if err != nil {
+			shs.Close()
+		}
+	}()
 	if err != nil {
 		return nil, nil, err
 	}

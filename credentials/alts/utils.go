@@ -49,8 +49,8 @@ func (k platformError) Error() string {
 
 var (
 	// The following two variables will be reassigned in tests.
-	runningOS  = runtime.GOOS
-	readerFunc = func() (io.Reader, error) {
+	runningOS          = runtime.GOOS
+	manufacturerReader = func() (io.Reader, error) {
 		switch runningOS {
 		case "linux":
 			return os.Open(linuxProductNameFile)
@@ -72,10 +72,10 @@ var (
 
 			return nil, errors.New("cannot determine the machine's manufacturer")
 		default:
-			panic(platformError(runningOS))
+			return nil, platformError(runningOS)
 		}
 	}
-	vmOnGCP = isRunningOnGCP()
+	vmOnGCP bool
 )
 
 // isRunningOnGCP checks whether the local system, without doing a network request is
@@ -83,7 +83,7 @@ var (
 func isRunningOnGCP() bool {
 	manufacturer, err := readManufacturer()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failure to read manufacturer information: %v", err)
 	}
 	name := string(manufacturer)
 	switch runningOS {
@@ -96,12 +96,13 @@ func isRunningOnGCP() bool {
 		name = strings.Replace(name, "\r", "", -1)
 		return name == "Google"
 	default:
-		panic(platformError(runningOS))
+		log.Fatal(platformError(runningOS))
 	}
+	return false
 }
 
 func readManufacturer() ([]byte, error) {
-	reader, err := readerFunc()
+	reader, err := manufacturerReader()
 	if err != nil {
 		return nil, err
 	}
