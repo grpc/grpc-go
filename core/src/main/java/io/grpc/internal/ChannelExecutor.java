@@ -34,7 +34,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * order as they are submitted.
  */
 @ThreadSafe
-final class ChannelExecutor {
+class ChannelExecutor {
   private static final Logger log = Logger.getLogger(ChannelExecutor.class.getName());
 
   private final Object lock = new Object();
@@ -51,7 +51,7 @@ final class ChannelExecutor {
    * <p>Upon returning, it guarantees that all tasks submitted by {@code executeLater()} before it
    * have been or will eventually be run, while not requiring any more calls to {@code drain()}.
    */
-  void drain() {
+  final void drain() {
     boolean drainLeaseAcquired = false;
     while (true) {
       Runnable runnable;
@@ -72,7 +72,7 @@ final class ChannelExecutor {
       try {
         runnable.run();
       } catch (Throwable t) {
-        log.log(Level.WARNING, "Runnable threw exception in ChannelExecutor", t);
+        handleUncaughtThrowable(t);
       }
     }
   }
@@ -82,7 +82,7 @@ final class ChannelExecutor {
    *
    * @return this ChannelExecutor
    */
-  ChannelExecutor executeLater(Runnable runnable) {
+  final ChannelExecutor executeLater(Runnable runnable) {
     synchronized (lock) {
       queue.add(checkNotNull(runnable, "runnable is null"));
     }
@@ -90,9 +90,18 @@ final class ChannelExecutor {
   }
 
   @VisibleForTesting
-  int numPendingTasks() {
+  final int numPendingTasks() {
     synchronized (lock) {
       return queue.size();
     }
+  }
+
+  /**
+   * Handle a throwable from a task.
+   *
+   * <p>The default implementation logs a warning.
+   */
+  void handleUncaughtThrowable(Throwable t) {
+    log.log(Level.WARNING, "Runnable threw exception in ChannelExecutor", t);
   }
 }

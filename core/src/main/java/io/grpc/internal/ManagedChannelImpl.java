@@ -121,7 +121,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   private final ObjectPool<? extends Executor> executorPool;
   private final ObjectPool<? extends Executor> oobExecutorPool;
 
-  private final ChannelExecutor channelExecutor = new ChannelExecutor();
+  private final ChannelExecutor channelExecutor = new ChannelExecutor() {
+      @Override
+      void handleUncaughtThrowable(Throwable t) {
+        super.handleUncaughtThrowable(t);
+        panic(t);
+      }
+    };
 
   private boolean fullStreamDecompression;
 
@@ -156,9 +162,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   @Nullable
   private LbHelperImpl lbHelper;
 
-  // Must be assigned from channelExecutor.  null if channel is in idle mode.
+  // Must ONLY be assigned from updateSubchannelPicker(), which is called from channelExecutor.
+  // null if channel is in idle mode.
   @Nullable
   private volatile SubchannelPicker subchannelPicker;
+
+  // Must be accessed from the channelExecutor
+  private boolean  panicMode;
 
   // Must be mutated from channelExecutor
   // If any monitoring hook to be added later needs to get a snapshot of this Set, we could
@@ -239,16 +249,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
         public void transportTerminated() {
           checkState(shutdown.get(), "Channel must have been shut down");
           terminating = true;
-          if (lbHelper != null) {
-            lbHelper.lb.shutdown();
-            lbHelper = null;
-          }
-          if (nameResolver != null) {
-            nameResolver.shutdown();
-            nameResolver = null;
-            nameResolverStarted = false;
-          }
-
+          shutdownNameResolverAndLoadBalancer(false);
+          // No need to call channelStateManager since we are already in SHUTDOWN state.
           // Until LoadBalancer is shutdown, it may still create new subchannels.  We catch them
           // here.
           maybeShutdownNowSubchannels();
@@ -324,6 +326,24 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
   @Nullable
   private IdleModeTimer idleModeTimer;
 
+  // Must be called from channelExecutor
+  private void shutdownNameResolverAndLoadBalancer(boolean verifyActive) {
+    if (verifyActive) {
+      checkState(nameResolver != null, "nameResolver is null");
+      checkState(lbHelper != null, "lbHelper is null");
+    }
+    if (nameResolver != null) {
+      nameResolver.shutdown();
+      nameResolver = null;
+      nameResolverStarted = false;
+    }
+    if (lbHelper != null) {
+      lbHelper.lb.shutdown();
+      lbHelper = null;
+    }
+    subchannelPicker = null;
+  }
+
   /**
    * Make the channel exit idle mode, if it's in it.
    *
@@ -331,7 +351,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
    */
   @VisibleForTesting
   void exitIdleMode() {
-    if (shutdown.get()) {
+    if (shutdown.get() || panicMode) {
       return;
     }
     if (inUseStateAggregator.isInUse()) {
@@ -366,12 +386,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
     // either the idleModeTimer ran twice without exiting the idle mode, or the task in shutdown()
     // did not cancel idleModeTimer, or prepareToLoseNetwork() ran while shutdown or in idle, all of
     // which are bugs.
-    nameResolver.shutdown();
-    nameResolverStarted = false;
+    shutdownNameResolverAndLoadBalancer(true);
     nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
-    lbHelper.lb.shutdown();
-    lbHelper = null;
-    subchannelPicker = null;
     channelStateManager.gotoState(IDLE);
   }
 
@@ -634,6 +650,35 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
         }
       }).drain();
     return this;
+  }
+
+  // Called from channelExecutor
+  @VisibleForTesting
+  void panic(final Throwable t) {
+    if (panicMode) {
+      // Preserve the first panic information
+      return;
+    }
+    panicMode = true;
+    cancelIdleTimer();
+    shutdownNameResolverAndLoadBalancer(false);
+    SubchannelPicker newPicker = new SubchannelPicker() {
+      final PickResult panicPickResult =
+          PickResult.withDrop(
+              Status.INTERNAL.withDescription("Panic! This is a bug!").withCause(t));
+      @Override
+      public PickResult pickSubchannel(PickSubchannelArgs args) {
+        return panicPickResult;
+      }
+    };
+    updateSubchannelPicker(newPicker);
+    channelStateManager.gotoState(TRANSIENT_FAILURE);
+  }
+
+  // Called from channelExecutor
+  private void updateSubchannelPicker(SubchannelPicker newPicker) {
+    subchannelPicker = newPicker;
+    delayedTransport.reprocess(newPicker);
   }
 
   @Override
@@ -958,8 +1003,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
               if (LbHelperImpl.this != lbHelper) {
                 return;
               }
-              subchannelPicker = newPicker;
-              delayedTransport.reprocess(newPicker);
+              updateSubchannelPicker(newPicker);
               // It's not appropriate to report SHUTDOWN state from lb.
               // Ignore the case of newState == SHUTDOWN for now.
               if (newState != SHUTDOWN) {
@@ -1084,16 +1128,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements Instrume
                 re);
           }
 
-          try {
-            balancer.handleResolvedAddressGroups(servers, config);
-          } catch (Throwable e) {
-            logger.log(
-                Level.WARNING, "[" + getLogId() + "] Unexpected exception from LoadBalancer", e);
-            // It must be a bug! Push the exception back to LoadBalancer in the hope that it may
-            // be propagated to the application.
-            balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
-                .withDescription("Thrown from handleResolvedAddresses(): " + e));
-          }
+          balancer.handleResolvedAddressGroups(servers, config);
         }
       }
 

@@ -16,14 +16,18 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,7 +43,13 @@ import org.mockito.stubbing.Answer;
  */
 @RunWith(JUnit4.class)
 public class ChannelExecutorTest {
-  private final ChannelExecutor executor = new ChannelExecutor();
+  private final BlockingQueue<Throwable> uncaughtErrors = new LinkedBlockingQueue<Throwable>();
+  private final ChannelExecutor executor = new ChannelExecutor() {
+      @Override
+      void handleUncaughtThrowable(Throwable t) {
+        uncaughtErrors.add(t);
+      }
+    };
 
   @Mock
   private Runnable task1;
@@ -52,6 +62,10 @@ public class ChannelExecutorTest {
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @After public void tearDown() {
+    assertThat(uncaughtErrors).isEmpty();
   }
 
   @Test
@@ -135,10 +149,11 @@ public class ChannelExecutorTest {
   @Test
   public void taskThrows() {
     InOrder inOrder = inOrder(task1, task2, task3);
+    final RuntimeException e = new RuntimeException("Simulated");
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock invocation) {
-          throw new RuntimeException("Simulated");
+          throw e;
         }
       }).when(task2).run();
     executor.executeLater(task1);
@@ -148,5 +163,7 @@ public class ChannelExecutorTest {
     inOrder.verify(task1).run();
     inOrder.verify(task2).run();
     inOrder.verify(task3).run();
+    assertThat(uncaughtErrors).containsExactly(e);
+    uncaughtErrors.clear();
   }
 }
