@@ -26,7 +26,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.UnsafeByteOperations;
 import io.grpc.Metadata;
 import io.grpc.binarylog.GrpcLogEntry;
 import io.grpc.binarylog.Message;
@@ -487,7 +486,7 @@ public final class BinaryLogTest {
     assertEquals(
         Message
             .newBuilder()
-            .setData(UnsafeByteOperations.unsafeWrap(truncatedMessage.getBytes(US_ASCII)))
+            .setData(ByteString.copyFrom(truncatedMessage.getBytes(US_ASCII)))
             .setFlags(0)
             .setLength(bytes.remaining())
             .build(),

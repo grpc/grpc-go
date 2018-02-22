@@ -183,37 +183,37 @@ public class BinaryLogProviderTest {
         },
         new Metadata());
 
-    String actualRequest = "hello world";
+    String expectedRequest = "hello world";
     assertThat(binlogReq).isEmpty();
     assertThat(serializedReq).isEmpty();
     assertEquals(0, reqMarshaller.streamInvocations);
-    clientCall.sendMessage(actualRequest);
+    clientCall.sendMessage(expectedRequest);
     // it is unacceptably expensive for the binlog to double parse every logged message
     assertEquals(1, reqMarshaller.streamInvocations);
     assertEquals(0, reqMarshaller.parseInvocations);
     assertThat(binlogReq).hasSize(1);
     assertThat(serializedReq).hasSize(1);
     assertEquals(
-        actualRequest,
+        expectedRequest,
         StringMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogReq.get(0))));
     assertEquals(
-        actualRequest,
+        expectedRequest,
         StringMarshaller.INSTANCE.parse(serializedReq.get(0)));
 
-    int actualResponse = 12345;
+    int expectedResponse = 12345;
     assertThat(binlogResp).isEmpty();
     assertThat(observedResponse).isEmpty();
     assertEquals(0, respMarshaller.parseInvocations);
-    onClientMessageHelper(listener.get(), IntegerMarshaller.INSTANCE.stream(actualResponse));
+    onClientMessageHelper(listener.get(), IntegerMarshaller.INSTANCE.stream(expectedResponse));
     // it is unacceptably expensive for the binlog to double parse every logged message
     assertEquals(1, respMarshaller.parseInvocations);
     assertEquals(0, respMarshaller.streamInvocations);
     assertThat(binlogResp).hasSize(1);
     assertThat(observedResponse).hasSize(1);
     assertEquals(
-        actualResponse,
+        expectedResponse,
         (int) IntegerMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogResp.get(0))));
-    assertEquals(actualResponse, (int) observedResponse.get(0));
+    assertEquals(expectedResponse, (int) observedResponse.get(0));
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -274,35 +274,35 @@ public class BinaryLogProviderTest {
     List<Object> serializedResp = new ArrayList<Object>();
     ServerCall.Listener<?> wListener = startServerCallHelper(wDef, serializedResp);
 
-    String actualRequest = "hello world";
+    String expectedRequest = "hello world";
     assertThat(binlogReq).isEmpty();
     assertThat(observedRequest).isEmpty();
     assertEquals(0, reqMarshaller.parseInvocations);
-    onServerMessageHelper(wListener, StringMarshaller.INSTANCE.stream(actualRequest));
+    onServerMessageHelper(wListener, StringMarshaller.INSTANCE.stream(expectedRequest));
     // it is unacceptably expensive for the binlog to double parse every logged message
     assertEquals(1, reqMarshaller.parseInvocations);
     assertEquals(0, reqMarshaller.streamInvocations);
     assertThat(binlogReq).hasSize(1);
     assertThat(observedRequest).hasSize(1);
     assertEquals(
-        actualRequest,
+        expectedRequest,
         StringMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogReq.get(0))));
-    assertEquals(actualRequest, observedRequest.get(0));
+    assertEquals(expectedRequest, observedRequest.get(0));
 
-    int actualResponse = 12345;
+    int expectedResponse = 12345;
     assertThat(binlogResp).isEmpty();
     assertThat(serializedResp).isEmpty();
     assertEquals(0, respMarshaller.streamInvocations);
-    serverCall.get().sendMessage(actualResponse);
+    serverCall.get().sendMessage(expectedResponse);
     // it is unacceptably expensive for the binlog to double parse every logged message
     assertEquals(0, respMarshaller.parseInvocations);
     assertEquals(1, respMarshaller.streamInvocations);
     assertThat(binlogResp).hasSize(1);
     assertThat(serializedResp).hasSize(1);
     assertEquals(
-        actualResponse,
+        expectedResponse,
         (int) IntegerMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogResp.get(0))));
-    assertEquals(actualResponse, (int) method.parseResponse((InputStream) serializedResp.get(0)));
+    assertEquals(expectedResponse, (int) method.parseResponse((InputStream) serializedResp.get(0)));
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
