@@ -68,6 +68,7 @@ $ VERSION_FILES=(
   cronet/build.gradle
   examples/build.gradle
   examples/pom.xml
+  examples/android/clientcache/app/build.gradle
   examples/android/helloworld/app/build.gradle
   examples/android/routeguide/app/build.gradle
   )
