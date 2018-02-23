@@ -19,7 +19,8 @@ if not exist "%CMAKE_NAME%" (
 )
 set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
 :hasCmake
-powershell -command "& { iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
+@rem GitHub requires TLSv1.2, and for whatever reason our powershell doesn't have it enabled
+powershell -command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
 powershell -command "& { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('protobuf.zip', '.') }"
 del protobuf.zip
 pushd protobuf-%PROTOBUF_VER%\cmake
