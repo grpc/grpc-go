@@ -53,7 +53,7 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
   }
 
   /** Creates a negotiator used for ALTS. */
-  public static AltsProtocolNegotiator create(TsiHandshakerFactory handshakerFactory) {
+  public static AltsProtocolNegotiator create(final TsiHandshakerFactory handshakerFactory) {
     return new AltsProtocolNegotiator() {
       @Override
       public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {

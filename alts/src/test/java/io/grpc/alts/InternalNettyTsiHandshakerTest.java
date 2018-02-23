@@ -181,7 +181,16 @@ public class InternalNettyTsiHandshakerTest {
   }
 
   private void doHandshake() throws GeneralSecurityException {
-    doHandshake(clientHandshaker, serverHandshaker, alloc, buf -> ref(buf));
+    doHandshake(
+        clientHandshaker,
+        serverHandshaker,
+        alloc,
+        new java.util.function.Function<ByteBuf, ByteBuf>() {
+          @Override
+          public ByteBuf apply(ByteBuf buf) {
+            return ref(buf);
+          }
+        });
   }
 
   private ByteBuf ref(ByteBuf buf) {

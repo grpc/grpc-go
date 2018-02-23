@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import com.google.common.testing.GcFinalization;
+import io.grpc.alts.transportsecurity.ByteBufTestUtils.RegisterRef;
 import io.grpc.alts.transportsecurity.TsiTest.Handshakers;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.ReferenceCounted;
@@ -44,6 +45,16 @@ public class FakeTsiTest {
       FakeChannelCrypter.getTagBytes() + AltsTsiFrameProtector.getHeaderBytes();
 
   private final List<ReferenceCounted> references = new ArrayList<>();
+  private final RegisterRef ref =
+      new RegisterRef() {
+        @Override
+        public ByteBuf register(ByteBuf buf) {
+          if (buf != null) {
+            references.add(buf);
+          }
+          return buf;
+        }
+      };
 
   private static Handshakers newHandshakers() {
     TsiHandshaker clientHandshaker = FakeTsiHandshaker.newFakeHandshakerClient();
@@ -157,53 +168,46 @@ public class FakeTsiTest {
 
   @Test
   public void pingPong() throws GeneralSecurityException {
-    TsiTest.pingPongTest(newHandshakers(), this::ref);
+    TsiTest.pingPongTest(newHandshakers(), ref);
   }
 
   @Test
   public void pingPongExactFrameSize() throws GeneralSecurityException {
-    TsiTest.pingPongExactFrameSizeTest(newHandshakers(), this::ref);
+    TsiTest.pingPongExactFrameSizeTest(newHandshakers(), ref);
   }
 
   @Test
   public void pingPongSmallBuffer() throws GeneralSecurityException {
-    TsiTest.pingPongSmallBufferTest(newHandshakers(), this::ref);
+    TsiTest.pingPongSmallBufferTest(newHandshakers(), ref);
   }
 
   @Test
   public void pingPongSmallFrame() throws GeneralSecurityException {
-    TsiTest.pingPongSmallFrameTest(OVERHEAD, newHandshakers(), this::ref);
+    TsiTest.pingPongSmallFrameTest(OVERHEAD, newHandshakers(), ref);
   }
 
   @Test
   public void pingPongSmallFrameSmallBuffer() throws GeneralSecurityException {
-    TsiTest.pingPongSmallFrameSmallBufferTest(OVERHEAD, newHandshakers(), this::ref);
+    TsiTest.pingPongSmallFrameSmallBufferTest(OVERHEAD, newHandshakers(), ref);
   }
 
   @Test
   public void corruptedCounter() throws GeneralSecurityException {
-    TsiTest.corruptedCounterTest(newHandshakers(), this::ref);
+    TsiTest.corruptedCounterTest(newHandshakers(), ref);
   }
 
   @Test
   public void corruptedCiphertext() throws GeneralSecurityException {
-    TsiTest.corruptedCiphertextTest(newHandshakers(), this::ref);
+    TsiTest.corruptedCiphertextTest(newHandshakers(), ref);
   }
 
   @Test
   public void corruptedTag() throws GeneralSecurityException {
-    TsiTest.corruptedTagTest(newHandshakers(), this::ref);
+    TsiTest.corruptedTagTest(newHandshakers(), ref);
   }
 
   @Test
   public void reflectedCiphertext() throws GeneralSecurityException {
-    TsiTest.reflectedCiphertextTest(newHandshakers(), this::ref);
-  }
-
-  private ByteBuf ref(ByteBuf buf) {
-    if (buf != null) {
-      references.add(buf);
-    }
-    return buf;
+    TsiTest.reflectedCiphertextTest(newHandshakers(), ref);
   }
 }

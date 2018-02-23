@@ -19,6 +19,7 @@ package io.grpc.testing.integration;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
 import io.grpc.ManagedChannel;
+import io.grpc.alts.AltsChannelBuilder;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.TestUtils;
@@ -76,6 +77,7 @@ public class TestServiceClient {
   private int serverPort = 8080;
   private String testCase = "empty_unary";
   private boolean useTls = true;
+  private boolean useAlts = false;
   private boolean useTestCa;
   private boolean useOkHttp;
   private String defaultServiceAccount;
@@ -116,6 +118,8 @@ public class TestServiceClient {
         testCase = value;
       } else if ("use_tls".equals(key)) {
         useTls = Boolean.parseBoolean(value);
+      } else if ("use_alts".equals(key)) {
+        useAlts = Boolean.parseBoolean(value);
       } else if ("use_test_ca".equals(key)) {
         useTestCa = Boolean.parseBoolean(value);
       } else if ("use_okhttp".equals(key)) {
@@ -140,6 +144,9 @@ public class TestServiceClient {
         break;
       }
     }
+    if (useAlts) {
+      useTls = false;
+    }
     if (usage) {
       TestServiceClient c = new TestServiceClient();
       System.out.println(
@@ -153,6 +160,8 @@ public class TestServiceClient {
           + "\n    Valid options:"
           + validTestCasesHelpText()
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
+          + "\n  --use_alts=true|false       Whether to use ALTS. Enable ALTS will disable TLS."
+          + "\n                              Default " + c.useTls
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Requires --use_tls=true "
           + "\n                              to have effect. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
@@ -317,6 +326,9 @@ public class TestServiceClient {
   private class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
+      if (useAlts) {
+        return AltsChannelBuilder.forAddress(serverHost, serverPort).build();
+      }
       AbstractManagedChannelImplBuilder<?> builder;
       if (!useOkHttp) {
         SslContext sslContext = null;

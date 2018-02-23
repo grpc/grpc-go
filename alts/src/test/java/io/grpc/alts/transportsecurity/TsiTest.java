@@ -123,10 +123,18 @@ public final class TsiTest {
       throws GeneralSecurityException {
 
     ByteBuf plaintextBuffer = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
-    List<ByteBuf> protectOut = new ArrayList<>();
+    final List<ByteBuf> protectOut = new ArrayList<>();
     List<Object> unprotectOut = new ArrayList<>();
 
-    sender.protectFlush(Collections.singletonList(plaintextBuffer), protectOut::add, alloc);
+    sender.protectFlush(
+        Collections.singletonList(plaintextBuffer),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            protectOut.add(buf);
+          }
+        },
+        alloc);
     assertThat(protectOut.size()).isEqualTo(1);
 
     ByteBuf protect = ref.register(protectOut.get(0));
@@ -249,10 +257,18 @@ public final class TsiTest {
 
     String message = "hello world";
     ByteBuf plaintextBuffer = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
-    List<ByteBuf> protectOut = new ArrayList<>();
+    final List<ByteBuf> protectOut = new ArrayList<>();
     List<Object> unprotectOut = new ArrayList<>();
 
-    sender.protectFlush(Collections.singletonList(plaintextBuffer), protectOut::add, alloc);
+    sender.protectFlush(
+        Collections.singletonList(plaintextBuffer),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            protectOut.add(buf);
+          }
+        },
+        alloc);
     assertThat(protectOut.size()).isEqualTo(1);
 
     ByteBuf protect = ref.register(protectOut.get(0));
@@ -282,10 +298,18 @@ public final class TsiTest {
 
     String message = "hello world";
     ByteBuf plaintextBuffer = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
-    List<ByteBuf> protectOut = new ArrayList<>();
+    final List<ByteBuf> protectOut = new ArrayList<>();
     List<Object> unprotectOut = new ArrayList<>();
 
-    sender.protectFlush(Collections.singletonList(plaintextBuffer), protectOut::add, alloc);
+    sender.protectFlush(
+        Collections.singletonList(plaintextBuffer),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            protectOut.add(buf);
+          }
+        },
+        alloc);
     assertThat(protectOut.size()).isEqualTo(1);
 
     ByteBuf protect = ref.register(protectOut.get(0));
@@ -313,10 +337,18 @@ public final class TsiTest {
 
     String message = "hello world";
     ByteBuf plaintextBuffer = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
-    List<ByteBuf> protectOut = new ArrayList<>();
+    final List<ByteBuf> protectOut = new ArrayList<>();
     List<Object> unprotectOut = new ArrayList<>();
 
-    sender.protectFlush(Collections.singletonList(plaintextBuffer), protectOut::add, alloc);
+    sender.protectFlush(
+        Collections.singletonList(plaintextBuffer),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            protectOut.add(buf);
+          }
+        },
+        alloc);
     assertThat(protectOut.size()).isEqualTo(1);
 
     ByteBuf protect = ref.register(protectOut.get(0));
@@ -344,10 +376,18 @@ public final class TsiTest {
 
     String message = "hello world";
     ByteBuf plaintextBuffer = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
-    List<ByteBuf> protectOut = new ArrayList<>();
+    final List<ByteBuf> protectOut = new ArrayList<>();
     List<Object> unprotectOut = new ArrayList<>();
 
-    sender.protectFlush(Collections.singletonList(plaintextBuffer), protectOut::add, alloc);
+    sender.protectFlush(
+        Collections.singletonList(plaintextBuffer),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            protectOut.add(buf);
+          }
+        },
+        alloc);
     assertThat(protectOut.size()).isEqualTo(1);
 
     ByteBuf protect = ref.register(protectOut.get(0));

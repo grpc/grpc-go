@@ -14,7 +14,8 @@ buildscript {
 }
 
 dependencies {
-    compile project(':grpc-auth'),
+    compile project(':grpc-alts'),
+            project(':grpc-auth'),
             project(':grpc-core'),
             project(':grpc-netty'),
             project(':grpc-okhttp'),

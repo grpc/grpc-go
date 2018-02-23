@@ -52,9 +52,10 @@ public final class FakeChannelCrypter implements ChannelCrypterNetty {
     for (ByteBuf buf : ciphertext) {
       out.writeBytes(buf);
     }
-    boolean tagValid = tag.forEachByte((byte value) -> value == TAG_BYTE) == -1;
-    if (!tagValid) {
-      throw new AEADBadTagException("Tag mismatch!");
+    while (tag.isReadable()) {
+      if (tag.readByte() != TAG_BYTE) {
+        throw new AEADBadTagException("Tag mismatch!");
+      }
     }
   }
 

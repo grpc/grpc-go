@@ -19,6 +19,7 @@ package io.grpc.alts.transportsecurity;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
+import io.grpc.alts.transportsecurity.TsiPeer.Property;
 import io.netty.buffer.ByteBufAllocator;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -203,7 +204,7 @@ public class FakeTsiHandshaker implements TsiHandshaker {
 
   @Override
   public TsiPeer extractPeer() {
-    return new TsiPeer(Collections.emptyList());
+    return new TsiPeer(Collections.<Property<?>>emptyList());
   }
 
   @Override

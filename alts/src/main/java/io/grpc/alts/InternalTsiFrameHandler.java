@@ -146,9 +146,9 @@ public final class InternalTsiFrameHandler extends ByteToMessageDecoder
   }
 
   @Override
-  public void flush(ChannelHandlerContext ctx) throws GeneralSecurityException {
+  public void flush(final ChannelHandlerContext ctx) throws GeneralSecurityException {
     checkState(protector != null, "Cannot write frames while the TSI handshake is in progress");
-    ProtectedPromise aggregatePromise =
+    final ProtectedPromise aggregatePromise =
         new ProtectedPromise(ctx.channel(), ctx.executor(), pendingUnprotectedWrites.size());
 
     List<ByteBuf> bufs = new ArrayList<>(pendingUnprotectedWrites.size());
@@ -168,7 +168,14 @@ public final class InternalTsiFrameHandler extends ByteToMessageDecoder
     }
 
     protector.protectFlush(
-        bufs, b -> ctx.writeAndFlush(b, aggregatePromise.newPromise()), ctx.alloc());
+        bufs,
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf b) {
+            ctx.writeAndFlush(b, aggregatePromise.newPromise());
+          }
+        },
+        ctx.alloc());
 
     // We're done writing, start the flow of promise events.
     @SuppressWarnings("unused") // go/futurereturn-lsc

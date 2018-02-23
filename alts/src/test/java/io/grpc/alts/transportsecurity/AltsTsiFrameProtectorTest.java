@@ -23,6 +23,7 @@ import static io.grpc.alts.transportsecurity.ByteBufTestUtils.writeSlice;
 import static org.junit.Assert.fail;
 
 import com.google.common.testing.GcFinalization;
+import io.grpc.alts.transportsecurity.ByteBufTestUtils.RegisterRef;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.util.ReferenceCounted;
@@ -45,6 +46,16 @@ public class AltsTsiFrameProtectorTest {
       AltsTsiFrameProtector.getHeaderTypeFieldBytes() + FakeChannelCrypter.getTagBytes();
 
   private final List<ReferenceCounted> references = new ArrayList<ReferenceCounted>();
+  private final RegisterRef ref =
+      new RegisterRef() {
+        @Override
+        public ByteBuf register(ByteBuf buf) {
+          if (buf != null) {
+            references.add(buf);
+          }
+          return buf;
+        }
+      };
 
   @Before
   public void setUp() {
@@ -68,7 +79,7 @@ public class AltsTsiFrameProtectorTest {
     FakeChannelCrypter crypter = new FakeChannelCrypter();
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
-    ByteBuf in = getDirectBuffer(AltsTsiFrameProtector.getHeaderBytes(), this::ref);
+    ByteBuf in = getDirectBuffer(AltsTsiFrameProtector.getHeaderBytes(), ref);
     in.writeIntLE(-1);
     in.writeIntLE(6);
     try {
@@ -90,7 +101,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(FRAME_MIN_SIZE - 1);
     in.writeIntLE(6);
     try {
@@ -112,7 +123,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(
         AltsTsiFrameProtector.getLimitMaxAllowedFrameBytes()
             - AltsTsiFrameProtector.getHeaderLenFieldBytes()
@@ -137,7 +148,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(FRAME_MIN_SIZE);
     in.writeIntLE(5);
     try {
@@ -159,7 +170,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(FRAME_MIN_SIZE);
     in.writeIntLE(6);
 
@@ -176,7 +187,7 @@ public class AltsTsiFrameProtectorTest {
     FakeChannelCrypter crypter = new FakeChannelCrypter();
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
-    ByteBuf emptyBuf = getDirectBuffer(0, this::ref);
+    ByteBuf emptyBuf = getDirectBuffer(0, ref);
     unprotector.unprotect(emptyBuf, out, alloc);
 
     assertThat(emptyBuf.refCnt()).isEqualTo(1);
@@ -193,7 +204,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(
         AltsTsiFrameProtector.getLimitMaxAllowedFrameBytes()
             - AltsTsiFrameProtector.getHeaderLenFieldBytes());
@@ -214,7 +225,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(FRAME_MIN_SIZE);
     in.writeIntLE(6);
     ByteBuf in1 = in.readSlice(AltsTsiFrameProtector.getHeaderBytes() - 1);
@@ -238,7 +249,7 @@ public class AltsTsiFrameProtectorTest {
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
     ByteBuf in =
         getDirectBuffer(
-            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), this::ref);
+            AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes(), ref);
     in.writeIntLE(FRAME_MIN_SIZE - 1);
     in.writeIntLE(6);
     ByteBuf in1 = in.readSlice(AltsTsiFrameProtector.getHeaderBytes() - 1);
@@ -267,13 +278,13 @@ public class AltsTsiFrameProtectorTest {
     FakeChannelCrypter crypter = new FakeChannelCrypter();
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
-    ByteBuf plain = getRandom(payloadBytes, this::ref);
+    ByteBuf plain = getRandom(payloadBytes, ref);
     ByteBuf outFrame =
         getDirectBuffer(
             AltsTsiFrameProtector.getHeaderBytes()
                 + payloadBytes
                 + FakeChannelCrypter.getTagBytes(),
-            this::ref);
+            ref);
 
     outFrame.writeIntLE(
         AltsTsiFrameProtector.getHeaderTypeFieldBytes()
@@ -305,12 +316,12 @@ public class AltsTsiFrameProtectorTest {
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
 
-    ByteBuf plain = getRandom(payloadBytes, this::ref);
+    ByteBuf plain = getRandom(payloadBytes, ref);
     ByteBuf outFrame =
         getDirectBuffer(
             2 * (AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes())
                 + payloadBytes,
-            this::ref);
+            ref);
 
     outFrame.writeIntLE(
         AltsTsiFrameProtector.getHeaderTypeFieldBytes()
@@ -353,13 +364,13 @@ public class AltsTsiFrameProtectorTest {
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
 
-    ByteBuf plain = getRandom(payloadBytes, this::ref);
+    ByteBuf plain = getRandom(payloadBytes, ref);
     ByteBuf protectedBuf =
         getDirectBuffer(
             2 * (AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes())
                 + payloadBytes
                 + AltsTsiFrameProtector.getHeaderBytes(),
-            this::ref);
+            ref);
 
     protectedBuf.writeIntLE(
         AltsTsiFrameProtector.getHeaderTypeFieldBytes()
@@ -421,13 +432,13 @@ public class AltsTsiFrameProtectorTest {
     AltsTsiFrameProtector.Unprotector unprotector =
         new AltsTsiFrameProtector.Unprotector(crypter, alloc);
 
-    ByteBuf plain = getRandom(payloadBytes, this::ref);
+    ByteBuf plain = getRandom(payloadBytes, ref);
     ByteBuf protectedBuf =
         getDirectBuffer(
             2 * (AltsTsiFrameProtector.getHeaderBytes() + FakeChannelCrypter.getTagBytes())
                 + payloadBytes
                 + AltsTsiFrameProtector.getHeaderBytes(),
-            this::ref);
+            ref);
 
     protectedBuf.writeIntLE(
         AltsTsiFrameProtector.getHeaderTypeFieldBytes()

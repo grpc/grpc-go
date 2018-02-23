@@ -150,7 +150,7 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
 
     @Override
     public TransportCreationParamsFilter create(
-        SocketAddress serverAddress,
+        final SocketAddress serverAddress,
         final String authority,
         final String userAgent,
         final ProxyParameters proxy) {

@@ -32,6 +32,7 @@ import io.grpc.alts.transportsecurity.TsiFrameProtector;
 import io.grpc.alts.transportsecurity.TsiHandshaker;
 import io.grpc.alts.transportsecurity.TsiHandshakerFactory;
 import io.grpc.alts.transportsecurity.TsiPeer;
+import io.grpc.alts.transportsecurity.TsiPeer.Property;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -89,7 +90,7 @@ public class AltsProtocolNegotiatorTest {
   private volatile InternalTsiHandshakeHandler.TsiHandshakeCompletionEvent tsiEvent;
   private ChannelHandler handler;
 
-  private TsiPeer mockedTsiPeer = new TsiPeer(Collections.emptyList());
+  private TsiPeer mockedTsiPeer = new TsiPeer(Collections.<Property<?>>emptyList());
   private AltsAuthContext mockedAltsContext =
       new AltsAuthContext(
           HandshakerResult.newBuilder()
@@ -220,10 +221,15 @@ public class AltsProtocolNegotiatorTest {
     assertEquals(message, unprotectedData.toString(UTF_8));
 
     // Protect the same message at the server.
-    AtomicReference<ByteBuf> newlyProtectedData = new AtomicReference<>();
+    final AtomicReference<ByteBuf> newlyProtectedData = new AtomicReference<>();
     serverProtector.protectFlush(
         Collections.singletonList(unprotectedData),
-        b -> newlyProtectedData.set(b),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            newlyProtectedData.set(buf);
+          }
+        },
         channel.alloc());
 
     // Read the protected message at the client and verify that it matches the original message.
@@ -250,7 +256,14 @@ public class AltsProtocolNegotiatorTest {
     TsiFrameProtector serverProtector =
         serverHandshaker.createFrameProtector(serverFrameSize, channel.alloc());
     serverProtector.protectFlush(
-        Collections.singletonList(unprotectedData), b -> channel.writeInbound(b), channel.alloc());
+        Collections.singletonList(unprotectedData),
+        new java.util.function.Consumer<ByteBuf>() {
+          @Override
+          public void accept(ByteBuf buf) {
+            channel.writeInbound(buf);
+          }
+        },
+        channel.alloc());
     channel.flushInbound();
 
     // Read the protected message at the client and verify that it matches the original message.
