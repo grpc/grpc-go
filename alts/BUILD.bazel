@@ -7,6 +7,8 @@ java_library(
     ]),
     visibility = ["//visibility:public"],
     deps = [
+        ":handshaker_java_grpc",
+        ":handshaker_java_proto",
         "//core",
         "//core:internal",
         "//stub",
@@ -16,8 +18,6 @@ java_library(
         "@com_google_protobuf//:protobuf_java_util",
         "@io_netty_netty_buffer//jar",
         "@io_netty_netty_common//jar",
-        ":handshaker_java_proto",
-        ":handshaker_java_grpc",
     ],
 )
 
@@ -28,6 +28,9 @@ java_library(
     ]),
     visibility = ["//visibility:public"],
     deps = [
+        ":alts_tsi",
+        ":handshaker_java_grpc",
+        ":handshaker_java_proto",
         "//core",
         "//core:internal",
         "//netty",
@@ -41,9 +44,6 @@ java_library(
         "@io_netty_netty_common//jar",
         "@io_netty_netty_transport//jar",
         "@org_apache_commons_commons_lang3//jar",
-        ":alts_tsi",
-        ":handshaker_java_proto",
-        ":handshaker_java_grpc",
     ],
 )
 
