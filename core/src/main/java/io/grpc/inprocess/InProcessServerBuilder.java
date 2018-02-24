@@ -23,6 +23,7 @@ import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import java.io.File;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,11 +41,12 @@ import java.util.concurrent.TimeUnit;
  * <h3>Usage example</h3>
  * <h4>Server and client channel setup</h4>
  * <pre>
- *   Server server = InProcessServerBuilder.forName("unique-name")
+ *   String uniqueName = InProcessServerBuilder.generateName();
+ *   Server server = InProcessServerBuilder.forName(uniqueName)
  *       .directExecutor() // directExecutor is fine for unit tests
  *       .addService(&#47;* your code here *&#47;)
  *       .build().start();
- *   ManagedChannel channel = InProcessChannelBuilder.forName("unique-name")
+ *   ManagedChannel channel = InProcessChannelBuilder.forName(uniqueName)
  *       .directExecutor()
  *       .build();
  * </pre>
@@ -74,6 +76,13 @@ public final class InProcessServerBuilder
    */
   public static InProcessServerBuilder forPort(int port) {
     throw new UnsupportedOperationException("call forName() instead");
+  }
+
+  /**
+   * Generates a new server name that is unique each time.
+   */
+  public static String generateName() {
+    return UUID.randomUUID().toString();
   }
 
   private final String name;
