@@ -154,7 +154,6 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   @GuardedBy("lock")
   private Status shutdownReason;
 
-
   InternalSubchannel(EquivalentAddressGroup addressGroup, String authority, String userAgent,
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,

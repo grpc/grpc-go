@@ -151,6 +151,7 @@ public class ManagedChannelImplTest {
       });
     }
   };
+  private final Channelz channelz = new Channelz();
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -228,6 +229,7 @@ public class ManagedChannelImplTest {
     builder.executorPool = executorPool;
     builder.idleTimeoutMillis = idleTimeoutMillis;
     builder.binlogProvider = binlogProvider;
+    builder.channelz = channelz;
     checkState(channel == null);
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
@@ -307,6 +309,82 @@ public class ManagedChannelImplTest {
     assertTrue(channel.isShutdown());
     assertTrue(channel.isTerminated());
     verify(executorPool).returnObject(executor.getScheduledExecutorService());
+  }
+
+  @Test
+  public void channelzMembership() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    assertTrue(channelz.containsRootChannel(channel.getLogId()));
+    assertTrue(channelz.containsChannel(channel.getLogId()));
+    channel.shutdownNow();
+    channel.awaitTermination(5, TimeUnit.SECONDS);
+    assertFalse(channelz.containsRootChannel(channel.getLogId()));
+    assertFalse(channelz.containsChannel(channel.getLogId()));
+  }
+
+  @Test
+  public void channelzMembership_subchannel() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    assertTrue(channelz.containsRootChannel(channel.getLogId()));
+    assertTrue(channelz.containsChannel(channel.getLogId()));
+
+    AbstractSubchannel subchannel =
+        (AbstractSubchannel) helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    // subchannels are not root channels
+    assertFalse(channelz.containsRootChannel(subchannel.getInternalSubchannel().getLogId()));
+    assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
+    assertThat(getStats(channel).subchannels)
+        .containsExactly(subchannel.getInternalSubchannel().getLogId());
+
+    // begin: terminate subchannel
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    assertNotNull(transportInfo);
+    subchannel.shutdown();
+    timer.forwardTime(ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS, TimeUnit.SECONDS);
+    timer.runDueTasks();
+    transportInfo.listener.transportTerminated();
+    // end: terminate subchannel
+
+    assertFalse(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
+    assertThat(getStats(channel).subchannels).isEmpty();
+
+    // channel still appears
+    assertTrue(channelz.containsRootChannel(channel.getLogId()));
+    assertTrue(channelz.containsChannel(channel.getLogId()));
+  }
+
+  @Test
+  public void channelzMembership_oob() throws Exception {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    OobChannel oob = (OobChannel) helper.createOobChannel(addressGroup, authority);
+    // oob channels are not root channels
+    assertFalse(channelz.containsRootChannel(oob.getLogId()));
+    assertTrue(channelz.containsChannel(oob.getLogId()));
+    assertThat(getStats(channel).subchannels).containsExactly(oob.getLogId());
+    assertTrue(channelz.containsChannel(oob.getLogId()));
+
+    AbstractSubchannel subchannel = (AbstractSubchannel) oob.getSubchannel();
+    assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
+    assertThat(getStats(oob).subchannels)
+        .containsExactly(subchannel.getInternalSubchannel().getLogId());
+    assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
+
+    // begin: terminate subchannel
+    oob.getSubchannel().requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    assertNotNull(transportInfo);
+    oob.shutdown();
+    transportInfo.listener.transportTerminated();
+    // end: terminate subchannel
+
+    assertFalse(channelz.containsChannel(oob.getLogId()));
+    assertThat(getStats(channel).subchannels).isEmpty();
+    assertFalse(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
+
+    // channel still appears
+    assertTrue(channelz.containsRootChannel(channel.getLogId()));
+    assertTrue(channelz.containsChannel(channel.getLogId()));
   }
 
   @Test
@@ -2266,7 +2344,7 @@ public class ManagedChannelImplTest {
   }
 
   private static ChannelStats getStats(AbstractSubchannel subchannel) throws Exception {
-    return subchannel.getStats().get();
+    return subchannel.getInternalSubchannel().getStats().get();
   }
 
   private static ChannelStats getStats(

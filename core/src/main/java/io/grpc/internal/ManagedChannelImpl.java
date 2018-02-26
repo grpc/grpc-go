@@ -170,7 +170,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   private final Set<InternalSubchannel> subchannels = new HashSet<InternalSubchannel>(16, .75f);
 
   // Must be mutated from channelExecutor
-  private final Set<InternalSubchannel> oobChannels = new HashSet<InternalSubchannel>(1, .75f);
+  private final Set<OobChannel> oobChannels = new HashSet<OobChannel>(1, .75f);
 
   // reprocess() must be run from channelExecutor
   private final DelayedClientTransport delayedTransport;
@@ -204,6 +204,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
   private final CallTracer.Factory callTracerFactory;
   private final CallTracer channelCallTracer;
+  private final Channelz channelz;
 
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
@@ -256,8 +257,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       for (InternalSubchannel subchannel : subchannels) {
         subchannel.shutdownNow(SHUTDOWN_NOW_STATUS);
       }
-      for (InternalSubchannel oobChannel : oobChannels) {
-        oobChannel.shutdownNow(SHUTDOWN_NOW_STATUS);
+      for (OobChannel oobChannel : oobChannels) {
+        oobChannel.getInternalSubchannel().shutdownNow(SHUTDOWN_NOW_STATUS);
       }
     }
   }
@@ -282,11 +283,25 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
   @Override
   public ListenableFuture<ChannelStats> getStats() {
-    SettableFuture<ChannelStats> ret = SettableFuture.create();
-    ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
+    final SettableFuture<ChannelStats> ret = SettableFuture.create();
+    final ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
     channelCallTracer.updateBuilder(builder);
     builder.setTarget(target).setState(channelStateManager.getState());
-    ret.set(builder.build());
+    // subchannels and oobchannels can only be accessed from channelExecutor
+    channelExecutor.executeLater(new Runnable() {
+      @Override
+      public void run() {
+        List<LogId> children = new ArrayList<LogId>();
+        for (InternalSubchannel internalSubchannel : subchannels) {
+          children.add(internalSubchannel.getLogId());
+        }
+        for (OobChannel oobChannel : oobChannels) {
+          children.add(oobChannel.getLogId());
+        }
+        builder.setSubchannels(children);
+        ret.set(builder.build());
+      }
+    }).drain();
     return ret;
   }
 
@@ -537,6 +552,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
     this.callTracerFactory = callTracerFactory;
     channelCallTracer = callTracerFactory.create();
+    this.channelz = checkNotNull(builder.channelz);
+    channelz.addRootChannel(this);
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
 
@@ -746,6 +763,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       executorPool.returnObject(executor);
       // Release the transport factory so that it can deallocate any resources.
       transportFactory.close();
+      channelz.removeRootChannel(this);
     }
   }
 
@@ -790,7 +808,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             for (InternalSubchannel subchannel : subchannels) {
               subchannel.resetConnectBackoff();
             }
-            for (InternalSubchannel oobChannel : oobChannels) {
+            for (OobChannel oobChannel : oobChannels) {
               oobChannel.resetConnectBackoff();
             }
           }
@@ -929,6 +947,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               @Override
               void onTerminated(InternalSubchannel is) {
                 subchannels.remove(is);
+                channelz.removeChannel(is);
                 maybeTerminateChannel();
               }
 
@@ -953,6 +972,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             },
             proxyDetector,
             callTracerFactory.create());
+      channelz.addChannel(internalSubchannel);
       subchannel.subchannel = internalSubchannel;
       logger.log(Level.FINE, "[{0}] {1} created for {2}",
           new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroup});
@@ -1014,7 +1034,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       checkState(!terminated, "Channel is terminated");
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, callTracerFactory.create());
+          channelExecutor, callTracerFactory.create(), channelz);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
@@ -1022,7 +1042,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           new InternalSubchannel.Callback() {
             @Override
             void onTerminated(InternalSubchannel is) {
-              oobChannels.remove(is);
+              oobChannels.remove(oobChannel);
+              channelz.removeChannel(is);
               oobChannel.handleSubchannelTerminated();
               maybeTerminateChannel();
             }
@@ -1035,6 +1056,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           },
           proxyDetector,
           callTracerFactory.create());
+      channelz.addChannel(oobChannel);
+      channelz.addChannel(internalSubchannel);
       oobChannel.setSubchannel(internalSubchannel);
       runSerialized(new Runnable() {
           @Override
@@ -1045,7 +1068,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             if (!terminated) {
               // If channel has not terminated, it will track the subchannel and block termination
               // for it.
-              oobChannels.add(internalSubchannel);
+              oobChannels.add(oobChannel);
             }
           }
         });
@@ -1179,8 +1202,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     }
 
     @Override
-    ListenableFuture<ChannelStats> getStats() {
-      return subchannel.getStats();
+    Instrumented<ChannelStats> getInternalSubchannel() {
+      return subchannel;
     }
 
     @Override
