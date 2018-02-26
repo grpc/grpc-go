@@ -37,7 +37,10 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
+@RunWith(JUnit4.class)
 public final class ManagedChannelOrphanWrapperTest {
   @Test
   public void orphanedChannelsAreLogged() throws Exception {
