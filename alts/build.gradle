@@ -23,6 +23,7 @@ dependencies {
                 libraries.junit,
                 libraries.mockito,
                 libraries.truth
+    signature 'org.codehaus.mojo.signature:java17:1.0@signature'
 }
 
 configureProtoCompilation()

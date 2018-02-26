@@ -20,7 +20,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import java.security.GeneralSecurityException;
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * This object protects and unprotects netty buffers once the handshake is done.
@@ -53,4 +52,9 @@ public interface TsiFrameProtector {
 
   /** Must be called to release all associated resources (instance cannot be used afterwards). */
   void destroy();
+
+  /** A mirror of java.util.function.Consumer without the Java 8 dependency. */
+  interface Consumer<T> {
+    void accept(T t);
+  }
 }

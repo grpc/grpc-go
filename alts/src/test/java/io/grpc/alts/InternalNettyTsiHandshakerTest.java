@@ -185,7 +185,7 @@ public class InternalNettyTsiHandshakerTest {
         clientHandshaker,
         serverHandshaker,
         alloc,
-        new java.util.function.Function<ByteBuf, ByteBuf>() {
+        new Function<ByteBuf, ByteBuf>() {
           @Override
           public ByteBuf apply(ByteBuf buf) {
             return ref(buf);
@@ -198,5 +198,10 @@ public class InternalNettyTsiHandshakerTest {
       references.add(buf);
     }
     return buf;
+  }
+
+  /** A mirror of java.util.function.Function without the Java 8 dependency. */
+  private interface Function<T,R> {
+    R apply(T t);
   }
 }

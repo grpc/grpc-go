@@ -22,6 +22,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.fail;
 
 import io.grpc.alts.transportsecurity.ByteBufTestUtils.RegisterRef;
+import io.grpc.alts.transportsecurity.TsiFrameProtector.Consumer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -128,7 +129,7 @@ public final class TsiTest {
 
     sender.protectFlush(
         Collections.singletonList(plaintextBuffer),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             protectOut.add(buf);
@@ -262,7 +263,7 @@ public final class TsiTest {
 
     sender.protectFlush(
         Collections.singletonList(plaintextBuffer),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             protectOut.add(buf);
@@ -303,7 +304,7 @@ public final class TsiTest {
 
     sender.protectFlush(
         Collections.singletonList(plaintextBuffer),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             protectOut.add(buf);
@@ -342,7 +343,7 @@ public final class TsiTest {
 
     sender.protectFlush(
         Collections.singletonList(plaintextBuffer),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             protectOut.add(buf);
@@ -381,7 +382,7 @@ public final class TsiTest {
 
     sender.protectFlush(
         Collections.singletonList(plaintextBuffer),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             protectOut.add(buf);

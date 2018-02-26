@@ -23,6 +23,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Internal;
 import io.grpc.alts.InternalTsiHandshakeHandler.TsiHandshakeCompletionEvent;
 import io.grpc.alts.transportsecurity.TsiFrameProtector;
+import io.grpc.alts.transportsecurity.TsiFrameProtector.Consumer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelHandlerContext;
@@ -169,7 +170,7 @@ public final class InternalTsiFrameHandler extends ByteToMessageDecoder
 
     protector.protectFlush(
         bufs,
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf b) {
             ctx.writeAndFlush(b, aggregatePromise.newPromise());

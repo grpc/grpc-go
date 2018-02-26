@@ -29,6 +29,7 @@ import io.grpc.alts.Handshaker.HandshakerResult;
 import io.grpc.alts.transportsecurity.AltsAuthContext;
 import io.grpc.alts.transportsecurity.FakeTsiHandshaker;
 import io.grpc.alts.transportsecurity.TsiFrameProtector;
+import io.grpc.alts.transportsecurity.TsiFrameProtector.Consumer;
 import io.grpc.alts.transportsecurity.TsiHandshaker;
 import io.grpc.alts.transportsecurity.TsiHandshakerFactory;
 import io.grpc.alts.transportsecurity.TsiPeer;
@@ -69,7 +70,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -224,7 +224,7 @@ public class AltsProtocolNegotiatorTest {
     final AtomicReference<ByteBuf> newlyProtectedData = new AtomicReference<>();
     serverProtector.protectFlush(
         Collections.singletonList(unprotectedData),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             newlyProtectedData.set(buf);
@@ -257,7 +257,7 @@ public class AltsProtocolNegotiatorTest {
         serverHandshaker.createFrameProtector(serverFrameSize, channel.alloc());
     serverProtector.protectFlush(
         Collections.singletonList(unprotectedData),
-        new java.util.function.Consumer<ByteBuf>() {
+        new Consumer<ByteBuf>() {
           @Override
           public void accept(ByteBuf buf) {
             channel.writeInbound(buf);
