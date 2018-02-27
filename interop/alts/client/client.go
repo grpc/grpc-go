@@ -17,7 +17,6 @@
  */
 
 // This binary can only run on Google Cloud Platform (GCP).
-
 package main
 
 import (

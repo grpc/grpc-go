@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts/core"
-	altspb "google.golang.org/grpc/credentials/alts/core/proto"
+	altspb "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
 	"google.golang.org/grpc/credentials/alts/core/testutil"
 )
 
