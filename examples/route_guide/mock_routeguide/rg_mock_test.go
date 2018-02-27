@@ -21,6 +21,7 @@ package mock_routeguide_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/proto"
@@ -59,7 +60,7 @@ func TestRouteChat(t *testing.T) {
 }
 
 func testRouteChat(client rgpb.RouteGuideClient) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := client.RouteChat(ctx)
 	if err != nil {
