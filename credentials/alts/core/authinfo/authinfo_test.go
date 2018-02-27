@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	altspb "google.golang.org/grpc/credentials/alts/core/proto"
+	altspb "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
 )
 
 const (

@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/alts/core"
 	"google.golang.org/grpc/credentials/alts/core/authinfo"
 	"google.golang.org/grpc/credentials/alts/core/conn"
-	altspb "google.golang.org/grpc/credentials/alts/core/proto"
+	altspb "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
 )
 
 const (
