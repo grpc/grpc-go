@@ -1380,6 +1380,19 @@ public class ServerImplTest {
     assertEquals(1, server.getStats().get().callsSucceeded);
   }
 
+  @Test
+  public void channelz_transport_membershp() throws Exception {
+    createAndStartServer();
+    SimpleServerTransport transport = new SimpleServerTransport();
+
+    assertFalse(builder.channelz.containsTransport(transport.getLogId()));
+    ServerTransportListener listener
+        = transportServer.registerNewServerTransport(transport);
+    assertTrue(builder.channelz.containsTransport(transport.getLogId()));
+    listener.transportTerminated();
+    assertFalse(builder.channelz.containsTransport(transport.getLogId()));
+  }
+
   private void createAndStartServer() throws IOException {
     createServer();
     server.start();
@@ -1445,6 +1458,7 @@ public class ServerImplTest {
 
   private class SimpleServerTransport implements ServerTransport {
     ServerTransportListener listener;
+    LogId id = LogId.allocate(getClass().getName());
 
     @Override
     public void shutdown() {
@@ -1458,7 +1472,7 @@ public class ServerImplTest {
 
     @Override
     public LogId getLogId() {
-      throw new UnsupportedOperationException();
+      return id;
     }
 
     @Override

@@ -380,6 +380,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
           @Override public void run() {}
         }, null);
       }
+      channelz.addTransport(transport);
     }
 
     @Override
@@ -397,14 +398,18 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
 
     @Override
     public void transportTerminated() {
-      if (handshakeTimeoutFuture != null) {
-        handshakeTimeoutFuture.cancel(false);
-        handshakeTimeoutFuture = null;
+      try {
+        if (handshakeTimeoutFuture != null) {
+          handshakeTimeoutFuture.cancel(false);
+          handshakeTimeoutFuture = null;
+        }
+        for (ServerTransportFilter filter : transportFilters) {
+          filter.transportTerminated(attributes);
+        }
+        transportClosed(transport);
+      } finally {
+        channelz.removeTransport(transport);
       }
-      for (ServerTransportFilter filter : transportFilters) {
-        filter.transportTerminated(attributes);
-      }
-      transportClosed(transport);
     }
 
     @Override
