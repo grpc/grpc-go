@@ -24,6 +24,7 @@ import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.SharedResourcePool;
 import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
 import org.junit.Test;
@@ -36,7 +37,7 @@ public class InProcessServerTest {
   @Test
   public void getPort_notStarted() throws Exception {
     InProcessServer s =
-        new InProcessServer("name", GrpcUtil.TIMER_SERVICE,
+        new InProcessServer("name", SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
             Collections.<ServerStreamTracer.Factory>emptyList());
 
     Truth.assertThat(s.getPort()).isEqualTo(-1);

@@ -20,6 +20,7 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.SharedResourcePool;
 import io.grpc.internal.testing.AbstractTransportTest;
 import java.util.List;
 import org.junit.runner.RunWith;
@@ -34,7 +35,9 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(TRANSPORT_NAME, GrpcUtil.TIMER_SERVICE, streamTracerFactories);
+    return new InProcessServer(
+        TRANSPORT_NAME,
+        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE), streamTracerFactories);
   }
 
   @Override

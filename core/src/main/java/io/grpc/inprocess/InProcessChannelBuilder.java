@@ -16,7 +16,8 @@
 
 package io.grpc.inprocess;
 
-import com.google.common.base.Preconditions;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
@@ -28,6 +29,7 @@ import io.grpc.internal.SharedResourceHolder;
 import java.net.SocketAddress;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 
 /**
  * Builder for a channel that issues in-process requests. Clients identify the in-process server by
@@ -65,10 +67,11 @@ public final class InProcessChannelBuilder extends
   }
 
   private final String name;
+  private ScheduledExecutorService scheduledExecutorService;
 
   private InProcessChannelBuilder(String name) {
     super(new InProcessSocketAddress(name), "localhost");
-    this.name = Preconditions.checkNotNull(name, "name");
+    this.name = checkNotNull(name, "name");
     // In-process transport should not record its traffic to the stats module.
     // https://github.com/grpc/grpc-java/issues/2284
     setStatsRecordStartedRpcs(false);
@@ -115,25 +118,44 @@ public final class InProcessChannelBuilder extends
     return this;
   }
 
+  /**
+   * Provides a custom scheduled executor service.
+   *
+   * <p>It's an optional parameter. If the user has not provided a scheduled executor service when
+   * the channel is built, the builder will use a static cached thread pool.
+   *
+   * @return this
+   *
+   * @since 1.11.0
+   */
+  public InProcessChannelBuilder scheduledExecutorService(
+      ScheduledExecutorService scheduledExecutorService) {
+    this.scheduledExecutorService =
+        checkNotNull(scheduledExecutorService, "scheduledExecutorService");
+    return this;
+  }
+
   @Override
   @Internal
   protected ClientTransportFactory buildTransportFactory() {
-    return new InProcessClientTransportFactory(name);
+    return new InProcessClientTransportFactory(name, scheduledExecutorService);
   }
 
   /**
    * Creates InProcess transports. Exposed for internal use, as it should be private.
    */
-  @Internal
   static final class InProcessClientTransportFactory implements ClientTransportFactory {
     private final String name;
-    private final ScheduledExecutorService timerService =
-        SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE);
-
+    private final ScheduledExecutorService timerService;
+    private final boolean useSharedTimer;
     private boolean closed;
 
-    private InProcessClientTransportFactory(String name) {
+    private InProcessClientTransportFactory(
+        String name, @Nullable ScheduledExecutorService scheduledExecutorService) {
       this.name = name;
+      useSharedTimer = scheduledExecutorService == null;
+      timerService = useSharedTimer
+          ? SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE) : scheduledExecutorService;
     }
 
     @Override
@@ -156,7 +178,9 @@ public final class InProcessChannelBuilder extends
         return;
       }
       closed = true;
-      SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timerService);
+      if (useSharedTimer) {
+        SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timerService);
+      }
     }
   }
 }

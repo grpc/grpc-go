@@ -16,10 +16,18 @@
 
 package io.grpc.inprocess;
 
+import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 
+import io.grpc.ServerStreamTracer.Factory;
+import io.grpc.internal.FakeClock;
+import io.grpc.internal.ObjectPool;
+import io.grpc.internal.SharedResourcePool;
+import java.util.ArrayList;
+import java.util.concurrent.ScheduledExecutorService;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -41,5 +49,41 @@ public class InProcessServerBuilderTest {
     assertFalse(name2.isEmpty());
 
     assertNotEquals(name1, name2);
+  }
+
+  @Test
+  public void scheduledExecutorService_default() {
+    InProcessServerBuilder builder = InProcessServerBuilder.forName("foo");
+    InProcessServer server = builder.buildTransportServer(new ArrayList<Factory>());
+
+    ObjectPool<ScheduledExecutorService> scheduledExecutorServicePool =
+        server.getScheduledExecutorServicePool();
+    ObjectPool<ScheduledExecutorService> expectedPool =
+        SharedResourcePool.forResource(TIMER_SERVICE);
+
+    ScheduledExecutorService expected = expectedPool.getObject();
+    ScheduledExecutorService actual = scheduledExecutorServicePool.getObject();
+    assertSame(expected, actual);
+
+    expectedPool.returnObject(expected);
+    scheduledExecutorServicePool.returnObject(actual);
+  }
+
+  @Test
+  public void scheduledExecutorService_custom() {
+    InProcessServerBuilder builder = InProcessServerBuilder.forName("foo");
+    ScheduledExecutorService scheduledExecutorService =
+        new FakeClock().getScheduledExecutorService();
+
+    InProcessServerBuilder builder1 = builder.scheduledExecutorService(scheduledExecutorService);
+    assertSame(builder, builder1);
+
+    InProcessServer server = builder1.buildTransportServer(new ArrayList<Factory>());
+    ObjectPool<ScheduledExecutorService> scheduledExecutorServicePool =
+        server.getScheduledExecutorServicePool();
+
+    assertSame(scheduledExecutorService, scheduledExecutorServicePool.getObject());
+
+    scheduledExecutorServicePool.returnObject(scheduledExecutorService);
   }
 }

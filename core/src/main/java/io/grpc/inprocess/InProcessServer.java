@@ -18,14 +18,11 @@ package io.grpc.inprocess;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.SharedResourceHolder.Resource;
-import io.grpc.internal.SharedResourcePool;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -47,7 +44,7 @@ final class InProcessServer implements InternalServer {
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private ServerListener listener;
   private boolean shutdown;
-  /** Expected to be a SharedResourcePool except in testing. */
+  /** Defaults to be a SharedResourcePool. */
   private final ObjectPool<ScheduledExecutorService> schedulerPool;
   /**
    * Only used to make sure the scheduler has at least one reference. Since child transports can
@@ -55,13 +52,6 @@ final class InProcessServer implements InternalServer {
    */
   private ScheduledExecutorService scheduler;
 
-  InProcessServer(
-      String name, Resource<ScheduledExecutorService> schedulerResource,
-      List<ServerStreamTracer.Factory> streamTracerFactories) {
-    this(name, SharedResourcePool.forResource(schedulerResource), streamTracerFactories);
-  }
-
-  @VisibleForTesting
   InProcessServer(
       String name, ObjectPool<ScheduledExecutorService> schedulerPool,
       List<ServerStreamTracer.Factory> streamTracerFactories) {

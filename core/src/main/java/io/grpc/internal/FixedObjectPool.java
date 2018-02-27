@@ -21,7 +21,7 @@ import com.google.common.base.Preconditions;
 /**
  * An object pool that always returns the same instance and does nothing when returning the object.
  */
-final class FixedObjectPool<T> implements ObjectPool<T> {
+public final class FixedObjectPool<T> implements ObjectPool<T> {
   private final T object;
 
   public FixedObjectPool(T object) {
