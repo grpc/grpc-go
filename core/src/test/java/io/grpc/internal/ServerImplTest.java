@@ -139,6 +139,8 @@ public class ServerImplTest {
 
   private final FakeClock executor = new FakeClock();
   private final FakeClock timer = new FakeClock();
+  private final Channelz channelz = new Channelz();
+
   @Mock
   private ServerStreamTracer.Factory streamTracerFactory;
   private List<ServerStreamTracer.Factory> streamTracerFactories;
@@ -188,6 +190,7 @@ public class ServerImplTest {
   @Before
   public void startUp() throws IOException {
     MockitoAnnotations.initMocks(this);
+    builder.channelz = channelz;
     streamTracerFactories = Arrays.asList(streamTracerFactory);
     when(executorPool.getObject()).thenReturn(executor.getScheduledExecutorService());
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
@@ -1359,6 +1362,22 @@ public class ServerImplTest {
     assertSame(
         METHOD.getResponseMarshaller(),
         userInterceptor.interceptedMethods.get(0).getResponseMarshaller());
+  }
+
+  @Test
+  public void channelz_membership() throws Exception {
+    createServer();
+    assertTrue(builder.channelz.containsServer(server.getLogId()));
+    server.shutdownNow().awaitTermination();
+    assertFalse(builder.channelz.containsServer(server.getLogId()));
+  }
+
+  @Test
+  public void channelz_serverStats() throws Exception {
+    createAndStartServer();
+    assertEquals(0, server.getStats().get().callsSucceeded);
+    basicExchangeHelper(METHOD, "Lots of pizza, please", 314, null);
+    assertEquals(1, server.getStats().get().callsSucceeded);
   }
 
   private void createAndStartServer() throws IOException {

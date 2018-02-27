@@ -110,6 +110,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   protected BinaryLogProvider binlogProvider = BinaryLogProvider.provider();
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
+  protected Channelz channelz = Channelz.instance();
+  protected CallTracer.Factory callTracerFactory = CallTracer.getDefaultFactory();
+
   @Override
   public final T directExecutor() {
     return executor(MoreExecutors.directExecutor());

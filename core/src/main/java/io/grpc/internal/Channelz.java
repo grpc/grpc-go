@@ -30,6 +30,8 @@ public final class Channelz {
   private static final Logger log = Logger.getLogger(Channelz.class.getName());
   private static final Channelz INSTANCE = new Channelz();
 
+  private final ConcurrentMap<Long, Instrumented<ServerStats>> servers =
+      new ConcurrentHashMap<Long, Instrumented<ServerStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> rootChannels =
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> channels =
@@ -45,6 +47,10 @@ public final class Channelz {
     return INSTANCE;
   }
 
+  public void addServer(Instrumented<ServerStats> server) {
+    add(servers, server);
+  }
+
   public void addChannel(Instrumented<ChannelStats> channel) {
     add(channels, channel);
   }
@@ -58,6 +64,10 @@ public final class Channelz {
     add(transports, transport);
   }
 
+  public void removeServer(Instrumented<ServerStats> server) {
+    remove(servers, server);
+  }
+
   public void removeChannel(Instrumented<ChannelStats> channel) {
     remove(channels, channel);
   }
@@ -69,6 +79,11 @@ public final class Channelz {
 
   public void removeTransport(Instrumented<TransportStats> transport) {
     remove(transports, transport);
+  }
+
+  @VisibleForTesting
+  public boolean containsServer(LogId serverRef) {
+    return contains(servers, serverRef);
   }
 
   @VisibleForTesting
@@ -96,6 +111,69 @@ public final class Channelz {
 
   private static <T extends Instrumented<?>> boolean contains(Map<Long, T> map, LogId id) {
     return map.containsKey(id.getId());
+  }
+
+  @Immutable
+  public static final class ServerStats {
+    public final long callsStarted;
+    public final long callsSucceeded;
+    public final long callsFailed;
+    public final long lastCallStartedMillis;
+
+    /**
+     * Creates an instance.
+     */
+    public ServerStats(
+        long callsStarted,
+        long callsSucceeded,
+        long callsFailed,
+        long lastCallStartedMillis) {
+      this.callsStarted = callsStarted;
+      this.callsSucceeded = callsSucceeded;
+      this.callsFailed = callsFailed;
+      this.lastCallStartedMillis = lastCallStartedMillis;
+    }
+
+    public static final class Builder {
+      private String target;
+      private ConnectivityState state;
+      private long callsStarted;
+      private long callsSucceeded;
+      private long callsFailed;
+      private long lastCallStartedMillis;
+      public List<LogId> subchannels;
+
+      public Builder setCallsStarted(long callsStarted) {
+        this.callsStarted = callsStarted;
+        return this;
+      }
+
+      public Builder setCallsSucceeded(long callsSucceeded) {
+        this.callsSucceeded = callsSucceeded;
+        return this;
+      }
+
+      public Builder setCallsFailed(long callsFailed) {
+        this.callsFailed = callsFailed;
+        return this;
+      }
+
+      public Builder setLastCallStartedMillis(long lastCallStartedMillis) {
+        this.lastCallStartedMillis = lastCallStartedMillis;
+        return this;
+      }
+
+      /**
+       * Builds an instance.
+       */
+      public ServerStats build() {
+        return new ServerStats(
+            callsStarted,
+            callsSucceeded,
+            callsFailed,
+            lastCallStartedMillis);
+      }
+    }
   }
 
   /**

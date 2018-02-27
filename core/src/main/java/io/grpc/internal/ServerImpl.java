@@ -26,6 +26,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -41,6 +43,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
+import io.grpc.internal.Channelz.ServerStats;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -70,7 +73,7 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public final class ServerImpl extends io.grpc.Server implements WithLogId {
+public final class ServerImpl extends io.grpc.Server implements Instrumented<ServerStats> {
   private static final Logger log = Logger.getLogger(ServerImpl.class.getName());
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
@@ -106,6 +109,9 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private final CompressorRegistry compressorRegistry;
   private final BinaryLogProvider binlogProvider;
 
+  private final Channelz channelz;
+  private final CallTracer serverCallTracer;
+
   /**
    * Construct a server.
    *
@@ -133,6 +139,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
     this.handshakeTimeoutMillis = builder.handshakeTimeoutMillis;
     this.binlogProvider = builder.binlogProvider;
+    this.channelz = builder.channelz;
+    this.serverCallTracer = builder.callTracerFactory.create();
+
+    channelz.addServer(this);
   }
 
   /**
@@ -304,6 +314,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
         }
         // TODO(carl-mastrangelo): move this outside the synchronized block.
         lock.notifyAll();
+        channelz.removeServer(this);
       }
     }
   }
@@ -538,7 +549,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           headers,
           context,
           decompressorRegistry,
-          compressorRegistry);
+          compressorRegistry,
+          serverCallTracer);
 
       ServerCall.Listener<WReqT> listener =
           methodDef.getServerCallHandler().startCall(call, headers);
@@ -553,6 +565,15 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   @Override
   public LogId getLogId() {
     return logId;
+  }
+
+  @Override
+  public ListenableFuture<ServerStats> getStats() {
+    ServerStats.Builder builder = new ServerStats.Builder();
+    serverCallTracer.updateBuilder(builder);
+    SettableFuture<ServerStats> ret = SettableFuture.create();
+    ret.set(builder.build());
+    return ret;
   }
 
   private static final class NoopListener implements ServerStreamListener {
