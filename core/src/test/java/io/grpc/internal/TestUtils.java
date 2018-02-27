@@ -74,6 +74,7 @@ final class TestUtils {
       @Override
       public ConnectionClientTransport answer(InvocationOnMock invocation) throws Throwable {
         final ConnectionClientTransport mockTransport = mock(ConnectionClientTransport.class);
+        when(mockTransport.getLogId()).thenReturn(LogId.allocate("mocktransport"));
         when(mockTransport.newStream(
                 any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class)))
             .thenReturn(mock(ClientStream.class));

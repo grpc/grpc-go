@@ -971,6 +971,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               }
             },
             proxyDetector,
+            channelz,
             callTracerFactory.create());
       channelz.addChannel(internalSubchannel);
       subchannel.subchannel = internalSubchannel;
@@ -1055,6 +1056,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             }
           },
           proxyDetector,
+          channelz,
           callTracerFactory.create());
       channelz.addChannel(oobChannel);
       channelz.addChannel(internalSubchannel);

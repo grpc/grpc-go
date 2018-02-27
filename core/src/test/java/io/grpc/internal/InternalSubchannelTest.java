@@ -79,6 +79,8 @@ public class InternalSubchannelTest {
   private final FakeClock fakeExecutor = new FakeClock();
   private final ChannelExecutor channelExecutor = new ChannelExecutor();
 
+  private final Channelz channelz = new Channelz();
+
   @Mock private BackoffPolicy mockBackoffPolicy1;
   @Mock private BackoffPolicy mockBackoffPolicy2;
   @Mock private BackoffPolicy mockBackoffPolicy3;
@@ -947,6 +949,18 @@ public class InternalSubchannelTest {
     assertNoCallbackInvoke();
   }
 
+  @Test
+  public void channelzMembership() throws Exception {
+    SocketAddress addr1 = mock(SocketAddress.class);
+    createInternalSubchannel(addr1);
+    internalSubchannel.obtainActiveTransport();
+
+    MockClientTransportInfo t0 = transports.poll();
+    assertTrue(channelz.containsTransport(t0.transport.getLogId()));
+    t0.listener.transportTerminated();
+    assertFalse(channelz.containsTransport(t0.transport.getLogId()));
+  }
+
   private void createInternalSubchannel(SocketAddress ... addrs) {
     createInternalSubChannelWithProxy(GrpcUtil.NOOP_PROXY_DETECTOR, addrs);
   }
@@ -957,7 +971,7 @@ public class InternalSubchannelTest {
     internalSubchannel = new InternalSubchannel(addressGroup, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), channelExecutor, mockInternalSubchannelCallback,
-        proxyDetector, CallTracer.getDefaultFactory().create());
+        proxyDetector, channelz, CallTracer.getDefaultFactory().create());
   }
 
   private void assertNoCallbackInvoke() {

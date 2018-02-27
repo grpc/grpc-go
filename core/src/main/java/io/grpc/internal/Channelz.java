@@ -34,6 +34,8 @@ public final class Channelz {
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> channels =
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
+  private final ConcurrentMap<Long, Instrumented<TransportStats>> transports =
+      new ConcurrentHashMap<Long, Instrumented<TransportStats>>();
 
   @VisibleForTesting
   public Channelz() {
@@ -52,6 +54,10 @@ public final class Channelz {
     add(rootChannels, rootChannel);
   }
 
+  public void addTransport(Instrumented<TransportStats> transport) {
+    add(transports, transport);
+  }
+
   public void removeChannel(Instrumented<ChannelStats> channel) {
     remove(channels, channel);
   }
@@ -59,6 +65,10 @@ public final class Channelz {
   public void removeRootChannel(Instrumented<ChannelStats> channel) {
     removeChannel(channel);
     remove(rootChannels, channel);
+  }
+
+  public void removeTransport(Instrumented<TransportStats> transport) {
+    remove(transports, transport);
   }
 
   @VisibleForTesting
@@ -69,6 +79,11 @@ public final class Channelz {
   @VisibleForTesting
   public boolean containsRootChannel(LogId channelRef) {
     return contains(rootChannels, channelRef);
+  }
+
+  @VisibleForTesting
+  public boolean containsTransport(LogId transportRef) {
+    return contains(transports, transportRef);
   }
 
   private static <T extends Instrumented<?>> void add(Map<Long, T> map, T object) {

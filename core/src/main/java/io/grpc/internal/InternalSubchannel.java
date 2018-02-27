@@ -64,6 +64,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
   private final ScheduledExecutorService scheduledExecutor;
+  private final Channelz channelz;
   private final CallTracer callsTracer;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
@@ -158,7 +159,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      ProxyDetector proxyDetector, CallTracer callsTracer) {
+      ProxyDetector proxyDetector, Channelz channelz, CallTracer callsTracer) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -169,6 +170,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     this.channelExecutor = channelExecutor;
     this.callback = callback;
     this.proxyDetector = proxyDetector;
+    this.channelz = channelz;
     this.callsTracer = callsTracer;
   }
 
@@ -216,6 +218,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
         new CallTracingTransport(
             transportFactory.newClientTransport(address, authority, userAgent, proxy),
             callsTracer);
+    channelz.addTransport(transport);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {logId, transport.getLogId(), address});
@@ -569,6 +572,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       } finally {
         channelExecutor.drain();
       }
+      channelz.removeTransport(transport);
       Preconditions.checkState(activeTransport != transport,
           "activeTransport still points to this transport. "
           + "Seems transportShutdown() was not called.");

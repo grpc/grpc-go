@@ -336,16 +336,20 @@ public class ManagedChannelImplTest {
     assertThat(getStats(channel).subchannels)
         .containsExactly(subchannel.getInternalSubchannel().getLogId());
 
-    // begin: terminate subchannel
     subchannel.requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
+    assertTrue(channelz.containsTransport(transportInfo.transport.getLogId()));
+
+    // terminate transport
+    transportInfo.listener.transportTerminated();
+    assertFalse(channelz.containsTransport(transportInfo.transport.getLogId()));
+
+    // terminate subchannel
+    assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
     subchannel.shutdown();
     timer.forwardTime(ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS, TimeUnit.SECONDS);
     timer.runDueTasks();
-    transportInfo.listener.transportTerminated();
-    // end: terminate subchannel
-
     assertFalse(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
     assertThat(getStats(channel).subchannels).isEmpty();
 
@@ -370,14 +374,17 @@ public class ManagedChannelImplTest {
         .containsExactly(subchannel.getInternalSubchannel().getLogId());
     assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
 
-    // begin: terminate subchannel
     oob.getSubchannel().requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
-    oob.shutdown();
-    transportInfo.listener.transportTerminated();
-    // end: terminate subchannel
+    assertTrue(channelz.containsTransport(transportInfo.transport.getLogId()));
 
+    // terminate transport
+    transportInfo.listener.transportTerminated();
+    assertFalse(channelz.containsTransport(transportInfo.transport.getLogId()));
+
+    // terminate oobchannel
+    oob.shutdown();
     assertFalse(channelz.containsChannel(oob.getLogId()));
     assertThat(getStats(channel).subchannels).isEmpty();
     assertFalse(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
