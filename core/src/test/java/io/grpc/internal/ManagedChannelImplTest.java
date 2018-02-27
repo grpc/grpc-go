@@ -97,6 +97,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nullable;
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1673,6 +1674,8 @@ public class ManagedChannelImplTest {
   }
 
   private void verifyPanicMode(Throwable cause) {
+    Assume.assumeTrue("Panic mode disabled to resolve issues with some tests. See #3293", false);
+
     @SuppressWarnings("unchecked")
     ClientCall.Listener<Integer> mockListener =
         (ClientCall.Listener<Integer>) mock(ClientCall.Listener.class);
