@@ -23,11 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Logger;
 import javax.annotation.concurrent.Immutable;
 
 public final class Channelz {
-  private static final Logger log = Logger.getLogger(Channelz.class.getName());
   private static final Channelz INSTANCE = new Channelz();
 
   private final ConcurrentMap<Long, Instrumented<ServerStats>> servers =

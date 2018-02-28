@@ -140,7 +140,7 @@ public class BinaryLogProviderTest {
       }
     };
     Channel wChannel = binlogProvider.wrapChannel(channel);
-    ClientCall<String, Integer> ignoredClientCall = wChannel.newCall(method, CallOptions.DEFAULT);
+    ClientCall<String, Integer> unusedClientCall = wChannel.newCall(method, CallOptions.DEFAULT);
     validateWrappedMethod(methodRef.get());
   }
 

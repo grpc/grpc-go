@@ -235,7 +235,6 @@ public class ServerCallImplTest {
     serverCall.sendMessage(1L);
     verify(stream, times(1)).writeMessage(any(InputStream.class));
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
     assertEquals(ServerCallImpl.TOO_MANY_RESPONSES, statusCaptor.getValue().getDescription());

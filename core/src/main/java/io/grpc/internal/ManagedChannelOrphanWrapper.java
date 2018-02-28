@@ -148,15 +148,14 @@ final class ManagedChannelOrphanWrapper extends ForwardingManagedChannel {
           orphanedChannels++;
           Level level = ref.shutdownNow ? Level.FINE : Level.SEVERE;
           if (logger.isLoggable(level)) {
-            String fmt = new StringBuilder()
-                .append("*~*~*~ Channel {0} was not ")
+            String fmt =
+                "*~*~*~ Channel {0} was not "
                 // Prefer to complain about shutdown if neither has been called.
-                .append(!ref.shutdown ? "shutdown" : "terminated")
-                .append(" properly!!! ~*~*~*")
-                .append(System.getProperty("line.separator"))
-                .append("    Make sure to call shutdown()/shutdownNow() and wait "
-                    + "until awaitTermination() returns true.")
-                .toString();
+                + (!ref.shutdown ? "shutdown" : "terminated")
+                + " properly!!! ~*~*~*"
+                + System.getProperty("line.separator")
+                + "    Make sure to call shutdown()/shutdownNow() and wait "
+                + "until awaitTermination() returns true.";
             LogRecord lr = new LogRecord(level, fmt);
             lr.setLoggerName(logger.getName());
             lr.setParameters(new Object[]{ref.channel.toString()});

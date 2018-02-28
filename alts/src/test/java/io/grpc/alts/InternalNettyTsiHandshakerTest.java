@@ -33,7 +33,6 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
