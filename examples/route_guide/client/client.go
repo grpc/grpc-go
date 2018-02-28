@@ -46,7 +46,9 @@ var (
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
-	feature, err := client.GetFeature(context.Background(), point)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
@@ -56,7 +58,9 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	log.Printf("Looking for features within %v", rect)
-	stream, err := client.ListFeatures(context.Background(), rect)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
 		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 	}
@@ -82,7 +86,9 @@ func runRecordRoute(client pb.RouteGuideClient) {
 		points = append(points, randomPoint(r))
 	}
 	log.Printf("Traversing %d points.", len(points))
-	stream, err := client.RecordRoute(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := client.RecordRoute(ctx)
 	if err != nil {
 		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 	}
@@ -108,7 +114,9 @@ func runRouteChat(client pb.RouteGuideClient) {
 		{Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Fifth message"},
 		{Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Sixth message"},
 	}
-	stream, err := client.RouteChat(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream, err := client.RouteChat(ctx)
 	if err != nil {
 		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
