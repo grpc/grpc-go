@@ -128,7 +128,7 @@ public class ManagedChannelImplIdlenessTest {
         throw new UnsupportedOperationException();
       }
 
-      @Override public Builder usePlaintext(boolean b) {
+      @Override public Builder usePlaintext() {
         throw new UnsupportedOperationException();
       }
     }

@@ -58,7 +58,7 @@ final class HandshakerServiceChannel {
         NettyChannelBuilder.forTarget(handshakerAddress)
             .directExecutor()
             .eventLoopGroup(new NioEventLoopGroup(1, clientThreadFactory))
-            .usePlaintext(true)
+            .usePlaintext()
             .build();
     return channel;
   }

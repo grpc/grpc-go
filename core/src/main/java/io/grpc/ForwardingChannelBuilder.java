@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3363")
 public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilder<T>>
     extends ManagedChannelBuilder<T> {
+
   /**
    * The default constructor.
    */
@@ -91,9 +92,19 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  /**
+   * @deprecated use {@link #usePlaintext()} instead.
+   */
   @Override
+  @Deprecated
   public T usePlaintext(boolean skipNegotiation) {
-    delegate().usePlaintext(skipNegotiation);
+    ManagedChannelBuilder<?> o = delegate().usePlaintext(skipNegotiation);
+    return thisT();
+  }
+
+  @Override
+  public T usePlaintext() {
+    delegate().usePlaintext();
     return thisT();
   }
 

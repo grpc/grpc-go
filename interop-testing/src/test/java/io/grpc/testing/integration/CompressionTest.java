@@ -193,7 +193,7 @@ public class CompressionTest {
         .decompressorRegistry(clientDecompressors)
         .compressorRegistry(clientCompressors)
         .intercept(new ClientCompressorInterceptor())
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     stub = TestServiceGrpc.newBlockingStub(channel);
 

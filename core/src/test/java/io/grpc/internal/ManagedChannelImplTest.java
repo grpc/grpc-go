@@ -218,7 +218,7 @@ public class ManagedChannelImplTest {
         return NAME_RESOLVER_PARAMS;
       }
 
-      @Override public Builder usePlaintext(boolean b) {
+      @Override public Builder usePlaintext() {
         throw new UnsupportedOperationException();
       }
     }

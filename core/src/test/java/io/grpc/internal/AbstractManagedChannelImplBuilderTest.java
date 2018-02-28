@@ -422,10 +422,5 @@ public class AbstractManagedChannelImplBuilderTest {
     protected ClientTransportFactory buildTransportFactory() {
       throw new UnsupportedOperationException();
     }
-
-    @Override
-    public Builder usePlaintext(boolean value) {
-      throw new UnsupportedOperationException();
-    }
   }
 }

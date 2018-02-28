@@ -94,9 +94,20 @@ public final class InProcessChannelBuilder extends
 
   /**
    * Does nothing.
+   *
+   * @deprecated use {@link #usePlaintext()} instead.
    */
   @Override
+  @Deprecated
   public InProcessChannelBuilder usePlaintext(boolean skipNegotiation) {
+    return this;
+  }
+
+  /**
+   * Does nothing.
+   */
+  @Override
+  public InProcessChannelBuilder usePlaintext() {
     return this;
   }
 

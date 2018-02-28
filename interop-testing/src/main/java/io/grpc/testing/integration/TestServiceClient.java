@@ -370,7 +370,7 @@ public class TestServiceClient {
             throw new RuntimeException(e);
           }
         } else {
-          okBuilder.usePlaintext(true);
+          okBuilder.usePlaintext();
         }
         if (fullStreamDecompression) {
           okBuilder.enableFullStreamDecompression();

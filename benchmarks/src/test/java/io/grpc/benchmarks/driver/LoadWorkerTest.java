@@ -57,7 +57,7 @@ public class LoadWorkerTest {
     int port = Utils.pickUnusedPort();
     worker = new LoadWorker(port, 0);
     worker.start();
-    channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext(true).build();
+    channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build();
     workerServiceStub = WorkerServiceGrpc.newStub(channel);
     marksQueue = new LinkedBlockingQueue<Stats.ClientStats>();
   }

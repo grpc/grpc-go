@@ -108,14 +108,14 @@ public class OkHttpChannelBuilderTest {
 
   @Test
   public void usePlaintext_newClientTransportAllowed() {
-    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext(true);
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext();
     builder.buildTransportFactory().newClientTransport(new InetSocketAddress(5678),
         "dummy_authority", "dummy_userAgent", null /* proxy */);
   }
 
   @Test
   public void usePlaintextDefaultPort() {
-    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext(true);
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext();
     assertEquals(GrpcUtil.DEFAULT_PORT_PLAINTEXT,
         builder.getNameResolverParams().get(NameResolver.Factory.PARAMS_DEFAULT_PORT).intValue());
   }
@@ -125,7 +125,7 @@ public class OkHttpChannelBuilderTest {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234);
     assertNotNull(builder.createSocketFactory());
 
-    builder.usePlaintext(true);
+    builder.usePlaintext();
     assertNull(builder.createSocketFactory());
   }
 }

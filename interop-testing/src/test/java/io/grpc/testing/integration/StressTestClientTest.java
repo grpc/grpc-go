@@ -129,7 +129,7 @@ public class StressTestClientTest {
 
     // Connect to the metrics service
     ManagedChannel ch = ManagedChannelBuilder.forAddress("localhost", client.getMetricServerPort())
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
 
     MetricsServiceGrpc.MetricsServiceBlockingStub stub = MetricsServiceGrpc.newBlockingStub(ch);

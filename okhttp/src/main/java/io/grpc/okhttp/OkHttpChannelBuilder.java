@@ -273,7 +273,7 @@ public class OkHttpChannelBuilder extends
    * <p>By default {@link #DEFAULT_CONNECTION_SPEC} will be used.
    *
    * <p>This method is only used when building a secure connection. For plaintext
-   * connection, use {@link #usePlaintext} instead.
+   * connection, use {@link #usePlaintext()} instead.
    *
    * @throws IllegalArgumentException
    *         If {@code connectionSpec} is not with TLS
@@ -286,14 +286,26 @@ public class OkHttpChannelBuilder extends
 
   /**
    * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
+   *
+   * @deprecated use {@link #usePlaintext()} instead.
    */
   @Override
+  @Deprecated
   public final OkHttpChannelBuilder usePlaintext(boolean skipNegotiation) {
     if (skipNegotiation) {
       negotiationType(NegotiationType.PLAINTEXT);
     } else {
       throw new IllegalArgumentException("Plaintext negotiation not currently supported");
     }
+    return this;
+  }
+
+  /**
+   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
+   */
+  @Override
+  public final OkHttpChannelBuilder usePlaintext() {
+    negotiationType(NegotiationType.PLAINTEXT);
     return this;
   }
 

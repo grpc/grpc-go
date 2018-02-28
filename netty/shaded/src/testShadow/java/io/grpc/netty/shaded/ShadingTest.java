@@ -78,7 +78,7 @@ public final class ShadingTest {
         .build().start();
     channel = ManagedChannelBuilder
         .forAddress("localhost", server.getPort())
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     SimpleServiceBlockingStub stub = SimpleServiceGrpc.newBlockingStub(channel);
     assertThat(SimpleResponse.getDefaultInstance())
