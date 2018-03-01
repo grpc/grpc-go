@@ -136,18 +136,25 @@ public final class StatusProto {
     while (cause != null) {
       if (cause instanceof StatusException) {
         StatusException e = (StatusException) cause;
-        return toStatusProto(e.getStatus(), e.getTrailers());
+        return fromStatusAndTrailers(e.getStatus(), e.getTrailers());
       } else if (cause instanceof StatusRuntimeException) {
         StatusRuntimeException e = (StatusRuntimeException) cause;
-        return toStatusProto(e.getStatus(), e.getTrailers());
+        return fromStatusAndTrailers(e.getStatus(), e.getTrailers());
       }
       cause = cause.getCause();
     }
     return null;
   }
 
+  /**
+   * Extracts the google.rpc.Status from trailers, and makes sure they match the gRPC
+   * {@code status}.
+   *
+   * @return the embedded google.rpc.Status or {@code null} if it is not present.
+   * @since 1.10.0
+   */
   @Nullable
-  private static com.google.rpc.Status toStatusProto(Status status, Metadata trailers) {
+  public static com.google.rpc.Status fromStatusAndTrailers(Status status, Metadata trailers) {
     if (trailers != null) {
       com.google.rpc.Status statusProto = trailers.get(STATUS_DETAILS_KEY);
       if (statusProto != null) {
