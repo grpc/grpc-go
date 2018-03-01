@@ -16,14 +16,20 @@
 
 package io.grpc.okhttp;
 
+import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 import com.squareup.okhttp.ConnectionSpec;
 import io.grpc.NameResolver;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.SharedResourceHolder;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ScheduledExecutorService;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -127,6 +133,35 @@ public class OkHttpChannelBuilderTest {
 
     builder.usePlaintext();
     assertNull(builder.createSocketFactory());
+  }
+
+  @Test
+  public void scheduledExecutorService_default() {
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forTarget("foo");
+    ClientTransportFactory clientTransportFactory = builder.buildTransportFactory();
+    assertSame(
+        SharedResourceHolder.get(TIMER_SERVICE),
+        clientTransportFactory.getScheduledExecutorService());
+
+    SharedResourceHolder.release(
+        TIMER_SERVICE, clientTransportFactory.getScheduledExecutorService());
+    clientTransportFactory.close();
+  }
+
+  @Test
+  public void scheduledExecutorService_custom() {
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forTarget("foo");
+    ScheduledExecutorService scheduledExecutorService =
+        new FakeClock().getScheduledExecutorService();
+
+    OkHttpChannelBuilder builder1 = builder.scheduledExecutorService(scheduledExecutorService);
+    assertSame(builder, builder1);
+
+    ClientTransportFactory clientTransportFactory = builder1.buildTransportFactory();
+
+    assertSame(scheduledExecutorService, clientTransportFactory.getScheduledExecutorService());
+
+    clientTransportFactory.close();
   }
 }
 
