@@ -558,7 +558,7 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	c.mu.RLock()
 	var cn entry
 	var ok bool
-	if cn, ok = c.entries[id]; !ok || cn.Type() != TopChannelT || cn.Type() != NestedChannelT {
+	if cn, ok = c.entries[id]; !ok || (cn.Type() != TopChannelT && cn.Type() != NestedChannelT) {
 		// channel with id doesn't exist.
 		c.mu.RUnlock()
 		return nil
@@ -596,7 +596,7 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 	var cn entry
 	var ok bool
 	c.mu.RLock()
-	if cn, ok = c.entries[id]; !ok || cn.Type() != NormalSocketT || cn.Type() != ListenSocketT {
+	if cn, ok = c.entries[id]; !ok || (cn.Type() != NormalSocketT && cn.Type() != ListenSocketT) {
 		// socket with id doesn't exist.
 		c.mu.RUnlock()
 		return nil
