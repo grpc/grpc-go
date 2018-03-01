@@ -1295,6 +1295,11 @@ public class ServerImplTest {
       protected int priority() {
         return 0;
       }
+
+      @Override
+      protected boolean isAvailable() {
+        return true;
+      }
     };
     createAndStartServer();
 
@@ -1344,6 +1349,11 @@ public class ServerImplTest {
       @Override
       protected int priority() {
         return 0;
+      }
+
+      @Override
+      protected boolean isAvailable() {
+        return true;
       }
     };
     createAndStartServer();

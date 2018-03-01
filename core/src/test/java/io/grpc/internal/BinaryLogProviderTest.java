@@ -18,7 +18,6 @@ package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -35,7 +34,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.ReplacingClassLoader;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -47,7 +45,6 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -55,7 +52,6 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link BinaryLogProvider}. */
 @RunWith(JUnit4.class)
 public class BinaryLogProviderTest {
-  private final String serviceFile = "META-INF/services/io.grpc.internal.BinaryLogProvider";
   private final InvocationCountMarshaller<String> reqMarshaller =
       new InvocationCountMarshaller<String>() {
         @Override
@@ -101,26 +97,12 @@ public class BinaryLogProviderTest {
     protected int priority() {
       return 0;
     }
+
+    @Override
+    protected boolean isAvailable() {
+      return true;
+    }
   };
-
-  @Test
-  public void noProvider() {
-    assertNull(BinaryLogProvider.provider());
-  }
-
-  @Test
-  public void multipleProvider() {
-    ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/internal/BinaryLogProviderTest-multipleProvider.txt");
-    assertSame(Provider7.class, BinaryLogProvider.load(cl).getClass());
-  }
-
-  @Test
-  public void unavailableProvider() {
-    ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
-        "io/grpc/internal/BinaryLogProviderTest-unavailableProvider.txt");
-    assertNull(BinaryLogProvider.load(cl));
-  }
 
   @Test
   public void wrapChannel_methodDescriptor() throws Exception {
@@ -325,49 +307,6 @@ public class BinaryLogProviderTest {
       }
     };
     return methodDef.getServerCallHandler().startCall(serverCall, new Metadata());
-  }
-
-  public static final class Provider0 extends BaseProvider {
-    public Provider0() {
-      super(0);
-    }
-  }
-
-  public static final class Provider5 extends BaseProvider {
-    public Provider5() {
-      super(5);
-    }
-  }
-
-  public static final class Provider7 extends BaseProvider {
-    public Provider7() {
-      super(7);
-    }
-  }
-
-  public static class BaseProvider extends BinaryLogProvider {
-    private int priority;
-
-    BaseProvider(int priority) {
-      this.priority = priority;
-    }
-
-    @Nullable
-    @Override
-    public ServerInterceptor getServerInterceptor(String fullMethodName) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Nullable
-    @Override
-    public ClientInterceptor getClientInterceptor(String fullMethodName) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected int priority() {
-      return priority;
-    }
   }
 
   private final class TestBinaryLogClientInterceptor implements ClientInterceptor {
