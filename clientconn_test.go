@@ -176,19 +176,18 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	}()
 	defer leakcheck.Check(t)
 	minConnectTimeout = time.Millisecond * 500
-	server, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	var (
-		conn1, conn2 net.Conn
-		over         uint32
+		conn2 net.Conn
+		over  uint32
 	)
 	defer func() {
-		server.Close()
-		if conn1 != nil {
-			conn1.Close()
-		}
+		lis.Close()
+		// conn2 shouldn't be closed until the client has
+		// observerd a successful test.
 		if conn2 != nil {
 			conn2.Close()
 		}
@@ -196,14 +195,14 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	done := make(chan struct{})
 	go func() { // Launch the server.
 		defer close(done)
-		var err error
-		conn1, err = server.Accept()
+		conn1, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Error while accepting. Err: %v", err)
 			return
 		}
+		defer conn1.Close()
 		// Don't send server settings and the client should close the connection and try again.
-		conn2, err = server.Accept() // Accept a reconnection request from client.
+		conn2, err = lis.Accept() // Accept a reconnection request from client.
 		if err != nil {
 			t.Errorf("Error while accepting. Err: %v", err)
 			return
@@ -228,13 +227,13 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(server.Addr().String(), WithInsecure())
+	client, err := Dial(lis.Addr().String(), WithInsecure())
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
 	time.Sleep(time.Second * 2) // Let things play out.
 	atomic.StoreUint32(&over, 1)
-	server.Close()
+	lis.Close()
 	client.Close()
 	<-done
 }
