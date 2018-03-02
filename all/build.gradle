@@ -4,7 +4,10 @@ description = "gRPC: All"
 
 buildscript {
     repositories {
-        mavenCentral()
+        maven {
+            // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+        }
     }
     dependencies {
         classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.0.1'

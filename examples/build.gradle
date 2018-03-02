@@ -3,7 +3,10 @@ apply plugin: 'com.google.protobuf'
 
 buildscript {
   repositories {
-    mavenCentral()
+    maven {
+      // The google mirror is less flaky than mavenCentral()
+      url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+    }
   }
   dependencies {
     // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier
@@ -13,7 +16,10 @@ buildscript {
 }
 
 repositories {
-  mavenCentral()
+  maven {
+      // The google mirror is less flaky than mavenCentral()
+    url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+  }
   mavenLocal()
 }
 

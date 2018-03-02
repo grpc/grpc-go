@@ -16,7 +16,10 @@ description = 'gRPC: gae interop testing (jdk8)'
 buildscript {    // Configuration for building
   repositories {
     jcenter()    // Bintray's repository - a fast Maven Central mirror & more
-    mavenCentral()
+    maven {
+      // The google mirror is less flaky than mavenCentral()
+      url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+    }
   }
   dependencies {
     classpath 'com.google.cloud.tools:appengine-gradle-plugin:1.3.3'
@@ -27,10 +30,10 @@ buildscript {    // Configuration for building
 repositories {   // repositories for Jar's you access in your code
   mavenLocal()
   maven {
-    url 'https://maven-central.storage.googleapis.com'             // Google's mirror of Maven Central
+    // The google mirror is less flaky than mavenCentral()
+    url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
   }
   jcenter()
-  mavenCentral()
 }
 
 apply plugin: 'java'                              // standard Java tasks

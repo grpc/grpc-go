@@ -1,7 +1,10 @@
 // Add dependency on the protobuf plugin
 buildscript {
     repositories {
-        mavenCentral()
+        maven {
+            // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+        }
     }
     dependencies {
         classpath libraries.protobuf_plugin
