@@ -651,13 +651,8 @@ class NettyServerHandler extends AbstractNettyHandler {
       ChannelPromise promise) {
     // Notify the listener if we haven't already.
     cmd.stream().transportReportStatus(cmd.reason());
-    Http2Error http2Error = Http2Error.INTERNAL_ERROR;
-    if (Status.DEADLINE_EXCEEDED.getCode().equals(cmd.reason().getCode()) || Status.CANCELLED
-        .getCode().equals(cmd.reason().getCode())) {
-      http2Error = Http2Error.CANCEL;
-    }
     // Terminate the stream.
-    encoder().writeRstStream(ctx, cmd.stream().id(), http2Error.code(), promise);
+    encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
   }
 
   private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,

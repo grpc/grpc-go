@@ -1110,7 +1110,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1135,7 +1135,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1158,7 +1158,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1181,7 +1181,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1204,7 +1204,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (TestError t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1227,7 +1227,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (RuntimeException t) {
       assertSame(expectedT, t);
-      ensureServerStateIsCancelled();
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1430,10 +1430,11 @@ public class ServerImplTest {
     verifyNoMoreInteractions(executorPool);
   }
 
-  private void ensureServerStateIsCancelled() {
-    verify(stream).cancel(statusCaptor.capture());
-    assertEquals(Status.INTERNAL, statusCaptor.getValue());
+  private void ensureServerStateNotLeaked() {
+    verify(stream).close(statusCaptor.capture(), metadataCaptor.capture());
+    assertEquals(Status.UNKNOWN, statusCaptor.getValue());
     assertNull(statusCaptor.getValue().getCause());
+    assertTrue(metadataCaptor.getValue().keys().isEmpty());
   }
 
   private static class SimpleServer implements io.grpc.internal.InternalServer {

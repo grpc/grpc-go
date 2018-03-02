@@ -655,7 +655,8 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
      * Like {@link ServerCall#close(Status, Metadata)}, but thread-safe for internal use.
      */
     private void internalClose() {
-      stream.cancel(Status.INTERNAL);
+      // TODO(ejona86): this is not thread-safe :)
+      stream.close(Status.UNKNOWN, new Metadata());
     }
 
     @Override
