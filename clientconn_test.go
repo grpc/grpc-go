@@ -187,7 +187,7 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	defer func() {
 		lis.Close()
 		// conn2 shouldn't be closed until the client has
-		// observerd a successful test.
+		// observed a successful test.
 		if conn2 != nil {
 			conn2.Close()
 		}
