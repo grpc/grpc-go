@@ -37,6 +37,10 @@ configureProtoCompilation()
     it.options.compilerArgs += ["-Xlint:-deprecation", "-Xep:FutureReturnValueIgnored:OFF"]
 }
 
+javadoc {
+    exclude 'io/grpc/alts/internal/**'
+}
+
 idea {
     module {
         sourceDirs += file("${projectDir}/src/generated/main/grpc");

@@ -22,14 +22,18 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityState;
+import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingChannelBuilder;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
-import io.grpc.alts.transportsecurity.AltsClientOptions;
-import io.grpc.alts.transportsecurity.AltsTsiHandshaker;
-import io.grpc.alts.transportsecurity.TsiHandshaker;
-import io.grpc.alts.transportsecurity.TsiHandshakerFactory;
+import io.grpc.alts.internal.AltsClientOptions;
+import io.grpc.alts.internal.AltsProtocolNegotiator;
+import io.grpc.alts.internal.AltsTsiHandshaker;
+import io.grpc.alts.internal.HandshakerServiceGrpc;
+import io.grpc.alts.internal.RpcProtocolVersionsUtil;
+import io.grpc.alts.internal.TsiHandshaker;
+import io.grpc.alts.internal.TsiHandshakerFactory;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ProxyParameters;
 import io.grpc.netty.InternalNettyChannelBuilder;
@@ -45,6 +49,7 @@ import javax.annotation.Nullable;
  * ALTS version of {@code ManagedChannelBuilder}. This class sets up a secure and authenticated
  * commmunication between two cloud VMs using ALTS.
  */
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4151")
 public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChannelBuilder> {
 
   private final NettyChannelBuilder delegate;

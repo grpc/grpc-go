@@ -19,6 +19,7 @@ package io.grpc.alts;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
+import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -26,10 +27,13 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer.Factory;
 import io.grpc.ServerTransportFilter;
-import io.grpc.alts.transportsecurity.AltsHandshakerOptions;
-import io.grpc.alts.transportsecurity.AltsTsiHandshaker;
-import io.grpc.alts.transportsecurity.TsiHandshaker;
-import io.grpc.alts.transportsecurity.TsiHandshakerFactory;
+import io.grpc.alts.internal.AltsHandshakerOptions;
+import io.grpc.alts.internal.AltsProtocolNegotiator;
+import io.grpc.alts.internal.AltsTsiHandshaker;
+import io.grpc.alts.internal.HandshakerServiceGrpc;
+import io.grpc.alts.internal.RpcProtocolVersionsUtil;
+import io.grpc.alts.internal.TsiHandshaker;
+import io.grpc.alts.internal.TsiHandshakerFactory;
 import io.grpc.netty.NettyServerBuilder;
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +46,7 @@ import java.util.concurrent.TimeUnit;
  * gRPC secure server builder used for ALTS. This class adds on the necessary ALTS support to create
  * a production server on Google Cloud Platform.
  */
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4151")
 public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
   private final NettyServerBuilder delegate;
