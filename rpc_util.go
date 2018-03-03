@@ -22,13 +22,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"strings"
 	"sync"
 	"time"
-	"fmt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
-
 )
+
 // These constants values are copied from the flate package, Declared to generify compression for all
 // compression algorithms
 const (
@@ -49,7 +49,7 @@ const (
 	BestSpeed          = 1
 	BestCompression    = 9
 	DefaultCompression = -1
-	HuffmanOnly = -2
+	HuffmanOnly        = -2
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -66,22 +66,22 @@ type gzipCompressor struct {
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
 func NewGZIPCompressor() Compressor {
-	c,_:=NewGZIPCompressorWithLevel(BestCompression)
+	c, _ := NewGZIPCompressorWithLevel(BestCompression)
 	return c
 }
 
-func NewGZIPCompressorWithLevel(level int) (Compressor,error){
+func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
 	if level < HuffmanOnly || level > BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
 	}
 	return &gzipCompressor{
 		pool: sync.Pool{
 			New: func() interface{} {
-				w,_:=gzip.NewWriterLevel(ioutil.Discard, level)
+				w, _ := gzip.NewWriterLevel(ioutil.Discard, level)
 				return w
 			},
 		},
-	},nil
+	}, nil
 }
 
 func (c *gzipCompressor) Do(w io.Writer, p []byte) error {
