@@ -70,6 +70,12 @@ func NewGZIPCompressor() Compressor {
 	return c
 }
 
+// NewGZIPCompressorWithLevel is like NewGZIPCompressor but specifies the compression level instead
+// of assuming BestCompression.
+//
+// The compression level can be DefaultCompression, NoCompression, HuffmanOnly
+// or any integer value between BestSpeed and BestCompression inclusive.
+// The error returned will be nil if the level is valid.
 func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
 	if level < HuffmanOnly || level > BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
