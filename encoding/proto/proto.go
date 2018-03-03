@@ -21,7 +21,6 @@
 package proto
 
 import (
-	"math"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -43,13 +42,6 @@ type cachedProtoBuffer struct {
 	proto.Buffer
 }
 
-func capToMaxInt32(val int) uint32 {
-	if val > math.MaxInt32 {
-		return uint32(math.MaxInt32)
-	}
-	return uint32(val)
-}
-
 func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
@@ -60,7 +52,7 @@ func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 		return nil, err
 	}
 	out := cb.Bytes()
-	cb.lastMarshaledSize = capToMaxInt32(len(out))
+	cb.lastMarshaledSize = uint32(len(out))
 	return out, nil
 }
 
