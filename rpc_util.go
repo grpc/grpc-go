@@ -40,17 +40,16 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
-	"compress/flate"
 
 )
-// These constants are copied from the flate package, to generify it for all
-// compression algorithms that can be used
+// These constants values are copied from the flate package, Declared to generify compression for all
+// compression algorithms
 const (
-	NoCompression      = flate.NoCompression
-	BestSpeed          = flate.BestSpeed
-	BestCompression    = flate.BestCompression
-	DefaultCompression = flate.DefaultCompression
-	HuffmanOnly        = flate.HuffmanOnly
+	NoCompression      = 0
+	BestSpeed          = 1
+	BestCompression    = 9
+	DefaultCompression = -1
+	HuffmanOnly = -2
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
