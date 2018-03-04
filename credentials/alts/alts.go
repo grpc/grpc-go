@@ -100,13 +100,13 @@ type altsTC struct {
 	accounts []string
 }
 
-// NewClientALTS constructs a client-side ALTS TransportCredentials object.
-func NewClientALTS(targetServiceAccounts []string) credentials.TransportCredentials {
+// NewClient constructs a client-side ALTS TransportCredentials object.
+func NewClient(targetServiceAccounts []string) credentials.TransportCredentials {
 	return newALTS(core.ClientSide, targetServiceAccounts)
 }
 
-// NewServerALTS constructs a server-side ALTS TransportCredentials object.
-func NewServerALTS() credentials.TransportCredentials {
+// NewServer constructs a server-side ALTS TransportCredentials object.
+func NewServer() credentials.TransportCredentials {
 	return newALTS(core.ServerSide, nil)
 }
 
