@@ -471,8 +471,8 @@ type listenSocket struct {
 	channelzID int64
 }
 
-func (l *listenSocket) ChannelzMetric() *channelz.SocketMetric {
-	return &channelz.SocketMetric{}
+func (l *listenSocket) ChannelzMetric() *channelz.SocketInternalMetric {
+	return &channelz.SocketInternalMetric{}
 }
 
 func (l *listenSocket) Close() error {
@@ -515,7 +515,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[ls] = true
 
 	if channelz.IsOn() {
-		ls.channelzID = channelz.RegisterSocket(ls, channelz.ListenSocketT, s.channelzID, "")
+		ls.channelzID = channelz.RegisterListenSocket(ls, s.channelzID, "")
 	}
 	s.mu.Unlock()
 
@@ -784,10 +784,10 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
-// ChannelzMetric returns ServerMetric of current server.
+// ChannelzMetric returns ServerInternalMetric of current server.
 // This is an EXPERIMENTAL API.
-func (s *Server) ChannelzMetric() *channelz.ServerMetric {
-	return &channelz.ServerMetric{ID: s.channelzID}
+func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
+	return &channelz.ServerInternalMetric{}
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {

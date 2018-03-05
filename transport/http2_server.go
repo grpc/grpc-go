@@ -231,7 +231,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		t.stats.HandleConn(t.ctx, connBegin)
 	}
 	if channelz.IsOn() {
-		t.channelzID = channelz.RegisterSocket(t, channelz.NormalSocketT, config.ChannelzParentID, "")
+		t.channelzID = channelz.RegisterNormalSocket(t, config.ChannelzParentID, "")
 	}
 	t.framer.writer.Flush()
 
@@ -1211,8 +1211,8 @@ func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true})
 }
 
-func (t *http2Server) ChannelzMetric() *channelz.SocketMetric {
-	return &channelz.SocketMetric{}
+func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
+	return &channelz.SocketInternalMetric{}
 }
 
 func (t *http2Server) IncrMsgSent() {}
