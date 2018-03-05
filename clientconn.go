@@ -45,6 +45,11 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+const (
+	// minimum time to give a connection to complete
+	minConnectTimeout = 20 * time.Second
+)
+
 var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the ClientConn is closing.
@@ -60,8 +65,11 @@ var (
 	errConnUnavailable = errors.New("grpc: the connection is unavailable")
 	// errBalancerClosed indicates that the balancer is closed.
 	errBalancerClosed = errors.New("grpc: balancer is closed")
-	// minimum time to give a connection to complete
-	minConnectTimeout = 20 * time.Second
+	// We use an accessor so that minConnectTimeout can be
+	// atomically read and updated while testing.
+	getMinConnectTimeout = func() time.Duration {
+		return minConnectTimeout
+	}
 )
 
 // The following errors are returned from Dial and DialContext
@@ -1055,7 +1063,7 @@ func (ac *addrConn) resetTransport() error {
 			// connection.
 			backoffFor := ac.dopts.bs.backoff(connectRetryNum) // time.Duration.
 			// This will be the duration that dial gets to finish.
-			dialDuration := minConnectTimeout
+			dialDuration := getMinConnectTimeout()
 			if backoffFor > dialDuration {
 				// Give dial more time as we keep failing to connect.
 				dialDuration = backoffFor
