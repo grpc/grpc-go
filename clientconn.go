@@ -441,9 +441,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
-			cc.channelzID = channelz.RegisterChannel(cc, channelz.NestedChannelT, cc.dopts.channelzParentID, "")
+			cc.channelzID = channelz.RegisterChannel(cc, cc.dopts.channelzParentID, "")
 		} else {
-			cc.channelzID = channelz.RegisterChannel(cc, channelz.TopChannelT, 0, "")
+			cc.channelzID = channelz.RegisterChannel(cc, 0, "")
 		}
 	}
 
@@ -813,7 +813,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
-		ac.channelzID = channelz.RegisterChannel(ac, channelz.SubChannelT, cc.channelzID, "")
+		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -833,10 +833,10 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	ac.tearDown(err)
 }
 
-// ChannelzMetric returns ChannelMetric of current ClientConn.
+// ChannelzMetric returns ChannelInternalMetric of current ClientConn.
 // This is an EXPERIMENTAL API.
-func (cc *ClientConn) ChannelzMetric() *channelz.ChannelMetric {
-	return &channelz.ChannelMetric{}
+func (cc *ClientConn) ChannelzMetric() *channelz.ChannelInternalMetric {
+	return &channelz.ChannelInternalMetric{}
 }
 
 // connect starts to creating transport and also starts the transport monitor
@@ -1423,8 +1423,8 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) ChannelzMetric() *channelz.ChannelMetric {
-	return &channelz.ChannelMetric{ID: ac.channelzID}
+func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
+	return &channelz.ChannelInternalMetric{}
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the

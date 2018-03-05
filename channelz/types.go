@@ -20,42 +20,44 @@ package channelz
 
 import (
 	"net"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/connectivity"
-)
-
-// EntryType defines six types of entity in channelz, they are TopChannelT, SubChannelT,
-// and NestedChannelT.
-type EntryType int
-
-const (
-	// TopChannelT is the type of channel which is the root.
-	TopChannelT EntryType = iota
-	// SubChannelT is the type of channel which is load balanced over.
-	SubChannelT
-	// NestedChannelT is the type of channel which is neither the root nor load balanced over,
-	// e.g. ClientConn used in grpclb.
-	NestedChannelT
-	// ServerT is the type of server.
-	ServerT
-	// NormalSocketT is the type of socket that is used for transmitting RPC.
-	NormalSocketT
-	// ListenSocketT is the type of socket that is used for listening for incoming
-	// connection on server side.
-	ListenSocketT
+	"google.golang.org/grpc/grpclog"
 )
 
 type entry interface {
-	Type() EntryType
-	sync.Locker
+	addChild(id int64, e entry)
+	deleteChild(id int64)
+	delete()
+	canDelete()
 }
 
-// ChannelMetric defines the metrics collected for a Channel.
+// ChannelMetric defines the info provided by channelz for a specific Channel, which
+// includes ChannelInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
 type ChannelMetric struct {
-	ID                       int64
-	RefName                  string
+	ID          int64
+	RefName     string
+	ChannelData *ChannelInternalMetric
+	NestedChans map[int64]string
+	SubChans    map[int64]string
+	Sockets     map[int64]string
+}
+
+// SubChannelMetric defines the info provided by channelz for a specific SubChannel,
+// which includes ChannelInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
+type SubChannelMetric struct {
+	ID          int64
+	RefName     string
+	ChannelData *ChannelInternalMetric
+	NestedChans map[int64]string
+	SubChans    map[int64]string
+	Sockets     map[int64]string
+}
+
+// ChannelInternalMetric defines the metrics an implementor of Channel interface
+// should report.
+type ChannelInternalMetric struct {
 	State                    connectivity.State
 	Target                   string
 	CallsStarted             int64
@@ -63,44 +65,122 @@ type ChannelMetric struct {
 	CallsFailed              int64
 	LastCallStartedTimestamp time.Time
 	// trace
-	NestedChans map[int64]string
-	SubChans    map[int64]string
-	Sockets     map[int64]string
 }
 
-// Channel is the interface implemented by grpc.ClientConn and grpc.addrConn
-// that reports ChannelMetric.
+// Channel is the interface that should be satisfied in order to be tracked by
+// channelz as a channel type (i.e TopChannelT, SubChannelT and NestedChannelT).
 type Channel interface {
-	ChannelzMetric() *ChannelMetric
+	ChannelzMetric() *ChannelInternalMetric
 }
 
 type channel struct {
-	t           EntryType
+	Name        string
 	c           Channel
-	mu          sync.Mutex
 	closeCalled bool
 	nestedChans map[int64]string
 	subChans    map[int64]string
-	sockets     map[int64]string
+	id          int64
 	pid         int64
+	cm          *channelMap
 }
 
-func (c *channel) Type() EntryType {
-	return c.t
+func (c *channel) addChild(id int64, e entry) {
+	switch v := e.(type) {
+	case *subChannel:
+		c.subChans[id] = v.Name
+	case *channel:
+		c.nestedChans[id] = v.Name
+	default:
+		grpclog.Errorf("cannot add a child of type %T to a channel", e)
+	}
 }
 
-func (c *channel) Lock() {
-	c.mu.Lock()
+func (c *channel) deleteChild(id int64) {
+	delete(c.subChans, id)
+	delete(c.nestedChans, id)
+	c.canDelete()
 }
 
-func (c *channel) Unlock() {
-	c.mu.Unlock()
+func (c *channel) delete() {
+	// channel has already been deleted
+	if c == nil {
+		return
+	}
+	c.closeCalled = true
+	if len(c.subChans)+len(c.nestedChans) != 0 {
+		return
+	}
+	c.cm.deleteEntry(c.id)
+	if c.pid != 0 {
+		c.cm.findEntry(c.pid).deleteChild(c.id)
+	}
 }
 
-// SocketMetric defines the metrics collected for a Socket.
+func (c *channel) canDelete() {
+	if c.closeCalled && len(c.subChans)+len(c.nestedChans) == 0 {
+		c.cm.deleteEntry(c.id)
+		if c.pid != 0 {
+			c.cm.findEntry(c.pid).deleteChild(c.id)
+		}
+	}
+	return
+}
+
+type subChannel struct {
+	Name        string
+	c           Channel
+	closeCalled bool
+	sockets     map[int64]string
+	id          int64
+	pid         int64
+	cm          *channelMap
+}
+
+func (sc *subChannel) addChild(id int64, e entry) {
+	if v, ok := e.(*normalSocket); ok {
+		sc.sockets[id] = v.Name
+	} else {
+		grpclog.Errorf("cannot add a child of type %T to a subChannel", e)
+	}
+}
+
+func (sc *subChannel) deleteChild(id int64) {
+	delete(sc.sockets, id)
+	sc.canDelete()
+}
+
+func (sc *subChannel) delete() {
+	// subChannel has already been deleted
+	if sc == nil {
+		return
+	}
+	sc.closeCalled = true
+	if len(sc.sockets) != 0 {
+		return
+	}
+	sc.cm.deleteEntry(sc.id)
+	sc.cm.findEntry(sc.pid).deleteChild(sc.id)
+}
+
+func (sc *subChannel) canDelete() {
+	if sc.closeCalled && len(sc.sockets) == 0 {
+		sc.cm.deleteEntry(sc.id)
+		sc.cm.findEntry(sc.pid).deleteChild(sc.id)
+	}
+	return
+}
+
+// SocketMetric defines the info provided by channelz for a specific Socket, which
+// includes SocketInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
 type SocketMetric struct {
-	ID                               int64
-	RefName                          string
+	ID         int64
+	RefName    string
+	SocketData *SocketInternalMetric
+}
+
+// SocketInternalMetric defines the metrics an implementor of Socket interface
+// should report.
+type SocketInternalMetric struct {
 	StreamsStarted                   int64
 	StreamsSucceeded                 int64
 	StreamsFailed                    int64
@@ -122,61 +202,128 @@ type SocketMetric struct {
 
 // Socket is the interface implemented by transport.http2Client and transport.http2Server.
 type Socket interface {
-	ChannelzMetric() *SocketMetric
+	ChannelzMetric() *SocketInternalMetric
 }
 
-type socket struct {
-	t    EntryType
-	name string
+type listenSocket struct {
+	Name string
 	s    Socket
+	id   int64
 	pid  int64
+	cm   *channelMap
 }
 
-func (s *socket) Type() EntryType {
-	return s.t
+func (ls *listenSocket) addChild(id int64, e entry) {
+	grpclog.Errorf("cannot add a child of type %T to a listen socket", e)
 }
 
-func (s *socket) Lock() {
+func (ls *listenSocket) deleteChild(id int64) {}
+
+func (ls *listenSocket) delete() {
+	// listenSocket has already been deleted
+	if ls == nil {
+		return
+	}
+	ls.cm.deleteEntry(ls.id)
+	if v := ls.cm.findEntry(ls.pid); v != nil {
+		v.deleteChild(ls.id)
+	}
 }
 
-func (s *socket) Unlock() {
+func (ls *listenSocket) canDelete() {}
+
+type normalSocket struct {
+	Name string
+	s    Socket
+	id   int64
+	pid  int64
+	cm   *channelMap
 }
 
-// ServerMetric defines the metrics collected for a Server.
+func (ns *normalSocket) addChild(id int64, e entry) {
+	grpclog.Errorf("cannot add a child of type %T to a normal socket", e)
+}
+
+func (ns *normalSocket) deleteChild(id int64) {}
+
+func (ns *normalSocket) delete() {
+	// normalSocket has already been deleted
+	if ns == nil {
+		return
+	}
+	ns.cm.deleteEntry(ns.id)
+	if v := ns.cm.findEntry(ns.pid); v != nil {
+		v.deleteChild(ns.id)
+	}
+}
+
+func (ns *normalSocket) canDelete() {}
+
+// ServerMetric defines the info provided by channelz for a specific Server, which
+// includes ServerInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
 type ServerMetric struct {
-	ID                       int64
-	RefName                  string
+	ID            int64
+	RefName       string
+	ServerData    *ServerInternalMetric
+	ListenSockets map[int64]string
+}
+
+// ServerInternalMetric defines the metrics collected for a Server.
+type ServerInternalMetric struct {
 	CallsStarted             int64
 	CallsSucceeded           int64
 	CallsFailed              int64
 	LastCallStartedTimestamp time.Time
 	// trace
-
-	ListenSockets map[int64]string
 }
 
-// Server is the interface implemented by grpc.Server that reports ServerMetric.
+// Server is the interface implemented by grpc.Server that reports ServerInternalMetric.
 type Server interface {
-	ChannelzMetric() *ServerMetric
+	ChannelzMetric() *ServerInternalMetric
 }
 
 type server struct {
-	name          string
+	Name          string
 	s             Server
-	mu            sync.Mutex
 	closeCalled   bool
 	sockets       map[int64]string
 	listenSockets map[int64]string
+	id            int64
+	cm            *channelMap
 }
 
-func (*server) Type() EntryType {
-	return ServerT
+func (s *server) addChild(id int64, e entry) {
+	switch v := e.(type) {
+	case *normalSocket:
+		s.sockets[id] = v.Name
+	case *listenSocket:
+		s.listenSockets[id] = v.Name
+	default:
+		grpclog.Errorf("cannot add a child of type %T to a server", e)
+	}
 }
 
-func (s *server) Lock() {
-	s.mu.Lock()
+func (s *server) deleteChild(id int64) {
+	delete(s.sockets, id)
+	delete(s.listenSockets, id)
+	s.canDelete()
 }
 
-func (s *server) Unlock() {
-	s.mu.Unlock()
+func (s *server) delete() {
+	// server has already been deleted
+	if s == nil {
+		return
+	}
+	s.closeCalled = true
+	if len(s.sockets) != 0 {
+		return
+	}
+	s.cm.deleteEntry(s.id)
+}
+
+func (s *server) canDelete() {
+	if s.closeCalled && len(s.sockets) == 0 {
+		s.cm.deleteEntry(s.id)
+	}
+	return
 }
