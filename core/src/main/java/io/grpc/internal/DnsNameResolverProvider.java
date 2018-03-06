@@ -47,8 +47,12 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
       Preconditions.checkArgument(targetPath.startsWith("/"),
           "the path component (%s) of the target (%s) must start with '/'", targetPath, targetUri);
       String name = targetPath.substring(1);
-      return new DnsNameResolver(targetUri.getAuthority(), name, params, GrpcUtil.TIMER_SERVICE,
-          GrpcUtil.SHARED_CHANNEL_EXECUTOR, GrpcUtil.getProxyDetector());
+      return new DnsNameResolver(
+          targetUri.getAuthority(),
+          name,
+          params,
+          GrpcUtil.SHARED_CHANNEL_EXECUTOR,
+          GrpcUtil.getProxyDetector());
     } else {
       return null;
     }

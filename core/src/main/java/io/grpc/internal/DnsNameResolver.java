@@ -36,9 +36,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -79,29 +76,22 @@ final class DnsNameResolver extends NameResolver {
   private final String authority;
   private final String host;
   private final int port;
-  private final Resource<ScheduledExecutorService> timerServiceResource;
   private final Resource<ExecutorService> executorResource;
   private final ProxyDetector proxyDetector;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
-  private ScheduledExecutorService timerService;
-  @GuardedBy("this")
   private ExecutorService executor;
-  @GuardedBy("this")
-  private ScheduledFuture<?> resolutionTask;
   @GuardedBy("this")
   private boolean resolving;
   @GuardedBy("this")
   private Listener listener;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
-      Resource<ScheduledExecutorService> timerServiceResource,
       Resource<ExecutorService> executorResource,
       ProxyDetector proxyDetector) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
-    this.timerServiceResource = timerServiceResource;
     this.executorResource = executorResource;
     // Must prepend a "//" to the name when constructing a URI, otherwise it will be treated as an
     // opaque URI, thus the authority and host of the resulted URI would be null.
@@ -131,7 +121,6 @@ final class DnsNameResolver extends NameResolver {
   @Override
   public final synchronized void start(Listener listener) {
     Preconditions.checkState(this.listener == null, "already started");
-    timerService = SharedResourceHolder.get(timerServiceResource);
     executor = SharedResourceHolder.get(executorResource);
     this.listener = Preconditions.checkNotNull(listener, "listener");
     resolve();
@@ -148,11 +137,6 @@ final class DnsNameResolver extends NameResolver {
       public void run() {
         Listener savedListener;
         synchronized (DnsNameResolver.this) {
-          // If this task is started by refresh(), there might already be a scheduled task.
-          if (resolutionTask != null) {
-            resolutionTask.cancel(false);
-            resolutionTask = null;
-          }
           if (shutdown) {
             return;
           }
@@ -171,16 +155,6 @@ final class DnsNameResolver extends NameResolver {
           try {
             resolvedInetAddrs = delegateResolver.resolve(host);
           } catch (Exception e) {
-            synchronized (DnsNameResolver.this) {
-              if (shutdown) {
-                return;
-              }
-              // Because timerService is the single-threaded GrpcUtil.TIMER_SERVICE in production,
-              // we need to delegate the blocking work to the executor
-              resolutionTask =
-                  timerService.schedule(new LogExceptionRunnable(resolutionRunnableOnExecutor),
-                      1, TimeUnit.MINUTES);
-            }
             savedListener.onError(
                 Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
             return;
@@ -207,17 +181,6 @@ final class DnsNameResolver extends NameResolver {
       }
     };
 
-  private final Runnable resolutionRunnableOnExecutor = new Runnable() {
-      @Override
-      public void run() {
-        synchronized (DnsNameResolver.this) {
-          if (!shutdown) {
-            executor.execute(resolutionRunnable);
-          }
-        }
-      }
-    };
-
   @GuardedBy("this")
   private void resolve() {
     if (resolving || shutdown) {
@@ -232,12 +195,6 @@ final class DnsNameResolver extends NameResolver {
       return;
     }
     shutdown = true;
-    if (resolutionTask != null) {
-      resolutionTask.cancel(false);
-    }
-    if (timerService != null) {
-      timerService = SharedResourceHolder.release(timerServiceResource, timerService);
-    }
     if (executor != null) {
       executor = SharedResourceHolder.release(executorResource, executor);
     }

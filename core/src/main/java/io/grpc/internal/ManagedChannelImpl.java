@@ -344,6 +344,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       checkState(lbHelper != null, "lbHelper is null");
     }
     if (nameResolver != null) {
+      cancelNameResolverBackoff();
       nameResolver.shutdown();
       nameResolver = null;
       nameResolverStarted = false;
@@ -427,6 +428,46 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             }
           }),
         idleTimeoutMillis, TimeUnit.MILLISECONDS);
+  }
+
+  // Run from channelExecutor
+  @VisibleForTesting
+  class NameResolverRefresh implements Runnable {
+    // Only mutated from channelExecutor
+    boolean cancelled;
+
+    @Override
+    public void run() {
+      if (cancelled) {
+        // Race detected: this task was scheduled on channelExecutor before
+        // cancelNameResolverBackoff() could cancel the timer.
+        return;
+      }
+      nameResolverRefreshFuture = null;
+      nameResolverRefresh = null;
+      if (nameResolver != null) {
+        nameResolver.refresh();
+      }
+    }
+  }
+
+  // Must be used from channelExecutor
+  @Nullable private ScheduledFuture<?> nameResolverRefreshFuture;
+  // Must be used from channelExecutor
+  @Nullable private NameResolverRefresh nameResolverRefresh;
+  // The policy to control backoff between name resolution attempts. Non-null when an attempt is
+  // scheduled. Must be used from channelExecutor
+  @Nullable private BackoffPolicy nameResolverBackoffPolicy;
+
+  // Must be run from channelExecutor
+  private void cancelNameResolverBackoff() {
+    if (nameResolverRefreshFuture != null) {
+      nameResolverRefreshFuture.cancel(false);
+      nameResolverRefresh.cancelled = true;
+      nameResolverRefreshFuture = null;
+      nameResolverRefresh = null;
+      nameResolverBackoffPolicy = null;
+    }
   }
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
@@ -799,24 +840,28 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
   @Override
   public void resetConnectBackoff() {
-    channelExecutor.executeLater(
-        new Runnable() {
-          @Override
-          public void run() {
-            if (shutdown.get()) {
-              return;
-            }
-            if (nameResolverStarted) {
-              nameResolver.refresh();
-            }
-            for (InternalSubchannel subchannel : subchannels) {
-              subchannel.resetConnectBackoff();
-            }
-            for (OobChannel oobChannel : oobChannels) {
-              oobChannel.resetConnectBackoff();
-            }
-          }
-        }).drain();
+    channelExecutor
+        .executeLater(
+            new Runnable() {
+              @Override
+              public void run() {
+                if (shutdown.get()) {
+                  return;
+                }
+                if (nameResolverRefreshFuture != null) {
+                  checkState(nameResolverStarted, "name resolver must be started");
+                  cancelNameResolverBackoff();
+                  nameResolver.refresh();
+                }
+                for (InternalSubchannel subchannel : subchannels) {
+                  subchannel.resetConnectBackoff();
+                }
+                for (OobChannel oobChannel : oobChannels) {
+                  oobChannel.resetConnectBackoff();
+                }
+              }
+            })
+        .drain();
   }
 
   @Override
@@ -1132,6 +1177,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             return;
           }
 
+          nameResolverBackoffPolicy = null;
+
           try {
             if (retryEnabled) {
               retryPolicies = getRetryPolicies(config);
@@ -1156,16 +1203,41 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       checkArgument(!error.isOk(), "the error status must not be OK");
       logger.log(Level.WARNING, "[{0}] Failed to resolve name. status={1}",
           new Object[] {getLogId(), error});
-      channelExecutor.executeLater(new Runnable() {
-          @Override
-          public void run() {
-            // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
-            if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
-              return;
-            }
-            balancer.handleNameResolutionError(error);
-          }
-        }).drain();
+      channelExecutor
+          .executeLater(
+              new Runnable() {
+                @Override
+                public void run() {
+                  // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+                  if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
+                    return;
+                  }
+                  balancer.handleNameResolutionError(error);
+                  if (nameResolverRefreshFuture != null) {
+                    // The name resolver may invoke onError multiple times, but we only want to
+                    // schedule one backoff attempt
+                    // TODO(ericgribkoff) Update contract of NameResolver.Listener or decide if we
+                    // want to reset the backoff interval upon repeated onError() calls
+                    return;
+                  }
+                  if (nameResolverBackoffPolicy == null) {
+                    nameResolverBackoffPolicy = backoffPolicyProvider.get();
+                  }
+                  long delayNanos = nameResolverBackoffPolicy.nextBackoffNanos();
+                  if (logger.isLoggable(Level.FINE)) {
+                    logger.log(
+                        Level.FINE,
+                        "[{0}] Scheduling DNS resolution backoff for {1} ns",
+                        new Object[] {logId, delayNanos});
+                  }
+                  nameResolverRefresh = new NameResolverRefresh();
+                  nameResolverRefreshFuture =
+                      transportFactory
+                          .getScheduledExecutorService()
+                          .schedule(nameResolverRefresh, delayNanos, TimeUnit.NANOSECONDS);
+                }
+              })
+          .drain();
     }
   }
 

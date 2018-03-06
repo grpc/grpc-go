@@ -30,6 +30,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>The addresses and attributes of a target may be changed over time, thus the caller registers a
  * {@link Listener} to receive continuous updates.
  *
+ * <p>A {@code NameResolver} does not need to automatically re-resolve on failure. Instead, the
+ * {@link Listener} is responsible for eventually (after an appropriate backoff period) invoking
+ * {@link #refresh()}.
+ *
  * @since 1.0.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
@@ -136,7 +140,8 @@ public abstract class NameResolver {
     void onAddresses(List<EquivalentAddressGroup> servers, Attributes attributes);
 
     /**
-     * Handles an error from the resolver.
+     * Handles an error from the resolver. The listener is responsible for eventually invoking
+     * {@link #refresh()} to re-attempt resolution.
      *
      * @param error a non-OK status
      * @since 1.0.0
