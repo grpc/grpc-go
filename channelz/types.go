@@ -33,6 +33,31 @@ type entry interface {
 	canDelete()
 }
 
+type dummyEntry struct {
+	idNotFound int64
+}
+
+func (d *dummyEntry) addChild(id int64, e entry) {
+	// It is possible for a normal program to reach here under race condition.
+	// For example, there could be a race between ClientConn.Close() info being propagated
+	// to addrConn and http2Client. ClientConn.Close() cancel the context and result
+	// in http2Client to error. The error info is then caught by transport monitor
+	// and before addrConn.tearDown() is called in side ClientConn.Close(). Therefore,
+	// the addrConn will create a new transport. And when registering the new transport in
+	// channelz, its parent addrConn could have already been torn down and deleted
+	// from channelz tracking, and thus reach the code here.
+	grpclog.Infof("attempt to add child of type %T with id %d to a parent (id=%d) that doesn't currently exist", e, id, d.idNotFound)
+}
+
+func (d *dummyEntry) deleteChild(id int64) {
+	// It is possible for a normal program to reach here under race condition.
+	// Refer to the example described in addChild().
+	grpclog.Infof("attempt to delete child with id %d from a parent (id=%d) that doesn't currently exist", id, d.idNotFound)
+}
+
+func (*dummyEntry) delete()    {}
+func (*dummyEntry) canDelete() {}
+
 // ChannelMetric defines the info provided by channelz for a specific Channel, which
 // includes ChannelInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
 type ChannelMetric struct {
@@ -315,14 +340,14 @@ func (s *server) delete() {
 		return
 	}
 	s.closeCalled = true
-	if len(s.sockets) != 0 {
+	if len(s.sockets)+len(s.listenSockets) != 0 {
 		return
 	}
 	s.cm.deleteEntry(s.id)
 }
 
 func (s *server) canDelete() {
-	if s.closeCalled && len(s.sockets) == 0 {
+	if s.closeCalled && len(s.sockets)+len(s.listenSockets) == 0 {
 		s.cm.deleteEntry(s.id)
 	}
 	return

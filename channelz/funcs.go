@@ -275,7 +275,7 @@ func (c *channelMap) findEntry(id int64) entry {
 	if v, ok = c.normalSockets[id]; ok {
 		return v
 	}
-	return v
+	return &dummyEntry{idNotFound: id}
 }
 
 // PrintMap will be deleted before PR is merged.
