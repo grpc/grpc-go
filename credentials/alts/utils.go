@@ -44,7 +44,7 @@ const (
 type platformError string
 
 func (k platformError) Error() string {
-	return fmt.Sprintf("%v is not supported", k)
+	return fmt.Sprintf("%s is not supported", string(k))
 }
 
 var (
