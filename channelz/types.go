@@ -38,7 +38,7 @@ type dummyEntry struct {
 }
 
 func (d *dummyEntry) addChild(id int64, e entry) {
-	// It is possible for a normal program to reach here under race condition.
+	// Note: It is possible for a normal program to reach here under race condition.
 	// For example, there could be a race between ClientConn.Close() info being propagated
 	// to addrConn and http2Client. ClientConn.Close() cancel the context and result
 	// in http2Client to error. The error info is then caught by transport monitor
@@ -58,8 +58,9 @@ func (d *dummyEntry) deleteChild(id int64) {
 func (*dummyEntry) delete()    {}
 func (*dummyEntry) canDelete() {}
 
-// ChannelMetric defines the info provided by channelz for a specific Channel, which
-// includes ChannelInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
+// ChannelMetric defines the info channelz provides for a specific Channel, which
+// includes ChannelInternalMetric and channelz-specific data, such as channelz id,
+// child list, etc.
 type ChannelMetric struct {
 	ID          int64
 	RefName     string
@@ -69,8 +70,9 @@ type ChannelMetric struct {
 	Sockets     map[int64]string
 }
 
-// SubChannelMetric defines the info provided by channelz for a specific SubChannel,
-// which includes ChannelInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
+// SubChannelMetric defines the info channelz provides for a specific SubChannel,
+// which includes ChannelInternalMetric and channelz-specific data, such as
+// channelz id, child list, etc.
 type SubChannelMetric struct {
 	ID          int64
 	RefName     string
@@ -80,8 +82,8 @@ type SubChannelMetric struct {
 	Sockets     map[int64]string
 }
 
-// ChannelInternalMetric defines the metrics an implementor of Channel interface
-// should report.
+// ChannelInternalMetric defines the struct that the implementor of Channel interface
+// should return from ChannelzMetric().
 type ChannelInternalMetric struct {
 	State                    connectivity.State
 	Target                   string
@@ -93,7 +95,7 @@ type ChannelInternalMetric struct {
 }
 
 // Channel is the interface that should be satisfied in order to be tracked by
-// channelz as a channel type (i.e TopChannelT, SubChannelT and NestedChannelT).
+// channelz as Channel or SubChannel.
 type Channel interface {
 	ChannelzMetric() *ChannelInternalMetric
 }
@@ -195,16 +197,16 @@ func (sc *subChannel) canDelete() {
 	return
 }
 
-// SocketMetric defines the info provided by channelz for a specific Socket, which
-// includes SocketInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
+// SocketMetric defines the info channelz provides for a specific Socket, which
+// includes SocketInternalMetric and channelz-specific data, such as channelz id, etc.
 type SocketMetric struct {
 	ID         int64
 	RefName    string
 	SocketData *SocketInternalMetric
 }
 
-// SocketInternalMetric defines the metrics an implementor of Socket interface
-// should report.
+// SocketInternalMetric defines the struct that the implementor of Socket interface
+// should return from ChannelzMetric().
 type SocketInternalMetric struct {
 	StreamsStarted                   int64
 	StreamsSucceeded                 int64
@@ -225,7 +227,8 @@ type SocketInternalMetric struct {
 	RemoteName string
 }
 
-// Socket is the interface implemented by transport.http2Client and transport.http2Server.
+// Socket is the interface that should be satisfied in order to be tracked by
+// channelz as Socket.
 type Socket interface {
 	ChannelzMetric() *SocketInternalMetric
 }
@@ -284,8 +287,9 @@ func (ns *normalSocket) delete() {
 
 func (ns *normalSocket) canDelete() {}
 
-// ServerMetric defines the info provided by channelz for a specific Server, which
-// includes ServerInternalMetric and channelz-specific data, i.e, Channelz ID, etc.
+// ServerMetric defines the info channelz provides for a specific Server, which
+// includes ServerInternalMetric and channelz-specific data, such as channelz id,
+// child list, etc.
 type ServerMetric struct {
 	ID            int64
 	RefName       string
@@ -293,7 +297,8 @@ type ServerMetric struct {
 	ListenSockets map[int64]string
 }
 
-// ServerInternalMetric defines the metrics collected for a Server.
+// ServerInternalMetric defines the struct that the implementor of Server interface
+// should return from ChannelzMetric().
 type ServerInternalMetric struct {
 	CallsStarted             int64
 	CallsSucceeded           int64
@@ -302,7 +307,8 @@ type ServerInternalMetric struct {
 	// trace
 }
 
-// Server is the interface implemented by grpc.Server that reports ServerInternalMetric.
+// Server is the interface to be satisfied in order to be tracked by channelz as
+// Server.
 type Server interface {
 	ChannelzMetric() *ServerInternalMetric
 }

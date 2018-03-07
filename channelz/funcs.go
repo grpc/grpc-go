@@ -16,6 +16,11 @@
  *
  */
 
+// Package channelz defines APIs for enabling channelz service, entry
+// registration/deletion, and accessing channelz data. It also defines channelz
+// metric struct formats.
+//
+// All APIs in this package are experimental.
 package channelz
 
 import (
@@ -30,13 +35,12 @@ import (
 var (
 	db    dbWrapper
 	idGen idGenerator
-	// EntryPerPage defines the number of channelz entries shown on a web page.
+	// EntryPerPage defines the number of channelz entries to be shown on a web page.
 	EntryPerPage = 50
 	curState     int32
 )
 
 // TurnOn turns on channelz data collection.
-// This is an EXPERIMENTAL API.
 func TurnOn() {
 	if !IsOn() {
 		NewChannelzStorage()
@@ -45,7 +49,6 @@ func TurnOn() {
 }
 
 // IsOn returns whether channelz data collection is on.
-// This is an EXPERIMENTAL API.
 func IsOn() bool {
 	return atomic.CompareAndSwapInt32(&curState, 1, 1)
 }
@@ -69,9 +72,10 @@ func (d *dbWrapper) get() *channelMap {
 	return d.DB
 }
 
-// NewChannelzStorage initializes channelz data storage and unique id generator.
-// Note: For testing purpose only. User should not call it in most cases.
-// This is an EXPERIMENTAL API.
+// NewChannelzStorage initializes channelz data storage and id generator.
+//
+// Note: This function is exported for testing purpose only. User should not call
+// it in most cases.
 func NewChannelzStorage() {
 	db.set(&channelMap{
 		topLevelChannels: make(map[int64]struct{}),
@@ -84,56 +88,56 @@ func NewChannelzStorage() {
 	idGen.reset()
 }
 
-// GetTopChannels returns up to EntryPerPage number of top channel's ChannelMetric
-// whose identification number is larger than or equal to id, along with a boolean
-// indicating whether there is more top channels to be queried.
-// This is an EXPERIMENTAL API.
+// GetTopChannels returns a slice of top channel's ChannelMetric, along with a
+// boolean indicating whether there's more top channels to be queried for.
+//
+// The arg id specifies that only top channel with id at or above it will be included
+// in the result. The returned slice is up to a length of EntryPerPage, and is
+// sorted in ascending id order.
 func GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 	return db.get().GetTopChannels(id)
 }
 
-// GetServers returns up to EntryPerPage number of ServerMetric whose
-// identification number is larger than or equal to id, along with a boolean
-// indicating whether there is more servers to be queried.
-// This is an EXPERIMENTAL API.
+// GetServers returns a slice of server's ServerMetric, along with a
+// boolean indicating whether there's more servers to be queried for.
+//
+// The arg id specifies that only server with id at or above it will be included
+// in the result. The returned slice is up to a length of EntryPerPage, and is
+// sorted in ascending id order.
 func GetServers(id int64) ([]*ServerMetric, bool) {
 	return db.get().GetServers(id)
 }
 
-// GetServerSockets returns up to EntryPerPage number of SocketMetric who is a
-// child of server with identification number to be id and whose identification
-// number is larger than startID, along with a boolean indicating whether there
-// is more sockets to be queried.
-// This is an EXPERIMENTAL API.
+// GetServerSockets returns a slice of server's (identified by id) normal socket's
+// SocketMetric, along with a boolean indicating whether there's more sockets to
+// be queried for.
+//
+// The arg startID specifies that only sockets with id at or above it will be
+// included in the result. The returned slice is up to a length of EntryPerPage,
+// and is sorted in ascending id order.
 func GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool) {
 	return db.get().GetServerSockets(id, startID)
 }
 
-// GetChannel returns the ChannelMetric for the channel with identification number
-// to be id.
-// This is an EXPERIMENTAL API.
+// GetChannel returns the ChannelMetric for the channel (identified by id).
 func GetChannel(id int64) *ChannelMetric {
 	return db.get().GetChannel(id)
 }
 
-// GetSubChannel returns the ChannelMetric for the sub channel with identification
-// number to be id.
-// This is an EXPERIMENTAL API.
+// GetSubChannel returns the SubChannelMetric for the subchannel (identified by id).
 func GetSubChannel(id int64) *SubChannelMetric {
 	return db.get().GetSubChannel(id)
 }
 
-// GetSocket returns the SocketInternalMetric for the socket with identification number
-// to be id.
-// This is an EXPERIMENTAL API.
+// GetSocket returns the SocketInternalMetric for the socket (identified by id).
 func GetSocket(id int64) *SocketMetric {
 	return db.get().GetSocket(id)
 }
 
-// RegisterChannel registers the given channel in db as EntryType t, with ref
-// as its reference name, and sets parent ID to be pid. zero-value pid means no
-// parent.
-// This is an EXPERIMENTAL API.
+// RegisterChannel registers the given channel c in channelz database with ref
+// as its reference name, and add it to the child list of its parent (identified
+// by pid). pid = 0 means no parent. It returns the unique channelz tracking id
+// assigned to this channel.
 func RegisterChannel(c Channel, pid int64, ref string) int64 {
 	id := idGen.genID()
 	cn := &channel{
@@ -151,9 +155,14 @@ func RegisterChannel(c Channel, pid int64, ref string) int64 {
 	return id
 }
 
-// RegisterSubChannel registers the given SubChannel in db.
-// This is an EXPERIMENTAL API.
+// RegisterSubChannel registers the given channel c in channelz database with ref
+// as its reference name, and add it to the child list of its parent (identified
+// by pid). It returns the unique channelz tracking id assigned to this subchannel.
 func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
+	if pid == 0 {
+		grpclog.Error("a SubChannel's parent id cannot be 0")
+		return 0
+	}
 	id := idGen.genID()
 	sc := &subChannel{
 		c:       c,
@@ -161,44 +170,50 @@ func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 		id:      id,
 		pid:     pid,
 	}
-	if pid != 0 {
-		db.get().addSubChannel(id, sc, pid, ref)
-	} else {
-		grpclog.Error("a SubChannel's parent id cannot be 0")
-	}
+	db.get().addSubChannel(id, sc, pid, ref)
 	return id
 }
 
-// RegisterServer registers the given server in db.
-// This is an EXPERIMENTAL API.
+// RegisterServer registers the given server s in channelz database. It returns
+// the unique channelz tracking id assigned to this server.
 func RegisterServer(s Server) int64 {
 	id := idGen.genID()
 	db.get().addServer(id, &server{s: s, sockets: make(map[int64]string), listenSockets: make(map[int64]string), id: id})
 	return id
 }
 
-// RegisterListenSocket registers the given listen socket in db with ref as
-// its reference name, and sets pid as its parent ID.
-// This is an EXPERIMENTAL API.
+// RegisterListenSocket registers the given listen socket s in channelz database
+// with ref as its reference name, and add it to the child list of its parent
+// (identified by pid). It returns the unique channelz tracking id assigned to
+// this listen socket.
 func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
+	if pid == 0 {
+		grpclog.Error("a ListenSocket's parent id cannot be 0")
+		return 0
+	}
 	id := idGen.genID()
 	ls := &listenSocket{s: s, id: id, pid: pid}
 	db.get().addListenSocket(id, ls, pid, ref)
 	return id
 }
 
-// RegisterNormalSocket registers the given socket in db as EntryType t, with ref as
-// its reference name, and sets pid as its parent ID.
-// This is an EXPERIMENTAL API.
+// RegisterNormalSocket registers the given normal socket s in channelz database
+// with ref as its reference name, and add it to the child list of its parent
+// (identified by pid). It returns the unique channelz tracking id assigned to
+// this normal socket.
 func RegisterNormalSocket(s Socket, pid int64, ref string) int64 {
+	if pid == 0 {
+		grpclog.Error("a NormalSocket's parent id cannot be 0")
+		return 0
+	}
 	id := idGen.genID()
 	ns := &normalSocket{s: s, id: id, pid: pid}
 	db.get().addNormalSocket(id, ns, pid, ref)
 	return id
 }
 
-// RemoveEntry removes an entry with unique identification number id from db.
-// This is an EXPERIMENTAL API.
+// RemoveEntry removes an entry with unique channelz trakcing id to be id from
+// channelz database.
 func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
