@@ -250,8 +250,8 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
     }
 
     @Override
-    public void prepareToLoseNetwork() {
-      delegate.prepareToLoseNetwork();
+    public void enterIdle() {
+      delegate.enterIdle();
     }
   }
 }

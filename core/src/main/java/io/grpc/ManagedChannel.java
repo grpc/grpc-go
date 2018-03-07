@@ -128,15 +128,15 @@ public abstract class ManagedChannel extends Channel {
    * continue. New RPCs on the channel will trigger creation of a new connection.
    *
    * <p>This is primarily intended for Android users when a device is transitioning from a cellular
-   * to a wifi connection. Initially the device will maintain both the cellular and wifi
-   * connections, but the OS also issues a notification that after a short time the cellular
-   * connection will be terminated. Apps may invoke this method to ensure that new RPCs are created
-   * using the wifi connection, rather than the soon-to-be-disconnected cellular network.
+   * to a wifi connection. The OS will issue a notification that a new network (wifi) has been made
+   * the default, but for approximately 30 seconds the device will maintain both the cellular
+   * and wifi connections. Apps may invoke this method to ensure that new RPCs are created using the
+   * new default wifi network, rather than the soon-to-be-disconnected cellular network.
    *
    * <p>No-op if not supported by implementation.
    *
    * @since 1.11.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4056")
-  public void prepareToLoseNetwork() {}
+  public void enterIdle() {}
 }

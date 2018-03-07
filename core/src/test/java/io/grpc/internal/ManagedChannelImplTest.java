@@ -1854,18 +1854,18 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void prepareToLoseNetworkEntersIdle() {
+  public void enterIdleEntersIdle() {
     createChannel(new FakeNameResolverFactory.Builder(expectedUri).build(), NO_INTERCEPTOR);
     helper.updateBalancingState(READY, mockPicker);
     assertEquals(READY, channel.getState(false));
 
-    channel.prepareToLoseNetwork();
+    channel.enterIdle();
 
     assertEquals(IDLE, channel.getState(false));
   }
 
   @Test
-  public void prepareToLoseNetworkAfterIdleTimerIsNoOp() {
+  public void enterIdleAfterIdleTimerIsNoOp() {
     long idleTimeoutMillis = 2000L;
     createChannel(
         new FakeNameResolverFactory.Builder(expectedUri).build(),
@@ -1875,7 +1875,7 @@ public class ManagedChannelImplTest {
     timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
     assertEquals(IDLE, channel.getState(false));
 
-    channel.prepareToLoseNetwork();
+    channel.enterIdle();
 
     assertEquals(IDLE, channel.getState(false));
   }

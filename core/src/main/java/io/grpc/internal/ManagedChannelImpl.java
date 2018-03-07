@@ -396,7 +396,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     logger.log(Level.FINE, "[{0}] Entering idle mode", getLogId());
     // nameResolver and loadBalancer are guaranteed to be non-null.  If any of them were null,
     // either the idleModeTimer ran twice without exiting the idle mode, or the task in shutdown()
-    // did not cancel idleModeTimer, or prepareToLoseNetwork() ran while shutdown or in idle, all of
+    // did not cancel idleModeTimer, or enterIdle() ran while shutdown or in idle, all of
     // which are bugs.
     shutdownNameResolverAndLoadBalancer(true);
     nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
@@ -865,7 +865,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   }
 
   @Override
-  public void prepareToLoseNetwork() {
+  public void enterIdle() {
     class PrepareToLoseNetworkRunnable implements Runnable {
       @Override
       public void run() {
