@@ -39,6 +39,16 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+var (
+	mutableMinConnectTimeout = time.Second * 20
+)
+
+func init() {
+	getMinConnectTimeout = func() time.Duration {
+		return time.Duration(atomic.LoadInt64((*int64)(&mutableMinConnectTimeout)))
+	}
+}
+
 func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.State, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -169,13 +179,14 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 }
 
 func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
-	mctBkp := minConnectTimeout
+	mctBkp := getMinConnectTimeout()
 	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
-		minConnectTimeout = mctBkp
+		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
+
 	}()
 	defer leakcheck.Check(t)
-	minConnectTimeout = time.Millisecond * 500
+	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(time.Millisecond)*500)
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
