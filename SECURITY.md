@@ -328,6 +328,21 @@ If you are developing for Android and have a dependency on `grpc-netty`, you sho
 
 If you are on a 32-bit operating system, or not on a [Transport Security supported platform](#transport-security-tls), you should use Jetty ALPN (and beware of potential issues), or you'll need to build your own 32-bit version of `netty-tcnative`.
 
+If you are using `musl` libc (e.g., with Alpine Linux), then
+`netty-tcnative-boringssl-static` won't work. There are several alternatives:
+ - Use [netty-tcnative-alpine](https://github.com/pires/netty-tcnative-alpine)
+ - Use a distribution with `glibc`
+
+If you are running inside of an embedded Tomcat runtime (e.g., Spring Boot),
+then some versions of `netty-tcnative-boringssl-static` will have conflicts and
+won't work. You must use gRPC 1.4.0 or later.
+
+Most dependency versioning problems can be solved by using
+`io.grpc:grpc-netty-shaded` instead of `io.grpc:grpc-netty`, although this also
+limits your usage of the Netty-specific APIs. `io.grpc:grpc-netty-shaded`
+includes the proper version of Netty and `netty-tcnative-boringssl-static` in a
+way that won't conflict with other Netty usages.
+
 Find the dependency tree (e.g., `mvn dependency:tree`), and look for versions of:
  - `io.grpc:grpc-netty`
  - `io.netty:netty-handler` (really, make sure all of io.netty except for
@@ -344,12 +359,6 @@ If you are running in a runtime environment that also uses Netty (e.g., Hadoop, 
  - Remove `io.grpc:grpc-netty` dependency
  - Add `io.grpc:grpc-netty-shaded` dependency
 
-If you are running inside of an embedded Tomcat runtime (e.g., Spring Boot), then some versions of `netty-tcnative-boringssl-static` will have conflicts and won't work. You must use gRPC 1.4.0 or later.
-
-If you are using `musl` libc (e.g., with Alpine Linux), then `netty-tcnative-boringssl-static` won't work. There are several alternatives:
- - Use [netty-tcnative-alpine](https://github.com/pires/netty-tcnative-alpine)
- - Use a distribution with `glibc`
-
 Below are known to work version combinations:
 
 grpc-netty version | netty-handler version | netty-tcnative-boringssl-static version
@@ -363,6 +372,8 @@ grpc-netty version | netty-handler version | netty-tcnative-boringssl-static ver
 1.7.x-1.8.x        | 4.1.16.Final          | 2.0.6.Final
 1.9.x-1.10.x       | 4.1.17.Final          | 2.0.7.Final
 1.11.x-            | 4.1.22.Final          | 2.0.7.Final
+
+_(grpc-netty-shaded avoids issues with keeping these versions in sync.)_
 
 ### OkHttp
 If you are using gRPC on Android devices, you are most likely using `grpc-okhttp` transport.
