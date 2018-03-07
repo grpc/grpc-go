@@ -278,11 +278,8 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 	lis.Close()
 	time.Sleep(10 * time.Millisecond)
 	ss, _ = channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should only be one server, not %d", len(ss))
-	}
-	if len(ss[0].ListenSockets) != 0 {
-		t.Fatalf("There should only be 0 server listen socket, not %d", len(ss[0].ListenSockets))
+	if len(ss) != 0 {
+		t.Fatalf("There should only be 0 server, not %d", len(ss))
 	}
 	s.Stop()
 }
