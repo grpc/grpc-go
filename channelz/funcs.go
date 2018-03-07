@@ -296,6 +296,7 @@ func (c *channelMap) findEntry(id int64) entry {
 // PrintMap will be deleted before PR is merged.
 func PrintMap() {
 	c := db.get()
+	c.mu.RLock()
 	fmt.Println("toplevelchannels")
 	fmt.Println(c.topLevelChannels)
 	fmt.Println("len", len(c.topLevelChannels))
@@ -309,6 +310,7 @@ func PrintMap() {
 	fmt.Println(c.listenSockets)
 	fmt.Println("normalsockets")
 	fmt.Println(c.normalSockets)
+	c.mu.RUnlock()
 }
 
 func (c *channelMap) deleteEntry(id int64) {

@@ -55,7 +55,10 @@ func (d *dummyEntry) deleteChild(id int64) {
 	grpclog.Infof("attempt to delete child with id %d from a parent (id=%d) that doesn't currently exist", id, d.idNotFound)
 }
 
-func (*dummyEntry) delete()    {}
+func (d *dummyEntry) delete() {
+	grpclog.Warningf("attempt to delete an entry (id=%d) that doesn't currently exist", d.idNotFound)
+}
+
 func (*dummyEntry) canDelete() {}
 
 // ChannelMetric defines the info channelz provides for a specific Channel, which

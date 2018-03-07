@@ -99,11 +99,12 @@ type Server struct {
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
 
-	quit     chan struct{}
-	done     chan struct{}
-	quitOnce sync.Once
-	doneOnce sync.Once
-	serveWG  sync.WaitGroup // counts active Serve goroutines for GracefulStop
+	quit               chan struct{}
+	done               chan struct{}
+	quitOnce           sync.Once
+	doneOnce           sync.Once
+	channelzRemoveOnce sync.Once
+	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
 	channelzID int64 // channelz unique identification number
 }
@@ -508,6 +509,11 @@ func (s *Server) Serve(lis net.Listener) error {
 		case <-s.quit:
 			<-s.done
 		default:
+			s.channelzRemoveOnce.Do(func() {
+				if channelz.IsOn() {
+					channelz.RemoveEntry(s.channelzID)
+				}
+			})
 		}
 	}()
 
@@ -1227,9 +1233,12 @@ func (s *Server) Stop() {
 		})
 	}()
 
-	if channelz.IsOn() {
-		channelz.RemoveEntry(s.channelzID)
-	}
+	s.channelzRemoveOnce.Do(func() {
+		if channelz.IsOn() {
+			channelz.RemoveEntry(s.channelzID)
+		}
+	})
+
 	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
@@ -1268,9 +1277,11 @@ func (s *Server) GracefulStop() {
 		})
 	}()
 
-	if channelz.IsOn() {
-		channelz.RemoveEntry(s.channelzID)
-	}
+	s.channelzRemoveOnce.Do(func() {
+		if channelz.IsOn() {
+			channelz.RemoveEntry(s.channelzID)
+		}
+	})
 	s.mu.Lock()
 	if s.conns == nil {
 		s.mu.Unlock()
