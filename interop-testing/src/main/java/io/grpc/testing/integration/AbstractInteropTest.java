@@ -703,8 +703,12 @@ public abstract class AbstractInteropTest {
     for (int i = 0; i < requests.size(); i++) {
       assertNull(queue.peek());
       requestObserver.onNext(requests.get(i));
-      assertEquals(goldenResponses.get(i),
-                   queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
+      Object actualResponse = queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+      assertNotNull("Timed out waiting for response", actualResponse);
+      if (actualResponse instanceof Throwable) {
+        throw new AssertionError((Throwable) actualResponse);
+      }
+      assertEquals(goldenResponses.get(i), actualResponse);
     }
     requestObserver.onCompleted();
     assertEquals("Completed", queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
