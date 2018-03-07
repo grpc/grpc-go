@@ -1287,8 +1287,8 @@ func SetHeader(ctx context.Context, md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	stream, ok := transport.StreamFromContext(ctx)
-	if !ok {
+	stream := transport.ServerStreamFromContext(ctx)
+	if stream == nil {
 		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetHeader(md)
@@ -1297,15 +1297,11 @@ func SetHeader(ctx context.Context, md metadata.MD) error {
 // SendHeader sends header metadata. It may be called at most once.
 // The provided md and headers set by SetHeader() will be sent.
 func SendHeader(ctx context.Context, md metadata.MD) error {
-	stream, ok := transport.StreamFromContext(ctx)
-	if !ok {
+	stream := transport.ServerStreamFromContext(ctx)
+	if stream == nil {
 		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
-	t := stream.ServerTransport()
-	if t == nil {
-		grpclog.Fatalf("grpc: SendHeader: %v has no ServerTransport to send header metadata.", stream)
-	}
-	if err := t.WriteHeader(stream, md); err != nil {
+	if err := stream.SendHeader(md); err != nil {
 		return toRPCErr(err)
 	}
 	return nil
@@ -1317,8 +1313,8 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	stream, ok := transport.StreamFromContext(ctx)
-	if !ok {
+	stream := transport.ServerStreamFromContext(ctx)
+	if stream == nil {
 		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetTrailer(md)

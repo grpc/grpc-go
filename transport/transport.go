@@ -366,6 +366,14 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 	return nil
 }
 
+// SendHeader sends the given header metadata. The given metadata is
+// combined with any metadata set by previous calls to SetHeader and
+// then written to the transport stream.
+func (s *Stream) SendHeader(md metadata.MD) error {
+	t := s.ServerTransport()
+	return t.WriteHeader(s, md)
+}
+
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can be called multiple times. Server side only.
 func (s *Stream) SetTrailer(md metadata.MD) error {
@@ -448,16 +456,42 @@ func (s *Stream) GoString() string {
 // The key to save transport.Stream in the context.
 type streamKey struct{}
 
-// newContextWithStream creates a new context from ctx and attaches stream
-// to it.
-func newContextWithStream(ctx context.Context, stream *Stream) context.Context {
+// NewContextWithServerStream creates a new context from ctx and attaches
+// stream to it.
+func NewContextWithServerStream(ctx context.Context, stream ServerStream) context.Context {
 	return context.WithValue(ctx, streamKey{}, stream)
 }
 
 // StreamFromContext returns the stream saved in ctx.
+//
+// Deprecated: use ServerStreamFromContext
 func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
+	// If there is a ServerStream in context, but it's not a *Stream,
+	// this still returns nil, false.
 	s, ok = ctx.Value(streamKey{}).(*Stream)
 	return
+}
+
+// ServerStream is a minimal interface that a transport stream must
+// implement. This can be used to mock an actual transport stream for
+// tests of handler code that use, for example, grpc.SetHeader (which
+// requires some stream to be in context).
+//
+// See also ContextWithServerStream.
+type ServerStream interface {
+	Context() context.Context
+	Method() string
+	SetHeader(md metadata.MD) error
+	SendHeader(md metadata.MD) error
+	SetTrailer(md metadata.MD) error
+}
+
+// ServerStreamFromContext returns the server stream saved in ctx. Returns
+// nil if the given context has no stream associated with it (which implies
+// it is not an RPC invocation context).
+func ServerStreamFromContext(ctx context.Context) ServerStream {
+	s, _ := ctx.Value(streamKey{}).(ServerStream)
+	return s
 }
 
 // state of transport

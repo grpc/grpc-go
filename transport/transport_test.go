@@ -1554,10 +1554,11 @@ func TestInvalidHeaderField(t *testing.T) {
 
 func TestStreamContext(t *testing.T) {
 	expectedStream := &Stream{}
-	ctx := newContextWithStream(context.Background(), expectedStream)
-	s, ok := StreamFromContext(ctx)
-	if !ok || expectedStream != s {
-		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, s, ok, expectedStream)
+	ctx := NewContextWithServerStream(context.Background(), expectedStream)
+	s := ServerStreamFromContext(ctx)
+	stream, ok := s.(*Stream)
+	if !ok || expectedStream != stream {
+		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
 	}
 }
 

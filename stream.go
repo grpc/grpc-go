@@ -675,9 +675,9 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 // MethodFromServerStream returns the method string for the input stream.
 // The returned string is in the format of "/service/method".
 func MethodFromServerStream(stream ServerStream) (string, bool) {
-	s, ok := transport.StreamFromContext(stream.Context())
-	if !ok {
-		return "", ok
+	s := transport.ServerStreamFromContext(stream.Context())
+	if s == nil {
+		return "", false
 	}
-	return s.Method(), ok
+	return s.Method(), true
 }

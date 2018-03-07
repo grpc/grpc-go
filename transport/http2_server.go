@@ -310,7 +310,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// Cache the current stream to the context so that the server application
 	// can find out. Required when the server wants to send some metadata
 	// back to the client (unary call only).
-	s.ctx = newContextWithStream(s.ctx, s)
+	s.ctx = NewContextWithServerStream(s.ctx, s)
 	// Attach the received metadata to the context.
 	if len(state.mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, state.mdata)
