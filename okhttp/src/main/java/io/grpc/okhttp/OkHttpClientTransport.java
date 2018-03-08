@@ -37,7 +37,8 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.Security;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
@@ -893,10 +894,14 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ListenableFuture<TransportStats> getStats() {
+  public ListenableFuture<SocketStats> getStats() {
     synchronized (lock) {
-      SettableFuture<TransportStats> ret = SettableFuture.create();
-      ret.set(transportTracer.getStats());
+      SettableFuture<SocketStats> ret = SettableFuture.create();
+      ret.set(new SocketStats(
+          transportTracer.getStats(),
+          socket.getLocalSocketAddress(),
+          socket.getRemoteSocketAddress(),
+          new Security()));
       return ret;
     }
   }

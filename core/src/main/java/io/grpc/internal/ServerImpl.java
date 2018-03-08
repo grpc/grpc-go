@@ -380,7 +380,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
           @Override public void run() {}
         }, null);
       }
-      channelz.addTransport(transport);
+      channelz.addSocket(transport);
     }
 
     @Override
@@ -408,7 +408,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
         }
         transportClosed(transport);
       } finally {
-        channelz.removeTransport(transport);
+        channelz.removeSocket(transport);
       }
     }
 

@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ConnectivityState;
+import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,8 @@ public final class Channelz {
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> channels =
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<TransportStats>> transports =
-      new ConcurrentHashMap<Long, Instrumented<TransportStats>>();
+  private final ConcurrentMap<Long, Instrumented<SocketStats>> sockets =
+      new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
 
   @VisibleForTesting
   public Channelz() {
@@ -58,8 +59,8 @@ public final class Channelz {
     add(rootChannels, rootChannel);
   }
 
-  public void addTransport(Instrumented<TransportStats> transport) {
-    add(transports, transport);
+  public void addSocket(Instrumented<SocketStats> socket) {
+    add(sockets, socket);
   }
 
   public void removeServer(Instrumented<ServerStats> server) {
@@ -75,8 +76,8 @@ public final class Channelz {
     remove(rootChannels, channel);
   }
 
-  public void removeTransport(Instrumented<TransportStats> transport) {
-    remove(transports, transport);
+  public void removeSocket(Instrumented<SocketStats> socket) {
+    remove(sockets, socket);
   }
 
   @VisibleForTesting
@@ -95,8 +96,8 @@ public final class Channelz {
   }
 
   @VisibleForTesting
-  public boolean containsTransport(LogId transportRef) {
-    return contains(transports, transportRef);
+  public boolean containsSocket(LogId transportRef) {
+    return contains(sockets, transportRef);
   }
 
   private static <T extends Instrumented<?>> void add(Map<Long, T> map, T object) {
@@ -117,6 +118,7 @@ public final class Channelz {
     public final long callsSucceeded;
     public final long callsFailed;
     public final long lastCallStartedMillis;
+    // TODO(zpencer): add listen sockets
 
     /**
      * Creates an instance.
@@ -133,13 +135,10 @@ public final class Channelz {
     }
 
     public static final class Builder {
-      private String target;
-      private ConnectivityState state;
       private long callsStarted;
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedMillis;
-      public List<LogId> subchannels;
 
       public Builder setCallsStarted(long callsStarted) {
         this.callsStarted = callsStarted;
@@ -264,6 +263,29 @@ public final class Channelz {
             lastCallStartedMillis,
             subchannels);
       }
+    }
+  }
+
+  public static final class Security {
+    // TODO(zpencer): fill this in
+  }
+
+  public static final class SocketStats {
+    public final TransportStats data;
+    public final SocketAddress local;
+    public final SocketAddress remote;
+    public final Security security;
+
+    /** Creates an instance. */
+    public SocketStats(
+        TransportStats data,
+        SocketAddress local,
+        SocketAddress remote,
+        Security security) {
+      this.data = data;
+      this.local = local;
+      this.remote = remote;
+      this.security = security;
     }
   }
 

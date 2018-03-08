@@ -67,7 +67,7 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ServerImpl.JumpToApplicationThreadServerStreamListener;
 import io.grpc.internal.testing.SingleMessageProducer;
 import io.grpc.internal.testing.TestServerStreamTracer;
@@ -1395,12 +1395,12 @@ public class ServerImplTest {
     createAndStartServer();
     SimpleServerTransport transport = new SimpleServerTransport();
 
-    assertFalse(builder.channelz.containsTransport(transport.getLogId()));
+    assertFalse(builder.channelz.containsSocket(transport.getLogId()));
     ServerTransportListener listener
         = transportServer.registerNewServerTransport(transport);
-    assertTrue(builder.channelz.containsTransport(transport.getLogId()));
+    assertTrue(builder.channelz.containsSocket(transport.getLogId()));
     listener.transportTerminated();
-    assertFalse(builder.channelz.containsTransport(transport.getLogId()));
+    assertFalse(builder.channelz.containsSocket(transport.getLogId()));
   }
 
   private void createAndStartServer() throws IOException {
@@ -1485,8 +1485,8 @@ public class ServerImplTest {
     }
 
     @Override
-    public ListenableFuture<TransportStats> getStats() {
-      SettableFuture<TransportStats> ret = SettableFuture.create();
+    public ListenableFuture<SocketStats> getStats() {
+      SettableFuture<SocketStats> ret = SettableFuture.create();
       ret.set(null);
       return ret;
     }

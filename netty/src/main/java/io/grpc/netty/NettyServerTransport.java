@@ -23,7 +23,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
@@ -195,19 +195,30 @@ class NettyServerTransport implements ServerTransport {
   }
 
   @Override
-  public ListenableFuture<TransportStats> getStats() {
-    final SettableFuture<TransportStats> result = SettableFuture.create();
+  public ListenableFuture<SocketStats> getStats() {
+    final SettableFuture<SocketStats> result = SettableFuture.create();
+    // TODO: fill in security
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      result.set(transportTracer.getStats());
+      result.set(
+          new SocketStats(
+              transportTracer.getStats(),
+              channel.localAddress(),
+              channel.remoteAddress(),
+              /*security=*/ null));
       return result;
     }
     channel.eventLoop().submit(
         new Runnable() {
           @Override
           public void run() {
-            result.set(transportTracer.getStats());
+            result.set(
+                new SocketStats(
+                    transportTracer.getStats(),
+                    channel.localAddress(),
+                    channel.remoteAddress(),
+                    /*security=*/ null));
           }
         });
     return result;

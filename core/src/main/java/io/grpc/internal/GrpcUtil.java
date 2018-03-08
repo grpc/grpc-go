@@ -36,7 +36,7 @@ import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.IOException;
@@ -692,7 +692,7 @@ public final class GrpcUtil {
         }
 
         @Override
-        public ListenableFuture<TransportStats> getStats() {
+        public ListenableFuture<SocketStats> getStats() {
           return transport.getStats();
         }
       };

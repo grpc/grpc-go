@@ -218,7 +218,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
         new CallTracingTransport(
             transportFactory.newClientTransport(address, authority, userAgent, proxy),
             callsTracer);
-    channelz.addTransport(transport);
+    channelz.addSocket(transport);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {logId, transport.getLogId(), address});
@@ -572,7 +572,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       } finally {
         channelExecutor.drain();
       }
-      channelz.removeTransport(transport);
+      channelz.removeSocket(transport);
       Preconditions.checkState(activeTransport != transport,
           "activeTransport still points to this transport. "
           + "Seems transportShutdown() was not called.");

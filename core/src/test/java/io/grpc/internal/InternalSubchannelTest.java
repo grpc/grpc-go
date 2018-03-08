@@ -956,9 +956,9 @@ public class InternalSubchannelTest {
     internalSubchannel.obtainActiveTransport();
 
     MockClientTransportInfo t0 = transports.poll();
-    assertTrue(channelz.containsTransport(t0.transport.getLogId()));
+    assertTrue(channelz.containsSocket(t0.transport.getLogId()));
     t0.listener.transportTerminated();
-    assertFalse(channelz.containsTransport(t0.transport.getLogId()));
+    assertFalse(channelz.containsSocket(t0.transport.getLogId()));
   }
 
   private void createInternalSubchannel(SocketAddress ... addrs) {

@@ -364,11 +364,11 @@ public class ManagedChannelImplTest {
     subchannel.requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
-    assertTrue(channelz.containsTransport(transportInfo.transport.getLogId()));
+    assertTrue(channelz.containsSocket(transportInfo.transport.getLogId()));
 
     // terminate transport
     transportInfo.listener.transportTerminated();
-    assertFalse(channelz.containsTransport(transportInfo.transport.getLogId()));
+    assertFalse(channelz.containsSocket(transportInfo.transport.getLogId()));
 
     // terminate subchannel
     assertTrue(channelz.containsChannel(subchannel.getInternalSubchannel().getLogId()));
@@ -402,11 +402,11 @@ public class ManagedChannelImplTest {
     oob.getSubchannel().requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
-    assertTrue(channelz.containsTransport(transportInfo.transport.getLogId()));
+    assertTrue(channelz.containsSocket(transportInfo.transport.getLogId()));
 
     // terminate transport
     transportInfo.listener.transportTerminated();
-    assertFalse(channelz.containsTransport(transportInfo.transport.getLogId()));
+    assertFalse(channelz.containsSocket(transportInfo.transport.getLogId()));
 
     // terminate oobchannel
     oob.shutdown();

@@ -27,7 +27,7 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.SocketStats;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -189,8 +189,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public ListenableFuture<TransportStats> getStats() {
-    SettableFuture<TransportStats> ret = SettableFuture.create();
+  public ListenableFuture<SocketStats> getStats() {
+    SettableFuture<SocketStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
   }

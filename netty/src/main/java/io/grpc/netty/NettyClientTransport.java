@@ -28,7 +28,8 @@ import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.internal.Channelz.Security;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.FailingClientStream;
@@ -312,19 +313,29 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ListenableFuture<TransportStats> getStats() {
-    final SettableFuture<TransportStats> result = SettableFuture.create();
+  public ListenableFuture<SocketStats> getStats() {
+    final SettableFuture<SocketStats> result = SettableFuture.create();
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      result.set(transportTracer.getStats());
+      result.set(
+          new SocketStats(
+              transportTracer.getStats(),
+              channel.localAddress(),
+              channel.remoteAddress(),
+              new Security()));
       return result;
     }
     channel.eventLoop().submit(
         new Runnable() {
           @Override
           public void run() {
-            result.set(transportTracer.getStats());
+            result.set(
+                new SocketStats(
+                    transportTracer.getStats(),
+                    channel.localAddress(),
+                    channel.remoteAddress(),
+                    new Security()));
           }
         });
     return result;

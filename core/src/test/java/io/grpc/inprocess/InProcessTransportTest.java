@@ -23,6 +23,8 @@ import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SharedResourcePool;
 import io.grpc.internal.testing.AbstractTransportTest;
 import java.util.List;
+import org.junit.Ignore;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -61,5 +63,12 @@ public class InProcessTransportTest extends AbstractTransportTest {
     // TODO(zhangkun83): InProcessTransport doesn't record metrics for now
     // (https://github.com/grpc/grpc-java/issues/2284)
     return false;
+  }
+
+  @Test
+  @Ignore
+  @Override
+  public void socketStats_addresses() throws Exception {
+    // test does not apply to in-process
   }
 }
