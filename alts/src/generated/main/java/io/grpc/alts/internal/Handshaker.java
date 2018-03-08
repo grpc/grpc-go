@@ -2103,7 +2103,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -2112,7 +2112,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -2121,7 +2121,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -2615,7 +2615,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -2626,7 +2626,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -2637,7 +2637,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote server, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4291,7 +4291,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4302,7 +4302,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4317,7 +4317,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4338,7 +4338,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4357,7 +4357,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4380,7 +4380,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4399,7 +4399,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4412,7 +4412,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -4428,7 +4428,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote server, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 7;</code>
@@ -6076,7 +6076,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -6085,7 +6085,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -6094,7 +6094,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -6491,7 +6491,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -6502,7 +6502,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -6513,7 +6513,7 @@ public final class Handshaker {
     /**
      * <pre>
      * (Optional) Endpoint information of the remote client, such as IP address,
-     * port number, and network protocool.
+     * port number, and network protocol.
      * </pre>
      *
      * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7545,7 +7545,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7556,7 +7556,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7571,7 +7571,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7592,7 +7592,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7611,7 +7611,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7634,7 +7634,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7653,7 +7653,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7666,7 +7666,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>
@@ -7682,7 +7682,7 @@ public final class Handshaker {
       /**
        * <pre>
        * (Optional) Endpoint information of the remote client, such as IP address,
-       * port number, and network protocool.
+       * port number, and network protocol.
        * </pre>
        *
        * <code>.grpc.gcp.Endpoint remote_endpoint = 5;</code>

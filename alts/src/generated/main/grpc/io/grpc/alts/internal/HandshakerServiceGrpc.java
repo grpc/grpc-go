@@ -94,8 +94,12 @@ public final class HandshakerServiceGrpc {
 
     /**
      * <pre>
-     * Accepts a stream of handshaker request, returning a stream of handshaker
-     * response.
+     * Handshaker service accepts a stream of handshaker request, returning a
+     * stream of handshaker response. Client is expected to send exactly one
+     * message with either client_start or server_start followed by one or more
+     * messages with next. Each time client sends a request, the handshaker
+     * service expects to respond. Client does not have to wait for service's
+     * response before sending next request.
      * </pre>
      */
     public io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerReq> doHandshake(
@@ -136,8 +140,12 @@ public final class HandshakerServiceGrpc {
 
     /**
      * <pre>
-     * Accepts a stream of handshaker request, returning a stream of handshaker
-     * response.
+     * Handshaker service accepts a stream of handshaker request, returning a
+     * stream of handshaker response. Client is expected to send exactly one
+     * message with either client_start or server_start followed by one or more
+     * messages with next. Each time client sends a request, the handshaker
+     * service expects to respond. Client does not have to wait for service's
+     * response before sending next request.
      * </pre>
      */
     public io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerReq> doHandshake(
