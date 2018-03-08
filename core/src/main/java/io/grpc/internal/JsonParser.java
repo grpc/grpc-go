@@ -78,28 +78,8 @@ final class JsonParser {
     Map<String, Object> obj = new LinkedHashMap<String, Object>();
     while (jr.hasNext()) {
       String name = jr.nextName();
-      switch (jr.peek()) {
-        case BEGIN_ARRAY:
-          obj.put(name, parseJsonArray(jr));
-          break;
-        case BEGIN_OBJECT:
-          obj.put(name, parseJsonObject(jr));
-          break;
-        case STRING:
-          obj.put(name, jr.nextString());
-          break;
-        case NUMBER:
-          obj.put(name, jr.nextDouble());
-          break;
-        case BOOLEAN:
-          obj.put(name, jr.nextBoolean());
-          break;
-        case NULL:
-          obj.put(name, parseJsonNull(jr));
-          break;
-        default:
-          throw new IllegalStateException("Bad token: " + jr.getPath());
-      }
+      Object value = parseRecursive(jr);
+      obj.put(name, value);
     }
     checkState(jr.peek() == JsonToken.END_OBJECT, "Bad token: " + jr.getPath());
     jr.endObject();
@@ -110,28 +90,8 @@ final class JsonParser {
     jr.beginArray();
     List<Object> array = new ArrayList<Object>();
     while (jr.hasNext()) {
-      switch (jr.peek()) {
-        case BEGIN_ARRAY:
-          array.add(parseJsonArray(jr));
-          break;
-        case BEGIN_OBJECT:
-          array.add(parseJsonObject(jr));
-          break;
-        case STRING:
-          array.add(jr.nextString());
-          break;
-        case NUMBER:
-          array.add(jr.nextDouble());
-          break;
-        case BOOLEAN:
-          array.add(jr.nextBoolean());
-          break;
-        case NULL:
-          array.add(parseJsonNull(jr));
-          break;
-        default:
-          throw new IllegalStateException("Bad token: " + jr.getPath());
-      }
+      Object value = parseRecursive(jr);
+      array.add(value);
     }
     checkState(jr.peek() == JsonToken.END_ARRAY, "Bad token: " + jr.getPath());
     jr.endArray();
