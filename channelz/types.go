@@ -26,13 +26,22 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// entry represents a node in the channelz database.
 type entry interface {
+	// addChild adds a child e, whose channelz id is id to child list
 	addChild(id int64, e entry)
+	// deleteChild deletes a child with channelz id to be id from child list
 	deleteChild(id int64)
+	// delete deletes self from channelz database. However, if child list is not
+	// empty, then deletion from the database is on hold until the last child is
+	// deleted from database.
 	delete()
+	// canDelete check whether delete() has been called before, and whether child
+	// list is now empty. If both conditions are met, then delete self from database.
 	canDelete()
 }
 
+// dummyEntry is a fake entry to handle entry not found case.
 type dummyEntry struct {
 	idNotFound int64
 }
@@ -59,7 +68,9 @@ func (d *dummyEntry) delete() {
 	grpclog.Warningf("attempt to delete an entry (id=%d) that doesn't currently exist", d.idNotFound)
 }
 
-func (*dummyEntry) canDelete() {}
+func (*dummyEntry) canDelete() {
+	// code should not reach here. canDelete is always called on an existing entry.
+}
 
 // ChannelMetric defines the info channelz provides for a specific Channel, which
 // includes ChannelInternalMetric and channelz-specific data, such as channelz id,
@@ -104,7 +115,7 @@ type Channel interface {
 }
 
 type channel struct {
-	Name        string
+	refName     string
 	c           Channel
 	closeCalled bool
 	nestedChans map[int64]string
@@ -117,11 +128,11 @@ type channel struct {
 func (c *channel) addChild(id int64, e entry) {
 	switch v := e.(type) {
 	case *subChannel:
-		c.subChans[id] = v.Name
+		c.subChans[id] = v.refName
 	case *channel:
-		c.nestedChans[id] = v.Name
+		c.nestedChans[id] = v.refName
 	default:
-		grpclog.Errorf("cannot add a child of type %T to a channel", e)
+		grpclog.Errorf("cannot add a child (id = %d) of type %T to a channel", id, e)
 	}
 }
 
@@ -132,15 +143,12 @@ func (c *channel) deleteChild(id int64) {
 }
 
 func (c *channel) delete() {
-	// channel has already been deleted
-	if c == nil {
-		return
-	}
 	c.closeCalled = true
 	if len(c.subChans)+len(c.nestedChans) != 0 {
 		return
 	}
 	c.cm.deleteEntry(c.id)
+	// not top channel
 	if c.pid != 0 {
 		c.cm.findEntry(c.pid).deleteChild(c.id)
 	}
@@ -149,6 +157,7 @@ func (c *channel) delete() {
 func (c *channel) canDelete() {
 	if c.closeCalled && len(c.subChans)+len(c.nestedChans) == 0 {
 		c.cm.deleteEntry(c.id)
+		// not top channel
 		if c.pid != 0 {
 			c.cm.findEntry(c.pid).deleteChild(c.id)
 		}
@@ -157,7 +166,7 @@ func (c *channel) canDelete() {
 }
 
 type subChannel struct {
-	Name        string
+	refName     string
 	c           Channel
 	closeCalled bool
 	sockets     map[int64]string
@@ -168,9 +177,9 @@ type subChannel struct {
 
 func (sc *subChannel) addChild(id int64, e entry) {
 	if v, ok := e.(*normalSocket); ok {
-		sc.sockets[id] = v.Name
+		sc.sockets[id] = v.refName
 	} else {
-		grpclog.Errorf("cannot add a child of type %T to a subChannel", e)
+		grpclog.Errorf("cannot add a child (id = %d) of type %T to a subChannel", id, e)
 	}
 }
 
@@ -180,10 +189,6 @@ func (sc *subChannel) deleteChild(id int64) {
 }
 
 func (sc *subChannel) delete() {
-	// subChannel has already been deleted
-	if sc == nil {
-		return
-	}
 	sc.closeCalled = true
 	if len(sc.sockets) != 0 {
 		return
@@ -224,8 +229,8 @@ type SocketInternalMetric struct {
 	LocalFlowControlWindow           int64
 	RemoteFlowControlWindow          int64
 	//socket options
-	Local  net.Addr
-	Remote net.Addr
+	LocalAddr  net.Addr
+	RemoteAddr net.Addr
 	// Security
 	RemoteName string
 }
@@ -237,58 +242,54 @@ type Socket interface {
 }
 
 type listenSocket struct {
-	Name string
-	s    Socket
-	id   int64
-	pid  int64
-	cm   *channelMap
+	refName string
+	s       Socket
+	id      int64
+	pid     int64
+	cm      *channelMap
 }
 
 func (ls *listenSocket) addChild(id int64, e entry) {
-	grpclog.Errorf("cannot add a child of type %T to a listen socket", e)
+	grpclog.Errorf("cannot add a child (id = %d) of type %T to a listen socket", id, e)
 }
 
-func (ls *listenSocket) deleteChild(id int64) {}
+func (ls *listenSocket) deleteChild(id int64) {
+	grpclog.Errorf("cannot delete a child (id = %d) from a listen socket", id)
+}
 
 func (ls *listenSocket) delete() {
-	// listenSocket has already been deleted
-	if ls == nil {
-		return
-	}
 	ls.cm.deleteEntry(ls.id)
-	if v := ls.cm.findEntry(ls.pid); v != nil {
-		v.deleteChild(ls.id)
-	}
+	ls.cm.findEntry(ls.pid).deleteChild(ls.id)
 }
 
-func (ls *listenSocket) canDelete() {}
+func (ls *listenSocket) canDelete() {
+	grpclog.Errorf("cannot call canDelete on a listen socket")
+}
 
 type normalSocket struct {
-	Name string
-	s    Socket
-	id   int64
-	pid  int64
-	cm   *channelMap
+	refName string
+	s       Socket
+	id      int64
+	pid     int64
+	cm      *channelMap
 }
 
 func (ns *normalSocket) addChild(id int64, e entry) {
-	grpclog.Errorf("cannot add a child of type %T to a normal socket", e)
+	grpclog.Errorf("cannot add a child (id = %d) of type %T to a normal socket", id, e)
 }
 
-func (ns *normalSocket) deleteChild(id int64) {}
+func (ns *normalSocket) deleteChild(id int64) {
+	grpclog.Errorf("cannot delete a child (id = %d) from a normal socket", id)
+}
 
 func (ns *normalSocket) delete() {
-	// normalSocket has already been deleted
-	if ns == nil {
-		return
-	}
 	ns.cm.deleteEntry(ns.id)
-	if v := ns.cm.findEntry(ns.pid); v != nil {
-		v.deleteChild(ns.id)
-	}
+	ns.cm.findEntry(ns.pid).deleteChild(ns.id)
 }
 
-func (ns *normalSocket) canDelete() {}
+func (ns *normalSocket) canDelete() {
+	grpclog.Errorf("cannot call canDelete on a normal socket")
+}
 
 // ServerMetric defines the info channelz provides for a specific Server, which
 // includes ServerInternalMetric and channelz-specific data, such as channelz id,
@@ -317,7 +318,7 @@ type Server interface {
 }
 
 type server struct {
-	Name          string
+	refName       string
 	s             Server
 	closeCalled   bool
 	sockets       map[int64]string
@@ -329,11 +330,11 @@ type server struct {
 func (s *server) addChild(id int64, e entry) {
 	switch v := e.(type) {
 	case *normalSocket:
-		s.sockets[id] = v.Name
+		s.sockets[id] = v.refName
 	case *listenSocket:
-		s.listenSockets[id] = v.Name
+		s.listenSockets[id] = v.refName
 	default:
-		grpclog.Errorf("cannot add a child of type %T to a server", e)
+		grpclog.Errorf("cannot add a child (id = %d) of type %T to a server", id, e)
 	}
 }
 
@@ -344,10 +345,6 @@ func (s *server) deleteChild(id int64) {
 }
 
 func (s *server) delete() {
-	// server has already been deleted
-	if s == nil {
-		return
-	}
 	s.closeCalled = true
 	if len(s.sockets)+len(s.listenSockets) != 0 {
 		return
@@ -359,5 +356,4 @@ func (s *server) canDelete() {
 	if s.closeCalled && len(s.sockets)+len(s.listenSockets) == 0 {
 		s.cm.deleteEntry(s.id)
 	}
-	return
 }
