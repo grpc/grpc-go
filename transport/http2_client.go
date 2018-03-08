@@ -114,7 +114,17 @@ type http2Client struct {
 	// GoAway frame.
 	goAwayReason GoAwayReason
 
-	channelzID int64 // channelz unique identification number
+	channelzID        int64 // channelz unique identification number
+	czmu              sync.RWMutex
+	kpCount           int64
+	streamsStarted    int64
+	streamsSucceeded  int64
+	streamsFailed     int64
+	lastStreamCreated time.Time
+	msgSent           int64
+	msgRecv           int64
+	lastMsgSent       time.Time
+	lastMsgRecv       time.Time
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -524,6 +534,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	})
 	t.mu.Unlock()
 
+	if channelz.IsOn() {
+		t.czmu.Lock()
+		t.streamsStarted++
+		t.lastStreamCreated = time.Now()
+		t.czmu.Unlock()
+	}
 	if t.statsHandler != nil {
 		outHeader := &stats.OutHeader{
 			Client:      true,
@@ -578,6 +594,15 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.mu.Lock()
 	rstStream = s.rstStream
 	rstError = s.rstError
+	if channelz.IsOn() {
+		t.czmu.Lock()
+		if s.eosReceived != -1 {
+			t.streamsSucceeded += int64(s.eosReceived)
+			t.streamsFailed += int64(1 - s.eosReceived)
+			s.eosReceived = -1
+		}
+		t.czmu.Unlock()
+	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
@@ -871,7 +896,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		if err := s.fc.onData(uint32(size)); err != nil {
 			s.rstStream = true
 			s.rstError = http2.ErrCodeFlowControl
-			s.finish(status.New(codes.Internal, err.Error()))
+			s.finish(status.New(codes.Internal, err.Error()), false)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
 			return
@@ -899,7 +924,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.mu.Unlock()
 			return
 		}
-		s.finish(status.New(codes.Internal, "server closed the stream without sending trailers"))
+		s.finish(status.New(codes.Internal, "server closed the stream without sending trailers"), true)
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})
 	}
@@ -910,6 +935,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	if !ok {
 		return
 	}
+
 	s.mu.Lock()
 	if s.state == streamDone {
 		s.mu.Unlock()
@@ -919,7 +945,6 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		close(s.headerChan)
 		s.headerDone = true
 	}
-
 	code := http2.ErrCode(f.ErrCode)
 	if code == http2.ErrCodeRefusedStream {
 		// The stream was unprocessed by the server.
@@ -930,7 +955,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown
 	}
-	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
+	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode), false)
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
@@ -1041,7 +1066,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			// The stream was unprocessed by the server.
 			stream.mu.Lock()
 			stream.unprocessed = true
-			stream.finish(statusGoAway)
+			stream.finish(statusGoAway, false)
 			stream.mu.Unlock()
 			close(stream.goAway)
 		}
@@ -1148,7 +1173,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if len(state.mdata) > 0 {
 		s.trailer = state.mdata
 	}
-	s.finish(state.status())
+	s.finish(state.status(), true)
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
@@ -1358,6 +1383,9 @@ func (t *http2Client) keepalive() {
 				}
 			} else {
 				t.mu.Unlock()
+				t.czmu.Lock()
+				t.kpCount++
+				t.czmu.Unlock()
 				// Send ping.
 				t.controlBuf.put(p)
 			}
@@ -1396,8 +1424,39 @@ func (t *http2Client) GoAway() <-chan struct{} {
 }
 
 func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
-	return &channelz.SocketInternalMetric{}
+	t.czmu.RLock()
+	s := channelz.SocketInternalMetric{
+		StreamsStarted:                  t.streamsStarted,
+		StreamsSucceeded:                t.streamsSucceeded,
+		StreamsFailed:                   t.streamsFailed,
+		MessagesSent:                    t.msgSent,
+		MessagesReceived:                t.msgRecv,
+		KeepAlivesSent:                  t.kpCount,
+		LastLocalStreamCreatedTimestamp: t.lastStreamCreated,
+		LastMessageSentTimestamp:        t.lastMsgSent,
+		LastMessageReceivedTimestamp:    t.lastMsgRecv,
+		LocalFlowControlWindow:          t.fc.getInFlowWindow(),
+		RemoteFlowControlWindow:         t.sendQuotaPool.getOutFlowWindow(),
+		//socket options
+		LocalAddr:  t.localAddr,
+		RemoteAddr: t.remoteAddr,
+		// Security
+		// RemoteName :
+	}
+	t.czmu.RUnlock()
+	return &s
 }
 
-func (t *http2Client) IncrMsgSent() {}
-func (t *http2Client) IncrMsgRecv() {}
+func (t *http2Client) IncrMsgSent() {
+	t.czmu.Lock()
+	t.msgSent++
+	t.lastMsgSent = time.Now()
+	t.czmu.Unlock()
+}
+
+func (t *http2Client) IncrMsgRecv() {
+	t.czmu.Lock()
+	t.msgRecv++
+	t.lastMsgRecv = time.Now()
+	t.czmu.Unlock()
+}

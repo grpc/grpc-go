@@ -332,3 +332,17 @@ func (f *inFlow) resetPendingUpdate() uint32 {
 	f.pendingUpdate = 0
 	return n
 }
+
+func (qb *quotaPool) getOutFlowWindow() int64 {
+	qb.mu.Lock()
+	remoteFc := int64(qb.quota)
+	qb.mu.Unlock()
+	return remoteFc
+}
+
+func (f *inFlow) getInFlowWindow() int64 {
+	f.mu.Lock()
+	localFc := int64(f.limit)
+	f.mu.Unlock()
+	return localFc
+}

@@ -99,14 +99,19 @@ type Server struct {
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
 
-	quit               chan struct{}
-	done               chan struct{}
-	quitOnce           sync.Once
-	doneOnce           sync.Once
-	channelzRemoveOnce sync.Once
-	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
+	quit     chan struct{}
+	done     chan struct{}
+	quitOnce sync.Once
+	doneOnce sync.Once
+	serveWG  sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	channelzID int64 // channelz unique identification number
+	channelzRemoveOnce  sync.Once
+	channelzID          int64 // channelz unique identification number
+	czmu                sync.RWMutex
+	callsStarted        int64
+	callsFailed         int64
+	callsSucceeded      int64
+	lastCallStartedTime time.Time
 }
 
 type options struct {
@@ -473,7 +478,9 @@ type listenSocket struct {
 }
 
 func (l *listenSocket) ChannelzMetric() *channelz.SocketInternalMetric {
-	return &channelz.SocketInternalMetric{}
+	return &channelz.SocketInternalMetric{
+		LocalAddr: l.Listener.Addr(),
+	}
 }
 
 func (l *listenSocket) Close() error {
@@ -794,7 +801,33 @@ func (s *Server) removeConn(c io.Closer) {
 // ChannelzMetric returns ServerInternalMetric of current server.
 // This is an EXPERIMENTAL API.
 func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
-	return &channelz.ServerInternalMetric{}
+	s.czmu.RLock()
+	defer s.czmu.RUnlock()
+	return &channelz.ServerInternalMetric{
+		CallsStarted:             s.callsStarted,
+		CallsSucceeded:           s.callsSucceeded,
+		CallsFailed:              s.callsFailed,
+		LastCallStartedTimestamp: s.lastCallStartedTime,
+	}
+}
+
+func (s *Server) incrCallsStarted() {
+	s.czmu.Lock()
+	s.callsStarted++
+	s.lastCallStartedTime = time.Now()
+	s.czmu.Unlock()
+}
+
+func (s *Server) incrCallsSucceeded() {
+	s.czmu.Lock()
+	s.callsSucceeded++
+	s.czmu.Unlock()
+}
+
+func (s *Server) incrCallsFailed() {
+	s.czmu.Lock()
+	s.callsFailed++
+	s.czmu.Unlock()
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
@@ -821,6 +854,16 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+	if channelz.IsOn() {
+		s.incrCallsStarted()
+		defer func() {
+			if err != nil && err != io.EOF {
+				s.incrCallsFailed()
+			} else {
+				s.incrCallsSucceeded()
+			}
+		}()
+	}
 	sh := s.opts.statsHandler
 	if sh != nil {
 		beginTime := time.Now()
@@ -915,6 +958,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
+	if channelz.IsOn() {
+		t.IncrMsgRecv()
+	}
 	if st := checkRecvPayload(pf, stream.RecvCompress(), dc != nil || decomp != nil); st != nil {
 		if e := t.WriteStatus(stream, st); e != nil {
 			grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
@@ -989,7 +1035,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		Last:  true,
 		Delay: false,
 	}
-
 	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
@@ -1013,6 +1058,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
+	if channelz.IsOn() {
+		t.IncrMsgSent()
+	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
 	}
@@ -1023,6 +1071,16 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+	if channelz.IsOn() {
+		s.incrCallsStarted()
+		defer func() {
+			if err != nil && err != io.EOF {
+				s.incrCallsFailed()
+			} else {
+				s.incrCallsSucceeded()
+			}
+		}()
+	}
 	sh := s.opts.statsHandler
 	if sh != nil {
 		beginTime := time.Now()
@@ -1241,6 +1299,9 @@ func (s *Server) Stop() {
 	})
 
 	s.mu.Lock()
+	if channelz.IsOn() {
+		channelz.RemoveEntry(s.channelzID)
+	}
 	listeners := s.lis
 	s.lis = nil
 	st := s.conns
