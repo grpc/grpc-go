@@ -202,9 +202,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	ctx = newContextWithRPCInfo(ctx, c.failFast)
 	sh := cc.dopts.copts.StatsHandler
+	var beginTime time.Time
 	if sh != nil {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
-		beginTime := time.Now()
+		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: beginTime,
@@ -283,6 +284,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 		statsCtx:     ctx,
 		statsHandler: cc.dopts.copts.StatsHandler,
+		beginTime:    beginTime,
 	}
 	if desc != unaryStreamDesc {
 		// Listen on cc and stream contexts to cleanup when the user closes the
@@ -337,6 +339,7 @@ type clientStream struct {
 	// so that all the generated stats for a particular RPC can be associated in the processing phase.
 	statsCtx     context.Context
 	statsHandler stats.Handler
+	beginTime    time.Time
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -513,7 +516,7 @@ func (cs *clientStream) finish(err error) {
 	if cs.statsHandler != nil {
 		end := &stats.End{
 			Client:    true,
-			BeginTime: time.Now(),
+			BeginTime: cs.beginTime,
 			EndTime:   time.Now(),
 			Error:     err,
 		}
