@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"io"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -72,6 +73,23 @@ func (bp *pickerWrapper) updatePicker(p balancer.Picker) {
 	close(bp.blockingCh)
 	bp.blockingCh = make(chan struct{})
 	bp.mu.Unlock()
+}
+
+func doneWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) func(balancer.DoneInfo) {
+	acw.mu.Lock()
+	ac := acw.ac
+	acw.mu.Unlock()
+	ac.incrCallsStarted()
+	return func(b balancer.DoneInfo) {
+		if b.Err != nil && b.Err != io.EOF {
+			ac.incrCallsFailed()
+		} else {
+			ac.incrCallsSucceeded()
+		}
+		if done != nil {
+			done(b)
+		}
+	}
 }
 
 // pick returns the transport that will be used for the RPC.
@@ -137,7 +155,7 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 			continue
 		}
 		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
-			return t, done, nil
+			return t, doneWrapper(acw, done), nil
 		}
 		grpclog.Infof("blockingPicker: the picked transport is not ready, loop back to repick")
 		// If ok == false, ac.state is not READY.

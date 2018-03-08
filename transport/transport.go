@@ -250,6 +250,14 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	// eosReceived indicates whether a frame with eos bit set has been received on client side.
+	// There a three possible values for it: -1, 0, 1.
+	// 1 indicates: frame with eos bit set has been received.
+	// 0 indicates: frame with eos bit set has not been received.
+	// -1 indicates: eosReceived value has been read before and should not be counted again
+	// for streams failed/successful.
+	eosReceived int
 }
 
 func (s *Stream) waitOnHeader() error {
@@ -414,11 +422,14 @@ func (t *transportReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// finish sets the stream's state and status, and closes the done channel.
+// finish sets the stream's state, status and eosReceived, and closes the done channel.
 // s.mu must be held by the caller.  st must always be non-nil.
-func (s *Stream) finish(st *status.Status) {
+func (s *Stream) finish(st *status.Status, succeeded bool) {
 	s.status = st
 	s.state = streamDone
+	if succeeded {
+		s.eosReceived = 1
+	}
 	close(s.done)
 }
 

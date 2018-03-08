@@ -648,7 +648,12 @@ type ClientConn struct {
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
 
-	channelzID int64 // channelz unique identification number
+	channelzID          int64 // channelz unique identification number
+	czmu                sync.RWMutex
+	callsStarted        int64
+	callsSucceeded      int64
+	callsFailed         int64
+	lastCallStartedTime time.Time
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -836,7 +841,37 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 // ChannelzMetric returns ChannelInternalMetric of current ClientConn.
 // This is an EXPERIMENTAL API.
 func (cc *ClientConn) ChannelzMetric() *channelz.ChannelInternalMetric {
-	return &channelz.ChannelInternalMetric{}
+	state := cc.GetState()
+	cc.czmu.RLock()
+	defer cc.czmu.RUnlock()
+	return &channelz.ChannelInternalMetric{
+		State:                    state,
+		Target:                   cc.target,
+		CallsStarted:             cc.callsStarted,
+		CallsSucceeded:           cc.callsSucceeded,
+		CallsFailed:              cc.callsFailed,
+		LastCallStartedTimestamp: cc.lastCallStartedTime,
+	}
+}
+
+func (cc *ClientConn) incrCallsStarted() {
+	cc.czmu.Lock()
+	cc.callsStarted++
+	// TODO(yuxuanli): will make this a time.Time pointer improve performance?
+	cc.lastCallStartedTime = time.Now()
+	cc.czmu.Unlock()
+}
+
+func (cc *ClientConn) incrCallsSucceeded() {
+	cc.czmu.Lock()
+	cc.callsSucceeded++
+	cc.czmu.Unlock()
+}
+
+func (cc *ClientConn) incrCallsFailed() {
+	cc.czmu.Lock()
+	cc.callsFailed++
+	cc.czmu.Unlock()
 }
 
 // connect starts to creating transport and also starts the transport monitor
@@ -857,7 +892,6 @@ func (ac *addrConn) connect() error {
 	ac.state = connectivity.Connecting
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
-
 	// Start a goroutine connecting to the server asynchronously.
 	go func() {
 		if err := ac.resetTransport(); err != nil {
@@ -986,13 +1020,16 @@ func (cc *ClientConn) Close() error {
 	bWrapper := cc.balancerWrapper
 	cc.balancerWrapper = nil
 	cc.mu.Unlock()
+
 	cc.blockingpicker.close()
+
 	if rWrapper != nil {
 		rWrapper.close()
 	}
 	if bWrapper != nil {
 		bWrapper.close()
 	}
+
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
@@ -1033,7 +1070,12 @@ type addrConn struct {
 	// negotiations must complete.
 	connectDeadline time.Time
 
-	channelzID int64 // channelz unique identification number
+	channelzID          int64 // channelz unique identification number
+	czmu                sync.RWMutex
+	callsStarted        int64
+	callsSucceeded      int64
+	callsFailed         int64
+	lastCallStartedTime time.Time
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1424,7 +1466,39 @@ func (ac *addrConn) getState() connectivity.State {
 }
 
 func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
-	return &channelz.ChannelInternalMetric{}
+	ac.mu.Lock()
+	addr := ac.curAddr.Addr
+	ac.mu.Unlock()
+	state := ac.getState()
+	ac.czmu.RLock()
+	defer ac.czmu.RUnlock()
+	return &channelz.ChannelInternalMetric{
+		State:                    state,
+		Target:                   addr,
+		CallsStarted:             ac.callsStarted,
+		CallsSucceeded:           ac.callsSucceeded,
+		CallsFailed:              ac.callsFailed,
+		LastCallStartedTimestamp: ac.lastCallStartedTime,
+	}
+}
+
+func (ac *addrConn) incrCallsStarted() {
+	ac.czmu.Lock()
+	ac.callsStarted++
+	ac.lastCallStartedTime = time.Now()
+	ac.czmu.Unlock()
+}
+
+func (ac *addrConn) incrCallsSucceeded() {
+	ac.czmu.Lock()
+	ac.callsSucceeded++
+	ac.czmu.Unlock()
+}
+
+func (ac *addrConn) incrCallsFailed() {
+	ac.czmu.Lock()
+	ac.callsFailed++
+	ac.czmu.Unlock()
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
