@@ -446,11 +446,10 @@ func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 
 	var s []*ServerMetric
 	for _, cn := range ss {
-		sim := cn.s.ChannelzMetric()
 		sm := &ServerMetric{}
-		sm.ServerData = sim
+		sm.ServerData = cn.s.ChannelzMetric()
 		sm.ID = cn.id
-		sm.RefName = cn.Name
+		sm.RefName = cn.refName
 		c.mu.RLock()
 		sm.ListenSockets = copyMap(cn.listenSockets)
 		c.mu.RUnlock()
@@ -503,7 +502,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 		sm := &SocketMetric{}
 		sm.SocketData = cn.s.ChannelzMetric()
 		sm.ID = cn.id
-		sm.RefName = cn.Name
+		sm.RefName = cn.refName
 		s = append(s, sm)
 	}
 	return s, ok
@@ -522,7 +521,7 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	cm := &ChannelMetric{}
 	cm.ChannelData = cn.c.ChannelzMetric()
 	cm.ID = cn.id
-	cm.RefName = cn.Name
+	cm.RefName = cn.refName
 	c.mu.RLock()
 	cm.NestedChans = copyMap(cn.nestedChans)
 	cm.SubChans = copyMap(cn.subChans)
@@ -543,7 +542,7 @@ func (c *channelMap) GetSubChannel(id int64) *SubChannelMetric {
 	cm := &SubChannelMetric{}
 	cm.ChannelData = cn.c.ChannelzMetric()
 	cm.ID = cn.id
-	cm.RefName = cn.Name
+	cm.RefName = cn.refName
 	c.mu.RLock()
 	cm.Sockets = copyMap(cn.sockets)
 	c.mu.RUnlock()
@@ -557,14 +556,14 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 		c.mu.RUnlock()
 		sm.SocketData = cn.s.ChannelzMetric()
 		sm.ID = cn.id
-		sm.RefName = cn.Name
+		sm.RefName = cn.refName
 		return sm
 	}
 	if cn, ok := c.normalSockets[id]; ok {
 		c.mu.RUnlock()
 		sm.SocketData = cn.s.ChannelzMetric()
 		sm.ID = cn.id
-		sm.RefName = cn.Name
+		sm.RefName = cn.refName
 		return sm
 	}
 	c.mu.RUnlock()
