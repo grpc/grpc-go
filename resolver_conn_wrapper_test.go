@@ -53,7 +53,6 @@ func TestParseTargetString(t *testing.T) {
 		want      resolver.Target
 	}{
 		{"", resolver.Target{"", "", ""}},
-		{"://", resolver.Target{"", "", ""}},
 		{":///", resolver.Target{"", "", ""}},
 		{"a:///", resolver.Target{"a", "", ""}},
 		{"://a/", resolver.Target{"", "a", ""}},
@@ -70,6 +69,15 @@ func TestParseTargetString(t *testing.T) {
 		{"google.com", resolver.Target{"", "", "google.com"}},
 		{"google.com/?a=b", resolver.Target{"", "", "google.com/?a=b"}},
 		{"/unix/socket/address", resolver.Target{"", "", "/unix/socket/address"}},
+
+		// If we can only parse part of the target.
+		{"://", resolver.Target{"", "", "://"}},
+		{"unix://domain", resolver.Target{"", "", "unix://domain"}},
+		{"a:b", resolver.Target{"", "", "a:b"}},
+		{"a/b", resolver.Target{"", "", "a/b"}},
+		{"a:/b", resolver.Target{"", "", "a:/b"}},
+		{"a//b", resolver.Target{"", "", "a//b"}},
+		{"a://b", resolver.Target{"", "", "a://b"}},
 	} {
 		got := parseTarget(test.targetStr)
 		if got != test.want {
