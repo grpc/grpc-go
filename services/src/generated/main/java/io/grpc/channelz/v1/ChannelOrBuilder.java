@@ -175,42 +175,42 @@ public interface ChannelOrBuilder extends
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
   java.util.List<io.grpc.channelz.v1.SocketRef> 
-      getSocketList();
+      getSocketRefList();
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  io.grpc.channelz.v1.SocketRef getSocket(int index);
+  io.grpc.channelz.v1.SocketRef getSocketRef(int index);
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  int getSocketCount();
+  int getSocketRefCount();
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
   java.util.List<? extends io.grpc.channelz.v1.SocketRefOrBuilder> 
-      getSocketOrBuilderList();
+      getSocketRefOrBuilderList();
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  io.grpc.channelz.v1.SocketRefOrBuilder getSocketOrBuilder(
+  io.grpc.channelz.v1.SocketRefOrBuilder getSocketRefOrBuilder(
       int index);
 }

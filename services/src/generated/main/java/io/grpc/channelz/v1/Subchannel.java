@@ -23,7 +23,7 @@ private static final long serialVersionUID = 0L;
   private Subchannel() {
     channelRef_ = java.util.Collections.emptyList();
     subchannelRef_ = java.util.Collections.emptyList();
-    socket_ = java.util.Collections.emptyList();
+    socketRef_ = java.util.Collections.emptyList();
   }
 
   @java.lang.Override
@@ -103,10 +103,10 @@ private static final long serialVersionUID = 0L;
           }
           case 42: {
             if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
-              socket_ = new java.util.ArrayList<io.grpc.channelz.v1.SocketRef>();
+              socketRef_ = new java.util.ArrayList<io.grpc.channelz.v1.SocketRef>();
               mutable_bitField0_ |= 0x00000010;
             }
-            socket_.add(
+            socketRef_.add(
                 input.readMessage(io.grpc.channelz.v1.SocketRef.parser(), extensionRegistry));
             break;
           }
@@ -125,7 +125,7 @@ private static final long serialVersionUID = 0L;
         subchannelRef_ = java.util.Collections.unmodifiableList(subchannelRef_);
       }
       if (((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
-        socket_ = java.util.Collections.unmodifiableList(socket_);
+        socketRef_ = java.util.Collections.unmodifiableList(socketRef_);
       }
       this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
@@ -345,59 +345,59 @@ private static final long serialVersionUID = 0L;
     return subchannelRef_.get(index);
   }
 
-  public static final int SOCKET_FIELD_NUMBER = 5;
-  private java.util.List<io.grpc.channelz.v1.SocketRef> socket_;
+  public static final int SOCKET_REF_FIELD_NUMBER = 5;
+  private java.util.List<io.grpc.channelz.v1.SocketRef> socketRef_;
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  public java.util.List<io.grpc.channelz.v1.SocketRef> getSocketList() {
-    return socket_;
+  public java.util.List<io.grpc.channelz.v1.SocketRef> getSocketRefList() {
+    return socketRef_;
   }
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
   public java.util.List<? extends io.grpc.channelz.v1.SocketRefOrBuilder> 
-      getSocketOrBuilderList() {
-    return socket_;
+      getSocketRefOrBuilderList() {
+    return socketRef_;
   }
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  public int getSocketCount() {
-    return socket_.size();
+  public int getSocketRefCount() {
+    return socketRef_.size();
   }
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  public io.grpc.channelz.v1.SocketRef getSocket(int index) {
-    return socket_.get(index);
+  public io.grpc.channelz.v1.SocketRef getSocketRef(int index) {
+    return socketRef_.get(index);
   }
   /**
    * <pre>
    * There are no ordering guarantees on the order of sockets.
    * </pre>
    *
-   * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+   * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
    */
-  public io.grpc.channelz.v1.SocketRefOrBuilder getSocketOrBuilder(
+  public io.grpc.channelz.v1.SocketRefOrBuilder getSocketRefOrBuilder(
       int index) {
-    return socket_.get(index);
+    return socketRef_.get(index);
   }
 
   private byte memoizedIsInitialized = -1;
@@ -424,8 +424,8 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < subchannelRef_.size(); i++) {
       output.writeMessage(4, subchannelRef_.get(i));
     }
-    for (int i = 0; i < socket_.size(); i++) {
-      output.writeMessage(5, socket_.get(i));
+    for (int i = 0; i < socketRef_.size(); i++) {
+      output.writeMessage(5, socketRef_.get(i));
     }
     unknownFields.writeTo(output);
   }
@@ -451,9 +451,9 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(4, subchannelRef_.get(i));
     }
-    for (int i = 0; i < socket_.size(); i++) {
+    for (int i = 0; i < socketRef_.size(); i++) {
       size += com.google.protobuf.CodedOutputStream
-        .computeMessageSize(5, socket_.get(i));
+        .computeMessageSize(5, socketRef_.get(i));
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -485,8 +485,8 @@ private static final long serialVersionUID = 0L;
         .equals(other.getChannelRefList());
     result = result && getSubchannelRefList()
         .equals(other.getSubchannelRefList());
-    result = result && getSocketList()
-        .equals(other.getSocketList());
+    result = result && getSocketRefList()
+        .equals(other.getSocketRefList());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -514,9 +514,9 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + SUBCHANNEL_REF_FIELD_NUMBER;
       hash = (53 * hash) + getSubchannelRefList().hashCode();
     }
-    if (getSocketCount() > 0) {
-      hash = (37 * hash) + SOCKET_FIELD_NUMBER;
-      hash = (53 * hash) + getSocketList().hashCode();
+    if (getSocketRefCount() > 0) {
+      hash = (37 * hash) + SOCKET_REF_FIELD_NUMBER;
+      hash = (53 * hash) + getSocketRefList().hashCode();
     }
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
@@ -650,7 +650,7 @@ private static final long serialVersionUID = 0L;
               .alwaysUseFieldBuilders) {
         getChannelRefFieldBuilder();
         getSubchannelRefFieldBuilder();
-        getSocketFieldBuilder();
+        getSocketRefFieldBuilder();
       }
     }
     public Builder clear() {
@@ -679,11 +679,11 @@ private static final long serialVersionUID = 0L;
       } else {
         subchannelRefBuilder_.clear();
       }
-      if (socketBuilder_ == null) {
-        socket_ = java.util.Collections.emptyList();
+      if (socketRefBuilder_ == null) {
+        socketRef_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000010);
       } else {
-        socketBuilder_.clear();
+        socketRefBuilder_.clear();
       }
       return this;
     }
@@ -737,14 +737,14 @@ private static final long serialVersionUID = 0L;
       } else {
         result.subchannelRef_ = subchannelRefBuilder_.build();
       }
-      if (socketBuilder_ == null) {
+      if (socketRefBuilder_ == null) {
         if (((bitField0_ & 0x00000010) == 0x00000010)) {
-          socket_ = java.util.Collections.unmodifiableList(socket_);
+          socketRef_ = java.util.Collections.unmodifiableList(socketRef_);
           bitField0_ = (bitField0_ & ~0x00000010);
         }
-        result.socket_ = socket_;
+        result.socketRef_ = socketRef_;
       } else {
-        result.socket_ = socketBuilder_.build();
+        result.socketRef_ = socketRefBuilder_.build();
       }
       result.bitField0_ = to_bitField0_;
       onBuilt();
@@ -846,29 +846,29 @@ private static final long serialVersionUID = 0L;
           }
         }
       }
-      if (socketBuilder_ == null) {
-        if (!other.socket_.isEmpty()) {
-          if (socket_.isEmpty()) {
-            socket_ = other.socket_;
+      if (socketRefBuilder_ == null) {
+        if (!other.socketRef_.isEmpty()) {
+          if (socketRef_.isEmpty()) {
+            socketRef_ = other.socketRef_;
             bitField0_ = (bitField0_ & ~0x00000010);
           } else {
-            ensureSocketIsMutable();
-            socket_.addAll(other.socket_);
+            ensureSocketRefIsMutable();
+            socketRef_.addAll(other.socketRef_);
           }
           onChanged();
         }
       } else {
-        if (!other.socket_.isEmpty()) {
-          if (socketBuilder_.isEmpty()) {
-            socketBuilder_.dispose();
-            socketBuilder_ = null;
-            socket_ = other.socket_;
+        if (!other.socketRef_.isEmpty()) {
+          if (socketRefBuilder_.isEmpty()) {
+            socketRefBuilder_.dispose();
+            socketRefBuilder_ = null;
+            socketRef_ = other.socketRef_;
             bitField0_ = (bitField0_ & ~0x00000010);
-            socketBuilder_ = 
+            socketRefBuilder_ = 
               com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
-                 getSocketFieldBuilder() : null;
+                 getSocketRefFieldBuilder() : null;
           } else {
-            socketBuilder_.addAllMessages(other.socket_);
+            socketRefBuilder_.addAllMessages(other.socketRef_);
           }
         }
       }
@@ -1920,30 +1920,30 @@ private static final long serialVersionUID = 0L;
       return subchannelRefBuilder_;
     }
 
-    private java.util.List<io.grpc.channelz.v1.SocketRef> socket_ =
+    private java.util.List<io.grpc.channelz.v1.SocketRef> socketRef_ =
       java.util.Collections.emptyList();
-    private void ensureSocketIsMutable() {
+    private void ensureSocketRefIsMutable() {
       if (!((bitField0_ & 0x00000010) == 0x00000010)) {
-        socket_ = new java.util.ArrayList<io.grpc.channelz.v1.SocketRef>(socket_);
+        socketRef_ = new java.util.ArrayList<io.grpc.channelz.v1.SocketRef>(socketRef_);
         bitField0_ |= 0x00000010;
        }
     }
 
     private com.google.protobuf.RepeatedFieldBuilderV3<
-        io.grpc.channelz.v1.SocketRef, io.grpc.channelz.v1.SocketRef.Builder, io.grpc.channelz.v1.SocketRefOrBuilder> socketBuilder_;
+        io.grpc.channelz.v1.SocketRef, io.grpc.channelz.v1.SocketRef.Builder, io.grpc.channelz.v1.SocketRefOrBuilder> socketRefBuilder_;
 
     /**
      * <pre>
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public java.util.List<io.grpc.channelz.v1.SocketRef> getSocketList() {
-      if (socketBuilder_ == null) {
-        return java.util.Collections.unmodifiableList(socket_);
+    public java.util.List<io.grpc.channelz.v1.SocketRef> getSocketRefList() {
+      if (socketRefBuilder_ == null) {
+        return java.util.Collections.unmodifiableList(socketRef_);
       } else {
-        return socketBuilder_.getMessageList();
+        return socketRefBuilder_.getMessageList();
       }
     }
     /**
@@ -1951,13 +1951,13 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public int getSocketCount() {
-      if (socketBuilder_ == null) {
-        return socket_.size();
+    public int getSocketRefCount() {
+      if (socketRefBuilder_ == null) {
+        return socketRef_.size();
       } else {
-        return socketBuilder_.getCount();
+        return socketRefBuilder_.getCount();
       }
     }
     /**
@@ -1965,13 +1965,13 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public io.grpc.channelz.v1.SocketRef getSocket(int index) {
-      if (socketBuilder_ == null) {
-        return socket_.get(index);
+    public io.grpc.channelz.v1.SocketRef getSocketRef(int index) {
+      if (socketRefBuilder_ == null) {
+        return socketRef_.get(index);
       } else {
-        return socketBuilder_.getMessage(index);
+        return socketRefBuilder_.getMessage(index);
       }
     }
     /**
@@ -1979,19 +1979,19 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder setSocket(
+    public Builder setSocketRef(
         int index, io.grpc.channelz.v1.SocketRef value) {
-      if (socketBuilder_ == null) {
+      if (socketRefBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
         }
-        ensureSocketIsMutable();
-        socket_.set(index, value);
+        ensureSocketRefIsMutable();
+        socketRef_.set(index, value);
         onChanged();
       } else {
-        socketBuilder_.setMessage(index, value);
+        socketRefBuilder_.setMessage(index, value);
       }
       return this;
     }
@@ -2000,16 +2000,16 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder setSocket(
+    public Builder setSocketRef(
         int index, io.grpc.channelz.v1.SocketRef.Builder builderForValue) {
-      if (socketBuilder_ == null) {
-        ensureSocketIsMutable();
-        socket_.set(index, builderForValue.build());
+      if (socketRefBuilder_ == null) {
+        ensureSocketRefIsMutable();
+        socketRef_.set(index, builderForValue.build());
         onChanged();
       } else {
-        socketBuilder_.setMessage(index, builderForValue.build());
+        socketRefBuilder_.setMessage(index, builderForValue.build());
       }
       return this;
     }
@@ -2018,18 +2018,18 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder addSocket(io.grpc.channelz.v1.SocketRef value) {
-      if (socketBuilder_ == null) {
+    public Builder addSocketRef(io.grpc.channelz.v1.SocketRef value) {
+      if (socketRefBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
         }
-        ensureSocketIsMutable();
-        socket_.add(value);
+        ensureSocketRefIsMutable();
+        socketRef_.add(value);
         onChanged();
       } else {
-        socketBuilder_.addMessage(value);
+        socketRefBuilder_.addMessage(value);
       }
       return this;
     }
@@ -2038,19 +2038,19 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder addSocket(
+    public Builder addSocketRef(
         int index, io.grpc.channelz.v1.SocketRef value) {
-      if (socketBuilder_ == null) {
+      if (socketRefBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
         }
-        ensureSocketIsMutable();
-        socket_.add(index, value);
+        ensureSocketRefIsMutable();
+        socketRef_.add(index, value);
         onChanged();
       } else {
-        socketBuilder_.addMessage(index, value);
+        socketRefBuilder_.addMessage(index, value);
       }
       return this;
     }
@@ -2059,16 +2059,16 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder addSocket(
+    public Builder addSocketRef(
         io.grpc.channelz.v1.SocketRef.Builder builderForValue) {
-      if (socketBuilder_ == null) {
-        ensureSocketIsMutable();
-        socket_.add(builderForValue.build());
+      if (socketRefBuilder_ == null) {
+        ensureSocketRefIsMutable();
+        socketRef_.add(builderForValue.build());
         onChanged();
       } else {
-        socketBuilder_.addMessage(builderForValue.build());
+        socketRefBuilder_.addMessage(builderForValue.build());
       }
       return this;
     }
@@ -2077,16 +2077,16 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder addSocket(
+    public Builder addSocketRef(
         int index, io.grpc.channelz.v1.SocketRef.Builder builderForValue) {
-      if (socketBuilder_ == null) {
-        ensureSocketIsMutable();
-        socket_.add(index, builderForValue.build());
+      if (socketRefBuilder_ == null) {
+        ensureSocketRefIsMutable();
+        socketRef_.add(index, builderForValue.build());
         onChanged();
       } else {
-        socketBuilder_.addMessage(index, builderForValue.build());
+        socketRefBuilder_.addMessage(index, builderForValue.build());
       }
       return this;
     }
@@ -2095,17 +2095,17 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder addAllSocket(
+    public Builder addAllSocketRef(
         java.lang.Iterable<? extends io.grpc.channelz.v1.SocketRef> values) {
-      if (socketBuilder_ == null) {
-        ensureSocketIsMutable();
+      if (socketRefBuilder_ == null) {
+        ensureSocketRefIsMutable();
         com.google.protobuf.AbstractMessageLite.Builder.addAll(
-            values, socket_);
+            values, socketRef_);
         onChanged();
       } else {
-        socketBuilder_.addAllMessages(values);
+        socketRefBuilder_.addAllMessages(values);
       }
       return this;
     }
@@ -2114,15 +2114,15 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder clearSocket() {
-      if (socketBuilder_ == null) {
-        socket_ = java.util.Collections.emptyList();
+    public Builder clearSocketRef() {
+      if (socketRefBuilder_ == null) {
+        socketRef_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000010);
         onChanged();
       } else {
-        socketBuilder_.clear();
+        socketRefBuilder_.clear();
       }
       return this;
     }
@@ -2131,15 +2131,15 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public Builder removeSocket(int index) {
-      if (socketBuilder_ == null) {
-        ensureSocketIsMutable();
-        socket_.remove(index);
+    public Builder removeSocketRef(int index) {
+      if (socketRefBuilder_ == null) {
+        ensureSocketRefIsMutable();
+        socketRef_.remove(index);
         onChanged();
       } else {
-        socketBuilder_.remove(index);
+        socketRefBuilder_.remove(index);
       }
       return this;
     }
@@ -2148,24 +2148,24 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public io.grpc.channelz.v1.SocketRef.Builder getSocketBuilder(
+    public io.grpc.channelz.v1.SocketRef.Builder getSocketRefBuilder(
         int index) {
-      return getSocketFieldBuilder().getBuilder(index);
+      return getSocketRefFieldBuilder().getBuilder(index);
     }
     /**
      * <pre>
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public io.grpc.channelz.v1.SocketRefOrBuilder getSocketOrBuilder(
+    public io.grpc.channelz.v1.SocketRefOrBuilder getSocketRefOrBuilder(
         int index) {
-      if (socketBuilder_ == null) {
-        return socket_.get(index);  } else {
-        return socketBuilder_.getMessageOrBuilder(index);
+      if (socketRefBuilder_ == null) {
+        return socketRef_.get(index);  } else {
+        return socketRefBuilder_.getMessageOrBuilder(index);
       }
     }
     /**
@@ -2173,14 +2173,14 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
     public java.util.List<? extends io.grpc.channelz.v1.SocketRefOrBuilder> 
-         getSocketOrBuilderList() {
-      if (socketBuilder_ != null) {
-        return socketBuilder_.getMessageOrBuilderList();
+         getSocketRefOrBuilderList() {
+      if (socketRefBuilder_ != null) {
+        return socketRefBuilder_.getMessageOrBuilderList();
       } else {
-        return java.util.Collections.unmodifiableList(socket_);
+        return java.util.Collections.unmodifiableList(socketRef_);
       }
     }
     /**
@@ -2188,10 +2188,10 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public io.grpc.channelz.v1.SocketRef.Builder addSocketBuilder() {
-      return getSocketFieldBuilder().addBuilder(
+    public io.grpc.channelz.v1.SocketRef.Builder addSocketRefBuilder() {
+      return getSocketRefFieldBuilder().addBuilder(
           io.grpc.channelz.v1.SocketRef.getDefaultInstance());
     }
     /**
@@ -2199,11 +2199,11 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
-    public io.grpc.channelz.v1.SocketRef.Builder addSocketBuilder(
+    public io.grpc.channelz.v1.SocketRef.Builder addSocketRefBuilder(
         int index) {
-      return getSocketFieldBuilder().addBuilder(
+      return getSocketRefFieldBuilder().addBuilder(
           index, io.grpc.channelz.v1.SocketRef.getDefaultInstance());
     }
     /**
@@ -2211,25 +2211,25 @@ private static final long serialVersionUID = 0L;
      * There are no ordering guarantees on the order of sockets.
      * </pre>
      *
-     * <code>repeated .grpc.channelz.SocketRef socket = 5;</code>
+     * <code>repeated .grpc.channelz.SocketRef socket_ref = 5;</code>
      */
     public java.util.List<io.grpc.channelz.v1.SocketRef.Builder> 
-         getSocketBuilderList() {
-      return getSocketFieldBuilder().getBuilderList();
+         getSocketRefBuilderList() {
+      return getSocketRefFieldBuilder().getBuilderList();
     }
     private com.google.protobuf.RepeatedFieldBuilderV3<
         io.grpc.channelz.v1.SocketRef, io.grpc.channelz.v1.SocketRef.Builder, io.grpc.channelz.v1.SocketRefOrBuilder> 
-        getSocketFieldBuilder() {
-      if (socketBuilder_ == null) {
-        socketBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+        getSocketRefFieldBuilder() {
+      if (socketRefBuilder_ == null) {
+        socketRefBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
             io.grpc.channelz.v1.SocketRef, io.grpc.channelz.v1.SocketRef.Builder, io.grpc.channelz.v1.SocketRefOrBuilder>(
-                socket_,
+                socketRef_,
                 ((bitField0_ & 0x00000010) == 0x00000010),
                 getParentForChildren(),
                 isClean());
-        socket_ = null;
+        socketRef_ = null;
       }
-      return socketBuilder_;
+      return socketRefBuilder_;
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
