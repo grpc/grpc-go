@@ -40,7 +40,7 @@ cd ../helloworld
 
 # Skip APK size and dex count comparisons for non-PR builds
 
-if [[ -z "$KOKORO_GITHUB_PULL_REQUEST_COMMIT" ]]; then
+if [[ -z "${KOKORO_GITHUB_PULL_REQUEST_COMMIT:-}" ]]; then
     echo "Skipping APK size and dex count"
     exit 0
 fi
