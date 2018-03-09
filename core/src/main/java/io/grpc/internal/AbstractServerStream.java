@@ -223,6 +223,7 @@ public abstract class AbstractServerStream extends AbstractStream
     @Override
     public final void onStreamAllocated() {
       super.onStreamAllocated();
+      getTransportTracer().reportRemoteStreamStarted();
     }
 
     @Override

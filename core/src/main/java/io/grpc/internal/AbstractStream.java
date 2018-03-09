@@ -235,7 +235,6 @@ public abstract class AbstractStream implements Stream {
         allocated = true;
       }
       notifyIfReady();
-      transportTracer.reportStreamStarted();
     }
 
     /**

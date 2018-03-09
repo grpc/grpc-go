@@ -242,6 +242,7 @@ class OkHttpClientStream extends AbstractClientStream {
     @Override
     protected void onStreamAllocated() {
       super.onStreamAllocated();
+      getTransportTracer().reportLocalStreamStarted();
     }
 
     @GuardedBy("lock")

@@ -248,6 +248,7 @@ class NettyClientStream extends AbstractClientStream {
       // Now that the stream has actually been initialized, call the listener's onReady callback if
       // appropriate.
       onStreamAllocated();
+      getTransportTracer().reportLocalStreamStarted();
     }
 
     /**

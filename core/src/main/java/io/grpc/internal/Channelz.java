@@ -295,7 +295,8 @@ public final class Channelz {
   @Immutable
   public static final class TransportStats {
     public final long streamsStarted;
-    public final long lastStreamCreatedTimeNanos;
+    public final long lastLocalStreamCreatedTimeNanos;
+    public final long lastRemoteStreamCreatedTimeNanos;
     public final long streamsSucceeded;
     public final long streamsFailed;
     public final long messagesSent;
@@ -311,7 +312,8 @@ public final class Channelz {
      */
     public TransportStats(
         long streamsStarted,
-        long lastStreamCreatedTimeNanos,
+        long lastLocalStreamCreatedTimeNanos,
+        long lastRemoteStreamCreatedTimeNanos,
         long streamsSucceeded,
         long streamsFailed,
         long messagesSent,
@@ -322,7 +324,8 @@ public final class Channelz {
         long localFlowControlWindow,
         long remoteFlowControlWindow) {
       this.streamsStarted = streamsStarted;
-      this.lastStreamCreatedTimeNanos = lastStreamCreatedTimeNanos;
+      this.lastLocalStreamCreatedTimeNanos = lastLocalStreamCreatedTimeNanos;
+      this.lastRemoteStreamCreatedTimeNanos = lastRemoteStreamCreatedTimeNanos;
       this.streamsSucceeded = streamsSucceeded;
       this.streamsFailed = streamsFailed;
       this.messagesSent = messagesSent;

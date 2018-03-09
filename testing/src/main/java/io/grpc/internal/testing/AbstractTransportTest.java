@@ -1409,10 +1409,10 @@ public abstract class AbstractTransportTest {
     {
       TransportStats serverBefore = getTransportStats(serverTransportListener.transport);
       assertEquals(0, serverBefore.streamsStarted);
-      assertEquals(0, serverBefore.lastStreamCreatedTimeNanos);
+      assertEquals(0, serverBefore.lastRemoteStreamCreatedTimeNanos);
       TransportStats clientBefore = getTransportStats(client);
       assertEquals(0, clientBefore.streamsStarted);
-      assertEquals(0, clientBefore.lastStreamCreatedTimeNanos);
+      assertEquals(0, clientBefore.lastRemoteStreamCreatedTimeNanos);
 
       ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
       ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
@@ -1422,14 +1422,14 @@ public abstract class AbstractTransportTest {
 
       TransportStats serverAfter = getTransportStats(serverTransportListener.transport);
       assertEquals(1, serverAfter.streamsStarted);
-      serverFirstTimestampNanos = serverAfter.lastStreamCreatedTimeNanos;
+      serverFirstTimestampNanos = serverAfter.lastRemoteStreamCreatedTimeNanos;
       assertEquals(
           currentTimeMillis(),
-          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastStreamCreatedTimeNanos));
+          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastRemoteStreamCreatedTimeNanos));
 
       TransportStats clientAfter = getTransportStats(client);
       assertEquals(1, clientAfter.streamsStarted);
-      clientFirstTimestampNanos = clientAfter.lastStreamCreatedTimeNanos;
+      clientFirstTimestampNanos = clientAfter.lastLocalStreamCreatedTimeNanos;
       assertEquals(
           currentTimeMillis(),
           TimeUnit.NANOSECONDS.toMillis(clientFirstTimestampNanos));
@@ -1458,18 +1458,18 @@ public abstract class AbstractTransportTest {
       assertEquals(2, serverAfter.streamsStarted);
       assertEquals(
           TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
-          serverAfter.lastStreamCreatedTimeNanos - serverFirstTimestampNanos);
+          serverAfter.lastRemoteStreamCreatedTimeNanos - serverFirstTimestampNanos);
       long serverSecondTimestamp =
-          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastStreamCreatedTimeNanos);
+          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastRemoteStreamCreatedTimeNanos);
       assertEquals(currentTimeMillis(), serverSecondTimestamp);
 
       TransportStats clientAfter = getTransportStats(client);
       assertEquals(2, clientAfter.streamsStarted);
       assertEquals(
           TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
-          clientAfter.lastStreamCreatedTimeNanos - clientFirstTimestampNanos);
+          clientAfter.lastLocalStreamCreatedTimeNanos - clientFirstTimestampNanos);
       long clientSecondTimestamp =
-          TimeUnit.NANOSECONDS.toMillis(clientAfter.lastStreamCreatedTimeNanos);
+          TimeUnit.NANOSECONDS.toMillis(clientAfter.lastLocalStreamCreatedTimeNanos);
       assertEquals(currentTimeMillis(), clientSecondTimestamp);
 
       ServerStream serverStream = serverStreamCreation.stream;

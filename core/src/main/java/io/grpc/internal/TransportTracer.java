@@ -36,7 +36,8 @@ public final class TransportTracer {
 
   private final TimeProvider timeProvider;
   private long streamsStarted;
-  private long lastStreamCreatedTimeNanos;
+  private long lastLocalStreamCreatedTimeNanos;
+  private long lastRemoteStreamCreatedTimeNanos;
   private long streamsSucceeded;
   private long streamsFailed;
   private long keepAlivesSent;
@@ -66,7 +67,8 @@ public final class TransportTracer {
         flowControlWindowReader == null ? -1 : flowControlWindowReader.read().remoteBytes;
     return new TransportStats(
         streamsStarted,
-        lastStreamCreatedTimeNanos,
+        lastLocalStreamCreatedTimeNanos,
+        lastRemoteStreamCreatedTimeNanos,
         streamsSucceeded,
         streamsFailed,
         messagesSent,
@@ -79,12 +81,19 @@ public final class TransportTracer {
   }
 
   /**
-   * Called by the transport to report a stream has started. For clients, this happens when a header
-   * is sent. For servers, this happens when a header is received.
+   * Called by the client to report a stream has started.
    */
-  public void reportStreamStarted() {
+  public void reportLocalStreamStarted() {
     streamsStarted++;
-    lastStreamCreatedTimeNanos = currentTimeNanos();
+    lastLocalStreamCreatedTimeNanos = currentTimeNanos();
+  }
+
+  /**
+   * Called by the server to report a stream has started.
+   */
+  public void reportRemoteStreamStarted() {
+    streamsStarted++;
+    lastRemoteStreamCreatedTimeNanos = currentTimeNanos();
   }
 
   /**
