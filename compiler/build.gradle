@@ -151,15 +151,16 @@ sourceSets {
 }
 
 compileTestJava {
-  options.compilerArgs += ["-Xlint:-cast", "-Xep:MissingOverride:OFF",
-      "-Xep:ReferenceEquality:OFF", "-Xep:FunctionalInterfaceClash:OFF"]
+  options.compilerArgs += [
+      "-Xlint:-cast",
+      "-XepExcludedPaths:.*/build/generated/source/proto/.*",
+  ]
 }
 
 compileTestLiteJava {
+  options.compilerArgs = compileTestJava.options.compilerArgs
   // Protobuf-generated Lite produces quite a few warnings.
-  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked",
-      "-Xep:MissingOverride:OFF", "-Xep:ReferenceEquality:OFF",
-      "-Xep:FallThrough:OFF"]
+  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked", "-Xlint:-fallthrough"]
 }
 
 compileTestNanoJava {

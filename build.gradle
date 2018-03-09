@@ -175,8 +175,10 @@ subprojects {
           [compileJava, compileTestJava, compileJmhJava].each() {
             // Protobuf-generated code produces some warnings.
             // https://github.com/google/protobuf/issues/2718
-            it.options.compilerArgs += ["-Xlint:-cast", "-Xep:MissingOverride:OFF",
-                "-Xep:ReferenceEquality:OFF", "-Xep:FunctionalInterfaceClash:OFF"]
+            it.options.compilerArgs += [
+                "-Xlint:-cast",
+                "-XepExcludedPaths:.*/src/generated/[^/]+/java/.*",
+            ]
           }
         }
 
