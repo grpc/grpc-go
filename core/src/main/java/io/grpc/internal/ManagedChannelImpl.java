@@ -996,7 +996,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               @Override
               void onTerminated(InternalSubchannel is) {
                 subchannels.remove(is);
-                channelz.removeChannel(is);
+                channelz.removeSubchannel(is);
                 maybeTerminateChannel();
               }
 
@@ -1022,7 +1022,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             proxyDetector,
             channelz,
             callTracerFactory.create());
-      channelz.addChannel(internalSubchannel);
+      channelz.addSubchannel(internalSubchannel);
       subchannel.subchannel = internalSubchannel;
       logger.log(Level.FINE, "[{0}] {1} created for {2}",
           new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroup});
@@ -1093,7 +1093,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             @Override
             void onTerminated(InternalSubchannel is) {
               oobChannels.remove(oobChannel);
-              channelz.removeChannel(is);
+              channelz.removeSubchannel(is);
               oobChannel.handleSubchannelTerminated();
               maybeTerminateChannel();
             }
@@ -1107,8 +1107,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           proxyDetector,
           channelz,
           callTracerFactory.create());
-      channelz.addChannel(oobChannel);
-      channelz.addChannel(internalSubchannel);
+      channelz.addSubchannel(oobChannel);
+      channelz.addSubchannel(internalSubchannel);
       oobChannel.setSubchannel(internalSubchannel);
       runSerialized(new Runnable() {
           @Override

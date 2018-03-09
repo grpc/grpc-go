@@ -33,7 +33,7 @@ public final class Channelz {
       new ConcurrentHashMap<Long, Instrumented<ServerStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> rootChannels =
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<ChannelStats>> channels =
+  private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels =
       new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<SocketStats>> sockets =
       new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
@@ -50,12 +50,11 @@ public final class Channelz {
     add(servers, server);
   }
 
-  public void addChannel(Instrumented<ChannelStats> channel) {
-    add(channels, channel);
+  public void addSubchannel(Instrumented<ChannelStats> subchannel) {
+    add(subchannels, subchannel);
   }
 
   public void addRootChannel(Instrumented<ChannelStats> rootChannel) {
-    addChannel(rootChannel);
     add(rootChannels, rootChannel);
   }
 
@@ -67,12 +66,11 @@ public final class Channelz {
     remove(servers, server);
   }
 
-  public void removeChannel(Instrumented<ChannelStats> channel) {
-    remove(channels, channel);
+  public void removeSubchannel(Instrumented<ChannelStats> subchannel) {
+    remove(subchannels, subchannel);
   }
 
   public void removeRootChannel(Instrumented<ChannelStats> channel) {
-    removeChannel(channel);
     remove(rootChannels, channel);
   }
 
@@ -86,8 +84,8 @@ public final class Channelz {
   }
 
   @VisibleForTesting
-  public boolean containsChannel(LogId channelRef) {
-    return contains(channels, channelRef);
+  public boolean containsSubchannel(LogId subchannelRef) {
+    return contains(subchannels, subchannelRef);
   }
 
   @VisibleForTesting
