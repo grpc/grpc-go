@@ -264,7 +264,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
     builder
         .setTarget(authority)
         .setState(subchannel.getState())
-        .setSubchannels(Collections.singletonList(subchannel.getLogId()));
+        .setSubchannels(Collections.<WithLogId>singletonList(subchannel));
     ret.set(builder.build());
     return ret;
   }

@@ -295,13 +295,9 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
-        List<LogId> children = new ArrayList<LogId>();
-        for (InternalSubchannel internalSubchannel : subchannels) {
-          children.add(internalSubchannel.getLogId());
-        }
-        for (OobChannel oobChannel : oobChannels) {
-          children.add(oobChannel.getLogId());
-        }
+        List<WithLogId> children = new ArrayList<WithLogId>();
+        children.addAll(subchannels);
+        children.addAll(oobChannels);
         builder.setSubchannels(children);
         ret.set(builder.build());
       }

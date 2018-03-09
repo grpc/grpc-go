@@ -358,7 +358,7 @@ public class ManagedChannelImplTest {
     assertFalse(channelz.containsRootChannel(subchannel.getInternalSubchannel().getLogId()));
     assertTrue(channelz.containsSubchannel(subchannel.getInternalSubchannel().getLogId()));
     assertThat(getStats(channel).subchannels)
-        .containsExactly(subchannel.getInternalSubchannel().getLogId());
+        .containsExactly(subchannel.getInternalSubchannel());
 
     subchannel.requestConnection();
     MockClientTransportInfo transportInfo = transports.poll();
@@ -388,13 +388,13 @@ public class ManagedChannelImplTest {
     // oob channels are not root channels
     assertFalse(channelz.containsRootChannel(oob.getLogId()));
     assertTrue(channelz.containsSubchannel(oob.getLogId()));
-    assertThat(getStats(channel).subchannels).containsExactly(oob.getLogId());
+    assertThat(getStats(channel).subchannels).containsExactly(oob);
     assertTrue(channelz.containsSubchannel(oob.getLogId()));
 
     AbstractSubchannel subchannel = (AbstractSubchannel) oob.getSubchannel();
     assertTrue(channelz.containsSubchannel(subchannel.getInternalSubchannel().getLogId()));
     assertThat(getStats(oob).subchannels)
-        .containsExactly(subchannel.getInternalSubchannel().getLogId());
+        .containsExactly(subchannel.getInternalSubchannel());
     assertTrue(channelz.containsSubchannel(subchannel.getInternalSubchannel().getLogId()));
 
     oob.getSubchannel().requestConnection();

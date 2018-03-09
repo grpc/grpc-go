@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
 import java.util.Collections;
@@ -182,7 +183,8 @@ public final class Channelz {
     public final long callsSucceeded;
     public final long callsFailed;
     public final long lastCallStartedMillis;
-    public final List<LogId> subchannels;
+    public final List<WithLogId> subchannels;
+    public final List<WithLogId> sockets;
 
     /**
      * Creates an instance.
@@ -194,14 +196,20 @@ public final class Channelz {
         long callsSucceeded,
         long callsFailed,
         long lastCallStartedMillis,
-        List<LogId> subchannels) {
+        List<WithLogId> subchannels,
+        List<WithLogId> sockets) {
+      Preconditions.checkState(
+          subchannels.isEmpty() || sockets.isEmpty(),
+          "channels can have subchannels only, subchannels can have either sockets OR subchannels, "
+              + "neither can have both");
       this.target = target;
       this.state = state;
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
       this.lastCallStartedMillis = lastCallStartedMillis;
-      this.subchannels = subchannels;
+      this.subchannels = Preconditions.checkNotNull(subchannels);
+      this.sockets = Preconditions.checkNotNull(sockets);
     }
 
     public static final class Builder {
@@ -211,7 +219,8 @@ public final class Channelz {
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedMillis;
-      public List<LogId> subchannels;
+      private List<WithLogId> subchannels = Collections.emptyList();
+      private List<WithLogId> sockets = Collections.emptyList();
 
       public Builder setTarget(String target) {
         this.target = target;
@@ -243,8 +252,17 @@ public final class Channelz {
         return this;
       }
 
-      public Builder setSubchannels(List<LogId> subchannels) {
-        this.subchannels = Collections.unmodifiableList(subchannels);
+      /** Sets the subchannels. */
+      public Builder setSubchannels(List<WithLogId> subchannels) {
+        Preconditions.checkState(sockets.isEmpty());
+        this.subchannels = Collections.unmodifiableList(Preconditions.checkNotNull(subchannels));
+        return this;
+      }
+
+      /** Sets the sockets. */
+      public Builder setSockets(List<WithLogId> sockets) {
+        Preconditions.checkState(subchannels.isEmpty());
+        this.sockets = Collections.unmodifiableList(Preconditions.checkNotNull(sockets));
         return this;
       }
 
@@ -259,7 +277,8 @@ public final class Channelz {
             callsSucceeded,
             callsFailed,
             lastCallStartedMillis,
-            subchannels);
+            subchannels,
+            sockets);
       }
     }
   }
