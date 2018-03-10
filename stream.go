@@ -99,6 +99,10 @@ type ClientStream interface {
 // NewStream creates a new Stream for the client side. This is typically
 // called by generated code.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
+	// allow interceptor to see all applicable call options, which means those
+	// configured as defaults from dial option as well as per-call options
+	opts = append(cc.dopts.callOptions, opts...)
+
 	if cc.dopts.streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
@@ -137,7 +141,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}()
 
-	opts = append(cc.dopts.callOptions, opts...)
 	for _, o := range opts {
 		if err := o.before(c); err != nil {
 			return nil, toRPCErr(err)
