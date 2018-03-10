@@ -20,24 +20,29 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 public final class Channelz {
   private static final Channelz INSTANCE = new Channelz();
 
-  private final ConcurrentMap<Long, Instrumented<ServerStats>> servers =
-      new ConcurrentHashMap<Long, Instrumented<ServerStats>>();
-  private final ConcurrentMap<Long, Instrumented<ChannelStats>> rootChannels =
-      new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels =
-      new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<SocketStats>> sockets =
-      new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
+  private final ConcurrentNavigableMap<Long, Instrumented<ServerStats>> servers
+      = new ConcurrentSkipListMap<Long, Instrumented<ServerStats>>();
+  private final ConcurrentNavigableMap<Long, Instrumented<ChannelStats>> rootChannels
+      = new ConcurrentSkipListMap<Long, Instrumented<ChannelStats>>();
+  private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels
+      = new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
+  private final ConcurrentMap<Long, Instrumented<SocketStats>> sockets
+      = new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
 
   @VisibleForTesting
   public Channelz() {
@@ -79,6 +84,47 @@ public final class Channelz {
     remove(sockets, socket);
   }
 
+  /** Returns a {@link RootChannelList}. */
+  public RootChannelList getRootChannels(long fromId, int maxPageSize) {
+    List<Instrumented<ChannelStats>> channelList = new ArrayList<Instrumented<ChannelStats>>();
+    Iterator<Instrumented<ChannelStats>> iterator
+        = rootChannels.tailMap(fromId).values().iterator();
+
+    while (iterator.hasNext() && channelList.size() < maxPageSize) {
+      channelList.add(iterator.next());
+    }
+    return new RootChannelList(channelList, !iterator.hasNext());
+  }
+
+  /** Returns a channel. */
+  @Nullable
+  public Instrumented<ChannelStats> getChannel(long id) {
+    return rootChannels.get(id);
+  }
+
+  /** Returns a subchannel. */
+  @Nullable
+  public Instrumented<ChannelStats> getSubchannel(long id) {
+    return subchannels.get(id);
+  }
+
+  /** Returns a server list. */
+  public ServerList getServers(long fromId, int maxPageSize) {
+    List<Instrumented<ServerStats>> serverList = new ArrayList<Instrumented<ServerStats>>();
+    Iterator<Instrumented<ServerStats>> iterator = servers.tailMap(fromId).values().iterator();
+
+    while (iterator.hasNext() && serverList.size() < maxPageSize) {
+      serverList.add(iterator.next());
+    }
+    return new ServerList(serverList, !iterator.hasNext());
+  }
+
+  /** Returns a socket. */
+  @Nullable
+  public Instrumented<SocketStats> getSocket(long id) {
+    return sockets.get(id);
+  }
+
   @VisibleForTesting
   public boolean containsServer(LogId serverRef) {
     return contains(servers, serverRef);
@@ -89,9 +135,8 @@ public final class Channelz {
     return contains(subchannels, subchannelRef);
   }
 
-  @VisibleForTesting
-  public boolean containsRootChannel(LogId channelRef) {
-    return contains(rootChannels, channelRef);
+  public Instrumented<ChannelStats> getRootChannel(long id) {
+    return rootChannels.get(id);
   }
 
   @VisibleForTesting
@@ -109,6 +154,28 @@ public final class Channelz {
 
   private static <T extends Instrumented<?>> boolean contains(Map<Long, T> map, LogId id) {
     return map.containsKey(id.getId());
+  }
+
+  public static final class RootChannelList {
+    public final List<Instrumented<ChannelStats>> channels;
+    public final boolean end;
+
+    /** Creates an instance. */
+    public RootChannelList(List<Instrumented<ChannelStats>> channels, boolean end) {
+      this.channels = Preconditions.checkNotNull(channels);
+      this.end = end;
+    }
+  }
+
+  public static final class ServerList {
+    public final List<Instrumented<ServerStats>> servers;
+    public final boolean end;
+
+    /** Creates an instance. */
+    public ServerList(List<Instrumented<ServerStats>> servers, boolean end) {
+      this.servers = Preconditions.checkNotNull(servers);
+      this.end = end;
+    }
   }
 
   @Immutable
@@ -323,6 +390,7 @@ public final class Channelz {
     public final long lastMessageReceivedTimeNanos;
     public final long localFlowControlWindow;
     public final long remoteFlowControlWindow;
+    // TODO(zpencer): report socket flags and other info
 
     /**
      * Creates an instance.
@@ -353,5 +421,10 @@ public final class Channelz {
       this.localFlowControlWindow = localFlowControlWindow;
       this.remoteFlowControlWindow = remoteFlowControlWindow;
     }
+  }
+
+  /** Unwraps a {@link LogId} to return a {@code long}. */
+  public static long id(WithLogId withLogId) {
+    return withLogId.getLogId().getId();
   }
 }
