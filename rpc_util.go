@@ -163,79 +163,61 @@ func (EmptyCallOption) after(*callInfo)        {}
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
-	return HeaderCallOption{md: md}
+	return HeaderCallOption{HeaderAddr: md}
 }
 
 // HeaderCallOption is a CallOption for collecting response header metadata.
 // This is an EXPERIMENTAL API.
 type HeaderCallOption struct {
-	md *metadata.MD
+	HeaderAddr *metadata.MD
 }
 
 func (o HeaderCallOption) before(c *callInfo) error { return nil }
 func (o HeaderCallOption) after(c *callInfo) {
 	if c.stream != nil {
-		*o.md, _ = c.stream.Header()
+		*o.HeaderAddr, _ = c.stream.Header()
 	}
-}
-
-// HeaderAddr returns the address where header metadata will be stored after the
-// unary RPC completes.
-func (o HeaderCallOption) HeaderAddr() *metadata.MD {
-	return o.md
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
-	return TrailerCallOption{md: md}
+	return TrailerCallOption{TrailerAddr: md}
 }
 
 // TrailerCallOption is a CallOption for collecting response trailer metadata.
 // This is an EXPERIMENTAL API.
 type TrailerCallOption struct {
-	md *metadata.MD
+	TrailerAddr *metadata.MD
 }
 
 func (o TrailerCallOption) before(c *callInfo) error { return nil }
 func (o TrailerCallOption) after(c *callInfo) {
 	if c.stream != nil {
-		*o.md = c.stream.Trailer()
+		*o.TrailerAddr = c.stream.Trailer()
 	}
-}
-
-// TrailerAddr returns the address where trailer metadata will be stored after
-// the unary RPC completes.
-func (o TrailerCallOption) TrailerAddr() *metadata.MD {
-	return o.md
 }
 
 // Peer returns a CallOption that retrieves peer information for a
 // unary RPC.
 func Peer(p *peer.Peer) CallOption {
-	return PeerCallOption{p: p}
+	return PeerCallOption{PeerAddr: p}
 }
 
 // PeerCallOption is a CallOption for collecting the identity of the remote
 // peer.
 // This is an EXPERIMENTAL API.
 type PeerCallOption struct {
-	p *peer.Peer
+	PeerAddr *peer.Peer
 }
 
 func (o PeerCallOption) before(c *callInfo) error { return nil }
 func (o PeerCallOption) after(c *callInfo) {
 	if c.stream != nil {
 		if x, ok := peer.FromContext(c.stream.Context()); ok {
-			*o.p = *x
+			*o.PeerAddr = *x
 		}
 	}
-}
-
-// PeerAddr returns the address where peer info will be stored after the unary
-// completes.
-func (o PeerCallOption) PeerAddr() *peer.Peer {
-	return o.p
 }
 
 // FailFast configures the action to take when an RPC is attempted on broken
@@ -249,93 +231,76 @@ func (o PeerCallOption) PeerAddr() *peer.Peer {
 //
 // By default, RPCs are "Fail Fast".
 func FailFast(failFast bool) CallOption {
-	return FailFastCallOption(failFast)
+	return FailFastCallOption{FailFast: failFast}
 }
 
 // FailFastCallOption is a CallOption for indicating whether an RPC should fail
 // fast or not.
 // This is an EXPERIMENTAL API.
-type FailFastCallOption bool
+type FailFastCallOption struct {
+	FailFast bool
+}
 
 func (o FailFastCallOption) before(c *callInfo) error {
-	c.failFast = bool(o)
+	c.failFast = o.FailFast
 	return nil
 }
 func (o FailFastCallOption) after(c *callInfo) { return }
 
-// FailFast returns true if this call option directs the RPC to fail fast, false
-// otherwise.
-func (o FailFastCallOption) FailFast() bool {
-	return bool(o)
-}
-
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
 func MaxCallRecvMsgSize(s int) CallOption {
-	return MaxRecvMsgSizeCallOption(s)
+	return MaxRecvMsgSizeCallOption{MaxRecvMsgSize: s}
 }
 
 // MaxRecvMsgSizeCallOption is a CallOption that indicates the maximum message
 // size the client can receive.
 // This is an EXPERIMENTAL API.
-type MaxRecvMsgSizeCallOption int
+type MaxRecvMsgSizeCallOption struct {
+	MaxRecvMsgSize int
+}
 
 func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
-	s := int(o)
-	c.maxReceiveMessageSize = &s
+	c.maxReceiveMessageSize = &o.MaxRecvMsgSize
 	return nil
 }
 func (o MaxRecvMsgSizeCallOption) after(c *callInfo) { return }
 
-// MaxRecvMsgSize returns the maximum size allowed for a received message.
-func (o MaxRecvMsgSizeCallOption) MaxRecvMsgSize() int {
-	return int(o)
-}
-
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
 func MaxCallSendMsgSize(s int) CallOption {
-	return MaxSendMsgSizeCallOption(s)
+	return MaxSendMsgSizeCallOption{MaxSendMsgSize: s}
 }
 
 // MaxSendMsgSizeCallOption is a CallOption that indicates the maximum message
 // size the client can send.
 // This is an EXPERIMENTAL API.
-type MaxSendMsgSizeCallOption int
+type MaxSendMsgSizeCallOption struct {
+	MaxSendMsgSize int
+}
 
 func (o MaxSendMsgSizeCallOption) before(c *callInfo) error {
-	s := int(o)
-	c.maxSendMessageSize = &s
+	c.maxSendMessageSize = &o.MaxSendMsgSize
 	return nil
 }
 func (o MaxSendMsgSizeCallOption) after(c *callInfo) { return }
 
-// MaxSendMsgSize returns the maximum size allowed for a sent message.
-func (o MaxSendMsgSizeCallOption) MaxSendMsgSize() int {
-	return int(o)
-}
-
 // PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
 // for a call.
 func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
-	return PerRPCCredsCallOption{creds: creds}
+	return PerRPCCredsCallOption{Creds: creds}
 }
 
 // PerRPCCredsCallOption is a CallOption that indicates the the per-RPC
 // credentials to use for the call.
 // This is an EXPERIMENTAL API.
 type PerRPCCredsCallOption struct {
-	creds credentials.PerRPCCredentials
+	Creds credentials.PerRPCCredentials
 }
 
 func (o PerRPCCredsCallOption) before(c *callInfo) error {
-	c.creds = o.creds
+	c.creds = o.Creds
 	return nil
 }
 func (o PerRPCCredsCallOption) after(c *callInfo) { return }
-
-// PerRPCCredentials returns the per-RPC credentials.
-func (o PerRPCCredsCallOption) PerRPCCredentials() credentials.PerRPCCredentials {
-	return o.creds
-}
 
 // UseCompressor returns a CallOption which sets the compressor used when
 // sending the request.  If WithCompressor is also set, UseCompressor has
@@ -343,23 +308,20 @@ func (o PerRPCCredsCallOption) PerRPCCredentials() credentials.PerRPCCredentials
 //
 // This API is EXPERIMENTAL.
 func UseCompressor(name string) CallOption {
-	return CompressorCallOption(name)
+	return CompressorCallOption{CompressorType: name}
 }
 
 // CompressorCallOption is a CallOption that indicates the compressor to use.
 // This is an EXPERIMENTAL API.
-type CompressorCallOption string
+type CompressorCallOption struct {
+	CompressorType string
+}
 
 func (o CompressorCallOption) before(c *callInfo) error {
-	c.compressorType = string(o)
+	c.compressorType = o.CompressorType
 	return nil
 }
 func (o CompressorCallOption) after(c *callInfo) { return }
-
-// Compressor returns the name of the compressor to use for the call.
-func (o CompressorCallOption) Compressor() string {
-	return string(o)
-}
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type over
@@ -378,24 +340,21 @@ func (o CompressorCallOption) Compressor() string {
 // response messages, with the content-subtype set to the given contentSubtype
 // here for requests.
 func CallContentSubtype(contentSubtype string) CallOption {
-	return ContentSubtypeCallOption(strings.ToLower(contentSubtype))
+	return ContentSubtypeCallOption{ContentSubtype: strings.ToLower(contentSubtype)}
 }
 
 // ContentSubtypeCallOption is a CallOption that indicates the content-subtype
 // used for marshaling messages.
 // This is an EXPERIMENTAL API.
-type ContentSubtypeCallOption string
+type ContentSubtypeCallOption struct {
+	ContentSubtype string
+}
 
 func (o ContentSubtypeCallOption) before(c *callInfo) error {
-	c.contentSubtype = string(o)
+	c.contentSubtype = o.ContentSubtype
 	return nil
 }
 func (o ContentSubtypeCallOption) after(c *callInfo) { return }
-
-// ContentSubtype returns the content-subtype of the codec used for the call.
-func (o ContentSubtypeCallOption) ContentSubtype() string {
-	return string(o)
-}
 
 // CallCustomCodec returns a CallOption that will set the given Codec to be
 // used for all request and response messages for a call. The result of calling
@@ -410,26 +369,21 @@ func (o ContentSubtypeCallOption) ContentSubtype() string {
 // This function is provided for advanced users; prefer to use only
 // CallContentSubtype to select a registered codec instead.
 func CallCustomCodec(codec Codec) CallOption {
-	return CustomCodecCallOption{codec: codec}
+	return CustomCodecCallOption{Codec: codec}
 }
 
 // CustomCodecCallOption is a CallOption that indicates the codec used for
 // marshaling messages.
 // This is an EXPERIMENTAL API.
 type CustomCodecCallOption struct {
-	codec Codec
+	Codec Codec
 }
 
 func (o CustomCodecCallOption) before(c *callInfo) error {
-	c.codec = o.codec
+	c.codec = o.Codec
 	return nil
 }
 func (o CustomCodecCallOption) after(c *callInfo) { return }
-
-// Codec returns the codec used for the call.
-func (o CustomCodecCallOption) Codec() Codec {
-	return o.codec
-}
 
 // The format of the payload: compressed or not?
 type payloadFormat uint8
