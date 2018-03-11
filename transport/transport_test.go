@@ -1552,16 +1552,6 @@ func TestInvalidHeaderField(t *testing.T) {
 	server.stop()
 }
 
-func TestStreamContext(t *testing.T) {
-	expectedStream := &Stream{}
-	ctx := NewContextWithServerStream(context.Background(), expectedStream)
-	s := ServerStreamFromContext(ctx)
-	stream, ok := s.(*Stream)
-	if !ok || expectedStream != stream {
-		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
-	}
-}
-
 func TestIsReservedHeader(t *testing.T) {
 	tests := []struct {
 		h    string

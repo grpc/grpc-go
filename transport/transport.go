@@ -453,47 +453,6 @@ func (s *Stream) GoString() string {
 	return fmt.Sprintf("<stream: %p, %v>", s, s.method)
 }
 
-// The key to save transport.Stream in the context.
-type streamKey struct{}
-
-// NewContextWithServerStream creates a new context from ctx and attaches
-// stream to it.
-func NewContextWithServerStream(ctx context.Context, stream ServerStream) context.Context {
-	return context.WithValue(ctx, streamKey{}, stream)
-}
-
-// StreamFromContext returns the stream saved in ctx.
-//
-// Deprecated: use ServerStreamFromContext
-func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
-	// If there is a ServerStream in context, but it's not a *Stream,
-	// this still returns nil, false.
-	s, ok = ctx.Value(streamKey{}).(*Stream)
-	return
-}
-
-// ServerStream is a minimal interface that a transport stream must
-// implement. This can be used to mock an actual transport stream for
-// tests of handler code that use, for example, grpc.SetHeader (which
-// requires some stream to be in context).
-//
-// See also ContextWithServerStream.
-type ServerStream interface {
-	Context() context.Context
-	Method() string
-	SetHeader(md metadata.MD) error
-	SendHeader(md metadata.MD) error
-	SetTrailer(md metadata.MD) error
-}
-
-// ServerStreamFromContext returns the server stream saved in ctx. Returns
-// nil if the given context has no stream associated with it (which implies
-// it is not an RPC invocation context).
-func ServerStreamFromContext(ctx context.Context) ServerStream {
-	s, _ := ctx.Value(streamKey{}).(ServerStream)
-	return s
-}
-
 // state of transport
 type transportState int
 

@@ -552,6 +552,7 @@ type ServerStream interface {
 
 // serverStream implements a server side Stream.
 type serverStream struct {
+	ctx   context.Context
 	t     transport.ServerTransport
 	s     *transport.Stream
 	p     *parser
@@ -572,7 +573,7 @@ type serverStream struct {
 }
 
 func (ss *serverStream) Context() context.Context {
-	return ss.s.Context()
+	return ss.ctx
 }
 
 func (ss *serverStream) SetHeader(md metadata.MD) error {
@@ -675,7 +676,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 // MethodFromServerStream returns the method string for the input stream.
 // The returned string is in the format of "/service/method".
 func MethodFromServerStream(stream ServerStream) (string, bool) {
-	s := transport.ServerStreamFromContext(stream.Context())
+	s := serverTransportStreamFromContext(stream.Context())
 	if s == nil {
 		return "", false
 	}
