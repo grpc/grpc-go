@@ -165,6 +165,13 @@ func WithMaxMsgSize(s int) DialOption {
 	return WithDefaultCallOptions(MaxCallRecvMsgSize(s))
 }
 
+// WithMaxStreamsClientSize returns a DialOption which sets the maximum stream client size.
+func WithMaxStreamsClientSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.copts.MaxStreamsClientSize = s
+	}
+}
+
 // WithDefaultCallOptions returns a DialOption which sets the default CallOptions for calls over the connection.
 func WithDefaultCallOptions(cos ...CallOption) DialOption {
 	return func(o *dialOptions) {
