@@ -676,6 +676,11 @@ public class NettyClientTransportTest {
 
     @Override
     public void closed(Status status, Metadata trailers) {
+      closed(status, RpcProgress.PROCESSED, trailers);
+    }
+
+    @Override
+    public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {
       if (status.isOk()) {
         closedFuture.set(null);
       } else {

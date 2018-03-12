@@ -35,6 +35,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener.MessageProducer;
@@ -322,7 +323,8 @@ public final class CronetClientStreamTest {
     // Verify trailer
     ArgumentCaptor<Metadata> trailerCaptor = ArgumentCaptor.forClass(Metadata.class);
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), trailerCaptor.capture());
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), trailerCaptor.capture());
     // Verify recevied headers.
     Metadata trailers = trailerCaptor.getValue();
     Status status = statusCaptor.getValue();
@@ -365,7 +367,8 @@ public final class CronetClientStreamTest {
     callback.onSucceeded(cronetStream, info);
 
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     // Verify error status.
     Status status = statusCaptor.getValue();
     assertFalse(status.isOk());
@@ -390,7 +393,8 @@ public final class CronetClientStreamTest {
     clientStream.transportState().transportReportStatus(Status.UNAVAILABLE, false, new Metadata());
 
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     assertEquals(Status.UNAVAILABLE.getCode(), status.getCode());
   }
@@ -417,7 +421,8 @@ public final class CronetClientStreamTest {
     clientStream.transportState().transportReportStatus(Status.UNAVAILABLE, false, new Metadata());
 
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     assertEquals(Status.UNAVAILABLE.getCode(), status.getCode());
   }
@@ -447,7 +452,8 @@ public final class CronetClientStreamTest {
     clientStream.transportState().transportReportStatus(Status.UNAVAILABLE, false, new Metadata());
 
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     // Stream has already finished so OK status should be reported.
     assertEquals(Status.UNAVAILABLE.getCode(), status.getCode());
@@ -479,7 +485,8 @@ public final class CronetClientStreamTest {
     clientStream.transportState().transportReportStatus(Status.UNAVAILABLE, false, new Metadata());
 
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener)
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     // Stream has already finished so OK status should be reported.
     assertEquals(Status.OK.getCode(), status.getCode());
@@ -522,12 +529,14 @@ public final class CronetClientStreamTest {
     // Receive trailer first
     ((CronetClientStream.BidirectionalStreamCallback) callback)
         .processTrailers(trailers(Status.UNAUTHENTICATED.getCode().value()));
-    verify(clientListener, times(0)).closed(isA(Status.class), isA(Metadata.class));
+    verify(clientListener, times(0))
+        .closed(isA(Status.class), isA(RpcProgress.class), isA(Metadata.class));
 
     // Receive cronet's endOfStream
     callback.onReadCompleted(cronetStream, null, ByteBuffer.allocate(0), true);
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener, times(1)).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener, times(1))
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     assertEquals(Status.UNAUTHENTICATED.getCode(), status.getCode());
   }
@@ -548,13 +557,15 @@ public final class CronetClientStreamTest {
     callback.onResponseHeadersReceived(cronetStream, info);
     // Receive cronet's endOfStream
     callback.onReadCompleted(cronetStream, null, ByteBuffer.allocate(0), true);
-    verify(clientListener, times(0)).closed(isA(Status.class), isA(Metadata.class));
+    verify(clientListener, times(0))
+        .closed(isA(Status.class), isA(RpcProgress.class), isA(Metadata.class));
 
     // Receive trailer
     ((CronetClientStream.BidirectionalStreamCallback) callback)
         .processTrailers(trailers(Status.UNAUTHENTICATED.getCode().value()));
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(clientListener, times(1)).closed(statusCaptor.capture(), isA(Metadata.class));
+    verify(clientListener, times(1))
+        .closed(statusCaptor.capture(), isA(RpcProgress.class), isA(Metadata.class));
     Status status = statusCaptor.getValue();
     assertEquals(Status.UNAUTHENTICATED.getCode(), status.getCode());
   }

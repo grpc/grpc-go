@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Charsets.US_ASCII;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -79,7 +80,7 @@ public class Http2ClientStreamTransportStateTest {
         "application/grpc");
     state.transportHeadersReceived(headers);
 
-    verify(mockListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener, never()).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
     verify(mockListener).headersRead(headers);
   }
 
@@ -93,7 +94,7 @@ public class Http2ClientStreamTransportStateTest {
         "application/grpc");
     state.transportHeadersReceived(headers);
 
-    verify(mockListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener, never()).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
     verify(mockListener).headersRead(headers);
   }
 
@@ -108,7 +109,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportDataReceived(ReadableBuffers.empty(), true);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(headers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headers));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
@@ -123,7 +124,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportDataReceived(ReadableBuffers.empty(), true);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(headers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headers));
     assertEquals(Code.UNKNOWN, statusCaptor.getValue().getCode());
     assertTrue(statusCaptor.getValue().getDescription().contains("200"));
   }
@@ -139,7 +140,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportDataReceived(ReadableBuffers.empty(), true);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(headers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headers));
     assertEquals(Code.UNAUTHENTICATED, statusCaptor.getValue().getCode());
     assertTrue(statusCaptor.getValue().getDescription().contains("401"));
     assertTrue(statusCaptor.getValue().getDescription().contains("text/html"));
@@ -163,7 +164,7 @@ public class Http2ClientStreamTransportStateTest {
         "application/grpc");
     state.transportHeadersReceived(headers);
 
-    verify(mockListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener, never()).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
     verify(mockListener).headersRead(headers);
   }
 
@@ -181,7 +182,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportDataReceived(ReadableBuffers.empty(), true);
 
     verify(mockListener).headersRead(headers);
-    verify(mockListener).closed(statusCaptor.capture(), same(headersAgain));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headersAgain));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
     assertTrue(statusCaptor.getValue().getDescription().contains("twice"));
   }
@@ -201,7 +202,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportDataReceived(ReadableBuffers.empty(), true);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(headers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headers));
     assertEquals(Code.UNKNOWN, statusCaptor.getValue().getCode());
     assertTrue(statusCaptor.getValue().getDescription().contains(testString));
   }
@@ -213,7 +214,7 @@ public class Http2ClientStreamTransportStateTest {
     String testString = "This is a test";
     state.transportDataReceived(ReadableBuffers.wrap(testString.getBytes(US_ASCII)), true);
 
-    verify(mockListener).closed(statusCaptor.capture(), any(Metadata.class));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), any(Metadata.class));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
@@ -228,7 +229,7 @@ public class Http2ClientStreamTransportStateTest {
     String testString = "This is a test";
     state.transportDataReceived(ReadableBuffers.wrap(testString.getBytes(US_ASCII)), true);
 
-    verify(mockListener).closed(statusCaptor.capture(), same(headers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(headers));
     assertTrue(statusCaptor.getValue().getDescription().contains(testString));
   }
 
@@ -244,7 +245,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(Status.OK, trailers);
+    verify(mockListener).closed(Status.OK, PROCESSED, trailers);
   }
 
   @Test
@@ -261,7 +262,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener).headersRead(headers);
-    verify(mockListener).closed(Status.OK, trailers);
+    verify(mockListener).closed(Status.OK, PROCESSED, trailers);
   }
 
   @Test
@@ -276,7 +277,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(Status.CANCELLED, trailers);
+    verify(mockListener).closed(Status.CANCELLED, PROCESSED, trailers);
   }
 
   @Test
@@ -290,7 +291,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(trailers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(trailers));
     assertEquals(Code.UNAUTHENTICATED, statusCaptor.getValue().getCode());
     assertTrue(statusCaptor.getValue().getDescription().contains("401"));
   }
@@ -306,7 +307,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(trailers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(trailers));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
@@ -320,7 +321,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener, never()).headersRead(any(Metadata.class));
-    verify(mockListener).closed(statusCaptor.capture(), same(trailers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(trailers));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
@@ -338,7 +339,7 @@ public class Http2ClientStreamTransportStateTest {
     state.transportTrailersReceived(trailers);
 
     verify(mockListener).headersRead(headers);
-    verify(mockListener).closed(statusCaptor.capture(), same(trailers));
+    verify(mockListener).closed(statusCaptor.capture(), same(PROCESSED), same(trailers));
     assertEquals(Code.UNKNOWN, statusCaptor.getValue().getCode());
   }
 

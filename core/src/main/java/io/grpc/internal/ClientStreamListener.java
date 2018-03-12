@@ -45,5 +45,39 @@ public interface ClientStreamListener extends StreamListener {
    * @param status details about the remote closure
    * @param trailers trailing metadata
    */
+  // TODO(zdapeng): remove this method in favor of the 3-arg one.
   void closed(Status status, Metadata trailers);
+
+  /**
+   * Called when the stream is fully closed. {@link
+   * io.grpc.Status.Code#OK} is the only status code that is guaranteed
+   * to have been sent from the remote server. Any other status code may have been caused by
+   * abnormal stream termination. This is guaranteed to always be the final call on a listener. No
+   * further callbacks will be issued.
+   *
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
+   *
+   * @param status details about the remote closure
+   * @param rpcProgress RPC progress when client stream listener is closed
+   * @param trailers trailing metadata
+   */
+  void closed(Status status, RpcProgress rpcProgress, Metadata trailers);
+
+  /**
+   * The progress of the RPC when client stream listener is closed.
+   */
+  enum RpcProgress {
+    /**
+     * The RPC is processed by the server normally.
+     */
+    PROCESSED,
+    /**
+     * The RPC is not processed by the server's application logic.
+     */
+    REFUSED,
+    /**
+     * The RPC is dropped (by load balancer).
+     */
+    DROPPED
+  }
 }

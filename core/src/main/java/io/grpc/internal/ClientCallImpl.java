@@ -559,6 +559,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void closed(Status status, Metadata trailers) {
+      closed(status, RpcProgress.PROCESSED, trailers);
+    }
+
+    @Override
+    public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {
       Deadline deadline = effectiveDeadline();
       if (status.getCode() == Status.Code.CANCELLED && deadline != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no

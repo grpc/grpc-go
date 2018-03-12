@@ -18,6 +18,7 @@ package io.grpc.okhttp;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 
 import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
@@ -307,8 +308,11 @@ class OkHttpClientStream extends AbstractClientStream {
       window -= length;
       if (window < 0) {
         frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
-        transport.finishStream(id(), Status.INTERNAL.withDescription(
-            "Received data size exceeded our receiving window size"), false, null, null);
+        transport.finishStream(
+            id(),
+            Status.INTERNAL.withDescription(
+                "Received data size exceeded our receiving window size"),
+            PROCESSED, false, null, null);
         return;
       }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
@@ -319,9 +323,9 @@ class OkHttpClientStream extends AbstractClientStream {
       if (!framer().isClosed()) {
         // If server's end-of-stream is received before client sends end-of-stream, we just send a
         // reset to server to fully close the server side stream.
-        transport.finishStream(id(), null, false, ErrorCode.CANCEL, null);
+        transport.finishStream(id(),null, PROCESSED, false, ErrorCode.CANCEL, null);
       } else {
-        transport.finishStream(id(), null, false, null, null);
+        transport.finishStream(id(), null, PROCESSED, false, null, null);
       }
     }
 
@@ -344,7 +348,8 @@ class OkHttpClientStream extends AbstractClientStream {
       } else {
         // If pendingData is null, start must have already been called, which means synStream has
         // been called as well.
-        transport.finishStream(id(), reason, stopDelivery, ErrorCode.CANCEL, trailers);
+        transport.finishStream(
+            id(), reason, PROCESSED, stopDelivery, ErrorCode.CANCEL, trailers);
       }
     }
 

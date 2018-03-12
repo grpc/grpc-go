@@ -28,6 +28,7 @@ import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -356,6 +357,27 @@ public abstract class AbstractClientStream extends AbstractStream
      */
     public final void transportReportStatus(final Status status, boolean stopDelivery,
         final Metadata trailers) {
+      transportReportStatus(status, RpcProgress.PROCESSED, stopDelivery, trailers);
+    }
+
+    /**
+     * Report stream closure with status to the application layer if not already reported. This
+     * method must be called from the transport thread.
+     *
+     * @param status the new status to set
+     * @param rpcProgress RPC progress that the
+     *        {@link ClientStreamListener#closed(Status, RpcProgress, Metadata)}
+     *        will receive
+     * @param stopDelivery if {@code true}, interrupts any further delivery of inbound messages that
+     *        may already be queued up in the deframer. If {@code false}, the listener will be
+     *        notified immediately after all currently completed messages in the deframer have been
+     *        delivered to the application.
+     * @param trailers new instance of {@code Trailers}, either empty or those returned by the
+     *        server
+     */
+    public final void transportReportStatus(
+        final Status status, final RpcProgress rpcProgress, boolean stopDelivery,
+        final Metadata trailers) {
       checkNotNull(status, "status");
       checkNotNull(trailers, "trailers");
       // If stopDelivery, we continue in case previous invocation is waiting for stall
@@ -367,13 +389,13 @@ public abstract class AbstractClientStream extends AbstractStream
 
       if (deframerClosed) {
         deframerClosedTask = null;
-        closeListener(status, trailers);
+        closeListener(status, rpcProgress, trailers);
       } else {
         deframerClosedTask =
             new Runnable() {
               @Override
               public void run() {
-                closeListener(status, trailers);
+                closeListener(status, rpcProgress, trailers);
               }
             };
         closeDeframer(stopDelivery);
@@ -385,11 +407,12 @@ public abstract class AbstractClientStream extends AbstractStream
      *
      * @throws IllegalStateException if the call has not yet been started.
      */
-    private void closeListener(Status status, Metadata trailers) {
+    private void closeListener(
+        Status status, RpcProgress rpcProgress, Metadata trailers) {
       if (!listenerClosed) {
         listenerClosed = true;
         statsTraceCtx.streamClosed(status);
-        listener().closed(status, trailers);
+        listener().closed(status, rpcProgress, trailers);
         if (getTransportTracer() != null) {
           getTransportTracer().reportStreamClosed(status.isOk());
         }

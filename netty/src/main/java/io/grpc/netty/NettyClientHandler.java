@@ -27,6 +27,7 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
@@ -348,7 +349,12 @@ class NettyClientHandler extends AbstractNettyHandler {
     if (stream != null) {
       Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
           .augmentDescription("Received Rst Stream");
-      stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+      stream.transportReportStatus(
+          status,
+          errorCode == Http2Error.REFUSED_STREAM.code()
+              ? RpcProgress.REFUSED : RpcProgress.PROCESSED,
+          false /*stop delivery*/,
+          new Metadata());
       if (keepAliveManager != null) {
         keepAliveManager.onDataReceived();
       }
@@ -617,7 +623,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   /**
-   * Handler for a GOAWAY being either sent or received. Fails any streams created after the
+   * Handler for a GOAWAY being received. Fails any streams created after the
    * last known stream.
    */
   private void goingAway(Status status) {
@@ -631,7 +637,8 @@ class NettyClientHandler extends AbstractNettyHandler {
           if (stream.id() > lastKnownStream) {
             NettyClientStream.TransportState clientStream = clientStream(stream);
             if (clientStream != null) {
-              clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
+              clientStream.transportReportStatus(
+                  goAwayStatus, RpcProgress.REFUSED, false, new Metadata());
             }
             stream.close();
           }

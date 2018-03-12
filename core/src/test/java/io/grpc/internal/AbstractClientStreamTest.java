@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -24,6 +25,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -136,7 +138,7 @@ public class AbstractClientStreamTest {
     stream.cancel(Status.DEADLINE_EXCEEDED);
     stream.cancel(Status.DEADLINE_EXCEEDED);
 
-    verify(mockListener).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
   }
 
   @Test
@@ -324,7 +326,7 @@ public class AbstractClientStreamTest {
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
 
-    verify(mockListener).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
   }
   
   @Test

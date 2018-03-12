@@ -17,6 +17,7 @@
 package io.grpc.okhttp;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
@@ -30,8 +31,8 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
-import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.NoopClientStreamListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -102,7 +103,8 @@ public class OkHttpClientStreamTest {
     final AtomicReference<Status> statusRef = new AtomicReference<Status>();
     stream.start(new BaseClientStreamListener() {
       @Override
-      public void closed(Status status, Metadata trailers) {
+      public void closed(
+          Status status, RpcProgress rpcProgress, Metadata trailers) {
         statusRef.set(status);
         assertTrue(Thread.holdsLock(lock));
       }
@@ -123,11 +125,12 @@ public class OkHttpClientStreamTest {
         assertTrue(Thread.holdsLock(lock));
         return null;
       }
-    }).when(transport).finishStream(1234, Status.CANCELLED, true, ErrorCode.CANCEL, null);
+    }).when(transport).finishStream(
+        1234, Status.CANCELLED, PROCESSED, true, ErrorCode.CANCEL, null);
 
     stream.cancel(Status.CANCELLED);
 
-    verify(transport).finishStream(1234, Status.CANCELLED, true, ErrorCode.CANCEL, null);
+    verify(transport).finishStream(1234, Status.CANCELLED, PROCESSED,true, ErrorCode.CANCEL, null);
   }
 
   @Test
@@ -213,20 +216,12 @@ public class OkHttpClientStreamTest {
 
   // TODO(carl-mastrangelo): extract this out into a testing/ directory and remove other definitions
   // of it.
-  private static class BaseClientStreamListener implements ClientStreamListener {
-    @Override
-    public void onReady() {}
+  private static class BaseClientStreamListener extends NoopClientStreamListener {
 
     @Override
     public void messagesAvailable(MessageProducer producer) {
       while (producer.next() != null) {}
     }
-
-    @Override
-    public void headersRead(Metadata headers) {}
-
-    @Override
-    public void closed(Status status, Metadata trailers) {}
   }
 }
 

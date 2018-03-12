@@ -420,6 +420,18 @@ class DelayedStream implements ClientStream {
       });
     }
 
+    @Override
+    public void closed(
+        final Status status, final RpcProgress rpcProgress,
+        final Metadata trailers) {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realListener.closed(status, rpcProgress, trailers);
+        }
+      });
+    }
+
     public void drainPendingCallbacks() {
       assert !passThrough;
       List<Runnable> toRun = new ArrayList<Runnable>();

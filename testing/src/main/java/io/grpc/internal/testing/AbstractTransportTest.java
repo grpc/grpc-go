@@ -982,6 +982,14 @@ public abstract class AbstractTransportTest {
         // This simulates the blocking calls which can trigger clientStream.cancel().
         clientStream.cancel(Status.CANCELLED.withCause(status.asRuntimeException()));
       }
+
+      @Override
+      public void closed(
+          Status status, RpcProgress rpcProgress, Metadata trailers) {
+        super.closed(status, rpcProgress, trailers);
+        // This simulates the blocking calls which can trigger clientStream.cancel().
+        clientStream.cancel(Status.CANCELLED.withCause(status.asRuntimeException()));
+      }
     };
     clientStream.start(clientStreamListener);
     StreamCreation serverStreamCreation
@@ -1056,6 +1064,12 @@ public abstract class AbstractTransportTest {
 
       @Override
       public void closed(Status status, Metadata trailers) {
+        closed(status, RpcProgress.PROCESSED, trailers);
+      }
+
+      @Override
+      public void closed(
+          Status status, RpcProgress rpcProgress, Metadata trailers) {
         assertEquals(Status.CANCELLED.getCode(), status.getCode());
         assertEquals("nevermind", status.getDescription());
         closedCalled.set(true);
@@ -1950,6 +1964,11 @@ public abstract class AbstractTransportTest {
 
     @Override
     public void closed(Status status, Metadata trailers) {
+      closed(status, RpcProgress.PROCESSED, trailers);
+    }
+
+    @Override
+    public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {
       if (this.status.isDone()) {
         fail("headersRead invoked after closed");
       }

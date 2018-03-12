@@ -18,6 +18,8 @@ package io.grpc.okhttp;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.REFUSED;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.okhttp.Headers.CONTENT_TYPE_HEADER;
 import static io.grpc.okhttp.Headers.METHOD_HEADER;
@@ -128,6 +130,7 @@ public class OkHttpClientTransportTest {
   private static final ProxyParameters NO_PROXY = null;
   private static final String NO_USER = null;
   private static final String NO_PW = null;
+  private static final int DEFAULT_START_STREAM_ID = 3;
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
@@ -168,7 +171,7 @@ public class OkHttpClientTransportTest {
   }
 
   private void initTransport() throws Exception {
-    startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE, null);
+    startTransport(DEFAULT_START_STREAM_ID, null, true, DEFAULT_MAX_MESSAGE_SIZE, null);
   }
 
   private void initTransport(int startId) throws Exception {
@@ -177,7 +180,8 @@ public class OkHttpClientTransportTest {
 
   private void initTransportAndDelayConnected() throws Exception {
     delayConnectedCallback = new DelayConnectedCallback();
-    startTransport(3, delayConnectedCallback, false, DEFAULT_MAX_MESSAGE_SIZE, null);
+    startTransport(
+        DEFAULT_START_STREAM_ID, delayConnectedCallback, false, DEFAULT_MAX_MESSAGE_SIZE, null);
   }
 
   private void startTransport(int startId, @Nullable Runnable connectingCallback,
@@ -1663,6 +1667,88 @@ public class OkHttpClientTransportTest {
     shutdownAndVerify();
   }
 
+  @Test
+  public void goAway_streamListenerRpcProgress() throws Exception {
+    initTransport();
+    setMaxConcurrentStreams(2);
+    MockStreamListener listener1 = new MockStreamListener();
+    MockStreamListener listener2 = new MockStreamListener();
+    MockStreamListener listener3 = new MockStreamListener();
+    OkHttpClientStream stream1 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream1.start(listener1);
+    OkHttpClientStream stream2 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream2.start(listener2);
+    OkHttpClientStream stream3 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream3.start(listener3);
+    waitForStreamPending(1);
+
+    assertEquals(2, activeStreamCount());
+    assertContainStream(DEFAULT_START_STREAM_ID);
+    assertContainStream(DEFAULT_START_STREAM_ID + 2);
+
+    frameHandler()
+        .goAway(DEFAULT_START_STREAM_ID, ErrorCode.CANCEL, ByteString.encodeUtf8("blablabla"));
+
+    listener2.waitUntilStreamClosed();
+    listener3.waitUntilStreamClosed();
+    assertNull(listener1.rpcProgress);
+    assertEquals(REFUSED, listener2.rpcProgress);
+    assertEquals(REFUSED, listener3.rpcProgress);
+    assertEquals(1, activeStreamCount());
+    assertContainStream(DEFAULT_START_STREAM_ID);
+
+    getStream(DEFAULT_START_STREAM_ID).cancel(Status.CANCELLED);
+
+    listener1.waitUntilStreamClosed();
+    assertEquals(PROCESSED, listener1.rpcProgress);
+
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void reset_streamListenerRpcProgress() throws Exception {
+    initTransport();
+    MockStreamListener listener1 = new MockStreamListener();
+    MockStreamListener listener2 = new MockStreamListener();
+    MockStreamListener listener3 = new MockStreamListener();
+    OkHttpClientStream stream1 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream1.start(listener1);
+    OkHttpClientStream stream2 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream2.start(listener2);
+    OkHttpClientStream stream3 =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream3.start(listener3);
+
+    assertEquals(3, activeStreamCount());
+    assertContainStream(DEFAULT_START_STREAM_ID);
+    assertContainStream(DEFAULT_START_STREAM_ID + 2);
+    assertContainStream(DEFAULT_START_STREAM_ID + 4);
+
+    frameHandler().rstStream(DEFAULT_START_STREAM_ID + 2, ErrorCode.REFUSED_STREAM);
+
+    listener2.waitUntilStreamClosed();
+    assertNull(listener1.rpcProgress);
+    assertEquals(REFUSED, listener2.rpcProgress);
+    assertNull(listener3.rpcProgress);
+
+    frameHandler().rstStream(DEFAULT_START_STREAM_ID, ErrorCode.CANCEL);
+    listener1.waitUntilStreamClosed();
+    assertEquals(PROCESSED, listener1.rpcProgress);
+    assertNull(listener3.rpcProgress);
+
+    getStream(DEFAULT_START_STREAM_ID + 4).cancel(Status.CANCELLED);
+
+    listener3.waitUntilStreamClosed();
+    assertEquals(PROCESSED, listener3.rpcProgress);
+
+    shutdownAndVerify();
+  }
+
   private int activeStreamCount() {
     return clientTransport.getActiveStreams().length;
   }
@@ -1813,6 +1899,7 @@ public class OkHttpClientTransportTest {
     Status status;
     Metadata headers;
     Metadata trailers;
+    RpcProgress rpcProgress;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
     boolean onReadyCalled;
@@ -1838,8 +1925,14 @@ public class OkHttpClientTransportTest {
 
     @Override
     public void closed(Status status, Metadata trailers) {
+      closed(status, PROCESSED, trailers);
+    }
+
+    @Override
+    public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {
       this.status = status;
       this.trailers = trailers;
+      this.rpcProgress = rpcProgress;
       closed.countDown();
     }
 

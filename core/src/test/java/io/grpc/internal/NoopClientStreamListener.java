@@ -22,7 +22,7 @@ import io.grpc.Status;
 /**
  * No-op base class for testing.
  */
-class NoopClientStreamListener implements ClientStreamListener {
+public class NoopClientStreamListener implements ClientStreamListener {
   @Override
   public void messagesAvailable(MessageProducer producer) {}
 
@@ -34,4 +34,7 @@ class NoopClientStreamListener implements ClientStreamListener {
 
   @Override
   public void closed(Status status, Metadata trailers) {}
+
+  @Override
+  public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {}
 }
