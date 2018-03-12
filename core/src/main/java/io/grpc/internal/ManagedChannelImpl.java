@@ -814,6 +814,9 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             @Override
             public void run() {
               exitIdleMode();
+              if (subchannelPicker != null) {
+                subchannelPicker.requestConnection();
+              }
             }
           }).drain();
     }

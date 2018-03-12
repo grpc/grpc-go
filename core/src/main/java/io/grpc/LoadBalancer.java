@@ -168,6 +168,16 @@ public abstract class LoadBalancer {
      * @since 1.3.0
      */
     public abstract PickResult pickSubchannel(PickSubchannelArgs args);
+
+    /**
+     * Tries to establish connections now so that the upcoming RPC may then just pick a ready
+     * connection without having to connect first.
+     *
+     * <p>No-op if unsupported.
+     *
+     * @since 1.11.0
+     */
+    public void requestConnection() {}
   }
 
   /**

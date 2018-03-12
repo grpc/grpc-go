@@ -24,6 +24,7 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -154,6 +155,14 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     @Override
     public PickResult pickSubchannel(PickSubchannelArgs args) {
       return result;
+    }
+
+    @Override
+    public void requestConnection() {
+      Subchannel subchannel = result.getSubchannel();
+      if (subchannel != null) {
+        subchannel.requestConnection();
+      }
     }
   }
 }

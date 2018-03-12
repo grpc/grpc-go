@@ -27,6 +27,7 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -246,6 +247,19 @@ public class PickFirstLoadBalancerTest {
     assertEquals(error2, pickResult.getStatus());
 
     verifyNoMoreInteractions(mockHelper);
+  }
+
+  @Test
+  public void requestConnection() {
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
+    verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
+    Picker picker = pickerCaptor.getValue();
+
+    verify(mockSubchannel).requestConnection();
+
+    picker.requestConnection();
+
+    verify(mockSubchannel, times(2)).requestConnection();
   }
 
   private static class FakeSocketAddress extends SocketAddress {

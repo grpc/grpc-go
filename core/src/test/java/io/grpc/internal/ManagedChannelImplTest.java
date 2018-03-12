@@ -1594,6 +1594,22 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void getState_withRequestConnect_IdleWithLbRunning() {
+    createChannel(
+        new FakeNameResolverFactory.Builder(expectedUri).setResolvedAtStart(false).build(),
+        NO_INTERCEPTOR,
+        true /* requestConnection */,
+        ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
+
+    helper.updateBalancingState(IDLE, mockPicker);
+
+    assertEquals(IDLE, channel.getState(true));
+    verifyNoMoreInteractions(mockLoadBalancerFactory);
+    verify(mockPicker).requestConnection();
+  }
+
+  @Test
   public void notifyWhenStateChanged() {
     final AtomicBoolean stateChanged = new AtomicBoolean();
     Runnable onStateChanged = new Runnable() {
