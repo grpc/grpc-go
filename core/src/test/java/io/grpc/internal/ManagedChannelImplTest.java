@@ -1851,6 +1851,68 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void idleMode_resetsDelayedTransportPicker() {
+    ClientStream mockStream = mock(ClientStream.class);
+    Status pickError = Status.UNAVAILABLE.withDescription("pick result error");
+    long idleTimeoutMillis = 1000L;
+    createChannel(
+        new FakeNameResolverFactory.Builder(expectedUri)
+            .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+            .build(),
+        NO_INTERCEPTOR,
+        true,
+        idleTimeoutMillis);
+    assertEquals(IDLE, channel.getState(false));
+
+    // This call will be buffered in delayedTransport
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+
+    // Move channel into TRANSIENT_FAILURE, which will fail the pending call
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withError(pickError));
+    helper.updateBalancingState(TRANSIENT_FAILURE, mockPicker);
+    assertEquals(TRANSIENT_FAILURE, channel.getState(false));
+    executor.runDueTasks();
+    verify(mockCallListener).onClose(same(pickError), any(Metadata.class));
+
+    // Move channel to idle
+    timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
+    assertEquals(IDLE, channel.getState(false));
+
+    // This call should be buffered, but will move the channel out of idle
+    ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
+    call2.start(mockCallListener2, new Metadata());
+    executor.runDueTasks();
+    verifyNoMoreInteractions(mockCallListener2);
+
+    // Get the helper created on exiting idle
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(Helper.class);
+    verify(mockLoadBalancerFactory, times(2)).newLoadBalancer(helperCaptor.capture());
+    Helper helper2 = helperCaptor.getValue();
+
+    // Establish a connection
+    Subchannel subchannel = helper2.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream);
+    transportListener.transportReady();
+
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withSubchannel(subchannel));
+    helper2.updateBalancingState(READY, mockPicker);
+    assertEquals(READY, channel.getState(false));
+    executor.runDueTasks();
+
+    // Verify the buffered call was drained
+    verify(mockTransport).newStream(same(method), any(Metadata.class), any(CallOptions.class));
+    verify(mockStream).start(any(ClientStreamListener.class));
+  }
+
+  @Test
   public void enterIdleEntersIdle() {
     createChannel(new FakeNameResolverFactory.Builder(expectedUri).build(), NO_INTERCEPTOR);
     helper.updateBalancingState(READY, mockPicker);

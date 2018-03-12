@@ -393,6 +393,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     // did not cancel idleModeTimer, or enterIdle() ran while shutdown or in idle, all of
     // which are bugs.
     shutdownNameResolverAndLoadBalancer(true);
+    delayedTransport.reprocess(null);
     nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     channelStateManager.gotoState(IDLE);
   }

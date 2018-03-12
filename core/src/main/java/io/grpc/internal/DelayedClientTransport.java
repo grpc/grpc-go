@@ -71,7 +71,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
   private Status shutdownStatus;
 
   /**
-   * The last picker that {@link #reprocess} has used.
+   * The last picker that {@link #reprocess} has used. May be set to null when the channel has moved
+   * to idle.
    */
   @GuardedBy("lock")
   @Nullable
@@ -271,17 +272,17 @@ final class DelayedClientTransport implements ManagedClientTransport {
    *
    * <p>This method <strong>must not</strong> be called concurrently with itself.
    */
-  final void reprocess(SubchannelPicker picker) {
+  final void reprocess(@Nullable SubchannelPicker picker) {
     ArrayList<PendingStream> toProcess;
-    ArrayList<PendingStream> toRemove = new ArrayList<PendingStream>();
     synchronized (lock) {
       lastPicker = picker;
       lastPickerVersion++;
-      if (!hasPendingStreams()) {
+      if (picker == null || !hasPendingStreams()) {
         return;
       }
       toProcess = new ArrayList<PendingStream>(pendingStreams);
     }
+    ArrayList<PendingStream> toRemove = new ArrayList<PendingStream>();
 
     for (final PendingStream stream : toProcess) {
       PickResult pickResult = picker.pickSubchannel(stream.args);
