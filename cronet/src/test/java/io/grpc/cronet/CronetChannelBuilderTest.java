@@ -25,7 +25,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.cronet.CronetChannelBuilder.CronetTransportFactory;
 import io.grpc.testing.TestMethodDescriptors;
 import java.net.InetSocketAddress;
-import org.chromium.net.CronetEngine;
+import org.chromium.net.ExperimentalCronetEngine;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,7 +36,7 @@ import org.robolectric.RobolectricTestRunner;
 @RunWith(RobolectricTestRunner.class)
 public final class CronetChannelBuilderTest {
 
-  @Mock private CronetEngine mockEngine;
+  @Mock private ExperimentalCronetEngine mockEngine;
 
   private MethodDescriptor<?, ?> method = TestMethodDescriptors.voidMethod();
 

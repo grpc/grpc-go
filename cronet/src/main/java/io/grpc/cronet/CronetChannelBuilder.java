@@ -39,6 +39,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 import org.chromium.net.BidirectionalStream;
 import org.chromium.net.CronetEngine;
+import org.chromium.net.ExperimentalBidirectionalStream;
 import org.chromium.net.ExperimentalCronetEngine;
 
 /** Convenience class for building channels with the cronet transport. */
@@ -53,26 +54,9 @@ public final class CronetChannelBuilder extends
   }
 
   /** Creates a new builder for the given server host, port and CronetEngine. */
-  public static CronetChannelBuilder forAddress(
-      String host, int port, final CronetEngine cronetEngine) {
+  public static CronetChannelBuilder forAddress(String host, int port, CronetEngine cronetEngine) {
     Preconditions.checkNotNull(cronetEngine, "cronetEngine");
-    return new CronetChannelBuilder(
-        host,
-        port,
-        new StreamBuilderFactory() {
-          @Override
-          public BidirectionalStream.Builder newBidirectionalStreamBuilder(
-              String url, BidirectionalStream.Callback callback, Executor executor) {
-            return ((ExperimentalCronetEngine) cronetEngine)
-                .newBidirectionalStreamBuilder(url, callback, executor);
-          }
-        });
-  }
-
-  /** Creates a new builder for the given server host, port and StreamBuilderFactory. */
-  public static CronetChannelBuilder forAddress(
-      String host, int port, StreamBuilderFactory streamFactory) {
-    return new CronetChannelBuilder(host, port, streamFactory);
+    return new CronetChannelBuilder(host, port, (ExperimentalCronetEngine) cronetEngine);
   }
 
   /**
@@ -89,17 +73,22 @@ public final class CronetChannelBuilder extends
     throw new UnsupportedOperationException("call forAddress(String, int, CronetEngine) instead");
   }
 
+  private final ExperimentalCronetEngine cronetEngine;
+
   private boolean alwaysUsePut = false;
 
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
-  private StreamBuilderFactory streamFactory;
+  private boolean trafficStatsTagSet;
+  private int trafficStatsTag;
+  private boolean trafficStatsUidSet;
+  private int trafficStatsUid;
 
-  private CronetChannelBuilder(String host, int port, StreamBuilderFactory streamFactory) {
+  private CronetChannelBuilder(String host, int port, ExperimentalCronetEngine cronetEngine) {
     super(
         InetSocketAddress.createUnresolved(host, port),
         GrpcUtil.authorityFromHostAndPort(host, port));
-    this.streamFactory = Preconditions.checkNotNull(streamFactory, "streamFactory");
+    this.cronetEngine = Preconditions.checkNotNull(cronetEngine, "cronetEngine");
   }
 
   /**
@@ -128,10 +117,59 @@ public final class CronetChannelBuilder extends
     throw new IllegalArgumentException("Plaintext not currently supported");
   }
 
+  /**
+   * Sets {@link android.net.TrafficStats} tag to use when accounting socket traffic caused by this
+   * channel. See {@link android.net.TrafficStats} for more information. If no tag is set (e.g. this
+   * method isn't called), then Android accounts for the socket traffic caused by this channel as if
+   * the tag value were set to 0.
+   *
+   * <p><b>NOTE:</b>Setting a tag disallows sharing of sockets with channels with other tags, which
+   * may adversely effect performance by prohibiting connection sharing. In other words use of
+   * multiplexed sockets (e.g. HTTP/2 and QUIC) will only be allowed if all channels have the same
+   * socket tag.
+   *
+   * @param tag the tag value used to when accounting for socket traffic caused by this channel.
+   *     Tags between 0xFFFFFF00 and 0xFFFFFFFF are reserved and used internally by system services
+   *     like {@link android.app.DownloadManager} when performing traffic on behalf of an
+   *     application.
+   * @return the builder to facilitate chaining.
+   */
+  public final CronetChannelBuilder setTrafficStatsTag(int tag) {
+    trafficStatsTagSet = true;
+    trafficStatsTag = tag;
+    return this;
+  }
+
+  /**
+   * Sets specific UID to use when accounting socket traffic caused by this channel. See {@link
+   * android.net.TrafficStats} for more information. Designed for use when performing an operation
+   * on behalf of another application. Caller must hold {@link
+   * android.Manifest.permission#MODIFY_NETWORK_ACCOUNTING} permission. By default traffic is
+   * attributed to UID of caller.
+   *
+   * <p><b>NOTE:</b>Setting a UID disallows sharing of sockets with channels with other UIDs, which
+   * may adversely effect performance by prohibiting connection sharing. In other words use of
+   * multiplexed sockets (e.g. HTTP/2 and QUIC) will only be allowed if all channels have the same
+   * UID set.
+   *
+   * @param uid the UID to attribute socket traffic caused by this channel.
+   * @return the builder to facilitate chaining.
+   */
+  public final CronetChannelBuilder setTrafficStatsUid(int uid) {
+    trafficStatsUidSet = true;
+    trafficStatsUid = uid;
+    return this;
+  }
+
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
-    return new CronetTransportFactory(streamFactory, MoreExecutors.directExecutor(),
-        maxMessageSize, alwaysUsePut, transportTracerFactory.create());
+    return new CronetTransportFactory(
+        new TaggingStreamFactory(
+            cronetEngine, trafficStatsTagSet, trafficStatsTag, trafficStatsUidSet, trafficStatsUid),
+        MoreExecutors.directExecutor(),
+        maxMessageSize,
+        alwaysUsePut,
+        transportTracerFactory.create());
   }
 
   @Override
@@ -179,6 +217,40 @@ public final class CronetChannelBuilder extends
     @Override
     public void close() {
       SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timeoutService);
+    }
+  }
+
+  /**
+   * StreamBuilderFactory impl that applies TrafficStats tags to stream builders that are produced.
+   */
+  private static class TaggingStreamFactory extends StreamBuilderFactory {
+    private final ExperimentalCronetEngine cronetEngine;
+    private final boolean trafficStatsTagSet;
+    private final int trafficStatsTag;
+    private final boolean trafficStatsUidSet;
+    private final int trafficStatsUid;
+
+    TaggingStreamFactory(
+        ExperimentalCronetEngine cronetEngine,
+        boolean trafficStatsTagSet,
+        int trafficStatsTag,
+        boolean trafficStatsUidSet,
+        int trafficStatsUid) {
+      this.cronetEngine = cronetEngine;
+      this.trafficStatsTagSet = trafficStatsTagSet;
+      this.trafficStatsTag = trafficStatsTag;
+      this.trafficStatsUidSet = trafficStatsUidSet;
+      this.trafficStatsUid = trafficStatsUid;
+    }
+
+    @Override
+    public BidirectionalStream.Builder newBidirectionalStreamBuilder(
+        String url, BidirectionalStream.Callback callback, Executor executor) {
+      ExperimentalBidirectionalStream.Builder builder =
+          cronetEngine.newBidirectionalStreamBuilder(url, callback, executor);
+      if (trafficStatsTagSet) builder.setTrafficStatsTag(trafficStatsTag);
+      if (trafficStatsUidSet) builder.setTrafficStatsUid(trafficStatsUid);
+      return builder;
     }
   }
 }
