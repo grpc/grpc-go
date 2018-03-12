@@ -68,6 +68,7 @@ import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Instrumented;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
@@ -124,6 +125,9 @@ public class OkHttpClientTransportTest {
   // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
   private static final int HEADER_LENGTH = 5;
   private static final Status SHUTDOWN_REASON = Status.UNAVAILABLE.withDescription("for test");
+  private static final ProxyParameters NO_PROXY = null;
+  private static final String NO_USER = null;
+  private static final String NO_PW = null;
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
@@ -137,9 +141,6 @@ public class OkHttpClientTransportTest {
 
   private final SSLSocketFactory sslSocketFactory = null;
   private final HostnameVerifier hostnameVerifier = null;
-  private final InetSocketAddress proxyAddr = null;
-  private final String proxyUser = null;
-  private final String proxyPassword = null;
   private final TransportTracer transportTracer = new TransportTracer();
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
@@ -225,9 +226,7 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC),
         DEFAULT_MAX_MESSAGE_SIZE,
-        proxyAddr,
-        proxyUser,
-        proxyPassword,
+        NO_PROXY,
         tooManyPingsRunnable,
         transportTracer);
     String s = clientTransport.toString();
@@ -1450,9 +1449,7 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
-        proxyAddr,
-        proxyUser,
-        proxyPassword,
+        NO_PROXY,
         tooManyPingsRunnable,
         transportTracer);
 
@@ -1474,9 +1471,7 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
-        proxyAddr,
-        proxyUser,
-        proxyPassword,
+        NO_PROXY,
         tooManyPingsRunnable,
         new TransportTracer());
 
@@ -1506,9 +1501,8 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
-        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
-        proxyUser,
-        proxyPassword,
+        new ProxyParameters(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
         transportTracer);
     clientTransport.start(transportListener);
@@ -1557,9 +1551,8 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
-        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
-        proxyUser,
-        proxyPassword,
+        new ProxyParameters(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
         transportTracer);
     clientTransport.start(transportListener);
@@ -1607,9 +1600,8 @@ public class OkHttpClientTransportTest {
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
-        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
-        proxyUser,
-        proxyPassword,
+        new ProxyParameters(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
         transportTracer);
     clientTransport.start(transportListener);
@@ -1617,34 +1609,6 @@ public class OkHttpClientTransportTest {
     Socket sock = serverSocket.accept();
     serverSocket.close();
     sock.close();
-
-    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
-    Status error = captor.getValue();
-    assertTrue("Status didn't contain proxy: " + captor.getValue(),
-        error.getDescription().contains("proxy"));
-    assertEquals("Not UNAVAILABLE: " + captor.getValue(),
-        Status.UNAVAILABLE.getCode(), error.getCode());
-    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
-  }
-
-  @Test
-  public void proxy_unresolvedProxyAddress() throws Exception {
-    clientTransport = new OkHttpClientTransport(
-        InetSocketAddress.createUnresolved("theservice", 80),
-        "authority",
-        "userAgent",
-        executor,
-        sslSocketFactory,
-        hostnameVerifier,
-        ConnectionSpec.CLEARTEXT,
-        DEFAULT_MAX_MESSAGE_SIZE,
-        InetSocketAddress.createUnresolved("unresolvedproxy", 80),
-        proxyUser,
-        proxyPassword,
-        tooManyPingsRunnable,
-        transportTracer);
-    clientTransport.start(transportListener);
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());

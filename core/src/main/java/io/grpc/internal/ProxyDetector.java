@@ -16,18 +16,24 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
+import java.io.IOException;
 import java.net.SocketAddress;
 import javax.annotation.Nullable;
 
 /**
  * A utility class to detect which proxy, if any, should be used for a given
- * {@link java.net.SocketAddress}.
+ * {@link java.net.SocketAddress}. This class performs network requests to resolve address names,
+ * and should only be used in places that are expected to do IO such as the
+ * {@link io.grpc.NameResolver}.
  */
 public interface ProxyDetector {
+  Attributes.Key<ProxyParameters> PROXY_PARAMS_KEY = Attributes.Key.of("proxy-params-key");
   /**
    * Given a target address, returns which proxy address should be used. If no proxy should be
-   * used, then return value will be null.
+   * used, then return value will be null. The address of the {@link ProxyParameters} is always
+   * resolved. This throws if the proxy address cannot be resolved.
    */
   @Nullable
-  ProxyParameters proxyFor(SocketAddress targetServerAddress);
+  ProxyParameters proxyFor(SocketAddress targetServerAddress) throws IOException;
 }

@@ -150,8 +150,6 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   @GuardedBy("lock")
   private ConnectivityStateInfo state = ConnectivityStateInfo.forNonError(IDLE);
 
-  private final ProxyDetector proxyDetector;
-
   @GuardedBy("lock")
   private Status shutdownReason;
 
@@ -159,7 +157,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      ProxyDetector proxyDetector, Channelz channelz, CallTracer callsTracer) {
+      Channelz channelz, CallTracer callsTracer) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -169,7 +167,6 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     this.connectingTimer = stopwatchSupplier.get();
     this.channelExecutor = channelExecutor;
     this.callback = callback;
-    this.proxyDetector = proxyDetector;
     this.channelz = channelz;
     this.callsTracer = callsTracer;
   }
@@ -211,9 +208,14 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       connectingTimer.reset().start();
     }
     List<SocketAddress> addrs = addressGroup.getAddresses();
-    final SocketAddress address = addrs.get(addressIndex);
+    SocketAddress address = addrs.get(addressIndex);
 
-    ProxyParameters proxy = proxyDetector.proxyFor(address);
+    ProxyParameters proxy = null;
+    if (address instanceof PairSocketAddress) {
+      proxy = ((PairSocketAddress) address).getAttributes().get(ProxyDetector.PROXY_PARAMS_KEY);
+      address = ((PairSocketAddress) address).getAddress();
+    }
+
     ConnectionClientTransport transport =
         new CallTracingTransport(
             transportFactory.newClientTransport(address, authority, userAgent, proxy),

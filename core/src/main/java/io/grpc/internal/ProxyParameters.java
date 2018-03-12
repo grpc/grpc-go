@@ -29,11 +29,16 @@ public final class ProxyParameters {
   @Nullable public final String username;
   @Nullable public final String password;
 
-  ProxyParameters(
+  /** Creates an instance. */
+  public ProxyParameters(
       InetSocketAddress proxyAddress,
       @Nullable String username,
       @Nullable String password) {
-    this.proxyAddress = Preconditions.checkNotNull(proxyAddress);
+    Preconditions.checkNotNull(proxyAddress);
+    // The resolution must be done by the ProxyParameters producer, because consumers
+    // may not be allowed to do IO.
+    Preconditions.checkState(!proxyAddress.isUnresolved());
+    this.proxyAddress = proxyAddress;
     this.username = username;
     this.password = password;
   }

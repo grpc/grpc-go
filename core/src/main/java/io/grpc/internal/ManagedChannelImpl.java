@@ -151,8 +151,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   // Only null after channel is terminated. Must be assigned from the channelExecutor.
   private NameResolver nameResolver;
 
-  private final ProxyDetector proxyDetector;
-
   // Must be accessed from the channelExecutor.
   private boolean nameResolverStarted;
 
@@ -548,7 +546,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       ObjectPool<? extends Executor> oobExecutorPool,
       Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors,
-      ProxyDetector proxyDetector,
       CallTracer.Factory callTracerFactory) {
     this.target = checkNotNull(builder.target, "target");
     this.nameResolverFactory = builder.getNameResolverFactory();
@@ -583,7 +580,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     this.decompressorRegistry = checkNotNull(builder.decompressorRegistry, "decompressorRegistry");
     this.compressorRegistry = checkNotNull(builder.compressorRegistry, "compressorRegistry");
     this.userAgent = builder.userAgent;
-    this.proxyDetector = proxyDetector;
 
     this.maxRetryAttempts = builder.maxRetryAttempts;
     this.maxHedgedAttempts = builder.maxHedgedAttempts;
@@ -1015,7 +1011,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
                 inUseStateAggregator.updateObjectInUse(is, false);
               }
             },
-            proxyDetector,
             channelz,
             callTracerFactory.create());
       channelz.addSubchannel(internalSubchannel);
@@ -1100,7 +1095,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               oobChannel.handleSubchannelStateChange(newState);
             }
           },
-          proxyDetector,
           channelz,
           callTracerFactory.create());
       channelz.addSubchannel(oobChannel);

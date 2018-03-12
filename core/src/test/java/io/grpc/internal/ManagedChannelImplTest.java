@@ -242,7 +242,7 @@ public class ManagedChannelImplTest {
     checkState(channel == null);
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
-        oobExecutorPool, timer.getStopwatchSupplier(), interceptors, GrpcUtil.NOOP_PROXY_DETECTOR,
+        oobExecutorPool, timer.getStopwatchSupplier(), interceptors,
         channelStatsFactory);
 
     if (requestConnection) {

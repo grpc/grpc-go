@@ -45,6 +45,7 @@ import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.LogId;
+import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
@@ -177,25 +178,23 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private long keepAliveTimeNanos;
   private long keepAliveTimeoutNanos;
   private boolean keepAliveWithoutCalls;
-  @Nullable
-  private final InetSocketAddress proxyAddress;
-  @Nullable
-  private final String proxyUsername;
-  @Nullable
-  private final String proxyPassword;
   private final Runnable tooManyPingsRunnable;
   @GuardedBy("lock")
   private final TransportTracer transportTracer;
+
+  @VisibleForTesting
+  @Nullable
+  final ProxyParameters proxy;
 
   // The following fields should only be used for test.
   Runnable connectingCallback;
   SettableFuture<Void> connectedFuture;
 
+
   OkHttpClientTransport(InetSocketAddress address, String authority, @Nullable String userAgent,
       Executor executor, @Nullable SSLSocketFactory sslSocketFactory,
       @Nullable HostnameVerifier hostnameVerifier, ConnectionSpec connectionSpec,
-      int maxMessageSize, @Nullable InetSocketAddress proxyAddress, @Nullable String proxyUsername,
-      @Nullable String proxyPassword, Runnable tooManyPingsRunnable,
+      int maxMessageSize, @Nullable ProxyParameters proxy, Runnable tooManyPingsRunnable,
       TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
@@ -210,9 +209,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
     this.stopwatchFactory = GrpcUtil.STOPWATCH_SUPPLIER;
     this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
-    this.proxyAddress = proxyAddress;
-    this.proxyUsername = proxyUsername;
-    this.proxyPassword = proxyPassword;
+    this.proxy = proxy;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
@@ -250,9 +247,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.connectionSpec = null;
     this.connectingCallback = connectingCallback;
     this.connectedFuture = Preconditions.checkNotNull(connectedFuture, "connectedFuture");
-    this.proxyAddress = null;
-    this.proxyUsername = null;
-    this.proxyPassword = null;
+    this.proxy = null;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
@@ -456,10 +451,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         BufferedSink sink;
         Socket sock;
         try {
-          if (proxyAddress == null) {
+          if (proxy == null) {
             sock = new Socket(address.getAddress(), address.getPort());
           } else {
-            sock = createHttpProxySocket(address, proxyAddress, proxyUsername, proxyPassword);
+            sock = createHttpProxySocket(
+                address, proxy.proxyAddress, proxy.username, proxy.password);
           }
 
           if (sslSocketFactory != null) {

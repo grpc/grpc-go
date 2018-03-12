@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
+import java.io.IOException;
 import java.net.Authenticator;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -108,7 +109,7 @@ class ProxyDetectorImpl implements ProxyDetector {
 
   @Nullable
   @Override
-  public ProxyParameters proxyFor(SocketAddress targetServerAddress) {
+  public ProxyParameters proxyFor(SocketAddress targetServerAddress) throws IOException {
     if (override != null) {
       return override;
     }
@@ -118,7 +119,7 @@ class ProxyDetectorImpl implements ProxyDetector {
     return detectProxy((InetSocketAddress) targetServerAddress);
   }
 
-  private ProxyParameters detectProxy(InetSocketAddress targetAddr) {
+  private ProxyParameters detectProxy(InetSocketAddress targetAddr) throws IOException {
     URI uri;
     String host;
     try {
@@ -167,12 +168,21 @@ class ProxyDetectorImpl implements ProxyDetector {
         promptString,
         null);
 
+    final InetSocketAddress resolvedProxyAddr;
+    if (proxyAddr.isUnresolved()) {
+      InetAddress resolvedAddress = InetAddress.getByName(proxyAddr.getHostName());
+      resolvedProxyAddr = new InetSocketAddress(resolvedAddress, proxyAddr.getPort());
+    } else {
+      resolvedProxyAddr = proxyAddr;
+    }
+
     if (auth == null) {
-      return new ProxyParameters(proxyAddr, null, null);
+      return new ProxyParameters(resolvedProxyAddr, null, null);
     }
 
     // TODO(spencerfang): users of ProxyParameters should clear the password when done
-    return new ProxyParameters(proxyAddr, auth.getUserName(), new String(auth.getPassword()));
+    return new ProxyParameters(
+        resolvedProxyAddr, auth.getUserName(), new String(auth.getPassword()));
   }
 
   /**

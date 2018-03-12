@@ -52,7 +52,7 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
           name,
           params,
           GrpcUtil.SHARED_CHANNEL_EXECUTOR,
-          GrpcUtil.getProxyDetector());
+          GrpcUtil.getDefaultProxyDetector());
     } else {
       return null;
     }

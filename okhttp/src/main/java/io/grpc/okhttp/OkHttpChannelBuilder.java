@@ -483,9 +483,7 @@ public class OkHttpChannelBuilder extends
           hostnameVerifier,
           Utils.convertSpec(connectionSpec),
           maxMessageSize,
-          proxy == null ? null : proxy.proxyAddress,
-          proxy == null ? null : proxy.username,
-          proxy == null ? null : proxy.password,
+          proxy,
           tooManyPingsRunnable,
           transportTracerFactory.create());
       if (enableKeepAlive) {

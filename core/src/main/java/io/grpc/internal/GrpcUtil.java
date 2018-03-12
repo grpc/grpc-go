@@ -249,7 +249,7 @@ public final class GrpcUtil {
   /**
    * Returns a proxy detector appropriate for the current environment.
    */
-  public static ProxyDetector getProxyDetector() {
+  public static ProxyDetector getDefaultProxyDetector() {
     if (IS_RESTRICTED_APPENGINE) {
       return NOOP_PROXY_DETECTOR;
     } else {

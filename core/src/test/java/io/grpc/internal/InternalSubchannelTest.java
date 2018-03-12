@@ -28,7 +28,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,19 +36,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
 import io.grpc.internal.InternalSubchannel.CallTracingTransport;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -866,32 +862,6 @@ public class InternalSubchannelTest {
   }
 
   @Test
-  public void proxyTest() {
-    final SocketAddress addr1 = mock(SocketAddress.class);
-    final ProxyParameters proxy = new ProxyParameters(
-        InetSocketAddress.createUnresolved("proxy.example.com", 1000), "username", "password");
-    ProxyDetector proxyDetector = new ProxyDetector() {
-      @Nullable
-      @Override
-      public ProxyParameters proxyFor(SocketAddress targetServerAddress) {
-        if (targetServerAddress == addr1) {
-          return proxy;
-        } else {
-          return null;
-        }
-      }
-    };
-    createInternalSubChannelWithProxy(proxyDetector, addr1);
-    assertEquals(ConnectivityState.IDLE, internalSubchannel.getState());
-    assertNoCallbackInvoke();
-    assertNull(internalSubchannel.obtainActiveTransport());
-    assertExactCallbackInvokes("onStateChange:CONNECTING");
-    assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
-    verify(mockTransportFactory).newClientTransport(
-        eq(addr1), eq(AUTHORITY), eq(USER_AGENT), eq(proxy));
-  }
-
-  @Test
   public void resetConnectBackoff() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
     createInternalSubchannel(addr);
@@ -962,16 +932,11 @@ public class InternalSubchannelTest {
   }
 
   private void createInternalSubchannel(SocketAddress ... addrs) {
-    createInternalSubChannelWithProxy(GrpcUtil.NOOP_PROXY_DETECTOR, addrs);
-  }
-
-  private void createInternalSubChannelWithProxy(
-      ProxyDetector proxyDetector, SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     internalSubchannel = new InternalSubchannel(addressGroup, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), channelExecutor, mockInternalSubchannelCallback,
-        proxyDetector, channelz, CallTracer.getDefaultFactory().create());
+        channelz, CallTracer.getDefaultFactory().create());
   }
 
   private void assertNoCallbackInvoke() {

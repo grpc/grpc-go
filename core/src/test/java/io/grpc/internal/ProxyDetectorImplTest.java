@@ -18,8 +18,10 @@ package io.grpc.internal;
 
 import static junit.framework.TestCase.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -42,18 +44,18 @@ import org.mockito.MockitoAnnotations;
 
 @RunWith(JUnit4.class)
 public class ProxyDetectorImplTest {
-  private InetSocketAddress destination = InetSocketAddress.createUnresolved(
-      "destination",
-      5678
-  );
-
+  private static final String NO_USER = null;
+  private static final String NO_PW = null;
   @Mock private ProxySelector proxySelector;
   @Mock private ProxyDetectorImpl.AuthenticationProvider authenticator;
+  private InetSocketAddress destination = InetSocketAddress.createUnresolved("10.10.10.10", 5678);
   private Supplier<ProxySelector> proxySelectorSupplier;
   private ProxyDetector proxyDetector;
+  private InetSocketAddress unresolvedProxy;
+  private ProxyParameters proxyParmeters;
 
   @Before
-  public void setUp() {
+  public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
     proxySelectorSupplier = new Supplier<ProxySelector>() {
       @Override
@@ -62,11 +64,17 @@ public class ProxyDetectorImplTest {
       }
     };
     proxyDetector = new ProxyDetectorImpl(proxySelectorSupplier, authenticator, null);
+    int proxyPort = 1234;
+    unresolvedProxy = InetSocketAddress.createUnresolved("10.0.0.1", proxyPort);
+    proxyParmeters = new ProxyParameters(
+        new InetSocketAddress(InetAddress.getByName(unresolvedProxy.getHostName()), proxyPort),
+        NO_USER,
+        NO_PW);
   }
 
   @Test
   public void override_hostPort() throws Exception {
-    final String overrideHost = "override";
+    final String overrideHost = "10.99.99.99";
     final int overridePort = 1234;
     final String overrideHostWithPort = overrideHost + ":" + overridePort;
     ProxyDetectorImpl proxyDetector = new ProxyDetectorImpl(
@@ -77,13 +85,15 @@ public class ProxyDetectorImplTest {
     assertNotNull(detected);
     assertEquals(
         new ProxyParameters(
-            InetSocketAddress.createUnresolved(overrideHost, overridePort), null, null),
+            new InetSocketAddress(InetAddress.getByName(overrideHost), overridePort),
+            NO_USER,
+            NO_PW),
         detected);
   }
 
   @Test
   public void override_hostOnly() throws Exception {
-    final String overrideHostWithoutPort = "override";
+    final String overrideHostWithoutPort = "10.99.99.99";
     final int defaultPort = 80;
     ProxyDetectorImpl proxyDetector = new ProxyDetectorImpl(
         proxySelectorSupplier,
@@ -93,7 +103,10 @@ public class ProxyDetectorImplTest {
     assertNotNull(detected);
     assertEquals(
         new ProxyParameters(
-            InetSocketAddress.createUnresolved(overrideHostWithoutPort, defaultPort), null, null),
+            new InetSocketAddress(
+                InetAddress.getByName(overrideHostWithoutPort), defaultPort),
+            NO_USER,
+            NO_PW),
         detected);
   }
 
@@ -105,43 +118,50 @@ public class ProxyDetectorImplTest {
   }
 
   @Test
-  public void detectProxyForUnresolved() throws Exception {
-    final InetSocketAddress proxyAddress = InetSocketAddress.createUnresolved("proxy", 1234);
-    Proxy proxy = new Proxy(Proxy.Type.HTTP, proxyAddress);
+  public void detectProxyForUnresolvedDestination() throws Exception {
+    Proxy proxy = new Proxy(Proxy.Type.HTTP, unresolvedProxy);
     when(proxySelector.select(any(URI.class))).thenReturn(ImmutableList.of(proxy));
 
     ProxyParameters detected = proxyDetector.proxyFor(destination);
     assertNotNull(detected);
-    assertEquals(new ProxyParameters(proxyAddress, null, null), detected);
+    assertEquals(proxyParmeters, detected);
   }
 
   @Test
-  public void detectProxyForResolved() throws Exception {
-    InetSocketAddress resolved =
-        new InetSocketAddress(InetAddress.getByAddress(new byte[]{10, 0, 0, 1}), 10);
+  public void detectProxyForResolvedDestination() throws Exception {
+    InetSocketAddress resolved = new InetSocketAddress(InetAddress.getByName("10.1.2.3"), 10);
     assertFalse(resolved.isUnresolved());
     destination = resolved;
 
-    final InetSocketAddress proxyAddress = InetSocketAddress.createUnresolved("proxy", 1234);
-    Proxy proxy = new Proxy(Proxy.Type.HTTP, proxyAddress);
+    Proxy proxy = new Proxy(Proxy.Type.HTTP, unresolvedProxy);
     when(proxySelector.select(any(URI.class))).thenReturn(ImmutableList.of(proxy));
 
     ProxyParameters detected = proxyDetector.proxyFor(destination);
     assertNotNull(detected);
-    assertEquals(new ProxyParameters(proxyAddress, null, null), detected);
+    assertEquals(proxyParmeters, detected);
+  }
+
+  @Test
+  public void unresolvedProxyAddressBecomesResolved() throws Exception {
+    InetSocketAddress unresolvedProxy = InetSocketAddress.createUnresolved("10.0.0.100", 1234);
+    assertTrue(unresolvedProxy.isUnresolved());
+    Proxy proxy1 = new java.net.Proxy(java.net.Proxy.Type.HTTP, unresolvedProxy);
+    when(proxySelector.select(any(URI.class))).thenReturn(ImmutableList.of(proxy1));
+    ProxyParameters proxy = proxyDetector.proxyFor(destination);
+    assertFalse(proxy.proxyAddress.isUnresolved());
   }
 
   @Test
   public void pickFirstHttpProxy() throws Exception {
-    final InetSocketAddress proxyAddress = InetSocketAddress.createUnresolved("proxy1", 1111);
-    InetSocketAddress otherProxy = InetSocketAddress.createUnresolved("proxy2", 2222);
-    Proxy proxy1 = new java.net.Proxy(java.net.Proxy.Type.HTTP, proxyAddress);
+    InetSocketAddress otherProxy = InetSocketAddress.createUnresolved("10.0.0.2", 11111);
+    assertNotEquals(unresolvedProxy, otherProxy);
+    Proxy proxy1 = new java.net.Proxy(java.net.Proxy.Type.HTTP, unresolvedProxy);
     Proxy proxy2 = new java.net.Proxy(java.net.Proxy.Type.HTTP, otherProxy);
     when(proxySelector.select(any(URI.class))).thenReturn(ImmutableList.of(proxy1, proxy2));
 
     ProxyParameters detected = proxyDetector.proxyFor(destination);
     assertNotNull(detected);
-    assertEquals(new ProxyParameters(proxyAddress, null, null), detected);
+    assertEquals(proxyParmeters, detected);
   }
 
   // Mainly for InProcessSocketAddress
@@ -152,10 +172,7 @@ public class ProxyDetectorImplTest {
 
   @Test
   public void authRequired() throws Exception {
-    final String proxyHost = "proxyhost";
-    final int proxyPort = 1234;
-    final InetSocketAddress proxyAddress = InetSocketAddress.createUnresolved(proxyHost, proxyPort);
-    Proxy proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP, proxyAddress);
+    Proxy proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP, unresolvedProxy);
     final String proxyUser = "testuser";
     final String proxyPassword = "testpassword";
     PasswordAuthentication auth = new PasswordAuthentication(
@@ -171,7 +188,13 @@ public class ProxyDetectorImplTest {
     when(proxySelector.select(any(URI.class))).thenReturn(ImmutableList.of(proxy));
 
     ProxyParameters detected = proxyDetector.proxyFor(destination);
-    assertNotNull(detected);
-    assertEquals(new ProxyParameters(proxyAddress, proxyUser, proxyPassword), detected);
+    assertEquals(
+        new ProxyParameters(
+            new InetSocketAddress(
+                InetAddress.getByName(unresolvedProxy.getHostName()),
+                unresolvedProxy.getPort()),
+            proxyUser,
+            proxyPassword),
+        detected);
   }
 }

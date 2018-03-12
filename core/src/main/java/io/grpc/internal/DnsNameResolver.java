@@ -26,6 +26,7 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -71,13 +72,15 @@ final class DnsNameResolver extends NameResolver {
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
 
+  @VisibleForTesting
+  final ProxyDetector proxyDetector;
+
   private DelegateResolver delegateResolver = pickDelegateResolver();
 
   private final String authority;
   private final String host;
   private final int port;
   private final Resource<ExecutorService> executorResource;
-  private final ProxyDetector proxyDetector;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
@@ -145,9 +148,23 @@ final class DnsNameResolver extends NameResolver {
         }
         try {
           InetSocketAddress destination = InetSocketAddress.createUnresolved(host, port);
-          ProxyParameters proxy = proxyDetector.proxyFor(destination);
+          ProxyParameters proxy;
+          try {
+            proxy = proxyDetector.proxyFor(destination);
+          } catch (IOException e) {
+            savedListener.onError(
+                Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
+            return;
+          }
           if (proxy != null) {
-            EquivalentAddressGroup server = new EquivalentAddressGroup(destination);
+            EquivalentAddressGroup server =
+                new EquivalentAddressGroup(
+                    new PairSocketAddress(
+                        destination,
+                        Attributes
+                            .newBuilder()
+                            .set(ProxyDetector.PROXY_PARAMS_KEY, proxy)
+                            .build()));
             savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
             return;
           }

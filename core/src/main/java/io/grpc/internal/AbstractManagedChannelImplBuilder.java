@@ -396,7 +396,6 @@ public abstract class AbstractManagedChannelImplBuilder
         SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
         GrpcUtil.STOPWATCH_SUPPLIER,
         getEffectiveInterceptors(),
-        GrpcUtil.getProxyDetector(),
         CallTracer.getDefaultFactory());
   }
 
