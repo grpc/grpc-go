@@ -516,6 +516,8 @@ type ConnectOptions struct {
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
 	ReadBufferSize int
+	// MaxStreamsClientSize sets the max number of concurrent streams, which in turn determines how many concurrent streams can be hold by one grpc client.
+	MaxStreamsClientSize int
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.

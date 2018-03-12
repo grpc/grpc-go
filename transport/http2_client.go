@@ -196,6 +196,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if opts.ReadBufferSize > 0 {
 		readBufSize = opts.ReadBufferSize
 	}
+	maxStreamsClientSize := defaultMaxStreamsClient
+	if opts.MaxStreamsClientSize > 0 {
+		maxStreamsClientSize = opts.MaxStreamsClientSize
+	}
 	t := &http2Client{
 		ctx:        ctx,
 		cancel:     cancel,
@@ -221,8 +225,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		activeStreams:     make(map[uint32]*Stream),
 		isSecure:          isSecure,
 		creds:             opts.PerRPCCredentials,
-		maxStreams:        defaultMaxStreamsClient,
-		streamsQuota:      newQuotaPool(defaultMaxStreamsClient),
+		maxStreams:        maxStreamsClientSize,
+		streamsQuota:      newQuotaPool(maxStreamsClientSize),
 		streamSendQuota:   defaultWindowSize,
 		kp:                kp,
 		statsHandler:      opts.StatsHandler,
