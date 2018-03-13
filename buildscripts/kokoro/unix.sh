@@ -43,6 +43,7 @@ GRADLE_FLAGS="${GRADLE_FLAGS:-}"
 GRADLE_FLAGS+=" -Pcheckstyle.ignoreFailures=false"
 GRADLE_FLAGS+=" -PfailOnWarnings=true"
 GRADLE_FLAGS+=" -PerrorProne=true"
+GRADLE_FLAGS+=" -Dorg.gradle.parallel=true"
 export GRADLE_OPTS="-Xmx512m"
 
 # Make protobuf discoverable by :grpc-compiler
@@ -60,7 +61,7 @@ if [[ -z "${SKIP_CLEAN_CHECK:-}" && ! -z $(git status --porcelain) ]]; then
 fi
 
 # Run tests
-./gradlew build
+./gradlew build $GRADLE_FLAGS
 pushd examples
 ./gradlew build $GRADLE_FLAGS
 # --batch-mode reduces log spam
@@ -69,8 +70,9 @@ popd
 # TODO(zpencer): also build the GAE examples
 
 LOCAL_MVN_TEMP=$(mktemp -d)
-./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives -PtargetArch=x86_64 \
-  -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP $GRADLE_FLAGS
+# Note that this disables parallel=true from GRADLE_FLAGS
+./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS -PtargetArch=x86_64 \
+  -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
 
 if [[ -z "${MVN_ARTIFACTS:-}" ]]; then
   exit 0
