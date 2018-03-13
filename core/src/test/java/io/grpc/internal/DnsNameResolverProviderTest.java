@@ -19,12 +19,8 @@ package io.grpc.internal;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import io.grpc.Attributes;
-import io.grpc.InternalNameResolverProvider;
-import io.grpc.InternalServiceProviders;
-import io.grpc.NameResolverProvider;
 import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,29 +30,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class DnsNameResolverProviderTest {
   private DnsNameResolverProvider provider = new DnsNameResolverProvider();
-
-  @Test
-  public void provided() {
-    for (NameResolverProvider current
-        : InternalServiceProviders.getCandidatesViaServiceLoader(
-            NameResolverProvider.class, getClass().getClassLoader())) {
-      if (current instanceof DnsNameResolverProvider) {
-        return;
-      }
-    }
-    fail("DnsNameResolverProvider not registered");
-  }
-
-  @Test
-  public void providedHardCoded() {
-    for (NameResolverProvider current : InternalServiceProviders.getCandidatesViaHardCoded(
-        NameResolverProvider.class, InternalNameResolverProvider.HARDCODED_CLASSES)) {
-      if (current instanceof DnsNameResolverProvider) {
-        return;
-      }
-    }
-    fail("DnsNameResolverProvider not registered");
-  }
 
   @Test
   public void isAvailable() {

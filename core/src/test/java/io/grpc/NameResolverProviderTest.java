@@ -94,6 +94,29 @@ public class NameResolverProviderTest {
         ImmutableSet.of("io.grpc.internal.DnsNameResolverProvider"));
   }
 
+  @Test
+  public void provided() {
+    for (NameResolverProvider current
+        : InternalServiceProviders.getCandidatesViaServiceLoader(
+        NameResolverProvider.class, getClass().getClassLoader())) {
+      if (current instanceof DnsNameResolverProvider) {
+        return;
+      }
+    }
+    fail("DnsNameResolverProvider not registered");
+  }
+
+  @Test
+  public void providedHardCoded() {
+    for (NameResolverProvider current : InternalServiceProviders.getCandidatesViaHardCoded(
+        NameResolverProvider.class, NameResolverProvider.HARDCODED_CLASSES)) {
+      if (current instanceof DnsNameResolverProvider) {
+        return;
+      }
+    }
+    fail("DnsNameResolverProvider not registered");
+  }
+
   public static final class HardcodedClassesCallable implements Callable<Iterator<Class<?>>> {
     @Override
     public Iterator<Class<?>> call() throws Exception {
