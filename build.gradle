@@ -42,7 +42,7 @@ subprojects {
       allprojects {
         afterEvaluate { project ->
           project.tasks.withType(JavaCompile) {
-            options.compilerArgs.removeAll { it.startsWith("-Xep:") }
+            options.compilerArgs.removeAll { it.startsWith("-Xep") }
           }
         }
       }
