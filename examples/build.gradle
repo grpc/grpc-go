@@ -28,7 +28,7 @@ repositories {
 
 // Feel free to delete the comment at the next line. It is just for safely
 // updating the version in our release process.
-def grpcVersion = '1.11.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+def grpcVersion = '1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 def nettyTcNativeVersion = '2.0.7.Final'
 
 dependencies {
