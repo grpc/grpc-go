@@ -47,11 +47,10 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// Track the number of times the user has been greeted.
-	s.count[in.Name] += 1
+	s.count[in.Name]++
 	if s.count[in.Name] > 1 {
 		st := status.New(codes.ResourceExhausted, "Request limit exceeded.")
-		// st has code codes.ResourceExhausted, and so WithDetails will not error.
-		ds, _ := st.WithDetails(
+		ds, err := st.WithDetails(
 			&epb.QuotaFailure{
 				Violations: []*epb.QuotaFailure_Violation{{
 					Subject:     fmt.Sprintf("name:%s", in.Name),
@@ -59,6 +58,9 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 				}},
 			},
 		)
+		if err != nil {
+			return nil, st.Err()
+		}
 		return nil, ds.Err()
 	}
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
