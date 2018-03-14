@@ -288,6 +288,8 @@ subprojects {
         source = fileTree(dir: "src/test", include: "**/*.java")
     }
 
+    // invoke jmh on a single benchmark class like so:
+    //   ./gradlew -PjmhIncludeSingleClass=StatsTraceContextBenchmark clean :grpc-core:jmh
     jmh {
         warmupIterations = 10
         iterations = 10
@@ -296,6 +298,9 @@ subprojects {
         // dependencies that break when including them. (context's testCompile
         // depends on core; core's testCompile depends on testing)
         includeTests = false
+        if (project.hasProperty('jmhIncludeSingleClass')) {
+          include = [project.property('jmhIncludeSingleClass')]
+        }
     }
 
     task javadocJar(type: Jar) {
