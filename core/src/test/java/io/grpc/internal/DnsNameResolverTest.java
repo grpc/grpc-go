@@ -270,6 +270,17 @@ public class DnsNameResolverTest {
     assertTrue(((InetSocketAddress) socketAddress.getAddress()).isUnresolved());
   }
 
+  @Test
+  public void unquoteRemovesJndiFormatting() {
+    assertEquals("blah", DnsNameResolver.unquote("blah"));
+    assertEquals("", DnsNameResolver.unquote("\"\""));
+    assertEquals("blahblah", DnsNameResolver.unquote("blah blah"));
+    assertEquals("blahfoo blah", DnsNameResolver.unquote("blah \"foo blah\""));
+    assertEquals("blah blah", DnsNameResolver.unquote("\"blah blah\""));
+    assertEquals("blah\"blah", DnsNameResolver.unquote("\"blah\\\"blah\""));
+    assertEquals("blah\\blah", DnsNameResolver.unquote("\"blah\\\\blah\""));
+  }
+
   private void testInvalidUri(URI uri) {
     try {
       provider.newNameResolver(uri, NAME_RESOLVER_PARAMS);

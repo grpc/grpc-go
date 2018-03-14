@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -67,13 +69,19 @@ final class DnsNameResolver extends NameResolver {
   private static final String GRPCLB_NAME_PREFIX = "_grpclb._tcp.";
 
   private static final String JNDI_PROPERTY =
-      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "false");
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "true");
 
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
 
+
   @VisibleForTesting
   final ProxyDetector proxyDetector;
+
+  /** Access through {@link #getLocalHostname}. */
+  private static String localHostname;
+
+  private final Random random = new Random();
 
   private DelegateResolver delegateResolver = pickDelegateResolver();
 
@@ -185,9 +193,31 @@ final class DnsNameResolver extends NameResolver {
 
           Attributes.Builder attrs = Attributes.newBuilder();
           if (!resolvedInetAddrs.txtRecords.isEmpty()) {
+            Map<String, Object> serviceConfig = null;
+            try {
+              for (Map<String, Object> possibleConfig :
+                  ServiceConfigUtil.parseTxtResults(resolvedInetAddrs.txtRecords)) {
+                try {
+                  serviceConfig =
+                      ServiceConfigUtil.maybeChooseServiceConfig(
+                          possibleConfig, random, getLocalHostname());
+                } catch (RuntimeException e) {
+                  logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
+                }
+                if (serviceConfig != null) {
+                  break;
+                }
+              }
+            } catch (RuntimeException e) {
+              logger.log(Level.WARNING, "Can't parse service Configs", e);
+            }
+
+            // TODO(carl-mastrangelo): pass this as an object.
             attrs.set(
                 GrpcAttributes.NAME_RESOLVER_ATTR_DNS_TXT,
                 Collections.unmodifiableList(new ArrayList<String>(resolvedInetAddrs.txtRecords)));
+          } else {
+            logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
           }
           savedListener.onAddresses(servers, attrs.build());
         } finally {
@@ -424,7 +454,7 @@ final class DnsNameResolver extends NameResolver {
           NamingEnumeration<?> rrValues = rrEntry.getAll();
           try {
             while (rrValues.hasMore()) {
-              records.add(String.valueOf(rrValues.next()));
+              records.add(unquote(String.valueOf(rrValues.next())));
             }
           } finally {
             rrValues.close();
@@ -435,5 +465,46 @@ final class DnsNameResolver extends NameResolver {
       }
       return records;
     }
+  }
+
+  /**
+   * Undo the quoting done in {@link com.sun.jndi.dns.ResourceRecord#decodeTxt}.
+   */
+  @VisibleForTesting
+  static String unquote(String txtRecord) {
+    StringBuilder sb = new StringBuilder(txtRecord.length());
+    boolean inquote = false;
+    for (int i = 0; i < txtRecord.length(); i++) {
+      char c = txtRecord.charAt(i);
+      if (!inquote) {
+        if (c == ' ') {
+          continue;
+        } else if (c == '"') {
+          inquote = true;
+          continue;
+        }
+      } else {
+        if (c == '"') {
+          inquote = false;
+          continue;
+        } else if (c == '\\') {
+          c = txtRecord.charAt(++i);
+          assert c == '"' || c == '\\';
+        }
+      }
+      sb.append(c);
+    }
+    return sb.toString();
+  }
+
+  private static String getLocalHostname() {
+    if (localHostname == null) {
+      try {
+        localHostname = InetAddress.getLocalHost().getHostName();
+      } catch (UnknownHostException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return localHostname;
   }
 }
