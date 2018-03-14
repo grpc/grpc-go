@@ -82,6 +82,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -1694,6 +1695,7 @@ public abstract class AbstractTransportTest {
     serverStream.close(Status.OK, new Metadata());
   }
 
+  @Ignore("hardcoding 127.0.0.1 fails in ipv6")
   @Test
   public void socketStats_addresses() throws Exception {
     server.start(serverListener);
