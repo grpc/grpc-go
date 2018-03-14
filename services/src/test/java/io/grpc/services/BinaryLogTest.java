@@ -95,16 +95,16 @@ public final class BinaryLogTest {
   private static final int HEADER_LIMIT = 10;
   private static final int MESSAGE_LIMIT = Integer.MAX_VALUE;
 
-  private final Metadata metadata = new Metadata();
+  private final Metadata nonEmptyMetadata = new Metadata();
   private final BinaryLogSink sink = mock(BinaryLogSink.class);
   private final BinaryLog binaryLog = new BinaryLog(sink, HEADER_LIMIT, MESSAGE_LIMIT);
   private final ByteBuffer message = ByteBuffer.wrap(new byte[100]);
 
   @Before
   public void setUp() throws Exception {
-    metadata.put(KEY_A, DATA_A);
-    metadata.put(KEY_B, DATA_B);
-    metadata.put(KEY_C, DATA_C);
+    nonEmptyMetadata.put(KEY_A, DATA_A);
+    nonEmptyMetadata.put(KEY_B, DATA_B);
+    nonEmptyMetadata.put(KEY_C, DATA_C);
   }
 
   @Test
@@ -372,6 +372,13 @@ public final class BinaryLogTest {
   }
 
   @Test
+  public void metadataToProto_empty() throws Exception {
+    assertEquals(
+        io.grpc.binarylog.Metadata.getDefaultInstance(),
+        BinaryLog.metadataToProto(new Metadata(), Integer.MAX_VALUE));
+  }
+
+  @Test
   public void metadataToProto() throws Exception {
     assertEquals(
         io.grpc.binarylog.Metadata
@@ -380,7 +387,7 @@ public final class BinaryLogTest {
             .addEntry(ENTRY_B)
             .addEntry(ENTRY_C)
             .build(),
-        BinaryLog.metadataToProto(metadata, Integer.MAX_VALUE));
+        BinaryLog.metadataToProto(nonEmptyMetadata, Integer.MAX_VALUE));
   }
 
   @Test
@@ -388,39 +395,39 @@ public final class BinaryLogTest {
     // 0 byte limit not enough for any metadata
     assertEquals(
         io.grpc.binarylog.Metadata.getDefaultInstance(),
-        BinaryLog.metadataToProto(metadata, 0));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 0));
     // not enough bytes for first key value
     assertEquals(
         io.grpc.binarylog.Metadata.getDefaultInstance(),
-        BinaryLog.metadataToProto(metadata, 9));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 9));
     // enough for first key value
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .build(),
-        BinaryLog.metadataToProto(metadata, 10));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 10));
     // Test edge cases for >= 2 key values
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .build(),
-        BinaryLog.metadataToProto(metadata, 19));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 19));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .addEntry(ENTRY_B)
             .build(),
-        BinaryLog.metadataToProto(metadata, 20));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 20));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .addEntry(ENTRY_B)
             .build(),
-        BinaryLog.metadataToProto(metadata, 29));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 29));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
@@ -428,7 +435,7 @@ public final class BinaryLogTest {
             .addEntry(ENTRY_B)
             .addEntry(ENTRY_C)
             .build(),
-        BinaryLog.metadataToProto(metadata, 30));
+        BinaryLog.metadataToProto(nonEmptyMetadata, 30));
   }
 
   @Test
@@ -504,7 +511,7 @@ public final class BinaryLogTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    binaryLog.logSendInitialMetadata(metadata, IS_SERVER, CALL_ID, socketAddress);
+    binaryLog.logSendInitialMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID, socketAddress);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
@@ -512,7 +519,7 @@ public final class BinaryLogTest {
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
             .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -521,7 +528,7 @@ public final class BinaryLogTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    binaryLog.logSendInitialMetadata(metadata, IS_CLIENT, CALL_ID, socketAddress);
+    binaryLog.logSendInitialMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID, socketAddress);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
@@ -529,7 +536,7 @@ public final class BinaryLogTest {
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
             .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -538,7 +545,7 @@ public final class BinaryLogTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    binaryLog.logRecvInitialMetadata(metadata, IS_SERVER, CALL_ID, socketAddress);
+    binaryLog.logRecvInitialMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID, socketAddress);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
@@ -546,7 +553,7 @@ public final class BinaryLogTest {
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
             .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -555,7 +562,7 @@ public final class BinaryLogTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    binaryLog.logRecvInitialMetadata(metadata, IS_CLIENT, CALL_ID, socketAddress);
+    binaryLog.logRecvInitialMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID, socketAddress);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
@@ -563,33 +570,33 @@ public final class BinaryLogTest {
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
             .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
   @Test
   public void logTrailingMetadata_server() throws Exception {
-    binaryLog.logTrailingMetadata(metadata, IS_SERVER, CALL_ID);
+    binaryLog.logTrailingMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
   @Test
   public void logTrailingMetadata_client() throws Exception {
-    binaryLog.logTrailingMetadata(metadata, IS_CLIENT, CALL_ID);
+    binaryLog.logTrailingMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID);
     verify(sink).write(
         GrpcLogEntry
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(metadata, 10))
+            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
