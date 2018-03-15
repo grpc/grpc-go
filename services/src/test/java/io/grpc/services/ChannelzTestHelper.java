@@ -95,7 +95,7 @@ final class ChannelzTestHelper {
 
     ChannelStats stats = new ChannelStats(
       /*target=*/ "sometarget",
-      /*connectivityState=*/ ConnectivityState.READY,
+      /*state=*/ ConnectivityState.READY,
       /*callsStarted=*/ 1,
       /*callsSucceeded=*/ 2,
       /*callsFailed=*/ 3,
