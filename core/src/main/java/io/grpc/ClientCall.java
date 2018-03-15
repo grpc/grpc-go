@@ -241,7 +241,7 @@ public abstract class ClientCall<ReqT, RespT> {
   /**
    * Returns additional properties of the call. May only be called after {@link Listener#onHeaders}
    * or {@link Listener#onClose}. If called prematurely, the implementation may throw {@code
-   * IllegalStateException} or return abitrary {@code Attributes}.
+   * IllegalStateException} or return arbitrary {@code Attributes}.
    *
    * <p>{@link Grpc} defines commonly used attributes, but they are not guaranteed to be present.
    *
