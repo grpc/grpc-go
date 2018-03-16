@@ -64,7 +64,7 @@ func main() {
 		}
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {
-		altsTC := alts.NewServer()
+		altsTC := alts.NewServerCreds()
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	server := grpc.NewServer(opts...)

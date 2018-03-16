@@ -27,8 +27,8 @@ import (
 
 func TestInfoServerName(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
-	// use NewServer and not NewClient.
-	alts := NewServer()
+	// use NewServerCreds and not NewClientCreds.
+	alts := NewServerCreds()
 	if got, want := alts.Info().ServerName, ""; got != want {
 		t.Fatalf("%v.Info().ServerName = %v, want %v", alts, got, want)
 	}
@@ -37,8 +37,8 @@ func TestInfoServerName(t *testing.T) {
 func TestOverrideServerName(t *testing.T) {
 	wantServerName := "server.name"
 	// This is not testing any handshaker functionality, so it's fine to only
-	// use NewServer and not NewClient.
-	c := NewServer()
+	// use NewServerCreds and not NewClientCreds.
+	c := NewServerCreds()
 	c.OverrideServerName(wantServerName)
 	if got, want := c.Info().ServerName, wantServerName; got != want {
 		t.Fatalf("c.Info().ServerName = %v, want %v", got, want)
@@ -48,8 +48,8 @@ func TestOverrideServerName(t *testing.T) {
 func TestClone(t *testing.T) {
 	wantServerName := "server.name"
 	// This is not testing any handshaker functionality, so it's fine to only
-	// use NewServer and not NewClient.
-	c := NewServer()
+	// use NewServerCreds and not NewClientCreds.
+	c := NewServerCreds()
 	c.OverrideServerName(wantServerName)
 	cc := c.Clone()
 	if got, want := cc.Info().ServerName, wantServerName; got != want {
@@ -66,8 +66,8 @@ func TestClone(t *testing.T) {
 
 func TestInfo(t *testing.T) {
 	// This is not testing any handshaker functionality, so it's fine to only
-	// use NewServer and not NewClient.
-	c := NewServer()
+	// use NewServerCreds and not NewClientCreds.
+	c := NewServerCreds()
 	info := c.Info()
 	if got, want := info.ProtocolVersion, ""; got != want {
 		t.Errorf("info.ProtocolVersion=%v, want %v", got, want)

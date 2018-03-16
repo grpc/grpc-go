@@ -41,7 +41,7 @@ var (
 func main() {
 	flag.Parse()
 
-	altsTC := alts.NewClient(alts.DefaultClientOptions())
+	altsTC := alts.NewClientCreds(&alts.ClientOptions{})
 	// Block until the server is ready.
 	conn, err := grpc.Dial(*serverAddr, grpc.WithTransportCredentials(altsTC), grpc.WithBlock())
 	if err != nil {

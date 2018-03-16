@@ -110,7 +110,7 @@ func main() {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(interop.GetToken(*serviceAccountKeyFile, *oauthScope))))
 		}
 	} else if *useALTS {
-		altsTC := alts.NewClient(nil)
+		altsTC := alts.NewClientCreds(&alts.ClientOptions{})
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
 	} else {
 		opts = append(opts, grpc.WithInsecure())

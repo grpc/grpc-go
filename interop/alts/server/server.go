@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", *serverAddr, err)
 	}
-	altsTC := alts.NewServer()
+	altsTC := alts.NewServerCreds()
 	grpcServer := grpc.NewServer(grpc.Creds(altsTC))
 	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
 	grpcServer.Serve(lis)
