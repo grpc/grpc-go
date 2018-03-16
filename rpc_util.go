@@ -167,6 +167,7 @@ func Header(md *metadata.MD) CallOption {
 }
 
 // HeaderCallOption is a CallOption for collecting response header metadata.
+// The metadata field will be populated *after* the RPC completes.
 // This is an EXPERIMENTAL API.
 type HeaderCallOption struct {
 	HeaderAddr *metadata.MD
@@ -186,6 +187,7 @@ func Trailer(md *metadata.MD) CallOption {
 }
 
 // TrailerCallOption is a CallOption for collecting response trailer metadata.
+// The metadata field will be populated *after* the RPC completes.
 // This is an EXPERIMENTAL API.
 type TrailerCallOption struct {
 	TrailerAddr *metadata.MD
@@ -205,7 +207,7 @@ func Peer(p *peer.Peer) CallOption {
 }
 
 // PeerCallOption is a CallOption for collecting the identity of the remote
-// peer.
+// peer. The peer field will be populated *after* the RPC completes.
 // This is an EXPERIMENTAL API.
 type PeerCallOption struct {
 	PeerAddr *peer.Peer
