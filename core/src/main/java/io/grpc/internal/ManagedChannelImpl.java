@@ -552,8 +552,11 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
-    this.loadBalancerFactory =
-        checkNotNull(builder.loadBalancerFactory, "loadBalancerFactory");
+    if (builder.loadBalancerFactory == null) {
+      this.loadBalancerFactory = new AutoConfiguredLoadBalancerFactory();
+    } else {
+      this.loadBalancerFactory = builder.loadBalancerFactory;
+    }
     this.executorPool = checkNotNull(builder.executorPool, "executorPool");
     this.oobExecutorPool = checkNotNull(oobExecutorPool, "oobExecutorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -1144,11 +1147,9 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   }
 
   private class NameResolverListenerImpl implements NameResolver.Listener {
-    final LoadBalancer balancer;
-    final LoadBalancer.Helper helper;
+    final LbHelperImpl helper;
 
     NameResolverListenerImpl(LbHelperImpl helperImpl) {
-      this.balancer = helperImpl.lb;
       this.helper = helperImpl;
     }
 
@@ -1185,7 +1186,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
                 re);
           }
 
-          balancer.handleResolvedAddressGroups(servers, config);
+          helper.lb.handleResolvedAddressGroups(servers, config);
         }
       }
 
@@ -1206,7 +1207,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
                   if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
                     return;
                   }
-                  balancer.handleNameResolutionError(error);
+                  helper.lb.handleNameResolutionError(error);
                   if (nameResolverRefreshFuture != null) {
                     // The name resolver may invoke onError multiple times, but we only want to
                     // schedule one backoff attempt

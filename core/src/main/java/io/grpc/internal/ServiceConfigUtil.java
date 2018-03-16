@@ -50,6 +50,15 @@ final class ServiceConfigUtil {
 
   private ServiceConfigUtil() {}
 
+  @Nullable
+  static String getLoadBalancingPolicy(Map<String, Object> serviceConfig) {
+    String key = "loadBalancingPolicy";
+    if (serviceConfig.containsKey(key)) {
+      return getString(serviceConfig, key);
+    }
+    return null;
+  }
+
   /**
    * Determines if a given Service Config choice applies, and if so, returns it.
    *
@@ -177,6 +186,20 @@ final class ServiceConfigUtil {
     }
     throw new ClassCastException(
         String.format("value %s for key %s in %s is not Double", value, key, obj));
+  }
+
+  /**
+   * Gets a string from an object for the given key.
+   */
+  @SuppressWarnings("unchecked")
+  private static String getString(Map<String, Object> obj, String key) {
+    assert obj.containsKey(key);
+    Object value = checkNotNull(obj.get(key), "no such key %s", key);
+    if (value instanceof String) {
+      return (String) value;
+    }
+    throw new ClassCastException(
+        String.format("value %s for key %s in %s is not String", value, key, obj));
   }
 
   /**

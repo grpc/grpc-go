@@ -211,11 +211,9 @@ final class DnsNameResolver extends NameResolver {
             } catch (RuntimeException e) {
               logger.log(Level.WARNING, "Can't parse service Configs", e);
             }
-
-            // TODO(carl-mastrangelo): pass this as an object.
-            attrs.set(
-                GrpcAttributes.NAME_RESOLVER_ATTR_DNS_TXT,
-                Collections.unmodifiableList(new ArrayList<String>(resolvedInetAddrs.txtRecords)));
+            if (serviceConfig != null) {
+              attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig);
+            }
           } else {
             logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
           }
