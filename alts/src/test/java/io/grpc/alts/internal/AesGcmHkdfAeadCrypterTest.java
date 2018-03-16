@@ -18,10 +18,10 @@ package io.grpc.alts.internal;
 
 import static com.google.common.truth.Truth.assertWithMessage;
 
+import com.google.common.io.BaseEncoding;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
-import javax.xml.bind.DatatypeConverter;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -78,27 +78,27 @@ public final class AesGcmHkdfAeadCrypterTest {
     }
 
     TestVectorBuilder withKey(String key) {
-      this.key = DatatypeConverter.parseHexBinary(key);
+      this.key = BaseEncoding.base16().lowerCase().decode(key);
       return this;
     }
 
     TestVectorBuilder withNonce(String nonce) {
-      this.nonce = DatatypeConverter.parseHexBinary(nonce);
+      this.nonce = BaseEncoding.base16().lowerCase().decode(nonce);
       return this;
     }
 
     TestVectorBuilder withAad(String aad) {
-      this.aad = DatatypeConverter.parseHexBinary(aad);
+      this.aad = BaseEncoding.base16().lowerCase().decode(aad);
       return this;
     }
 
     TestVectorBuilder withPlaintext(String plaintext) {
-      this.plaintext = DatatypeConverter.parseHexBinary(plaintext);
+      this.plaintext = BaseEncoding.base16().lowerCase().decode(plaintext);
       return this;
     }
 
     TestVectorBuilder withCiphertext(String ciphertext) {
-      this.ciphertext = DatatypeConverter.parseHexBinary(ciphertext);
+      this.ciphertext = BaseEncoding.base16().lowerCase().decode(ciphertext);
       return this;
     }
   }
