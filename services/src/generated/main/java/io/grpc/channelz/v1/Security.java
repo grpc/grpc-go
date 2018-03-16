@@ -107,39 +107,43 @@ private static final long serialVersionUID = 0L;
 
     /**
      * <pre>
-     * The key exchange used.  e.g. X25519
+     * The cipher suite name in the RFC 4346 format:
+     * https://tools.ietf.org/html/rfc4346#appendix-C
      * </pre>
      *
-     * <code>string key_exchange = 1;</code>
+     * <code>string standard_name = 1;</code>
      */
-    java.lang.String getKeyExchange();
+    java.lang.String getStandardName();
     /**
      * <pre>
-     * The key exchange used.  e.g. X25519
+     * The cipher suite name in the RFC 4346 format:
+     * https://tools.ietf.org/html/rfc4346#appendix-C
      * </pre>
      *
-     * <code>string key_exchange = 1;</code>
+     * <code>string standard_name = 1;</code>
      */
     com.google.protobuf.ByteString
-        getKeyExchangeBytes();
+        getStandardNameBytes();
 
     /**
      * <pre>
-     * The cipher used. e.g. AES_128_GCM.
+     * Some other way to describe the cipher suite if
+     * the RFC 4346 name is not available.
      * </pre>
      *
-     * <code>string cipher = 2;</code>
+     * <code>string other_name = 2;</code>
      */
-    java.lang.String getCipher();
+    java.lang.String getOtherName();
     /**
      * <pre>
-     * The cipher used. e.g. AES_128_GCM.
+     * Some other way to describe the cipher suite if
+     * the RFC 4346 name is not available.
      * </pre>
      *
-     * <code>string cipher = 2;</code>
+     * <code>string other_name = 2;</code>
      */
     com.google.protobuf.ByteString
-        getCipherBytes();
+        getOtherNameBytes();
 
     /**
      * <pre>
@@ -158,6 +162,8 @@ private static final long serialVersionUID = 0L;
      * <code>bytes remote_certificate = 4;</code>
      */
     com.google.protobuf.ByteString getRemoteCertificate();
+
+    public io.grpc.channelz.v1.Security.Tls.CipherSuiteCase getCipherSuiteCase();
   }
   /**
    * Protobuf type {@code grpc.channelz.Security.Tls}
@@ -172,8 +178,6 @@ private static final long serialVersionUID = 0L;
       super(builder);
     }
     private Tls() {
-      keyExchange_ = "";
-      cipher_ = "";
       localCertificate_ = com.google.protobuf.ByteString.EMPTY;
       remoteCertificate_ = com.google.protobuf.ByteString.EMPTY;
     }
@@ -211,14 +215,14 @@ private static final long serialVersionUID = 0L;
             }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
-
-              keyExchange_ = s;
+              cipherSuiteCase_ = 1;
+              cipherSuite_ = s;
               break;
             }
             case 18: {
               java.lang.String s = input.readStringRequireUtf8();
-
-              cipher_ = s;
+              cipherSuiteCase_ = 2;
+              cipherSuite_ = s;
               break;
             }
             case 26: {
@@ -255,84 +259,144 @@ private static final long serialVersionUID = 0L;
               io.grpc.channelz.v1.Security.Tls.class, io.grpc.channelz.v1.Security.Tls.Builder.class);
     }
 
-    public static final int KEY_EXCHANGE_FIELD_NUMBER = 1;
-    private volatile java.lang.Object keyExchange_;
+    private int cipherSuiteCase_ = 0;
+    private java.lang.Object cipherSuite_;
+    public enum CipherSuiteCase
+        implements com.google.protobuf.Internal.EnumLite {
+      STANDARD_NAME(1),
+      OTHER_NAME(2),
+      CIPHERSUITE_NOT_SET(0);
+      private final int value;
+      private CipherSuiteCase(int value) {
+        this.value = value;
+      }
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
+      public static CipherSuiteCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static CipherSuiteCase forNumber(int value) {
+        switch (value) {
+          case 1: return STANDARD_NAME;
+          case 2: return OTHER_NAME;
+          case 0: return CIPHERSUITE_NOT_SET;
+          default: return null;
+        }
+      }
+      public int getNumber() {
+        return this.value;
+      }
+    };
+
+    public CipherSuiteCase
+    getCipherSuiteCase() {
+      return CipherSuiteCase.forNumber(
+          cipherSuiteCase_);
+    }
+
+    public static final int STANDARD_NAME_FIELD_NUMBER = 1;
     /**
      * <pre>
-     * The key exchange used.  e.g. X25519
+     * The cipher suite name in the RFC 4346 format:
+     * https://tools.ietf.org/html/rfc4346#appendix-C
      * </pre>
      *
-     * <code>string key_exchange = 1;</code>
+     * <code>string standard_name = 1;</code>
      */
-    public java.lang.String getKeyExchange() {
-      java.lang.Object ref = keyExchange_;
+    public java.lang.String getStandardName() {
+      java.lang.Object ref = "";
+      if (cipherSuiteCase_ == 1) {
+        ref = cipherSuite_;
+      }
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        keyExchange_ = s;
+        if (cipherSuiteCase_ == 1) {
+          cipherSuite_ = s;
+        }
         return s;
       }
     }
     /**
      * <pre>
-     * The key exchange used.  e.g. X25519
+     * The cipher suite name in the RFC 4346 format:
+     * https://tools.ietf.org/html/rfc4346#appendix-C
      * </pre>
      *
-     * <code>string key_exchange = 1;</code>
+     * <code>string standard_name = 1;</code>
      */
     public com.google.protobuf.ByteString
-        getKeyExchangeBytes() {
-      java.lang.Object ref = keyExchange_;
+        getStandardNameBytes() {
+      java.lang.Object ref = "";
+      if (cipherSuiteCase_ == 1) {
+        ref = cipherSuite_;
+      }
       if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        keyExchange_ = b;
+        if (cipherSuiteCase_ == 1) {
+          cipherSuite_ = b;
+        }
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
       }
     }
 
-    public static final int CIPHER_FIELD_NUMBER = 2;
-    private volatile java.lang.Object cipher_;
+    public static final int OTHER_NAME_FIELD_NUMBER = 2;
     /**
      * <pre>
-     * The cipher used. e.g. AES_128_GCM.
+     * Some other way to describe the cipher suite if
+     * the RFC 4346 name is not available.
      * </pre>
      *
-     * <code>string cipher = 2;</code>
+     * <code>string other_name = 2;</code>
      */
-    public java.lang.String getCipher() {
-      java.lang.Object ref = cipher_;
+    public java.lang.String getOtherName() {
+      java.lang.Object ref = "";
+      if (cipherSuiteCase_ == 2) {
+        ref = cipherSuite_;
+      }
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        cipher_ = s;
+        if (cipherSuiteCase_ == 2) {
+          cipherSuite_ = s;
+        }
         return s;
       }
     }
     /**
      * <pre>
-     * The cipher used. e.g. AES_128_GCM.
+     * Some other way to describe the cipher suite if
+     * the RFC 4346 name is not available.
      * </pre>
      *
-     * <code>string cipher = 2;</code>
+     * <code>string other_name = 2;</code>
      */
     public com.google.protobuf.ByteString
-        getCipherBytes() {
-      java.lang.Object ref = cipher_;
+        getOtherNameBytes() {
+      java.lang.Object ref = "";
+      if (cipherSuiteCase_ == 2) {
+        ref = cipherSuite_;
+      }
       if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        cipher_ = b;
+        if (cipherSuiteCase_ == 2) {
+          cipherSuite_ = b;
+        }
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
@@ -377,11 +441,11 @@ private static final long serialVersionUID = 0L;
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!getKeyExchangeBytes().isEmpty()) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, keyExchange_);
+      if (cipherSuiteCase_ == 1) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, cipherSuite_);
       }
-      if (!getCipherBytes().isEmpty()) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, cipher_);
+      if (cipherSuiteCase_ == 2) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, cipherSuite_);
       }
       if (!localCertificate_.isEmpty()) {
         output.writeBytes(3, localCertificate_);
@@ -397,11 +461,11 @@ private static final long serialVersionUID = 0L;
       if (size != -1) return size;
 
       size = 0;
-      if (!getKeyExchangeBytes().isEmpty()) {
-        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, keyExchange_);
+      if (cipherSuiteCase_ == 1) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, cipherSuite_);
       }
-      if (!getCipherBytes().isEmpty()) {
-        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, cipher_);
+      if (cipherSuiteCase_ == 2) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, cipherSuite_);
       }
       if (!localCertificate_.isEmpty()) {
         size += com.google.protobuf.CodedOutputStream
@@ -427,14 +491,25 @@ private static final long serialVersionUID = 0L;
       io.grpc.channelz.v1.Security.Tls other = (io.grpc.channelz.v1.Security.Tls) obj;
 
       boolean result = true;
-      result = result && getKeyExchange()
-          .equals(other.getKeyExchange());
-      result = result && getCipher()
-          .equals(other.getCipher());
       result = result && getLocalCertificate()
           .equals(other.getLocalCertificate());
       result = result && getRemoteCertificate()
           .equals(other.getRemoteCertificate());
+      result = result && getCipherSuiteCase().equals(
+          other.getCipherSuiteCase());
+      if (!result) return false;
+      switch (cipherSuiteCase_) {
+        case 1:
+          result = result && getStandardName()
+              .equals(other.getStandardName());
+          break;
+        case 2:
+          result = result && getOtherName()
+              .equals(other.getOtherName());
+          break;
+        case 0:
+        default:
+      }
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -446,14 +521,22 @@ private static final long serialVersionUID = 0L;
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + KEY_EXCHANGE_FIELD_NUMBER;
-      hash = (53 * hash) + getKeyExchange().hashCode();
-      hash = (37 * hash) + CIPHER_FIELD_NUMBER;
-      hash = (53 * hash) + getCipher().hashCode();
       hash = (37 * hash) + LOCAL_CERTIFICATE_FIELD_NUMBER;
       hash = (53 * hash) + getLocalCertificate().hashCode();
       hash = (37 * hash) + REMOTE_CERTIFICATE_FIELD_NUMBER;
       hash = (53 * hash) + getRemoteCertificate().hashCode();
+      switch (cipherSuiteCase_) {
+        case 1:
+          hash = (37 * hash) + STANDARD_NAME_FIELD_NUMBER;
+          hash = (53 * hash) + getStandardName().hashCode();
+          break;
+        case 2:
+          hash = (37 * hash) + OTHER_NAME_FIELD_NUMBER;
+          hash = (53 * hash) + getOtherName().hashCode();
+          break;
+        case 0:
+        default:
+      }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -583,14 +666,12 @@ private static final long serialVersionUID = 0L;
       }
       public Builder clear() {
         super.clear();
-        keyExchange_ = "";
-
-        cipher_ = "";
-
         localCertificate_ = com.google.protobuf.ByteString.EMPTY;
 
         remoteCertificate_ = com.google.protobuf.ByteString.EMPTY;
 
+        cipherSuiteCase_ = 0;
+        cipherSuite_ = null;
         return this;
       }
 
@@ -613,10 +694,15 @@ private static final long serialVersionUID = 0L;
 
       public io.grpc.channelz.v1.Security.Tls buildPartial() {
         io.grpc.channelz.v1.Security.Tls result = new io.grpc.channelz.v1.Security.Tls(this);
-        result.keyExchange_ = keyExchange_;
-        result.cipher_ = cipher_;
+        if (cipherSuiteCase_ == 1) {
+          result.cipherSuite_ = cipherSuite_;
+        }
+        if (cipherSuiteCase_ == 2) {
+          result.cipherSuite_ = cipherSuite_;
+        }
         result.localCertificate_ = localCertificate_;
         result.remoteCertificate_ = remoteCertificate_;
+        result.cipherSuiteCase_ = cipherSuiteCase_;
         onBuilt();
         return result;
       }
@@ -658,19 +744,28 @@ private static final long serialVersionUID = 0L;
 
       public Builder mergeFrom(io.grpc.channelz.v1.Security.Tls other) {
         if (other == io.grpc.channelz.v1.Security.Tls.getDefaultInstance()) return this;
-        if (!other.getKeyExchange().isEmpty()) {
-          keyExchange_ = other.keyExchange_;
-          onChanged();
-        }
-        if (!other.getCipher().isEmpty()) {
-          cipher_ = other.cipher_;
-          onChanged();
-        }
         if (other.getLocalCertificate() != com.google.protobuf.ByteString.EMPTY) {
           setLocalCertificate(other.getLocalCertificate());
         }
         if (other.getRemoteCertificate() != com.google.protobuf.ByteString.EMPTY) {
           setRemoteCertificate(other.getRemoteCertificate());
+        }
+        switch (other.getCipherSuiteCase()) {
+          case STANDARD_NAME: {
+            cipherSuiteCase_ = 1;
+            cipherSuite_ = other.cipherSuite_;
+            onChanged();
+            break;
+          }
+          case OTHER_NAME: {
+            cipherSuiteCase_ = 2;
+            cipherSuite_ = other.cipherSuite_;
+            onChanged();
+            break;
+          }
+          case CIPHERSUITE_NOT_SET: {
+            break;
+          }
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -698,22 +793,42 @@ private static final long serialVersionUID = 0L;
         }
         return this;
       }
+      private int cipherSuiteCase_ = 0;
+      private java.lang.Object cipherSuite_;
+      public CipherSuiteCase
+          getCipherSuiteCase() {
+        return CipherSuiteCase.forNumber(
+            cipherSuiteCase_);
+      }
 
-      private java.lang.Object keyExchange_ = "";
+      public Builder clearCipherSuite() {
+        cipherSuiteCase_ = 0;
+        cipherSuite_ = null;
+        onChanged();
+        return this;
+      }
+
+
       /**
        * <pre>
-       * The key exchange used.  e.g. X25519
+       * The cipher suite name in the RFC 4346 format:
+       * https://tools.ietf.org/html/rfc4346#appendix-C
        * </pre>
        *
-       * <code>string key_exchange = 1;</code>
+       * <code>string standard_name = 1;</code>
        */
-      public java.lang.String getKeyExchange() {
-        java.lang.Object ref = keyExchange_;
+      public java.lang.String getStandardName() {
+        java.lang.Object ref = "";
+        if (cipherSuiteCase_ == 1) {
+          ref = cipherSuite_;
+        }
         if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
-          keyExchange_ = s;
+          if (cipherSuiteCase_ == 1) {
+            cipherSuite_ = s;
+          }
           return s;
         } else {
           return (java.lang.String) ref;
@@ -721,19 +836,25 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The key exchange used.  e.g. X25519
+       * The cipher suite name in the RFC 4346 format:
+       * https://tools.ietf.org/html/rfc4346#appendix-C
        * </pre>
        *
-       * <code>string key_exchange = 1;</code>
+       * <code>string standard_name = 1;</code>
        */
       public com.google.protobuf.ByteString
-          getKeyExchangeBytes() {
-        java.lang.Object ref = keyExchange_;
+          getStandardNameBytes() {
+        java.lang.Object ref = "";
+        if (cipherSuiteCase_ == 1) {
+          ref = cipherSuite_;
+        }
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
-          keyExchange_ = b;
+          if (cipherSuiteCase_ == 1) {
+            cipherSuite_ = b;
+          }
           return b;
         } else {
           return (com.google.protobuf.ByteString) ref;
@@ -741,68 +862,78 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The key exchange used.  e.g. X25519
+       * The cipher suite name in the RFC 4346 format:
+       * https://tools.ietf.org/html/rfc4346#appendix-C
        * </pre>
        *
-       * <code>string key_exchange = 1;</code>
+       * <code>string standard_name = 1;</code>
        */
-      public Builder setKeyExchange(
+      public Builder setStandardName(
           java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
-  
-        keyExchange_ = value;
+  cipherSuiteCase_ = 1;
+        cipherSuite_ = value;
         onChanged();
         return this;
       }
       /**
        * <pre>
-       * The key exchange used.  e.g. X25519
+       * The cipher suite name in the RFC 4346 format:
+       * https://tools.ietf.org/html/rfc4346#appendix-C
        * </pre>
        *
-       * <code>string key_exchange = 1;</code>
+       * <code>string standard_name = 1;</code>
        */
-      public Builder clearKeyExchange() {
-        
-        keyExchange_ = getDefaultInstance().getKeyExchange();
-        onChanged();
+      public Builder clearStandardName() {
+        if (cipherSuiteCase_ == 1) {
+          cipherSuiteCase_ = 0;
+          cipherSuite_ = null;
+          onChanged();
+        }
         return this;
       }
       /**
        * <pre>
-       * The key exchange used.  e.g. X25519
+       * The cipher suite name in the RFC 4346 format:
+       * https://tools.ietf.org/html/rfc4346#appendix-C
        * </pre>
        *
-       * <code>string key_exchange = 1;</code>
+       * <code>string standard_name = 1;</code>
        */
-      public Builder setKeyExchangeBytes(
+      public Builder setStandardNameBytes(
           com.google.protobuf.ByteString value) {
         if (value == null) {
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-        
-        keyExchange_ = value;
+        cipherSuiteCase_ = 1;
+        cipherSuite_ = value;
         onChanged();
         return this;
       }
 
-      private java.lang.Object cipher_ = "";
       /**
        * <pre>
-       * The cipher used. e.g. AES_128_GCM.
+       * Some other way to describe the cipher suite if
+       * the RFC 4346 name is not available.
        * </pre>
        *
-       * <code>string cipher = 2;</code>
+       * <code>string other_name = 2;</code>
        */
-      public java.lang.String getCipher() {
-        java.lang.Object ref = cipher_;
+      public java.lang.String getOtherName() {
+        java.lang.Object ref = "";
+        if (cipherSuiteCase_ == 2) {
+          ref = cipherSuite_;
+        }
         if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
-          cipher_ = s;
+          if (cipherSuiteCase_ == 2) {
+            cipherSuite_ = s;
+          }
           return s;
         } else {
           return (java.lang.String) ref;
@@ -810,19 +941,25 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The cipher used. e.g. AES_128_GCM.
+       * Some other way to describe the cipher suite if
+       * the RFC 4346 name is not available.
        * </pre>
        *
-       * <code>string cipher = 2;</code>
+       * <code>string other_name = 2;</code>
        */
       public com.google.protobuf.ByteString
-          getCipherBytes() {
-        java.lang.Object ref = cipher_;
+          getOtherNameBytes() {
+        java.lang.Object ref = "";
+        if (cipherSuiteCase_ == 2) {
+          ref = cipherSuite_;
+        }
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
-          cipher_ = b;
+          if (cipherSuiteCase_ == 2) {
+            cipherSuite_ = b;
+          }
           return b;
         } else {
           return (com.google.protobuf.ByteString) ref;
@@ -830,49 +967,54 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The cipher used. e.g. AES_128_GCM.
+       * Some other way to describe the cipher suite if
+       * the RFC 4346 name is not available.
        * </pre>
        *
-       * <code>string cipher = 2;</code>
+       * <code>string other_name = 2;</code>
        */
-      public Builder setCipher(
+      public Builder setOtherName(
           java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
-  
-        cipher_ = value;
+  cipherSuiteCase_ = 2;
+        cipherSuite_ = value;
         onChanged();
         return this;
       }
       /**
        * <pre>
-       * The cipher used. e.g. AES_128_GCM.
+       * Some other way to describe the cipher suite if
+       * the RFC 4346 name is not available.
        * </pre>
        *
-       * <code>string cipher = 2;</code>
+       * <code>string other_name = 2;</code>
        */
-      public Builder clearCipher() {
-        
-        cipher_ = getDefaultInstance().getCipher();
-        onChanged();
+      public Builder clearOtherName() {
+        if (cipherSuiteCase_ == 2) {
+          cipherSuiteCase_ = 0;
+          cipherSuite_ = null;
+          onChanged();
+        }
         return this;
       }
       /**
        * <pre>
-       * The cipher used. e.g. AES_128_GCM.
+       * Some other way to describe the cipher suite if
+       * the RFC 4346 name is not available.
        * </pre>
        *
-       * <code>string cipher = 2;</code>
+       * <code>string other_name = 2;</code>
        */
-      public Builder setCipherBytes(
+      public Builder setOtherNameBytes(
           com.google.protobuf.ByteString value) {
         if (value == null) {
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-        
-        cipher_ = value;
+        cipherSuiteCase_ = 2;
+        cipherSuite_ = value;
         onChanged();
         return this;
       }

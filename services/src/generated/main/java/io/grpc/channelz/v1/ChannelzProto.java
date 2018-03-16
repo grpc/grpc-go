@@ -276,70 +276,71 @@ public final class ChannelzProto {
       "\014\n\004port\030\002 \001(\005\032\036\n\nUdsAddress\022\020\n\010filename\030" +
       "\001 \001(\t\032A\n\014OtherAddress\022\014\n\004name\030\001 \001(\t\022#\n\005v" +
       "alue\030\002 \001(\0132\024.google.protobuf.AnyB\t\n\007addr" +
-      "ess\"\237\002\n\010Security\022*\n\003tls\030\001 \001(\0132\033.grpc.cha" +
+      "ess\"\270\002\n\010Security\022*\n\003tls\030\001 \001(\0132\033.grpc.cha" +
       "nnelz.Security.TlsH\000\0226\n\005other\030\002 \001(\0132%.gr" +
-      "pc.channelz.Security.OtherSecurityH\000\032b\n\003" +
-      "Tls\022\024\n\014key_exchange\030\001 \001(\t\022\016\n\006cipher\030\002 \001(" +
-      "\t\022\031\n\021local_certificate\030\003 \001(\014\022\032\n\022remote_c" +
-      "ertificate\030\004 \001(\014\032B\n\rOtherSecurity\022\014\n\004nam" +
-      "e\030\001 \001(\t\022#\n\005value\030\002 \001(\0132\024.google.protobuf" +
-      ".AnyB\007\n\005model\"U\n\014SocketOption\022\014\n\004name\030\001 " +
-      "\001(\t\022\r\n\005value\030\002 \001(\t\022(\n\nadditional\030\003 \001(\0132\024" +
-      ".google.protobuf.Any\"B\n\023SocketOptionTime" +
-      "out\022+\n\010duration\030\001 \001(\0132\031.google.protobuf." +
-      "Duration\"Q\n\022SocketOptionLinger\022\016\n\006active" +
-      "\030\001 \001(\010\022+\n\010duration\030\002 \001(\0132\031.google.protob" +
-      "uf.Duration\"\256\005\n\023SocketOptionTcpInfo\022\022\n\nt" +
-      "cpi_state\030\001 \001(\r\022\025\n\rtcpi_ca_state\030\002 \001(\r\022\030" +
-      "\n\020tcpi_retransmits\030\003 \001(\r\022\023\n\013tcpi_probes\030" +
-      "\004 \001(\r\022\024\n\014tcpi_backoff\030\005 \001(\r\022\024\n\014tcpi_opti" +
-      "ons\030\006 \001(\r\022\027\n\017tcpi_snd_wscale\030\007 \001(\r\022\027\n\017tc" +
-      "pi_rcv_wscale\030\010 \001(\r\022\020\n\010tcpi_rto\030\t \001(\r\022\020\n" +
-      "\010tcpi_ato\030\n \001(\r\022\024\n\014tcpi_snd_mss\030\013 \001(\r\022\024\n" +
-      "\014tcpi_rcv_mss\030\014 \001(\r\022\024\n\014tcpi_unacked\030\r \001(" +
-      "\r\022\023\n\013tcpi_sacked\030\016 \001(\r\022\021\n\ttcpi_lost\030\017 \001(" +
-      "\r\022\024\n\014tcpi_retrans\030\020 \001(\r\022\024\n\014tcpi_fackets\030" +
-      "\021 \001(\r\022\033\n\023tcpi_last_data_sent\030\022 \001(\r\022\032\n\022tc" +
-      "pi_last_ack_sent\030\023 \001(\r\022\033\n\023tcpi_last_data" +
-      "_recv\030\024 \001(\r\022\032\n\022tcpi_last_ack_recv\030\025 \001(\r\022" +
-      "\021\n\ttcpi_pmtu\030\026 \001(\r\022\031\n\021tcpi_rcv_ssthresh\030" +
-      "\027 \001(\r\022\020\n\010tcpi_rtt\030\030 \001(\r\022\023\n\013tcpi_rttvar\030\031" +
-      " \001(\r\022\031\n\021tcpi_snd_ssthresh\030\032 \001(\r\022\025\n\rtcpi_" +
-      "snd_cwnd\030\033 \001(\r\022\023\n\013tcpi_advmss\030\034 \001(\r\022\027\n\017t" +
-      "cpi_reordering\030\035 \001(\r\",\n\021GetServersReques" +
-      "t\022\027\n\017start_server_id\030\001 \001(\003\"H\n\022GetServers" +
-      "Response\022%\n\006server\030\001 \003(\0132\025.grpc.channelz" +
-      ".Server\022\013\n\003end\030\002 \001(\010\"E\n\027GetServerSockets" +
-      "Request\022\021\n\tserver_id\030\001 \001(\003\022\027\n\017start_sock" +
-      "et_id\030\002 \001(\003\"U\n\030GetServerSocketsResponse\022" +
-      ",\n\nsocket_ref\030\001 \003(\0132\030.grpc.channelz.Sock" +
-      "etRef\022\013\n\003end\030\002 \001(\010\"1\n\025GetTopChannelsRequ" +
-      "est\022\030\n\020start_channel_id\030\001 \001(\003\"N\n\026GetTopC" +
-      "hannelsResponse\022\'\n\007channel\030\001 \003(\0132\026.grpc." +
-      "channelz.Channel\022\013\n\003end\030\002 \001(\010\"\'\n\021GetChan" +
-      "nelRequest\022\022\n\nchannel_id\030\001 \001(\003\"=\n\022GetCha" +
-      "nnelResponse\022\'\n\007channel\030\001 \001(\0132\026.grpc.cha" +
-      "nnelz.Channel\"-\n\024GetSubchannelRequest\022\025\n" +
-      "\rsubchannel_id\030\001 \001(\003\"F\n\025GetSubchannelRes" +
-      "ponse\022-\n\nsubchannel\030\001 \001(\0132\031.grpc.channel" +
-      "z.Subchannel\"%\n\020GetSocketRequest\022\021\n\tsock" +
-      "et_id\030\001 \001(\003\":\n\021GetSocketResponse\022%\n\006sock" +
-      "et\030\001 \001(\0132\025.grpc.channelz.Socket2\240\004\n\010Chan" +
-      "nelz\022]\n\016GetTopChannels\022$.grpc.channelz.G" +
-      "etTopChannelsRequest\032%.grpc.channelz.Get" +
-      "TopChannelsResponse\022Q\n\nGetServers\022 .grpc" +
-      ".channelz.GetServersRequest\032!.grpc.chann" +
-      "elz.GetServersResponse\022c\n\020GetServerSocke" +
-      "ts\022&.grpc.channelz.GetServerSocketsReque" +
-      "st\032\'.grpc.channelz.GetServerSocketsRespo" +
-      "nse\022Q\n\nGetChannel\022 .grpc.channelz.GetCha" +
-      "nnelRequest\032!.grpc.channelz.GetChannelRe" +
-      "sponse\022Z\n\rGetSubchannel\022#.grpc.channelz." +
-      "GetSubchannelRequest\032$.grpc.channelz.Get" +
-      "SubchannelResponse\022N\n\tGetSocket\022\037.grpc.c" +
-      "hannelz.GetSocketRequest\032 .grpc.channelz" +
-      ".GetSocketResponseB&\n\023io.grpc.channelz.v" +
-      "1B\rChannelzProtoP\001b\006proto3"
+      "pc.channelz.Security.OtherSecurityH\000\032{\n\003" +
+      "Tls\022\027\n\rstandard_name\030\001 \001(\tH\000\022\024\n\nother_na" +
+      "me\030\002 \001(\tH\000\022\031\n\021local_certificate\030\003 \001(\014\022\032\n" +
+      "\022remote_certificate\030\004 \001(\014B\016\n\014cipher_suit" +
+      "e\032B\n\rOtherSecurity\022\014\n\004name\030\001 \001(\t\022#\n\005valu" +
+      "e\030\002 \001(\0132\024.google.protobuf.AnyB\007\n\005model\"U" +
+      "\n\014SocketOption\022\014\n\004name\030\001 \001(\t\022\r\n\005value\030\002 " +
+      "\001(\t\022(\n\nadditional\030\003 \001(\0132\024.google.protobu" +
+      "f.Any\"B\n\023SocketOptionTimeout\022+\n\010duration" +
+      "\030\001 \001(\0132\031.google.protobuf.Duration\"Q\n\022Soc" +
+      "ketOptionLinger\022\016\n\006active\030\001 \001(\010\022+\n\010durat" +
+      "ion\030\002 \001(\0132\031.google.protobuf.Duration\"\256\005\n" +
+      "\023SocketOptionTcpInfo\022\022\n\ntcpi_state\030\001 \001(\r" +
+      "\022\025\n\rtcpi_ca_state\030\002 \001(\r\022\030\n\020tcpi_retransm" +
+      "its\030\003 \001(\r\022\023\n\013tcpi_probes\030\004 \001(\r\022\024\n\014tcpi_b" +
+      "ackoff\030\005 \001(\r\022\024\n\014tcpi_options\030\006 \001(\r\022\027\n\017tc" +
+      "pi_snd_wscale\030\007 \001(\r\022\027\n\017tcpi_rcv_wscale\030\010" +
+      " \001(\r\022\020\n\010tcpi_rto\030\t \001(\r\022\020\n\010tcpi_ato\030\n \001(\r" +
+      "\022\024\n\014tcpi_snd_mss\030\013 \001(\r\022\024\n\014tcpi_rcv_mss\030\014" +
+      " \001(\r\022\024\n\014tcpi_unacked\030\r \001(\r\022\023\n\013tcpi_sacke" +
+      "d\030\016 \001(\r\022\021\n\ttcpi_lost\030\017 \001(\r\022\024\n\014tcpi_retra" +
+      "ns\030\020 \001(\r\022\024\n\014tcpi_fackets\030\021 \001(\r\022\033\n\023tcpi_l" +
+      "ast_data_sent\030\022 \001(\r\022\032\n\022tcpi_last_ack_sen" +
+      "t\030\023 \001(\r\022\033\n\023tcpi_last_data_recv\030\024 \001(\r\022\032\n\022" +
+      "tcpi_last_ack_recv\030\025 \001(\r\022\021\n\ttcpi_pmtu\030\026 " +
+      "\001(\r\022\031\n\021tcpi_rcv_ssthresh\030\027 \001(\r\022\020\n\010tcpi_r" +
+      "tt\030\030 \001(\r\022\023\n\013tcpi_rttvar\030\031 \001(\r\022\031\n\021tcpi_sn" +
+      "d_ssthresh\030\032 \001(\r\022\025\n\rtcpi_snd_cwnd\030\033 \001(\r\022" +
+      "\023\n\013tcpi_advmss\030\034 \001(\r\022\027\n\017tcpi_reordering\030" +
+      "\035 \001(\r\",\n\021GetServersRequest\022\027\n\017start_serv" +
+      "er_id\030\001 \001(\003\"H\n\022GetServersResponse\022%\n\006ser" +
+      "ver\030\001 \003(\0132\025.grpc.channelz.Server\022\013\n\003end\030" +
+      "\002 \001(\010\"E\n\027GetServerSocketsRequest\022\021\n\tserv" +
+      "er_id\030\001 \001(\003\022\027\n\017start_socket_id\030\002 \001(\003\"U\n\030" +
+      "GetServerSocketsResponse\022,\n\nsocket_ref\030\001" +
+      " \003(\0132\030.grpc.channelz.SocketRef\022\013\n\003end\030\002 " +
+      "\001(\010\"1\n\025GetTopChannelsRequest\022\030\n\020start_ch" +
+      "annel_id\030\001 \001(\003\"N\n\026GetTopChannelsResponse" +
+      "\022\'\n\007channel\030\001 \003(\0132\026.grpc.channelz.Channe" +
+      "l\022\013\n\003end\030\002 \001(\010\"\'\n\021GetChannelRequest\022\022\n\nc" +
+      "hannel_id\030\001 \001(\003\"=\n\022GetChannelResponse\022\'\n" +
+      "\007channel\030\001 \001(\0132\026.grpc.channelz.Channel\"-" +
+      "\n\024GetSubchannelRequest\022\025\n\rsubchannel_id\030" +
+      "\001 \001(\003\"F\n\025GetSubchannelResponse\022-\n\nsubcha" +
+      "nnel\030\001 \001(\0132\031.grpc.channelz.Subchannel\"%\n" +
+      "\020GetSocketRequest\022\021\n\tsocket_id\030\001 \001(\003\":\n\021" +
+      "GetSocketResponse\022%\n\006socket\030\001 \001(\0132\025.grpc" +
+      ".channelz.Socket2\240\004\n\010Channelz\022]\n\016GetTopC" +
+      "hannels\022$.grpc.channelz.GetTopChannelsRe" +
+      "quest\032%.grpc.channelz.GetTopChannelsResp" +
+      "onse\022Q\n\nGetServers\022 .grpc.channelz.GetSe" +
+      "rversRequest\032!.grpc.channelz.GetServersR" +
+      "esponse\022c\n\020GetServerSockets\022&.grpc.chann" +
+      "elz.GetServerSocketsRequest\032\'.grpc.chann" +
+      "elz.GetServerSocketsResponse\022Q\n\nGetChann" +
+      "el\022 .grpc.channelz.GetChannelRequest\032!.g" +
+      "rpc.channelz.GetChannelResponse\022Z\n\rGetSu" +
+      "bchannel\022#.grpc.channelz.GetSubchannelRe" +
+      "quest\032$.grpc.channelz.GetSubchannelRespo" +
+      "nse\022N\n\tGetSocket\022\037.grpc.channelz.GetSock" +
+      "etRequest\032 .grpc.channelz.GetSocketRespo" +
+      "nseB&\n\023io.grpc.channelz.v1B\rChannelzProt" +
+      "oP\001b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -470,7 +471,7 @@ public final class ChannelzProto {
     internal_static_grpc_channelz_Security_Tls_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_Security_Tls_descriptor,
-        new java.lang.String[] { "KeyExchange", "Cipher", "LocalCertificate", "RemoteCertificate", });
+        new java.lang.String[] { "StandardName", "OtherName", "LocalCertificate", "RemoteCertificate", "CipherSuite", });
     internal_static_grpc_channelz_Security_OtherSecurity_descriptor =
       internal_static_grpc_channelz_Security_descriptor.getNestedTypes().get(1);
     internal_static_grpc_channelz_Security_OtherSecurity_fieldAccessorTable = new
