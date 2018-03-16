@@ -56,7 +56,7 @@ public final class CronetChannelBuilder extends
   /** Creates a new builder for the given server host, port and CronetEngine. */
   public static CronetChannelBuilder forAddress(String host, int port, CronetEngine cronetEngine) {
     Preconditions.checkNotNull(cronetEngine, "cronetEngine");
-    return new CronetChannelBuilder(host, port, (ExperimentalCronetEngine) cronetEngine);
+    return new CronetChannelBuilder(host, port, cronetEngine);
   }
 
   /**
@@ -73,7 +73,7 @@ public final class CronetChannelBuilder extends
     throw new UnsupportedOperationException("call forAddress(String, int, CronetEngine) instead");
   }
 
-  private final ExperimentalCronetEngine cronetEngine;
+  private final CronetEngine cronetEngine;
 
   private boolean alwaysUsePut = false;
 
@@ -84,7 +84,7 @@ public final class CronetChannelBuilder extends
   private boolean trafficStatsUidSet;
   private int trafficStatsUid;
 
-  private CronetChannelBuilder(String host, int port, ExperimentalCronetEngine cronetEngine) {
+  private CronetChannelBuilder(String host, int port, CronetEngine cronetEngine) {
     super(
         InetSocketAddress.createUnresolved(host, port),
         GrpcUtil.authorityFromHostAndPort(host, port));
@@ -224,14 +224,14 @@ public final class CronetChannelBuilder extends
    * StreamBuilderFactory impl that applies TrafficStats tags to stream builders that are produced.
    */
   private static class TaggingStreamFactory extends StreamBuilderFactory {
-    private final ExperimentalCronetEngine cronetEngine;
+    private final CronetEngine cronetEngine;
     private final boolean trafficStatsTagSet;
     private final int trafficStatsTag;
     private final boolean trafficStatsUidSet;
     private final int trafficStatsUid;
 
     TaggingStreamFactory(
-        ExperimentalCronetEngine cronetEngine,
+        CronetEngine cronetEngine,
         boolean trafficStatsTagSet,
         int trafficStatsTag,
         boolean trafficStatsUidSet,
@@ -247,9 +247,14 @@ public final class CronetChannelBuilder extends
     public BidirectionalStream.Builder newBidirectionalStreamBuilder(
         String url, BidirectionalStream.Callback callback, Executor executor) {
       ExperimentalBidirectionalStream.Builder builder =
-          cronetEngine.newBidirectionalStreamBuilder(url, callback, executor);
-      if (trafficStatsTagSet) builder.setTrafficStatsTag(trafficStatsTag);
-      if (trafficStatsUidSet) builder.setTrafficStatsUid(trafficStatsUid);
+          ((ExperimentalCronetEngine) cronetEngine)
+              .newBidirectionalStreamBuilder(url, callback, executor);
+      if (trafficStatsTagSet) {
+        builder.setTrafficStatsTag(trafficStatsTag);
+      }
+      if (trafficStatsUidSet) {
+        builder.setTrafficStatsUid(trafficStatsUid);
+      }
       return builder;
     }
   }
