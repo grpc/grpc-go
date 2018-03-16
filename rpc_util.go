@@ -160,46 +160,66 @@ type EmptyCallOption struct{}
 func (EmptyCallOption) before(*callInfo) error { return nil }
 func (EmptyCallOption) after(*callInfo)        {}
 
-type beforeCall func(c *callInfo) error
-
-func (o beforeCall) before(c *callInfo) error { return o(c) }
-func (o beforeCall) after(c *callInfo)        {}
-
-type afterCall func(c *callInfo)
-
-func (o afterCall) before(c *callInfo) error { return nil }
-func (o afterCall) after(c *callInfo)        { o(c) }
-
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		if c.stream != nil {
-			*md, _ = c.stream.Header()
-		}
-	})
+	return HeaderCallOption{HeaderAddr: md}
+}
+
+// HeaderCallOption is a CallOption for collecting response header metadata.
+// The metadata field will be populated *after* the RPC completes.
+// This is an EXPERIMENTAL API.
+type HeaderCallOption struct {
+	HeaderAddr *metadata.MD
+}
+
+func (o HeaderCallOption) before(c *callInfo) error { return nil }
+func (o HeaderCallOption) after(c *callInfo) {
+	if c.stream != nil {
+		*o.HeaderAddr, _ = c.stream.Header()
+	}
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		if c.stream != nil {
-			*md = c.stream.Trailer()
-		}
-	})
+	return TrailerCallOption{TrailerAddr: md}
+}
+
+// TrailerCallOption is a CallOption for collecting response trailer metadata.
+// The metadata field will be populated *after* the RPC completes.
+// This is an EXPERIMENTAL API.
+type TrailerCallOption struct {
+	TrailerAddr *metadata.MD
+}
+
+func (o TrailerCallOption) before(c *callInfo) error { return nil }
+func (o TrailerCallOption) after(c *callInfo) {
+	if c.stream != nil {
+		*o.TrailerAddr = c.stream.Trailer()
+	}
 }
 
 // Peer returns a CallOption that retrieves peer information for a
 // unary RPC.
 func Peer(p *peer.Peer) CallOption {
-	return afterCall(func(c *callInfo) {
-		if c.stream != nil {
-			if x, ok := peer.FromContext(c.stream.Context()); ok {
-				*p = *x
-			}
+	return PeerCallOption{PeerAddr: p}
+}
+
+// PeerCallOption is a CallOption for collecting the identity of the remote
+// peer. The peer field will be populated *after* the RPC completes.
+// This is an EXPERIMENTAL API.
+type PeerCallOption struct {
+	PeerAddr *peer.Peer
+}
+
+func (o PeerCallOption) before(c *callInfo) error { return nil }
+func (o PeerCallOption) after(c *callInfo) {
+	if c.stream != nil {
+		if x, ok := peer.FromContext(c.stream.Context()); ok {
+			*o.PeerAddr = *x
 		}
-	})
+	}
 }
 
 // FailFast configures the action to take when an RPC is attempted on broken
@@ -213,36 +233,76 @@ func Peer(p *peer.Peer) CallOption {
 //
 // By default, RPCs are "Fail Fast".
 func FailFast(failFast bool) CallOption {
-	return beforeCall(func(c *callInfo) error {
-		c.failFast = failFast
-		return nil
-	})
+	return FailFastCallOption{FailFast: failFast}
 }
+
+// FailFastCallOption is a CallOption for indicating whether an RPC should fail
+// fast or not.
+// This is an EXPERIMENTAL API.
+type FailFastCallOption struct {
+	FailFast bool
+}
+
+func (o FailFastCallOption) before(c *callInfo) error {
+	c.failFast = o.FailFast
+	return nil
+}
+func (o FailFastCallOption) after(c *callInfo) { return }
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
 func MaxCallRecvMsgSize(s int) CallOption {
-	return beforeCall(func(o *callInfo) error {
-		o.maxReceiveMessageSize = &s
-		return nil
-	})
+	return MaxRecvMsgSizeCallOption{MaxRecvMsgSize: s}
 }
+
+// MaxRecvMsgSizeCallOption is a CallOption that indicates the maximum message
+// size the client can receive.
+// This is an EXPERIMENTAL API.
+type MaxRecvMsgSizeCallOption struct {
+	MaxRecvMsgSize int
+}
+
+func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
+	c.maxReceiveMessageSize = &o.MaxRecvMsgSize
+	return nil
+}
+func (o MaxRecvMsgSizeCallOption) after(c *callInfo) { return }
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
 func MaxCallSendMsgSize(s int) CallOption {
-	return beforeCall(func(o *callInfo) error {
-		o.maxSendMessageSize = &s
-		return nil
-	})
+	return MaxSendMsgSizeCallOption{MaxSendMsgSize: s}
 }
+
+// MaxSendMsgSizeCallOption is a CallOption that indicates the maximum message
+// size the client can send.
+// This is an EXPERIMENTAL API.
+type MaxSendMsgSizeCallOption struct {
+	MaxSendMsgSize int
+}
+
+func (o MaxSendMsgSizeCallOption) before(c *callInfo) error {
+	c.maxSendMessageSize = &o.MaxSendMsgSize
+	return nil
+}
+func (o MaxSendMsgSizeCallOption) after(c *callInfo) { return }
 
 // PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
 // for a call.
 func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
-	return beforeCall(func(c *callInfo) error {
-		c.creds = creds
-		return nil
-	})
+	return PerRPCCredsCallOption{Creds: creds}
 }
+
+// PerRPCCredsCallOption is a CallOption that indicates the the per-RPC
+// credentials to use for the call.
+// This is an EXPERIMENTAL API.
+type PerRPCCredsCallOption struct {
+	Creds credentials.PerRPCCredentials
+}
+
+func (o PerRPCCredsCallOption) before(c *callInfo) error {
+	c.creds = o.Creds
+	return nil
+}
+func (o PerRPCCredsCallOption) after(c *callInfo) { return }
 
 // UseCompressor returns a CallOption which sets the compressor used when
 // sending the request.  If WithCompressor is also set, UseCompressor has
@@ -250,11 +310,20 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 //
 // This API is EXPERIMENTAL.
 func UseCompressor(name string) CallOption {
-	return beforeCall(func(c *callInfo) error {
-		c.compressorType = name
-		return nil
-	})
+	return CompressorCallOption{CompressorType: name}
 }
+
+// CompressorCallOption is a CallOption that indicates the compressor to use.
+// This is an EXPERIMENTAL API.
+type CompressorCallOption struct {
+	CompressorType string
+}
+
+func (o CompressorCallOption) before(c *callInfo) error {
+	c.compressorType = o.CompressorType
+	return nil
+}
+func (o CompressorCallOption) after(c *callInfo) { return }
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type over
@@ -273,12 +342,21 @@ func UseCompressor(name string) CallOption {
 // response messages, with the content-subtype set to the given contentSubtype
 // here for requests.
 func CallContentSubtype(contentSubtype string) CallOption {
-	contentSubtype = strings.ToLower(contentSubtype)
-	return beforeCall(func(c *callInfo) error {
-		c.contentSubtype = contentSubtype
-		return nil
-	})
+	return ContentSubtypeCallOption{ContentSubtype: strings.ToLower(contentSubtype)}
 }
+
+// ContentSubtypeCallOption is a CallOption that indicates the content-subtype
+// used for marshaling messages.
+// This is an EXPERIMENTAL API.
+type ContentSubtypeCallOption struct {
+	ContentSubtype string
+}
+
+func (o ContentSubtypeCallOption) before(c *callInfo) error {
+	c.contentSubtype = o.ContentSubtype
+	return nil
+}
+func (o ContentSubtypeCallOption) after(c *callInfo) { return }
 
 // CallCustomCodec returns a CallOption that will set the given Codec to be
 // used for all request and response messages for a call. The result of calling
@@ -293,11 +371,21 @@ func CallContentSubtype(contentSubtype string) CallOption {
 // This function is provided for advanced users; prefer to use only
 // CallContentSubtype to select a registered codec instead.
 func CallCustomCodec(codec Codec) CallOption {
-	return beforeCall(func(c *callInfo) error {
-		c.codec = codec
-		return nil
-	})
+	return CustomCodecCallOption{Codec: codec}
 }
+
+// CustomCodecCallOption is a CallOption that indicates the codec used for
+// marshaling messages.
+// This is an EXPERIMENTAL API.
+type CustomCodecCallOption struct {
+	Codec Codec
+}
+
+func (o CustomCodecCallOption) before(c *callInfo) error {
+	c.codec = o.Codec
+	return nil
+}
+func (o CustomCodecCallOption) after(c *callInfo) { return }
 
 // The format of the payload: compressed or not?
 type payloadFormat uint8
