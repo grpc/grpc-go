@@ -350,7 +350,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 
 	if channelz.IsOn() {
-		s.channelzID = channelz.RegisterServer(s)
+		s.channelzID = channelz.RegisterServer(s, "")
 	}
 	return s
 }

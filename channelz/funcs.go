@@ -141,6 +141,7 @@ func GetSocket(id int64) *SocketMetric {
 func RegisterChannel(c Channel, pid int64, ref string) int64 {
 	id := idGen.genID()
 	cn := &channel{
+		refName:     ref,
 		c:           c,
 		subChans:    make(map[int64]string),
 		nestedChans: make(map[int64]string),
@@ -165,6 +166,7 @@ func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 	}
 	id := idGen.genID()
 	sc := &subChannel{
+		refName: ref,
 		c:       c,
 		sockets: make(map[int64]string),
 		id:      id,
@@ -176,9 +178,9 @@ func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 
 // RegisterServer registers the given server s in channelz database. It returns
 // the unique channelz tracking id assigned to this server.
-func RegisterServer(s Server) int64 {
+func RegisterServer(s Server, ref string) int64 {
 	id := idGen.genID()
-	db.get().addServer(id, &server{s: s, sockets: make(map[int64]string), listenSockets: make(map[int64]string), id: id})
+	db.get().addServer(id, &server{refName: ref, s: s, sockets: make(map[int64]string), listenSockets: make(map[int64]string), id: id})
 	return id
 }
 
@@ -192,7 +194,7 @@ func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
 		return 0
 	}
 	id := idGen.genID()
-	ls := &listenSocket{s: s, id: id, pid: pid}
+	ls := &listenSocket{refName: ref, s: s, id: id, pid: pid}
 	db.get().addListenSocket(id, ls, pid, ref)
 	return id
 }
@@ -207,7 +209,7 @@ func RegisterNormalSocket(s Socket, pid int64, ref string) int64 {
 		return 0
 	}
 	id := idGen.genID()
-	ns := &normalSocket{s: s, id: id, pid: pid}
+	ns := &normalSocket{refName: ref, s: s, id: id, pid: pid}
 	db.get().addNormalSocket(id, ns, pid, ref)
 	return id
 }
