@@ -441,9 +441,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
-			cc.channelzID = channelz.RegisterChannel(cc, cc.dopts.channelzParentID, "")
+			cc.channelzID = channelz.RegisterChannel(cc, cc.dopts.channelzParentID, target)
 		} else {
-			cc.channelzID = channelz.RegisterChannel(cc, 0, "")
+			cc.channelzID = channelz.RegisterChannel(cc, 0, target)
 		}
 	}
 

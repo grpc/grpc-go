@@ -32,6 +32,10 @@ import (
 	"google.golang.org/grpc/test/leakcheck"
 )
 
+func init() {
+	channelz.TurnOn()
+}
+
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	for i := 0; i < num; i++ {
 		te.startServer(ts)
@@ -40,11 +44,6 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 		te.srv = nil
 		te.srvAddr = ""
 	}
-}
-
-func turnOnChannelzAndClearPreviousChannelzData() {
-	grpc.RegisterChannelz()
-	channelz.NewChannelzStorage()
 }
 
 func TestCZServerRegistrationAndDeletion(t *testing.T) {
@@ -61,7 +60,7 @@ func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		turnOnChannelzAndClearPreviousChannelzData()
+		channelz.NewChannelzStorage()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
@@ -91,7 +90,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		turnOnChannelzAndClearPreviousChannelzData()
+		channelz.NewChannelzStorage()
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		var ccs []*grpc.ClientConn
@@ -121,7 +120,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 
 func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	turnOnChannelzAndClearPreviousChannelzData()
+	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -159,7 +158,7 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 
 func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	turnOnChannelzAndClearPreviousChannelzData()
+	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -218,7 +217,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 
 func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	turnOnChannelzAndClearPreviousChannelzData()
+	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	num := 3 // number of clients
 	te := newTest(t, e)
@@ -259,7 +258,7 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 
 func TestCZServerListenSocketDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
-	turnOnChannelzAndClearPreviousChannelzData()
+	channelz.NewChannelzStorage()
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
