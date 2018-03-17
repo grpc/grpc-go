@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.Channelz.id;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
@@ -27,6 +28,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.RootChannelList;
 import io.grpc.internal.Channelz.ServerList;
+import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.ServerStats;
 import io.grpc.internal.Channelz.SocketStats;
 import org.junit.Test;
@@ -35,6 +37,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public final class ChannelzTest {
+
   private final Channelz channelz = new Channelz();
 
   @Test
@@ -212,11 +215,69 @@ public final class ChannelzTest {
     Instrumented<SocketStats> socket = create();
     assertNull(channelz.getSocket(id(socket)));
 
-    channelz.addSocket(socket);
+    channelz.addClientSocket(socket);
     assertSame(socket, channelz.getSocket(id(socket)));
 
-    channelz.removeSocket(socket);
+    channelz.removeClientSocket(socket);
     assertNull(channelz.getSocket(id(socket)));
+  }
+
+  @Test
+  public void serverSocket_noServer() {
+    assertNull(channelz.getServerSockets(/*serverId=*/ 1, /*fromId=*/0, /*maxPageSize=*/ 1));
+  }
+
+  @Test
+  public void serverSocket() {
+    Instrumented<ServerStats> server = create();
+    channelz.addServer(server);
+
+    Instrumented<SocketStats> socket = create();
+    assertEmptyServerSocketsPage(id(server), id(socket));
+
+    channelz.addServerSocket(server, socket);
+    ServerSocketsList page
+        = channelz.getServerSockets(id(server), id(socket), /*maxPageSize=*/ 1);
+    assertNotNull(page);
+    assertTrue(page.end);
+    assertThat(page.sockets).containsExactly(socket);
+
+    channelz.removeServerSocket(server, socket);
+    assertEmptyServerSocketsPage(id(server), id(socket));
+  }
+
+  @Test
+  public void serverSocket_eachServerSeparate() {
+    Instrumented<ServerStats> server1 = create();
+    Instrumented<ServerStats> server2 = create();
+
+    Instrumented<SocketStats> socket1 = create();
+    Instrumented<SocketStats> socket2 = create();
+
+    channelz.addServer(server1);
+    channelz.addServer(server2);
+    channelz.addServerSocket(server1, socket1);
+    channelz.addServerSocket(server2, socket2);
+
+    ServerSocketsList list1
+        = channelz.getServerSockets(id(server1), /*fromId=*/ 0, /*maxPageSize=*/ 2);
+    assertNotNull(list1);
+    assertTrue(list1.end);
+    assertThat(list1.sockets).containsExactly(socket1);
+
+    ServerSocketsList list2
+        = channelz.getServerSockets(id(server2), /*fromId=*/ 0, /*maxPageSize=*/2);
+    assertNotNull(list2);
+    assertTrue(list2.end);
+    assertThat(list2.sockets).containsExactly(socket2);
+  }
+
+  private void assertEmptyServerSocketsPage(long serverId, long socketId) {
+    ServerSocketsList emptyPage
+        = channelz.getServerSockets(serverId, socketId, /*maxPageSize=*/ 1);
+    assertNotNull(emptyPage);
+    assertTrue(emptyPage.end);
+    assertThat(emptyPage.sockets).isEmpty();
   }
 
   private static <T> Instrumented<T> create() {

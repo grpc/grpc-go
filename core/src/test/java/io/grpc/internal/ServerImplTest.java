@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.Channelz.id;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -67,6 +68,7 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ServerImpl.JumpToApplicationThreadServerStreamListener;
 import io.grpc.internal.testing.SingleMessageProducer;
@@ -1395,12 +1397,23 @@ public class ServerImplTest {
     createAndStartServer();
     SimpleServerTransport transport = new SimpleServerTransport();
 
-    assertFalse(builder.channelz.containsSocket(transport.getLogId()));
+    ServerSocketsList before = builder.channelz
+        .getServerSockets(id(server), id(transport), /*maxPageSize=*/ 1);
+    assertThat(before.sockets).isEmpty();
+    assertTrue(before.end);
+
     ServerTransportListener listener
         = transportServer.registerNewServerTransport(transport);
-    assertTrue(builder.channelz.containsSocket(transport.getLogId()));
+    ServerSocketsList added = builder.channelz
+        .getServerSockets(id(server), id(transport), /*maxPageSize=*/ 1);
+    assertThat(added.sockets).containsExactly(transport);
+    assertTrue(before.end);
+
     listener.transportTerminated();
-    assertFalse(builder.channelz.containsSocket(transport.getLogId()));
+    ServerSocketsList after = builder.channelz
+        .getServerSockets(id(server), id(transport), /*maxPageSize=*/ 1);
+    assertThat(after.sockets).isEmpty();
+    assertTrue(after.end);
   }
 
   private void createAndStartServer() throws IOException {

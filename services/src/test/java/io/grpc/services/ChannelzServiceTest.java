@@ -132,7 +132,7 @@ public class ChannelzServiceTest {
     TestSocket socket = new TestSocket();
     assertSocketNotFound(socket.getLogId().getId());
 
-    channelz.addSocket(socket);
+    channelz.addClientSocket(socket);
     assertEquals(
         GetSocketResponse
             .newBuilder()
@@ -140,7 +140,7 @@ public class ChannelzServiceTest {
             .build(),
         getSocketHelper(socket.getLogId().getId()));
 
-    channelz.removeSocket(socket);
+    channelz.removeClientSocket(socket);
     assertSocketNotFound(socket.getLogId().getId());
   }
 

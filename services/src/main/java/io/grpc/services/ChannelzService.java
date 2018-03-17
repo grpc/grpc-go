@@ -35,6 +35,7 @@ import io.grpc.channelz.v1.GetTopChannelsResponse;
 import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.ServerList;
+import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.Instrumented;
 import io.grpc.stub.StreamObserver;
@@ -135,7 +136,14 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   @Override
   public void getServerSockets(
       GetServerSocketsRequest request, StreamObserver<GetServerSocketsResponse> responseObserver) {
-    // TODO(zpencer): fill this one out after refactoring channelz class
-    responseObserver.onError(Status.UNIMPLEMENTED.asRuntimeException());
+    ServerSocketsList serverSockets
+        = channelz.getServerSockets(request.getServerId(), request.getStartSocketId(), maxPageSize);
+    if (serverSockets == null) {
+      responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
+      return;
+    }
+
+    responseObserver.onNext(ChannelzProtoUtil.toGetServerSocketsResponse(serverSockets));
+    responseObserver.onCompleted();
   }
 }

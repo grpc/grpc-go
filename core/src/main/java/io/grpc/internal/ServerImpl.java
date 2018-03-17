@@ -294,6 +294,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
    */
   private void transportClosed(ServerTransport transport) {
     synchronized (lock) {
+      channelz.removeServerSocket(ServerImpl.this, transport);
       if (!transports.remove(transport)) {
         throw new AssertionError("Transport already removed");
       }
@@ -380,7 +381,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
           @Override public void run() {}
         }, null);
       }
-      channelz.addSocket(transport);
+      channelz.addServerSocket(ServerImpl.this, transport);
     }
 
     @Override
@@ -398,18 +399,14 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
 
     @Override
     public void transportTerminated() {
-      try {
-        if (handshakeTimeoutFuture != null) {
-          handshakeTimeoutFuture.cancel(false);
-          handshakeTimeoutFuture = null;
-        }
-        for (ServerTransportFilter filter : transportFilters) {
-          filter.transportTerminated(attributes);
-        }
-        transportClosed(transport);
-      } finally {
-        channelz.removeSocket(transport);
+      if (handshakeTimeoutFuture != null) {
+        handshakeTimeoutFuture.cancel(false);
+        handshakeTimeoutFuture = null;
       }
+      for (ServerTransportFilter filter : transportFilters) {
+        filter.transportTerminated(attributes);
+      }
+      transportClosed(transport);
     }
 
     @Override

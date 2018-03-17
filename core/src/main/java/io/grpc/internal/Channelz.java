@@ -41,8 +41,17 @@ public final class Channelz {
       = new ConcurrentSkipListMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels
       = new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<SocketStats>> sockets
+  // An InProcessTransport can appear in both clientSockets and perServerSockets simultaneously
+  private final ConcurrentMap<Long, Instrumented<SocketStats>> clientSockets
       = new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
+  private final ConcurrentMap<Long, ServerSocketMap> perServerSockets
+      = new ConcurrentHashMap<Long, ServerSocketMap>();
+
+  // A convenience class to avoid deeply nested types.
+  private static final class ServerSocketMap
+      extends ConcurrentSkipListMap<Long, Instrumented<SocketStats>> {
+    private static final long serialVersionUID = -7883772124944661414L;
+  }
 
   @VisibleForTesting
   public Channelz() {
@@ -52,24 +61,41 @@ public final class Channelz {
     return INSTANCE;
   }
 
+  /** Adds a server. */
   public void addServer(Instrumented<ServerStats> server) {
+    ServerSocketMap prev = perServerSockets.put(id(server), new ServerSocketMap());
+    assert prev == null;
     add(servers, server);
   }
 
+  /** Adds a subchannel. */
   public void addSubchannel(Instrumented<ChannelStats> subchannel) {
     add(subchannels, subchannel);
   }
 
+  /** Adds a root channel. */
   public void addRootChannel(Instrumented<ChannelStats> rootChannel) {
     add(rootChannels, rootChannel);
   }
 
-  public void addSocket(Instrumented<SocketStats> socket) {
-    add(sockets, socket);
+  /** Adds a socket. */
+  public void addClientSocket(Instrumented<SocketStats> socket) {
+    add(clientSockets, socket);
   }
 
+  /** Adds a server socket. */
+  public void addServerSocket(Instrumented<ServerStats> server, Instrumented<SocketStats> socket) {
+    ServerSocketMap serverSockets = perServerSockets.get(id(server));
+    assert serverSockets != null;
+    add(serverSockets, socket);
+  }
+
+  /** Removes a server. */
   public void removeServer(Instrumented<ServerStats> server) {
     remove(servers, server);
+    ServerSocketMap prev = perServerSockets.remove(id(server));
+    assert prev != null;
+    assert prev.isEmpty();
   }
 
   public void removeSubchannel(Instrumented<ChannelStats> subchannel) {
@@ -80,8 +106,16 @@ public final class Channelz {
     remove(rootChannels, channel);
   }
 
-  public void removeSocket(Instrumented<SocketStats> socket) {
-    remove(sockets, socket);
+  public void removeClientSocket(Instrumented<SocketStats> socket) {
+    remove(clientSockets, socket);
+  }
+
+  /** Removes a server socket. */
+  public void removeServerSocket(
+      Instrumented<ServerStats> server, Instrumented<SocketStats> socket) {
+    ServerSocketMap socketsOfServer = perServerSockets.get(id(server));
+    assert socketsOfServer != null;
+    remove(socketsOfServer, socket);
   }
 
   /** Returns a {@link RootChannelList}. */
@@ -110,7 +144,8 @@ public final class Channelz {
 
   /** Returns a server list. */
   public ServerList getServers(long fromId, int maxPageSize) {
-    List<Instrumented<ServerStats>> serverList = new ArrayList<Instrumented<ServerStats>>();
+    List<Instrumented<ServerStats>> serverList
+        = new ArrayList<Instrumented<ServerStats>>(maxPageSize);
     Iterator<Instrumented<ServerStats>> iterator = servers.tailMap(fromId).values().iterator();
 
     while (iterator.hasNext() && serverList.size() < maxPageSize) {
@@ -119,10 +154,40 @@ public final class Channelz {
     return new ServerList(serverList, !iterator.hasNext());
   }
 
+  /** Returns socket refs for a server. */
+  @Nullable
+  public ServerSocketsList getServerSockets(long serverId, long fromId, int maxPageSize) {
+    ServerSocketMap serverSockets = perServerSockets.get(serverId);
+    if (serverSockets == null) {
+      return null;
+    }
+    List<WithLogId> socketList = new ArrayList<WithLogId>(maxPageSize);
+    Iterator<Instrumented<SocketStats>> iterator
+        = serverSockets.tailMap(fromId).values().iterator();
+    while (socketList.size() < maxPageSize && iterator.hasNext()) {
+      socketList.add(iterator.next());
+    }
+    return new ServerSocketsList(socketList, !iterator.hasNext());
+  }
+
   /** Returns a socket. */
   @Nullable
   public Instrumented<SocketStats> getSocket(long id) {
-    return sockets.get(id);
+    Instrumented<SocketStats> clientSocket = clientSockets.get(id);
+    if (clientSocket != null) {
+      return clientSocket;
+    }
+    return getServerSocket(id);
+  }
+
+  private Instrumented<SocketStats> getServerSocket(long id) {
+    for (ServerSocketMap perServerSockets : perServerSockets.values()) {
+      Instrumented<SocketStats> serverSocket = perServerSockets.get(id);
+      if (serverSocket != null) {
+        return serverSocket;
+      }
+    }
+    return null;
   }
 
   @VisibleForTesting
@@ -140,16 +205,18 @@ public final class Channelz {
   }
 
   @VisibleForTesting
-  public boolean containsSocket(LogId transportRef) {
-    return contains(sockets, transportRef);
+  public boolean containsClientSocket(LogId transportRef) {
+    return contains(clientSockets, transportRef);
   }
 
   private static <T extends Instrumented<?>> void add(Map<Long, T> map, T object) {
-    map.put(object.getLogId().getId(), object);
+    T prev = map.put(object.getLogId().getId(), object);
+    assert prev == null;
   }
 
   private static <T extends Instrumented<?>> void remove(Map<Long, T> map, T object) {
-    map.remove(object.getLogId().getId());
+    T prev = map.remove(id(object));
+    assert prev != null;
   }
 
   private static <T extends Instrumented<?>> boolean contains(Map<Long, T> map, LogId id) {
@@ -174,6 +241,17 @@ public final class Channelz {
     /** Creates an instance. */
     public ServerList(List<Instrumented<ServerStats>> servers, boolean end) {
       this.servers = Preconditions.checkNotNull(servers);
+      this.end = end;
+    }
+  }
+
+  public static final class ServerSocketsList {
+    public final List<WithLogId> sockets;
+    public final boolean end;
+
+    /** Creates an instance. */
+    public ServerSocketsList(List<WithLogId> sockets, boolean end) {
+      this.sockets = sockets;
       this.end = end;
     }
   }

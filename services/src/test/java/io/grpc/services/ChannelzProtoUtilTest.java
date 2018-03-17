@@ -31,6 +31,7 @@ import io.grpc.channelz.v1.Channel;
 import io.grpc.channelz.v1.ChannelData;
 import io.grpc.channelz.v1.ChannelData.State;
 import io.grpc.channelz.v1.ChannelRef;
+import io.grpc.channelz.v1.GetServerSocketsResponse;
 import io.grpc.channelz.v1.GetServersResponse;
 import io.grpc.channelz.v1.GetTopChannelsResponse;
 import io.grpc.channelz.v1.Server;
@@ -44,6 +45,7 @@ import io.grpc.channelz.v1.SubchannelRef;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.RootChannelList;
 import io.grpc.internal.Channelz.ServerList;
+import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.ServerStats;
 import io.grpc.internal.Instrumented;
 import io.grpc.internal.WithLogId;
@@ -393,10 +395,11 @@ public final class ChannelzProtoUtilTest {
             .newBuilder()
             .addChannel(channelProto)
             .addChannel(ChannelzProtoUtil.toChannel(channel2))
+            .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetTopChannelResponse(
             new RootChannelList(
-                ImmutableList.<Instrumented<ChannelStats>>of(channel, channel2), false)));
+                ImmutableList.<Instrumented<ChannelStats>>of(channel, channel2), true)));
   }
 
   @Test
@@ -433,9 +436,50 @@ public final class ChannelzProtoUtilTest {
             .newBuilder()
             .addServer(serverProto)
             .addServer(ChannelzProtoUtil.toServer(server2))
+            .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetServersResponse(
-            new ServerList(ImmutableList.<Instrumented<ServerStats>>of(server, server2), false)));
+            new ServerList(ImmutableList.<Instrumented<ServerStats>>of(server, server2), true)));
+  }
+
+  @Test
+  public void toGetServerSocketsResponse() {
+    // empty results
+    assertEquals(
+        GetServerSocketsResponse.getDefaultInstance(),
+        ChannelzProtoUtil.toGetServerSocketsResponse(
+            new ServerSocketsList(Collections.<WithLogId>emptyList(), false)));
+
+    // 1 result, paginated
+    assertEquals(
+        GetServerSocketsResponse
+            .newBuilder()
+            .addSocketRef(socketRef)
+            .build(),
+        ChannelzProtoUtil.toGetServerSocketsResponse(
+            new ServerSocketsList(ImmutableList.<WithLogId>of(socket), false)));
+
+    // 1 result, end
+    assertEquals(
+        GetServerSocketsResponse
+            .newBuilder()
+            .addSocketRef(socketRef)
+            .setEnd(true)
+            .build(),
+        ChannelzProtoUtil.toGetServerSocketsResponse(
+            new ServerSocketsList(ImmutableList.<WithLogId>of(socket), true)));
+
+    TestSocket socket2 = new TestSocket();
+    // 2 results, end
+    assertEquals(
+        GetServerSocketsResponse
+            .newBuilder()
+            .addSocketRef(socketRef)
+            .addSocketRef(ChannelzProtoUtil.toSocketRef(socket2))
+            .setEnd(true)
+            .build(),
+        ChannelzProtoUtil.toGetServerSocketsResponse(
+            new ServerSocketsList(ImmutableList.<WithLogId>of(socket, socket2), true)));
   }
 
   private static ChannelStats.Builder toBuilder(ChannelStats stats) {
