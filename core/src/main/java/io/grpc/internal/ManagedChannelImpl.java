@@ -799,12 +799,12 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     }
     if (shutdown.get() && subchannels.isEmpty() && oobChannels.isEmpty()) {
       logger.log(Level.FINE, "[{0}] Terminated", getLogId());
+      channelz.removeRootChannel(this);
       terminated = true;
       terminatedLatch.countDown();
       executorPool.returnObject(executor);
       // Release the transport factory so that it can deallocate any resources.
       transportFactory.close();
-      channelz.removeRootChannel(this);
     }
   }
 

@@ -240,10 +240,10 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
 
   // must be run from channel executor
   void handleSubchannelTerminated() {
+    channelz.removeSubchannel(this);
     // When delayedTransport is terminated, it shuts down subchannel.  Therefore, at this point
     // both delayedTransport and subchannel have terminated.
     executorPool.returnObject(executor);
-    channelz.removeSubchannel(this);
     terminatedLatch.countDown();
   }
 

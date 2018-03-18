@@ -560,6 +560,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
         log.log(Level.FINE, "[{0}] {1} for {2} is terminated",
             new Object[] {logId, transport.getLogId(), address});
       }
+      channelz.removeClientSocket(transport);
       handleTransportInUseState(transport, false);
       try {
         synchronized (lock) {
@@ -574,7 +575,6 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       } finally {
         channelExecutor.drain();
       }
-      channelz.removeClientSocket(transport);
       Preconditions.checkState(activeTransport != transport,
           "activeTransport still points to this transport. "
           + "Seems transportShutdown() was not called.");
