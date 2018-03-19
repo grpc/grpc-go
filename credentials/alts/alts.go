@@ -25,7 +25,6 @@ package alts
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"sync"
@@ -52,9 +51,8 @@ const (
 )
 
 var (
-	enableUntrustedALTS = flag.Bool("enable_untrusted_alts", false, "Enables ALTS in untrusted mode. Enabling this mode is risky since we cannot ensure that the application is running on GCP with a trusted handshaker service.")
-	once                sync.Once
-	maxRPCVersion       = &altspb.RpcProtocolVersions_Version{
+	once          sync.Once
+	maxRPCVersion = &altspb.RpcProtocolVersions_Version{
 		Major: protocolVersionMaxMajor,
 		Minor: protocolVersionMaxMinor,
 	}
@@ -65,7 +63,7 @@ var (
 	// ErrUntrustedPlatform is returned from ClientHandshake and
 	// ServerHandshake is running on a platform where the trustworthiness of
 	// the handshaker service is not guaranteed.
-	ErrUntrustedPlatform = errors.New("untrusted platform, use enable_untrusted_alts flag at your own risk")
+	ErrUntrustedPlatform = errors.New("untrusted platform")
 )
 
 // AuthInfo exposes security information from the ALTS handshake to the
@@ -119,14 +117,9 @@ func NewServerCreds() credentials.TransportCredentials {
 }
 
 func newALTS(side core.Side, accounts []string) credentials.TransportCredentials {
-	// Make sure flags are parsed before accessing enableUntrustedALTS.
 	once.Do(func() {
-		flag.Parse()
 		vmOnGCP = isRunningOnGCP()
 	})
-	if *enableUntrustedALTS {
-		grpclog.Warning("untrusted ALTS mode is enabled and we cannot guarantee the trustworthiness of the ALTS handshaker service.")
-	}
 
 	return &altsTC{
 		info: &credentials.ProtocolInfo{
@@ -140,7 +133,7 @@ func newALTS(side core.Side, accounts []string) credentials.TransportCredentials
 
 // ClientHandshake implements the client side handshake protocol.
 func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	if !*enableUntrustedALTS && !vmOnGCP {
+	if !vmOnGCP {
 		return nil, nil, ErrUntrustedPlatform
 	}
 
@@ -194,7 +187,7 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 
 // ServerHandshake implements the server side ALTS handshaker.
 func (g *altsTC) ServerHandshake(rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	if !*enableUntrustedALTS && !vmOnGCP {
+	if !vmOnGCP {
 		return nil, nil, ErrUntrustedPlatform
 	}
 	// Connecting to ALTS handshaker service.
