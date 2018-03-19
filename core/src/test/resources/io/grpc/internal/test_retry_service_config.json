@@ -40,7 +40,7 @@
       ],
       "waitForReady":true,
       "retryPolicy":{
-        "maxAttempts":4,
+        "maxAttempts":5,
         "initialBackoff":".1s",
         "maxBackoff":"1s",
         "backoffMultiplier":2,
@@ -49,5 +49,10 @@
         ]
       }
     }
-  ]
+  ],
+
+  "retryThrottling": {
+    "maxTokens": 10,
+    "tokenRatio": 0.1
+  }
 }

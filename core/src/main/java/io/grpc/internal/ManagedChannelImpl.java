@@ -55,6 +55,7 @@ import io.grpc.Status;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
+import io.grpc.internal.RetriableStream.RetryPolicies;
 import io.grpc.internal.RetriableStream.RetryPolicy;
 import io.grpc.internal.RetriableStream.Throttle;
 import java.net.URI;
@@ -72,7 +73,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -211,6 +211,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
 
+  @Nullable
   private Throttle throttle;
 
   private final int maxRetryAttempts;
@@ -1236,22 +1237,16 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     }
   }
 
-  // TODO(zdapeng): take client provided maxAttempts into account.
-  // TODO(zdapeng): implement it once the Gson dependency issue is resolved.
   // TODO(zdapeng): test retryEnabled = true/flase really works as expected.
-  private static RetryPolicies getRetryPolicies(Attributes config) {
-    return new RetryPolicies() {
-      @Override
-      public RetryPolicy get(MethodDescriptor<?, ?> method) {
-        return RetryPolicy.DEFAULT;
-      }
-    };
+  private RetryPolicies getRetryPolicies(Attributes config) {
+    return ServiceConfigUtil.getRetryPolicies(
+        config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG), maxRetryAttempts);
   }
 
-  // TODO(zdapeng): implement it once the Gson dependency issue is resolved.
   @Nullable
   private static Throttle getThrottle(Attributes config) {
-    return null;
+    return ServiceConfigUtil.getThrottlePolicy(
+        config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG));
   }
 
   private final class SubchannelImpl extends AbstractSubchannel {
@@ -1339,12 +1334,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     public String toString() {
       return subchannel.getLogId().toString();
     }
-  }
-
-  @VisibleForTesting
-  interface RetryPolicies {
-    @Nonnull
-    RetryPolicy get(MethodDescriptor<?, ?> method);
   }
 
   @Override

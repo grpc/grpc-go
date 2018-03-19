@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.CheckReturnValue;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.Immutable;
@@ -948,6 +949,28 @@ abstract class RetriableStream<ReqT> implements ClientStream {
         }
       }
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof Throttle)) {
+        return false;
+      }
+      Throttle that = (Throttle) o;
+      return maxTokens == that.maxTokens && tokenRatio == that.tokenRatio;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(maxTokens, tokenRatio);
+    }
+  }
+
+  interface RetryPolicies {
+    @Nonnull
+    RetryPolicy get(MethodDescriptor<?, ?> method);
   }
 
   @Immutable

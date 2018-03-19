@@ -17,12 +17,19 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.base.Verify;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status.Code;
+import io.grpc.internal.RetriableStream.RetryPolicies;
+import io.grpc.internal.RetriableStream.RetryPolicy;
+import io.grpc.internal.RetriableStream.Throttle;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +64,144 @@ final class ServiceConfigUtil {
       return getString(serviceConfig, key);
     }
     return null;
+  }
+
+  /**
+   * Gets retry policies from the service config.
+   *
+   * @throw ClassCastException if the service config doesn't parse properly
+   */
+  static RetryPolicies getRetryPolicies(
+      @Nullable Map<String, Object> serviceConfig, int maxAttemptsLimit) {
+    final Map<String, RetryPolicy> fullMethodNameMap = new HashMap<String, RetryPolicy>();
+    final Map<String, RetryPolicy> serviceNameMap = new HashMap<String, RetryPolicy>();
+
+    if (serviceConfig != null) {
+
+      /* schema as follows
+      {
+        "methodConfig": [
+          {
+            "name": [
+              {
+                "service": string,
+                "method": string,         // Optional
+              }
+            ],
+            "retryPolicy": {
+              "maxAttempts": number,
+              "initialBackoff": string,   // Long decimal with "s" appended
+              "maxBackoff": string,       // Long decimal with "s" appended
+              "backoffMultiplier": number
+              "retryableStatusCodes": []
+            }
+          }
+        ]
+      }
+      */
+
+      if (serviceConfig.containsKey("methodConfig")) {
+        List<Object> methodConfigs = getList(serviceConfig, "methodConfig");
+        for (int i = 0; i < methodConfigs.size(); i++) {
+          Map<String, Object> methodConfig = getObject(methodConfigs, i);
+          if (methodConfig.containsKey("retryPolicy")) {
+            Map<String, Object> retryPolicy = getObject(methodConfig, "retryPolicy");
+
+            int maxAttempts = getDouble(retryPolicy, "maxAttempts").intValue();
+            maxAttempts = Math.min(maxAttempts, maxAttemptsLimit);
+
+            String initialBackoffStr = getString(retryPolicy, "initialBackoff");
+            checkState(
+                initialBackoffStr.charAt(initialBackoffStr.length() - 1) == 's',
+                "invalid value of initialBackoff");
+            double initialBackoff =
+                Double.parseDouble(initialBackoffStr.substring(0, initialBackoffStr.length() - 1));
+
+            String maxBackoffStr = getString(retryPolicy, "maxBackoff");
+            checkState(
+                maxBackoffStr.charAt(maxBackoffStr.length() - 1) == 's',
+                "invalid value of maxBackoff");
+            double maxBackoff =
+                Double.parseDouble(maxBackoffStr.substring(0, maxBackoffStr.length() - 1));
+
+            double backoffMultiplier = getDouble(retryPolicy, "backoffMultiplier");
+
+            List<Object> retryableStatusCodes = getList(retryPolicy, "retryableStatusCodes");
+            Set<Code> codeSet = new HashSet<Code>(retryableStatusCodes.size());
+            for (int j = 0; j < retryableStatusCodes.size(); j++) {
+              String code = getString(retryableStatusCodes, j);
+              codeSet.add(Code.valueOf(code));
+            }
+
+            RetryPolicy pojoPolicy = new RetryPolicy(
+                maxAttempts, initialBackoff, maxBackoff, backoffMultiplier, codeSet);
+
+            List<Object> names = getList(methodConfig, "name");
+            for (int j = 0; j < names.size(); j++) {
+              Map<String, Object> name = getObject(names, j);
+              String service = getString(name, "service");
+              if (name.containsKey("method")) {
+                String method = getString(name, "method");
+                fullMethodNameMap.put(
+                    MethodDescriptor.generateFullMethodName(service, method), pojoPolicy);
+              } else {
+                serviceNameMap.put(service, pojoPolicy);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return new RetryPolicies() {
+      @Override
+      public RetryPolicy get(MethodDescriptor<?, ?> method) {
+        RetryPolicy retryPolicy = fullMethodNameMap.get(method.getFullMethodName());
+        if (retryPolicy == null) {
+          retryPolicy = serviceNameMap
+              .get(MethodDescriptor.extractFullServiceName(method.getFullMethodName()));
+        }
+        if (retryPolicy == null) {
+          retryPolicy = RetryPolicy.DEFAULT;
+        }
+        return retryPolicy;
+      }
+    };
+  }
+
+  @Nullable
+  static Throttle getThrottlePolicy(@Nullable Map<String, Object> serviceConfig) {
+    String retryThrottlingKey = "retryThrottling";
+    if (serviceConfig == null || !serviceConfig.containsKey(retryThrottlingKey)) {
+      return null;
+    }
+
+    /* schema as follows
+    {
+      "retryThrottling": {
+        // The number of tokens starts at maxTokens. The token_count will always be
+        // between 0 and maxTokens.
+        //
+        // This field is required and must be greater than zero.
+        "maxTokens": number,
+
+        // The amount of tokens to add on each successful RPC. Typically this will
+        // be some number between 0 and 1, e.g., 0.1.
+        //
+        // This field is required and must be greater than zero. Up to 3 decimal
+        // places are supported.
+        "tokenRatio": number
+      }
+    }
+    */
+
+    Map<String, Object> throttling = getObject(serviceConfig, retryThrottlingKey);
+
+    float maxTokens = getDouble(throttling, "maxTokens").floatValue();
+    float tokenRatio = getDouble(throttling, "tokenRatio").floatValue();
+    checkState(maxTokens > 0f, "maxToken should be greater than zero");
+    checkState(tokenRatio > 0f, "tokenRatio should be greater than zero");
+    return new Throttle(maxTokens, tokenRatio);
   }
 
   /**
@@ -172,6 +317,20 @@ final class ServiceConfigUtil {
     }
     throw new ClassCastException(
         String.format("value %s for key %s in %s is not object", value, key, obj));
+  }
+
+  /**
+   * Gets an object from a list of objects for the given index.
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> getObject(List<Object> list, int i) {
+    assert i >= 0 && i < list.size();
+    Object value = checkNotNull(list.get(i), "idx %s in %s is null", i, list);
+    if (value instanceof Map) {
+      return (Map<String, Object>) value;
+    }
+    throw new ClassCastException(
+        String.format("value %s for idx %d in %s is not a map", value, i, list));
   }
 
   /**
