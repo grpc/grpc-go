@@ -291,7 +291,7 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 	return PerRPCCredsCallOption{Creds: creds}
 }
 
-// PerRPCCredsCallOption is a CallOption that indicates the the per-RPC
+// PerRPCCredsCallOption is a CallOption that indicates the per-RPC
 // credentials to use for the call.
 // This is an EXPERIMENTAL API.
 type PerRPCCredsCallOption struct {
