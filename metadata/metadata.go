@@ -131,7 +131,11 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
 	}
 	md, _ := ctx.Value(mdOutgoingKey{}).(rawMD)
-	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: append(md.added, kv)})
+	added := make([][]string, len(md.added)+1)
+	copy(added, md.added)
+	added[len(added)-1] = make([]string, len(kv))
+	copy(added[len(added)-1], kv)
+	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.  The
@@ -159,7 +163,7 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.  The
 // returned MD should not be modified. Writing to it may cause races.
-// Modification should be made to the copies of the returned MD.
+// Modification should be made to copies of the returned MD.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {
