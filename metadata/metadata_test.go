@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -98,19 +99,60 @@ func TestAppendToOutgoingContext(t *testing.T) {
 	}
 }
 
+func TestAppendToOutgoingContext_Repeated(t *testing.T) {
+	ctx := context.Background()
+
+	for i := 0; i < 100; i = i + 2 {
+		ctx1 := AppendToOutgoingContext(ctx, "k", strconv.Itoa(i))
+		ctx2 := AppendToOutgoingContext(ctx, "k", strconv.Itoa(i+1))
+
+		md1, _ := FromOutgoingContext(ctx1)
+		md2, _ := FromOutgoingContext(ctx2)
+
+		if reflect.DeepEqual(md1, md2) {
+			t.Fatalf("md1, md2 = %v, %v; should not be equal", md1, md2)
+		}
+
+		ctx = ctx1
+	}
+}
+
+func TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
+	const k, v = "a", "b"
+	kv := []string{k, v}
+	ctx := AppendToOutgoingContext(context.Background(), kv...)
+	md, _ := FromOutgoingContext(ctx)
+	if md[k][0] != v {
+		t.Fatalf("md[%q] = %q; want %q", k, md[k], v)
+	}
+	kv[1] = "xxx"
+	md, _ = FromOutgoingContext(ctx)
+	if md[k][0] != v {
+		t.Fatalf("md[%q] = %q; want %q", k, md[k], v)
+	}
+}
+
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
+	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
+	const num = 10
 	for n := 0; n < b.N; n++ {
 		ctx := context.Background()
-		md, _ := FromOutgoingContext(ctx)
-		NewOutgoingContext(ctx, Join(Pairs("k1", "v1", "k2", "v2"), md))
+		for i := 0; i < num; i++ {
+			md, _ := FromOutgoingContext(ctx)
+			NewOutgoingContext(ctx, Join(Pairs("k1", "v1", "k2", "v2"), md))
+		}
 	}
 }
 
 // Newer/faster approach to adding metadata to context
 func BenchmarkAppendToOutgoingContext(b *testing.B) {
+	const num = 10
 	for n := 0; n < b.N; n++ {
-		AppendToOutgoingContext(context.Background(), "k1", "v1", "k2", "v2")
+		ctx := context.Background()
+		for i := 0; i < num; i++ {
+			ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+		}
 	}
 }
 
