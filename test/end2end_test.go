@@ -1244,7 +1244,7 @@ func testFailFast(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	// Stop the server and tear down all the exisiting connections.
+	// Stop the server and tear down all the existing connections.
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
@@ -5901,7 +5901,6 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 		maxSendSize []int
 		compressor  []string
 		subtype     []string
-		codec       []grpc.Codec
 	}
 	var observedOpts observedOptions
 	populateOpts := func(opts []grpc.CallOption) {
@@ -5925,8 +5924,6 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 				observedOpts.compressor = append(observedOpts.compressor, o.CompressorType)
 			case grpc.ContentSubtypeCallOption:
 				observedOpts.subtype = append(observedOpts.subtype, o.ContentSubtype)
-			case grpc.CustomCodecCallOption:
-				observedOpts.codec = append(observedOpts.codec, o.Codec)
 			}
 		}
 	}
@@ -5972,20 +5969,17 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 
 	observedOpts = observedOptions{} // reset
 
-	var codec errCodec
 	tc.StreamingInputCall(context.Background(),
 		grpc.FailFast(true),
 		grpc.MaxCallSendMsgSize(2020),
 		grpc.UseCompressor("comp-type"),
-		grpc.CallContentSubtype("json"),
-		grpc.CallCustomCodec(&codec))
+		grpc.CallContentSubtype("json"))
 	expected = observedOptions{
 		failFast:    []bool{false, true},
 		maxRecvSize: []int{1010},
 		maxSendSize: []int{2020},
 		compressor:  []string{"comp-type"},
 		subtype:     []string{"json"},
-		codec:       []grpc.Codec{&codec},
 	}
 
 	if !reflect.DeepEqual(expected, observedOpts) {
