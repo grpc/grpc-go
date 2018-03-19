@@ -91,6 +91,14 @@ type AuthInfo interface {
 	PeerRPCVersions() *altspb.RpcProtocolVersions
 }
 
+// ClientOptions contains the client-side options of an ALTS channel. These
+// options will be passed to the underlying ALTS handshaker.
+type ClientOptions struct {
+	// TargetServiceAccounts contains a list of expected target service
+	// accounts.
+	TargetServiceAccounts []string
+}
+
 // altsTC is the credentials required for authenticating a connection using ALTS.
 // It implements credentials.TransportCredentials interface.
 type altsTC struct {
@@ -100,13 +108,13 @@ type altsTC struct {
 	accounts []string
 }
 
-// NewClient constructs a client-side ALTS TransportCredentials object.
-func NewClient(targetServiceAccounts []string) credentials.TransportCredentials {
-	return newALTS(core.ClientSide, targetServiceAccounts)
+// NewClientCreds constructs a client-side ALTS TransportCredentials object.
+func NewClientCreds(opts *ClientOptions) credentials.TransportCredentials {
+	return newALTS(core.ClientSide, opts.TargetServiceAccounts)
 }
 
-// NewServer constructs a server-side ALTS TransportCredentials object.
-func NewServer() credentials.TransportCredentials {
+// NewServerCreds constructs a server-side ALTS TransportCredentials object.
+func NewServerCreds() credentials.TransportCredentials {
 	return newALTS(core.ServerSide, nil)
 }
 
