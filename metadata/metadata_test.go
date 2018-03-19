@@ -134,30 +134,25 @@ func TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
-	for _, num := range []int{1, 10, 100} {
-		b.Run(strconv.Itoa(num), func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				ctx := context.Background()
-				for i := 0; i < num; i++ {
-					md, _ := FromOutgoingContext(ctx)
-					NewOutgoingContext(ctx, Join(Pairs("k1", "v1", "k2", "v2"), md))
-				}
-			}
-		})
+	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
+	const num = 10
+	for n := 0; n < b.N; n++ {
+		ctx := context.Background()
+		for i := 0; i < num; i++ {
+			md, _ := FromOutgoingContext(ctx)
+			NewOutgoingContext(ctx, Join(Pairs("k1", "v1", "k2", "v2"), md))
+		}
 	}
 }
 
 // Newer/faster approach to adding metadata to context
 func BenchmarkAppendToOutgoingContext(b *testing.B) {
-	for _, num := range []int{1, 10, 100} {
-		b.Run(strconv.Itoa(num), func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				ctx := context.Background()
-				for i := 0; i < num; i++ {
-					ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
-				}
-			}
-		})
+	const num = 10
+	for n := 0; n < b.N; n++ {
+		ctx := context.Background()
+		for i := 0; i < num; i++ {
+			ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+		}
 	}
 }
 
