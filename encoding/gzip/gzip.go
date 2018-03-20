@@ -54,11 +54,11 @@ type writer struct {
 // The error returned will be nil if the specified level is valid.
 func SetLevel(level int) error {
 	if level < gzip.DefaultCompression || level > gzip.BestCompression {
-		return  fmt.Errorf("grpc: invalid gzip compression level: %d", level)
+		return fmt.Errorf("grpc: invalid gzip compression level: %d", level)
 	}
 	c := encoding.GetCompressor(Name).(*compressor)
 	c.poolCompressor.New = func() interface{} {
-		w,_:=gzip.NewWriterLevel(ioutil.Discard, level)
+		w, _ := gzip.NewWriterLevel(ioutil.Discard, level)
 		return &writer{Writer: w, pool: &c.poolCompressor}
 	}
 	return nil
