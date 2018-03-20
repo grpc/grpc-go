@@ -23,10 +23,10 @@ package gzip
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
-	"fmt"
 
 	"google.golang.org/grpc/encoding"
 )
@@ -47,12 +47,13 @@ type writer struct {
 	pool *sync.Pool
 }
 
-// SetLevel updates the registered gzip compressor to use the compression level specified.
-// NOTE: this function must only be called during initialization time (i.e. in an init() function), and is not thread-safe.
+// SetLevel updates the registered gzip compressor to use the compression level specified (gzip.HuffmanOnly is not supported).
+// NOTE: this function must only be called during initialization time (i.e. in an init() function),
+// and is not thread-safe.
 //
 // The error returned will be nil if the specified level is valid.
 func SetLevel(level int) error {
-	if level < gzip.HuffmanOnly || level > gzip.BestCompression {
+	if level < gzip.DefaultCompression || level > gzip.BestCompression {
 		return  fmt.Errorf("grpc: invalid gzip compression level: %d", level)
 	}
 	c := encoding.GetCompressor(Name).(*compressor)
