@@ -42,16 +42,6 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
-// These constants values are copied from the flate package, Declared to generify compression for all
-// compression algorithms
-const (
-	NoCompression      = 0
-	BestSpeed          = 1
-	BestCompression    = 9
-	DefaultCompression = -1
-	HuffmanOnly        = -2
-)
-
 // Compressor defines the interface gRPC uses to compress a message.
 type Compressor interface {
 	// Do compresses p into w.
@@ -66,18 +56,16 @@ type gzipCompressor struct {
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
 func NewGZIPCompressor() Compressor {
-	c, _ := NewGZIPCompressorWithLevel(BestCompression)
+	c, _ := NewGZIPCompressorWithLevel(gzip.DefaultCompression)
 	return c
 }
 
-// NewGZIPCompressorWithLevel is like NewGZIPCompressor but specifies the compression level instead
-// of assuming BestCompression.
+// NewGZIPCompressorWithLevel is like NewGZIPCompressor but specifies the gzip compression level instead
+// of assuming DefaultCompression.
 //
-// The compression level can be DefaultCompression, NoCompression, HuffmanOnly
-// or any integer value between BestSpeed and BestCompression inclusive.
 // The error returned will be nil if the level is valid.
 func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
-	if level < HuffmanOnly || level > BestCompression {
+	if level < gzip.HuffmanOnly || level > gzip.BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
 	}
 	return &gzipCompressor{

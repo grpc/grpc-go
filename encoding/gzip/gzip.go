@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"sync"
+	"fmt"
 
 	"google.golang.org/grpc/encoding"
 )
@@ -44,6 +45,22 @@ func init() {
 type writer struct {
 	*gzip.Writer
 	pool *sync.Pool
+}
+
+// SetLevel updates the registered gzip compressor to use the compression level specified.
+// NOTE: this function must only be called during initialization time (i.e. in an init() function), and is not thread-safe.
+//
+// The error returned will be nil if the specified level is valid.
+func SetLevel(level int) error {
+	if level < gzip.HuffmanOnly || level > gzip.BestCompression {
+		return  fmt.Errorf("grpc: invalid gzip compression level: %d", level)
+	}
+	c := encoding.GetCompressor(Name).(*compressor)
+	c.poolCompressor.New = func() interface{} {
+		w,_:=gzip.NewWriterLevel(ioutil.Discard, level)
+		return &writer{Writer: w, pool: &c.poolCompressor}
+	}
+	return nil
 }
 
 func (c *compressor) Compress(w io.Writer) (io.WriteCloser, error) {
