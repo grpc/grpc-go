@@ -149,9 +149,9 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		// Sleep so that if the test were to fail it
-		// will fail more often than not.
-		time.Sleep(100 * time.Millisecond)
+		// Sleep for a little bit to make sure that Dial on client
+		// side blocks until settings are received.
+		time.Sleep(500 * time.Millisecond)
 		framer := http2.NewFramer(conn, conn)
 		close(sent)
 		if err := framer.WriteSettings(http2.Setting{}); err != nil {
@@ -160,7 +160,7 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 		}
 		<-dialDone // Close conn only after dial returns.
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 	close(dialDone)
