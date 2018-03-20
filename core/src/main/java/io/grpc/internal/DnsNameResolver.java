@@ -341,7 +341,9 @@ final class DnsNameResolver extends NameResolver {
         ResolutionResults jdniResults = jndiResovler.resolve(host);
         txtRecords = jdniResults.txtRecords;
         balancerAddresses = jdniResults.balancerAddresses;
-      } catch (Exception e) {
+      } catch (Throwable e) {
+        // JndiResolver.resolve may throw Error that could cause rpc to hang.
+        // Catch and log Throwable and keep using jdkResolver's result to prevent it.
         logger.log(Level.SEVERE, "Failed to resolve TXT results", e);
       }
 
