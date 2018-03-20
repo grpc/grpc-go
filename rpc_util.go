@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -55,13 +56,29 @@ type gzipCompressor struct {
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
 func NewGZIPCompressor() Compressor {
+	c, _ := NewGZIPCompressorWithLevel(gzip.DefaultCompression)
+	return c
+}
+
+// NewGZIPCompressorWithLevel is like NewGZIPCompressor but specifies the gzip compression level instead
+// of assuming DefaultCompression.
+//
+// The error returned will be nil if the level is valid.
+func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
+	if level < gzip.DefaultCompression || level > gzip.BestCompression {
+		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
+	}
 	return &gzipCompressor{
 		pool: sync.Pool{
 			New: func() interface{} {
-				return gzip.NewWriter(ioutil.Discard)
+				w, err := gzip.NewWriterLevel(ioutil.Discard, level)
+				if err != nil {
+					panic(err)
+				}
+				return w
 			},
 		},
-	}
+	}, nil
 }
 
 func (c *gzipCompressor) Do(w io.Writer, p []byte) error {

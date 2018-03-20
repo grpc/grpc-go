@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"math"
 	"reflect"
@@ -120,6 +121,26 @@ func TestEncode(t *testing.T) {
 }
 
 func TestCompress(t *testing.T) {
+
+	bestCompressor, err := NewGZIPCompressorWithLevel(gzip.BestCompression)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best compression.")
+	}
+	bestSpeedCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best speed compression.")
+	}
+
+	defaultCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with default compression.")
+	}
+
+	level5, err := NewGZIPCompressorWithLevel(5)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with level 5 compression.")
+	}
+
 	for _, test := range []struct {
 		// input
 		data []byte
@@ -129,6 +150,10 @@ func TestCompress(t *testing.T) {
 		err error
 	}{
 		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestSpeedCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), defaultCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), level5, NewGZIPDecompressor(), nil},
 	} {
 		b := new(bytes.Buffer)
 		if err := test.cp.Do(b, test.data); err != test.err {
