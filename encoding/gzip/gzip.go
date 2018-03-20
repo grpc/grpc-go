@@ -58,7 +58,10 @@ func SetLevel(level int) error {
 	}
 	c := encoding.GetCompressor(Name).(*compressor)
 	c.poolCompressor.New = func() interface{} {
-		w, _ := gzip.NewWriterLevel(ioutil.Discard, level)
+		w, err := gzip.NewWriterLevel(ioutil.Discard, level)
+		if err != nil {
+			panic(err)
+		}
 		return &writer{Writer: w, pool: &c.poolCompressor}
 	}
 	return nil

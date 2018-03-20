@@ -71,7 +71,10 @@ func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
 	return &gzipCompressor{
 		pool: sync.Pool{
 			New: func() interface{} {
-				w, _ := gzip.NewWriterLevel(ioutil.Discard, level)
+				w, err := gzip.NewWriterLevel(ioutil.Discard, level)
+				if err != nil {
+					panic(err)
+				}
 				return w
 			},
 		},
