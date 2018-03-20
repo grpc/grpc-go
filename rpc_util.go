@@ -65,7 +65,7 @@ func NewGZIPCompressor() Compressor {
 //
 // The error returned will be nil if the level is valid.
 func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
-	if level < gzip.HuffmanOnly || level > gzip.BestCompression {
+	if level < gzip.DefaultCompression || level > gzip.BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
 	}
 	return &gzipCompressor{
