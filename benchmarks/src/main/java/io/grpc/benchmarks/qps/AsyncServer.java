@@ -24,7 +24,6 @@ import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
 import io.grpc.benchmarks.proto.Messages;
 import io.grpc.internal.testing.TestUtils;
-import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -33,9 +32,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.File;
 import java.io.IOException;
@@ -94,26 +90,6 @@ public class AsyncServer {
 
   @SuppressWarnings("LiteralClassName") // Epoll is not available on windows
   static Server newServer(ServerConfiguration config) throws IOException {
-    SslContext sslContext = null;
-    if (config.tls) {
-      System.out.println("Using fake CA for TLS certificate.\n"
-          + "Run the Java client with --tls --testca");
-
-      File cert = TestUtils.loadCert("server1.pem");
-      File key = TestUtils.loadCert("server1.key");
-      SslContextBuilder sslContextBuilder = GrpcSslContexts.forServer(cert, key);
-      if (config.transport == ServerConfiguration.Transport.NETTY_NIO) {
-        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.JDK);
-      } else {
-        // Native transport with OpenSSL
-        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
-      }
-      if (config.useDefaultCiphers) {
-        sslContextBuilder.ciphers(null);
-      }
-      sslContext = sslContextBuilder.build();
-    }
-
     final EventLoopGroup boss;
     final EventLoopGroup worker;
     final Class<? extends ServerChannel> channelType;
@@ -183,8 +159,15 @@ public class AsyncServer {
         .workerEventLoopGroup(worker)
         .channelType(channelType)
         .addService(new BenchmarkServiceImpl())
-        .sslContext(sslContext)
         .flowControlWindow(config.flowControlWindow);
+    if (config.tls) {
+      System.out.println("Using fake CA for TLS certificate.\n"
+          + "Run the Java client with --tls --testca");
+
+      File cert = TestUtils.loadCert("server1.pem");
+      File key = TestUtils.loadCert("server1.key");
+      builder.useTransportSecurity(cert, key);
+    }
     if (config.directExecutor) {
       builder.directExecutor();
     } else {

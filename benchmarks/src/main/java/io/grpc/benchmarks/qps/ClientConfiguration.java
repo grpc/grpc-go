@@ -67,7 +67,7 @@ public class ClientConfiguration implements Configuration {
 
   public ManagedChannel newChannel() throws IOException {
     return Utils.newClientChannel(transport, address, tls, testca, authorityOverride,
-        useDefaultCiphers, flowControlWindow, directExecutor);
+        flowControlWindow, directExecutor);
   }
 
   public Messages.SimpleRequest newRequest() {
@@ -174,13 +174,6 @@ public class ClientConfiguration implements Configuration {
       @Override
       protected void setClientValue(ClientConfiguration config, String value) {
         config.testca = parseBoolean(value);
-      }
-    },
-    USE_DEFAULT_CIPHERS("", "Use the default JDK ciphers for TLS (Used to support Java 7).",
-            "" + DEFAULT.useDefaultCiphers) {
-      @Override
-      protected void setClientValue(ClientConfiguration config, String value) {
-        config.useDefaultCiphers = parseBoolean(value);
       }
     },
     TRANSPORT("STR", Transport.getDescriptionString(), DEFAULT.transport.name().toLowerCase()) {

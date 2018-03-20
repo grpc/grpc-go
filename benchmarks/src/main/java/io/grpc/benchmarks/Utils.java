@@ -27,10 +27,8 @@ import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Messages.Payload;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.benchmarks.proto.Messages.SimpleResponse;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.TestUtils;
 import io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.okhttp.internal.Platform;
@@ -40,9 +38,6 @@ import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.channel.unix.DomainSocketAddress;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -57,7 +52,6 @@ import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
-import javax.net.ssl.SSLSocketFactory;
 import org.HdrHistogram.Histogram;
 
 /**
@@ -117,59 +111,35 @@ public final class Utils {
     }
   }
 
-  private static OkHttpChannelBuilder newOkhttpClientChannel(
-      SocketAddress address, boolean tls, boolean testca, @Nullable String authorityOverride) {
+  private static OkHttpChannelBuilder newOkHttpClientChannel(
+      SocketAddress address, boolean tls, boolean testca) {
     InetSocketAddress addr = (InetSocketAddress) address;
     OkHttpChannelBuilder builder =
         OkHttpChannelBuilder.forAddress(addr.getHostName(), addr.getPort());
-    if (tls) {
-      builder.negotiationType(io.grpc.okhttp.NegotiationType.TLS);
-      SSLSocketFactory factory;
-      if (testca) {
-        builder.overrideAuthority(
-            GrpcUtil.authorityFromHostAndPort(authorityOverride, addr.getPort()));
-        try {
-          factory = TestUtils.newSslSocketFactoryForCa(
-              Platform.get().getProvider(),
-              TestUtils.loadCert("ca.pem"));
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      } else {
-        factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+    if (!tls) {
+      builder.usePlaintext();
+    } else if (testca) {
+      try {
+        builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(
+            Platform.get().getProvider(),
+            TestUtils.loadCert("ca.pem")));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
-      builder.sslSocketFactory(factory);
-    } else {
-      builder.negotiationType(io.grpc.okhttp.NegotiationType.PLAINTEXT);
     }
     return builder;
   }
 
   private static NettyChannelBuilder newNettyClientChannel(Transport transport,
-      SocketAddress address, boolean tls, boolean testca, int flowControlWindow,
-      boolean useDefaultCiphers) throws IOException {
+      SocketAddress address, boolean tls, boolean testca, int flowControlWindow)
+      throws IOException {
     NettyChannelBuilder builder =
         NettyChannelBuilder.forAddress(address).flowControlWindow(flowControlWindow);
-    if (tls) {
-      builder.negotiationType(NegotiationType.TLS);
-      SslContext sslContext = null;
-      if (testca) {
-        File cert = TestUtils.loadCert("ca.pem");
-        SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient().trustManager(cert);
-        if (transport == Transport.NETTY_NIO) {
-          sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.JDK);
-        } else {
-          // Native transport with OpenSSL
-          sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
-        }
-        if (useDefaultCiphers) {
-          sslContextBuilder.ciphers(null);
-        }
-        sslContext = sslContextBuilder.build();
-      }
-      builder.sslContext(sslContext);
-    } else {
-      builder.negotiationType(NegotiationType.PLAINTEXT);
+    if (!tls) {
+      builder.usePlaintext();
+    } else if (testca) {
+      File cert = TestUtils.loadCert("ca.pem");
+      builder.sslContext(GrpcSslContexts.forClient().trustManager(cert).build());
     }
 
     DefaultThreadFactory tf = new DefaultThreadFactory("client-elg-", true /*daemon */);
@@ -225,15 +195,14 @@ public final class Utils {
    * Create a {@link ManagedChannel} for the given parameters.
    */
   public static ManagedChannel newClientChannel(Transport transport, SocketAddress address,
-        boolean tls, boolean testca, @Nullable String authorityOverride, boolean useDefaultCiphers,
+        boolean tls, boolean testca, @Nullable String authorityOverride,
         int flowControlWindow, boolean directExecutor) {
     ManagedChannelBuilder<?> builder;
     if (transport == Transport.OK_HTTP) {
-      builder = newOkhttpClientChannel(address, tls, testca, authorityOverride);
+      builder = newOkHttpClientChannel(address, tls, testca);
     } else {
       try {
-        builder = newNettyClientChannel(
-            transport, address, tls, testca, flowControlWindow, useDefaultCiphers);
+        builder = newNettyClientChannel(transport, address, tls, testca, flowControlWindow);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

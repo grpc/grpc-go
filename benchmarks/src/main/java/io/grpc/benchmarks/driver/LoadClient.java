@@ -88,7 +88,6 @@ class LoadClient {
               config.hasSecurityParams()
                   ? config.getSecurityParams().getServerHostOverride()
                   : null,
-              true,
               Utils.DEFAULT_FLOW_CONTROL_WINDOW,
               false);
     }

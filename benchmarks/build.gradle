@@ -72,7 +72,6 @@ task openloop_client(type: CreateStartScripts) {
 task qps_server(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.AsyncServer"
     applicationName = "qps_server"
-    defaultJvmOpts = ["-javaagent:" + configurations.alpnagent.asPath] + vmArgs
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }

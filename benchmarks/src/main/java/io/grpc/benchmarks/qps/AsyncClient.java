@@ -32,7 +32,6 @@ import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAMING_R
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
-import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.USE_DEFAULT_CIPHERS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.WARMUP_DURATION;
 
 import com.google.common.base.Preconditions;
@@ -308,7 +307,7 @@ public class AsyncClient {
   public static void main(String... args) throws Exception {
     ClientConfiguration.Builder configBuilder = ClientConfiguration.newBuilder(
         ADDRESS, CHANNELS, OUTSTANDING_RPCS, CLIENT_PAYLOAD, SERVER_PAYLOAD,
-        TLS, TESTCA, USE_DEFAULT_CIPHERS, TRANSPORT, DURATION, WARMUP_DURATION, DIRECTEXECUTOR,
+        TLS, TESTCA, TRANSPORT, DURATION, WARMUP_DURATION, DIRECTEXECUTOR,
         SAVE_HISTOGRAM, STREAMING_RPCS, FLOW_CONTROL_WINDOW);
     ClientConfiguration config;
     try {
