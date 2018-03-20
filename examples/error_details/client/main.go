@@ -49,8 +49,12 @@ func main() {
 	if err != nil {
 		s := status.Convert(err)
 		for _, d := range s.Details() {
-			info := d.(*epb.QuotaFailure)
-			log.Printf("Error details: %s", info)
+			switch info := d.(type) {
+			case *epb.QuotaFailure:
+				log.Printf("Quota failure: %s", info)
+			default:
+				log.Printf("Unexpected type: %s", info)
+			}
 		}
 		os.Exit(1)
 	}
