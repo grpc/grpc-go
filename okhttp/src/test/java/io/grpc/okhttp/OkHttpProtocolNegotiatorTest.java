@@ -19,6 +19,7 @@ package io.grpc.okhttp;
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -32,6 +33,7 @@ import io.grpc.okhttp.internal.Platform.TlsExtensionType;
 import io.grpc.okhttp.internal.Protocol;
 import java.io.IOException;
 import javax.net.ssl.HandshakeCompletedListener;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
 import org.junit.Rule;
@@ -110,7 +112,9 @@ public class OkHttpProtocolNegotiatorTest {
 
   @Test
   public void negotiate_handshakeFails() throws IOException {
+    SSLParameters parameters = new SSLParameters();
     OkHttpProtocolNegotiator negotiator = OkHttpProtocolNegotiator.get();
+    doReturn(parameters).when(sock).getSSLParameters();
     doThrow(new IOException()).when(sock).startHandshake();
     thrown.expect(IOException.class);
 

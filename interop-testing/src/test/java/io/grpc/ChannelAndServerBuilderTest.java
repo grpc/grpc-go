@@ -36,6 +36,8 @@ import org.junit.runners.Parameterized.Parameters;
 
 /**
  * Tests that Channel and Server builders properly hide the static constructors.
+ *
+ * <p>This test does nothing on Java 9.
  */
 @RunWith(Parameterized.class)
 public class ChannelAndServerBuilderTest {
@@ -49,13 +51,19 @@ public class ChannelAndServerBuilderTest {
   @Parameters(name = "class={0}")
   public static Collection<Object[]> params() throws Exception {
     ClassLoader loader = ChannelAndServerBuilderTest.class.getClassLoader();
+    Collection<ClassInfo> classInfos =
+        ClassPath.from(loader).getTopLevelClassesRecursive("io.grpc");
+    // Java 9 doesn't expose the URLClassLoader, which breaks searching through the classpath
+    if (classInfos.isEmpty()) {
+      return new ArrayList<Object[]>();
+    }
     List<Object[]> classes = new ArrayList<Object[]>();
-    for (ClassInfo classInfo : ClassPath.from(loader).getTopLevelClassesRecursive("io.grpc")) {
+    for (ClassInfo classInfo : classInfos) {
       Class<?> clazz = Class.forName(classInfo.getName(), false /*initialize*/, loader);
       if (ServerBuilder.class.isAssignableFrom(clazz) && clazz != ServerBuilder.class) {
         classes.add(new Object[]{clazz});
       } else if (ManagedChannelBuilder.class.isAssignableFrom(clazz)
-          && clazz != ManagedChannelBuilder.class ) {
+          && clazz != ManagedChannelBuilder.class) {
         classes.add(new Object[]{clazz});
       }
     }
