@@ -354,8 +354,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		pr.AuthInfo = credentials.TLSInfo{State: *req.TLS}
 	}
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
-	ctx = peer.NewContext(ctx, pr)
-	s.ctx = newContextWithStream(ctx, s)
+	s.ctx = peer.NewContext(ctx, pr)
 	if ht.stats != nil {
 		s.ctx = ht.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{

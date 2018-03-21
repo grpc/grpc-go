@@ -366,6 +366,14 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 	return nil
 }
 
+// SendHeader sends the given header metadata. The given metadata is
+// combined with any metadata set by previous calls to SetHeader and
+// then written to the transport stream.
+func (s *Stream) SendHeader(md metadata.MD) error {
+	t := s.ServerTransport()
+	return t.WriteHeader(s, md)
+}
+
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can be called multiple times. Server side only.
 func (s *Stream) SetTrailer(md metadata.MD) error {
@@ -443,21 +451,6 @@ func (s *Stream) Unprocessed() bool {
 // race when printing %#v.
 func (s *Stream) GoString() string {
 	return fmt.Sprintf("<stream: %p, %v>", s, s.method)
-}
-
-// The key to save transport.Stream in the context.
-type streamKey struct{}
-
-// newContextWithStream creates a new context from ctx and attaches stream
-// to it.
-func newContextWithStream(ctx context.Context, stream *Stream) context.Context {
-	return context.WithValue(ctx, streamKey{}, stream)
-}
-
-// StreamFromContext returns the stream saved in ctx.
-func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
-	s, ok = ctx.Value(streamKey{}).(*Stream)
-	return
 }
 
 // state of transport
