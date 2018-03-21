@@ -131,7 +131,7 @@ func TestFileDescContainingExtension(t *testing.T) {
 		{reflect.TypeOf(pb.ToBeExtended{}), 23, fdProto2Ext2},
 		{reflect.TypeOf(pb.ToBeExtended{}), 29, fdProto2Ext2},
 	} {
-		fd, err := s.fileDescContainingExtension(test.st, test.extNum)
+		fd, err := fileDescContainingExtension(test.st, test.extNum)
 		if err != nil || !proto.Equal(fd, test.want) {
 			t.Errorf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
 		}

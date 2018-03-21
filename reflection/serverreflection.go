@@ -59,7 +59,7 @@ import (
 type serverReflectionServer struct {
 	s *grpc.Server
 
-	mu           sync.RWMutex
+	initSymbols  sync.Once
 	serviceNames []string
 	symbols      map[string]*dpb.FileDescriptorProto // map of fully-qualified names to files
 }
@@ -80,44 +80,31 @@ type protoMessage interface {
 }
 
 func (s *serverReflectionServer) getSymbols() (svcNames []string, symbolIndex map[string]*dpb.FileDescriptorProto) {
-	s.mu.RLock()
-	if s.symbols != nil {
-		s.mu.RUnlock()
-		return s.serviceNames, s.symbols
-	}
-	s.mu.RUnlock()
+	s.initSymbols.Do(func() {
+		serviceInfo := s.s.GetServiceInfo()
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// check again in case it was initialized while re-acquiring lock
-	if s.symbols != nil {
-		return s.serviceNames, s.symbols
-	}
+		s.symbols = map[string]*dpb.FileDescriptorProto{}
+		s.serviceNames = make([]string, 0, len(serviceInfo))
+		processed := map[string]struct{}{}
+		for svc, info := range serviceInfo {
+			s.serviceNames = append(s.serviceNames, svc)
+			fdenc, ok := parseMetadata(info.Metadata)
+			if !ok {
+				continue
+			}
+			fd, err := decodeFileDesc(fdenc)
+			if err != nil {
+				continue
+			}
+			s.processFile(fd, processed)
+		}
+		sort.Strings(s.serviceNames)
+	})
 
-	serviceInfo := s.s.GetServiceInfo()
-
-	s.symbols = map[string]*dpb.FileDescriptorProto{}
-	s.serviceNames = make([]string, 0, len(serviceInfo))
-	processed := map[string]struct{}{}
-	for svc, info := range serviceInfo {
-		s.serviceNames = append(s.serviceNames, svc)
-		fdenc, ok := parseMetadata(info.Metadata)
-		if !ok {
-			continue
-		}
-		fd, err := decodeFileDesc(fdenc)
-		if err != nil {
-			continue
-		}
-		if ok {
-			s.processFileLocked(fd, processed)
-		}
-	}
-	sort.Strings(s.serviceNames)
 	return s.serviceNames, s.symbols
 }
 
-func (s *serverReflectionServer) processFileLocked(fd *dpb.FileDescriptorProto, processed map[string]struct{}) {
+func (s *serverReflectionServer) processFile(fd *dpb.FileDescriptorProto, processed map[string]struct{}) {
 	filename := fd.GetName()
 	if _, ok := processed[filename]; ok {
 		return
@@ -127,13 +114,13 @@ func (s *serverReflectionServer) processFileLocked(fd *dpb.FileDescriptorProto, 
 	prefix := fd.GetPackage()
 
 	for _, msg := range fd.MessageType {
-		s.processMessageLocked(fd, prefix, msg)
+		s.processMessage(fd, prefix, msg)
 	}
 	for _, en := range fd.EnumType {
-		s.processEnumLocked(fd, prefix, en)
+		s.processEnum(fd, prefix, en)
 	}
 	for _, ext := range fd.Extension {
-		s.processFieldLocked(fd, prefix, ext)
+		s.processField(fd, prefix, ext)
 	}
 	for _, svc := range fd.Service {
 		svcName := fqn(prefix, svc.GetName())
@@ -150,25 +137,25 @@ func (s *serverReflectionServer) processFileLocked(fd *dpb.FileDescriptorProto, 
 		if err != nil {
 			continue
 		}
-		s.processFileLocked(fdDep, processed)
+		s.processFile(fdDep, processed)
 	}
 }
 
-func (s *serverReflectionServer) processMessageLocked(fd *dpb.FileDescriptorProto, prefix string, msg *dpb.DescriptorProto) {
+func (s *serverReflectionServer) processMessage(fd *dpb.FileDescriptorProto, prefix string, msg *dpb.DescriptorProto) {
 	msgName := fqn(prefix, msg.GetName())
 	s.symbols[msgName] = fd
 
 	for _, nested := range msg.NestedType {
-		s.processMessageLocked(fd, msgName, nested)
+		s.processMessage(fd, msgName, nested)
 	}
 	for _, en := range msg.EnumType {
-		s.processEnumLocked(fd, msgName, en)
+		s.processEnum(fd, msgName, en)
 	}
 	for _, ext := range msg.Extension {
-		s.processFieldLocked(fd, msgName, ext)
+		s.processField(fd, msgName, ext)
 	}
 	for _, fld := range msg.Field {
-		s.processFieldLocked(fd, msgName, fld)
+		s.processField(fd, msgName, fld)
 	}
 	for _, oneof := range msg.OneofDecl {
 		oneofName := fqn(msgName, oneof.GetName())
@@ -176,7 +163,7 @@ func (s *serverReflectionServer) processMessageLocked(fd *dpb.FileDescriptorProt
 	}
 }
 
-func (s *serverReflectionServer) processEnumLocked(fd *dpb.FileDescriptorProto, prefix string, en *dpb.EnumDescriptorProto) {
+func (s *serverReflectionServer) processEnum(fd *dpb.FileDescriptorProto, prefix string, en *dpb.EnumDescriptorProto) {
 	enName := fqn(prefix, en.GetName())
 	s.symbols[enName] = fd
 
@@ -186,7 +173,7 @@ func (s *serverReflectionServer) processEnumLocked(fd *dpb.FileDescriptorProto, 
 	}
 }
 
-func (s *serverReflectionServer) processFieldLocked(fd *dpb.FileDescriptorProto, prefix string, fld *dpb.FieldDescriptorProto) {
+func (s *serverReflectionServer) processField(fd *dpb.FileDescriptorProto, prefix string, fld *dpb.FieldDescriptorProto) {
 	fldName := fqn(prefix, fld.GetName())
 	s.symbols[fldName] = fd
 }
@@ -248,7 +235,7 @@ func typeForName(name string) (reflect.Type, error) {
 	return st, nil
 }
 
-func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescriptorProto, error) {
+func fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescriptorProto, error) {
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
 	if !ok {
 		return nil, fmt.Errorf("failed to create message from type: %v", st)
@@ -346,7 +333,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName st
 	if err != nil {
 		return nil, err
 	}
-	fd, err := s.fileDescContainingExtension(st, extNum)
+	fd, err := fileDescContainingExtension(st, extNum)
 	if err != nil {
 		return nil, err
 	}
