@@ -16,15 +16,21 @@
 
 package io.grpc.cronet;
 
+import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.cronet.CronetChannelBuilder.CronetTransportFactory;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.SharedResourceHolder;
 import io.grpc.testing.TestMethodDescriptors;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ScheduledExecutorService;
 import org.chromium.net.ExperimentalCronetEngine;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,5 +78,32 @@ public final class CronetChannelBuilderTest {
     CronetClientStream stream = transport.newStream(method, new Metadata(), CallOptions.DEFAULT);
 
     assertFalse(stream.idempotent);
+  }
+
+  @Test
+  public void scheduledExecutorService_default() {
+    CronetChannelBuilder builder = CronetChannelBuilder.forAddress("address", 1234, mockEngine);
+    ClientTransportFactory clientTransportFactory = builder.buildTransportFactory();
+    assertSame(
+        SharedResourceHolder.get(TIMER_SERVICE),
+        clientTransportFactory.getScheduledExecutorService());
+
+    SharedResourceHolder.release(
+        TIMER_SERVICE, clientTransportFactory.getScheduledExecutorService());
+    clientTransportFactory.close();
+  }
+
+  @Test
+  public void scheduledExecutorService_custom() {
+    CronetChannelBuilder builder = CronetChannelBuilder.forAddress("address", 1234, mockEngine);
+    ScheduledExecutorService scheduledExecutorService = mock(ScheduledExecutorService.class);
+
+    CronetChannelBuilder builder1 = builder.scheduledExecutorService(scheduledExecutorService);
+    assertSame(builder, builder1);
+
+    ClientTransportFactory clientTransportFactory = builder1.buildTransportFactory();
+    assertSame(scheduledExecutorService, clientTransportFactory.getScheduledExecutorService());
+
+    clientTransportFactory.close();
   }
 }

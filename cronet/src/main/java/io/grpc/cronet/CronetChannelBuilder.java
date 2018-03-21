@@ -17,6 +17,7 @@
 package io.grpc.cronet;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -72,6 +73,9 @@ public final class CronetChannelBuilder extends
   public static CronetChannelBuilder forAddress(String name, int port) {
     throw new UnsupportedOperationException("call forAddress(String, int, CronetEngine) instead");
   }
+
+  @Nullable
+  private ScheduledExecutorService scheduledExecutorService;
 
   private final CronetEngine cronetEngine;
 
@@ -161,12 +165,30 @@ public final class CronetChannelBuilder extends
     return this;
   }
 
+  /**
+   * Provides a custom scheduled executor service.
+   *
+   * <p>It's an optional parameter. If the user has not provided a scheduled executor service when
+   * the channel is built, the builder will use a static cached thread pool.
+   *
+   * @return this
+   *
+   * @since 1.12.0
+   */
+  public final CronetChannelBuilder scheduledExecutorService(
+      ScheduledExecutorService scheduledExecutorService) {
+    this.scheduledExecutorService =
+        checkNotNull(scheduledExecutorService, "scheduledExecutorService");
+    return this;
+  }
+
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
     return new CronetTransportFactory(
         new TaggingStreamFactory(
             cronetEngine, trafficStatsTagSet, trafficStatsTag, trafficStatsUidSet, trafficStatsUid),
         MoreExecutors.directExecutor(),
+        scheduledExecutorService,
         maxMessageSize,
         alwaysUsePut,
         transportTracerFactory.create());
@@ -180,20 +202,24 @@ public final class CronetChannelBuilder extends
 
   @VisibleForTesting
   static class CronetTransportFactory implements ClientTransportFactory {
-    private final ScheduledExecutorService timeoutService =
-        SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE);
+    private final ScheduledExecutorService timeoutService;
     private final Executor executor;
     private final int maxMessageSize;
     private final boolean alwaysUsePut;
     private final StreamBuilderFactory streamFactory;
     private final TransportTracer transportTracer;
+    private final boolean usingSharedScheduler;
 
     private CronetTransportFactory(
         StreamBuilderFactory streamFactory,
         Executor executor,
+        @Nullable ScheduledExecutorService timeoutService,
         int maxMessageSize,
         boolean alwaysUsePut,
         TransportTracer transportTracer) {
+      usingSharedScheduler = timeoutService == null;
+      this.timeoutService = usingSharedScheduler
+          ? SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE) : timeoutService;
       this.maxMessageSize = maxMessageSize;
       this.alwaysUsePut = alwaysUsePut;
       this.streamFactory = streamFactory;
@@ -216,7 +242,9 @@ public final class CronetChannelBuilder extends
 
     @Override
     public void close() {
-      SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timeoutService);
+      if (usingSharedScheduler) {
+        SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timeoutService);
+      }
     }
   }
 
