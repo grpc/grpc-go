@@ -32,12 +32,9 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
-  private static final Logger logger =
-      Logger.getLogger(AutoConfiguredLoadBalancerFactory.class.getName());
 
   @VisibleForTesting
   static final String ROUND_ROUND_LOAD_BALANCER_FACTORY_NAME =

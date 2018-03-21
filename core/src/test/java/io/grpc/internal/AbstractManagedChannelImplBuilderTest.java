@@ -45,13 +45,19 @@ import java.net.URI;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link AbstractManagedChannelImplBuilder}. */
 @RunWith(JUnit4.class)
 public class AbstractManagedChannelImplBuilderTest {
+
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
+
   private static final ClientInterceptor DUMMY_USER_INTERCEPTOR =
       new ClientInterceptor() {
         @Override
@@ -366,15 +372,19 @@ public class AbstractManagedChannelImplBuilderTest {
     assertEquals(3456L, builder.perRpcBufferLimit);
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void retryBufferSizeInvalidArg() {
     Builder builder = new Builder("target");
+
+    thrown.expect(IllegalArgumentException.class);
     builder.retryBufferSize(0L);
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void perRpcBufferLimitInvalidArg() {
     Builder builder = new Builder("target");
+
+    thrown.expect(IllegalArgumentException.class);
     builder.perRpcBufferLimit(0L);
   }
 

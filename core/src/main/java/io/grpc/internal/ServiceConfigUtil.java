@@ -69,7 +69,7 @@ final class ServiceConfigUtil {
   /**
    * Gets retry policies from the service config.
    *
-   * @throw ClassCastException if the service config doesn't parse properly
+   * @throws ClassCastException if the service config doesn't parse properly
    */
   static RetryPolicies getRetryPolicies(
       @Nullable Map<String, Object> serviceConfig, int maxAttemptsLimit) {
@@ -221,7 +221,7 @@ final class ServiceConfigUtil {
     }
     if (choice.containsKey("clientLanguage")) {
       List<Object> clientLanguages = getList(choice, "clientLanguage");
-      if (clientLanguages.size() != 0) {
+      if (!clientLanguages.isEmpty()) {
         boolean javaPresent = false;
         for (int i = 0; i < clientLanguages.size(); i++) {
           String lang = getString(clientLanguages, i).toLowerCase(Locale.ROOT);
@@ -244,7 +244,7 @@ final class ServiceConfigUtil {
     }
     if (choice.containsKey("clientHostname")) {
       List<Object> clientHostnames = getList(choice, "clientHostname");
-      if (clientHostnames.size() != 0) {
+      if (!clientHostnames.isEmpty()) {
         boolean hostnamePresent = false;
         for (int i = 0; i < clientHostnames.size(); i++) {
           if (getString(clientHostnames, i).equals(hostname)) {
