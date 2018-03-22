@@ -320,7 +320,7 @@ class OkHttpClientStream extends AbstractClientStream {
 
     @GuardedBy("lock")
     private void onEndOfStream() {
-      if (!framer().isClosed()) {
+      if (!isOutboundClosed()) {
         // If server's end-of-stream is received before client sends end-of-stream, we just send a
         // reset to server to fully close the server side stream.
         transport.finishStream(id(),null, PROCESSED, false, ErrorCode.CANCEL, null);

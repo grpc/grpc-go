@@ -18,18 +18,19 @@ package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
 import io.grpc.Status;
+import javax.annotation.Nullable;
 
 /**
  * Command sent from a Netty client stream to the handler to cancel the stream.
  */
 class CancelClientStreamCommand extends WriteQueue.AbstractQueuedCommand {
   private final NettyClientStream.TransportState stream;
-  private final Status reason;
+  @Nullable private final Status reason;
 
   CancelClientStreamCommand(NettyClientStream.TransportState stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
-    Preconditions.checkNotNull(reason, "reason");
-    Preconditions.checkArgument(!reason.isOk(), "Should not cancel with OK status");
+    Preconditions.checkArgument(
+        reason == null || !reason.isOk(), "Should not cancel with OK status");
     this.reason = reason;
   }
 
@@ -37,6 +38,7 @@ class CancelClientStreamCommand extends WriteQueue.AbstractQueuedCommand {
     return stream;
   }
 
+  @Nullable
   Status reason() {
     return reason;
   }

@@ -262,6 +262,28 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   }
 
   @Test
+  public void inboundTrailersBeforeHalfCloseSendsRstStream() {
+    stream().transportState().setId(STREAM_ID);
+    stream().transportState().transportHeadersReceived(grpcResponseHeaders(), false);
+    stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.OK), true);
+
+    // Verify a cancel stream with reason=null is sent to the handler.
+    ArgumentCaptor<CancelClientStreamCommand> captor = ArgumentCaptor
+        .forClass(CancelClientStreamCommand.class);
+    verify(writeQueue).enqueue(captor.capture(), eq(true));
+    assertNull(captor.getValue().reason());
+  }
+
+  @Test
+  public void inboundTrailersAfterHalfCloseDoesNotSendRstStream() {
+    stream().transportState().setId(STREAM_ID);
+    stream().transportState().transportHeadersReceived(grpcResponseHeaders(), false);
+    stream.halfClose();
+    stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.OK), true);
+    verify(writeQueue, never()).enqueue(isA(CancelClientStreamCommand.class), eq(true));
+  }
+
+  @Test
   public void inboundStatusShouldSetStatus() throws Exception {
     stream().transportState().setId(STREAM_ID);
 
@@ -293,7 +315,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
 
     // Now verify that cancel is sent and an error is reported to the listener
-    verify(writeQueue).enqueue(any(CancelClientStreamCommand.class), eq(true));
+    verify(writeQueue).enqueue(isA(CancelClientStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     verify(listener).closed(captor.capture(), same(PROCESSED), metadataCaptor.capture());

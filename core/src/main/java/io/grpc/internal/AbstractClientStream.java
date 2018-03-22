@@ -92,7 +92,6 @@ public abstract class AbstractClientStream extends AbstractStream
   private final Framer framer;
   private boolean useGet;
   private Metadata headers;
-  private boolean outboundClosed;
   /**
    * Whether cancel() has been called. This is not strictly necessary, but removes the delay between
    * cancel() being called and isReady() beginning to return false, since cancel is commonly
@@ -175,8 +174,8 @@ public abstract class AbstractClientStream extends AbstractStream
 
   @Override
   public final void halfClose() {
-    if (!outboundClosed) {
-      outboundClosed = true;
+    if (!transportState().isOutboundClosed()) {
+      transportState().setOutboundClosed();
       endOfMessages();
     }
   }
@@ -208,6 +207,9 @@ public abstract class AbstractClientStream extends AbstractStream
 
     private boolean deframerClosed = false;
     private Runnable deframerClosedTask;
+
+    /** Whether the client has half-closed the stream. */
+    private volatile boolean outboundClosed;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -251,6 +253,14 @@ public abstract class AbstractClientStream extends AbstractStream
     @Override
     protected final ClientStreamListener listener() {
       return listener;
+    }
+
+    private final void setOutboundClosed() {
+      outboundClosed = true;
+    }
+
+    protected final boolean isOutboundClosed() {
+      return outboundClosed;
     }
 
     /**
