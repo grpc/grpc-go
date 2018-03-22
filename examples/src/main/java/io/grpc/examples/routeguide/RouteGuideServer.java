@@ -268,25 +268,23 @@ public class RouteGuideServer {
 
     /**
      * Calculate the distance between two points using the "haversine" formula.
-     * This code was taken from http://www.movable-type.co.uk/scripts/latlong.html.
+     * The formula is based on http://mathforum.org/library/drmath/view/51879.html.
      *
      * @param start The starting point
      * @param end The end point
      * @return The distance between the points in meters
      */
     private static int calcDistance(Point start, Point end) {
-      double lat1 = RouteGuideUtil.getLatitude(start);
-      double lat2 = RouteGuideUtil.getLatitude(end);
-      double lon1 = RouteGuideUtil.getLongitude(start);
-      double lon2 = RouteGuideUtil.getLongitude(end);
-      int r = 6371000; // meters
-      double phi1 = toRadians(lat1);
-      double phi2 = toRadians(lat2);
-      double deltaPhi = toRadians(lat2 - lat1);
-      double deltaLambda = toRadians(lon2 - lon1);
+      int r = 6371000; // earth radius in meters
+      double lat1 = toRadians(RouteGuideUtil.getLatitude(start));
+      double lat2 = toRadians(RouteGuideUtil.getLatitude(end));
+      double lon1 = toRadians(RouteGuideUtil.getLongitude(start));
+      double lon2 = toRadians(RouteGuideUtil.getLongitude(end));
+      double deltaLat = lat2 - lat1;
+      double deltaLon = lon2 - lon1;
 
-      double a = sin(deltaPhi / 2) * sin(deltaPhi / 2)
-          + cos(phi1) * cos(phi2) * sin(deltaLambda / 2) * sin(deltaLambda / 2);
+      double a = sin(deltaLat / 2) * sin(deltaLat / 2)
+          + cos(lat1) * cos(lat2) * sin(deltaLon / 2) * sin(deltaLon / 2);
       double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
       return (int) (r * c);
