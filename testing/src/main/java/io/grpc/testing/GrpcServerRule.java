@@ -41,7 +41,7 @@ import org.junit.rules.TestRule;
  * {@link ManagedChannel} provided by {@link GrpcServerRule#getChannel()}.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2488")
-public class GrpcServerRule extends ExternalResource {
+public final class GrpcServerRule extends ExternalResource {
 
   private ManagedChannel channel;
   private Server server;
