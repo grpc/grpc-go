@@ -31,6 +31,7 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +40,9 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 public abstract class BinaryLogProvider implements Closeable {
+  @VisibleForTesting
+  public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
+
   private static final Logger logger = Logger.getLogger(BinaryLogProvider.class.getName());
   private static final BinaryLogProvider PROVIDER = InternalServiceProviders.load(
       BinaryLogProvider.class,
@@ -55,8 +59,6 @@ public abstract class BinaryLogProvider implements Closeable {
           return provider.priority();
         }
       });
-  @VisibleForTesting
-  static final Marshaller<InputStream> IDENTITY_MARSHALLER = new IdentityMarshaller();
 
   private final ClientInterceptor binaryLogShim = new BinaryLogShim();
 
@@ -75,9 +77,9 @@ public abstract class BinaryLogProvider implements Closeable {
     return ClientInterceptors.intercept(channel, binaryLogShim);
   }
 
-  private static MethodDescriptor<InputStream, InputStream> toInputStreamMethod(
+  private static MethodDescriptor<byte[], byte[]> toByteBufferMethod(
       MethodDescriptor<?, ?> method) {
-    return method.toBuilder(IDENTITY_MARSHALLER, IDENTITY_MARSHALLER).build();
+    return method.toBuilder(BYTEARRAY_MARSHALLER, BYTEARRAY_MARSHALLER).build();
   }
 
   /**
@@ -90,11 +92,11 @@ public abstract class BinaryLogProvider implements Closeable {
     if (binlogInterceptor == null) {
       return oMethodDef;
     }
-    MethodDescriptor<InputStream, InputStream> binMethod =
-        BinaryLogProvider.toInputStreamMethod(oMethodDef.getMethodDescriptor());
-    ServerMethodDefinition<InputStream, InputStream> binDef = InternalServerInterceptors
+    MethodDescriptor<byte[], byte[]> binMethod =
+        BinaryLogProvider.toByteBufferMethod(oMethodDef.getMethodDescriptor());
+    ServerMethodDefinition<byte[], byte[]> binDef = InternalServerInterceptors
         .wrapMethod(oMethodDef, binMethod);
-    ServerCallHandler<InputStream, InputStream> binlogHandler = InternalServerInterceptors
+    ServerCallHandler<byte[], byte[]> binlogHandler = InternalServerInterceptors
         .interceptCallHandler(binlogInterceptor, binDef.getServerCallHandler());
     return ServerMethodDefinition.create(binMethod, binlogHandler);
   }
@@ -141,15 +143,27 @@ public abstract class BinaryLogProvider implements Closeable {
   protected abstract boolean isAvailable();
 
   // Creating a named class makes debugging easier
-  private static final class IdentityMarshaller implements Marshaller<InputStream> {
+  private static final class ByteArrayMarshaller implements Marshaller<byte[]> {
     @Override
-    public InputStream stream(InputStream value) {
-      return value;
+    public InputStream stream(byte[] value) {
+      return new ByteArrayInputStream(value);
     }
 
     @Override
-    public InputStream parse(InputStream stream) {
-      return stream;
+    public byte[] parse(InputStream stream) {
+      try {
+        return parseHelper(stream);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    private byte[] parseHelper(InputStream stream) throws IOException {
+      try {
+        return IoUtils.toByteArray(stream);
+      } finally {
+        stream.close();
+      }
     }
   }
 
@@ -172,8 +186,8 @@ public abstract class BinaryLogProvider implements Closeable {
         return InternalClientInterceptors
             .wrapClientInterceptor(
                 binlogInterceptor,
-                IDENTITY_MARSHALLER,
-                IDENTITY_MARSHALLER)
+                BYTEARRAY_MARSHALLER,
+                BYTEARRAY_MARSHALLER)
             .interceptCall(method, callOptions, next);
       }
     }

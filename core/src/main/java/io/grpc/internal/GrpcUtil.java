@@ -715,7 +715,7 @@ public final class GrpcUtil {
    * Closes an InputStream, ignoring IOExceptions.
    * This method exists because Guava's {@code Closeables.closeQuietly()} is beta.
    */
-  static void closeQuietly(@Nullable InputStream message) {
+  public static void closeQuietly(@Nullable InputStream message) {
     if (message == null) {
       return;
     }

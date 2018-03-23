@@ -128,7 +128,7 @@ public class BinaryLogProviderTest {
 
   @Test
   public void wrapChannel_handler() throws Exception {
-    final List<InputStream> serializedReq = new ArrayList<InputStream>();
+    final List<byte[]> serializedReq = new ArrayList<byte[]>();
     final AtomicReference<ClientCall.Listener<?>> listener =
         new AtomicReference<ClientCall.Listener<?>>();
     Channel channel = new Channel() {
@@ -143,7 +143,7 @@ public class BinaryLogProviderTest {
 
           @Override
           public void sendMessage(RequestT message) {
-            serializedReq.add((InputStream) message);
+            serializedReq.add((byte[]) message);
           }
         };
       }
@@ -180,7 +180,7 @@ public class BinaryLogProviderTest {
         StringMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogReq.get(0))));
     assertEquals(
         expectedRequest,
-        StringMarshaller.INSTANCE.parse(serializedReq.get(0)));
+        StringMarshaller.INSTANCE.parse(new ByteArrayInputStream(serializedReq.get(0))));
 
     int expectedResponse = 12345;
     assertThat(binlogResp).isEmpty();
@@ -204,8 +204,8 @@ public class BinaryLogProviderTest {
   }
 
   private void validateWrappedMethod(MethodDescriptor<?, ?> wMethod) {
-    assertSame(BinaryLogProvider.IDENTITY_MARSHALLER, wMethod.getRequestMarshaller());
-    assertSame(BinaryLogProvider.IDENTITY_MARSHALLER, wMethod.getResponseMarshaller());
+    assertSame(BinaryLogProvider.BYTEARRAY_MARSHALLER, wMethod.getRequestMarshaller());
+    assertSame(BinaryLogProvider.BYTEARRAY_MARSHALLER, wMethod.getResponseMarshaller());
     assertEquals(method.getType(), wMethod.getType());
     assertEquals(method.getFullMethodName(), wMethod.getFullMethodName());
     assertEquals(method.getSchemaDescriptor(), wMethod.getSchemaDescriptor());
@@ -284,7 +284,8 @@ public class BinaryLogProviderTest {
     assertEquals(
         expectedResponse,
         (int) IntegerMarshaller.INSTANCE.parse(new ByteArrayInputStream(binlogResp.get(0))));
-    assertEquals(expectedResponse, (int) method.parseResponse((InputStream) serializedResp.get(0)));
+    assertEquals(expectedResponse,
+        (int) method.parseResponse(new ByteArrayInputStream((byte[]) serializedResp.get(0))));
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -315,8 +316,8 @@ public class BinaryLogProviderTest {
         final MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions,
         Channel next) {
-      assertSame(BinaryLogProvider.IDENTITY_MARSHALLER, method.getRequestMarshaller());
-      assertSame(BinaryLogProvider.IDENTITY_MARSHALLER, method.getResponseMarshaller());
+      assertSame(BinaryLogProvider.BYTEARRAY_MARSHALLER, method.getRequestMarshaller());
+      assertSame(BinaryLogProvider.BYTEARRAY_MARSHALLER, method.getResponseMarshaller());
       return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
         @Override
         public void start(Listener<RespT> responseListener, Metadata headers) {
@@ -330,7 +331,6 @@ public class BinaryLogProviderTest {
                     binlogResp.add(bytes);
                     ByteArrayInputStream input = new ByteArrayInputStream(bytes);
                     RespT dup = method.parseResponse(input);
-                    assertSame(input, dup);
                     super.onMessage(dup);
                   } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -342,17 +342,11 @@ public class BinaryLogProviderTest {
 
         @Override
         public void sendMessage(ReqT message) {
-          assertTrue(message instanceof InputStream);
-          try {
-            byte[] bytes = IoUtils.toByteArray((InputStream) message);
+            byte[] bytes = (byte[]) message;
             binlogReq.add(bytes);
             ByteArrayInputStream input = new ByteArrayInputStream(bytes);
             ReqT dup = method.parseRequest(input);
-            assertSame(input, dup);
             super.sendMessage(dup);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
         }
       };
     }
@@ -365,25 +359,19 @@ public class BinaryLogProviderTest {
         Metadata headers,
         ServerCallHandler<ReqT, RespT> next) {
       assertSame(
-          BinaryLogProvider.IDENTITY_MARSHALLER,
+          BinaryLogProvider.BYTEARRAY_MARSHALLER,
           call.getMethodDescriptor().getRequestMarshaller());
       assertSame(
-          BinaryLogProvider.IDENTITY_MARSHALLER,
+          BinaryLogProvider.BYTEARRAY_MARSHALLER,
           call.getMethodDescriptor().getResponseMarshaller());
       ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
         @Override
         public void sendMessage(RespT message) {
-          assertTrue(message instanceof InputStream);
-          try {
-            byte[] bytes = IoUtils.toByteArray((InputStream) message);
+            byte[] bytes = (byte[]) message;
             binlogResp.add(bytes);
             ByteArrayInputStream input = new ByteArrayInputStream(bytes);
             RespT dup = call.getMethodDescriptor().parseResponse(input);
-            assertSame(input, dup);
             super.sendMessage(dup);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
         }
       };
       final ServerCall.Listener<ReqT> oListener = next.startCall(wCall, headers);
@@ -396,7 +384,6 @@ public class BinaryLogProviderTest {
             binlogReq.add(bytes);
             ByteArrayInputStream input = new ByteArrayInputStream(bytes);
             ReqT dup = call.getMethodDescriptor().parseRequest(input);
-            assertSame(input, dup);
             super.onMessage(dup);
           } catch (IOException e) {
             throw new RuntimeException(e);
