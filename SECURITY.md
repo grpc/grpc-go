@@ -318,12 +318,15 @@ public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<RespT> c
 If you received an error message "ALPN is not configured properly" or "Jetty ALPN/NPN has not been properly configured", it most likely means that:
  - ALPN related dependencies are either not present in the classpath
  - or that there is a classpath conflict
- - or that a wrong version is used due to dependency management.
+ - or that a wrong version is used due to dependency management
+ - or you are on an unsupported platform (e.g., 32-bit OS, Alpine with `musl` libc). See [Transport Security](#transport-security-tls) for supported platforms.
 
 ### Netty
 If you aren't using gRPC on Android devices, you are most likely using `grpc-netty` transport.
 
 If you are developing for Android and have a dependency on `grpc-netty`, you should remove it as `grpc-netty` is unsupported on Android. Use `grpc-okhttp` instead.
+
+If you are on a 32-bit operating system, or not on a [Transport Security supported platform](#transport-security-tls), you should use Jetty ALPN (and beware of potential issues), or you'll need to build your own 32-bit version of `netty-tcnative`.
 
 Find the dependency tree (e.g., `mvn dependency:tree`), and look for versions of:
  - `io.grpc:grpc-netty`
@@ -337,11 +340,15 @@ If you have both `netty-handler` and `netty-tcnative-boringssl-static` dependenc
 
 If you have other `netty` dependencies, such as `netty-all`, that are pulled in from other libraries, then ultimately you should make sure only one `netty` dependency is used to avoid classpath conflict. The easiest way is to exclude transitive Netty dependencies from all the immediate dependencies, e.g., in Maven use `<exclusions>`, and then add an explict Netty dependency in your project along with the corresponding `tcnative` versions. See the versions table below.
 
-If you are using `musl` libc (e.g., with Alpine Linux), then `netty-tcnative-boringssl-static` won't work. There are several alternatives:
- - Use [netty-tcnative-alpine] (https://github.com/pires/netty-tcnative-alpine)
- - Use a distribution with `glibc`
+If you are running in a runtime environment that also uses Netty (e.g., Hadoop, Spark, Spring Boot 2) and you have no control over the Netty version at all, then you should use a shaded gRPC Netty dependency to avoid classpath conflicts with other Netty versions in runtime the classpath:
+ - Remove `io.grpc:grpc-netty` dependency
+ - Add `io.grpc:grpc-netty-shaded` dependency
 
 If you are running inside of an embedded Tomcat runtime (e.g., Spring Boot), then some versions of `netty-tcnative-boringssl-static` will have conflicts and won't work. You must use gRPC 1.4.0 or later.
+
+If you are using `musl` libc (e.g., with Alpine Linux), then `netty-tcnative-boringssl-static` won't work. There are several alternatives:
+ - Use [netty-tcnative-alpine](https://github.com/pires/netty-tcnative-alpine)
+ - Use a distribution with `glibc`
 
 Below are known to work version combinations:
 
