@@ -26,7 +26,16 @@ del protobuf.zip
 pushd protobuf-%PROTOBUF_VER%\cmake
 mkdir build
 cd build
-cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio %VisualStudioVersion:~0,2%" .. || exit /b 1
+
+@rem cmake does not detect x86_64 from the vcvars64.bat variables.
+@rem If vcvars64.bat has set PLATFORM to X64, then inform cmake to use the Win64 version of VS
+if "%PLATFORM%" == "X64" (
+  @rem Note the space
+  SET CMAKE_VSARCH= Win64
+) else (
+  SET CMAKE_VSARCH=
+)
+cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio %VisualStudioVersion:~0,2%%CMAKE_VSARCH%" .. || exit /b 1
 msbuild /maxcpucount /p:Configuration=Release libprotoc.vcxproj || exit /b 1
 call extract_includes.bat || exit /b 1
 popd
