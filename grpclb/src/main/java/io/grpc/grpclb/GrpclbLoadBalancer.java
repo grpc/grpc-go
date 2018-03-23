@@ -49,6 +49,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private final LogId logId = LogId.allocate(getClass().getName());
 
   private final Helper helper;
+  private final SubchannelPool subchannelPool;
   private final Factory pickFirstBalancerFactory;
   private final Factory roundRobinBalancerFactory;
   private final ObjectPool<ScheduledExecutorService> timerServicePool;
@@ -67,7 +68,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @Nullable
   private GrpclbState grpclbState;
 
-  GrpclbLoadBalancer(Helper helper, Factory pickFirstBalancerFactory,
+  GrpclbLoadBalancer(Helper helper, SubchannelPool subchannelPool, Factory pickFirstBalancerFactory,
       Factory roundRobinBalancerFactory, ObjectPool<ScheduledExecutorService> timerServicePool,
       TimeProvider time) {
     this.helper = checkNotNull(helper, "helper");
@@ -78,6 +79,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     this.timerServicePool = checkNotNull(timerServicePool, "timerServicePool");
     this.timerService = checkNotNull(timerServicePool.getObject(), "timerService");
     this.time = checkNotNull(time, "time provider");
+    this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
+    this.subchannelPool.init(helper, timerService);
     setLbPolicy(LbPolicy.GRPCLB);
   }
 
@@ -159,7 +162,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
               "roundRobinBalancerFactory.newLoadBalancer()");
           break;
         case GRPCLB:
-          grpclbState = new GrpclbState(helper, time, timerService, logId);
+          grpclbState =
+              new GrpclbState(helper, subchannelPool, time, timerService, logId);
           break;
         default:
           // Do nohting

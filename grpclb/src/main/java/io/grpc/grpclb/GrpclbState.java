@@ -95,6 +95,7 @@ final class GrpclbState {
   private final LogId logId;
   private final String serviceName;
   private final Helper helper;
+  private final SubchannelPool subchannelPool;
   private final TimeProvider time;
   private final ScheduledExecutorService timerService;
 
@@ -128,10 +129,12 @@ final class GrpclbState {
 
   GrpclbState(
       Helper helper,
+      SubchannelPool subchannelPool,
       TimeProvider time,
       ScheduledExecutorService timerService,
       LogId logId) {
     this.helper = checkNotNull(helper, "helper");
+    this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.time = checkNotNull(time, "time provider");
     this.timerService = checkNotNull(timerService, "timerService");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
@@ -278,10 +281,13 @@ final class GrpclbState {
 
   void shutdown() {
     shutdownLbComm();
+    // We close the subchannels through subchannelPool instead of helper just for convenience of
+    // testing.
     for (Subchannel subchannel : subchannels.values()) {
-      subchannel.shutdown();
+      subchannelPool.returnSubchannel(subchannel);
     }
     subchannels = Collections.emptyMap();
+    subchannelPool.clear();
     cancelFallbackTimer();
   }
 
@@ -324,7 +330,7 @@ final class GrpclbState {
                   new AtomicReference<ConnectivityStateInfo>(
                       ConnectivityStateInfo.forNonError(IDLE)))
               .build();
-          subchannel = helper.createSubchannel(eag, subchannelAttrs);
+          subchannel = subchannelPool.takeOrCreateSubchannel(eag, subchannelAttrs);
           subchannel.requestConnection();
         }
         newSubchannelMap.put(eag, subchannel);
@@ -343,7 +349,7 @@ final class GrpclbState {
     for (Entry<EquivalentAddressGroup, Subchannel> entry : subchannels.entrySet()) {
       EquivalentAddressGroup eag = entry.getKey();
       if (!newSubchannelMap.containsKey(eag)) {
-        entry.getValue().shutdown();
+        subchannelPool.returnSubchannel(entry.getValue());
       }
     }
 

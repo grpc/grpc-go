@@ -50,7 +50,7 @@ public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
   @Override
   public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new GrpclbLoadBalancer(
-        helper, PickFirstBalancerFactory.getInstance(),
+        helper, new CachedSubchannelPool(), PickFirstBalancerFactory.getInstance(),
         RoundRobinLoadBalancerFactory.getInstance(),
         // TODO(zhangkun83): balancer sends load reporting RPCs from it, which also involves
         // channelExecutor thus may also run other tasks queued in the channelExecutor.  If such

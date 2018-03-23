@@ -121,6 +121,8 @@ public class GrpclbLoadBalancerTest {
 
   @Mock
   private Helper helper;
+  @Mock
+  private SubchannelPool subchannelPool;
   private SubchannelPicker currentPicker;
   private LoadBalancerGrpc.LoadBalancerImplBase mockLbService;
   @Captor
@@ -139,7 +141,6 @@ public class GrpclbLoadBalancerTest {
         return fakeClock.currentTimeMillis();
       }
     };
-
   private io.grpc.Server fakeLbServer;
   @Captor
   private ArgumentCaptor<SubchannelPicker> pickerCaptor;
@@ -215,7 +216,8 @@ public class GrpclbLoadBalancerTest {
           subchannelTracker.add(subchannel);
           return subchannel;
         }
-      }).when(helper).createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
+      }).when(subchannelPool).takeOrCreateSubchannel(
+          any(EquivalentAddressGroup.class), any(Attributes.class));
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock invocation) throws Throwable {
@@ -233,11 +235,13 @@ public class GrpclbLoadBalancerTest {
       }).when(helper).updateBalancingState(
           any(ConnectivityState.class), any(SubchannelPicker.class));
     when(helper.getAuthority()).thenReturn(SERVICE_AUTHORITY);
-    when(timerServicePool.getObject()).thenReturn(fakeClock.getScheduledExecutorService());
+    ScheduledExecutorService timerService = fakeClock.getScheduledExecutorService();
+    when(timerServicePool.getObject()).thenReturn(timerService);
     balancer = new GrpclbLoadBalancer(
-        helper, pickFirstBalancerFactory, roundRobinBalancerFactory,
+        helper, subchannelPool, pickFirstBalancerFactory, roundRobinBalancerFactory,
         timerServicePool,
         timeProvider);
+    verify(subchannelPool).init(same(helper), same(timerService));
   }
 
   @After
@@ -256,11 +260,17 @@ public class GrpclbLoadBalancerTest {
         // balancer should have closed the LB stream, terminating the OOB channel.
         assertTrue(channel + " is terminated", channel.isTerminated());
       }
+      // GRPCLB manages subchannels only through subchannelPool
       for (Subchannel subchannel: subchannelTracker) {
-        verify(subchannel).shutdown();
+        verify(subchannelPool).returnSubchannel(same(subchannel));
+        // Our mock subchannelPool never calls Subchannel.shutdown(), thus we can tell if
+        // LoadBalancer has called it expectedly.
+        verify(subchannel, never()).shutdown();
       }
+      verify(helper, never())
+          .createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
       // No timer should linger after shutdown
-      assertEquals(0, fakeClock.numPendingTasks());
+      assertThat(fakeClock.getPendingTasks()).isEmpty();
     } finally {
       if (fakeLbServer != null) {
         fakeLbServer.shutdownNow();
@@ -382,7 +392,7 @@ public class GrpclbLoadBalancerTest {
     assertEquals(1, lbRequestObservers.size());
     StreamObserver<LoadBalanceRequest> lbRequestObserver = lbRequestObservers.poll();
     InOrder inOrder = inOrder(lbRequestObserver);
-    InOrder helperInOrder = inOrder(helper);
+    InOrder helperInOrder = inOrder(helper, subchannelPool);
 
     inOrder.verify(lbRequestObserver).onNext(
         eq(LoadBalanceRequest.newBuilder().setInitialRequest(
@@ -565,7 +575,7 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildLbResponse(backends));
 
     // Same backends, thus no new subchannels
-    helperInOrder.verify(helper, never()).createSubchannel(
+    helperInOrder.verify(subchannelPool, never()).takeOrCreateSubchannel(
         any(EquivalentAddressGroup.class), any(Attributes.class));
     // But the new RoundRobinEntries have a new loadRecorder, thus considered different from
     // the previous list, thus a new picker is created
@@ -784,7 +794,7 @@ public class GrpclbLoadBalancerTest {
 
   @Test
   public void grpclbThenNameResolutionFails() {
-    InOrder inOrder = inOrder(helper);
+    InOrder inOrder = inOrder(helper, subchannelPool);
     // Go to GRPCLB first
     List<EquivalentAddressGroup> grpclbResolutionList = createResolvedServerAddresses(true);
     Attributes grpclbResolutionAttrs = Attributes.newBuilder()
@@ -818,9 +828,9 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildLbResponse(backends));
 
     verify(helper, times(2)).runSerialized(any(Runnable.class));
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends.get(0).addr)), any(Attributes.class));
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends.get(1).addr)), any(Attributes.class));
   }
 
@@ -863,6 +873,8 @@ public class GrpclbLoadBalancerTest {
     // GRPCLB connection is closed
     verify(lbRequestObserver).onCompleted();
     assertTrue(oobChannel.isShutdown());
+    // Switching away from GRPCLB will clear the subchannelPool
+    verify(subchannelPool).clear();
 
     // Switch to ROUND_ROBIN
     List<EquivalentAddressGroup> roundRobinResolutionList =
@@ -911,11 +923,13 @@ public class GrpclbLoadBalancerTest {
     assertSame(pickFirstBalancer, balancer.getDelegate());
     // GRPCLB connection is closed
     assertTrue(oobChannel.isShutdown());
+    // Switching away from GRPCLB will clear the subchannelPool
+    verify(subchannelPool, times(2)).clear();
   }
 
   @Test
   public void resetGrpclbWhenSwitchingAwayFromGrpclb() {
-    InOrder inOrder = inOrder(helper);
+    InOrder inOrder = inOrder(helper, subchannelPool);
     List<EquivalentAddressGroup> grpclbResolutionList = createResolvedServerAddresses(true);
     Attributes grpclbResolutionAttrs = Attributes.newBuilder()
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
@@ -942,7 +956,7 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildInitialResponse());
     lbResponseObserver.onNext(buildLbResponse(backends));
 
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends.get(0).addr)), any(Attributes.class));
     assertEquals(1, mockSubchannels.size());
     Subchannel subchannel = mockSubchannels.poll();
@@ -954,12 +968,12 @@ public class GrpclbLoadBalancerTest {
     Attributes roundRobinResolutionAttrs = Attributes.newBuilder()
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.ROUND_ROBIN).build();
     verify(lbRequestObserver, never()).onCompleted();
-    verify(subchannel, never()).shutdown();
+    verify(subchannelPool, never()).returnSubchannel(same(subchannel));
     assertFalse(oobChannel.isShutdown());
     deliverResolvedAddresses(roundRobinResolutionList, roundRobinResolutionAttrs);
 
     verify(lbRequestObserver).onCompleted();
-    verify(subchannel).shutdown();
+    verify(subchannelPool).returnSubchannel(same(subchannel));
     assertTrue(oobChannel.isShutdown());
     assertTrue(oobChannel.isTerminated());
     assertSame(LbPolicy.ROUND_ROBIN, balancer.getLbPolicy());
@@ -1016,7 +1030,7 @@ public class GrpclbLoadBalancerTest {
 
   @Test
   public void grpclbWorking() {
-    InOrder inOrder = inOrder(helper);
+    InOrder inOrder = inOrder(helper, subchannelPool);
     List<EquivalentAddressGroup> grpclbResolutionList = createResolvedServerAddresses(true);
     Attributes grpclbResolutionAttrs = Attributes.newBuilder()
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
@@ -1048,9 +1062,9 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildInitialResponse());
     lbResponseObserver.onNext(buildLbResponse(backends1));
 
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends1.get(0).addr)), any(Attributes.class));
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends1.get(1).addr)), any(Attributes.class));
     assertEquals(2, mockSubchannels.size());
     Subchannel subchannel1 = mockSubchannels.poll();
@@ -1121,15 +1135,17 @@ public class GrpclbLoadBalancerTest {
             new ServerEntry("127.0.0.1", 2010, "token0004"),  // Existing address with token changed
             new ServerEntry("127.0.0.1", 2030, "token0005"),  // New address appearing second time
             new ServerEntry("token0006"));  // drop
-    verify(subchannel1, never()).shutdown();
+    verify(subchannelPool, never()).returnSubchannel(same(subchannel1));
 
     lbResponseObserver.onNext(buildLbResponse(backends2));
-    verify(subchannel1).shutdown();  // not in backends2, closed
-    verify(subchannel2, never()).shutdown();  // backends2[2], will be kept
+    // not in backends2, closed
+    verify(subchannelPool).returnSubchannel(same(subchannel1));
+    // backends2[2], will be kept
+    verify(subchannelPool, never()).returnSubchannel(same(subchannel2));
 
-    inOrder.verify(helper, never()).createSubchannel(
+    inOrder.verify(subchannelPool, never()).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends2.get(2).addr)), any(Attributes.class));
-    inOrder.verify(helper).createSubchannel(
+    inOrder.verify(subchannelPool).takeOrCreateSubchannel(
         eq(new EquivalentAddressGroup(backends2.get(0).addr)), any(Attributes.class));
     assertEquals(1, mockSubchannels.size());
     Subchannel subchannel3 = mockSubchannels.poll();
@@ -1179,12 +1195,12 @@ public class GrpclbLoadBalancerTest {
         new BackendEntry(subchannel3, getLoadRecorder(), "token0003"),
         new BackendEntry(subchannel2, getLoadRecorder(), "token0004"),
         new BackendEntry(subchannel3, getLoadRecorder(), "token0005")).inOrder();
-    verify(subchannel3, never()).shutdown();
+    verify(subchannelPool, never()).returnSubchannel(same(subchannel3));
 
     // Update backends, with no entry
     lbResponseObserver.onNext(buildLbResponse(Collections.<ServerEntry>emptyList()));
-    verify(subchannel2).shutdown();
-    verify(subchannel3).shutdown();
+    verify(subchannelPool).returnSubchannel(same(subchannel2));
+    verify(subchannelPool).returnSubchannel(same(subchannel3));
     inOrder.verify(helper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
     RoundRobinPicker picker10 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker10.dropList).isEmpty();
@@ -1197,6 +1213,10 @@ public class GrpclbLoadBalancerTest {
 
     // Load reporting was not requested, thus never scheduled
     assertEquals(0, fakeClock.numPendingTasks(LOAD_REPORTING_TASK_FILTER));
+
+    verify(subchannelPool, never()).clear();
+    balancer.shutdown();
+    verify(subchannelPool).clear();
   }
 
   @Test
@@ -1212,7 +1232,7 @@ public class GrpclbLoadBalancerTest {
   // Fallback or not within the period of the initial timeout.
   private void subtestGrpclbFallbackInitialTimeout(boolean timerExpires) {
     long loadReportIntervalMillis = 1983;
-    InOrder helperInOrder = inOrder(helper);
+    InOrder inOrder = inOrder(helper, subchannelPool);
 
     // Create a resolution list with a mixture of balancer and backend addresses
     List<EquivalentAddressGroup> resolutionList =
@@ -1222,7 +1242,7 @@ public class GrpclbLoadBalancerTest {
     deliverResolvedAddresses(resolutionList, resolutionAttrs);
 
     assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
-    helperInOrder.verify(helper).createOobChannel(
+    inOrder.verify(helper).createOobChannel(
         addrsEq(resolutionList.get(1)), eq(lbAuthority(0)));
 
     // Attempted to connect to balancer
@@ -1239,8 +1259,8 @@ public class GrpclbLoadBalancerTest {
             .build()));
     lbResponseObserver.onNext(buildInitialResponse(loadReportIntervalMillis));
     // We don't care if runSerialized() has been run.
-    helperInOrder.verify(helper, atLeast(0)).runSerialized(any(Runnable.class));
-    helperInOrder.verifyNoMoreInteractions();
+    inOrder.verify(helper, atLeast(0)).runSerialized(any(Runnable.class));
+    inOrder.verifyNoMoreInteractions();
 
     assertEquals(1, fakeClock.numPendingTasks(FALLBACK_MODE_TASK_FILTER));
     fakeClock.forwardTime(GrpclbState.FALLBACK_TIMEOUT_MS - 1, TimeUnit.MILLISECONDS);
@@ -1277,7 +1297,7 @@ public class GrpclbLoadBalancerTest {
       assertEquals(0, fakeClock.numPendingTasks(FALLBACK_MODE_TASK_FILTER));
       // Fall back to the backends from resolver
       fallbackTestVerifyUseOfFallbackBackendLists(
-          helperInOrder, helper, Arrays.asList(resolutionList.get(0), resolutionList.get(2)));
+          inOrder, Arrays.asList(resolutionList.get(0), resolutionList.get(2)));
 
       assertNull(balancer.getDelegate());
       assertFalse(oobChannel.isShutdown());
@@ -1292,7 +1312,7 @@ public class GrpclbLoadBalancerTest {
     assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
 
     // New addresses are updated to the OobChannel
-    helperInOrder.verify(helper).updateOobChannelAddresses(
+    inOrder.verify(helper).updateOobChannelAddresses(
         same(oobChannel),
         eq(new EquivalentAddressGroup(
                 Arrays.asList(
@@ -1302,7 +1322,7 @@ public class GrpclbLoadBalancerTest {
     if (timerExpires) {
       // Still in fallback logic, except that the backend list is empty
       fallbackTestVerifyUseOfFallbackBackendLists(
-          helperInOrder, helper, Collections.<EquivalentAddressGroup>emptyList());
+          inOrder, Collections.<EquivalentAddressGroup>emptyList());
     }
 
     //////////////////////////////////////////////////
@@ -1313,14 +1333,14 @@ public class GrpclbLoadBalancerTest {
     assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
 
     // New LB address is updated to the OobChannel
-    helperInOrder.verify(helper).updateOobChannelAddresses(
+    inOrder.verify(helper).updateOobChannelAddresses(
         same(oobChannel),
         addrsEq(resolutionList.get(0)));
 
     if (timerExpires) {
       // New backend addresses are used for fallback
       fallbackTestVerifyUseOfFallbackBackendLists(
-          helperInOrder, helper, Arrays.asList(resolutionList.get(1), resolutionList.get(2)));
+          inOrder, Arrays.asList(resolutionList.get(1), resolutionList.get(2)));
     }
 
     ////////////////////////////////////////////////
@@ -1330,7 +1350,7 @@ public class GrpclbLoadBalancerTest {
       lbResponseObserver.onError(streamError.asException());
 
       // The error will NOT propagate to picker because fallback list is in use.
-      helperInOrder.verify(helper, never())
+      inOrder.verify(helper, never())
           .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
       // A new stream is created
       verify(mockLbService, times(3)).balanceLoad(lbResponseObserverCaptor.capture());
@@ -1353,7 +1373,7 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildLbResponse(serverList));
 
     // Balancer-provided server list now in effect
-    fallbackTestVerifyUseOfBalancerBackendLists(helperInOrder, helper, serverList);
+    fallbackTestVerifyUseOfBalancerBackendLists(inOrder, serverList);
 
     ///////////////////////////////////////////////////////////////
     // New backend addresses from resolver outside of fallback mode
@@ -1362,7 +1382,7 @@ public class GrpclbLoadBalancerTest {
     deliverResolvedAddresses(resolutionList, resolutionAttrs);
     assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
     // Will not affect the round robin list at all
-    helperInOrder.verify(helper, never())
+    inOrder.verify(helper, never())
         .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
 
     // No fallback timeout timer scheduled.
@@ -1388,7 +1408,7 @@ public class GrpclbLoadBalancerTest {
   private void subtestGrpclbFallbackConnectionLost(
       boolean balancerBroken, boolean allSubchannelsBroken) {
     long loadReportIntervalMillis = 1983;
-    InOrder inOrder = inOrder(helper, mockLbService);
+    InOrder inOrder = inOrder(helper, mockLbService, subchannelPool);
 
     // Create a resolution list with a mixture of balancer and backend addresses
     List<EquivalentAddressGroup> resolutionList =
@@ -1425,8 +1445,7 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildInitialResponse());
     lbResponseObserver.onNext(buildLbResponse(serverList));
 
-    List<Subchannel> subchannels =
-        fallbackTestVerifyUseOfBalancerBackendLists(inOrder, helper, serverList);
+    List<Subchannel> subchannels = fallbackTestVerifyUseOfBalancerBackendLists(inOrder, serverList);
 
     // Break connections
     if (balancerBroken) {
@@ -1447,7 +1466,7 @@ public class GrpclbLoadBalancerTest {
     if (balancerBroken && allSubchannelsBroken) {
       // Going into fallback
       subchannels = fallbackTestVerifyUseOfFallbackBackendLists(
-          inOrder, helper, Arrays.asList(resolutionList.get(0), resolutionList.get(2)));
+          inOrder, Arrays.asList(resolutionList.get(0), resolutionList.get(2)));
 
       // When in fallback mode, fallback timer should not be scheduled when all backend
       // connections are lost
@@ -1462,40 +1481,42 @@ public class GrpclbLoadBalancerTest {
       lbResponseObserver.onNext(buildInitialResponse());
       lbResponseObserver.onNext(buildLbResponse(serverList2));
 
-      fallbackTestVerifyUseOfBalancerBackendLists(inOrder, helper, serverList2);
+      fallbackTestVerifyUseOfBalancerBackendLists(inOrder, serverList2);
     }
     assertEquals(0, fakeClock.numPendingTasks(FALLBACK_MODE_TASK_FILTER));
 
     if (!(balancerBroken && allSubchannelsBroken)) {
-      verify(helper, never()).createSubchannel(eq(resolutionList.get(0)), any(Attributes.class));
-      verify(helper, never()).createSubchannel(eq(resolutionList.get(2)), any(Attributes.class));
+      verify(subchannelPool, never()).takeOrCreateSubchannel(
+          eq(resolutionList.get(0)), any(Attributes.class));
+      verify(subchannelPool, never()).takeOrCreateSubchannel(
+          eq(resolutionList.get(2)), any(Attributes.class));
     }
   }
 
   private List<Subchannel> fallbackTestVerifyUseOfFallbackBackendLists(
-      InOrder inOrder, Helper helper, List<EquivalentAddressGroup> addrs) {
-    return fallbackTestVerifyUseOfBackendLists(inOrder, helper, addrs, null);
+      InOrder inOrder, List<EquivalentAddressGroup> addrs) {
+    return fallbackTestVerifyUseOfBackendLists(inOrder, addrs, null);
   }
 
   private List<Subchannel> fallbackTestVerifyUseOfBalancerBackendLists(
-      InOrder inOrder, Helper helper, List<ServerEntry> servers) {
+      InOrder inOrder, List<ServerEntry> servers) {
     ArrayList<EquivalentAddressGroup> addrs = new ArrayList<EquivalentAddressGroup>();
     ArrayList<String> tokens = new ArrayList<String>();
     for (ServerEntry server : servers) {
       addrs.add(new EquivalentAddressGroup(server.addr));
       tokens.add(server.token);
     }
-    return fallbackTestVerifyUseOfBackendLists(inOrder, helper, addrs, tokens);
+    return fallbackTestVerifyUseOfBackendLists(inOrder, addrs, tokens);
   }
 
   private List<Subchannel> fallbackTestVerifyUseOfBackendLists(
-      InOrder inOrder, Helper helper, List<EquivalentAddressGroup> addrs,
+      InOrder inOrder, List<EquivalentAddressGroup> addrs,
       @Nullable List<String> tokens) {
     if (tokens != null) {
       assertEquals(addrs.size(), tokens.size());
     }
     for (EquivalentAddressGroup addr : addrs) {
-      inOrder.verify(helper).createSubchannel(addrsEq(addr), any(Attributes.class));
+      inOrder.verify(subchannelPool).takeOrCreateSubchannel(addrsEq(addr), any(Attributes.class));
     }
     RoundRobinPicker picker = (RoundRobinPicker) currentPicker;
     assertThat(picker.dropList).containsExactlyElementsIn(Collections.nCopies(addrs.size(), null));
@@ -1668,33 +1689,6 @@ public class GrpclbLoadBalancerTest {
     ServerEntry(String token) {
       this.addr = null;
       this.token = token;
-    }
-  }
-
-  private static class FakeSocketAddress extends SocketAddress {
-    final String name;
-
-    FakeSocketAddress(String name) {
-      this.name = name;
-    }
-
-    @Override
-    public String toString() {
-      return "FakeSocketAddress-" + name;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (other instanceof FakeSocketAddress) {
-        FakeSocketAddress otherAddr = (FakeSocketAddress) other;
-        return name.equals(otherAddr.name);
-      }
-      return false;
-    }
-
-    @Override
-    public int hashCode() {
-      return name.hashCode();
     }
   }
 }
