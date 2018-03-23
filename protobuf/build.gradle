@@ -15,8 +15,12 @@ buildscript {
 dependencies {
     compile project(':grpc-core'),
             libraries.protobuf,
-            libraries.guava,
-            libraries.protobuf_util
+            libraries.guava
+
+    compile (libraries.protobuf_util) {
+        // prefer 20.0 from libraries instead of 19.0
+        exclude group: 'com.google.guava', module: 'guava'
+    }
 
     compile (libraries.google_api_protos) {
         // 'com.google.api:api-common' transitively depends on auto-value, which breaks our

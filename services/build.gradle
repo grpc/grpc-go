@@ -19,6 +19,8 @@ dependencies {
     compile (libraries.instrumentation_api) {
         // prefer 2.0.19 from libraries instead of 2.0.11
         exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        // prefer 20.0 from libraries instead of 19.0
+        exclude group: 'com.google.guava', module: 'guava'
         // we'll always be more up-to-date
         exclude group: 'io.grpc', module: 'grpc-context'
     }

@@ -100,7 +100,7 @@ subprojects {
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
         nettyVersion = '4.1.22.Final'
-        guavaVersion = '19.0'
+        guavaVersion = '20.0'
         protobufVersion = '3.5.1'
         protocVersion = '3.5.1-1'
         protobufNanoVersion = '3.0.0-alpha-5'
@@ -222,7 +222,7 @@ subprojects {
                 junit: 'junit:junit:4.12',
                 mockito: 'org.mockito:mockito-core:1.9.5',
                 truth: 'com.google.truth:truth:0.36',
-                guava_testlib: 'com.google.guava:guava-testlib:19.0',
+                guava_testlib: 'com.google.guava:guava-testlib:20.0',
 
                 // Benchmark dependencies
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.10',
