@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.ClientStreamListener.RpcProgress.DROPPED;
 import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static io.grpc.internal.ClientStreamListener.RpcProgress.REFUSED;
 import static io.grpc.internal.RetriableStream.GRPC_PREVIOUS_RPC_ATTEMPTS;
@@ -28,6 +29,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -1504,6 +1506,30 @@ public class RetriableStreamTest {
         .closed(Status.fromCode(NON_RETRIABLE_STATUS_CODE), REFUSED, new Metadata());
 
     verify(retriableStreamRecorder).postCommit();
+  }
+
+  @Test
+  public void droppedShouldNeverRetry() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
+
+    // start
+    retriableStream.start(masterListener);
+
+    verify(retriableStreamRecorder).newSubstream(0);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    // drop and verify no retry
+    Status status = Status.fromCode(RETRIABLE_STATUS_CODE_1);
+    sublistenerCaptor1.getValue().closed(status, DROPPED, new Metadata());
+
+    verifyNoMoreInteractions(mockStream1, mockStream2);
+    verify(retriableStreamRecorder).postCommit();
+    verify(masterListener).closed(same(status), any(Metadata.class));
   }
 
   /**

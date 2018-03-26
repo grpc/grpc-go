@@ -25,6 +25,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.util.concurrent.Executor;
 
 /**
@@ -33,16 +34,18 @@ import java.util.concurrent.Executor;
 class FailingClientTransport implements ClientTransport {
   @VisibleForTesting
   final Status error;
+  private final RpcProgress rpcProgress;
 
-  FailingClientTransport(Status error) {
+  FailingClientTransport(Status error, RpcProgress rpcProgress) {
     Preconditions.checkArgument(!error.isOk(), "error must not be OK");
     this.error = error;
+    this.rpcProgress = rpcProgress;
   }
 
   @Override
   public ClientStream newStream(
       MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
-    return new FailingClientStream(error);
+    return new FailingClientStream(error, rpcProgress);
   }
 
   @Override

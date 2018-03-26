@@ -566,31 +566,35 @@ abstract class RetriableStream<ReqT> implements ClientStream {
             }
           });
           return;
-        } // TODO(zdapeng): else if (rpcProgress == RpcProgress.DROPPED)
-
-        noMoreTransparentRetry = true;
-        RetryPlan retryPlan = makeRetryDecision(retryPolicy, status, trailers);
-        if (retryPlan.shouldRetry) {
-          // The check state.winningSubstream == null, checking if is not already committed, is
-          // racy, but is still safe b/c the retry will also handle committed/cancellation
-          scheduledRetry = scheduledExecutorService.schedule(
-              new Runnable() {
-                @Override
-                public void run() {
-                  scheduledRetry = null;
-                  callExecutor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                      // retry
-                      Substream newSubstream = createSubstream(substream.previousAttempts + 1);
-                      drain(newSubstream);
-                    }
-                  });
-                }
-              },
-              retryPlan.backoffInMillis,
-              TimeUnit.MILLISECONDS);
-          return;
+        } else if (rpcProgress == RpcProgress.DROPPED) {
+          // For normal retry, nothing need be done here, will just commit.
+          // For hedging:
+          // TODO(zdapeng): cancel all scheduled hedges (TBD)
+        } else {
+          noMoreTransparentRetry = true;
+          RetryPlan retryPlan = makeRetryDecision(retryPolicy, status, trailers);
+          if (retryPlan.shouldRetry) {
+            // The check state.winningSubstream == null, checking if is not already committed, is
+            // racy, but is still safe b/c the retry will also handle committed/cancellation
+            scheduledRetry = scheduledExecutorService.schedule(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    scheduledRetry = null;
+                    callExecutor.execute(new Runnable() {
+                      @Override
+                      public void run() {
+                        // retry
+                        Substream newSubstream = createSubstream(substream.previousAttempts + 1);
+                        drain(newSubstream);
+                      }
+                    });
+                  }
+                },
+                retryPlan.backoffInMillis,
+                TimeUnit.MILLISECONDS);
+            return;
+          }
         }
       }
 

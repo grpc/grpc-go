@@ -43,6 +43,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -228,7 +229,8 @@ public class DelayedClientTransportTest {
     stream = delayedTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
     verify(streamListener, never()).closed(any(Status.class), any(Metadata.class));
     stream.start(streamListener);
-    verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
+    verify(streamListener).closed(
+        statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
 
     assertEquals(0, delayedTransport.getPendingStreamsCount());
@@ -255,7 +257,8 @@ public class DelayedClientTransportTest {
     verify(transportListener).transportTerminated();
     ClientStream stream = delayedTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
     stream.start(streamListener);
-    verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
+    verify(streamListener).closed(
+        statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
   }
 
@@ -275,7 +278,8 @@ public class DelayedClientTransportTest {
     verify(transportListener).transportTerminated();
     ClientStream stream = delayedTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
     stream.start(streamListener);
-    verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
+    verify(streamListener).closed(
+        statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
   }
 

@@ -37,6 +37,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.IOException;
@@ -697,8 +698,13 @@ public final class GrpcUtil {
         }
       };
     }
-    if (!result.getStatus().isOk() && (result.isDrop() || !isWaitForReady)) {
-      return new FailingClientTransport(result.getStatus());
+    if (!result.getStatus().isOk()) {
+      if (result.isDrop()) {
+        return new FailingClientTransport(result.getStatus(), RpcProgress.DROPPED);
+      }
+      if (!isWaitForReady) {
+        return new FailingClientTransport(result.getStatus(), RpcProgress.PROCESSED);
+      }
     }
     return null;
   }

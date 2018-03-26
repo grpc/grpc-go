@@ -18,12 +18,22 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import io.grpc.CallOptions;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.GrpcUtil.Http2Error;
+import io.grpc.testing.TestMethodDescriptors;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -214,5 +224,62 @@ public class GrpcUtilTest {
     for (int i = -1; i < 800; i++) {
       assertFalse(GrpcUtil.httpStatusToGrpcStatus(i).isOk());
     }
+  }
+
+  @Test
+  public void getTransportFromPickResult_errorPickResult_waitForReady() {
+    Status status = Status.UNAVAILABLE;
+    PickResult pickResult = PickResult.withError(status);
+    ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult, true);
+
+    assertNull(transport);
+  }
+
+  @Test
+  public void getTransportFromPickResult_errorPickResult_failFast() {
+    Status status = Status.UNAVAILABLE;
+    PickResult pickResult = PickResult.withError(status);
+    ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult, false);
+
+    assertNotNull(transport);
+
+    ClientStream stream = transport
+        .newStream(TestMethodDescriptors.voidMethod(), new Metadata(), CallOptions.DEFAULT);
+    ClientStreamListener listener = mock(ClientStreamListener.class);
+    stream.start(listener);
+
+    verify(listener).closed(eq(status), eq(RpcProgress.PROCESSED), any(Metadata.class));
+  }
+
+  @Test
+  public void getTransportFromPickResult_dropPickResult_waitForReady() {
+    Status status = Status.UNAVAILABLE;
+    PickResult pickResult = PickResult.withDrop(status);
+    ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult, true);
+
+    assertNotNull(transport);
+
+    ClientStream stream = transport
+        .newStream(TestMethodDescriptors.voidMethod(), new Metadata(), CallOptions.DEFAULT);
+    ClientStreamListener listener = mock(ClientStreamListener.class);
+    stream.start(listener);
+
+    verify(listener).closed(eq(status), eq(RpcProgress.DROPPED), any(Metadata.class));
+  }
+
+  @Test
+  public void getTransportFromPickResult_dropPickResult_failFast() {
+    Status status = Status.UNAVAILABLE;
+    PickResult pickResult = PickResult.withDrop(status);
+    ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult, false);
+
+    assertNotNull(transport);
+
+    ClientStream stream = transport
+        .newStream(TestMethodDescriptors.voidMethod(), new Metadata(), CallOptions.DEFAULT);
+    ClientStreamListener listener = mock(ClientStreamListener.class);
+    stream.start(listener);
+
+    verify(listener).closed(eq(status), eq(RpcProgress.DROPPED), any(Metadata.class));
   }
 }
