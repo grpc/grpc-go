@@ -46,9 +46,9 @@ func split2(s, sep string) (string, string, bool) {
 	return spl[0], spl[1], true
 }
 
-// parseTarget splits target into a struct containing scheme, authority and
+// splitTarget splits target into a struct containing scheme, authority and
 // endpoint.
-func parseTarget(target string) (ret resolver.Target) {
+func splitTarget(target string) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
@@ -56,6 +56,22 @@ func parseTarget(target string) (ret resolver.Target) {
 	}
 	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
 	if !ok {
+		return resolver.Target{Endpoint: target}
+	}
+	return ret
+}
+
+// parseTarget splits target into a struct containing scheme, authority and
+// endpoint.
+//
+// If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
+// target}.
+//
+// If the parsed scheme is not registered, it returns {Endpoint: target}.
+func parseTarget(target string) resolver.Target {
+	ret := splitTarget(target)
+	if !resolver.Find(ret.Scheme) {
+		grpclog.Infof("scheme %q is not registered, falling back to passthrough", ret.Scheme)
 		return resolver.Target{Endpoint: target}
 	}
 	return ret

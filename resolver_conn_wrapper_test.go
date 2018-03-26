@@ -47,7 +47,7 @@ func TestParseTarget(t *testing.T) {
 	}
 }
 
-func TestParseTargetString(t *testing.T) {
+func TestSplitTargetString(t *testing.T) {
 	for _, test := range []struct {
 		targetStr string
 		want      resolver.Target
@@ -79,9 +79,9 @@ func TestParseTargetString(t *testing.T) {
 		{"a//b", resolver.Target{"", "", "a//b"}},
 		{"a://b", resolver.Target{"", "", "a://b"}},
 	} {
-		got := parseTarget(test.targetStr)
+		got := splitTarget(test.targetStr)
 		if got != test.want {
-			t.Errorf("parseTarget(%q) = %+v, want %+v", test.targetStr, got, test.want)
+			t.Errorf("splitTarget(%q) = %+v, want %+v", test.targetStr, got, test.want)
 		}
 	}
 }
