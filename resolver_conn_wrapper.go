@@ -70,7 +70,7 @@ func splitTarget(target string) (ret resolver.Target) {
 // If the parsed scheme is not registered, it returns {Endpoint: target}.
 func parseTarget(target string) resolver.Target {
 	ret := splitTarget(target)
-	if !resolver.Find(ret.Scheme) {
+	if !resolver.SchemeRegistered(ret.Scheme) {
 		grpclog.Infof("scheme %q is not registered, falling back to passthrough", ret.Scheme)
 		return resolver.Target{Endpoint: target}
 	}

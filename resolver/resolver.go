@@ -35,8 +35,9 @@ func Register(b Builder) {
 	m[b.Scheme()] = b
 }
 
-// Find returns whether a resolver builder was registered with the given scheme.
-func Find(scheme string) bool {
+// SchemeRegistered returns whether a resolver builder was registered with the
+// given scheme.
+func SchemeRegistered(scheme string) bool {
 	_, ok := m[scheme]
 	return ok
 }
