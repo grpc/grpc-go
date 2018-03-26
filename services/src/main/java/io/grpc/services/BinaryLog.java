@@ -81,7 +81,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
   @VisibleForTesting
   static final byte[] dumyCallId = new byte[16];
   @VisibleForTesting
-  static final SocketAddress DUMMY_SOCKET = new SocketAddress() { };
+  static final SocketAddress DUMMY_SOCKET = new DummySocketAddress();
   @VisibleForTesting
   static final boolean DUMMY_IS_COMPRESSED = false;
 
@@ -618,5 +618,9 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
   @VisibleForTesting
   static int flagsForMessage(boolean compressed) {
     return compressed ? 1 : 0;
+  }
+
+  private static class DummySocketAddress extends SocketAddress {
+    private static final long serialVersionUID = 0;
   }
 }
