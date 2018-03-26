@@ -228,7 +228,7 @@ public class OkHttpClientTransportTest {
         executor,
         sslSocketFactory,
         hostnameVerifier,
-        Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC),
+        OkHttpChannelBuilder.INTERNAL_DEFAULT_CONNECTION_SPEC,
         DEFAULT_MAX_MESSAGE_SIZE,
         NO_PROXY,
         tooManyPingsRunnable,

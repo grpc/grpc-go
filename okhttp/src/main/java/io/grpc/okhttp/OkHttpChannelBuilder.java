@@ -23,9 +23,6 @@ import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.squareup.okhttp.CipherSuite;
-import com.squareup.okhttp.ConnectionSpec;
-import com.squareup.okhttp.TlsVersion;
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
@@ -40,7 +37,10 @@ import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.TransportTracer;
+import io.grpc.okhttp.internal.CipherSuite;
+import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.Platform;
+import io.grpc.okhttp.internal.TlsVersion;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.GeneralSecurityException;
@@ -62,7 +62,39 @@ import javax.net.ssl.TrustManagerFactory;
 public class OkHttpChannelBuilder extends
         AbstractManagedChannelImplBuilder<OkHttpChannelBuilder> {
 
-  public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
+  /**
+   * ConnectionSpec closely matching the default configuration that could be used as a basis for
+   * modification.
+   *
+   * <p>Since this field is the only reference in gRPC to ConnectionSpec that may not be ProGuarded,
+   * we are removing the field to reduce method count. We've been unable to find any existing users
+   * of the field, and any such user would highly likely at least be changing the cipher suites,
+   * which is sort of the only part that's non-obvious. Any existing user should instead create
+   * their own spec from scratch or base it off ConnectionSpec.MODERN_TLS if believed to be
+   * necessary. If this was providing you with value and don't want to see it removed, open a GitHub
+   * issue to discuss keeping it.
+   *
+   * @deprecated Deemed of little benefit and users weren't using it. Just define one yourself
+   */
+  @Deprecated
+  public static final com.squareup.okhttp.ConnectionSpec DEFAULT_CONNECTION_SPEC =
+      new com.squareup.okhttp.ConnectionSpec.Builder(com.squareup.okhttp.ConnectionSpec.MODERN_TLS)
+          .cipherSuites(
+              // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
+              com.squareup.okhttp.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+              com.squareup.okhttp.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+              com.squareup.okhttp.CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+              com.squareup.okhttp.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+              com.squareup.okhttp.CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+              com.squareup.okhttp.CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
+              com.squareup.okhttp.CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+              com.squareup.okhttp.CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
+          .tlsVersions(com.squareup.okhttp.TlsVersion.TLS_1_2)
+          .supportsTlsExtensions(true)
+          .build();
+
+  @VisibleForTesting
+  static final ConnectionSpec INTERNAL_DEFAULT_CONNECTION_SPEC =
       new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
           .cipherSuites(
               // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
@@ -110,7 +142,7 @@ public class OkHttpChannelBuilder extends
 
   private SSLSocketFactory sslSocketFactory;
   private HostnameVerifier hostnameVerifier;
-  private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
+  private ConnectionSpec connectionSpec = INTERNAL_DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
@@ -272,7 +304,7 @@ public class OkHttpChannelBuilder extends
    * For secure connection, provides a ConnectionSpec to specify Cipher suite and
    * TLS versions.
    *
-   * <p>By default {@link #DEFAULT_CONNECTION_SPEC} will be used.
+   * <p>By default a modern, HTTP/2-compatible spec will be used.
    *
    * <p>This method is only used when building a secure connection. For plaintext
    * connection, use {@link #usePlaintext()} instead.
@@ -280,9 +312,10 @@ public class OkHttpChannelBuilder extends
    * @throws IllegalArgumentException
    *         If {@code connectionSpec} is not with TLS
    */
-  public final OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
+  public final OkHttpChannelBuilder connectionSpec(
+      com.squareup.okhttp.ConnectionSpec connectionSpec) {
     Preconditions.checkArgument(connectionSpec.isTls(), "plaintext ConnectionSpec is not accepted");
-    this.connectionSpec = connectionSpec;
+    this.connectionSpec = Utils.convertSpec(connectionSpec);
     return this;
   }
 
@@ -481,7 +514,7 @@ public class OkHttpChannelBuilder extends
           executor,
           socketFactory,
           hostnameVerifier,
-          Utils.convertSpec(connectionSpec),
+          connectionSpec,
           maxMessageSize,
           proxy,
           tooManyPingsRunnable,

@@ -23,7 +23,6 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.base.Throwables;
 import com.google.protobuf.EmptyProtos.Empty;
 import com.squareup.okhttp.ConnectionSpec;
-import com.squareup.okhttp.TlsVersion;
 import io.grpc.ManagedChannel;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
@@ -94,9 +93,8 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   private OkHttpChannelBuilder createChannelBuilder() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("localhost", getPort())
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-        .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
+        .connectionSpec(new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
-            .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
             TestUtils.TEST_SERVER_HOST, getPort()));
