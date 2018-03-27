@@ -92,6 +92,22 @@ public class HpackTest {
     assertEquals(headerEntries("custom-key", "custom-header"), hpackReader.getAndResetHeaderList());
   }
 
+  @Test public void setMaxDynamicTableToZeroDoesNotClearHeaderList() throws IOException {
+    bytesIn.writeByte(0x40); // Literal indexed
+    bytesIn.writeByte(0x0a); // Literal name (len = 10)
+    bytesIn.writeUtf8("custom-key");
+
+    bytesIn.writeByte(0x0d); // Literal value (len = 13)
+    bytesIn.writeUtf8("custom-header");
+
+    bytesIn.writeByte(0x20); // Set max table size to 0
+
+    hpackReader.readHeaders();
+
+    assertEquals(0, hpackReader.maxDynamicTableByteCount());
+    assertEquals(headerEntries("custom-key", "custom-header"), hpackReader.getAndResetHeaderList());
+  }
+
   /** Oldest entries are evicted to support newer ones. */
   @Test public void testEviction() throws IOException {
     bytesIn.writeByte(0x40); // Literal indexed
