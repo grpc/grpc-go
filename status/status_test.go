@@ -24,8 +24,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/protobuf/ptypes/any"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
@@ -124,7 +122,7 @@ func TestFromErrorOK(t *testing.T) {
 type customError struct {
 	Code    codes.Code
 	Message string
-	Details []*any.Any
+	Details []*apb.Any
 }
 
 func (c customError) Error() string {
@@ -143,7 +141,7 @@ func (c customError) GRPCStatus() *Status {
 
 func TestFromErrorImplementsInterface(t *testing.T) {
 	code, message := codes.Internal, "test description"
-	details := []*any.Any{{
+	details := []*apb.Any{{
 		TypeUrl: "testUrl",
 		Value:   []byte("testValue"),
 	}}
