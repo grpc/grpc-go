@@ -131,7 +131,7 @@ func (c customError) Error() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", c.Code, c.Message)
 }
 
-func (c customError) Status() *Status {
+func (c customError) GRPCStatus() *Status {
 	return &Status{
 		s: &spb.Status{
 			Code:    int32(c.Code),
