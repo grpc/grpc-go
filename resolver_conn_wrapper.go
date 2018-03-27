@@ -48,6 +48,9 @@ func split2(s, sep string) (string, string, bool) {
 
 // parseTarget splits target into a struct containing scheme, authority and
 // endpoint.
+//
+// If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
+// target}.
 func parseTarget(target string) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
@@ -68,14 +71,9 @@ func parseTarget(target string) (ret resolver.Target) {
 // If withResolverBuilder dial option is set, the specified resolver will be
 // used instead.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	grpclog.Infof("dialing to target with scheme: %q", cc.parsedTarget.Scheme)
-
 	rb := cc.dopts.resolverBuilder
 	if rb == nil {
-		rb = resolver.Get(cc.parsedTarget.Scheme)
-		if rb == nil {
-			return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
-		}
+		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
 	}
 
 	ccr := &ccResolverWrapper{
