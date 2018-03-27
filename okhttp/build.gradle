@@ -14,7 +14,12 @@ dependencies {
 project.sourceSets {
     main {
         java {
-            srcDir "${projectDir}/third_party/okhttp/java"
+            srcDir "${projectDir}/third_party/okhttp/main/java"
+        }
+    }
+    test {
+        java {
+            srcDir "${projectDir}/third_party/okhttp/test/java"
         }
     }
 }

@@ -1,7 +1,7 @@
 java_library(
     name = "okhttp",
     srcs = glob([
-        "third_party/okhttp/java/**/*.java",
+        "third_party/okhttp/main/java/**/*.java",
         "src/main/java/**/*.java",
     ]),
     resources = glob([
