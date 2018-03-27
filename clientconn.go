@@ -487,7 +487,19 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
-	cc.parsedTarget = parseTarget(cc.target)
+	if cc.dopts.resolverBuilder == nil {
+		cc.parsedTarget = parseTarget(cc.target)
+		cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+		if cc.dopts.resolverBuilder == nil {
+			cc.parsedTarget = resolver.Target{
+				Scheme:   resolver.GetDefaultScheme(),
+				Endpoint: target,
+			}
+			cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+		}
+	} else {
+		cc.parsedTarget = resolver.Target{Endpoint: target}
+	}
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
