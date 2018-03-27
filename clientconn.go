@@ -488,9 +488,15 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.bs = DefaultBackoffConfig
 	}
 	if cc.dopts.resolverBuilder == nil {
+		// Only try to parse target when resolver builder is not already set.
 		cc.parsedTarget = parseTarget(cc.target)
+		grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
 		cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
 		if cc.dopts.resolverBuilder == nil {
+			// If resolver builder is still nil, the parse target's scheme is
+			// not registered. Fallback to default resolver and set Endpoint to
+			// the original unparsed target.
+			grpclog.Infof("scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
 			cc.parsedTarget = resolver.Target{
 				Scheme:   resolver.GetDefaultScheme(),
 				Endpoint: target,
