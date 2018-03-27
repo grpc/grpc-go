@@ -91,12 +91,3 @@ applicationDistribution.into("bin") {
     from(benchmark_worker)
     fileMode = 0755
 }
-
-// Let intellij projects refer to generated code
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-    }
-}
-

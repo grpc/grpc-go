@@ -36,9 +36,3 @@ if (project.hasProperty('protobuf')) {
     }
   }
 }
-
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/test/javanano");
-    }
-}

@@ -59,9 +59,3 @@ protobuf {
     }
   }
 }
-
-idea {
-    module {
-        testSourceDirs += file("${projectDir}/build/generated/source/proto/test/javalite/")
-    }
-}

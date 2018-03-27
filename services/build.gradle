@@ -30,13 +30,3 @@ dependencies {
 }
 
 configureProtoCompilation()
-
-// Let intellij projects refer to generated code
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-        testSourceDirs += file("${projectDir}/src/generated/test/java")
-        testSourceDirs += file("${projectDir}/src/generated/test/grpc")
-    }
-}

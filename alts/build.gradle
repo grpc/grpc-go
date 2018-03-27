@@ -41,10 +41,3 @@ configureProtoCompilation()
 javadoc {
     exclude 'io/grpc/alts/internal/**'
 }
-
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-    }
-}
