@@ -126,8 +126,8 @@ final class Hpack {
     // Visible for testing.
     io.grpc.okhttp.internal.framed.Header[] dynamicTable = new io.grpc.okhttp.internal.framed.Header[8];
     // Array is populated back to front, so new entries always have lowest index.
-    int nextHeaderIndex = dynamicTable.length - 1;
-    int headerCount = 0;
+    int nextDynamicTableIndex = dynamicTable.length - 1;
+    int dynamicTableHeaderCount = 0;
     int dynamicTableByteCount = 0;
 
     Reader(int headerTableSizeSetting, Source source) {
@@ -165,8 +165,8 @@ final class Hpack {
 
     private void clearDynamicTable() {
       Arrays.fill(dynamicTable, null);
-      nextHeaderIndex = dynamicTable.length - 1;
-      headerCount = 0;
+      nextDynamicTableIndex = dynamicTable.length - 1;
+      dynamicTableHeaderCount = 0;
       dynamicTableByteCount = 0;
     }
 
@@ -175,15 +175,15 @@ final class Hpack {
       int entriesToEvict = 0;
       if (bytesToRecover > 0) {
         // determine how many headers need to be evicted.
-        for (int j = dynamicTable.length - 1; j >= nextHeaderIndex && bytesToRecover > 0; j--) {
+        for (int j = dynamicTable.length - 1; j >= nextDynamicTableIndex && bytesToRecover > 0; j--) {
           bytesToRecover -= dynamicTable[j].hpackSize;
           dynamicTableByteCount -= dynamicTable[j].hpackSize;
-          headerCount--;
+          dynamicTableHeaderCount--;
           entriesToEvict++;
         }
-        System.arraycopy(dynamicTable, nextHeaderIndex + 1, dynamicTable,
-            nextHeaderIndex + 1 + entriesToEvict, headerCount);
-        nextHeaderIndex += entriesToEvict;
+        System.arraycopy(dynamicTable, nextDynamicTableIndex + 1, dynamicTable,
+            nextDynamicTableIndex + 1 + entriesToEvict, dynamicTableHeaderCount);
+        nextDynamicTableIndex += entriesToEvict;
       }
       return entriesToEvict;
     }
@@ -240,9 +240,9 @@ final class Hpack {
       }
     }
 
-    // referencedHeaders is relative to nextHeaderIndex + 1.
+    // referencedHeaders is relative to nextDynamicTableIndex + 1.
     private int dynamicTableIndex(int index) {
-      return nextHeaderIndex + 1 + index;
+      return nextDynamicTableIndex + 1 + index;
     }
 
     private void readLiteralHeaderWithoutIndexingIndexedName(int index) throws IOException {
@@ -302,15 +302,15 @@ final class Hpack {
       int entriesEvicted = evictToRecoverBytes(bytesToRecover);
 
       if (index == -1) { // Adding a value to the dynamic table.
-        if (headerCount + 1 > dynamicTable.length) { // Need to grow the dynamic table.
+        if (dynamicTableHeaderCount + 1 > dynamicTable.length) { // Need to grow the dynamic table.
           io.grpc.okhttp.internal.framed.Header[] doubled = new io.grpc.okhttp.internal.framed.Header[dynamicTable.length * 2];
           System.arraycopy(dynamicTable, 0, doubled, dynamicTable.length, dynamicTable.length);
-          nextHeaderIndex = dynamicTable.length - 1;
+          nextDynamicTableIndex = dynamicTable.length - 1;
           dynamicTable = doubled;
         }
-        index = nextHeaderIndex--;
+        index = nextDynamicTableIndex--;
         dynamicTable[index] = entry;
-        headerCount++;
+        dynamicTableHeaderCount++;
       } else { // Replace value at same position.
         index += dynamicTableIndex(index) + entriesEvicted;
         dynamicTable[index] = entry;
