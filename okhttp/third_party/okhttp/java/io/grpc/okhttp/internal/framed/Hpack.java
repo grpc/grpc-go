@@ -164,7 +164,6 @@ final class Hpack {
     }
 
     private void clearDynamicTable() {
-      headerList.clear();
       Arrays.fill(dynamicTable, null);
       nextHeaderIndex = dynamicTable.length - 1;
       headerCount = 0;
