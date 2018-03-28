@@ -30,37 +30,37 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-netty</artifactId>
-  <version>1.10.0</version>
+  <version>1.11.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-protobuf</artifactId>
-  <version>1.10.0</version>
+  <version>1.11.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-stub</artifactId>
-  <version>1.10.0</version>
+  <version>1.11.0</version>
 </dependency>
 ```
 
 Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-netty:1.10.0'
-compile 'io.grpc:grpc-protobuf:1.10.0'
-compile 'io.grpc:grpc-stub:1.10.0'
+compile 'io.grpc:grpc-netty:1.11.0'
+compile 'io.grpc:grpc-protobuf:1.11.0'
+compile 'io.grpc:grpc-stub:1.11.0'
 ```
 
 For Android client, use `grpc-okhttp` instead of `grpc-netty` and
 `grpc-protobuf-lite` or `grpc-protobuf-nano` instead of `grpc-protobuf`:
 ```gradle
-compile 'io.grpc:grpc-okhttp:1.10.0'
-compile 'io.grpc:grpc-protobuf-lite:1.10.0'
-compile 'io.grpc:grpc-stub:1.10.0'
+compile 'io.grpc:grpc-okhttp:1.11.0'
+compile 'io.grpc:grpc-protobuf-lite:1.11.0'
+compile 'io.grpc:grpc-stub:1.11.0'
 ```
 
 [the JARs]:
-http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%221.10.0%22
+http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%221.11.0%22
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
@@ -89,7 +89,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <configuration>
         <protocArtifact>com.google.protobuf:protoc:3.5.1-1:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.10.0:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.11.0:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -129,7 +129,7 @@ protobuf {
   }
   plugins {
     grpc {
-      artifact = 'io.grpc:protoc-gen-grpc-java:1.10.0'
+      artifact = 'io.grpc:protoc-gen-grpc-java:1.11.0'
     }
   }
   generateProtoTasks {
