@@ -390,7 +390,7 @@ public abstract class AbstractInteropTest {
    * Tests client per-message compression for unary calls. The Java API does not support inspecting
    * a message's compression level, so this is primarily intended to run against a gRPC C++ server.
    */
-  public void clientCompressedUnary() throws Exception {
+  public void clientCompressedUnary(boolean probe) throws Exception {
     assumeEnoughMemory();
     final SimpleRequest expectCompressedRequest =
         SimpleRequest.newBuilder()
@@ -409,15 +409,17 @@ public abstract class AbstractInteropTest {
             .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[314159])))
             .build();
 
-    // Send a non-compressed message with expectCompress=true. Servers supporting this test case
-    // should return INVALID_ARGUMENT.
-    try {
-      blockingStub.unaryCall(expectCompressedRequest);
-      fail("expected INVALID_ARGUMENT");
-    } catch (StatusRuntimeException e) {
-      assertEquals(Status.INVALID_ARGUMENT.getCode(), e.getStatus().getCode());
+    if (probe) {
+      // Send a non-compressed message with expectCompress=true. Servers supporting this test case
+      // should return INVALID_ARGUMENT.
+      try {
+        blockingStub.unaryCall(expectCompressedRequest);
+        fail("expected INVALID_ARGUMENT");
+      } catch (StatusRuntimeException e) {
+        assertEquals(Status.INVALID_ARGUMENT.getCode(), e.getStatus().getCode());
+      }
+      assertStatsTrace("grpc.testing.TestService/UnaryCall", Status.Code.INVALID_ARGUMENT);
     }
-    assertStatsTrace("grpc.testing.TestService/UnaryCall", Status.Code.INVALID_ARGUMENT);
 
     assertEquals(
         goldenResponse, blockingStub.withCompression("gzip").unaryCall(expectCompressedRequest));
@@ -557,7 +559,7 @@ public abstract class AbstractInteropTest {
    * inspecting a message's compression level, so this is primarily intended to run against a gRPC
    * C++ server.
    */
-  public void clientCompressedStreaming() throws Exception {
+  public void clientCompressedStreaming(boolean probe) throws Exception {
     final StreamingInputCallRequest expectCompressedRequest =
         StreamingInputCallRequest.newBuilder()
             .setExpectCompressed(BoolValue.newBuilder().setValue(true))
@@ -575,13 +577,15 @@ public abstract class AbstractInteropTest {
     StreamObserver<StreamingInputCallRequest> requestObserver =
         asyncStub.streamingInputCall(responseObserver);
 
-    // Send a non-compressed message with expectCompress=true. Servers supporting this test case
-    // should return INVALID_ARGUMENT.
-    requestObserver.onNext(expectCompressedRequest);
-    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
-    Throwable e = responseObserver.getError();
-    assertNotNull("expected INVALID_ARGUMENT", e);
-    assertEquals(Status.INVALID_ARGUMENT.getCode(), Status.fromThrowable(e).getCode());
+    if (probe) {
+      // Send a non-compressed message with expectCompress=true. Servers supporting this test case
+      // should return INVALID_ARGUMENT.
+      requestObserver.onNext(expectCompressedRequest);
+      responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+      Throwable e = responseObserver.getError();
+      assertNotNull("expected INVALID_ARGUMENT", e);
+      assertEquals(Status.INVALID_ARGUMENT.getCode(), Status.fromThrowable(e).getCode());
+    }
 
     // Start a new stream
     responseObserver = StreamRecorder.create();

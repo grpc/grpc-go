@@ -65,10 +65,19 @@ public class TestCasesTest {
       "timeout_on_sleeping_server"
     };
 
-    assertEquals(testCases.length, TestCases.values().length);
+    // additional test cases
+    String[] additionalTestCases = {
+      "client_compressed_unary_noprobe",
+      "client_compressed_streaming_noprobe"
+    };
+
+    assertEquals(testCases.length + additionalTestCases.length, TestCases.values().length);
 
     Set<TestCases> testCaseSet = new HashSet<TestCases>(testCases.length);
     for (String testCase : testCases) {
+      testCaseSet.add(TestCases.fromString(testCase));
+    }
+    for (String testCase : additionalTestCases) {
       testCaseSet.add(TestCases.fromString(testCase));
     }
 

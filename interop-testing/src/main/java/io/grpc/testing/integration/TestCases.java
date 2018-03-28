@@ -26,9 +26,13 @@ public enum TestCases {
   CACHEABLE_UNARY("cacheable unary rpc sent using GET"),
   LARGE_UNARY("single request and (large) response"),
   CLIENT_COMPRESSED_UNARY("client compressed unary request"),
+  CLIENT_COMPRESSED_UNARY_NOPROBE(
+      "client compressed unary request (skip initial feature-probing request)"),
   SERVER_COMPRESSED_UNARY("server compressed unary response"),
   CLIENT_STREAMING("request streaming with single response"),
   CLIENT_COMPRESSED_STREAMING("client per-message compression on stream"),
+  CLIENT_COMPRESSED_STREAMING_NOPROBE(
+      "client per-message compression on stream (skip initial feature-probing request)"),
   SERVER_STREAMING("single request with response streaming"),
   SERVER_COMPRESSED_STREAMING("server per-message compression on stream"),
   PING_PONG("full-duplex ping-pong streaming"),
