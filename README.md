@@ -239,3 +239,16 @@ The [examples](https://github.com/grpc/grpc-java/tree/master/examples)
 and the
 [Android example](https://github.com/grpc/grpc-java/tree/master/examples/android) are standalone projects that
 showcase the usage of gRPC.
+
+Tools
+-----
+
+APIs annotated with `@Internal` are for internal use by the gRPC library and
+should not be used by gRPC users. APIs annotated with `@ExperimentalApi` are
+subject to change in future releases, and library code that other projects
+may depend on should not use these APIs. We recommend using the
+[grpc-java-api-checker](https://github.com/grpc/grpc-java-api-checker)
+(an [Error Prone](https://github.com/google/error-prone) plugin)
+to check for usages of `@ExperimentalApi` and `@Internal` in any library code
+that depends on gRPC. It may also be used to check for `@Internal` usage or 
+unintended `@ExperimentalApi` consumption in non-library code.

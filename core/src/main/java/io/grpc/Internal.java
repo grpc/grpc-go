@@ -32,6 +32,9 @@ import java.lang.annotation.Target;
  *
  * <p>Note: This annotation is intended only for gRPC library code. Users should not attach this
  * annotation to their own code.
+ *
+ * <p>See: <a href="https://github.com/grpc/grpc-java-api-checker">grpc-java-api-checker</a>, an
+ * Error Prone plugin to automatically check for usages of this API.
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({
