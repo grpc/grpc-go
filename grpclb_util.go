@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -100,20 +101,84 @@ const subConnCacheTime = time.Second * 10
 type lbCacheClientConn struct {
 	balancer.ClientConn
 
-	cache map[string]string
+	// subConnCache only keeps subConns that are being deleted.
+	subConnCache map[resolver.Address]*subConnCacheEntry
+
+	subConnToAddr map[balancer.SubConn]resolver.Address
+}
+
+type subConnCacheEntry struct {
+	sc     balancer.SubConn
+	cancel func()
 }
 
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	return &lbCacheClientConn{
-		ClientConn: cc,
-		cache:      make(map[string]string),
+		ClientConn:    cc,
+		subConnCache:  make(map[resolver.Address]*subConnCacheEntry),
+		subConnToAddr: make(map[balancer.SubConn]resolver.Address),
 	}
 }
 
+// The caller of this function (refreshSubConns) is call synchronously, so
+// thers's no need to hold any lock.
 func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	return ccc.ClientConn.NewSubConn(addrs, opts)
+	if len(addrs) != 1 {
+		return nil, fmt.Errorf("grpclb calling NewSubConn with addrs of length %v", len(addrs))
+	}
+
+	if entry, ok := ccc.subConnCache[addrs[0]]; ok {
+		// If entry is in subConnCache, the SubConn was being deleted.
+		// cancel function will never be nil.
+		entry.cancel()
+		return entry.sc, nil
+	}
+
+	scNew, err := ccc.ClientConn.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	ccc.subConnToAddr[scNew] = addrs[0]
+	return scNew, nil
 }
 
 func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
-	ccc.ClientConn.RemoveSubConn(sc)
+	addr, ok := ccc.subConnToAddr[sc]
+	if !ok {
+		return
+	}
+
+	if entry, ok := ccc.subConnCache[addr]; ok {
+		if entry.sc != sc {
+			// This could happen if NewSubConn was called multiple times for the
+			// same address, and those SubConns are all removed. We remove sc
+			// immediately here.
+			delete(ccc.subConnToAddr, sc)
+			ccc.ClientConn.RemoveSubConn(sc)
+		}
+		return
+	}
+
+	timer := time.AfterFunc(subConnCacheTime, func() {
+		delete(ccc.subConnToAddr, sc)
+		ccc.ClientConn.RemoveSubConn(sc)
+	})
+
+	ccc.subConnCache[addr] = &subConnCacheEntry{
+		sc: sc,
+		cancel: func() {
+			if !timer.Stop() {
+				<-timer.C
+			}
+		},
+	}
+	return
+}
+
+func (ccc *lbCacheClientConn) close() {
+	// Only cancel all existing timers. There's no need to remove SubConns.
+	for _, entry := range ccc.subConnCache {
+		entry.cancel()
+	}
 }
