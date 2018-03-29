@@ -127,7 +127,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	}
 
 	lb := &lbBalancer{
-		cc:              cc,
+		cc:              &lbCacheClientConn{ClientConn: cc},
 		target:          target,
 		opt:             opt,
 		fallbackTimeout: b.fallbackTimeout,

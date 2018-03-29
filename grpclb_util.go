@@ -19,6 +19,8 @@
 package grpc
 
 import (
+	"time"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 )
@@ -87,4 +89,31 @@ func (r *lbManualResolver) NewAddress(addrs []resolver.Address) {
 // NewServiceConfig calls cc.NewServiceConfig.
 func (r *lbManualResolver) NewServiceConfig(sc string) {
 	r.ccr.NewServiceConfig(sc)
+}
+
+const subConnCacheTime = time.Second * 10
+
+// lbCacheClientConn is a wrapper balancer.ClientConn with a SubConn cache.
+// SubConns will be kept in cache for subConnCacheTime before being removed.
+//
+// Its new and remove methods are updated to do cache first.
+type lbCacheClientConn struct {
+	balancer.ClientConn
+
+	cache map[string]string
+}
+
+func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
+	return &lbCacheClientConn{
+		ClientConn: cc,
+		cache:      make(map[string]string),
+	}
+}
+
+func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return ccc.ClientConn.NewSubConn(addrs, opts)
+}
+
+func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
+	ccc.ClientConn.RemoveSubConn(sc)
 }
