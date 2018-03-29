@@ -36,11 +36,16 @@ script:
   - ./gradlew check :grpc-all:jacocoTestReport
 
 after_success:
-  - if \[ "$TRAVIS_OS_NAME" = linux \]; then ./gradlew :grpc-all:coveralls; fi
+    # Upload to coveralls once, instead of for each job in the matrix
+  - if \[\[ "$TRAVIS_JOB_NUMBER" == *.1 \]\]; then ./gradlew :grpc-all:coveralls; fi
   - bash <(curl -s https://codecov.io/bash)
 
 os:
   - linux
+
+jdk:
+  - oraclejdk8
+  - oraclejdk9
 
 notifications:
   email: false

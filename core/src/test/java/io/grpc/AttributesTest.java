@@ -53,11 +53,20 @@ public class AttributesTest {
   }
 
   @Test
-  @SuppressWarnings("BoxedPrimitiveConstructor")
   public void valueEquality() {
-    Attributes.Key<Integer> key = Attributes.Key.of("ints");
-    Integer v1 = new Integer(100000);
-    Integer v2 = new Integer(100000);
+    class EqualObject {
+      @Override public boolean equals(Object o) {
+        return o instanceof EqualObject;
+      }
+
+      @Override public int hashCode() {
+        return 42;
+      }
+    }
+
+    Attributes.Key<EqualObject> key = Attributes.Key.of("ints");
+    EqualObject v1 = new EqualObject();
+    EqualObject v2 = new EqualObject();
 
     assertNotSame(v1, v2);
     assertEquals(v1, v2);

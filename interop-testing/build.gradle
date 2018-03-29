@@ -29,6 +29,7 @@ dependencies {
             libraries.mockito,
             libraries.oauth_client,
             libraries.truth
+    compileOnly libraries.javax_annotation
     runtime libraries.opencensus_impl,
             libraries.netty_tcnative
     testCompile project(':grpc-context').sourceSets.test.output

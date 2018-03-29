@@ -192,6 +192,7 @@ subprojects {
                 gson: "com.google.code.gson:gson:2.7",
                 guava: "com.google.guava:guava:${guavaVersion}",
                 hpack: 'com.twitter:hpack:0.10.1',
+                javax_annotation: 'javax.annotation:javax.annotation-api:1.2',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.9.0',
                 google_api_protos: 'com.google.api.grpc:proto-google-common-protos:1.0.0',

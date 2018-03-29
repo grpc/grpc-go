@@ -17,6 +17,7 @@ dependencies {
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             libraries.protobuf
+    compileOnly libraries.javax_annotation
     testCompile libraries.truth,
                 project(':grpc-core').sourceSets.test.output
 }

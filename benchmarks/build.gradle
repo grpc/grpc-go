@@ -37,6 +37,7 @@ dependencies {
             libraries.netty_tcnative,
             libraries.netty_epoll,
             libraries.math
+    compileOnly libraries.javax_annotation
 }
 
 compileJava {
