@@ -127,7 +127,9 @@ Tagging the Release
    version was updated since the last release.
 
    ```bash
-   $ git checkout -b release v$MAJOR.$MINOR.x
+   $ git checkout v$MAJOR.$MINOR.x
+   $ git pull upstream v$MAJOR.$MINOR.x
+   $ git checkout -b release
    # Bump documented versions. Don't forget protobuf version
    $ ${EDITOR:-nano -w} README.md
    $ git commit -a -m "Update README to reference $MAJOR.$MINOR.$PATCH"
@@ -160,8 +162,8 @@ Tagging the Release
    ```bash
    $ git checkout v$MAJOR.$MINOR.x
    $ git merge --ff-only release
-   $ git push upstream v$MAJOR.$MINOR.$PATCH
    $ git push upstream v$MAJOR.$MINOR.x
+   $ git push upstream v$MAJOR.$MINOR.$PATCH
    ```
 6. Close the release milestone.
 
