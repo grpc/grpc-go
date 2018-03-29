@@ -18,12 +18,12 @@ package io.grpc.testing.integration;
 
 import static org.junit.Assert.assertTrue;
 
-import com.google.protobuf.EmptyProtos.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
+import io.grpc.testing.integration.EmptyProtos.Empty;
 import io.grpc.testing.integration.Messages.ReconnectInfo;
 
 /**

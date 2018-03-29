@@ -16,7 +16,7 @@ syntax = "proto2";
 
 package grpc.testing;
 
-option java_package = "com.google.protobuf";
+option java_package = "io.grpc.testing.integration";
 option java_outer_classname = "EmptyProtos";
 
 // An empty message that you can re-use to avoid defining duplicated empty

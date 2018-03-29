@@ -33,34 +33,34 @@ public final class UnimplementedServiceGrpc {
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   @java.lang.Deprecated // Use {@link #getUnimplementedCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethodHelper();
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
+      io.grpc.testing.integration.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethodHelper();
 
-  private static volatile io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod;
+  private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
+      io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  public static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod() {
+  public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
+      io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod() {
     return getUnimplementedCallMethodHelper();
   }
 
-  private static io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
-      com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethodHelper() {
-    io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty> getUnimplementedCallMethod;
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
+      io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethodHelper() {
+    io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty, io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
     if ((getUnimplementedCallMethod = UnimplementedServiceGrpc.getUnimplementedCallMethod) == null) {
       synchronized (UnimplementedServiceGrpc.class) {
         if ((getUnimplementedCallMethod = UnimplementedServiceGrpc.getUnimplementedCallMethod) == null) {
           UnimplementedServiceGrpc.getUnimplementedCallMethod = getUnimplementedCallMethod = 
-              io.grpc.MethodDescriptor.<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty>newBuilder()
+              io.grpc.MethodDescriptor.<io.grpc.testing.integration.EmptyProtos.Empty, io.grpc.testing.integration.EmptyProtos.Empty>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
                   "grpc.testing.UnimplementedService", "UnimplementedCall"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+                  io.grpc.testing.integration.EmptyProtos.Empty.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+                  io.grpc.testing.integration.EmptyProtos.Empty.getDefaultInstance()))
                   .setSchemaDescriptor(new UnimplementedServiceMethodDescriptorSupplier("UnimplementedCall"))
                   .build();
           }
@@ -105,8 +105,8 @@ public final class UnimplementedServiceGrpc {
      * A call that no server should implement
      * </pre>
      */
-    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+    public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
       asyncUnimplementedUnaryCall(getUnimplementedCallMethodHelper(), responseObserver);
     }
 
@@ -116,8 +116,8 @@ public final class UnimplementedServiceGrpc {
             getUnimplementedCallMethodHelper(),
             asyncUnaryCall(
               new MethodHandlers<
-                com.google.protobuf.EmptyProtos.Empty,
-                com.google.protobuf.EmptyProtos.Empty>(
+                io.grpc.testing.integration.EmptyProtos.Empty,
+                io.grpc.testing.integration.EmptyProtos.Empty>(
                   this, METHODID_UNIMPLEMENTED_CALL)))
           .build();
     }
@@ -150,8 +150,8 @@ public final class UnimplementedServiceGrpc {
      * A call that no server should implement
      * </pre>
      */
-    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+    public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request, responseObserver);
     }
@@ -184,7 +184,7 @@ public final class UnimplementedServiceGrpc {
      * A call that no server should implement
      * </pre>
      */
-    public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
+    public io.grpc.testing.integration.EmptyProtos.Empty unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request) {
       return blockingUnaryCall(
           getChannel(), getUnimplementedCallMethodHelper(), getCallOptions(), request);
     }
@@ -217,8 +217,8 @@ public final class UnimplementedServiceGrpc {
      * A call that no server should implement
      * </pre>
      */
-    public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
-        com.google.protobuf.EmptyProtos.Empty request) {
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.EmptyProtos.Empty> unimplementedCall(
+        io.grpc.testing.integration.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request);
     }
@@ -244,8 +244,8 @@ public final class UnimplementedServiceGrpc {
     public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
       switch (methodId) {
         case METHODID_UNIMPLEMENTED_CALL:
-          serviceImpl.unimplementedCall((com.google.protobuf.EmptyProtos.Empty) request,
-              (io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver);
+          serviceImpl.unimplementedCall((io.grpc.testing.integration.EmptyProtos.Empty) request,
+              (io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty>) responseObserver);
           break;
         default:
           throw new AssertionError();

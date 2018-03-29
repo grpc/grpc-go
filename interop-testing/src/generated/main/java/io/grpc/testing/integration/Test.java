@@ -63,10 +63,10 @@ public final class Test {
     com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
-          com.google.protobuf.EmptyProtos.getDescriptor(),
+          io.grpc.testing.integration.EmptyProtos.getDescriptor(),
           io.grpc.testing.integration.Messages.getDescriptor(),
         }, assigner);
-    com.google.protobuf.EmptyProtos.getDescriptor();
+    io.grpc.testing.integration.EmptyProtos.getDescriptor();
     io.grpc.testing.integration.Messages.getDescriptor();
   }
 

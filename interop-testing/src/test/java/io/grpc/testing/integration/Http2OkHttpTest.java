@@ -21,7 +21,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Throwables;
-import com.google.protobuf.EmptyProtos.Empty;
 import com.squareup.okhttp.ConnectionSpec;
 import io.grpc.ManagedChannel;
 import io.grpc.internal.AbstractServerImplBuilder;
@@ -33,6 +32,7 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.okhttp.internal.Platform;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.integration.EmptyProtos.Empty;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
