@@ -16,11 +16,14 @@
 
 package io.grpc.services;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
 import io.grpc.channelz.v1.Address;
@@ -39,14 +42,19 @@ import io.grpc.channelz.v1.ServerData;
 import io.grpc.channelz.v1.ServerRef;
 import io.grpc.channelz.v1.Socket;
 import io.grpc.channelz.v1.SocketData;
+import io.grpc.channelz.v1.SocketOption;
+import io.grpc.channelz.v1.SocketOptionLinger;
+import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.RootChannelList;
 import io.grpc.internal.Channelz.ServerList;
 import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.ServerStats;
+import io.grpc.internal.Channelz.SocketOptions;
 import io.grpc.internal.Instrumented;
 import io.grpc.internal.WithLogId;
 import io.grpc.services.ChannelzTestHelper.TestChannel;
@@ -57,6 +65,7 @@ import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Collections;
+import java.util.Map.Entry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -125,13 +134,47 @@ public final class ChannelzProtoUtilTest {
       .setData(serverData)
       .build();
 
+  private final SocketOption sockOptLingerDisabled = SocketOption
+      .newBuilder()
+      .setName("SO_LINGER")
+      .setAdditional(
+          Any.pack(SocketOptionLinger.getDefaultInstance()))
+      .build();
+
+  private final SocketOption sockOptlinger10s = SocketOption
+      .newBuilder()
+      .setName("SO_LINGER")
+      .setAdditional(
+          Any.pack(SocketOptionLinger
+              .newBuilder()
+              .setActive(true)
+              .setDuration(Durations.fromSeconds(10))
+              .build()))
+      .build();
+
+  private final SocketOption sockOptTimeout200ms = SocketOption
+      .newBuilder()
+      .setName("SO_TIMEOUT")
+      .setAdditional(
+          Any.pack(SocketOptionTimeout
+          .newBuilder()
+          .setDuration(Durations.fromMillis(200))
+          .build())
+      ).build();
+
+  private final SocketOption sockOptAdditional = SocketOption
+      .newBuilder()
+      .setName("SO_MADE_UP_OPTION")
+      .setValue("some-made-up-value")
+      .build();
+
   private final TestSocket socket = new TestSocket();
   private final SocketRef socketRef = SocketRef
       .newBuilder()
       .setName(socket.toString())
       .setSocketId(socket.getLogId().getId())
       .build();
-  private final SocketData socketData = SocketData
+  private final SocketData socketDataNoSockOpts = SocketData
       .newBuilder()
       .setStreamsStarted(1)
       .setLastLocalStreamCreatedTimestamp(Timestamps.fromNanos(2))
@@ -203,16 +246,28 @@ public final class ChannelzProtoUtilTest {
             .setRef(socketRef)
             .setLocal(localAddress)
             .setRemote(remoteAddress)
-            .setData(socketData)
+            .setData(socketDataNoSockOpts)
             .build(),
         ChannelzProtoUtil.toSocket(socket));
   }
 
   @Test
-  public void toSocketData() {
+  public void extractSocketData() throws Exception {
+    // no options
     assertEquals(
-        socketData,
-        ChannelzProtoUtil.toSocketData(socket.transportStats));
+        socketDataNoSockOpts,
+        ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
+
+    // with options
+    socket.socketOptions = toBuilder(socket.socketOptions)
+        .setSocketOptionLingerSeconds(10)
+        .build();
+    assertEquals(
+        socketDataNoSockOpts
+            .toBuilder()
+            .addOption(sockOptlinger10s)
+            .build(),
+        ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
   }
 
   @Test
@@ -482,6 +537,64 @@ public final class ChannelzProtoUtilTest {
             new ServerSocketsList(ImmutableList.<WithLogId>of(socket, socket2), true)));
   }
 
+  @Test
+  public void toSocketOptionLinger() {
+    assertEquals(sockOptLingerDisabled, ChannelzProtoUtil.toSocketOptionLinger(-1));
+    assertEquals(sockOptlinger10s, ChannelzProtoUtil.toSocketOptionLinger(10));
+  }
+
+  @Test
+  public void toSocketOptionTimeout() {
+    assertEquals(
+        sockOptTimeout200ms, ChannelzProtoUtil.toSocketOptionTimeout("SO_TIMEOUT", 200));
+  }
+
+  @Test
+  public void toSocketOptionAdditional() {
+    assertEquals(
+        sockOptAdditional,
+        ChannelzProtoUtil.toSocketOptionAdditional("SO_MADE_UP_OPTION", "some-made-up-value"));
+  }
+
+  @Test
+  public void toSocketOptionsList() {
+    assertThat(
+        ChannelzProtoUtil.toSocketOptionsList(
+            new Channelz.SocketOptions.Builder().build()))
+        .isEmpty();
+
+    assertThat(
+        ChannelzProtoUtil.toSocketOptionsList(
+            new Channelz.SocketOptions.Builder().setSocketOptionLingerSeconds(10).build()))
+        .containsExactly(sockOptlinger10s);
+
+    assertThat(
+        ChannelzProtoUtil.toSocketOptionsList(
+            new Channelz.SocketOptions.Builder().setSocketOptionTimeoutMillis(200).build()))
+        .containsExactly(sockOptTimeout200ms);
+
+    assertThat(
+        ChannelzProtoUtil.toSocketOptionsList(
+            new Channelz.SocketOptions
+                .Builder()
+                .addOption("SO_MADE_UP_OPTION", "some-made-up-value")
+                .build()))
+        .containsExactly(sockOptAdditional);
+
+    SocketOption otherOption = SocketOption
+        .newBuilder()
+        .setName("SO_MADE_UP_OPTION2")
+        .setValue("some-made-up-value2")
+        .build();
+    assertThat(
+        ChannelzProtoUtil.toSocketOptionsList(
+            new Channelz.SocketOptions.Builder()
+                .addOption("SO_MADE_UP_OPTION", "some-made-up-value")
+                .addOption("SO_MADE_UP_OPTION2", "some-made-up-value2")
+                .build()))
+        .containsExactly(sockOptAdditional, otherOption);
+  }
+
   private static ChannelStats.Builder toBuilder(ChannelStats stats) {
     ChannelStats.Builder builder = new ChannelStats.Builder()
         .setTarget(stats.target)
@@ -495,6 +608,16 @@ public final class ChannelzProtoUtilTest {
     }
     if (!stats.sockets.isEmpty()) {
       builder.setSockets(stats.sockets);
+    }
+    return builder;
+  }
+
+  private static SocketOptions.Builder toBuilder(SocketOptions options) {
+    SocketOptions.Builder builder = new SocketOptions.Builder()
+        .setSocketOptionTimeoutMillis(options.soTimeoutMillis)
+        .setSocketOptionLingerSeconds(options.lingerSeconds);
+    for (Entry<String, String> entry : options.others.entrySet()) {
+      builder.addOption(entry.getKey(), entry.getValue());
     }
     return builder;
   }

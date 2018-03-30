@@ -206,6 +206,7 @@ class NettyServerTransport implements ServerTransport {
               transportTracer.getStats(),
               channel.localAddress(),
               channel.remoteAddress(),
+              Utils.getSocketOptions(channel),
               /*security=*/ null));
       return result;
     }
@@ -218,6 +219,7 @@ class NettyServerTransport implements ServerTransport {
                     transportTracer.getStats(),
                     channel.localAddress(),
                     channel.remoteAddress(),
+                    Utils.getSocketOptions(channel),
                     /*security=*/ null));
           }
         });

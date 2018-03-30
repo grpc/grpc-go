@@ -19,6 +19,8 @@ package io.grpc.netty;
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.TransportFrameUtil.toHttp2Headers;
 import static io.grpc.internal.TransportFrameUtil.toRawSerializedHeaders;
+import static io.netty.channel.ChannelOption.SO_LINGER;
+import static io.netty.channel.ChannelOption.SO_TIMEOUT;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -26,9 +28,13 @@ import com.google.common.base.Preconditions;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2InboundHeaders;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.Http2Exception;
@@ -38,6 +44,7 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
@@ -199,6 +206,36 @@ class Utils {
     public String toString() {
       return name;
     }
+  }
+
+  static Channelz.SocketOptions getSocketOptions(Channel channel) {
+    ChannelConfig config = channel.config();
+    Channelz.SocketOptions.Builder b = new Channelz.SocketOptions.Builder();
+
+    // The API allows returning null but not sure if it can happen in practice.
+    // Let's be paranoid and do null checking just in case.
+    Integer lingerSeconds = config.getOption(SO_LINGER);
+    if (lingerSeconds != null) {
+      b.setSocketOptionLingerSeconds(lingerSeconds);
+    }
+
+    Integer timeoutMillis = config.getOption(SO_TIMEOUT);
+    if (timeoutMillis != null) {
+      // in java, SO_TIMEOUT only applies to receiving
+      b.setSocketOptionTimeoutMillis(timeoutMillis);
+    }
+
+    for (Entry<ChannelOption<?>, Object> opt : config.getOptions().entrySet()) {
+      ChannelOption<?> key = opt.getKey();
+      // Constants are pooled, so there should only be one instance of each constant
+      if (key.equals(SO_LINGER) || key.equals(SO_TIMEOUT)) {
+        continue;
+      }
+      Object value = opt.getValue();
+      // zpencer: Can a netty option be null?
+      b.addOption(key.name(), String.valueOf(value));
+    }
+    return b.build();
   }
 
   private Utils() {

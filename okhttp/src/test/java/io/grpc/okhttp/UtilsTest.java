@@ -19,9 +19,11 @@ package io.grpc.okhttp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import io.grpc.internal.Channelz.SocketOptions;
 import io.grpc.okhttp.internal.CipherSuite;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.TlsVersion;
+import java.net.Socket;
 import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
@@ -68,5 +70,30 @@ public class UtilsTest {
     for (int i = 0; i < cipherSuitesSize; i++) {
       assertEquals(CipherSuite.forJavaName(squareCipherSuites.get(i).name()), cipherSuites.get(i));
     }
+  }
+
+  @Test
+  public void getSocketOptions() throws Exception {
+    Socket socket = new Socket();
+    socket.setSoLinger(true, 2);
+    socket.setSoTimeout(3);
+    socket.setTcpNoDelay(true);
+    socket.setReuseAddress(true);
+    socket.setReceiveBufferSize(4000);
+    socket.setSendBufferSize(5000);
+    socket.setKeepAlive(true);
+    socket.setOOBInline(true);
+    socket.setTrafficClass(8); // note: see javadoc for valid input values
+
+    SocketOptions socketOptions = Utils.getSocketOptions(socket);
+    assertEquals(2, (int) socketOptions.lingerSeconds);
+    assertEquals(3, (int) socketOptions.soTimeoutMillis);
+    assertEquals("true", socketOptions.others.get("TCP_NODELAY"));
+    assertEquals("true", socketOptions.others.get("SO_REUSEADDR"));
+    assertEquals("4000", socketOptions.others.get("SO_RECVBUF"));
+    assertEquals("5000", socketOptions.others.get("SO_SNDBUF"));
+    assertEquals("true", socketOptions.others.get("SO_KEEPALIVE"));
+    assertEquals("true", socketOptions.others.get("SO_OOBINLINE"));
+    assertEquals("8", socketOptions.others.get("IP_TOS"));
   }
 }

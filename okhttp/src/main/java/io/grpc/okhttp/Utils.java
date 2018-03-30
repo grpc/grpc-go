@@ -19,16 +19,23 @@ package io.grpc.okhttp;
 import com.google.common.base.Preconditions;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.CipherSuite;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.Header;
+import java.net.Socket;
+import java.net.SocketException;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Common utility methods for OkHttp transport.
  */
 class Utils {
+  private static final Logger log = Logger.getLogger(Utils.class.getName());
+
   static final int DEFAULT_WINDOW_SIZE = 65535;
   static final int CONNECTION_STREAM_ID = 0;
 
@@ -77,6 +84,78 @@ class Utils {
         .tlsVersions(tlsVersions)
         .cipherSuites(cipherSuites)
         .build();
+  }
+
+  /**
+   * Attempts to capture all known socket options and return the results as a
+   * {@link Channelz.SocketOptions}. If getting a socket option threw an exception,
+   * log the error to the logger and report the value as an error in the response.
+   */
+  static Channelz.SocketOptions getSocketOptions(Socket socket) {
+    Channelz.SocketOptions.Builder builder = new Channelz.SocketOptions.Builder();
+    try {
+      builder.setSocketOptionLingerSeconds(socket.getSoLinger());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_LINGER", "channelz_internal_error");
+    }
+
+    try {
+      builder.setSocketOptionTimeoutMillis(socket.getSoTimeout());
+    } catch (Exception e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_TIMEOUT", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("TCP_NODELAY", socket.getTcpNoDelay());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("TCP_NODELAY", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("SO_REUSEADDR", socket.getReuseAddress());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_REUSEADDR", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("SO_SNDBUF", socket.getSendBufferSize());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_SNDBUF", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("SO_RECVBUF", socket.getReceiveBufferSize());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_RECVBUF", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("SO_KEEPALIVE", socket.getKeepAlive());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_KEEPALIVE", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("SO_OOBINLINE", socket.getOOBInline());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("SO_OOBINLINE", "channelz_internal_error");
+    }
+
+    try {
+      builder.addOption("IP_TOS", socket.getTrafficClass());
+    } catch (SocketException e) {
+      log.log(Level.SEVERE, "Exception caught while reading socket option", e);
+      builder.addOption("IP_TOS", "channelz_internal_error");
+    }
+    return builder.build();
   }
 
   private Utils() {

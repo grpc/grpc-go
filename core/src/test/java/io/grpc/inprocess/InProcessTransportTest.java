@@ -68,7 +68,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
   @Test
   @Ignore
   @Override
-  public void socketStats_addresses() throws Exception {
+  public void socketStats() throws Exception {
     // test does not apply to in-process
   }
 }

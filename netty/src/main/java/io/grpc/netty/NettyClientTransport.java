@@ -323,6 +323,7 @@ class NettyClientTransport implements ConnectionClientTransport {
               transportTracer.getStats(),
               channel.localAddress(),
               channel.remoteAddress(),
+              Utils.getSocketOptions(channel),
               new Security()));
       return result;
     }
@@ -335,6 +336,7 @@ class NettyClientTransport implements ConnectionClientTransport {
                     transportTracer.getStats(),
                     channel.localAddress(),
                     channel.remoteAddress(),
+                    Utils.getSocketOptions(channel),
                     new Security()));
           }
         });

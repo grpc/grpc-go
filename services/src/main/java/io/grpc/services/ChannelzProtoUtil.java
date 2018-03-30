@@ -18,8 +18,10 @@ package io.grpc.services;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
 import io.grpc.Status;
@@ -39,6 +41,9 @@ import io.grpc.channelz.v1.ServerData;
 import io.grpc.channelz.v1.ServerRef;
 import io.grpc.channelz.v1.Socket;
 import io.grpc.channelz.v1.SocketData;
+import io.grpc.channelz.v1.SocketOption;
+import io.grpc.channelz.v1.SocketOptionLinger;
+import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
@@ -54,6 +59,9 @@ import io.grpc.internal.Instrumented;
 import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -121,7 +129,7 @@ final class ChannelzProtoUtil {
         .setRef(toSocketRef(obj))
         .setRemote(toAddress(socketStats.remote))
         .setLocal(toAddress(socketStats.local))
-        .setData(toSocketData(socketStats.data))
+        .setData(extractSocketData(socketStats))
         .build();
   }
 
@@ -147,7 +155,8 @@ final class ChannelzProtoUtil {
     return builder.build();
   }
 
-  static SocketData toSocketData(TransportStats s) {
+  static SocketData extractSocketData(SocketStats socketStats) {
+    TransportStats s = socketStats.data;
     return SocketData
         .newBuilder()
         .setStreamsStarted(s.streamsStarted)
@@ -168,7 +177,64 @@ final class ChannelzProtoUtil {
             Int64Value.newBuilder().setValue(s.localFlowControlWindow).build())
         .setRemoteFlowControlWindow(
             Int64Value.newBuilder().setValue(s.remoteFlowControlWindow).build())
+        .addAllOption(toSocketOptionsList(socketStats.socketOptions))
         .build();
+  }
+
+  public static final String SO_LINGER = "SO_LINGER";
+  public static final String SO_TIMEOUT = "SO_TIMEOUT";
+
+  static SocketOption toSocketOptionLinger(int lingerSeconds) {
+    final SocketOptionLinger lingerOpt;
+    if (lingerSeconds >= 0) {
+      lingerOpt = SocketOptionLinger
+          .newBuilder()
+          .setActive(true)
+          .setDuration(Durations.fromSeconds(lingerSeconds))
+          .build();
+    } else {
+      lingerOpt = SocketOptionLinger.getDefaultInstance();
+    }
+    return SocketOption
+        .newBuilder()
+        .setName(SO_LINGER)
+        .setAdditional(Any.pack(lingerOpt))
+        .build();
+  }
+
+  static SocketOption toSocketOptionTimeout(String name, int timeoutMillis) {
+    Preconditions.checkNotNull(name);
+    return SocketOption
+        .newBuilder()
+        .setName(name)
+        .setAdditional(
+            Any.pack(
+                SocketOptionTimeout
+                    .newBuilder()
+                    .setDuration(Durations.fromMillis(timeoutMillis))
+                    .build()))
+        .build();
+  }
+
+  static SocketOption toSocketOptionAdditional(String name, String value) {
+    Preconditions.checkNotNull(name);
+    Preconditions.checkNotNull(value);
+    return SocketOption.newBuilder().setName(name).setValue(value).build();
+  }
+
+  static List<SocketOption> toSocketOptionsList(Channelz.SocketOptions options) {
+    Preconditions.checkNotNull(options);
+    List<SocketOption> ret = new ArrayList<SocketOption>();
+    if (options.lingerSeconds != null) {
+      ret.add(toSocketOptionLinger(options.lingerSeconds));
+    }
+    if (options.soTimeoutMillis != null) {
+      ret.add(toSocketOptionTimeout(SO_TIMEOUT, options.soTimeoutMillis));
+    }
+    for (Entry<String, String> entry : options.others.entrySet()) {
+      ret.add(toSocketOptionAdditional(entry.getKey(), entry.getValue()));
+    }
+    return ret;
   }
 
   static Channel toChannel(Instrumented<ChannelStats> channel) {

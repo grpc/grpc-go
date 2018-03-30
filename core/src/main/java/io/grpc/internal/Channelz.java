@@ -22,6 +22,7 @@ import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -437,17 +438,77 @@ public final class Channelz {
     public final SocketAddress local;
     public final SocketAddress remote;
     public final Security security;
+    public final SocketOptions socketOptions;
 
     /** Creates an instance. */
     public SocketStats(
         TransportStats data,
         SocketAddress local,
         SocketAddress remote,
+        SocketOptions socketOptions,
         Security security) {
       this.data = data;
       this.local = local;
       this.remote = remote;
+      this.socketOptions = socketOptions;
       this.security = security;
+    }
+  }
+
+  public static final class SocketOptions {
+    public final Map<String, String> others;
+    // In netty, the value of a channel option may be null.
+    @Nullable public final Integer soTimeoutMillis;
+    @Nullable public final Integer lingerSeconds;
+
+    /** Creates an instance. */
+    public SocketOptions(
+        Integer timeoutMillis,
+        Integer lingerSeconds,
+        Map<String, String> others) {
+      Preconditions.checkNotNull(others);
+      this.soTimeoutMillis = timeoutMillis;
+      this.lingerSeconds = lingerSeconds;
+      this.others = Collections.unmodifiableMap(new HashMap<String, String>(others));
+    }
+
+    public static final class Builder {
+      private final Map<String, String> others = new HashMap<String, String>();
+      private Integer timeoutMillis;
+      private Integer lingerSeconds;
+
+      /** The value of {@link java.net.Socket#getSoTimeout()}. */
+      public Builder setSocketOptionTimeoutMillis(Integer timeoutMillis) {
+        this.timeoutMillis = timeoutMillis;
+        return this;
+      }
+
+      /** The value of {@link java.net.Socket#getSoLinger()}.
+       * Note: SO_LINGER is typically expressed in seconds.
+       */
+      public Builder setSocketOptionLingerSeconds(Integer lingerSeconds) {
+        this.lingerSeconds = lingerSeconds;
+        return this;
+      }
+
+      public Builder addOption(String name, String value) {
+        others.put(name, Preconditions.checkNotNull(value));
+        return this;
+      }
+
+      public Builder addOption(String name, int value) {
+        others.put(name, Integer.toString(value));
+        return this;
+      }
+
+      public Builder addOption(String name, boolean value) {
+        others.put(name, Boolean.toString(value));
+        return this;
+      }
+
+      public SocketOptions build() {
+        return new SocketOptions(timeoutMillis, lingerSeconds, others);
+      }
     }
   }
 

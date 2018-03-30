@@ -19,6 +19,7 @@ package io.grpc.services;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ConnectivityState;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.Security;
 import io.grpc.internal.Channelz.ServerStats;
@@ -54,12 +55,18 @@ final class ChannelzTestHelper {
         /*remoteFlowControlWindow=*/ 12);
     SocketAddress local = new InetSocketAddress("10.0.0.1", 1000);
     SocketAddress remote = new InetSocketAddress("10.0.0.2", 1000);
-
+    Channelz.SocketOptions socketOptions = new Channelz.SocketOptions.Builder().build();
 
     @Override
     public ListenableFuture<SocketStats> getStats() {
       SettableFuture<SocketStats> ret = SettableFuture.create();
-      ret.set(new SocketStats(transportStats, local, remote, new Security()));
+      ret.set(
+          new SocketStats(
+              transportStats,
+              local,
+              remote,
+              socketOptions,
+              new Security()));
       return ret;
     }
 

@@ -911,6 +911,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           transportTracer.getStats(),
           socket.getLocalSocketAddress(),
           socket.getRemoteSocketAddress(),
+          Utils.getSocketOptions(socket),
           new Security()));
       return ret;
     }
