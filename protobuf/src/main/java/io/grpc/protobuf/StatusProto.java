@@ -151,7 +151,7 @@ public final class StatusProto {
    * {@code status}.
    *
    * @return the embedded google.rpc.Status or {@code null} if it is not present.
-   * @since 1.10.0
+   * @since 1.11.0
    */
   @Nullable
   public static com.google.rpc.Status fromStatusAndTrailers(Status status, Metadata trailers) {
