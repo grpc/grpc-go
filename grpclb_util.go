@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -102,9 +103,9 @@ type lbCacheClientConn struct {
 	balancer.ClientConn
 	timeout time.Duration
 
+	mu sync.Mutex
 	// subConnCache only keeps subConns that are being deleted.
-	subConnCache map[resolver.Address]*subConnCacheEntry
-
+	subConnCache  map[resolver.Address]*subConnCacheEntry
 	subConnToAddr map[balancer.SubConn]resolver.Address
 }
 
@@ -122,13 +123,13 @@ func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	}
 }
 
-// The caller of this function (refreshSubConns) is call synchronously, so
-// thers's no need to hold any lock.
 func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	if len(addrs) != 1 {
 		return nil, fmt.Errorf("grpclb calling NewSubConn with addrs of length %v", len(addrs))
 	}
 
+	ccc.mu.Lock()
+	defer ccc.mu.Unlock()
 	if entry, ok := ccc.subConnCache[addrs[0]]; ok {
 		// If entry is in subConnCache, the SubConn was being deleted.
 		// cancel function will never be nil.
@@ -147,6 +148,8 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
+	ccc.mu.Lock()
+	defer ccc.mu.Unlock()
 	addr, ok := ccc.subConnToAddr[sc]
 	if !ok {
 		return
@@ -164,9 +167,11 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 	}
 
 	timer := time.AfterFunc(ccc.timeout, func() {
-		delete(ccc.subConnToAddr, sc)
 		ccc.ClientConn.RemoveSubConn(sc)
+		ccc.mu.Lock()
+		delete(ccc.subConnToAddr, sc)
 		delete(ccc.subConnCache, addr)
+		ccc.mu.Unlock()
 	})
 
 	ccc.subConnCache[addr] = &subConnCacheEntry{
@@ -181,8 +186,10 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccc *lbCacheClientConn) close() {
+	ccc.mu.Lock()
 	// Only cancel all existing timers. There's no need to remove SubConns.
 	for _, entry := range ccc.subConnCache {
 		entry.cancel()
 	}
+	ccc.mu.Unlock()
 }

@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ type mockSubConn struct {
 type mockClientConn struct {
 	balancer.ClientConn
 
+	mu       sync.Mutex
 	subConns map[balancer.SubConn]resolver.Address
 }
 
@@ -45,29 +47,37 @@ func newMockClientConn() *mockClientConn {
 
 func (mcc *mockClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := &mockSubConn{}
+	mcc.mu.Lock()
+	defer mcc.mu.Unlock()
 	mcc.subConns[sc] = addrs[0]
 	return sc, nil
 }
 
 func (mcc *mockClientConn) RemoveSubConn(sc balancer.SubConn) {
+	mcc.mu.Lock()
+	defer mcc.mu.Unlock()
 	delete(mcc.subConns, sc)
 }
 
 const testCacheTimeout = 100 * time.Millisecond
 
 func checkMockCC(mcc *mockClientConn, scLen int) error {
+	mcc.mu.Lock()
+	defer mcc.mu.Unlock()
 	if len(mcc.subConns) != scLen {
-		return fmt.Errorf("mcc = %+v, want len(mcc.subConns) = %v", mcc, scLen)
+		return fmt.Errorf("mcc = %+v, want len(mcc.subConns) = %v", mcc.subConns, scLen)
 	}
 	return nil
 }
 
 func checkCacheCC(ccc *lbCacheClientConn, sccLen, sctaLen int) error {
+	ccc.mu.Lock()
+	defer ccc.mu.Unlock()
 	if len(ccc.subConnCache) != sccLen {
-		return fmt.Errorf("ccc = %+v, want len(ccc.subConnCache) = %v", ccc, sccLen)
+		return fmt.Errorf("ccc = %+v, want len(ccc.subConnCache) = %v", ccc.subConnCache, sccLen)
 	}
 	if len(ccc.subConnToAddr) != sctaLen {
-		return fmt.Errorf("ccc = %+v, want len(ccc.subConnToAddr) = %v", ccc, sctaLen)
+		return fmt.Errorf("ccc = %+v, want len(ccc.subConnToAddr) = %v", ccc.subConnToAddr, sctaLen)
 	}
 	return nil
 }
