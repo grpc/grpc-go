@@ -100,6 +100,7 @@ const subConnCacheTime = time.Second * 10
 // Its new and remove methods are updated to do cache first.
 type lbCacheClientConn struct {
 	balancer.ClientConn
+	timeout time.Duration
 
 	// subConnCache only keeps subConns that are being deleted.
 	subConnCache map[resolver.Address]*subConnCacheEntry
@@ -115,6 +116,7 @@ type subConnCacheEntry struct {
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	return &lbCacheClientConn{
 		ClientConn:    cc,
+		timeout:       subConnCacheTime,
 		subConnCache:  make(map[resolver.Address]*subConnCacheEntry),
 		subConnToAddr: make(map[balancer.SubConn]resolver.Address),
 	}
@@ -131,6 +133,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 		// If entry is in subConnCache, the SubConn was being deleted.
 		// cancel function will never be nil.
 		entry.cancel()
+		delete(ccc.subConnCache, addrs[0])
 		return entry.sc, nil
 	}
 
@@ -160,9 +163,10 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 		return
 	}
 
-	timer := time.AfterFunc(subConnCacheTime, func() {
+	timer := time.AfterFunc(ccc.timeout, func() {
 		delete(ccc.subConnToAddr, sc)
 		ccc.ClientConn.RemoveSubConn(sc)
+		delete(ccc.subConnCache, addr)
 	})
 
 	ccc.subConnCache[addr] = &subConnCacheEntry{
