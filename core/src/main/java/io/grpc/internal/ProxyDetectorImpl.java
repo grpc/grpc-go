@@ -43,6 +43,81 @@ import javax.annotation.Nullable;
  *
  */
 class ProxyDetectorImpl implements ProxyDetector {
+  // To validate this code: set up a local squid proxy instance, and
+  // try to communicate with grpc-test.sandbox.googleapis.com:443.
+  // The endpoint runs an instance of TestServiceGrpc, see
+  // AbstractInteropTest for an example how to run a
+  // TestService.EmptyCall RPC.
+  //
+  // The instructions below assume Squid 3.5.23 and a recent
+  // version of Debian.
+  //
+  // Set the contents of /etc/squid/squid.conf to be:
+  // WARNING: THESE CONFIGS HAVE NOT BEEN REVIEWED FOR SECURITY, DO
+  // NOT USE OUTSIDE OF TESTING. COMMENT OUT THIS WARNING TO
+  // UNBREAK THE CONFIG FILE.
+  // acl SSL_ports port 443
+  // acl Safe_ports port 80
+  // acl Safe_ports port 21
+  // acl Safe_ports port 443
+  // acl Safe_ports port 70
+  // acl Safe_ports port 210
+  // acl Safe_ports port 1025-65535
+  // acl Safe_ports port 280
+  // acl Safe_ports port 488
+  // acl Safe_ports port 591
+  // acl Safe_ports port 777
+  // acl CONNECT method CONNECT
+  // http_access deny !Safe_ports
+  // http_access deny CONNECT !SSL_ports
+  // http_access allow localhost manager
+  // http_access deny manager
+  // http_access allow localhost
+  // http_access deny all
+  // http_port 3128
+  // coredump_dir /var/spool/squid
+  // refresh_pattern ^ftp: 1440 20% 10080
+  // refresh_pattern ^gopher: 1440 0% 1440
+  // refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
+  // refresh_pattern . 0 20% 4320
+  //
+  // Restart squid:
+  // $ sudo /etc/init.d/squid restart
+  //
+  // To test with passwords:
+  //
+  // Run this command and follow the instructions to set up a user/pass:
+  // $ sudo htpasswd -c /etc/squid/passwd myuser1
+  //
+  // Make the file readable to squid:
+  // $ sudo chmod 644 /etc/squid/passwd
+  //
+  // Validate the username and password, you should see OK printed:
+  // $ /usr/lib/squid3/basic_ncsa_auth /etc/squid/passwd
+  // myuser1 <your password here>
+  //
+  // Add these additional lines to the beginning of squid.conf (the ordering matters):
+  // auth_param basic program /usr/lib/squid3/basic_ncsa_auth /etc/squid/passwd
+  // auth_param basic children 5
+  // auth_param basic realm Squid proxy-caching web server
+  // auth_param basic credentialsttl 2 hours
+  // acl ncsa_users proxy_auth REQUIRED
+  // http_access allow ncsa_users
+  //
+  // Restart squid:
+  // $ sudo /etc/init.d/squid restart
+  //
+  // In both cases, start the JVM with -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 to
+  // configure the proxy. For passwords, use java.net.Authenticator.setDefault().
+  //
+  // Testing with curl, no password:
+  // $ curl -U myuser1:pass1 -x http://localhost:3128 -L grpc.io
+  // Testing with curl, with password:
+  // $ curl -U myuser1:pass1 -x http://localhost:3128 -L grpc.io
+  //
+  // It may be helpful to monitor the squid access logs:
+  // $ sudo tail -f /var/log/squid/access.log
+
   private static final Logger log = Logger.getLogger(ProxyDetectorImpl.class.getName());
   private static final AuthenticationProvider DEFAULT_AUTHENTICATOR = new AuthenticationProvider() {
     @Override
