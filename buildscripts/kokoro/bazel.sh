@@ -5,3 +5,6 @@ cat /VERSION
 
 cd github/grpc-java
 bazel build ...
+
+cd examples
+bazel build ...
