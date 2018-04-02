@@ -800,6 +800,8 @@ func (cc *ClientConn) switchBalancer(name string) {
 	if cc.balancerWrapper != nil {
 		cc.balancerWrapper.close()
 	}
+	// Clear all stickiness state.
+	cc.blockingpicker.clearStickinessState()
 
 	builder := balancer.Get(name)
 	if builder == nil {
@@ -981,6 +983,13 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
 	}
+
+	var newStickinessMDKey string
+	if sc.stickinessKey != nil && *sc.stickinessKey != "" {
+		newStickinessMDKey = *sc.stickinessKey
+	}
+	cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
+
 	cc.mu.Unlock()
 	return nil
 }
@@ -1464,6 +1473,12 @@ func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+func (ac *addrConn) getCurAddr() resolver.Address {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.curAddr
 }
 
 func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
