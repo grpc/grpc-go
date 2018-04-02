@@ -4887,7 +4887,6 @@ func TestGRPCMethod(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// Sanity check that endpoint properly errors when it sees mdkey.
 	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
