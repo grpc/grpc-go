@@ -23,6 +23,7 @@ import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -40,6 +41,15 @@ public final class LongLivedChannel extends HttpServlet {
   private static final String INTEROP_TEST_ADDRESS = "grpc-test.sandbox.googleapis.com:443";
   private final ManagedChannel channel =
       ManagedChannelBuilder.forTarget(INTEROP_TEST_ADDRESS).build();
+
+  @Override
+  public void destroy() {
+    try {
+      channel.shutdownNow().awaitTermination(1, TimeUnit.SECONDS);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
