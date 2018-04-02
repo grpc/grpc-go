@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
 )
@@ -42,10 +44,18 @@ type pickerWrapper struct {
 	// The latest connection happened.
 	connErrMu sync.Mutex
 	connErr   error
+
+	stickinessMu    sync.Mutex
+	stickinessMDKey string
+
+	stickiness *stickyStore
 }
 
 func newPickerWrapper() *pickerWrapper {
-	bp := &pickerWrapper{blockingCh: make(chan struct{})}
+	bp := &pickerWrapper{
+		blockingCh: make(chan struct{}),
+		stickiness: newStickyStore(),
+	}
 	return bp
 }
 
@@ -60,6 +70,19 @@ func (bp *pickerWrapper) connectionError() error {
 	err := bp.connErr
 	bp.connErrMu.Unlock()
 	return err
+}
+
+func (bp *pickerWrapper) updateStickinessMDKey(newKey string) {
+	bp.stickinessMu.Lock()
+	if bp.stickinessMDKey != newKey {
+		bp.stickinessMDKey = newKey
+		bp.stickiness.clear()
+	}
+	bp.stickinessMu.Unlock()
+}
+
+func (bp *pickerWrapper) clearStickinessState() {
+	bp.stickiness.clear()
 }
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
@@ -101,6 +124,19 @@ func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) f
 // - the subConn returned by the current picker is not READY
 // When one of these situations happens, pick blocks until the picker gets updated.
 func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+
+	bp.stickinessMu.Lock()
+	mdKey := bp.stickinessMDKey
+	bp.stickinessMu.Unlock()
+	stickyKey, isSticky := stickyKeyFromContext(ctx, mdKey)
+
+	if isSticky {
+		if t, ok := bp.stickiness.get(stickyKey); ok {
+			// Done function returned is always nil.
+			return t, nil, nil
+		}
+	}
+
 	var (
 		p  balancer.Picker
 		ch chan struct{}
@@ -156,6 +192,9 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 			continue
 		}
 		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
+			if isSticky {
+				bp.stickiness.put(stickyKey, acw)
+			}
 			if channelz.IsOn() {
 				return t, doneChannelzWrapper(acw, done), nil
 			}
@@ -177,4 +216,85 @@ func (bp *pickerWrapper) close() {
 	}
 	bp.done = true
 	close(bp.blockingCh)
+}
+
+type stickyStoreEntry struct {
+	acw  *acBalancerWrapper
+	addr resolver.Address
+}
+
+type stickyStore struct {
+	mu    sync.Mutex
+	store map[string]*stickyStoreEntry
+}
+
+func newStickyStore() *stickyStore {
+	return &stickyStore{
+		store: make(map[string]*stickyStoreEntry),
+	}
+}
+
+func (ss *stickyStore) clear() {
+	ss.mu.Lock()
+	ss.store = make(map[string]*stickyStoreEntry)
+	ss.mu.Unlock()
+}
+
+func (ss *stickyStore) put(stickyKey string, acw *acBalancerWrapper) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	ss.store[stickyKey] = &stickyStoreEntry{
+		acw:  acw,
+		addr: acw.getAddrConn().getCurAddr(),
+	}
+}
+
+func (ss *stickyStore) get(stickyKey string) (transport.ClientTransport, bool) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	entry, ok := ss.store[stickyKey]
+	if !ok {
+		return nil, false
+	}
+	ac := entry.acw.getAddrConn()
+	if ac.getCurAddr() != entry.addr {
+		delete(ss.store, stickyKey)
+		return nil, false
+	}
+	t, ok := ac.getReadyTransport()
+	if !ok {
+		delete(ss.store, stickyKey)
+		return nil, false
+	}
+	return t, true
+}
+
+// Get one value from metadata in ctx with key stickinessMDKey.
+//
+// It returns "", false if stickinessMDKey is an empty string.
+func stickyKeyFromContext(ctx context.Context, stickinessMDKey string) (string, bool) {
+	if stickinessMDKey == "" {
+		return "", false
+	}
+
+	md, added, ok := metadata.FromOutgoingContextRaw(ctx)
+	if !ok {
+		return "", false
+	}
+
+	if vv, ok := md[stickinessMDKey]; ok {
+		if len(vv) > 0 {
+			return vv[0], true
+		}
+	}
+
+	for _, ss := range added {
+		for i := 0; i < len(ss)-1; i += 2 {
+			if ss[i] == stickinessMDKey {
+				return ss[i+1], true
+			}
+		}
+	}
+
+	return "", false
 }
