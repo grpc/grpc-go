@@ -21,6 +21,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.io.InputStream;
@@ -118,5 +119,13 @@ public class ReadableBuffersTest {
     byte[] dest = new byte[3];
     assertEquals(2, inputStream.read(dest, /*destOffset*/ 1, /*length*/ 2));
     assertArrayEquals(new byte[]{0x00, 'h', 'e'}, dest);
+  }
+
+  @Test
+  public void bufferInputStream_close_closesBuffer() throws Exception {
+    ReadableBuffer buffer = mock(ReadableBuffer.class);
+    InputStream inputStream = ReadableBuffers.openStream(buffer, true);
+    inputStream.close();
+    verify(buffer, times(1)).close();
   }
 }

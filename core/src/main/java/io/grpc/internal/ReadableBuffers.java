@@ -327,6 +327,11 @@ public final class ReadableBuffers {
       buffer.readBytes(dest, destOffset, length);
       return length;
     }
+
+    @Override
+    public void close() throws IOException {
+      buffer.close();
+    }
   }
 
   private ReadableBuffers() {}
