@@ -81,6 +81,7 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -1461,6 +1462,11 @@ public class ServerImplTest {
     @Override
     public int getPort() {
       return -1;
+    }
+
+    @Override
+    public List<Instrumented<SocketStats>> getListenSockets() {
+      return Collections.emptyList();
     }
 
     @Override

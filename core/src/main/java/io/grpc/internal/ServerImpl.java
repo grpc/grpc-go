@@ -571,7 +571,9 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
 
   @Override
   public ListenableFuture<ServerStats> getStats() {
-    ServerStats.Builder builder = new ServerStats.Builder();
+    ServerStats.Builder builder
+        = new ServerStats.Builder()
+        .setListenSockets(transportServer.getListenSockets());
     serverCallTracer.updateBuilder(builder);
     SettableFuture<ServerStats> ret = SettableFuture.create();
     ret.set(builder.build());

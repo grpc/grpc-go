@@ -17,6 +17,7 @@
 package io.grpc.services;
 
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.Channelz.id;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
@@ -55,9 +56,11 @@ import io.grpc.internal.Channelz.ServerList;
 import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.ServerStats;
 import io.grpc.internal.Channelz.SocketOptions;
+import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.Instrumented;
 import io.grpc.internal.WithLogId;
 import io.grpc.services.ChannelzTestHelper.TestChannel;
+import io.grpc.services.ChannelzTestHelper.TestListenSocket;
 import io.grpc.services.ChannelzTestHelper.TestServer;
 import io.grpc.services.ChannelzTestHelper.TestSocket;
 import io.netty.channel.unix.DomainSocketAddress;
@@ -168,6 +171,23 @@ public final class ChannelzProtoUtilTest {
       .setValue("some-made-up-value")
       .build();
 
+  private final TestListenSocket listenSocket = new TestListenSocket();
+  private final SocketRef listenSocketRef = SocketRef
+      .newBuilder()
+      .setName(listenSocket.toString())
+      .setSocketId(id(listenSocket))
+      .build();
+  private final Address listenAddress = Address
+      .newBuilder()
+      .setTcpipAddress(
+          TcpIpAddress
+              .newBuilder()
+              .setIpAddress(ByteString.copyFrom(
+                  ((InetSocketAddress) listenSocket.listenAddress).getAddress().getAddress()))
+              .setPort(1234)
+              .build())
+      .build();
+
   private final TestSocket socket = new TestSocket();
   private final SocketRef socketRef = SocketRef
       .newBuilder()
@@ -196,6 +216,7 @@ public final class ChannelzProtoUtilTest {
               .newBuilder()
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) socket.local).getAddress().getAddress()))
+              .setPort(1000)
               .build())
       .build();
   private final Address remoteAddress = Address
@@ -205,6 +226,7 @@ public final class ChannelzProtoUtilTest {
               .newBuilder()
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) socket.remote).getAddress().getAddress()))
+              .setPort(1000)
               .build())
       .build();
 
@@ -271,6 +293,26 @@ public final class ChannelzProtoUtilTest {
   }
 
   @Test
+  public void toSocket_listenSocket() {
+    assertEquals(
+        Socket
+            .newBuilder()
+            .setRef(listenSocketRef)
+            .setLocal(listenAddress)
+            .build(),
+        ChannelzProtoUtil.toSocket(listenSocket));
+  }
+
+  @Test
+  public void toSocketData() throws Exception {
+    assertEquals(
+        socketDataNoSockOpts
+            .toBuilder()
+            .build(),
+        ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
+  }
+
+  @Test
   public void toAddress_inet() throws Exception {
     InetSocketAddress inet4 = new InetSocketAddress(Inet4Address.getByName("10.0.0.1"), 1000);
     assertEquals(
@@ -278,6 +320,7 @@ public final class ChannelzProtoUtilTest {
             TcpIpAddress
                 .newBuilder()
                 .setIpAddress(ByteString.copyFrom(inet4.getAddress().getAddress()))
+                .setPort(1000)
                 .build())
             .build(),
         ChannelzProtoUtil.toAddress(inet4));
@@ -318,7 +361,34 @@ public final class ChannelzProtoUtilTest {
 
   @Test
   public void toServer() throws Exception {
+    // no listen sockets
     assertEquals(serverProto, ChannelzProtoUtil.toServer(server));
+
+    // 1 listen socket
+    server.serverStats = toBuilder(server.serverStats)
+        .setListenSockets(ImmutableList.<Instrumented<SocketStats>>of(listenSocket))
+        .build();
+    assertEquals(
+        serverProto
+            .toBuilder()
+            .addListenSocket(listenSocketRef)
+            .build(),
+        ChannelzProtoUtil.toServer(server));
+
+    // multiple listen sockets
+    TestListenSocket otherListenSocket = new TestListenSocket();
+    SocketRef otherListenSocketRef = ChannelzProtoUtil.toSocketRef(otherListenSocket);
+    server.serverStats = toBuilder(server.serverStats)
+        .setListenSockets(
+            ImmutableList.<Instrumented<SocketStats>>of(listenSocket, otherListenSocket))
+        .build();
+    assertEquals(
+        serverProto
+            .toBuilder()
+            .addListenSocket(listenSocketRef)
+            .addListenSocket(otherListenSocketRef)
+            .build(),
+        ChannelzProtoUtil.toServer(server));
   }
 
   @Test
@@ -612,6 +682,7 @@ public final class ChannelzProtoUtilTest {
     return builder;
   }
 
+
   private static SocketOptions.Builder toBuilder(SocketOptions options) {
     SocketOptions.Builder builder = new SocketOptions.Builder()
         .setSocketOptionTimeoutMillis(options.soTimeoutMillis)
@@ -620,5 +691,14 @@ public final class ChannelzProtoUtilTest {
       builder.addOption(entry.getKey(), entry.getValue());
     }
     return builder;
+  }
+
+  private static ServerStats.Builder toBuilder(ServerStats stats) {
+    return new ServerStats.Builder()
+        .setCallsStarted(stats.callsStarted)
+        .setCallsSucceeded(stats.callsSucceeded)
+        .setCallsFailed(stats.callsFailed)
+        .setLastCallStartedMillis(stats.lastCallStartedMillis)
+        .setListenSockets(stats.listenSockets);
   }
 }

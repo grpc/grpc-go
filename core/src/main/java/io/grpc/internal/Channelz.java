@@ -42,8 +42,8 @@ public final class Channelz {
       = new ConcurrentSkipListMap<Long, Instrumented<ChannelStats>>();
   private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels
       = new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
-  // An InProcessTransport can appear in both clientSockets and perServerSockets simultaneously
-  private final ConcurrentMap<Long, Instrumented<SocketStats>> clientSockets
+  // An InProcessTransport can appear in both otherSockets and perServerSockets simultaneously
+  private final ConcurrentMap<Long, Instrumented<SocketStats>> otherSockets
       = new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
   private final ConcurrentMap<Long, ServerSocketMap> perServerSockets
       = new ConcurrentHashMap<Long, ServerSocketMap>();
@@ -81,7 +81,11 @@ public final class Channelz {
 
   /** Adds a socket. */
   public void addClientSocket(Instrumented<SocketStats> socket) {
-    add(clientSockets, socket);
+    add(otherSockets, socket);
+  }
+
+  public void addListenSocket(Instrumented<SocketStats> socket) {
+    add(otherSockets, socket);
   }
 
   /** Adds a server socket. */
@@ -108,7 +112,11 @@ public final class Channelz {
   }
 
   public void removeClientSocket(Instrumented<SocketStats> socket) {
-    remove(clientSockets, socket);
+    remove(otherSockets, socket);
+  }
+
+  public void removeListenSocket(Instrumented<SocketStats> socket) {
+    remove(otherSockets, socket);
   }
 
   /** Removes a server socket. */
@@ -174,7 +182,7 @@ public final class Channelz {
   /** Returns a socket. */
   @Nullable
   public Instrumented<SocketStats> getSocket(long id) {
-    Instrumented<SocketStats> clientSocket = clientSockets.get(id);
+    Instrumented<SocketStats> clientSocket = otherSockets.get(id);
     if (clientSocket != null) {
       return clientSocket;
     }
@@ -207,7 +215,7 @@ public final class Channelz {
 
   @VisibleForTesting
   public boolean containsClientSocket(LogId transportRef) {
-    return contains(clientSockets, transportRef);
+    return contains(otherSockets, transportRef);
   }
 
   private static <T extends Instrumented<?>> void add(Map<Long, T> map, T object) {
@@ -263,7 +271,7 @@ public final class Channelz {
     public final long callsSucceeded;
     public final long callsFailed;
     public final long lastCallStartedMillis;
-    // TODO(zpencer): add listen sockets
+    public final List<Instrumented<SocketStats>> listenSockets;
 
     /**
      * Creates an instance.
@@ -272,11 +280,13 @@ public final class Channelz {
         long callsStarted,
         long callsSucceeded,
         long callsFailed,
-        long lastCallStartedMillis) {
+        long lastCallStartedMillis,
+        List<Instrumented<SocketStats>> listenSockets) {
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
       this.lastCallStartedMillis = lastCallStartedMillis;
+      this.listenSockets = Preconditions.checkNotNull(listenSockets);
     }
 
     public static final class Builder {
@@ -284,6 +294,7 @@ public final class Channelz {
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedMillis;
+      public List<Instrumented<SocketStats>> listenSockets = Collections.emptyList();
 
       public Builder setCallsStarted(long callsStarted) {
         this.callsStarted = callsStarted;
@@ -305,6 +316,14 @@ public final class Channelz {
         return this;
       }
 
+      /** Sets the listen sockets. */
+      public Builder setListenSockets(List<Instrumented<SocketStats>> listenSockets) {
+        Preconditions.checkNotNull(listenSockets);
+        this.listenSockets = Collections.unmodifiableList(
+            new ArrayList<Instrumented<SocketStats>>(listenSockets));
+        return this;
+      }
+
       /**
        * Builds an instance.
        */
@@ -313,7 +332,8 @@ public final class Channelz {
             callsStarted,
             callsSucceeded,
             callsFailed,
-            lastCallStartedMillis);
+            lastCallStartedMillis,
+            listenSockets);
       }
     }
   }
@@ -434,11 +454,11 @@ public final class Channelz {
   }
 
   public static final class SocketStats {
-    public final TransportStats data;
+    @Nullable public final TransportStats data;
     public final SocketAddress local;
-    public final SocketAddress remote;
-    public final Security security;
+    @Nullable public final SocketAddress remote;
     public final SocketOptions socketOptions;
+    @Nullable public final Security security;
 
     /** Creates an instance. */
     public SocketStats(

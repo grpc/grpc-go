@@ -16,9 +16,18 @@
 
 package io.grpc.netty;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.Channelz.id;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ServerStreamTracer;
+import io.grpc.internal.Channelz;
+import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.internal.Instrumented;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
@@ -41,6 +50,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class NettyServerTest {
+  private final Channelz channelz = new Channelz();
 
   @Test
   public void getPort() throws Exception {
@@ -61,7 +71,8 @@ public class NettyServerTest {
         1, // ignore
         1, 1, // ignore
         1, 1, // ignore
-        true, 0); // ignore
+        true, 0, // ignore
+        channelz);
     ns.start(new ServerListener() {
       @Override
       public ServerTransportListener transportCreated(ServerTransport transport) {
@@ -98,7 +109,8 @@ public class NettyServerTest {
         1, // ignore
         1, 1, // ignore
         1, 1, // ignore
-        true, 0); // ignore
+        true, 0, // ignore
+        channelz);
 
     assertThat(ns.getPort()).isEqualTo(-1);
   }
@@ -135,7 +147,8 @@ public class NettyServerTest {
         1, // ignore
         1, 1, // ignore
         1, 1, // ignore
-        true, 0); // ignore
+        true, 0, // ignore
+        channelz);
     ns.start(new ServerListener() {
       @Override
       public ServerTransportListener transportCreated(ServerTransport transport) {
@@ -163,5 +176,60 @@ public class NettyServerTest {
     assertThat(highWaterMark.get()).isEqualTo(originalHighWaterMark);
 
     ns.shutdown();
+  }
+
+  @Test
+  public void channelzListenSocket() throws Exception {
+    InetSocketAddress addr = new InetSocketAddress(0);
+    NettyServer ns = new NettyServer(
+        addr,
+        NioServerSocketChannel.class,
+        new HashMap<ChannelOption<?>, Object>(),
+        null, // no boss group
+        null, // no event group
+        new ProtocolNegotiators.PlaintextNegotiator(),
+        Collections.<ServerStreamTracer.Factory>emptyList(),
+        TransportTracer.getDefaultFactory(),
+        1, // ignore
+        1, // ignore
+        1, // ignore
+        1, // ignore
+        1, // ignore
+        1, 1, // ignore
+        1, 1, // ignore
+        true, 0, // ignore
+        channelz);
+    final SettableFuture<Void> shutdownCompleted = SettableFuture.create();
+    ns.start(new ServerListener() {
+      @Override
+      public ServerTransportListener transportCreated(ServerTransport transport) {
+        return null;
+      }
+
+      @Override
+      public void serverShutdown() {
+        shutdownCompleted.set(null);
+      }
+    });
+    assertThat(ns.getPort()).isGreaterThan(0);
+
+    Instrumented<SocketStats> listenSocket = getOnlyElement(ns.getListenSockets());
+    assertSame(listenSocket, channelz.getSocket(id(listenSocket)));
+
+    // very basic sanity check of the contents
+    SocketStats socketStats = listenSocket.getStats().get();
+    assertEquals(ns.getPort(), ((InetSocketAddress) socketStats.local).getPort());
+    assertNull(socketStats.remote);
+
+    // TODO(zpencer): uncomment when sock options are exposed
+    // by default, there are some socket options set on the listen socket
+    // assertThat(socketStats.socketOptions.additional).isNotEmpty();
+
+    // Cleanup
+    ns.shutdown();
+    shutdownCompleted.get();
+
+    // listen socket is removed
+    assertNull(channelz.getSocket(id(listenSocket)));
   }
 }

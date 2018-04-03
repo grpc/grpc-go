@@ -50,6 +50,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.StreamBufferingEncoder.Http2ChannelClosedException;
 import io.netty.util.AsciiString;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
@@ -339,7 +341,16 @@ class NettyClientTransport implements ConnectionClientTransport {
                     Utils.getSocketOptions(channel),
                     new Security()));
           }
-        });
+        })
+        .addListener(
+            new GenericFutureListener<Future<Object>>() {
+              @Override
+              public void operationComplete(Future<Object> future) throws Exception {
+                if (!future.isSuccess()) {
+                  result.setException(future.cause());
+                }
+              }
+            });
     return result;
   }
 

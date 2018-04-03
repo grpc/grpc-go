@@ -40,6 +40,7 @@ import io.grpc.channelz.v1.Server;
 import io.grpc.channelz.v1.ServerData;
 import io.grpc.channelz.v1.ServerRef;
 import io.grpc.channelz.v1.Socket;
+import io.grpc.channelz.v1.Socket.Builder;
 import io.grpc.channelz.v1.SocketData;
 import io.grpc.channelz.v1.SocketOption;
 import io.grpc.channelz.v1.SocketOptionLinger;
@@ -106,11 +107,14 @@ final class ChannelzProtoUtil {
 
   static Server toServer(Instrumented<ServerStats> obj) {
     ServerStats stats = getFuture(obj.getStats());
-    return Server
+    Server.Builder builder = Server
         .newBuilder()
         .setRef(toServerRef(obj))
-        .setData(toServerData(stats))
-        .build();
+        .setData(toServerData(stats));
+    for (Instrumented<SocketStats> listenSocket : stats.listenSockets) {
+      builder.addListenSocket(toSocketRef(listenSocket));
+    }
+    return builder.build();
   }
 
   static ServerData toServerData(ServerStats stats) {
@@ -125,15 +129,21 @@ final class ChannelzProtoUtil {
 
   static Socket toSocket(Instrumented<SocketStats> obj) {
     SocketStats socketStats = getFuture(obj.getStats());
-    return Socket.newBuilder()
+    Builder builder = Socket.newBuilder()
         .setRef(toSocketRef(obj))
-        .setRemote(toAddress(socketStats.remote))
-        .setLocal(toAddress(socketStats.local))
-        .setData(extractSocketData(socketStats))
-        .build();
+        .setLocal(toAddress(socketStats.local));
+    // listen sockets do not have remote nor data
+    if (socketStats.remote != null) {
+      builder.setRemote(toAddress(socketStats.remote));
+    }
+    if (socketStats.data != null) {
+      builder.setData(extractSocketData(socketStats));
+    }
+    return builder.build();
   }
 
   static Address toAddress(SocketAddress address) {
+    Preconditions.checkNotNull(address);
     Address.Builder builder = Address.newBuilder();
     if (address instanceof InetSocketAddress) {
       InetSocketAddress inetAddress = (InetSocketAddress) address;
@@ -142,6 +152,7 @@ final class ChannelzProtoUtil {
               .newBuilder()
               .setIpAddress(
                   ByteString.copyFrom(inetAddress.getAddress().getAddress()))
+              .setPort(inetAddress.getPort())
               .build());
     } else if (address.getClass().getName().endsWith("io.netty.channel.unix.DomainSocketAddress")) {
       builder.setUdsAddress(

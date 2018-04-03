@@ -33,6 +33,8 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPromise;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -222,7 +224,16 @@ class NettyServerTransport implements ServerTransport {
                     Utils.getSocketOptions(channel),
                     /*security=*/ null));
           }
-        });
+        })
+        .addListener(
+            new GenericFutureListener<Future<Object>>() {
+              @Override
+              public void operationComplete(Future<Object> future) throws Exception {
+                if (!future.isSuccess()) {
+                  result.setException(future.cause());
+                }
+              }
+            });
     return result;
   }
 

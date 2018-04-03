@@ -425,7 +425,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
-        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos, channelz);
   }
 
   @Override

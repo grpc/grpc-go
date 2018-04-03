@@ -48,6 +48,7 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
@@ -107,6 +108,7 @@ public class NettyClientTransportTest {
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private final EchoServerListener serverListener = new EchoServerListener();
+  private final Channelz channelz = new Channelz();
   private Runnable tooManyPingsRunnable = new Runnable() {
     // Throwing is useless in this method, because Netty doesn't propagate the exception
     @Override public void run() {}
@@ -604,7 +606,8 @@ public class NettyClientTransportTest {
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize,
         DEFAULT_SERVER_KEEPALIVE_TIME_NANOS, DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS,
         MAX_CONNECTION_IDLE_NANOS_DISABLED,
-        MAX_CONNECTION_AGE_NANOS_DISABLED, MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE, true, 0);
+        MAX_CONNECTION_AGE_NANOS_DISABLED, MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE, true, 0,
+        channelz);
     server.start(serverListener);
     address = TestUtils.testServerAddress(server.getPort());
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
