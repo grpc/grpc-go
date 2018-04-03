@@ -16,6 +16,8 @@
 
 package io.grpc.okhttp;
 
+import static io.grpc.okhttp.OkHttpTlsUpgrader.canonicalizeHost;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import io.grpc.okhttp.internal.Protocol;
@@ -31,5 +33,15 @@ public class OkHttpTlsUpgraderTest {
         OkHttpTlsUpgrader.TLS_PROTOCOLS.indexOf(Protocol.GRPC_EXP) == -1
             || OkHttpTlsUpgrader.TLS_PROTOCOLS.indexOf(Protocol.GRPC_EXP)
                 < OkHttpTlsUpgrader.TLS_PROTOCOLS.indexOf(Protocol.HTTP_2));
+  }
+
+  @Test public void canonicalizeHosts() {
+    assertEquals("::1", canonicalizeHost("::1"));
+    assertEquals("::1", canonicalizeHost("[::1]"));
+    assertEquals("127.0.0.1", canonicalizeHost("127.0.0.1"));
+    assertEquals("some.long.url.com", canonicalizeHost("some.long.url.com"));
+
+    // Extra square brackets in a malformed URI are retained
+    assertEquals("[::1]", canonicalizeHost("[[::1]]"));
   }
 }
