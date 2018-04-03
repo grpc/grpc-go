@@ -1,14 +1,26 @@
 java_library(
-    name = "protobuf_lite",
+    name = "protobuf-lite",
     srcs = glob([
         "src/main/java/**/*.java",
     ]),
-    # TOOD(zdapeng): fix visibility and deps (https://github.com/google/protobuf/issues/2762)
-    visibility = ["//protobuf:__pkg__"],
+    visibility = ["//visibility:public"],
     deps = [
         "//core",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
-        "@com_google_protobuf//:protobuf_java",
-    ],
+    ] + select({
+        ":android": ["@com_google_protobuf_javalite//:protobuf_java_lite"],
+        "//conditions:default": ["@com_google_protobuf//:protobuf_java"],
+    }),
+)
+
+# This config is not fully-reliable. If it breaks, it is probably because you
+# are changing --android_crosstool_top. Instead of doing that, you can bind
+# your own toolchain on top of the default android/crosstool, as mentioned at
+# https://github.com/bazelbuild/bazel/issues/3924#issuecomment-338704582
+config_setting(
+    name = "android",
+    values = {
+        "crosstool_top": "//external:android/crosstool",
+    },
 )

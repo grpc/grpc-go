@@ -9,6 +9,7 @@ def grpc_java_repositories(
     omit_com_google_guava=False,
     omit_com_google_protobuf=False,
     omit_com_google_protobuf_java=False,
+    omit_com_google_protobuf_javalite=False,
     omit_com_google_protobuf_nano_protobuf_javanano=False,
     omit_com_google_truth_truth=False,
     omit_com_squareup_okhttp=False,
@@ -45,6 +46,8 @@ def grpc_java_repositories(
     com_google_protobuf()
   if omit_com_google_protobuf_java:
     fail("omit_com_google_protobuf_java is no longer supported and must be not be passed to grpc_java_repositories()")
+  if not omit_com_google_protobuf_javalite:
+    com_google_protobuf_javalite()
   if not omit_com_google_protobuf_nano_protobuf_javanano:
     com_google_protobuf_nano_protobuf_javanano()
   if not omit_com_google_truth_truth:
@@ -144,6 +147,15 @@ def com_google_protobuf():
       sha256 = "1f8b9b202e9a4e467ff0b0f25facb1642727cdf5e69092038f15b37c75b99e45",
       strip_prefix = "protobuf-3.5.1",
       urls = ["https://github.com/google/protobuf/archive/v3.5.1.zip"],
+  )
+
+def com_google_protobuf_javalite():
+  # java_lite_proto_library rules implicitly depend on @com_google_protobuf_javalite
+  native.http_archive(
+      name = "com_google_protobuf_javalite",
+      sha256 = "d8a2fed3708781196f92e1e7e7e713cf66804bd2944894401057214aff4f468e",
+      strip_prefix = "protobuf-5e8916e881c573c5d83980197a6f783c132d4276",
+      urls = ["https://github.com/google/protobuf/archive/5e8916e881c573c5d83980197a6f783c132d4276.zip"],
   )
 
 def com_google_protobuf_nano_protobuf_javanano():
