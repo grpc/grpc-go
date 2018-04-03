@@ -416,6 +416,9 @@ public abstract class AbstractManagedChannelImplBuilder
               Tracing.getPropagationComponent().getBinaryFormat());
       effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
     }
+    if (binlogProvider != null) {
+      effectiveInterceptors.add(0, binlogProvider.getClientCallIdSetter());
+    }
     return effectiveInterceptors;
   }
 

@@ -22,24 +22,39 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
+import io.grpc.Context;
+import io.grpc.Internal;
 import io.grpc.InternalClientInterceptors;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.InternalServiceProviders;
 import io.grpc.InternalServiceProviders.PriorityAccessor;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerStreamTracer;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.Tracing;
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 public abstract class BinaryLogProvider implements Closeable {
+  // TODO(zpencer): move to services and make package private
+  @Internal
+  public static final Context.Key<CallId> SERVER_CALL_ID_CONTEXT_KEY
+      = Context.key("binarylog-context-key");
+  // TODO(zpencer): move to services and make package private when this class is moved
+  @Internal
+  public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
+      = CallOptions.Key.of("binarylog-calloptions-key", null);
   @VisibleForTesting
   public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
 
@@ -128,6 +143,62 @@ public abstract class BinaryLogProvider implements Closeable {
     // TODO(zpencer): make BinaryLogProvider provide a BinaryLog, and this method belongs there
   }
 
+  private static final ServerStreamTracer SERVER_CALLID_SETTER = new ServerStreamTracer() {
+    @Override
+    public Context filterContext(Context context) {
+      Context toRestore = context.attach();
+      try {
+        Span span = Tracing.getTracer().getCurrentSpan();
+        if (span == null) {
+          return context;
+        }
+
+        return context.withValue(SERVER_CALL_ID_CONTEXT_KEY, CallId.fromCensusSpan(span));
+      } finally {
+        context.detach(toRestore);
+      }
+    }
+  };
+
+  private static final ServerStreamTracer.Factory SERVER_CALLID_SETTER_FACTORY
+      = new ServerStreamTracer.Factory() {
+          @Override
+          public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
+            return SERVER_CALLID_SETTER;
+          }
+      };
+
+  /**
+   * Returns a {@link ServerStreamTracer.Factory} that copies the call ID to the {@link Context}
+   * as {@code SERVER_CALL_ID_CONTEXT_KEY}.
+   */
+  public ServerStreamTracer.Factory getServerCallIdSetter() {
+    return SERVER_CALLID_SETTER_FACTORY;
+  }
+
+  private static final ClientInterceptor CLIENT_CALLID_SETTER = new ClientInterceptor() {
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      Span span = Tracing.getTracer().getCurrentSpan();
+      if (span == null) {
+        return next.newCall(method, callOptions);
+      }
+
+      return next.newCall(
+          method,
+          callOptions.withOption(CLIENT_CALL_ID_CALLOPTION_KEY, CallId.fromCensusSpan(span)));
+    }
+  };
+
+  /**
+   * Returns a {@link ClientInterceptor} that copies the call ID to the {@link CallOptions}
+   * as {@code CALL_CLIENT_CALL_ID_CALLOPTION_KEY}.
+   */
+  public ClientInterceptor getClientCallIdSetter() {
+    return CLIENT_CALLID_SETTER;
+  }
+
   /**
    * A priority, from 0 to 10 that this provider should be used, taking the current environment into
    * consideration. 5 should be considered the default, and then tweaked based on environment
@@ -190,6 +261,27 @@ public abstract class BinaryLogProvider implements Closeable {
                 BYTEARRAY_MARSHALLER)
             .interceptCall(method, callOptions, next);
       }
+    }
+  }
+
+  /**
+   * A CallId is two byte[] arrays both of size 8 that uniquely identifies the RPC. Users are
+   * free to use the byte arrays however they see fit.
+   */
+  public static final class CallId {
+    public final long hi;
+    public final long lo;
+
+    /**
+     * Creates an instance.
+     */
+    public CallId(long hi, long lo) {
+      this.hi = hi;
+      this.lo = lo;
+    }
+
+    static CallId fromCensusSpan(Span span) {
+      return new CallId(0, ByteBuffer.wrap(span.getContext().getSpanId().getBytes()).getLong());
     }
   }
 }

@@ -370,7 +370,6 @@ class NettyServer implements InternalServer, WithLogId {
                   }
                 }
               });
-
       return ret;
     }
 

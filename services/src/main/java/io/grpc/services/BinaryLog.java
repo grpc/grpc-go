@@ -23,14 +23,17 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.Context;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
+import io.grpc.Grpc;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -48,12 +51,13 @@ import io.grpc.binarylog.MetadataEntry;
 import io.grpc.binarylog.Peer;
 import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
+import io.grpc.internal.BinaryLogProvider;
+import io.grpc.internal.BinaryLogProvider.CallId;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,9 +81,8 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
   private static final boolean SERVER = true;
   private static final boolean CLIENT = false;
 
-  // TODO(zpencer): extract these fields from call and stop using dummy values
   @VisibleForTesting
-  static final byte[] dumyCallId = new byte[16];
+  static final CallId emptyCallId = new CallId(0, 0);
   @VisibleForTesting
   static final SocketAddress DUMMY_SOCKET = new DummySocketAddress();
   @VisibleForTesting
@@ -106,14 +109,12 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     }
 
     @Override
-    void logSendInitialMetadata(
-        Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket) {
+    void logSendInitialMetadata(Metadata metadata, boolean isServer, CallId callId) {
       GrpcLogEntry entry = GrpcLogEntry
           .newBuilder()
           .setType(Type.SEND_INITIAL_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId))
-          .setPeer(socketToProto(peerSocket))
           .setMetadata(metadataToProto(metadata, maxHeaderBytes))
           .build();
       sink.write(entry);
@@ -121,7 +122,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
 
     @Override
     void logRecvInitialMetadata(
-        Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket) {
+        Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket) {
       GrpcLogEntry entry = GrpcLogEntry
           .newBuilder()
           .setType(Type.RECV_INITIAL_METADATA)
@@ -134,7 +135,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     }
 
     @Override
-    void logTrailingMetadata(Metadata metadata, boolean isServer, byte[] callId) {
+    void logTrailingMetadata(Metadata metadata, boolean isServer, CallId callId) {
       GrpcLogEntry entry = GrpcLogEntry
           .newBuilder()
           .setType(isServer ? Type.SEND_TRAILING_METADATA : Type.RECV_TRAILING_METADATA)
@@ -151,7 +152,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
         T message,
         boolean compressed,
         boolean isServer,
-        byte[] callId) {
+        CallId callId) {
       if (marshaller != BYTEARRAY_MARSHALLER) {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
@@ -172,7 +173,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
         T message,
         boolean compressed,
         boolean isServer,
-        byte[] callId) {
+        CallId callId) {
       if (marshaller != BYTEARRAY_MARSHALLER) {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
@@ -203,21 +204,20 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
      * Logs the sending of initial metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logSendInitialMetadata(
-        Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket);
+    abstract void logSendInitialMetadata(Metadata metadata, boolean isServer, CallId callId);
 
     /**
      * Logs the receiving of initial metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
     abstract void logRecvInitialMetadata(
-        Metadata metadata, boolean isServer, byte[] callId, SocketAddress peerSocket);
+        Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket);
 
     /**
      * Logs the trailing metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logTrailingMetadata(Metadata metadata, boolean isServer, byte[] callId);
+    abstract void logTrailingMetadata(Metadata metadata, boolean isServer, CallId callId);
 
     /**
      * Logs the outbound message. This method logs the appropriate number of bytes from
@@ -226,7 +226,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
      * This method takes ownership of {@code message}.
      */
     abstract <T> void logOutboundMessage(
-        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, byte[] callId);
+        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, CallId callId);
 
     /**
      * Logs the inbound message. This method logs the appropriate number of bytes from
@@ -235,7 +235,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
      * This method takes ownership of {@code message}.
      */
     abstract <T> void logInboundMessage(
-        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, byte[] callId);
+        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, CallId callId);
 
     /**
      * Returns the number bytes of the header this writer will log, according to configuration.
@@ -275,13 +275,38 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     return DEFAULT_FACTORY.getLog(fullMethodName);
   }
 
+  static CallId getCallIdForServer(Context context) {
+    CallId callId = BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY.get(context);
+    if (callId == null) {
+      return emptyCallId;
+    }
+    return callId;
+  }
+
+  static CallId getCallIdForClient(CallOptions callOptions) {
+    CallId callId = callOptions.getOption(BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY);
+    if (callId == null) {
+      return emptyCallId;
+    }
+    return callId;
+  }
+
+  static SocketAddress getPeerSocket(Attributes streamAttributes) {
+    SocketAddress peer = streamAttributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
+    if (peer == null) {
+      return DUMMY_SOCKET;
+    }
+    return peer;
+  }
+
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+    final CallId callId = getCallIdForClient(callOptions);
     return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
       @Override
       public void start(Listener<RespT> responseListener, Metadata headers) {
-        writer.logSendInitialMetadata(headers, CLIENT, dumyCallId, DUMMY_SOCKET);
+        writer.logSendInitialMetadata(headers, CLIENT, callId);
         ClientCall.Listener<RespT> wListener =
             new SimpleForwardingClientCallListener<RespT>(responseListener) {
               @Override
@@ -291,19 +316,20 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
                     message,
                     DUMMY_IS_COMPRESSED,
                     CLIENT,
-                    dumyCallId);
+                    callId);
                 super.onMessage(message);
               }
 
               @Override
               public void onHeaders(Metadata headers) {
-                writer.logRecvInitialMetadata(headers, CLIENT, dumyCallId, DUMMY_SOCKET);
+                SocketAddress peer = getPeerSocket(getAttributes());
+                writer.logRecvInitialMetadata(headers, CLIENT, callId, peer);
                 super.onHeaders(headers);
               }
 
               @Override
               public void onClose(Status status, Metadata trailers) {
-                writer.logTrailingMetadata(trailers, CLIENT, dumyCallId);
+                writer.logTrailingMetadata(trailers, CLIENT, callId);
                 super.onClose(status, trailers);
               }
             };
@@ -317,7 +343,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
             message,
             DUMMY_IS_COMPRESSED,
             CLIENT,
-            dumyCallId);
+            callId);
         super.sendMessage(message);
       }
     };
@@ -326,7 +352,9 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
   @Override
   public <ReqT, RespT> Listener<ReqT> interceptCall(
       final ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-    writer.logRecvInitialMetadata(headers, SERVER, dumyCallId, DUMMY_SOCKET);
+    final CallId callId = getCallIdForServer(Context.current());
+    SocketAddress peer = getPeerSocket(call.getAttributes());
+    writer.logRecvInitialMetadata(headers, SERVER, callId, peer);
     ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
       @Override
       public void sendMessage(RespT message) {
@@ -335,19 +363,19 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
             message,
             DUMMY_IS_COMPRESSED,
             SERVER,
-            dumyCallId);
+            callId);
         super.sendMessage(message);
       }
 
       @Override
       public void sendHeaders(Metadata headers) {
-        writer.logSendInitialMetadata(headers, SERVER, dumyCallId, DUMMY_SOCKET);
+        writer.logSendInitialMetadata(headers, SERVER, callId);
         super.sendHeaders(headers);
       }
 
       @Override
       public void close(Status status, Metadata trailers) {
-        writer.logTrailingMetadata(trailers, SERVER, dumyCallId);
+        writer.logTrailingMetadata(trailers, SERVER, callId);
         super.close(status, trailers);
       }
     };
@@ -360,7 +388,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
             message,
             DUMMY_IS_COMPRESSED,
             SERVER,
-            dumyCallId);
+            callId);
         super.onMessage(message);
       }
     };
@@ -522,19 +550,15 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
   }
 
   /**
-   * Returns a {@link Uint128} by interpreting the first 8 bytes as the high int64 and the second
-   * 8 bytes as the low int64.
+   * Returns a {@link Uint128} from a CallId.
    */
-  // TODO(zpencer): verify int64 representation with other gRPC languages
-  static Uint128 callIdToProto(byte[] bytes) {
-    Preconditions.checkNotNull(bytes);
-    Preconditions.checkArgument(
-        bytes.length == 16,
-        String.format("can only convert from 16 byte input, actual length = %d", bytes.length));
-    ByteBuffer bb = ByteBuffer.wrap(bytes);
-    long high = bb.getLong();
-    long low = bb.getLong();
-    return Uint128.newBuilder().setHigh(high).setLow(low).build();
+  static Uint128 callIdToProto(CallId callId) {
+    Preconditions.checkNotNull(callId);
+    return Uint128
+        .newBuilder()
+        .setHigh(callId.hi)
+        .setLow(callId.lo)
+        .build();
   }
 
   @VisibleForTesting
