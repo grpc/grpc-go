@@ -110,8 +110,11 @@ type lbCacheClientConn struct {
 }
 
 type subConnCacheEntry struct {
-	sc     balancer.SubConn
-	cancel func()
+	sc balancer.SubConn
+
+	// cancel returns whether it was successful.
+	cancel        func() bool
+	abortDeleting bool
 }
 
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
@@ -133,7 +136,16 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 	if entry, ok := ccc.subConnCache[addrs[0]]; ok {
 		// If entry is in subConnCache, the SubConn was being deleted.
 		// cancel function will never be nil.
-		entry.cancel()
+		if !entry.cancel() {
+			// If cancel was not successful, the timer has fired (this can only
+			// happen in a race). But the deleting function is blocked on ccc.mu
+			// because we are holding the lock here.
+			//
+			// Set abortDeleting to true to abort the deleting function. When we
+			// release the lock, the deleting function will acquire the lock,
+			// check the value abort and return.
+			entry.abortDeleting = true
+		}
 		delete(ccc.subConnCache, addrs[0])
 		return entry.sc, nil
 	}
@@ -166,22 +178,22 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 		return
 	}
 
+	entry := &subConnCacheEntry{
+		sc: sc,
+	}
+	ccc.subConnCache[addr] = entry
+
 	timer := time.AfterFunc(ccc.timeout, func() {
-		ccc.ClientConn.RemoveSubConn(sc)
 		ccc.mu.Lock()
+		if entry.abortDeleting {
+			return
+		}
+		ccc.ClientConn.RemoveSubConn(sc)
 		delete(ccc.subConnToAddr, sc)
 		delete(ccc.subConnCache, addr)
 		ccc.mu.Unlock()
 	})
-
-	ccc.subConnCache[addr] = &subConnCacheEntry{
-		sc: sc,
-		cancel: func() {
-			if !timer.Stop() {
-				<-timer.C
-			}
-		},
-	}
+	entry.cancel = timer.Stop
 	return
 }
 
