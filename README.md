@@ -85,7 +85,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
     <plugin>
       <groupId>org.xolstice.maven.plugins</groupId>
       <artifactId>protobuf-maven-plugin</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
       <configuration>
         <protocArtifact>com.google.protobuf:protoc:3.5.1-1:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
