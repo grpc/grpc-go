@@ -329,6 +329,7 @@ public class ManagedChannelImplTest {
         NO_INTERCEPTOR);
     verify(executorPool).getObject();
     verify(executorPool, never()).returnObject(anyObject());
+    verify(mockTransportFactory).getScheduledExecutorService();
     verifyNoMoreInteractions(mockTransportFactory);
     channel.shutdown();
     assertTrue(channel.isShutdown());

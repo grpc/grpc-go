@@ -51,10 +51,12 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.FakeClock.ScheduledTask;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -163,7 +165,10 @@ public class ManagedChannelImplIdlenessTest {
 
   @After
   public void allPendingTasksAreRun() {
-    assertEquals(timer.getPendingTasks() + " should be empty", 0, timer.numPendingTasks());
+    Collection<ScheduledTask> pendingTimerTasks = timer.getPendingTasks();
+    for (ScheduledTask a : pendingTimerTasks) {
+      assertFalse(Rescheduler.isEnabled(a.command));
+    }
     assertEquals(executor.getPendingTasks() + " should be empty", 0, executor.numPendingTasks());
   }
 
