@@ -55,6 +55,7 @@ func TestCZServerRegistrationAndDeletion(t *testing.T) {
 		end    bool
 	}{
 		{total: channelz.EntryPerPage, start: 0, length: channelz.EntryPerPage, end: true},
+		{total: channelz.EntryPerPage - 1, start: 0, length: channelz.EntryPerPage - 1, end: true},
 		{total: channelz.EntryPerPage + 1, start: 0, length: channelz.EntryPerPage, end: false},
 		{total: channelz.EntryPerPage + 1, start: int64(2*(channelz.EntryPerPage+1) + 1), length: 0, end: true},
 	}
@@ -85,8 +86,10 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 		length int
 		end    bool
 	}{
+		{total: channelz.EntryPerPage, start: 0, length: channelz.EntryPerPage, end: true},
+		{total: channelz.EntryPerPage - 1, start: 0, length: channelz.EntryPerPage - 1, end: true},
 		{total: channelz.EntryPerPage + 1, start: 0, length: channelz.EntryPerPage, end: false},
-		// {total: channelz.EntryPerPage + 1, start: int64(2*(channelz.EntryPerPage+1) + 1), length: 0, end: true},
+		{total: channelz.EntryPerPage + 1, start: int64(2*(channelz.EntryPerPage+1) + 1), length: 0, end: true},
 	}
 
 	for _, c := range testcases {
@@ -277,8 +280,8 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 	lis.Close()
 	time.Sleep(10 * time.Millisecond)
 	ss, _ = channelz.GetServers(0)
-	if len(ss) != 0 {
-		t.Fatalf("There should only be 0 server, not %d", len(ss))
+	if len(ss) != 1 {
+		t.Fatalf("There should be 1 server, not %d", len(ss))
 	}
 	s.Stop()
 }

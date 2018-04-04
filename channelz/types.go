@@ -32,13 +32,13 @@ type entry interface {
 	addChild(id int64, e entry)
 	// deleteChild deletes a child with channelz id to be id from child list
 	deleteChild(id int64)
-	// delete deletes self from channelz database. However, if child list is not
-	// empty, then deletion from the database is on hold until the last child is
-	// deleted from database.
-	delete()
-	// canDelete check whether delete() has been called before, and whether child
+	// triggerDelete tries to delete self from channelz database. However, if child
+	// list is not empty, then deletion from the database is on hold until the last
+	// child is deleted from database.
+	triggerDelete()
+	// deleteSelfIfReady check whether triggerDelete() has been called before, and whether child
 	// list is now empty. If both conditions are met, then delete self from database.
-	canDelete()
+	deleteSelfIfReady()
 }
 
 // dummyEntry is a fake entry to handle entry not found case.
@@ -64,48 +64,80 @@ func (d *dummyEntry) deleteChild(id int64) {
 	grpclog.Infof("attempt to delete child with id %d from a parent (id=%d) that doesn't currently exist", id, d.idNotFound)
 }
 
-func (d *dummyEntry) delete() {
+func (d *dummyEntry) triggerDelete() {
 	grpclog.Warningf("attempt to delete an entry (id=%d) that doesn't currently exist", d.idNotFound)
 }
 
-func (*dummyEntry) canDelete() {
-	// code should not reach here. canDelete is always called on an existing entry.
+func (*dummyEntry) deleteSelfIfReady() {
+	// code should not reach here. deleteSelfIfReady is always called on an existing entry.
 }
 
 // ChannelMetric defines the info channelz provides for a specific Channel, which
 // includes ChannelInternalMetric and channelz-specific data, such as channelz id,
 // child list, etc.
 type ChannelMetric struct {
-	ID          int64
-	RefName     string
+	// ID is the channelz id of this channel.
+	ID int64
+	// RefName is the human readable reference string of this channel.
+	RefName string
+	// ChannelData contains channel internal metric reported by the channel through
+	// ChannelzMetric().
 	ChannelData *ChannelInternalMetric
+	// NestedChans tracks the nested channel type children of this channel in the format of
+	// a map from nested channel channelz id to corresponding reference string.
 	NestedChans map[int64]string
-	SubChans    map[int64]string
-	Sockets     map[int64]string
+	// SubChans tracks the subchannel type children of this channel in the format of a
+	// map from subchannel channelz id to corresponding reference string.
+	SubChans map[int64]string
+	// Sockets tracks the socket type children of this channel in the format of a map
+	// from socket channelz id to corresponding reference string.
+	// Note current grpc implementation doesn't allow channel having sockets directly,
+	// therefore, this is field is unused.
+	Sockets map[int64]string
 }
 
 // SubChannelMetric defines the info channelz provides for a specific SubChannel,
 // which includes ChannelInternalMetric and channelz-specific data, such as
 // channelz id, child list, etc.
 type SubChannelMetric struct {
-	ID          int64
-	RefName     string
+	// ID is the channelz id of this subchannel.
+	ID int64
+	// RefName is the human readable reference string of this subchannel.
+	RefName string
+	// ChannelData contains subchannel internal metric reported by the subchannel
+	// through ChannelzMetric().
 	ChannelData *ChannelInternalMetric
+	// NestedChans tracks the nested channel type children of this subchannel in the format of
+	// a map from nested channel channelz id to corresponding reference string.
+	// Note current grpc implementation doesn't allow subchannel to have nested channels
+	// as children, therefore, this field is unused.
 	NestedChans map[int64]string
-	SubChans    map[int64]string
-	Sockets     map[int64]string
+	// SubChans tracks the subchannel type children of this subchannel in the format of a
+	// map from subchannel channelz id to corresponding reference string.
+	// Note current grpc implementation doesn't allow subchannel to have subchannels
+	// as children, therefore, this field is unused.
+	SubChans map[int64]string
+	// Sockets tracks the socket type children of this subchannel in the format of a map
+	// from socket channelz id to corresponding reference string.
+	Sockets map[int64]string
 }
 
 // ChannelInternalMetric defines the struct that the implementor of Channel interface
 // should return from ChannelzMetric().
 type ChannelInternalMetric struct {
-	State                    connectivity.State
-	Target                   string
-	CallsStarted             int64
-	CallsSucceeded           int64
-	CallsFailed              int64
+	// current connectivity state of the channel.
+	State connectivity.State
+	// The target this channel originally tried to connect to.  May be absent
+	Target string
+	// The number of calls started on the channel.
+	CallsStarted int64
+	// The number of calls that have completed with an OK status.
+	CallsSucceeded int64
+	// The number of calls that have a completed with a non-OK status.
+	CallsFailed int64
+	// The last time a call was started on the channel.
 	LastCallStartedTimestamp time.Time
-	// trace
+	//TODO: trace
 }
 
 // Channel is the interface that should be satisfied in order to be tracked by
@@ -139,12 +171,16 @@ func (c *channel) addChild(id int64, e entry) {
 func (c *channel) deleteChild(id int64) {
 	delete(c.subChans, id)
 	delete(c.nestedChans, id)
-	c.canDelete()
+	c.deleteSelfIfReady()
 }
 
-func (c *channel) delete() {
+func (c *channel) triggerDelete() {
 	c.closeCalled = true
-	if len(c.subChans)+len(c.nestedChans) != 0 {
+	c.deleteSelfIfReady()
+}
+
+func (c *channel) deleteSelfIfReady() {
+	if !c.closeCalled || len(c.subChans)+len(c.nestedChans) != 0 {
 		return
 	}
 	c.cm.deleteEntry(c.id)
@@ -152,17 +188,6 @@ func (c *channel) delete() {
 	if c.pid != 0 {
 		c.cm.findEntry(c.pid).deleteChild(c.id)
 	}
-}
-
-func (c *channel) canDelete() {
-	if c.closeCalled && len(c.subChans)+len(c.nestedChans) == 0 {
-		c.cm.deleteEntry(c.id)
-		// not top channel
-		if c.pid != 0 {
-			c.cm.findEntry(c.pid).deleteChild(c.id)
-		}
-	}
-	return
 }
 
 type subChannel struct {
@@ -185,54 +210,77 @@ func (sc *subChannel) addChild(id int64, e entry) {
 
 func (sc *subChannel) deleteChild(id int64) {
 	delete(sc.sockets, id)
-	sc.canDelete()
+	sc.deleteSelfIfReady()
 }
 
-func (sc *subChannel) delete() {
+func (sc *subChannel) triggerDelete() {
 	sc.closeCalled = true
-	if len(sc.sockets) != 0 {
+	sc.deleteSelfIfReady()
+}
+
+func (sc *subChannel) deleteSelfIfReady() {
+	if !sc.closeCalled || len(sc.sockets) != 0 {
 		return
 	}
 	sc.cm.deleteEntry(sc.id)
 	sc.cm.findEntry(sc.pid).deleteChild(sc.id)
 }
 
-func (sc *subChannel) canDelete() {
-	if sc.closeCalled && len(sc.sockets) == 0 {
-		sc.cm.deleteEntry(sc.id)
-		sc.cm.findEntry(sc.pid).deleteChild(sc.id)
-	}
-	return
-}
-
 // SocketMetric defines the info channelz provides for a specific Socket, which
 // includes SocketInternalMetric and channelz-specific data, such as channelz id, etc.
 type SocketMetric struct {
-	ID         int64
-	RefName    string
+	// ID is the channelz id of this socket.
+	ID int64
+	// RefName is the human readable reference string of this socket.
+	RefName string
+	// SocketData contains socket internal metric reported by the socket through
+	// ChannelzMetric().
 	SocketData *SocketInternalMetric
 }
 
 // SocketInternalMetric defines the struct that the implementor of Socket interface
 // should return from ChannelzMetric().
 type SocketInternalMetric struct {
-	StreamsStarted                   int64
-	StreamsSucceeded                 int64
-	StreamsFailed                    int64
-	MessagesSent                     int64
-	MessagesReceived                 int64
-	KeepAlivesSent                   int64
-	LastLocalStreamCreatedTimestamp  time.Time
+	// The number of streams that have been started.
+	StreamsStarted int64
+	// The number of streams that have ended successfully with the EoS bit set for
+	//  both end points.
+	StreamsSucceeded int64
+	// The number of incoming streams that have a completed with a non-OK status.
+	StreamsFailed int64
+	// The number of messages successfully sent on this socket.
+	MessagesSent     int64
+	MessagesReceived int64
+	// The number of keep alives sent.  This is typically implemented with HTTP/2
+	// ping messages.
+	KeepAlivesSent int64
+	// The last time a stream was created by this endpoint.  Usually unset for
+	// servers.
+	LastLocalStreamCreatedTimestamp time.Time
+	// The last time a stream was created by the remote endpoint.  Usually unset
+	// for clients.
 	LastRemoteStreamCreatedTimestamp time.Time
-	LastMessageSentTimestamp         time.Time
-	LastMessageReceivedTimestamp     time.Time
-	LocalFlowControlWindow           int64
-	RemoteFlowControlWindow          int64
-	//socket options
-	LocalAddr  net.Addr
+	// The last time a message was sent by this endpoint.
+	LastMessageSentTimestamp time.Time
+	// The last time a message was received by this endpoint.
+	LastMessageReceivedTimestamp time.Time
+	// The amount of window, granted to the local endpoint by the remote endpoint.
+	// This may be slightly out of date due to network latency.  This does NOT
+	// include stream level or TCP level flow control info.
+	LocalFlowControlWindow int64
+	// The amount of window, granted to the remote endpoint by the local endpoint.
+	// This may be slightly out of date due to network latency.  This does NOT
+	// include stream level or TCP level flow control info.
+	RemoteFlowControlWindow int64
+	// The locally bound address.
+	LocalAddr net.Addr
+	// The remote bound address.  May be absent.
 	RemoteAddr net.Addr
-	// Security
+	// Optional, represents the name of the remote endpoint, if different than
+	// the original target name.
 	RemoteName string
+	//TODO: socket options
+	//TODO: Security
 }
 
 // Socket is the interface that should be satisfied in order to be tracked by
@@ -257,13 +305,13 @@ func (ls *listenSocket) deleteChild(id int64) {
 	grpclog.Errorf("cannot delete a child (id = %d) from a listen socket", id)
 }
 
-func (ls *listenSocket) delete() {
+func (ls *listenSocket) triggerDelete() {
 	ls.cm.deleteEntry(ls.id)
 	ls.cm.findEntry(ls.pid).deleteChild(ls.id)
 }
 
-func (ls *listenSocket) canDelete() {
-	grpclog.Errorf("cannot call canDelete on a listen socket")
+func (ls *listenSocket) deleteSelfIfReady() {
+	grpclog.Errorf("cannot call deleteSelfIfReady on a listen socket")
 }
 
 type normalSocket struct {
@@ -282,33 +330,43 @@ func (ns *normalSocket) deleteChild(id int64) {
 	grpclog.Errorf("cannot delete a child (id = %d) from a normal socket", id)
 }
 
-func (ns *normalSocket) delete() {
+func (ns *normalSocket) triggerDelete() {
 	ns.cm.deleteEntry(ns.id)
 	ns.cm.findEntry(ns.pid).deleteChild(ns.id)
 }
 
-func (ns *normalSocket) canDelete() {
-	grpclog.Errorf("cannot call canDelete on a normal socket")
+func (ns *normalSocket) deleteSelfIfReady() {
+	grpclog.Errorf("cannot call deleteSelfIfReady on a normal socket")
 }
 
 // ServerMetric defines the info channelz provides for a specific Server, which
 // includes ServerInternalMetric and channelz-specific data, such as channelz id,
 // child list, etc.
 type ServerMetric struct {
-	ID            int64
-	RefName       string
-	ServerData    *ServerInternalMetric
+	// ID is the channelz id of this server.
+	ID int64
+	// RefName is the human readable reference string of this server.
+	RefName string
+	// ServerData contains server internal metric reported by the server through
+	// ChannelzMetric().
+	ServerData *ServerInternalMetric
+	// ListenSockets tracks the listener socket type children of this server in the
+	// format of a map from socket channelz id to corresponding reference string.
 	ListenSockets map[int64]string
 }
 
 // ServerInternalMetric defines the struct that the implementor of Server interface
 // should return from ChannelzMetric().
 type ServerInternalMetric struct {
-	CallsStarted             int64
-	CallsSucceeded           int64
-	CallsFailed              int64
+	// The number of incoming calls started on the server.
+	CallsStarted int64
+	// The number of incoming calls that have completed with an OK status.
+	CallsSucceeded int64
+	// The number of incoming calls that have a completed with a non-OK status.
+	CallsFailed int64
+	// The last time a call was started on the server.
 	LastCallStartedTimestamp time.Time
-	// trace
+	//TODO: trace
 }
 
 // Server is the interface to be satisfied in order to be tracked by channelz as
@@ -341,19 +399,17 @@ func (s *server) addChild(id int64, e entry) {
 func (s *server) deleteChild(id int64) {
 	delete(s.sockets, id)
 	delete(s.listenSockets, id)
-	s.canDelete()
+	s.deleteSelfIfReady()
 }
 
-func (s *server) delete() {
+func (s *server) triggerDelete() {
 	s.closeCalled = true
-	if len(s.sockets)+len(s.listenSockets) != 0 {
+	s.deleteSelfIfReady()
+}
+
+func (s *server) deleteSelfIfReady() {
+	if !s.closeCalled || len(s.sockets)+len(s.listenSockets) != 0 {
 		return
 	}
 	s.cm.deleteEntry(s.id)
-}
-
-func (s *server) canDelete() {
-	if s.closeCalled && len(s.sockets)+len(s.listenSockets) == 0 {
-		s.cm.deleteEntry(s.id)
-	}
 }

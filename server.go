@@ -508,12 +508,13 @@ func (s *Server) Serve(lis net.Listener) error {
 		// Stop or GracefulStop called; block until done and return nil.
 		case <-s.quit:
 			<-s.done
-		default:
+
 			s.channelzRemoveOnce.Do(func() {
 				if channelz.IsOn() {
 					channelz.RemoveEntry(s.channelzID)
 				}
 			})
+		default:
 		}
 	}()
 
