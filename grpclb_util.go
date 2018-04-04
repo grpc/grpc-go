@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -100,7 +101,7 @@ const subConnCacheTime = time.Second * 10
 //
 // Its new and remove methods are updated to do cache first.
 type lbCacheClientConn struct {
-	balancer.ClientConn
+	cc      balancer.ClientConn
 	timeout time.Duration
 
 	mu sync.Mutex
@@ -119,7 +120,7 @@ type subConnCacheEntry struct {
 
 func newLBCacheClientConn(cc balancer.ClientConn) *lbCacheClientConn {
 	return &lbCacheClientConn{
-		ClientConn:    cc,
+		cc:            cc,
 		timeout:       subConnCacheTime,
 		subConnCache:  make(map[resolver.Address]*subConnCacheEntry),
 		subConnToAddr: make(map[balancer.SubConn]resolver.Address),
@@ -150,7 +151,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 		return entry.sc, nil
 	}
 
-	scNew, err := ccc.ClientConn.NewSubConn(addrs, opts)
+	scNew, err := ccc.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 			// same address, and those SubConns are all removed. We remove sc
 			// immediately here.
 			delete(ccc.subConnToAddr, sc)
-			ccc.ClientConn.RemoveSubConn(sc)
+			ccc.cc.RemoveSubConn(sc)
 		}
 		return
 	}
@@ -188,13 +189,17 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 		if entry.abortDeleting {
 			return
 		}
-		ccc.ClientConn.RemoveSubConn(sc)
+		ccc.cc.RemoveSubConn(sc)
 		delete(ccc.subConnToAddr, sc)
 		delete(ccc.subConnCache, addr)
 		ccc.mu.Unlock()
 	})
 	entry.cancel = timer.Stop
 	return
+}
+
+func (ccc *lbCacheClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
+	ccc.cc.UpdateBalancerState(s, p)
 }
 
 func (ccc *lbCacheClientConn) close() {
