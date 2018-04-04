@@ -130,14 +130,15 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 	if len(addrs) != 1 {
 		return nil, fmt.Errorf("grpclb calling NewSubConn with addrs of length %v", len(addrs))
 	}
+	addr := addrs[0]
 
 	ccc.mu.Lock()
 	defer ccc.mu.Unlock()
-	if entry, ok := ccc.subConnCache[addrs[0]]; ok {
+	if entry, ok := ccc.subConnCache[addr]; ok {
 		// If entry is in subConnCache, the SubConn was being deleted.
 		// cancel function will never be nil.
 		entry.cancel()
-		delete(ccc.subConnCache, addrs[0])
+		delete(ccc.subConnCache, addr)
 		return entry.sc, nil
 	}
 
@@ -146,7 +147,7 @@ func (ccc *lbCacheClientConn) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 
-	ccc.subConnToAddr[scNew] = addrs[0]
+	ccc.subConnToAddr[scNew] = addr
 	return scNew, nil
 }
 
