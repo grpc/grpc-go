@@ -88,7 +88,7 @@ final class ChannelzTestHelper {
           new SocketStats(
               /*data=*/ null,
               listenAddress,
-              /*remoteAddress=*/ null,
+              /*remote=*/ null,
               new SocketOptions.Builder().build(),
               /*security=*/ null));
       return ret;
