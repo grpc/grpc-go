@@ -80,5 +80,8 @@ google.golang.org/grpc/transport/transport_test.go:SA2002
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/end2end_test.go:SA1019
+google.golang.org/grpc/balancer_test.go:SA1019
+google.golang.org/grpc/balancer.go:SA1019
+google.golang.org/grpc/clientconn_test.go:SA1019
 ' ./...
 misspell -error .
