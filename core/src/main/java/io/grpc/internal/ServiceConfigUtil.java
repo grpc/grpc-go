@@ -18,26 +18,20 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.math.LongMath.checkedAdd;
 
-import com.google.common.base.Verify;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status.Code;
 import io.grpc.internal.RetriableStream.RetryPolicies;
 import io.grpc.internal.RetriableStream.RetryPolicy;
 import io.grpc.internal.RetriableStream.Throttle;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.text.ParseException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
-import java.util.logging.Level;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -48,23 +42,28 @@ final class ServiceConfigUtil {
 
   private static final Logger logger = Logger.getLogger(ServiceConfigUtil.class.getName());
 
-  // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
-  static final String SERVICE_CONFIG_PREFIX = "_grpc_config=";
-  private static final Set<String> SERVICE_CONFIG_CHOICE_KEYS =
-      Collections.unmodifiableSet(
-          new HashSet<String>(
-              Arrays.asList("clientLanguage", "percentage", "clientHostname", "serviceConfig")));
+  private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
+  private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_key = "loadBalancingPolicy";
+  private static final String METHOD_CONFIG_NAME_KEY = "name";
+  private static final String METHOD_CONFIG_TIMEOUT_KEY = "timeout";
+  private static final String METHOD_CONFIG_WAIT_FOR_READY_KEY = "waitForReady";
+  private static final String METHOD_CONFIG_MAX_REQUEST_MESSAGE_BYTES_KEY =
+      "maxRequestMessageBytes";
+  private static final String METHOD_CONFIG_MAX_RESPONSE_MESSAGE_BYTES_KEY =
+      "maxResponseMessageBytes";
+  private static final String METHOD_CONFIG_RETRY_POLICY_KEY = "retryPolicy";
+  private static final String NAME_SERVICE_KEY = "service";
+  private static final String NAME_METHOD_KEY = "method";
+  private static final String RETRY_POLICY_MAX_ATTEMPTS_KEY = "maxAttempts";
+  private static final String RETRY_POLICY_INITIAL_BACKOFF_KEY = "initialBackoff";
+  private static final String RETRY_POLICY_MAX_BACKOFF_KEY = "maxBackoff";
+  private static final String RETRY_POLICY_BACKOFF_MULTIPLIER_KEY = "backoffMultiplier";
+  private static final String RETRY_POLICY_RETRYABLE_STATUS_CODES_KEY = "retryableStatusCodes";
+
+  private static final long DURATION_SECONDS_MIN = -315576000000L;
+  private static final long DURATION_SECONDS_MAX = 315576000000L;
 
   private ServiceConfigUtil() {}
-
-  @Nullable
-  static String getLoadBalancingPolicy(Map<String, Object> serviceConfig) {
-    String key = "loadBalancingPolicy";
-    if (serviceConfig.containsKey(key)) {
-      return getString(serviceConfig, key);
-    }
-    return null;
-  }
 
   /**
    * Gets retry policies from the service config.
@@ -94,10 +93,10 @@ final class ServiceConfigUtil {
               "maxBackoff": string,       // Long decimal with "s" appended
               "backoffMultiplier": number
               "retryableStatusCodes": []
-            }
-          }
-        ]
-      }
+             }
+           }
+         ]
+       }
       */
 
       if (serviceConfig.containsKey("methodConfig")) {
@@ -204,98 +203,152 @@ final class ServiceConfigUtil {
     return new Throttle(maxTokens, tokenRatio);
   }
 
-  /**
-   * Determines if a given Service Config choice applies, and if so, returns it.
-   *
-   * @see <a href="https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md">
-   *   Service Config in DNS</a>
-   * @param choice The service config choice.
-   * @return The service config object or {@code null} if this choice does not apply.
-   */
   @Nullable
-  @SuppressWarnings("BetaApi") // Verify isn't all that beta
-  static Map<String, Object> maybeChooseServiceConfig(
-      Map<String, Object> choice, Random random, String hostname) {
-    for (Entry<String, ?> entry : choice.entrySet()) {
-      Verify.verify(SERVICE_CONFIG_CHOICE_KEYS.contains(entry.getKey()), "Bad key: %s", entry);
+  static Integer getMaxAttemptsFromRetryPolicy(Map<String, Object> retryPolicy) {
+    if (!retryPolicy.containsKey(RETRY_POLICY_MAX_ATTEMPTS_KEY)) {
+      return null;
     }
-    if (choice.containsKey("clientLanguage")) {
-      List<Object> clientLanguages = getList(choice, "clientLanguage");
-      if (!clientLanguages.isEmpty()) {
-        boolean javaPresent = false;
-        for (int i = 0; i < clientLanguages.size(); i++) {
-          String lang = getString(clientLanguages, i).toLowerCase(Locale.ROOT);
-          if ("java".equals(lang)) {
-            javaPresent = true;
-            break;
-          }
-        }
-        if (!javaPresent) {
-          return null;
-        }
-      }
-    }
-    if (choice.containsKey("percentage")) {
-      int pct = getDouble(choice, "percentage").intValue();
-      Verify.verify(pct >= 0 && pct <= 100, "Bad percentage", choice.get("percentage"));
-      if (random.nextInt(100) >= pct) {
-        return null;
-      }
-    }
-    if (choice.containsKey("clientHostname")) {
-      List<Object> clientHostnames = getList(choice, "clientHostname");
-      if (!clientHostnames.isEmpty()) {
-        boolean hostnamePresent = false;
-        for (int i = 0; i < clientHostnames.size(); i++) {
-          if (getString(clientHostnames, i).equals(hostname)) {
-            hostnamePresent = true;
-            break;
-          }
-        }
-        if (!hostnamePresent) {
-          return null;
-        }
-      }
-    }
-    return getObject(choice, "serviceConfig");
+    return getDouble(retryPolicy, RETRY_POLICY_MAX_ATTEMPTS_KEY).intValue();
   }
 
-  @SuppressWarnings("unchecked")
-  static List<Map<String, Object>> parseTxtResults(List<String> txtRecords) {
-    List<Map<String, Object>> serviceConfigs = new ArrayList<Map<String, Object>>();
-
-    for (String txtRecord : txtRecords) {
-      if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
-        List<Map<String, Object>> choices;
-        try {
-          Object rawChoices = JsonParser.parse(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()));
-          if (!(rawChoices instanceof List)) {
-            throw new IOException("wrong type" + rawChoices);
-          }
-          List<Object> listChoices = (List<Object>) rawChoices;
-          for (Object obj : listChoices) {
-            if (!(obj instanceof Map)) {
-              throw new IOException("wrong element type" + rawChoices);
-            }
-          }
-          choices = (List<Map<String, Object>>) (List) listChoices;
-        } catch (IOException e) {
-          logger.log(Level.WARNING, "Bad service config: " + txtRecord, e);
-          continue;
-        }
-        serviceConfigs.addAll(choices);
-      } else {
-        logger.log(Level.FINE, "Ignoring non service config {0}", new Object[]{txtRecord});
-      }
+  @Nullable
+  static Long getInitialBackoffNanosFromRetryPolicy(Map<String, Object> retryPolicy) {
+    if (!retryPolicy.containsKey(RETRY_POLICY_INITIAL_BACKOFF_KEY)) {
+      return null;
     }
-    return serviceConfigs;
+    String rawInitialBackoff = getString(retryPolicy, RETRY_POLICY_INITIAL_BACKOFF_KEY);
+    try {
+      return parseDuration(rawInitialBackoff);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Nullable
+  static Long getMaxBackoffNanosFromRetryPolicy(Map<String, Object> retryPolicy) {
+    if (!retryPolicy.containsKey(RETRY_POLICY_MAX_BACKOFF_KEY)) {
+      return null;
+    }
+    String rawMaxBackoff = getString(retryPolicy, RETRY_POLICY_MAX_BACKOFF_KEY);
+    try {
+      return parseDuration(rawMaxBackoff);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Nullable
+  static Double getBackoffMultiplierFromRetryPolicy(Map<String, Object> retryPolicy) {
+    if (!retryPolicy.containsKey(RETRY_POLICY_BACKOFF_MULTIPLIER_KEY)) {
+      return null;
+    }
+    return getDouble(retryPolicy, RETRY_POLICY_BACKOFF_MULTIPLIER_KEY);
+  }
+
+  @Nullable
+  static List<String> getRetryableStatusCodesFromRetryPolicy(Map<String, Object> retryPolicy) {
+    if (!retryPolicy.containsKey(RETRY_POLICY_RETRYABLE_STATUS_CODES_KEY)) {
+      return null;
+    }
+    return checkStringList(getList(retryPolicy, RETRY_POLICY_RETRYABLE_STATUS_CODES_KEY));
+  }
+
+  @Nullable
+  static String getServiceFromName(Map<String, Object> name) {
+    if (!name.containsKey(NAME_SERVICE_KEY)) {
+      return null;
+    }
+    return getString(name, NAME_SERVICE_KEY);
+  }
+
+  @Nullable
+  static String getMethodFromName(Map<String, Object> name) {
+    if (!name.containsKey(NAME_METHOD_KEY)) {
+      return null;
+    }
+    return getString(name, NAME_METHOD_KEY);
+  }
+
+  @Nullable
+  static Map<String, Object> getRetryPolicyFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_RETRY_POLICY_KEY)) {
+      return null;
+    }
+    return getObject(methodConfig, METHOD_CONFIG_RETRY_POLICY_KEY);
+  }
+
+  @Nullable
+  static List<Map<String, Object>> getNameListFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_NAME_KEY)) {
+      return null;
+    }
+    return checkObjectList(getList(methodConfig, METHOD_CONFIG_NAME_KEY));
+  }
+
+  /**
+   * Returns the number of nanoseconds of timeout for the given method config.
+   *
+   * @return duration nanoseconds, or {@code null} if it isn't present.
+   */
+  @Nullable
+  static Long getTimeoutFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_TIMEOUT_KEY)) {
+      return null;
+    }
+    String rawTimeout = getString(methodConfig, METHOD_CONFIG_TIMEOUT_KEY);
+    try {
+      return parseDuration(rawTimeout);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Nullable
+  static Boolean getWaitForReadyFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_WAIT_FOR_READY_KEY)) {
+      return null;
+    }
+    return getBoolean(methodConfig, METHOD_CONFIG_WAIT_FOR_READY_KEY);
+  }
+
+  @Nullable
+  static Integer getMaxRequestMessageBytesFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_MAX_REQUEST_MESSAGE_BYTES_KEY)) {
+      return null;
+    }
+    return getDouble(methodConfig, METHOD_CONFIG_MAX_REQUEST_MESSAGE_BYTES_KEY).intValue();
+  }
+
+  @Nullable
+  static Integer getMaxResponseMessageBytesFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_MAX_RESPONSE_MESSAGE_BYTES_KEY)) {
+      return null;
+    }
+    return getDouble(methodConfig, METHOD_CONFIG_MAX_RESPONSE_MESSAGE_BYTES_KEY).intValue();
+  }
+
+  @Nullable
+  static List<Map<String, Object>> getMethodConfigFromServiceConfig(
+      Map<String, Object> serviceConfig) {
+    if (!serviceConfig.containsKey(SERVICE_CONFIG_METHOD_CONFIG_KEY)) {
+      return null;
+    }
+    return checkObjectList(getList(serviceConfig, SERVICE_CONFIG_METHOD_CONFIG_KEY));
+  }
+
+  @Nullable
+  static String getLoadBalancingPolicyFromServiceConfig(Map<String, Object> serviceConfig) {
+    if (!serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_key)) {
+      return null;
+    }
+    return getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_key);
   }
 
   /**
    * Gets a list from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  private static List<Object> getList(Map<String, Object> obj, String key) {
+  static List<Object> getList(Map<String, Object> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof List) {
@@ -309,7 +362,7 @@ final class ServiceConfigUtil {
    * Gets an object from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  private static Map<String, Object> getObject(Map<String, Object> obj, String key) {
+  static Map<String, Object> getObject(Map<String, Object> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof Map) {
@@ -337,7 +390,7 @@ final class ServiceConfigUtil {
    * Gets a double from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  private static Double getDouble(Map<String, Object> obj, String key) {
+  static Double getDouble(Map<String, Object> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof Double) {
@@ -351,7 +404,7 @@ final class ServiceConfigUtil {
    * Gets a string from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  private static String getString(Map<String, Object> obj, String key) {
+  static String getString(Map<String, Object> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof String) {
@@ -365,7 +418,7 @@ final class ServiceConfigUtil {
    * Gets a string from an object for the given index.
    */
   @SuppressWarnings("unchecked")
-  private static String getString(List<Object> list, int i) {
+  static String getString(List<Object> list, int i) {
     assert i >= 0 && i < list.size();
     Object value = checkNotNull(list.get(i), "idx %s in %s is null", i, list);
     if (value instanceof String) {
@@ -373,5 +426,171 @@ final class ServiceConfigUtil {
     }
     throw new ClassCastException(
         String.format("value %s for idx %d in %s is not String", value, i, list));
+  }
+
+  /**
+   * Gets a boolean from an object for the given key.
+   */
+  static Boolean getBoolean(Map<String, Object> obj, String key) {
+    assert obj.containsKey(key);
+    Object value = checkNotNull(obj.get(key), "no such key %s", key);
+    if (value instanceof Boolean) {
+      return (Boolean) value;
+    }
+    throw new ClassCastException(
+        String.format("value %s for key %s in %s is not Boolean", value, key, obj));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> checkObjectList(List<Object> rawList) {
+    for (int i = 0; i < rawList.size(); i++) {
+      if (!(rawList.get(i) instanceof Map)) {
+        throw new ClassCastException(
+            String.format("value %s for idx %d in %s is not object", rawList.get(i), i, rawList));
+      }
+    }
+    return (List<Map<String, Object>>) (List<?>) rawList;
+  }
+
+  @SuppressWarnings("unchecked")
+  static List<String> checkStringList(List<Object> rawList) {
+    for (int i = 0; i < rawList.size(); i++) {
+      if (!(rawList.get(i) instanceof String)) {
+        throw new ClassCastException(
+            String.format("value %s for idx %d in %s is not string", rawList.get(i), i, rawList));
+      }
+    }
+    return (List<String>) (List<?>) rawList;
+  }
+
+  /**
+   * Parse from a string to produce a duration.  Copy of
+   * {@link com.google.protobuf.util.Durations#parse}.
+   *
+   * @return A Duration parsed from the string.
+   * @throws ParseException if parsing fails.
+   */
+  private static long parseDuration(String value) throws ParseException {
+    // Must ended with "s".
+    if (value.isEmpty() || value.charAt(value.length() - 1) != 's') {
+      throw new ParseException("Invalid duration string: " + value, 0);
+    }
+    boolean negative = false;
+    if (value.charAt(0) == '-') {
+      negative = true;
+      value = value.substring(1);
+    }
+    String secondValue = value.substring(0, value.length() - 1);
+    String nanoValue = "";
+    int pointPosition = secondValue.indexOf('.');
+    if (pointPosition != -1) {
+      nanoValue = secondValue.substring(pointPosition + 1);
+      secondValue = secondValue.substring(0, pointPosition);
+    }
+    long seconds = Long.parseLong(secondValue);
+    int nanos = nanoValue.isEmpty() ? 0 : parseNanos(nanoValue);
+    if (seconds < 0) {
+      throw new ParseException("Invalid duration string: " + value, 0);
+    }
+    if (negative) {
+      seconds = -seconds;
+      nanos = -nanos;
+    }
+    try {
+      return normalizedDuration(seconds, nanos);
+    } catch (IllegalArgumentException e) {
+      throw new ParseException("Duration value is out of range.", 0);
+    }
+  }
+
+  /**
+   * Copy of {@link com.google.protobuf.util.Timestamps#parseNanos}.
+   */
+  private static int parseNanos(String value) throws ParseException {
+    int result = 0;
+    for (int i = 0; i < 9; ++i) {
+      result = result * 10;
+      if (i < value.length()) {
+        if (value.charAt(i) < '0' || value.charAt(i) > '9') {
+          throw new ParseException("Invalid nanoseconds.", 0);
+        }
+        result += value.charAt(i) - '0';
+      }
+    }
+    return result;
+  }
+
+  private static final long NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
+
+  /**
+   * Copy of {@link com.google.protobuf.util.Durations#normalizedDuration}.
+   */
+  @SuppressWarnings("NarrowingCompoundAssignment")
+  private static long normalizedDuration(long seconds, int nanos) {
+    if (nanos <= -NANOS_PER_SECOND || nanos >= NANOS_PER_SECOND) {
+      seconds = checkedAdd(seconds, nanos / NANOS_PER_SECOND);
+      nanos %= NANOS_PER_SECOND;
+    }
+    if (seconds > 0 && nanos < 0) {
+      nanos += NANOS_PER_SECOND; // no overflow since nanos is negative (and we're adding)
+      seconds--; // no overflow since seconds is positive (and we're decrementing)
+    }
+    if (seconds < 0 && nanos > 0) {
+      nanos -= NANOS_PER_SECOND; // no overflow since nanos is positive (and we're subtracting)
+      seconds++; // no overflow since seconds is negative (and we're incrementing)
+    }
+    if (!durationIsValid(seconds, nanos)) {
+      throw new IllegalArgumentException(String.format(
+          "Duration is not valid. See proto definition for valid values. "
+              + "Seconds (%s) must be in range [-315,576,000,000, +315,576,000,000]. "
+              + "Nanos (%s) must be in range [-999,999,999, +999,999,999]. "
+              + "Nanos must have the same sign as seconds", seconds, nanos));
+    }
+    return saturatedAdd(TimeUnit.SECONDS.toNanos(seconds), nanos);
+  }
+
+  /**
+   * Returns true if the given number of seconds and nanos is a valid {@code Duration}. The {@code
+   * seconds} value must be in the range [-315,576,000,000, +315,576,000,000]. The {@code nanos}
+   * value must be in the range [-999,999,999, +999,999,999].
+   *
+   * <p><b>Note:</b> Durations less than one second are represented with a 0 {@code seconds} field
+   * and a positive or negative {@code nanos} field. For durations of one second or more, a non-zero
+   * value for the {@code nanos} field must be of the same sign as the {@code seconds} field.
+   *
+   * <p>Copy of {@link com.google.protobuf.util.Duration#isValid}.</p>
+   */
+  private static boolean durationIsValid(long seconds, int nanos) {
+    if (seconds < DURATION_SECONDS_MIN || seconds > DURATION_SECONDS_MAX) {
+      return false;
+    }
+    if (nanos < -999999999L || nanos >= NANOS_PER_SECOND) {
+      return false;
+    }
+    if (seconds < 0 || nanos < 0) {
+      if (seconds > 0 || nanos > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns the sum of {@code a} and {@code b} unless it would overflow or underflow in which case
+   * {@code Long.MAX_VALUE} or {@code Long.MIN_VALUE} is returned, respectively.
+   *
+   * <p>Copy of {@link com.google.common.math.LongMath#saturatedAdd}.</p>
+   *
+   */
+  @SuppressWarnings("ShortCircuitBoolean")
+  private static long saturatedAdd(long a, long b) {
+    long naiveSum = a + b;
+    if ((a ^ b) < 0 | (a ^ naiveSum) >= 0) {
+      // If a and b have different signs or a has the same sign as the result then there was no
+      // overflow, return.
+      return naiveSum;
+    }
+    // we did over/under flow, if the sign is negative we should return MAX otherwise MIN
+    return Long.MAX_VALUE + ((naiveSum >>> (Long.SIZE - 1)) ^ 1);
   }
 }

@@ -164,7 +164,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
       }
 
       String serviceConfigChoiceBalancingPolicy =
-          ServiceConfigUtil.getLoadBalancingPolicy(config);
+          ServiceConfigUtil.getLoadBalancingPolicyFromServiceConfig(config);
 
       // Check for an explicitly present lb choice
       if (serviceConfigChoiceBalancingPolicy != null) {

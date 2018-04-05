@@ -35,9 +35,12 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -62,6 +65,22 @@ final class DnsNameResolver extends NameResolver {
   private static final Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
 
   private static final boolean JNDI_AVAILABLE = jndiAvailable();
+
+  private static final String SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY = "clientLanguage";
+  private static final String SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY = "percentage";
+  private static final String SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY = "clientHostname";
+  private static final String SERVICE_CONFIG_CHOICE_SERVICE_CONFIG_KEY = "serviceConfig";
+
+  // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
+  static final String SERVICE_CONFIG_PREFIX = "_grpc_config=";
+  private static final Set<String> SERVICE_CONFIG_CHOICE_KEYS =
+      Collections.unmodifiableSet(
+          new HashSet<String>(
+              Arrays.asList(
+                  SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY,
+                  SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY,
+                  SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY,
+                  SERVICE_CONFIG_CHOICE_SERVICE_CONFIG_KEY)));
 
   // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
   private static final String SERVICE_CONFIG_NAME_PREFIX = "_grpc_config.";
@@ -196,11 +215,10 @@ final class DnsNameResolver extends NameResolver {
             Map<String, Object> serviceConfig = null;
             try {
               for (Map<String, Object> possibleConfig :
-                  ServiceConfigUtil.parseTxtResults(resolvedInetAddrs.txtRecords)) {
+                  parseTxtResults(resolvedInetAddrs.txtRecords)) {
                 try {
                   serviceConfig =
-                      ServiceConfigUtil.maybeChooseServiceConfig(
-                          possibleConfig, random, getLocalHostname());
+                      maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
                 } catch (RuntimeException e) {
                   logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
                 }
@@ -263,6 +281,120 @@ final class DnsNameResolver extends NameResolver {
   @VisibleForTesting
   void setDelegateResolver(DelegateResolver delegateResolver) {
     this.delegateResolver = delegateResolver;
+  }
+
+  @SuppressWarnings("unchecked")
+  @VisibleForTesting
+  static List<Map<String, Object>> parseTxtResults(List<String> txtRecords) {
+    List<Map<String, Object>> serviceConfigs = new ArrayList<Map<String, Object>>();
+    for (String txtRecord : txtRecords) {
+      if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
+        List<Map<String, Object>> choices;
+        try {
+          Object rawChoices = JsonParser.parse(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()));
+          if (!(rawChoices instanceof List)) {
+            throw new IOException("wrong type " + rawChoices);
+          }
+          List<Object> listChoices = (List<Object>) rawChoices;
+          for (Object obj : listChoices) {
+            if (!(obj instanceof Map)) {
+              throw new IOException("wrong element type " + rawChoices);
+            }
+          }
+          choices = (List<Map<String, Object>>) (List<?>) listChoices;
+        } catch (IOException e) {
+          logger.log(Level.WARNING, "Bad service config: " + txtRecord, e);
+          continue;
+        }
+        serviceConfigs.addAll(choices);
+      } else {
+        logger.log(Level.FINE, "Ignoring non service config {0}", new Object[]{txtRecord});
+      }
+    }
+    return serviceConfigs;
+  }
+
+  @Nullable
+  private static final Double getPercentageFromChoice(
+      Map<String, Object> serviceConfigChoice) {
+    if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY)) {
+      return null;
+    }
+    return ServiceConfigUtil.getDouble(serviceConfigChoice, SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY);
+  }
+
+  @Nullable
+  private static final List<String> getClientLanguagesFromChoice(
+      Map<String, Object> serviceConfigChoice) {
+    if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY)) {
+      return null;
+    }
+    return ServiceConfigUtil.checkStringList(
+        ServiceConfigUtil.getList(serviceConfigChoice, SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY));
+  }
+
+  @Nullable
+  private static final List<String> getHostnamesFromChoice(
+      Map<String, Object> serviceConfigChoice) {
+    if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY)) {
+      return null;
+    }
+    return ServiceConfigUtil.checkStringList(
+        ServiceConfigUtil.getList(serviceConfigChoice, SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY));
+  }
+
+  /**
+   * Determines if a given Service Config choice applies, and if so, returns it.
+   *
+   * @see <a href="https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md">
+   *   Service Config in DNS</a>
+   * @param choice The service config choice.
+   * @return The service config object or {@code null} if this choice does not apply.
+   */
+  @Nullable
+  @SuppressWarnings("BetaApi") // Verify isn't all that beta
+  @VisibleForTesting
+  static Map<String, Object> maybeChooseServiceConfig(
+      Map<String, Object> choice, Random random, String hostname) {
+    for (Entry<String, ?> entry : choice.entrySet()) {
+      Verify.verify(SERVICE_CONFIG_CHOICE_KEYS.contains(entry.getKey()), "Bad key: %s", entry);
+    }
+
+    List<String> clientLanguages = getClientLanguagesFromChoice(choice);
+    if (clientLanguages != null && clientLanguages.size() != 0) {
+      boolean javaPresent = false;
+      for (String lang : clientLanguages) {
+        if ("java".equalsIgnoreCase(lang)) {
+          javaPresent = true;
+          break;
+        }
+      }
+      if (!javaPresent) {
+        return null;
+      }
+    }
+    Double percentage = getPercentageFromChoice(choice);
+    if (percentage != null) {
+      int pct = percentage.intValue();
+      Verify.verify(pct >= 0 && pct <= 100, "Bad percentage: %s", percentage);
+      if (random.nextInt(100) >= pct) {
+        return null;
+      }
+    }
+    List<String> clientHostnames = getHostnamesFromChoice(choice);
+    if (clientHostnames != null && clientHostnames.size() != 0) {
+      boolean hostnamePresent = false;
+      for (String clientHostname : clientHostnames) {
+        if (clientHostname.equals(hostname)) {
+          hostnamePresent = true;
+          break;
+        }
+      }
+      if (!hostnamePresent) {
+        return null;
+      }
+    }
+    return ServiceConfigUtil.getObject(choice, SERVICE_CONFIG_CHOICE_SERVICE_CONFIG_KEY);
   }
 
   /**

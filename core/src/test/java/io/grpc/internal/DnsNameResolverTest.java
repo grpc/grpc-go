@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -45,15 +46,19 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -67,6 +72,11 @@ import org.mockito.MockitoAnnotations;
 public class DnsNameResolverTest {
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
+
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
+
+  private final Map<String, Object> serviceConfig = new LinkedHashMap<String, Object>();
 
   private static final int DEFAULT_PORT = 887;
   private static final Attributes NAME_RESOLVER_PARAMS =
@@ -279,6 +289,239 @@ public class DnsNameResolverTest {
     assertEquals("blah blah", DnsNameResolver.unquote("\"blah blah\""));
     assertEquals("blah\"blah", DnsNameResolver.unquote("\"blah\\\"blah\""));
     assertEquals("blah\\blah", DnsNameResolver.unquote("\"blah\\\\blah\""));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_failsOnMisspelling() {
+    Map<String, Object> bad = new LinkedHashMap<String, Object>();
+    bad.put("parcentage", 1.0);
+    thrown.expectMessage("Bad key");
+
+    DnsNameResolver.maybeChooseServiceConfig(bad, new Random(), "host");
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageMatchesJava() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> langs = new ArrayList<Object>();
+    langs.add("java");
+    choice.put("clientLanguage", langs);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageDoesntMatchGo() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> langs = new ArrayList<Object>();
+    langs.add("go");
+    choice.put("clientLanguage", langs);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageCaseInsensitive() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> langs = new ArrayList<Object>();
+    langs.add("JAVA");
+    choice.put("clientLanguage", langs);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageMatchesEmtpy() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> langs = new ArrayList<Object>();
+    choice.put("clientLanguage", langs);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageMatchesMulti() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> langs = new ArrayList<Object>();
+    langs.add("go");
+    langs.add("java");
+    choice.put("clientLanguage", langs);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageZeroAlwaysFails() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 0D);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageHundredAlwaysSucceeds() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 100D);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAboveMatches50() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 50D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 49;
+      }
+    };
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAtFails50() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 50D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 50;
+      }
+    };
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAboveMatches99() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 99D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 98;
+      }
+    };
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAtFails99() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 99D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 99;
+      }
+    };
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAboveMatches1() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 1D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 0;
+      }
+    };
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_percentageAtFails1() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    choice.put("percentage", 1D);
+    choice.put("serviceConfig", serviceConfig);
+
+    Random r = new Random() {
+      @Override
+      public int nextInt(int bound) {
+        return 1;
+      }
+    };
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, r, "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_hostnameMatches() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> hosts = new ArrayList<Object>();
+    hosts.add("localhost");
+    choice.put("clientHostname", hosts);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_hostnameDoesntMatch() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> hosts = new ArrayList<Object>();
+    hosts.add("localhorse");
+    choice.put("clientHostname", hosts);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_clientLanguageCaseSensitive() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> hosts = new ArrayList<Object>();
+    hosts.add("LOCALHOST");
+    choice.put("clientHostname", hosts);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_hostnameMatchesEmtpy() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> hosts = new ArrayList<Object>();
+    choice.put("clientHostname", hosts);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "host"));
+  }
+
+  @Test
+  public void maybeChooseServiceConfig_hostnameMatchesMulti() {
+    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    List<Object> hosts = new ArrayList<Object>();
+    hosts.add("localhorse");
+    hosts.add("localhost");
+    choice.put("clientHostname", hosts);
+    choice.put("serviceConfig", serviceConfig);
+
+    assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
   }
 
   private void testInvalidUri(URI uri) {
