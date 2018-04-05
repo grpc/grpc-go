@@ -127,7 +127,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	}
 
 	lb := &lbBalancer{
-		cc:              cc,
+		cc:              newLBCacheClientConn(cc),
 		target:          target,
 		opt:             opt,
 		fallbackTimeout: b.fallbackTimeout,
@@ -145,7 +145,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 }
 
 type lbBalancer struct {
-	cc              balancer.ClientConn
+	cc              *lbCacheClientConn
 	target          string
 	opt             balancer.BuildOptions
 	fallbackTimeout time.Duration
@@ -339,4 +339,5 @@ func (lb *lbBalancer) Close() {
 	if lb.ccRemoteLB != nil {
 		lb.ccRemoteLB.Close()
 	}
+	lb.cc.close()
 }
