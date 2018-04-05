@@ -1241,7 +1241,20 @@ func (ac *addrConn) transportMonitor() {
 		// Block until we receive a goaway or an error occurs.
 		select {
 		case <-t.GoAway():
+			done := t.Error()
+			cleanup := t.Close
+			// Since this transport will be orphaned (won't have a transportMonitor)
+			// we need to launch a goroutine to keep track of clientConn.Close()
+			// happening since it might not be noticed by any other goroutine for a while.
+			go func() {
+				<-done
+				cleanup()
+			}()
 		case <-t.Error():
+			// In case this is triggered because clientConn.Close()
+			// was called, we want to immeditately close the transport
+			// since no other goroutine might notice it for a while.
+			t.Close()
 		case <-cdeadline:
 			ac.mu.Lock()
 			// This implies that client received server preface.
