@@ -44,6 +44,7 @@ import io.grpc.channelz.v1.Socket.Builder;
 import io.grpc.channelz.v1.SocketData;
 import io.grpc.channelz.v1.SocketOption;
 import io.grpc.channelz.v1.SocketOptionLinger;
+import io.grpc.channelz.v1.SocketOptionTcpInfo;
 import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
@@ -194,6 +195,7 @@ final class ChannelzProtoUtil {
 
   public static final String SO_LINGER = "SO_LINGER";
   public static final String SO_TIMEOUT = "SO_TIMEOUT";
+  public static final String TCP_INFO = "TCP_INFO";
 
   static SocketOption toSocketOptionLinger(int lingerSeconds) {
     final SocketOptionLinger lingerOpt;
@@ -227,6 +229,45 @@ final class ChannelzProtoUtil {
         .build();
   }
 
+  static SocketOption toSocketOptionTcpInfo(Channelz.TcpInfo i) {
+    SocketOptionTcpInfo tcpInfo = SocketOptionTcpInfo.newBuilder()
+        .setTcpiState(i.state)
+        .setTcpiCaState(i.caState)
+        .setTcpiRetrans(i.retransmits)
+        .setTcpiProbes(i.probes)
+        .setTcpiBackoff(i.backoff)
+        .setTcpiOptions(i.options)
+        .setTcpiSndWscale(i.sndWscale)
+        .setTcpiRcvWscale(i.rcvWscale)
+        .setTcpiRto(i.rto)
+        .setTcpiAto(i.ato)
+        .setTcpiSndMss(i.sndMss)
+        .setTcpiRcvMss(i.rcvMss)
+        .setTcpiUnacked(i.unacked)
+        .setTcpiSacked(i.sacked)
+        .setTcpiLost(i.lost)
+        .setTcpiRetrans(i.retrans)
+        .setTcpiFackets(i.fackets)
+        .setTcpiLastDataSent(i.lastDataSent)
+        .setTcpiLastAckSent(i.lastAckSent)
+        .setTcpiLastDataRecv(i.lastDataRecv)
+        .setTcpiLastAckRecv(i.lastAckRecv)
+        .setTcpiPmtu(i.pmtu)
+        .setTcpiRcvSsthresh(i.rcvSsthresh)
+        .setTcpiRtt(i.rtt)
+        .setTcpiRttvar(i.rttvar)
+        .setTcpiSndSsthresh(i.sndSsthresh)
+        .setTcpiSndCwnd(i.sndCwnd)
+        .setTcpiAdvmss(i.advmss)
+        .setTcpiReordering(i.reordering)
+        .build();
+    return SocketOption
+        .newBuilder()
+        .setName(TCP_INFO)
+        .setAdditional(Any.pack(tcpInfo))
+        .build();
+  }
+
   static SocketOption toSocketOptionAdditional(String name, String value) {
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(value);
@@ -241,6 +282,9 @@ final class ChannelzProtoUtil {
     }
     if (options.soTimeoutMillis != null) {
       ret.add(toSocketOptionTimeout(SO_TIMEOUT, options.soTimeoutMillis));
+    }
+    if (options.tcpInfo != null) {
+      ret.add(toSocketOptionTcpInfo(options.tcpInfo));
     }
     for (Entry<String, String> entry : options.others.entrySet()) {
       ret.add(toSocketOptionAdditional(entry.getKey(), entry.getValue()));

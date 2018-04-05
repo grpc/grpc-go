@@ -45,6 +45,7 @@ import io.grpc.channelz.v1.Socket;
 import io.grpc.channelz.v1.SocketData;
 import io.grpc.channelz.v1.SocketOption;
 import io.grpc.channelz.v1.SocketOptionLinger;
+import io.grpc.channelz.v1.SocketOptionTcpInfo;
 import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
@@ -171,6 +172,77 @@ public final class ChannelzProtoUtilTest {
       .setValue("some-made-up-value")
       .build();
 
+  private final Channelz.TcpInfo channelzTcpInfo
+      = new Channelz.TcpInfo.Builder()
+      .setState(70)
+      .setCaState(71)
+      .setRetransmits(72)
+      .setProbes(73)
+      .setBackoff(74)
+      .setOptions(75)
+      .setSndWscale(76)
+      .setRcvWscale(77)
+      .setRto(78)
+      .setAto(79)
+      .setSndMss(710)
+      .setRcvMss(711)
+      .setUnacked(712)
+      .setSacked(713)
+      .setLost(714)
+      .setRetrans(715)
+      .setFackets(716)
+      .setLastDataSent(717)
+      .setLastAckSent(718)
+      .setLastDataRecv(719)
+      .setLastAckRecv(720)
+      .setPmtu(721)
+      .setRcvSsthresh(722)
+      .setRtt(723)
+      .setRttvar(724)
+      .setSndSsthresh(725)
+      .setSndCwnd(726)
+      .setAdvmss(727)
+      .setReordering(728)
+      .build();
+
+  private final SocketOption socketOptionTcpInfo = SocketOption
+      .newBuilder()
+      .setName("TCP_INFO")
+      .setAdditional(
+          Any.pack(
+              SocketOptionTcpInfo.newBuilder()
+                  .setTcpiState(70)
+                  .setTcpiCaState(71)
+                  .setTcpiRetrans(72)
+                  .setTcpiProbes(73)
+                  .setTcpiBackoff(74)
+                  .setTcpiOptions(75)
+                  .setTcpiSndWscale(76)
+                  .setTcpiRcvWscale(77)
+                  .setTcpiRto(78)
+                  .setTcpiAto(79)
+                  .setTcpiSndMss(710)
+                  .setTcpiRcvMss(711)
+                  .setTcpiUnacked(712)
+                  .setTcpiSacked(713)
+                  .setTcpiLost(714)
+                  .setTcpiRetrans(715)
+                  .setTcpiFackets(716)
+                  .setTcpiLastDataSent(717)
+                  .setTcpiLastAckSent(718)
+                  .setTcpiLastDataRecv(719)
+                  .setTcpiLastAckRecv(720)
+                  .setTcpiPmtu(721)
+                  .setTcpiRcvSsthresh(722)
+                  .setTcpiRtt(723)
+                  .setTcpiRttvar(724)
+                  .setTcpiSndSsthresh(725)
+                  .setTcpiSndCwnd(726)
+                  .setTcpiAdvmss(727)
+                  .setTcpiReordering(728)
+                  .build()))
+      .build();
+
   private final TestListenSocket listenSocket = new TestListenSocket();
   private final SocketRef listenSocketRef = SocketRef
       .newBuilder()
@@ -283,11 +355,13 @@ public final class ChannelzProtoUtilTest {
     // with options
     socket.socketOptions = toBuilder(socket.socketOptions)
         .setSocketOptionLingerSeconds(10)
+        .setTcpInfo(channelzTcpInfo)
         .build();
     assertEquals(
         socketDataNoSockOpts
             .toBuilder()
             .addOption(sockOptlinger10s)
+            .addOption(socketOptionTcpInfo)
             .build(),
         ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
   }
@@ -624,6 +698,13 @@ public final class ChannelzProtoUtilTest {
     assertEquals(
         sockOptAdditional,
         ChannelzProtoUtil.toSocketOptionAdditional("SO_MADE_UP_OPTION", "some-made-up-value"));
+  }
+
+  @Test
+  public void toSocketOptionTcpInfo() {
+    assertEquals(
+        socketOptionTcpInfo,
+        ChannelzProtoUtil.toSocketOptionTcpInfo(channelzTcpInfo));
   }
 
   @Test

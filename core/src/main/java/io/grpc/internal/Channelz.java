@@ -475,25 +475,284 @@ public final class Channelz {
     }
   }
 
+  public static final class TcpInfo {
+    public final int state;
+    public final int caState;
+    public final int retransmits;
+    public final int probes;
+    public final int backoff;
+    public final int options;
+    public final int sndWscale;
+    public final int rcvWscale;
+    public final int rto;
+    public final int ato;
+    public final int sndMss;
+    public final int rcvMss;
+    public final int unacked;
+    public final int sacked;
+    public final int lost;
+    public final int retrans;
+    public final int fackets;
+    public final int lastDataSent;
+    public final int lastAckSent;
+    public final int lastDataRecv;
+    public final int lastAckRecv;
+    public final int pmtu;
+    public final int rcvSsthresh;
+    public final int rtt;
+    public final int rttvar;
+    public final int sndSsthresh;
+    public final int sndCwnd;
+    public final int advmss;
+    public final int reordering;
+
+    TcpInfo(int state, int caState, int retransmits, int probes, int backoff, int options,
+        int sndWscale, int rcvWscale, int rto, int ato, int sndMss, int rcvMss, int unacked,
+        int sacked, int lost, int retrans, int fackets, int lastDataSent, int lastAckSent,
+        int lastDataRecv, int lastAckRecv, int pmtu, int rcvSsthresh, int rtt, int rttvar,
+        int sndSsthresh, int sndCwnd, int advmss, int reordering) {
+      this.state = state;
+      this.caState = caState;
+      this.retransmits = retransmits;
+      this.probes = probes;
+      this.backoff = backoff;
+      this.options = options;
+      this.sndWscale = sndWscale;
+      this.rcvWscale = rcvWscale;
+      this.rto = rto;
+      this.ato = ato;
+      this.sndMss = sndMss;
+      this.rcvMss = rcvMss;
+      this.unacked = unacked;
+      this.sacked = sacked;
+      this.lost = lost;
+      this.retrans = retrans;
+      this.fackets = fackets;
+      this.lastDataSent = lastDataSent;
+      this.lastAckSent = lastAckSent;
+      this.lastDataRecv = lastDataRecv;
+      this.lastAckRecv = lastAckRecv;
+      this.pmtu = pmtu;
+      this.rcvSsthresh = rcvSsthresh;
+      this.rtt = rtt;
+      this.rttvar = rttvar;
+      this.sndSsthresh = sndSsthresh;
+      this.sndCwnd = sndCwnd;
+      this.advmss = advmss;
+      this.reordering = reordering;
+    }
+
+    public static final class Builder {
+      private int state;
+      private int caState;
+      private int retransmits;
+      private int probes;
+      private int backoff;
+      private int options;
+      private int sndWscale;
+      private int rcvWscale;
+      private int rto;
+      private int ato;
+      private int sndMss;
+      private int rcvMss;
+      private int unacked;
+      private int sacked;
+      private int lost;
+      private int retrans;
+      private int fackets;
+      private int lastDataSent;
+      private int lastAckSent;
+      private int lastDataRecv;
+      private int lastAckRecv;
+      private int pmtu;
+      private int rcvSsthresh;
+      private int rtt;
+      private int rttvar;
+      private int sndSsthresh;
+      private int sndCwnd;
+      private int advmss;
+      private int reordering;
+
+      public Builder setState(int state) {
+        this.state = state;
+        return this;
+      }
+
+      public Builder setCaState(int caState) {
+        this.caState = caState;
+        return this;
+      }
+
+      public Builder setRetransmits(int retransmits) {
+        this.retransmits = retransmits;
+        return this;
+      }
+
+      public Builder setProbes(int probes) {
+        this.probes = probes;
+        return this;
+      }
+
+      public Builder setBackoff(int backoff) {
+        this.backoff = backoff;
+        return this;
+      }
+
+      public Builder setOptions(int options) {
+        this.options = options;
+        return this;
+      }
+
+      public Builder setSndWscale(int sndWscale) {
+        this.sndWscale = sndWscale;
+        return this;
+      }
+
+      public Builder setRcvWscale(int rcvWscale) {
+        this.rcvWscale = rcvWscale;
+        return this;
+      }
+
+      public Builder setRto(int rto) {
+        this.rto = rto;
+        return this;
+      }
+
+      public Builder setAto(int ato) {
+        this.ato = ato;
+        return this;
+      }
+
+      public Builder setSndMss(int sndMss) {
+        this.sndMss = sndMss;
+        return this;
+      }
+
+      public Builder setRcvMss(int rcvMss) {
+        this.rcvMss = rcvMss;
+        return this;
+      }
+
+      public Builder setUnacked(int unacked) {
+        this.unacked = unacked;
+        return this;
+      }
+
+      public Builder setSacked(int sacked) {
+        this.sacked = sacked;
+        return this;
+      }
+
+      public Builder setLost(int lost) {
+        this.lost = lost;
+        return this;
+      }
+
+      public Builder setRetrans(int retrans) {
+        this.retrans = retrans;
+        return this;
+      }
+
+      public Builder setFackets(int fackets) {
+        this.fackets = fackets;
+        return this;
+      }
+
+      public Builder setLastDataSent(int lastDataSent) {
+        this.lastDataSent = lastDataSent;
+        return this;
+      }
+
+      public Builder setLastAckSent(int lastAckSent) {
+        this.lastAckSent = lastAckSent;
+        return this;
+      }
+
+      public Builder setLastDataRecv(int lastDataRecv) {
+        this.lastDataRecv = lastDataRecv;
+        return this;
+      }
+
+      public Builder setLastAckRecv(int lastAckRecv) {
+        this.lastAckRecv = lastAckRecv;
+        return this;
+      }
+
+      public Builder setPmtu(int pmtu) {
+        this.pmtu = pmtu;
+        return this;
+      }
+
+      public Builder setRcvSsthresh(int rcvSsthresh) {
+        this.rcvSsthresh = rcvSsthresh;
+        return this;
+      }
+
+      public Builder setRtt(int rtt) {
+        this.rtt = rtt;
+        return this;
+      }
+
+      public Builder setRttvar(int rttvar) {
+        this.rttvar = rttvar;
+        return this;
+      }
+
+      public Builder setSndSsthresh(int sndSsthresh) {
+        this.sndSsthresh = sndSsthresh;
+        return this;
+      }
+
+      public Builder setSndCwnd(int sndCwnd) {
+        this.sndCwnd = sndCwnd;
+        return this;
+      }
+
+      public Builder setAdvmss(int advmss) {
+        this.advmss = advmss;
+        return this;
+      }
+
+      public Builder setReordering(int reordering) {
+        this.reordering = reordering;
+        return this;
+      }
+
+      /** Builds an instance. */
+      public TcpInfo build() {
+        return new TcpInfo(
+            state, caState, retransmits, probes, backoff, options, sndWscale, rcvWscale,
+            rto, ato, sndMss, rcvMss, unacked, sacked, lost, retrans, fackets, lastDataSent,
+            lastAckSent, lastDataRecv, lastAckRecv, pmtu, rcvSsthresh, rtt, rttvar, sndSsthresh,
+            sndCwnd, advmss, reordering);
+      }
+    }
+  }
+
   public static final class SocketOptions {
     public final Map<String, String> others;
     // In netty, the value of a channel option may be null.
     @Nullable public final Integer soTimeoutMillis;
     @Nullable public final Integer lingerSeconds;
+    @Nullable public final TcpInfo tcpInfo;
 
     /** Creates an instance. */
     public SocketOptions(
-        Integer timeoutMillis,
-        Integer lingerSeconds,
+        @Nullable Integer timeoutMillis,
+        @Nullable Integer lingerSeconds,
+        @Nullable TcpInfo tcpInfo,
         Map<String, String> others) {
       Preconditions.checkNotNull(others);
       this.soTimeoutMillis = timeoutMillis;
       this.lingerSeconds = lingerSeconds;
+      this.tcpInfo = tcpInfo;
       this.others = Collections.unmodifiableMap(new HashMap<String, String>(others));
     }
 
     public static final class Builder {
       private final Map<String, String> others = new HashMap<String, String>();
+
+      private TcpInfo tcpInfo;
       private Integer timeoutMillis;
       private Integer lingerSeconds;
 
@@ -508,6 +767,11 @@ public final class Channelz {
        */
       public Builder setSocketOptionLingerSeconds(Integer lingerSeconds) {
         this.lingerSeconds = lingerSeconds;
+        return this;
+      }
+
+      public Builder setTcpInfo(TcpInfo tcpInfo) {
+        this.tcpInfo = tcpInfo;
         return this;
       }
 
@@ -527,7 +791,7 @@ public final class Channelz {
       }
 
       public SocketOptions build() {
-        return new SocketOptions(timeoutMillis, lingerSeconds, others);
+        return new SocketOptions(timeoutMillis, lingerSeconds, tcpInfo, others);
       }
     }
   }

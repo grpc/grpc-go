@@ -32,6 +32,7 @@ import io.grpc.internal.Channelz;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2InboundHeaders;
+import io.grpc.netty.NettySocketSupport.NativeSocketOptions;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelOption;
@@ -234,6 +235,14 @@ class Utils {
       Object value = opt.getValue();
       // zpencer: Can a netty option be null?
       b.addOption(key.name(), String.valueOf(value));
+    }
+
+    NativeSocketOptions nativeOptions = NettySocketSupport.getNativeSocketOptions(channel);
+    if (nativeOptions != null) {
+      b.setTcpInfo(nativeOptions.tcpInfo); // may be null
+      for (Entry<String, String> entry : nativeOptions.otherInfo.entrySet()) {
+        b.addOption(entry.getKey(), entry.getValue());
+      }
     }
     return b.build();
   }
