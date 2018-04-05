@@ -4,6 +4,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <vector>
 #include <google/protobuf/compiler/java/java_names.h>
 #include <google/protobuf/descriptor.h>
@@ -33,9 +34,67 @@ using google::protobuf::io::Printer;
 using google::protobuf::SourceLocation;
 using std::to_string;
 
+// java keywords from: https://docs.oracle.com/javase/specs/jls/se8/html/jls-3.html#jls-3.9
+static std::set<string> java_keywords = {
+  "abstract",
+  "assert",
+  "boolean",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "char",
+  "class",
+  "const",
+  "continue",
+  "default",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "extends",
+  "final",
+  "finally",
+  "float",
+  "for",
+  "goto",
+  "if",
+  "implements",
+  "import",
+  "instanceof",
+  "int",
+  "interface",
+  "long",
+  "native",
+  "new",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "short",
+  "static",
+  "strictfp",
+  "super",
+  "switch",
+  "synchronized",
+  "this",
+  "throw",
+  "throws",
+  "transient",
+  "try",
+  "void",
+  "volatile",
+  "while",
+  // additional ones added by us
+  "true",
+  "false",
+};
+
 // Adjust a method name prefix identifier to follow the JavaBean spec:
 //   - decapitalize the first letter
 //   - remove embedded underscores & capitalize the following letter
+//  Finally, if the result is a reserved java keyword, append an underscore.
 static string MixedLower(const string& word) {
   string w;
   w += tolower(word[0]);
@@ -47,6 +106,9 @@ static string MixedLower(const string& word) {
       w += after_underscore ? toupper(word[i]) : word[i];
       after_underscore = false;
     }
+  }
+  if (java_keywords.find(w) != java_keywords.end()) {
+    return w + "_";
   }
   return w;
 }

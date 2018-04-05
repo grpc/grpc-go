@@ -51,4 +51,8 @@ service TestService {
   // first request.
   rpc HalfBidiCall(stream StreamingOutputCallRequest)
       returns (stream StreamingOutputCallResponse);
+
+  // An RPC method whose Java name collides with a keyword, and whose generated
+  // method should have a '_' appended.
+  rpc Import(stream StreamingInputCallRequest) returns (stream StreamingInputCallResponse);
 }

@@ -222,6 +222,44 @@ public final class TestServiceGrpc {
     }
     return getHalfBidiCallMethod;
   }
+  private static final int ARG_IN_METHOD_IMPORT = 10;
+  private static final int ARG_OUT_METHOD_IMPORT = 11;
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  @java.lang.Deprecated // Use {@link #getImportMethod()} instead. 
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_IMPORT = getImportMethodHelper();
+
+  private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getImportMethod;
+
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getImportMethod() {
+    return getImportMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getImportMethodHelper() {
+    io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest, io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> getImportMethod;
+    if ((getImportMethod = TestServiceGrpc.getImportMethod) == null) {
+      synchronized (TestServiceGrpc.class) {
+        if ((getImportMethod = TestServiceGrpc.getImportMethod) == null) {
+          TestServiceGrpc.getImportMethod = getImportMethod = 
+              io.grpc.MethodDescriptor.<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest, io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
+              .setFullMethodName(generateFullMethodName(
+                  "grpc.testing.TestService", "Import"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>marshaller(
+                  new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>(ARG_IN_METHOD_IMPORT)))
+              .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>marshaller(
+                  new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>(ARG_OUT_METHOD_IMPORT)))
+              .build();
+        }
+      }
+    }
+    return getImportMethod;
+  }
 
   private static final class NanoFactory<T extends com.google.protobuf.nano.MessageNano>
       implements io.grpc.protobuf.nano.MessageNanoFactory<T> {
@@ -264,6 +302,12 @@ public final class TestServiceGrpc {
         break;
       case ARG_OUT_METHOD_HALF_BIDI_CALL:
         o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
+        break;
+      case ARG_IN_METHOD_IMPORT:
+        o = new io.grpc.testing.integration.nano.Test.StreamingInputCallRequest();
+        break;
+      case ARG_OUT_METHOD_IMPORT:
+        o = new io.grpc.testing.integration.nano.Test.StreamingInputCallResponse();
         break;
       default:
         throw new AssertionError();
@@ -362,6 +406,17 @@ public final class TestServiceGrpc {
       return asyncUnimplementedStreamingCall(getHalfBidiCallMethodHelper(), responseObserver);
     }
 
+    /**
+     * <pre>
+     * An RPC method whose Java name collides with a keyword, and whose generated
+     * method should have a '_' appended.
+     * </pre>
+     */
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> import_(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(getImportMethodHelper(), responseObserver);
+    }
+
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
@@ -399,6 +454,13 @@ public final class TestServiceGrpc {
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(
                   this, METHODID_HALF_BIDI_CALL)))
+          .addMethod(
+            getImportMethodHelper(),
+            asyncBidiStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+                io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>(
+                  this, METHODID_IMPORT)))
           .build();
     }
   }
@@ -486,6 +548,18 @@ public final class TestServiceGrpc {
       return asyncBidiStreamingCall(
           getChannel().newCall(getHalfBidiCallMethodHelper(), getCallOptions()), responseObserver);
     }
+
+    /**
+     * <pre>
+     * An RPC method whose Java name collides with a keyword, and whose generated
+     * method should have a '_' appended.
+     * </pre>
+     */
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> import_(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncBidiStreamingCall(
+          getChannel().newCall(getImportMethodHelper(), getCallOptions()), responseObserver);
+    }
   }
 
   /**
@@ -572,6 +646,7 @@ public final class TestServiceGrpc {
   private static final int METHODID_STREAMING_INPUT_CALL = 2;
   private static final int METHODID_FULL_BIDI_CALL = 3;
   private static final int METHODID_HALF_BIDI_CALL = 4;
+  private static final int METHODID_IMPORT = 5;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -617,6 +692,9 @@ public final class TestServiceGrpc {
         case METHODID_HALF_BIDI_CALL:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.halfBidiCall(
               (io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>) responseObserver);
+        case METHODID_IMPORT:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.import_(
+              (io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>) responseObserver);
         default:
           throw new AssertionError();
       }
@@ -637,6 +715,7 @@ public final class TestServiceGrpc {
               .addMethod(getStreamingInputCallMethodHelper())
               .addMethod(getFullBidiCallMethodHelper())
               .addMethod(getHalfBidiCallMethodHelper())
+              .addMethod(getImportMethodHelper())
               .build();
         }
       }

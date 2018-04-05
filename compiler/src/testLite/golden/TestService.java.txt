@@ -210,6 +210,42 @@ public final class TestServiceGrpc {
      }
      return getHalfBidiCallMethod;
   }
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  @java.lang.Deprecated // Use {@link #getImportMethod()} instead. 
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.Test.StreamingInputCallResponse> METHOD_IMPORT = getImportMethodHelper();
+
+  private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.Test.StreamingInputCallResponse> getImportMethod;
+
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.Test.StreamingInputCallResponse> getImportMethod() {
+    return getImportMethodHelper();
+  }
+
+  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingInputCallRequest,
+      io.grpc.testing.integration.Test.StreamingInputCallResponse> getImportMethodHelper() {
+    io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingInputCallRequest, io.grpc.testing.integration.Test.StreamingInputCallResponse> getImportMethod;
+    if ((getImportMethod = TestServiceGrpc.getImportMethod) == null) {
+      synchronized (TestServiceGrpc.class) {
+        if ((getImportMethod = TestServiceGrpc.getImportMethod) == null) {
+          TestServiceGrpc.getImportMethod = getImportMethod = 
+              io.grpc.MethodDescriptor.<io.grpc.testing.integration.Test.StreamingInputCallRequest, io.grpc.testing.integration.Test.StreamingInputCallResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
+              .setFullMethodName(generateFullMethodName(
+                  "grpc.testing.TestService", "Import"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.lite.ProtoLiteUtils.marshaller(
+                  io.grpc.testing.integration.Test.StreamingInputCallRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.lite.ProtoLiteUtils.marshaller(
+                  io.grpc.testing.integration.Test.StreamingInputCallResponse.getDefaultInstance()))
+                  .build();
+          }
+        }
+     }
+     return getImportMethod;
+  }
 
   /**
    * Creates a new async stub that supports all call types for the service
@@ -299,6 +335,17 @@ public final class TestServiceGrpc {
       return asyncUnimplementedStreamingCall(getHalfBidiCallMethodHelper(), responseObserver);
     }
 
+    /**
+     * <pre>
+     * An RPC method whose Java name collides with a keyword, and whose generated
+     * method should have a '_' appended.
+     * </pre>
+     */
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallRequest> import_(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(getImportMethodHelper(), responseObserver);
+    }
+
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
@@ -336,6 +383,13 @@ public final class TestServiceGrpc {
                 io.grpc.testing.integration.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Test.StreamingOutputCallResponse>(
                   this, METHODID_HALF_BIDI_CALL)))
+          .addMethod(
+            getImportMethodHelper(),
+            asyncBidiStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Test.StreamingInputCallRequest,
+                io.grpc.testing.integration.Test.StreamingInputCallResponse>(
+                  this, METHODID_IMPORT)))
           .build();
     }
   }
@@ -423,6 +477,18 @@ public final class TestServiceGrpc {
       return asyncBidiStreamingCall(
           getChannel().newCall(getHalfBidiCallMethodHelper(), getCallOptions()), responseObserver);
     }
+
+    /**
+     * <pre>
+     * An RPC method whose Java name collides with a keyword, and whose generated
+     * method should have a '_' appended.
+     * </pre>
+     */
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallRequest> import_(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncBidiStreamingCall(
+          getChannel().newCall(getImportMethodHelper(), getCallOptions()), responseObserver);
+    }
   }
 
   /**
@@ -509,6 +575,7 @@ public final class TestServiceGrpc {
   private static final int METHODID_STREAMING_INPUT_CALL = 2;
   private static final int METHODID_FULL_BIDI_CALL = 3;
   private static final int METHODID_HALF_BIDI_CALL = 4;
+  private static final int METHODID_IMPORT = 5;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -554,6 +621,9 @@ public final class TestServiceGrpc {
         case METHODID_HALF_BIDI_CALL:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.halfBidiCall(
               (io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse>) responseObserver);
+        case METHODID_IMPORT:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.import_(
+              (io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallResponse>) responseObserver);
         default:
           throw new AssertionError();
       }
@@ -574,6 +644,7 @@ public final class TestServiceGrpc {
               .addMethod(getStreamingInputCallMethodHelper())
               .addMethod(getFullBidiCallMethodHelper())
               .addMethod(getHalfBidiCallMethodHelper())
+              .addMethod(getImportMethodHelper())
               .build();
         }
       }
