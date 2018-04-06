@@ -43,6 +43,8 @@ import (
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
+//
+// Deprecated: use package encoding.
 type Compressor interface {
 	// Do compresses p into w.
 	Do(w io.Writer, p []byte) error
@@ -55,6 +57,8 @@ type gzipCompressor struct {
 }
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPCompressor() Compressor {
 	c, _ := NewGZIPCompressorWithLevel(gzip.DefaultCompression)
 	return c
@@ -64,6 +68,8 @@ func NewGZIPCompressor() Compressor {
 // of assuming DefaultCompression.
 //
 // The error returned will be nil if the level is valid.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
 	if level < gzip.DefaultCompression || level > gzip.BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
@@ -96,6 +102,8 @@ func (c *gzipCompressor) Type() string {
 }
 
 // Decompressor defines the interface gRPC uses to decompress a message.
+//
+// Deprecated: use package encoding.
 type Decompressor interface {
 	// Do reads the data from r and uncompress them.
 	Do(r io.Reader) ([]byte, error)
@@ -108,6 +116,8 @@ type gzipDecompressor struct {
 }
 
 // NewGZIPDecompressor creates a Decompressor based on GZIP.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPDecompressor() Decompressor {
 	return &gzipDecompressor{}
 }
