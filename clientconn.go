@@ -840,33 +840,6 @@ func (ac *addrConn) connect() error {
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
 
-	common := func() bool {
-		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
-			return true
-		}
-
-		ac.state = connectivity.TransientFailure
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-		ac.cc.resolveNow(resolver.ResolveNowOption{})
-		ac.curAddr = resolver.Address{}
-		ac.mu.Unlock()
-
-		if err := ac.resetTransport(); err != nil {
-			ac.mu.Lock()
-			ac.printf("transport exiting: %v", err)
-			ac.mu.Unlock()
-			grpclog.Warningf("grpc: addrConn.transportMonitor exits due to: %v", err)
-			if err != errConnClosing {
-				// Keep this ac in cc.conns, to get the reason it's torn down.
-				ac.tearDown(err)
-			}
-			return true
-		}
-		return false
-	}
-
 	var timer *time.Timer
 	var cdeadline <-chan time.Time
 
@@ -874,7 +847,7 @@ func (ac *addrConn) connect() error {
 		ac.mu.Lock()
 		if ac.backoffDeadline.IsZero() {
 			ac.mu.Unlock()
-			return true
+			return false
 		}
 		ac.mu.Unlock()
 		err := ac.transport.Close()
@@ -882,7 +855,7 @@ func (ac *addrConn) connect() error {
 			grpclog.Error(err)
 		}
 
-		return common()
+		return ac.reconnect()
 	}
 
 	onGoAway := func() bool {
@@ -890,13 +863,22 @@ func (ac *addrConn) connect() error {
 			timer.Stop()
 		}
 		ac.adjustParams(ac.transport.GetGoAwayReason())
-		return common()
+
+		return ac.reconnect()
 	}
 
 	onError := func() bool {
 		if timer != nil {
 			timer.Stop()
 		}
+		// In case this is triggered because clientConn.Close()
+		// was called, we want to immediately close the transport
+		// since no other goroutine might notice it for a while.
+		err := ac.transport.Close()
+		if err != nil {
+			grpclog.Error(err)
+		}
+
 		// If a GoAway happened, regardless of error, adjust our keepalive
 		// parameters as appropriate. Note this is inherently racy.
 		select {
@@ -904,7 +886,7 @@ func (ac *addrConn) connect() error {
 			ac.adjustParams(ac.transport.GetGoAwayReason())
 		default:
 		}
-		return common()
+		return ac.reconnect()
 	}
 
 	// Start a goroutine connecting to the server asynchronously.
@@ -918,7 +900,7 @@ func (ac *addrConn) connect() error {
 			return
 		}
 
-		var shouldExit bool
+		var successfulReconnect bool
 		for {
 			ac.mu.Lock()
 			if !ac.connectDeadline.IsZero() {
@@ -929,15 +911,15 @@ func (ac *addrConn) connect() error {
 
 			select {
 			case <-cdeadline:
-				if shouldExit = onDeadline(); shouldExit {
+				if successfulReconnect = onDeadline(); !successfulReconnect {
 					return
 				}
 			case <-ac.transport.GoAway():
-				if shouldExit = onGoAway(); shouldExit {
+				if successfulReconnect = onGoAway(); !successfulReconnect {
 					return
 				}
 			case <-ac.transport.Error():
-				if shouldExit = onError(); shouldExit {
+				if successfulReconnect = onError(); !successfulReconnect {
 					return
 				}
 			}
@@ -1416,6 +1398,34 @@ func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+// Begins reconnect process; returns true if successful or false otherwise.
+func (ac *addrConn) reconnect() bool {
+	ac.mu.Lock()
+	if ac.state == connectivity.Shutdown {
+		ac.mu.Unlock()
+		return false
+	}
+
+	ac.state = connectivity.TransientFailure
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+	ac.cc.resolveNow(resolver.ResolveNowOption{})
+	ac.curAddr = resolver.Address{}
+	ac.mu.Unlock()
+
+	if err := ac.resetTransport(); err != nil {
+		ac.mu.Lock()
+		ac.printf("transport exiting: %v", err)
+		ac.mu.Unlock()
+		grpclog.Warningf("grpc: addrConn.transportMonitor exits due to: %v", err)
+		if err != errConnClosing {
+			// Keep this ac in cc.conns, to get the reason it's torn down.
+			ac.tearDown(err)
+		}
+		return false
+	}
+	return true
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
