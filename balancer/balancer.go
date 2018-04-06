@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/connectivity"
@@ -33,13 +34,16 @@ import (
 
 var (
 	// m is a map from name to balancer builder.
-	m = make(map[string]Builder)
+	m  = make(map[string]Builder)
+	mu sync.RWMutex
 )
 
 // Register registers the balancer builder to the balancer map.
 // b.Name (lowercased) will be used as the name registered with
 // this builder.
 func Register(b Builder) {
+	mu.Lock()
+	defer mu.Unlock()
 	m[strings.ToLower(b.Name())] = b
 }
 
@@ -47,6 +51,8 @@ func Register(b Builder) {
 // Note that the compare is done in a case-insenstive fashion.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
+	mu.RLock()
+	defer mu.RUnlock()
 	if b, ok := m[strings.ToLower(name)]; ok {
 		return b
 	}
