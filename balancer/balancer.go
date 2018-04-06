@@ -36,9 +36,12 @@ var (
 	m = make(map[string]Builder)
 )
 
-// Register registers the balancer builder to the balancer map.
-// b.Name (lowercased) will be used as the name registered with
-// this builder.
+// Register registers the balancer builder to the balancer map. b.Name
+// (lowercased) will be used as the name registered with this builder.
+//
+// NOTE: this function must only be called during initialization time (i.e. in
+// an init() function), and is not thread-safe. If multiple Balancers are
+// registered with the same name, the one registered last will take effect.
 func Register(b Builder) {
 	m[strings.ToLower(b.Name())] = b
 }
