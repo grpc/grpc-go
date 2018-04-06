@@ -21,6 +21,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Type;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
@@ -58,6 +60,20 @@ public class ProtoUtilsTest {
     InputStream is = marshaller.stream(proto);
     is = new ByteArrayInputStream(ByteStreams.toByteArray(is));
     assertEquals(proto, marshaller.parse(is));
+  }
+
+  @Test
+  public void testJsonMarshallerFailToPrint() {
+    Marshaller<Any> marshaller = ProtoUtils.jsonMarshaller(Any.getDefaultInstance());
+    try {
+      marshaller.stream(
+          Any.newBuilder().setValue(ByteString.copyFromUtf8("invalid (no type url)")).build());
+      fail("Expected exception");
+    } catch (StatusRuntimeException e) {
+      assertNotNull(e.getCause());
+      assertNotNull(e.getMessage());
+      assertEquals(Status.Code.INTERNAL, e.getStatus().getCode());
+    }
   }
 
   @Test
