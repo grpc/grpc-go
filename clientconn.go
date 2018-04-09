@@ -406,10 +406,13 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // established, and connecting happens in the background). To make it a blocking
 // dial, use WithBlock() dial option.
 //
-// ctx can be used to cancel or expire the pending connection. It's mostly
-// useful in the blocking case. Once this function returns, the cancellation and
-// expiration of ctx will be noop. Users should call ClientConn.Close to
-// terminate all the pending operations after this function returns.
+// In the non-blocking case, the ctx does not act against the connection. It
+// only controls the setup steps.
+//
+// In the blocking case, ctx can be used to cancel or expire the pending
+// connection. Once this function returns, the cancellation and expiration of
+// ctx will be noop. Users should call ClientConn.Close to terminate all the
+// pending operations after this function returns.
 //
 // The target name syntax is defined in
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
