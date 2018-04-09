@@ -76,15 +76,16 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	}
 
 	// Call refreshSubConns to create/remove SubConns.
-	backendsUpdated := lb.refreshSubConns(backendAddrs)
-	// If no backend was updated, no SubConn will be newed/removed. But since
-	// the full serverList was different, there might be updates in drops or
-	// pick weights(different number of duplicates). We need to update picker
-	// with the fulllist.
-	if !backendsUpdated {
-		lb.regeneratePicker()
-		lb.cc.UpdateBalancerState(lb.state, lb.picker)
-	}
+	lb.refreshSubConns(backendAddrs)
+	// Regenerate and update picker no matter if there's update on backends (if
+	// any SubConn will be newed/removed). Because since the full serverList was
+	// different, there might be updates in drops or pick weights(different
+	// number of duplicates). We need to update picker with the fulllist.
+	//
+	// Now with cache, even if SubConn was newed/removed, there might be no
+	// state changes.
+	lb.regeneratePicker()
+	lb.cc.UpdateBalancerState(lb.state, lb.picker)
 }
 
 // refreshSubConns creates/removes SubConns with backendAddrs. It returns a bool
@@ -114,7 +115,11 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 				continue
 			}
 			lb.subConns[addrWithoutMD] = sc // Use the addr without MD as key for the map.
-			lb.scStates[sc] = connectivity.Idle
+			if _, ok := lb.scStates[sc]; !ok {
+				// Only set state of new sc to IDLE. The state could already be
+				// READY for cached SubConns.
+				lb.scStates[sc] = connectivity.Idle
+			}
 			sc.Connect()
 		}
 	}
