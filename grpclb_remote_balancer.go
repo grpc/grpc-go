@@ -26,6 +26,8 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/channelz"
+
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
@@ -168,6 +170,7 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 		}
 	}
 }
+
 func (lb *lbBalancer) callRemoteBalancer() error {
 	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -243,9 +246,13 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerName(PickFirstBalancerName))
 	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
-	// Dial using manualResolver.Scheme, which is a random scheme generated
+	if channelz.IsOn() {
+		dopts = append(dopts, WithChannelzParentID(lb.opt.ChannelzParentID))
+	}
+
+	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	cc, err := Dial("grpclb:///grpclb.server", dopts...)
+	cc, err := DialContext(context.Background(), "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}

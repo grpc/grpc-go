@@ -35,6 +35,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -89,6 +91,8 @@ type http2Server struct {
 	resetPingStrikes  uint32 // Accessed atomically.
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
+
+	channelzID int64 // channelz unique identification number
 
 	mu sync.Mutex // guard the following
 
@@ -217,6 +221,9 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		})
 		connBegin := &stats.ConnBegin{}
 		t.stats.HandleConn(t.ctx, connBegin)
+	}
+	if channelz.IsOn() {
+		t.channelzID = channelz.RegisterNormalSocket(t, config.ChannelzParentID, "")
 	}
 	t.framer.writer.Flush()
 
@@ -907,6 +914,9 @@ func (t *http2Server) Close() error {
 	t.controlBuf.finish()
 	t.cancel()
 	err := t.conn.Close()
+	if channelz.IsOn() {
+		channelz.RemoveEntry(t.channelzID)
+	}
 	// Cancel all active streams.
 	for _, s := range streams {
 		s.cancel()
@@ -1026,6 +1036,13 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	}()
 	return false, nil
 }
+
+func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
+	return &channelz.SocketInternalMetric{}
+}
+
+func (t *http2Server) IncrMsgSent() {}
+func (t *http2Server) IncrMsgRecv() {}
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
