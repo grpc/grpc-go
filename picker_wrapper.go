@@ -21,6 +21,7 @@ package grpc
 import (
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
@@ -45,10 +46,8 @@ type pickerWrapper struct {
 	connErrMu sync.Mutex
 	connErr   error
 
-	stickinessMu    sync.Mutex
-	stickinessMDKey string
-
-	stickiness *stickyStore
+	stickinessMDKey atomic.Value
+	stickiness      *stickyStore
 }
 
 func newPickerWrapper() *pickerWrapper {
@@ -73,12 +72,10 @@ func (bp *pickerWrapper) connectionError() error {
 }
 
 func (bp *pickerWrapper) updateStickinessMDKey(newKey string) {
-	bp.stickinessMu.Lock()
-	if bp.stickinessMDKey != newKey {
-		bp.stickinessMDKey = newKey
+	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != newKey {
+		bp.stickinessMDKey.Store(newKey)
 		bp.stickiness.clear()
 	}
-	bp.stickinessMu.Unlock()
 }
 
 func (bp *pickerWrapper) clearStickinessState() {
@@ -125,9 +122,7 @@ func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) f
 // When one of these situations happens, pick blocks until the picker gets updated.
 func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
 
-	bp.stickinessMu.Lock()
-	mdKey := bp.stickinessMDKey
-	bp.stickinessMu.Unlock()
+	mdKey, _ := bp.stickinessMDKey.Load().(string)
 	stickyKey, isSticky := stickyKeyFromContext(ctx, mdKey)
 
 	if isSticky {
