@@ -72,7 +72,7 @@ type ServiceConfig struct {
 	// Otherwise, the method has no MethodConfig to use.
 	Methods map[string]MethodConfig
 
-	stickinessKey *string
+	stickinessMetadataKey *string
 }
 
 func parseDuration(s *string) (*time.Duration, error) {
@@ -146,9 +146,9 @@ type jsonMC struct {
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
-	LoadBalancingPolicy *string
-	StickinessKey       *string
-	MethodConfig        *[]jsonMC
+	LoadBalancingPolicy   *string
+	StickinessMetadataKey *string
+	MethodConfig          *[]jsonMC
 }
 
 func parseServiceConfig(js string) (ServiceConfig, error) {
@@ -162,7 +162,7 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 		LB:      rsc.LoadBalancingPolicy,
 		Methods: make(map[string]MethodConfig),
 
-		stickinessKey: rsc.StickinessKey,
+		stickinessMetadataKey: rsc.StickinessMetadataKey,
 	}
 	if rsc.MethodConfig == nil {
 		return sc, nil

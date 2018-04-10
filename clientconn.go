@@ -1020,8 +1020,8 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 
 	var newStickinessMDKey string
-	if sc.stickinessKey != nil && *sc.stickinessKey != "" {
-		newStickinessMDKey = *sc.stickinessKey
+	if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
+		newStickinessMDKey = *sc.stickinessMetadataKey
 	}
 	cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
 
