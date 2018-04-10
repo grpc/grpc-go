@@ -2,7 +2,13 @@
 
 With load balancer, each RPC pick a different backend based on the load
 balancing policy. Stickiness policies try to preserve peers for the duration of
-a session.
+a session, so that RPCs with the same stickiness key will be directed to the
+same server.
+
+Note that there's only "soft" stickiness now, which means RPCs with the same
+stickienss key could still be sent to different servers. If stickiness is
+critical for the system, server side application level handling is still
+necessary.
 
 ## Stickiness Key
 
