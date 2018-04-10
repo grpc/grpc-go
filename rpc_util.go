@@ -228,8 +228,8 @@ func (o TrailerCallOption) after(c *callInfo) {
 	}
 }
 
-// Peer returns a CallOption that retrieves peer information for a
-// unary RPC.
+// Peer returns a CallOption that retrieves peer information for a unary RPC.
+// The peer field will be populated *after* the RPC completes.
 func Peer(p *peer.Peer) CallOption {
 	return PeerCallOption{PeerAddr: p}
 }
