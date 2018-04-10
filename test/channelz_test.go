@@ -999,7 +999,7 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	skt := channelz.GetSocket(id)
 	sktData := skt.SocketData
 	// 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
-	if sktData.LocalFlowControlWindow != 65536 || sktData.RemoteFlowControlWindow != 65486 {
+	if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
 		t.Fatalf("(LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 	}
 	ss, _ := channelz.GetServers(0)
@@ -1008,7 +1008,7 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	}
 	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 	sktData = ns[0].SocketData
-	if sktData.LocalFlowControlWindow != 65536 || sktData.RemoteFlowControlWindow != 65486 {
+	if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
 		t.Fatalf("(LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 	}
 }

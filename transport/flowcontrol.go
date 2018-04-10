@@ -225,10 +225,3 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	f.mu.Unlock()
 	return 0
 }
-
-func (f *inFlow) getInFlowWindow() int64 {
-	f.mu.Lock()
-	localFc := int64(f.limit)
-	f.mu.Unlock()
-	return localFc
-}
