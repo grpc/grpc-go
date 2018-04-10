@@ -1518,10 +1518,11 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) getCurAddr() resolver.Address {
+func (ac *addrConn) getCurAddr() (ret resolver.Address) {
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.curAddr
+	ret = ac.curAddr
+	ac.mu.Unlock()
+	return
 }
 
 func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
