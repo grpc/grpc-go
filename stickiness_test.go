@@ -76,7 +76,7 @@ func TestStickinessServiceConfig(t *testing.T) {
 	const testInput = "testStickinessKey"
 	wantStr := strings.ToLower(testInput)
 
-	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "%v"}`, testInput)) // ToLower() will be applied to the input.
+	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "%v"}`, testInput)) // ToLower() will be applied to the input.
 
 	for i := 0; i < 1000; i++ {
 		if key, _ := cc.blockingpicker.stickinessMDKey.Load().(string); key == wantStr {
@@ -130,7 +130,7 @@ func TestStickinessEnd2end(t *testing.T) {
 		t.Fatalf("When doing roundrobin, addr1 was picked %v times, addr2 was picked %v times", picked[0], picked[1])
 	}
 
-	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "sessionid"}`))
+	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "sessionid"}`))
 
 	// Should still be roundrobin.
 	picked = make([]int, 2, 2)
@@ -190,7 +190,7 @@ func TestStickinessChangeMDKey(t *testing.T) {
 	var reply string
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 
-	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "sessionid"}`))
+	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "sessionid"}`))
 
 	// Do sticky call, only one backend will be picked, and there will be one
 	// entry in stickiness map.
@@ -207,7 +207,7 @@ func TestStickinessChangeMDKey(t *testing.T) {
 		t.Fatalf("length of stickiness map is %v, want 1", mapLen)
 	}
 
-	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "sessionidnew"}`))
+	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "sessionidnew"}`))
 
 	var i int
 	for i = 0; i < 1000; i++ {
@@ -243,7 +243,7 @@ func TestStickinessSwitchingBalancer(t *testing.T) {
 	var reply string
 	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
 
-	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "sessionid"}`))
+	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "sessionid"}`))
 
 	// Do sticky call, only one backend will be picked, and there will be one
 	// entry in stickiness map.
