@@ -202,7 +202,7 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	for _, s := range srvs {
 		lbAddrs, err := lookupHost(d.ctx, s.Target)
 		if err != nil {
-			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
+			grpclog.Warningf("grpc: failed load balancer address dns lookup due to %v.\n", err)
 			continue
 		}
 		for _, a := range lbAddrs {
