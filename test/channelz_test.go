@@ -47,6 +47,18 @@ func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	}
 }
 
+func verifyResultWithDelay(f func() (bool, error)) error {
+	var ok bool
+	var err error
+	for i := 0; i < 1000; i++ {
+		if ok, err = f(); ok {
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return err
+}
+
 func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
@@ -79,24 +91,6 @@ func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func verifyResultWith5SecondDeadline(t *testing.T, f func() (bool, error)) {
-	deadline := time.After(5 * time.Second)
-	var ok bool
-	var err error
-	for {
-		if ok, err = f(); ok {
-			return
-		}
-		select {
-		case <-deadline:
-			t.Fatal(err)
-		default:
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-	}
-}
-
 func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	defer leakcheck.Check(t)
 	testcases := []struct {
@@ -123,22 +117,27 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 			te.srvAddr = ""
 			ccs = append(ccs, cc)
 		}
-		verifyResultWith5SecondDeadline(t, func() (bool, error) {
+		if err := verifyResultWithDelay(func() (bool, error) {
 			if tcs, end := channelz.GetTopChannels(c.start); len(tcs) != c.length || end != c.end {
 				return false, fmt.Errorf("GetTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)
 			}
 			return true, nil
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
+
 		for _, cc := range ccs {
 			cc.Close()
 		}
 
-		verifyResultWith5SecondDeadline(t, func() (bool, error) {
+		if err := verifyResultWithDelay(func() (bool, error) {
 			if tcs, end := channelz.GetTopChannels(c.start); len(tcs) != 0 || !end {
 				return false, fmt.Errorf("GetTopChannels(0) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(0)) = 0, end: true", tcs, len(tcs), end)
 			}
 			return true, nil
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 		te.tearDown()
 	}
 }
@@ -158,7 +157,7 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	te.clientConn()
 	defer te.tearDown()
 
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
@@ -167,14 +166,15 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
 	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
 
 	// wait for the shutdown of grpclb balancer
-	time.Sleep(10 * time.Millisecond)
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
@@ -183,7 +183,9 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
@@ -205,7 +207,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	defer te.tearDown()
 	// Here, we just wait for all sockets to be up. In the future, if we implement
 	// IDLE, we may need to make several rpc calls to create the sockets.
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
@@ -226,11 +228,13 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 		}
 
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	r.NewAddress(svrAddrs[:len(svrAddrs)-1])
 
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
@@ -251,7 +255,9 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 		}
 
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
@@ -273,9 +279,8 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 			c.Close()
 		}
 	}()
-	time.Sleep(10 * time.Millisecond)
 	var svrID int64
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
 			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
@@ -289,17 +294,21 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 		}
 		svrID = ss[0].ID
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	ccs[len(ccs)-1].Close()
-	time.Sleep(10 * time.Millisecond)
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+
+	if err := verifyResultWithDelay(func() (bool, error) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		if len(ns) != num-1 {
 			return false, fmt.Errorf("There should be %d normal sockets not %d", num-1, len(ns))
 		}
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCZServerListenSocketDeletion(t *testing.T) {
@@ -311,7 +320,7 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	go s.Serve(lis)
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
 			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
@@ -320,16 +329,20 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 			return false, fmt.Errorf("There should only be one server listen socket, not %d", len(ss[0].ListenSockets))
 		}
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	lis.Close()
-	verifyResultWith5SecondDeadline(t, func() (bool, error) {
+	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
 			return false, fmt.Errorf("There should be 1 server, not %d", len(ss))
 		}
 		return true, nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	s.Stop()
 }
 
