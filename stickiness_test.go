@@ -79,11 +79,9 @@ func TestStickinessServiceConfig(t *testing.T) {
 	r.NewServiceConfig(fmt.Sprintf(`{"stickinessKey": "%v"}`, testInput)) // ToLower() will be applied to the input.
 
 	for i := 0; i < 1000; i++ {
-		cc.blockingpicker.stickinessMu.Lock()
-		if cc.blockingpicker.stickinessMDKey == wantStr {
+		if key, _ := cc.blockingpicker.stickinessMDKey.Load().(string); key == wantStr {
 			return
 		}
-		cc.blockingpicker.stickinessMu.Unlock()
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatalf("cc.blockingpicker.stickiness.stickinessMDKey failed to change to %v within one second", wantStr)
