@@ -258,17 +258,10 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 		if count != num-1 {
 			return false, fmt.Errorf("There should be %d sockets not %d", num-1, count)
 		}
-<<<<<<< HEAD
 
 		return true, nil
 	}); err != nil {
 		t.Fatal(err)
-=======
-		count += len(sc.Sockets)
-	}
-	if count != num-1 {
-		t.Fatalf("There should be %d sockets not %d", num-1, count)
->>>>>>> init
 	}
 }
 
@@ -468,57 +461,46 @@ func TestCZChannelMetrics(t *testing.T) {
 	defer stream.CloseSend()
 	// Here, we just wait for all sockets to be up. In the future, if we implement
 	// IDLE, we may need to make several rpc calls to create the sockets.
-	time.Sleep(100 * time.Millisecond)
-	tcs, _ := channelz.GetTopChannels(0)
-	if len(tcs) != 1 {
-		t.Fatalf("There should only be one top channel, not %d", len(tcs))
-	}
-	if len(tcs[0].SubChans) != num {
-		t.Fatalf("There should be %d subchannel not %d", num, len(tcs[0].SubChans))
-	}
-	var cst, csu, cf int64
-	for k := range tcs[0].SubChans {
-		sc := channelz.GetSubChannel(k)
-		if sc == nil {
-			t.Fatalf("got <nil> subchannel")
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
 		}
-		cst += sc.ChannelData.CallsStarted
-		csu += sc.ChannelData.CallsSucceeded
-		cf += sc.ChannelData.CallsFailed
+		if len(tcs[0].SubChans) != num {
+			return false, fmt.Errorf("There should be %d subchannel not %d", num, len(tcs[0].SubChans))
+		}
+		var cst, csu, cf int64
+		for k := range tcs[0].SubChans {
+			sc := channelz.GetSubChannel(k)
+			if sc == nil {
+				return false, fmt.Errorf("got <nil> subchannel")
+			}
+			cst += sc.ChannelData.CallsStarted
+			csu += sc.ChannelData.CallsSucceeded
+			cf += sc.ChannelData.CallsFailed
+		}
+		if cst != 3 {
+			return false, fmt.Errorf("There should be 3 CallsStarted not %d", cst)
+		}
+		if csu != 1 {
+			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", csu)
+		}
+		if cf != 1 {
+			return false, fmt.Errorf("There should be 1 CallsFailed not %d", cf)
+		}
+		if tcs[0].ChannelData.CallsStarted != 3 {
+			return false, fmt.Errorf("There should be 3 CallsStarted not %d", tcs[0].ChannelData.CallsStarted)
+		}
+		if tcs[0].ChannelData.CallsSucceeded != 1 {
+			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", tcs[0].ChannelData.CallsSucceeded)
+		}
+		if tcs[0].ChannelData.CallsFailed != 1 {
+			return false, fmt.Errorf("There should be 1 CallsFailed not %d", tcs[0].ChannelData.CallsFailed)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if cst != 3 {
-		t.Fatalf("There should be 3 CallsStarted not %d", cst)
-	}
-	if csu != 1 {
-		t.Fatalf("There should be 1 CallsSucceeded not %d", csu)
-	}
-	if cf != 1 {
-		t.Fatalf("There should be 1 CallsFailed not %d", cf)
-	}
-	if tcs[0].ChannelData.CallsStarted != 3 {
-		t.Fatalf("There should be 3 CallsStarted not %d", tcs[0].ChannelData.CallsStarted)
-	}
-	if tcs[0].ChannelData.CallsSucceeded != 1 {
-		t.Fatalf("There should be 1 CallsSucceeded not %d", tcs[0].ChannelData.CallsSucceeded)
-	}
-	if tcs[0].ChannelData.CallsFailed != 1 {
-		t.Fatalf("There should be 1 CallsFailed not %d", tcs[0].ChannelData.CallsFailed)
-	}
-}
-
-func prettyPrintServerMetric(s *channelz.ServerMetric) {
-	if s == nil {
-		return
-	}
-	fmt.Println("{")
-	fmt.Printf("  ID: %+v\n", s.ID)
-	fmt.Printf("  RefName: %+v\n", s.RefName)
-	fmt.Printf("  CallsStarted: %+v\n", s.ServerData.CallsStarted)
-	fmt.Printf("  CallsSucceeded: %+v\n", s.ServerData.CallsSucceeded)
-	fmt.Printf("  CallsFailed: %+v\n", s.ServerData.CallsFailed)
-	fmt.Printf("  LastCallStartedTimestamp: %+v\n", s.ServerData.LastCallStartedTimestamp)
-	fmt.Printf("  Sockets: %+v\n", s.ListenSockets)
-	fmt.Println("}")
 }
 
 func TestCZServerMetrics(t *testing.T) {
@@ -557,45 +539,24 @@ func TestCZServerMetrics(t *testing.T) {
 	}
 	defer stream.CloseSend()
 
-	time.Sleep(10 * time.Millisecond)
-	ss, _ := channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should only be one server, not %d", len(ss))
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
+		if ss[0].ServerData.CallsStarted != 3 {
+			return false, fmt.Errorf("There should be 3 CallsStarted not %d", ss[0].ServerData.CallsStarted)
+		}
+		if ss[0].ServerData.CallsSucceeded != 1 {
+			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", ss[0].ServerData.CallsSucceeded)
+		}
+		if ss[0].ServerData.CallsFailed != 1 {
+			return false, fmt.Errorf("There should be 1 CallsFailed not %d", ss[0].ServerData.CallsFailed)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if ss[0].ServerData.CallsStarted != 3 {
-		t.Fatalf("There should be 3 CallsStarted not %d", ss[0].ServerData.CallsStarted)
-	}
-	if ss[0].ServerData.CallsSucceeded != 1 {
-		t.Fatalf("There should be 1 CallsSucceeded not %d", ss[0].ServerData.CallsSucceeded)
-	}
-	if ss[0].ServerData.CallsFailed != 1 {
-		t.Fatalf("There should be 1 CallsFailed not %d", ss[0].ServerData.CallsFailed)
-	}
-}
-
-func prettyPrintSocketMetric(s *channelz.SocketMetric) {
-	if s == nil {
-		return
-	}
-	fmt.Println("{")
-	fmt.Printf("  ID: %+v\n", s.ID)
-	fmt.Printf("  RefName: %+v\n", s.RefName)
-	fmt.Printf("  StreamsStarted: %+v\n", s.SocketData.StreamsStarted)
-	fmt.Printf("  StreamsSucceeded: %+v\n", s.SocketData.StreamsSucceeded)
-	fmt.Printf("  StreamsFailed: %+v\n", s.SocketData.StreamsFailed)
-	fmt.Printf("  MessagesSent: %+v\n", s.SocketData.MessagesSent)
-	fmt.Printf("  MessagesReceived: %+v\n", s.SocketData.MessagesReceived)
-	fmt.Printf("  KeepAlivesSent: %+v\n", s.SocketData.KeepAlivesSent)
-	fmt.Printf("  LastLocalStreamCreatedTimestamp: %+v\n", s.SocketData.LastLocalStreamCreatedTimestamp)
-	fmt.Printf("  LastRemoteStreamCreatedTimestamp: %+v\n", s.SocketData.LastRemoteStreamCreatedTimestamp)
-	fmt.Printf("  LastMessageSentTimestamp: %+v\n", s.SocketData.LastMessageSentTimestamp)
-	fmt.Printf("  LastMessageReceivedTimestamp: %+v\n", s.SocketData.LastMessageReceivedTimestamp)
-	fmt.Printf("  LocalFlowControlWindow: %+v\n", s.SocketData.LocalFlowControlWindow)
-	fmt.Printf("  RemoteFlowControlWindow: %+v\n", s.SocketData.RemoteFlowControlWindow)
-	fmt.Printf("  LocalAddr: %+v\n", s.SocketData.LocalAddr)
-	fmt.Printf("  RemoteAddr: %+v\n", s.SocketData.RemoteAddr)
-	fmt.Printf("  RemoteName: %+v\n", s.SocketData.RemoteName)
-	fmt.Println("}")
 }
 
 type testServiceClientWrapper struct {
@@ -656,6 +617,18 @@ func doSuccessfulUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
+}
+
+func doStreamingInputCallWithLargePayload(tc testpb.TestServiceClient, t *testing.T) {
+	s, err := tc.StreamingInputCall(context.Background())
+	if err != nil {
+		t.Fatalf("TestService/StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Send(&testpb.StreamingInputCallRequest{Payload: payload})
 }
 
 func doServerSideFailedUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
@@ -804,7 +777,6 @@ func doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc testpb.TestS
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = %v, want error code: %v", stream, err, codes.ResourceExhausted)
 	}
-
 }
 
 func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
@@ -832,64 +804,85 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
 
 	doSuccessfulUnaryCall(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	tchan, _ := channelz.GetTopChannels(0)
-	if len(tchan) != 1 {
-		t.Fatalf("There should only be one top channel, not %d", len(tchan))
-	}
-	if len(tchan[0].SubChans) != 1 {
-		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
-	}
-	var id int64
-	for id = range tchan[0].SubChans {
-		break
-	}
-	sc := channelz.GetSubChannel(id)
-	if sc == nil {
-		t.Fatalf("There should only be one socket under subchannel %d, not 0", id)
-	}
-	if len(sc.Sockets) != 1 {
-		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
-	}
-	for id = range sc.Sockets {
-		break
-	}
-	skt := channelz.GetSocket(id)
-	sktData := skt.SocketData
-	if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
+	var scID, skID int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tchan, _ := channelz.GetTopChannels(0)
+		if len(tchan) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+		}
+		if len(tchan[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+		}
+
+		for scID = range tchan[0].SubChans {
+			break
+		}
+		sc := channelz.GetSubChannel(scID)
+		if sc == nil {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", scID)
+		}
+		if len(sc.Sockets) != 1 {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+		}
+		for skID = range sc.Sockets {
+			break
+		}
+		skt := channelz.GetSocket(skID)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doServerSideFailedUnaryCall(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	skt = channelz.GetSocket(id)
-	sktData = skt.SocketData
-	if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 1 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (2, 2, 2, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(skID)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 1 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (2, 2, 2, 1), got (%d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doClientSideInitiatedFailedStream(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	skt = channelz.GetSocket(id)
-	sktData = skt.SocketData
-	if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 2 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 3, 2), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(skID)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 2 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 3, 2), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doServerSideInitiatedFailedStreamWithRSTStream(tc, t, rcw)
-	time.Sleep(10 * time.Millisecond)
-	skt = channelz.GetSocket(id)
-	sktData = skt.SocketData
-	if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 2 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 2, 2, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(skID)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 2 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 2, 2, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doServerSideInitiatedFailedStreamWithGoAway(tc, t, rcw)
-	time.Sleep(10 * time.Millisecond)
-	skt = channelz.GetSocket(id)
-	sktData = skt.SocketData
-	if sktData.StreamsStarted != 6 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 3 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (6, 2, 3, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(skID)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 6 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 3 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (6, 2, 3, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -913,45 +906,49 @@ func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testi
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
 
 	doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc, t, dw)
-	time.Sleep(10 * time.Millisecond)
-	tchan, _ := channelz.GetTopChannels(0)
-	if len(tchan) != 1 {
-		t.Fatalf("There should only be one top channel, not %d", len(tchan))
-	}
-	if len(tchan[0].SubChans) != 1 {
-		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
-	}
-	var id int64
-	for id = range tchan[0].SubChans {
-		break
-	}
-	sc := channelz.GetSubChannel(id)
-	if sc == nil {
-		t.Fatalf("There should only be one socket under subchannel %d, not 0", id)
-	}
-	if len(sc.Sockets) != 1 {
-		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
-	}
-	for id = range sc.Sockets {
-		break
-	}
-	skt := channelz.GetSocket(id)
-	sktData := skt.SocketData
-	if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 0 || sktData.StreamsFailed != 1 {
-		t.Fatalf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
-	}
-	ss, _ := channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should only be one server, not %d", len(ss))
-	}
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tchan, _ := channelz.GetTopChannels(0)
+		if len(tchan) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+		}
+		if len(tchan[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+		}
+		var id int64
+		for id = range tchan[0].SubChans {
+			break
+		}
+		sc := channelz.GetSubChannel(id)
+		if sc == nil {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+		}
+		if len(sc.Sockets) != 1 {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+		}
+		for id = range sc.Sockets {
+			break
+		}
+		skt := channelz.GetSocket(id)
+		sktData := skt.SocketData
+		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 0 || sktData.StreamsFailed != 1 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
+		}
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
 
-	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
-	if len(ns) != 1 {
-		t.Fatalf("There should be one server normal socket, not %d", len(ns))
-	}
-	sktData = ns[0].SocketData
-	if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 0 || sktData.StreamsFailed != 1 {
-		t.Fatalf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
+		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
+		if len(ns) != 1 {
+			return false, fmt.Errorf("There should be one server normal socket, not %d", len(ns))
+		}
+		sktData = ns[0].SocketData
+		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 0 || sktData.StreamsFailed != 1 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -974,42 +971,97 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 		doSuccessfulUnaryCall(tc, t)
 	}
 
-	time.Sleep(10 * time.Millisecond)
-	tchan, _ := channelz.GetTopChannels(0)
-	if len(tchan) != 1 {
-		t.Fatalf("There should only be one top channel, not %d", len(tchan))
+	var cliSktID, svrSktID int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tchan, _ := channelz.GetTopChannels(0)
+		if len(tchan) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+		}
+		if len(tchan[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+		}
+		var id int64
+		for id = range tchan[0].SubChans {
+			break
+		}
+		sc := channelz.GetSubChannel(id)
+		if sc == nil {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+		}
+		if len(sc.Sockets) != 1 {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+		}
+		for id = range sc.Sockets {
+			break
+		}
+		skt := channelz.GetSocket(id)
+		sktData := skt.SocketData
+		// 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
+		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
+			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
+		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
+		sktData = ns[0].SocketData
+		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
+			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		cliSktID, svrSktID = id, ss[0].ID
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if len(tchan[0].SubChans) != 1 {
-		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+
+	doStreamingInputCallWithLargePayload(tc, t)
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(cliSktID)
+		sktData := skt.SocketData
+		// Local: 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
+		// Remote: 65536 - 5 (Length-Prefixed-Message size) * 10 - 10011 = 55475
+		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 55475 {
+			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 55475), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
+		ns, _ := channelz.GetServerSockets(svrSktID, 0)
+		sktData = ns[0].SocketData
+		if sktData.LocalFlowControlWindow != 55475 || sktData.RemoteFlowControlWindow != 65486 {
+			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (55475, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	var id int64
-	for id = range tchan[0].SubChans {
-		break
-	}
-	sc := channelz.GetSubChannel(id)
-	if sc == nil {
-		t.Fatalf("There should only be one socket under subchannel %d, not 0", id)
-	}
-	if len(sc.Sockets) != 1 {
-		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
-	}
-	for id = range sc.Sockets {
-		break
-	}
-	skt := channelz.GetSocket(id)
-	sktData := skt.SocketData
-	// 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
-	if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
-		t.Fatalf("(LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
-	}
-	ss, _ := channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should only be one server, not %d", len(ss))
-	}
-	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
-	sktData = ns[0].SocketData
-	if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
-		t.Fatalf("(LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+
+	// triggers transport flow control window update on server side, since unacked
+	// bytes should be larger than limit now. i.e. 50 + 20022 > 65536/4.
+	doStreamingInputCallWithLargePayload(tc, t)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		skt := channelz.GetSocket(cliSktID)
+		sktData := skt.SocketData
+		// Local: 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
+		// Remote: 65536
+		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65536 {
+			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 65536), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
+		ns, _ := channelz.GetServerSockets(svrSktID, 0)
+		sktData = ns[0].SocketData
+		if sktData.LocalFlowControlWindow != 65536 || sktData.RemoteFlowControlWindow != 65486 {
+			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1025,32 +1077,35 @@ func TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	doIdleCallToInvokeKeepAlive(tc, t)
 
-	time.Sleep(10 * time.Millisecond)
-	tchan, _ := channelz.GetTopChannels(0)
-	if len(tchan) != 1 {
-		t.Fatalf("There should only be one top channel, not %d", len(tchan))
-	}
-	if len(tchan[0].SubChans) != 1 {
-		t.Fatalf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
-	}
-	var id int64
-	for id = range tchan[0].SubChans {
-		break
-	}
-	sc := channelz.GetSubChannel(id)
-	if sc == nil {
-		t.Fatalf("There should only be one socket under subchannel %d, not 0", id)
-	}
-	if len(sc.Sockets) != 1 {
-		t.Fatalf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
-	}
-	for id = range sc.Sockets {
-		break
-	}
-	time.Sleep(10 * time.Millisecond)
-	skt := channelz.GetSocket(id)
-	if skt.SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-		t.Fatalf("There should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tchan, _ := channelz.GetTopChannels(0)
+		if len(tchan) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+		}
+		if len(tchan[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+		}
+		var id int64
+		for id = range tchan[0].SubChans {
+			break
+		}
+		sc := channelz.GetSubChannel(id)
+		if sc == nil {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+		}
+		if len(sc.Sockets) != 1 {
+			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+		}
+		for id = range sc.Sockets {
+			break
+		}
+		skt := channelz.GetSocket(id)
+		if skt.SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
+			return false, fmt.Errorf("There should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1065,41 +1120,65 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	defer te.tearDown()
 	cc, _ := te.clientConnWithConnControl()
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
-	ss, _ := channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should only be one server, not %d", len(ss))
+
+	var svrID int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+		}
+		svrID = ss[0].ID
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doSuccessfulUnaryCall(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
-	sktData := ns[0].SocketData
-	if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
-		t.Fatalf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ns, _ := channelz.GetServerSockets(svrID, 0)
+		sktData := ns[0].SocketData
+		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doServerSideFailedUnaryCall(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	ns, _ = channelz.GetServerSockets(ss[0].ID, 0)
-	sktData = ns[0].SocketData
-	if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
-		t.Fatalf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (2, 2, 0, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ns, _ := channelz.GetServerSockets(svrID, 0)
+		sktData := ns[0].SocketData
+		if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (2, 2, 0, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doClientSideFailedUnaryCall(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	ns, _ = channelz.GetServerSockets(ss[0].ID, 0)
-	sktData = ns[0].SocketData
-	if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 2 {
-		t.Fatalf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 3, 0, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ns, _ := channelz.GetServerSockets(svrID, 0)
+		sktData := ns[0].SocketData
+		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 2 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 3, 0, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	doClientSideInitiatedFailedStream(tc, t)
-	time.Sleep(10 * time.Millisecond)
-	ns, _ = channelz.GetServerSockets(ss[0].ID, 0)
-	sktData = ns[0].SocketData
-	if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 3 {
-		t.Fatalf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 3, 1, 3, 3), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ns, _ := channelz.GetServerSockets(svrID, 0)
+		sktData := ns[0].SocketData
+		if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 3 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 3, 1, 3, 3), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1115,16 +1194,20 @@ func TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	doIdleCallToInvokeKeepAlive(tc, t)
 
-	time.Sleep(10 * time.Millisecond)
-	ss, _ := channelz.GetServers(0)
-	if len(ss) != 1 {
-		t.Fatalf("There should be one server, not %d", len(ss))
-	}
-	ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
-	if len(ns) != 1 {
-		t.Fatalf("There should be one server normal socket, not %d", len(ns))
-	}
-	if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-		t.Fatalf("There should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+	if err := verifyResultWithDelay(func() (bool, error) {
+		ss, _ := channelz.GetServers(0)
+		if len(ss) != 1 {
+			return false, fmt.Errorf("There should be one server, not %d", len(ss))
+		}
+		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
+		if len(ns) != 1 {
+			return false, fmt.Errorf("There should be one server normal socket, not %d", len(ns))
+		}
+		if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
+			return false, fmt.Errorf("There should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
