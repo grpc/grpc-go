@@ -971,6 +971,15 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 				}
 			}
 			t.mu.Unlock()
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				if streamSucceeded {
+					t.streamsSucceeded++
+				} else {
+					t.streamsFailed++
+				}
+				t.czmu.Unlock()
+			}
 		},
 	}
 	if hdr != nil {
@@ -978,15 +987,6 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 		t.controlBuf.put(hdr)
 	} else {
 		t.controlBuf.put(cleanup)
-	}
-	if channelz.IsOn() {
-		t.czmu.Lock()
-		if streamSucceeded {
-			t.streamsSucceeded++
-		} else {
-			t.streamsFailed++
-		}
-		t.czmu.Unlock()
 	}
 }
 

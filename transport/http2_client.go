@@ -524,6 +524,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				return false, err
 			}
 			t.activeStreams[id] = s
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				t.streamsStarted++
+				t.lastStreamCreated = time.Now()
+				t.czmu.Unlock()
+			}
 			var sendPing bool
 			// If the number of active streams change from 0 to 1, then check if keepalive
 			// has gone dormant. If so, wake it up.
@@ -590,12 +596,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ErrConnClosing
 		}
 	}
-	if channelz.IsOn() {
-		t.czmu.Lock()
-		t.streamsStarted++
-		t.lastStreamCreated = time.Now()
-		t.czmu.Unlock()
-	}
 	if t.statsHandler != nil {
 		outHeader := &stats.OutHeader{
 			Client:      true,
@@ -636,15 +636,6 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	if len(mdata) > 0 {
 		s.trailer = mdata
 	}
-	if channelz.IsOn() {
-		t.czmu.Lock()
-		if streamSucceeded {
-			t.streamsSucceeded++
-		} else {
-			t.streamsFailed++
-		}
-		t.czmu.Unlock()
-	}
 	if err != nil {
 		// This will unblock reads eventually.
 		s.write(recvMsg{err: err})
@@ -663,6 +654,15 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 				delete(t.activeStreams, s.id)
 			}
 			t.mu.Unlock()
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				if streamSucceeded {
+					t.streamsSucceeded++
+				} else {
+					t.streamsFailed++
+				}
+				t.czmu.Unlock()
+			}
 		},
 		rst:     rst,
 		rstCode: rstCode,

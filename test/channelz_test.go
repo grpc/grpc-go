@@ -745,14 +745,34 @@ func doServerSideInitiatedFailedStreamWithRSTStream(tc testpb.TestServiceClient,
 func doServerSideInitiatedFailedStreamWithGoAway(tc testpb.TestServiceClient, t *testing.T, l *listenerWrapper) {
 	// This call is just to keep the transport from shutting down (socket will be deleted
 	// in this case, and we will not be able to get metrics).
-	_, err := tc.FullDuplexCall(context.Background())
-	if err != nil {
-		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
-	}
-
 	s, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+	if err := s.Send(&testpb.StreamingOutputCallRequest{ResponseParameters: []*testpb.ResponseParameters{
+		{
+			Size: 1,
+		},
+	}}); err != nil {
+		t.Fatalf("s.Send() failed with error: %v", err)
+	}
+	if _, err := s.Recv(); err != nil {
+		t.Fatalf("s.Recv() failed with error: %v", err)
+	}
+
+	s, err = tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+	if err := s.Send(&testpb.StreamingOutputCallRequest{ResponseParameters: []*testpb.ResponseParameters{
+		{
+			Size: 1,
+		},
+	}}); err != nil {
+		t.Fatalf("s.Send() failed with error: %v", err)
+	}
+	if _, err := s.Recv(); err != nil {
+		t.Fatalf("s.Recv() failed with error: %v", err)
 	}
 
 	rcw := l.getLastConn()
@@ -877,8 +897,8 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		skt := channelz.GetSocket(skID)
 		sktData := skt.SocketData
-		if sktData.StreamsStarted != 6 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 3 || sktData.MessagesSent != 4 || sktData.MessagesReceived != 3 {
-			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (6, 2, 3, 4, 3), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		if sktData.StreamsStarted != 6 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 3 || sktData.MessagesSent != 6 || sktData.MessagesReceived != 5 {
+			return false, fmt.Errorf("channelz.GetSocket(%d), want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (6, 2, 3, 6, 5), got (%d, %d, %d, %d, %d)", skt.ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
 		}
 		return true, nil
 	}); err != nil {
