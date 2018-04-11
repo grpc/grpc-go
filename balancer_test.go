@@ -434,7 +434,7 @@ func TestOneAddressRemoval(t *testing.T) {
 			// After sleepDuration, invoke RPC.
 			// server[0] is removed around the same time to make it racy between balancer and gRPC internals.
 			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
-				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
+				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want nil", err)
 			}
 			wg.Done()
 		}()
@@ -795,7 +795,7 @@ func TestPickFirstOneAddressRemoval(t *testing.T) {
 			// After sleepDuration, invoke RPC.
 			// server[0] is removed around the same time to make it racy between balancer and gRPC internals.
 			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
-				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
+				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want nil", err)
 			}
 			wg.Done()
 		}()
