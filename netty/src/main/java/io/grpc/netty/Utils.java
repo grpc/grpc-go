@@ -237,7 +237,8 @@ class Utils {
       b.addOption(key.name(), String.valueOf(value));
     }
 
-    NativeSocketOptions nativeOptions = NettySocketSupport.getNativeSocketOptions(channel);
+    NativeSocketOptions nativeOptions
+        = NettySocketSupport.getNativeSocketOptions(channel);
     if (nativeOptions != null) {
       b.setTcpInfo(nativeOptions.tcpInfo); // may be null
       for (Entry<String, String> entry : nativeOptions.otherInfo.entrySet()) {

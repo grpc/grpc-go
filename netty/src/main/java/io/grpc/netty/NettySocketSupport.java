@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import io.grpc.internal.Channelz.TcpInfo;
 import io.netty.channel.Channel;
-import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -28,22 +27,22 @@ import javax.annotation.Nullable;
  * An class for getting low level socket info.
  */
 final class NettySocketSupport {
+  private static volatile Helper INSTANCE = new NettySocketHelperImpl();
 
-  /**
-   * Returns the info on the socket if possible. Returns null if the info can not be discovered.
-   */
-  @Nullable
-  public static NativeSocketOptions getNativeSocketOptions(Channel ch) {
-    // TODO(zpencer): if netty-epoll, use reflection to call EpollSocketChannel.tcpInfo()
-    // And/or if some other low level socket support library is available, call it now.
-    return null;
+  interface Helper {
+    /**
+     * Returns the info on the socket if possible. Returns null if the info can not be discovered.
+     */
+    @Nullable
+    NativeSocketOptions getNativeSocketOptions(Channel ch);
   }
 
   /**
    * A TcpInfo and additional other info that will be turned into channelz socket options.
    */
   public static final class NativeSocketOptions {
-    @Nullable public final TcpInfo tcpInfo;
+    @Nullable
+    public final TcpInfo tcpInfo;
     public final ImmutableMap<String, String> otherInfo;
 
     /** Creates an instance. */
@@ -52,9 +51,24 @@ final class NettySocketSupport {
         Map<String, String> otherInfo) {
       Preconditions.checkNotNull(otherInfo);
       this.tcpInfo = tcpInfo;
-      this.otherInfo = ImmutableMap.copyOf(new HashMap<String, String>(otherInfo));
+      this.otherInfo = ImmutableMap.copyOf(otherInfo);
     }
   }
 
-  private NettySocketSupport() {}
+  public static NativeSocketOptions getNativeSocketOptions(Channel ch) {
+    return INSTANCE.getNativeSocketOptions(ch);
+  }
+
+  static void setHelper(Helper helper) {
+    INSTANCE = Preconditions.checkNotNull(helper);
+  }
+
+  private static final class NettySocketHelperImpl implements Helper {
+    @Override
+    public NativeSocketOptions getNativeSocketOptions(Channel ch) {
+      // TODO(zpencer): if netty-epoll, use reflection to call EpollSocketChannel.tcpInfo()
+      // And/or if some other low level socket support library is available, call it now.
+      return null;
+    }
+  }
 }
