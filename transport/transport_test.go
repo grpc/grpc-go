@@ -100,7 +100,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		req = expectedRequestLarge
 		resp = expectedResponseLarge
 	}
-	_, p, err := s.Read()
+	_, p, err := s.Read(math.MaxInt32)
 	if err != nil {
 		return
 	}
@@ -115,7 +115,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 
 func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 	for {
-		_, msg, err := s.Read()
+		_, msg, err := s.Read(math.MaxInt32)
 		if err != nil {
 			if err == io.EOF {
 				h.t.WriteStatus(s, status.New(codes.OK, ""))
@@ -186,7 +186,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	// Wait before reading. Give time to client to start sending
 	// before server starts reading.
 	time.Sleep(2 * time.Second)
-	_, p, err := s.Read()
+	_, p, err := s.Read(math.MaxInt32)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, <nil>", err)
 		return
@@ -215,7 +215,7 @@ func (h *testStreamHandler) handleStreamDelayWrite(t *testing.T, s *Stream) {
 		req = expectedRequestLarge
 		resp = expectedResponseLarge
 	}
-	_, p, err := s.Read()
+	_, p, err := s.Read(math.MaxInt32)
 	if err != nil {
 		t.Errorf("s.Read(_) = _, %v, want _, <nil>", err)
 		return
@@ -433,7 +433,7 @@ func TestInflightStreamClosing(t *testing.T) {
 	serr := StreamError{Desc: "client connection is closing"}
 	go func() {
 		defer close(donec)
-		if _, _, err := stream.Read(); err != serr {
+		if _, _, err := stream.Read(math.MaxInt32); err != serr {
 			t.Errorf("unexpected Stream error %v, expected %v", err, serr)
 		}
 	}()
@@ -852,11 +852,11 @@ func TestClientSendAndReceive(t *testing.T) {
 	if err := ct.Write(s1, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("failed to send data: %v", err)
 	}
-	_, p, recvErr := s1.Read()
+	_, p, recvErr := s1.Read(math.MaxInt32)
 	if recvErr != nil || !bytes.Equal(p, expectedResponse) {
 		t.Fatalf("Error: %v, want <nil>; Result: %v, want %v", recvErr, p, expectedResponse)
 	}
-	_, _, recvErr = s1.Read()
+	_, _, recvErr = s1.Read(math.MaxInt32)
 	if recvErr != io.EOF {
 		t.Fatalf("Error: %v; want <EOF>", recvErr)
 	}
@@ -891,9 +891,9 @@ func performOneRPC(ct ClientTransport) {
 		// underlying transport is gone.
 		//
 		// Read response
-		s.Read()
+		s.Read(math.MaxInt32)
 		// Read io.EOF
-		s.Read()
+		s.Read(math.MaxInt32)
 	}
 }
 
@@ -931,10 +931,10 @@ func TestLargeMessage(t *testing.T) {
 			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
-			if _, p, err := s.Read(); err != nil || !bytes.Equal(p, expectedResponseLarge) {
-				t.Errorf("s.Read() = %v, %v, want %v, <nil>", p, err, expectedResponse)
+			if _, p, err := s.Read(math.MaxInt32); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+				t.Errorf("s.Read(math.MaxInt32) = %v, %v, want %v, <nil>", p, err, expectedResponse)
 			}
-			if _, _, err = s.Read(); err != io.EOF {
+			if _, _, err = s.Read(math.MaxInt32); err != io.EOF {
 				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
@@ -969,11 +969,11 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 
 			// Give time to server to begin sending before client starts reading.
 			time.Sleep(2 * time.Second)
-			if _, p, err := s.Read(); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+			if _, p, err := s.Read(math.MaxInt32); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 				t.Errorf("s.Read(_) = _, %v, want _, <nil>", err)
 				return
 			}
-			if _, _, err = s.Read(); err != io.EOF {
+			if _, _, err = s.Read(math.MaxInt32); err != io.EOF {
 				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
@@ -1008,11 +1008,11 @@ func TestLargeMessageDelayWrite(t *testing.T) {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 				return
 			}
-			if _, p, err := s.Read(); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+			if _, p, err := s.Read(math.MaxInt32); err != nil || !bytes.Equal(p, expectedResponseLarge) {
 				t.Errorf("io.ReadFull(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
 				return
 			}
-			if _, _, err = s.Read(); err != io.EOF {
+			if _, _, err = s.Read(math.MaxInt32); err != io.EOF {
 				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
@@ -1036,7 +1036,7 @@ func TestGracefulClose(t *testing.T) {
 	if err := ct.Write(s, msg, &Options{}); err != nil {
 		t.Fatalf("Error while writing: %v", err)
 	}
-	if _, _, err := s.Read(); err != nil {
+	if _, _, err := s.Read(math.MaxInt32); err != nil {
 		t.Fatalf("Error while reading: %v", err)
 	}
 	if err = ct.GracefulClose(); err != nil {
@@ -1053,13 +1053,13 @@ func TestGracefulClose(t *testing.T) {
 				return
 			}
 			ct.Write(str, nil, &Options{Last: true})
-			if _, _, err := str.Read(); err != errStreamDrain {
+			if _, _, err := str.Read(math.MaxInt32); err != errStreamDrain {
 				t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, errStreamDrain)
 			}
 		}()
 	}
 	ct.Write(s, nil, &Options{Last: true})
-	if _, _, err := s.Read(); err != io.EOF {
+	if _, _, err := s.Read(math.MaxInt32); err != io.EOF {
 		t.Fatalf("Client expected EOF from the server. Got: %v", err)
 	}
 	// The stream which was created before graceful close can still proceed.
@@ -1093,7 +1093,7 @@ func TestLargeMessageSuspension(t *testing.T) {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
 	expectedErr := streamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
-	if _, _, err := s.Read(); err != expectedErr {
+	if _, _, err := s.Read(math.MaxInt32); err != expectedErr {
 		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
 	}
 	ct.Close()
@@ -1312,12 +1312,12 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 
 	// Client should be able to read data on second stream.
-	if _, _, err := cstream2.Read(); err != nil {
+	if _, _, err := cstream2.Read(math.MaxInt32); err != nil {
 		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
 	}
 
 	// Client should be able to read data on first stream.
-	if _, _, err := cstream1.Read(); err != nil {
+	if _, _, err := cstream1.Read(math.MaxInt32); err != nil {
 		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
 	}
 }
@@ -1380,11 +1380,11 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 	st.mu.Unlock()
 	// Reading from the stream on server should succeed.
-	if _, _, err := sstream1.Read(); err != nil {
+	if _, _, err := sstream1.Read(math.MaxInt32); err != nil {
 		t.Fatalf("_.Read(_) = %v, want <nil>", err)
 	}
 
-	if _, _, err := sstream1.Read(); err != io.EOF {
+	if _, _, err := sstream1.Read(math.MaxInt32); err != io.EOF {
 		t.Fatalf("_.Read(_) = %v, want io.EOF", err)
 	}
 
@@ -1596,7 +1596,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 	if err := ct.Write(s, expectedRequest, &opts); err != nil && err != errStreamDone {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
-	if _, _, err := s.Read(); err != io.EOF {
+	if _, _, err := s.Read(math.MaxInt32); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
 	if !reflect.DeepEqual(s.Status(), encodingTestStatus) {
@@ -1623,7 +1623,7 @@ func TestInvalidHeaderField(t *testing.T) {
 	if err := ct.Write(s, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
-	_, _, err = s.Read()
+	_, _, err = s.Read(math.MaxInt32)
 	if se, ok := err.(StreamError); !ok || se.Code != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
 	}
@@ -1751,7 +1751,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		if err := ct.Write(cstream, msg, &opts); err != nil {
 			t.Fatalf("Error on client while writing message: %v", err)
 		}
-		_, recvMsg, err := cstream.Read()
+		_, recvMsg, err := cstream.Read(math.MaxInt32)
 		if err != nil {
 			t.Fatalf("Error on client while reading data: %v", err)
 		}
@@ -1768,7 +1768,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	loopyServerStream := st.loopy.estdStreams[sstream.id]
 	loopyClientStream := ct.loopy.estdStreams[cstream.id]
 	ct.Write(cstream, nil, &Options{Last: true}) // Close the stream.
-	if _, _, err := cstream.Read(); err != io.EOF {
+	if _, _, err := cstream.Read(math.MaxInt32); err != io.EOF {
 		t.Fatalf("Client expected an EOF from the server. Got: %v", err)
 	}
 	// Sleep for a little to make sure both sides flush out their buffers.
@@ -1973,7 +1973,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) 
 	stream, cleanUp := setUpHTTPStatusTest(t, httpStatus, wh)
 	defer cleanUp()
 	want := httpStatusConvTab[httpStatus]
-	_, _, err := stream.Read()
+	_, _, err := stream.Read(math.MaxInt32)
 	if err == nil {
 		t.Fatalf("Stream.Read(_) unexpectedly returned no error. Expected stream error with code %v", want)
 	}
@@ -1989,7 +1989,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) 
 func TestHTTPStatusOKAndMissingGRPCStatus(t *testing.T) {
 	stream, cleanUp := setUpHTTPStatusTest(t, http.StatusOK, writeOneHeader)
 	defer cleanUp()
-	_, _, err := stream.Read()
+	_, _, err := stream.Read(math.MaxInt32)
 	if err != io.EOF {
 		t.Fatalf("stream.Read(_) = _, %v, want _, io.EOF", err)
 	}
@@ -2010,7 +2010,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	testErr := errors.New("test error")
 	s.notifyErr(testErr)
 
-	pf, inBuf, actualErr := s.Read()
+	pf, inBuf, actualErr := s.Read(math.MaxInt32)
 	if pf != false || inBuf != nil || actualErr.Error() != testErr.Error() {
 		t.Errorf("%v, %v, %v := s.Read(_) differs; want false, <nil>, %v", pf, inBuf, actualErr, testErr)
 	}
@@ -2022,7 +2022,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	s.notifyErr(errors.New("different error from first"))
 
 	for i := 0; i < 2; i++ {
-		pf, inBuf, actualErr := s.Read()
+		pf, inBuf, actualErr := s.Read(math.MaxInt32)
 		if pf != false || inBuf != nil || actualErr.Error() != testErr.Error() {
 			t.Errorf("%v, %v, %v := s.Read(_) differs; want false, <nil>, %v", pf, inBuf, actualErr, testErr)
 		}
@@ -2075,7 +2075,7 @@ func runPingPongTest(t *testing.T, msgSize int) {
 		select {
 		case <-done:
 			ct.Write(stream, nil, &Options{Last: true})
-			if _, _, err := stream.Read(); err != io.EOF {
+			if _, _, err := stream.Read(math.MaxInt32); err != io.EOF {
 				t.Fatalf("Client expected EOF from the server. Got: %v", err)
 			}
 			return
@@ -2083,7 +2083,7 @@ func runPingPongTest(t *testing.T, msgSize int) {
 			if err := ct.Write(stream, msg, opts); err != nil {
 				t.Fatalf("Error on client while writing message. Err: %v", err)
 			}
-			_, recvMsg, err := stream.Read()
+			_, recvMsg, err := stream.Read(math.MaxInt32)
 			if err != nil {
 				t.Fatalf("Error on client while reading data. Err: %v", err)
 			}

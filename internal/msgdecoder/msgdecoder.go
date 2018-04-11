@@ -1,3 +1,21 @@
+/*
+ * Copyright 2018 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package msgdecoder contains the logic to deconstruct a gRPC-message.
 package msgdecoder
 
 import (
@@ -15,8 +33,11 @@ type RecvMsg struct {
 	// true if the message was compressed by the other
 	// side.
 	IsCompressed bool
-	// WindowUpdate to be sent out for this message.
-	WindowUpdate uint32
+	// Length of the message.
+	Length int
+	// Overhead is the length of message header(5 bytes)
+	// plus padding.
+	Overhead int
 
 	// Data payload of the message.
 	Data []byte
@@ -100,7 +121,8 @@ func (m *MessageDecoder) parseHeader(b []byte) {
 	buf := getMem(b[1:5])
 	hdr := &RecvMsg{
 		IsCompressed: int(b[0]) == 1,
-		WindowUpdate: uint32(len(buf) + m.padding + 5),
+		Length:       len(buf),
+		Overhead:     m.padding + 5,
 	}
 	m.padding = 0
 	// Dispatch the information retreived from message header so

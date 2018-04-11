@@ -426,18 +426,10 @@ func (o CustomCodecCallOption) after(c *callInfo) { return }
 //   * of type transport.ConnectionError
 //   * of type transport.StreamError
 // No other error values or types must be returned.
-func recvMsg(s *transport.Stream, maxReceiveMessageSize int) (bool, []byte, error) {
-	isCompressed, msg, err := s.Read()
+func recvMsg(s *transport.Stream, maxRecvMsgSize int) (bool, []byte, error) {
+	isCompressed, msg, err := s.Read(maxRecvMsgSize)
 	if err != nil {
 		return false, nil, err
-	}
-	length := len(msg)
-	// TODO(yuxuanli, dfawley): What does this check do?
-	if int64(length) > int64(maxInt) {
-		return false, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine (%d vs. %d)", length, maxInt)
-	}
-	if int(length) > maxReceiveMessageSize {
-		return false, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
 	return isCompressed, msg, nil
 }

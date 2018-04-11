@@ -25,10 +25,13 @@ import (
 	"sync/atomic"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/msgdecoder"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+const maxInt = int(^uint(0) >> 1)
 
 type streamState uint32
 
@@ -231,7 +234,7 @@ func (s *Stream) consume(b []byte, padding int) error {
 // 1. received message's compression status(true if was compressed)
 // 2. Message as a byte slice
 // 3. Error, if any.
-func (s *Stream) Read() (bool, []byte, error) {
+func (s *Stream) Read(maxRecvMsgSize int) (bool, []byte, error) {
 	if s.readErr != nil {
 		return false, nil, s.readErr
 	}
@@ -251,9 +254,18 @@ func (s *Stream) Read() (bool, []byte, error) {
 		s.readErr = m.Err
 		return false, nil, s.readErr
 	}
+	// Make sure the message being received isn't too large.
+	if int64(m.Length) > int64(maxInt) {
+		s.readErr = status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine (%d vs. %d)", m.Length, maxInt)
+		return false, nil, s.readErr
+	}
+	if m.Length > maxRecvMsgSize {
+		s.readErr = status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", m.Length, maxRecvMsgSize)
+		return false, nil, s.readErr
+	}
 	// Send a window update for the message this RPC is reading.
 	if s.fc != nil { // HanderServer doesn't use our flow control.
-		s.fc.onRead(m.WindowUpdate)
+		s.fc.onRead(uint32(m.Length + m.Overhead))
 	}
 	isCompressed := m.IsCompressed
 	// Read the message.
