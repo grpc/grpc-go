@@ -414,6 +414,10 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
+func (ht *serverHandlerTransport) IncrMsgSent() {}
+
+func (ht *serverHandlerTransport) IncrMsgRecv() {}
+
 func (ht *serverHandlerTransport) Drain() {
 	panic("Drain() is not implemented")
 }

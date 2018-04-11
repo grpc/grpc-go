@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,8 @@ import (
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
+//
+// Deprecated: use package encoding.
 type Compressor interface {
 	// Do compresses p into w.
 	Do(w io.Writer, p []byte) error
@@ -54,6 +57,8 @@ type gzipCompressor struct {
 }
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPCompressor() Compressor {
 	c, _ := NewGZIPCompressorWithLevel(gzip.DefaultCompression)
 	return c
@@ -63,6 +68,8 @@ func NewGZIPCompressor() Compressor {
 // of assuming DefaultCompression.
 //
 // The error returned will be nil if the level is valid.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPCompressorWithLevel(level int) (Compressor, error) {
 	if level < gzip.DefaultCompression || level > gzip.BestCompression {
 		return nil, fmt.Errorf("grpc: invalid compression level: %d", level)
@@ -95,6 +102,8 @@ func (c *gzipCompressor) Type() string {
 }
 
 // Decompressor defines the interface gRPC uses to decompress a message.
+//
+// Deprecated: use package encoding.
 type Decompressor interface {
 	// Do reads the data from r and uncompress them.
 	Do(r io.Reader) ([]byte, error)
@@ -107,6 +116,8 @@ type gzipDecompressor struct {
 }
 
 // NewGZIPDecompressor creates a Decompressor based on GZIP.
+//
+// Deprecated: use package encoding/gzip.
 func NewGZIPDecompressor() Decompressor {
 	return &gzipDecompressor{}
 }
@@ -216,8 +227,8 @@ func (o TrailerCallOption) after(c *callInfo) {
 	}
 }
 
-// Peer returns a CallOption that retrieves peer information for a
-// unary RPC.
+// Peer returns a CallOption that retrieves peer information for a unary RPC.
+// The peer field will be populated *after* the RPC completes.
 func Peer(p *peer.Peer) CallOption {
 	return PeerCallOption{PeerAddr: p}
 }
@@ -607,6 +618,40 @@ func setCallInfoCodec(c *callInfo) error {
 		return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 	}
 	return nil
+}
+
+// parseDialTarget returns the network and address to pass to dialer
+func parseDialTarget(target string) (net string, addr string) {
+	net = "tcp"
+
+	m1 := strings.Index(target, ":")
+	m2 := strings.Index(target, ":/")
+
+	// handle unix:addr which will fail with url.Parse
+	if m1 >= 0 && m2 < 0 {
+		if n := target[0:m1]; n == "unix" {
+			net = n
+			addr = target[m1+1:]
+			return net, addr
+		}
+	}
+	if m2 >= 0 {
+		t, err := url.Parse(target)
+		if err != nil {
+			return net, target
+		}
+		scheme := t.Scheme
+		addr = t.Path
+		if scheme == "unix" {
+			net = scheme
+			if addr == "" {
+				addr = t.Host
+			}
+			return net, addr
+		}
+	}
+
+	return net, target
 }
 
 // The SupportPackageIsVersion variables are referenced from generated protocol

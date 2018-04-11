@@ -68,6 +68,10 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+func init() {
+	grpc.RegisterChannelz()
+}
+
 var (
 	// For headers:
 	testMetadata = metadata.MD{
@@ -478,6 +482,10 @@ type test struct {
 	srv     *grpc.Server
 	srvAddr string
 
+	// srvs and srvAddrs are set once startServers is called.
+	srvs     []*grpc.Server
+	srvAddrs []string
+
 	cc          *grpc.ClientConn // nil until requested via clientConn
 	restoreLogs func()           // nil unless declareLogNoise is used
 }
@@ -497,6 +505,11 @@ func (te *test) tearDown() {
 	}
 	if te.srv != nil {
 		te.srv.Stop()
+	}
+	if len(te.srvs) != 0 {
+		for _, s := range te.srvs {
+			s.Stop()
+		}
 	}
 }
 

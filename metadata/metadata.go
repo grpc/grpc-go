@@ -95,6 +95,30 @@ func (md MD) Copy() MD {
 	return Join(md)
 }
 
+// Get obtains the values for a given key.
+func (md MD) Get(k string) []string {
+	k = strings.ToLower(k)
+	return md[k]
+}
+
+// Set sets the value of a given key with a slice of values.
+func (md MD) Set(k string, vals ...string) {
+	if len(vals) == 0 {
+		return
+	}
+	k = strings.ToLower(k)
+	md[k] = vals
+}
+
+// Append adds the values to key k, not overwriting what was already stored at that key.
+func (md MD) Append(k string, vals ...string) {
+	if len(vals) == 0 {
+		return
+	}
+	k = strings.ToLower(k)
+	md[k] = append(md[k], vals...)
+}
+
 // Join joins any number of mds into a single MD.
 // The order of values for each key is determined by the order in which
 // the mds containing those values are presented to Join.
