@@ -38,6 +38,7 @@ import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import java.io.File;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.HashMap;
@@ -430,6 +431,17 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
   @Override
   public NettyServerBuilder useTransportSecurity(File certChain, File privateKey) {
+    try {
+      sslContext = GrpcSslContexts.forServer(certChain, privateKey).build();
+    } catch (SSLException e) {
+      // This should likely be some other, easier to catch exception.
+      throw new RuntimeException(e);
+    }
+    return this;
+  }
+
+  @Override
+  public NettyServerBuilder useTransportSecurity(InputStream certChain, InputStream privateKey) {
     try {
       sslContext = GrpcSslContexts.forServer(certChain, privateKey).build();
     } catch (SSLException e) {

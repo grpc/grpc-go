@@ -31,6 +31,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 import java.io.File;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.Provider;
@@ -138,6 +139,27 @@ public class GrpcSslContexts {
   public static SslContextBuilder forServer(
       File keyCertChainFile, File keyFile, String keyPassword) {
     return configure(SslContextBuilder.forServer(keyCertChainFile, keyFile, keyPassword));
+  }
+
+  /**
+   * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
+   *
+   * @see SslContextBuilder#forServer(InputStream, InputStream)
+   * @see #configure(SslContextBuilder)
+   */
+  public static SslContextBuilder forServer(InputStream keyCertChain, InputStream key) {
+    return configure(SslContextBuilder.forServer(keyCertChain, key));
+  }
+
+  /**
+   * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
+   *
+   * @see SslContextBuilder#forServer(InputStream, InputStream, String)
+   * @see #configure(SslContextBuilder)
+   */
+  public static SslContextBuilder forServer(
+      InputStream keyCertChain, InputStream key, String keyPassword) {
+    return configure(SslContextBuilder.forServer(keyCertChain, key, keyPassword));
   }
 
   /**

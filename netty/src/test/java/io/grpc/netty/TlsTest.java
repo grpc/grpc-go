@@ -176,7 +176,6 @@ public class TlsTest {
     client.unaryRpc(SimpleRequest.getDefaultInstance());
   }
 
-
   /**
    * Tests that a server configured to require client authentication refuses to accept connections
    * from a client that has an untrusted certificate.
