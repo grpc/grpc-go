@@ -75,7 +75,7 @@ func (bp *pickerWrapper) updatePicker(p balancer.Picker) {
 	bp.mu.Unlock()
 }
 
-func doneWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) func(balancer.DoneInfo) {
+func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) func(balancer.DoneInfo) {
 	acw.mu.Lock()
 	ac := acw.ac
 	acw.mu.Unlock()
@@ -155,7 +155,7 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 			continue
 		}
 		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
-			return t, doneWrapper(acw, done), nil
+			return t, doneChannelzWrapper(acw, done), nil
 		}
 		grpclog.Infof("blockingPicker: the picked transport is not ready, loop back to repick")
 		// If ok == false, ac.state is not READY.

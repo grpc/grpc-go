@@ -515,12 +515,6 @@ func (s *Server) Serve(lis net.Listener) error {
 		// Stop or GracefulStop called; block until done and return nil.
 		case <-s.quit:
 			<-s.done
-
-			s.channelzRemoveOnce.Do(func() {
-				if channelz.IsOn() {
-					channelz.RemoveEntry(s.channelzID)
-				}
-			})
 		default:
 		}
 	}()
@@ -1335,9 +1329,6 @@ func (s *Server) Stop() {
 	})
 
 	s.mu.Lock()
-	if channelz.IsOn() {
-		channelz.RemoveEntry(s.channelzID)
-	}
 	listeners := s.lis
 	s.lis = nil
 	st := s.conns
