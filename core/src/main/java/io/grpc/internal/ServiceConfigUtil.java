@@ -25,7 +25,6 @@ import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -33,10 +32,8 @@ import javax.annotation.Nullable;
  */
 final class ServiceConfigUtil {
 
-  private static final Logger logger = Logger.getLogger(ServiceConfigUtil.class.getName());
-
   private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
-  private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_key = "loadBalancingPolicy";
+  private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY = "loadBalancingPolicy";
   private static final String METHOD_CONFIG_NAME_KEY = "name";
   private static final String METHOD_CONFIG_TIMEOUT_KEY = "timeout";
   private static final String METHOD_CONFIG_WAIT_FOR_READY_KEY = "waitForReady";
@@ -228,10 +225,10 @@ final class ServiceConfigUtil {
 
   @Nullable
   static String getLoadBalancingPolicyFromServiceConfig(Map<String, Object> serviceConfig) {
-    if (!serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_key)) {
+    if (!serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
       return null;
     }
-    return getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_key);
+    return getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
   }
 
   /**

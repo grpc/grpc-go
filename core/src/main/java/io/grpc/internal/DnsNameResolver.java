@@ -361,7 +361,7 @@ final class DnsNameResolver extends NameResolver {
     }
 
     List<String> clientLanguages = getClientLanguagesFromChoice(choice);
-    if (clientLanguages != null && clientLanguages.size() != 0) {
+    if (clientLanguages != null && !clientLanguages.isEmpty()) {
       boolean javaPresent = false;
       for (String lang : clientLanguages) {
         if ("java".equalsIgnoreCase(lang)) {
@@ -382,7 +382,7 @@ final class DnsNameResolver extends NameResolver {
       }
     }
     List<String> clientHostnames = getHostnamesFromChoice(choice);
-    if (clientHostnames != null && clientHostnames.size() != 0) {
+    if (clientHostnames != null && !clientHostnames.isEmpty()) {
       boolean hostnamePresent = false;
       for (String clientHostname : clientHostnames) {
         if (clientHostname.equals(hostname)) {

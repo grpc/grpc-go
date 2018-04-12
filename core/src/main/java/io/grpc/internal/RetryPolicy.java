@@ -74,10 +74,10 @@ final class RetryPolicy {
       return false;
     }
     RetryPolicy that = (RetryPolicy) other;
-    return Objects.equal(this.maxAttempts, that.maxAttempts)
-        && Objects.equal(this.initialBackoffNanos, that.initialBackoffNanos)
-        && Objects.equal(this.maxBackoffNanos, that.maxBackoffNanos)
-        && Double.compare(this.backoffMultiplier, that.backoffMultiplier) == 0
+    return this.maxAttempts == that.maxAttempts
+        && this.initialBackoffNanos == that.initialBackoffNanos
+        && this.maxBackoffNanos == that.maxBackoffNanos
+        && this.backoffMultiplier == that.backoffMultiplier
         && Objects.equal(this.retryableStatusCodes, that.retryableStatusCodes);
   }
 
