@@ -1023,7 +1023,7 @@ func TestLargeMessageDelayWrite(t *testing.T) {
 			}
 			p := make([]byte, len(expectedResponseLarge))
 			if _, err := s.Read(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
-				t.Errorf("io.ReadFull(%v) = _, %v, want %v, <nil>", p, err, expectedResponseLarge)
+				t.Errorf("io.ReadFull(len: %v) = _, %v, want len: %v, <nil>", len(p), err, len(expectedResponseLarge))
 				return
 			}
 			if _, err = s.Read(p); err != io.EOF {
