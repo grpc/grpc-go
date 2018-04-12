@@ -776,10 +776,10 @@ public abstract class AbstractTransportTest {
     trailers.put(asciiKey, "dupvalue");
     trailers.put(binaryKey, "äbinarytrailers");
     serverStream.close(status, trailers);
-    assertSame(status, serverStreamTracer1.getStatus());
     assertNull(serverStreamTracer1.nextInboundEvent());
     assertNull(serverStreamTracer1.nextOutboundEvent());
     assertCodeEquals(Status.OK, serverStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertSame(status, serverStreamTracer1.getStatus());
     Status clientStreamStatus = clientStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     Metadata clientStreamTrailers =
         clientStreamListener.trailers.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);

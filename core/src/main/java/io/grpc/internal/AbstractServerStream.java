@@ -128,7 +128,6 @@ public abstract class AbstractServerStream extends AbstractStream
     Preconditions.checkNotNull(trailers, "trailers");
     if (!outboundClosed) {
       outboundClosed = true;
-      statsTraceCtx.streamClosed(status);
       endOfMessages();
       addStatusToTrailers(trailers, status);
       // Safe to set without synchronization because access is tightly controlled.
@@ -336,6 +335,7 @@ public abstract class AbstractServerStream extends AbstractStream
           statsTraceCtx.streamClosed(newStatus);
           getTransportTracer().reportStreamClosed(false);
         } else {
+          statsTraceCtx.streamClosed(closedStatus);
           getTransportTracer().reportStreamClosed(closedStatus.isOk());
         }
         listenerClosed = true;
