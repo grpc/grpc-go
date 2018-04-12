@@ -16,24 +16,30 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.internal.ServiceConfigInterceptor.RETRY_POLICY_KEY;
 import static java.lang.Double.parseDouble;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import com.google.common.collect.ImmutableSet;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status.Code;
-import io.grpc.internal.RetriableStream.RetryPolicies;
-import io.grpc.internal.RetriableStream.RetryPolicy;
 import io.grpc.internal.RetriableStream.Throttle;
 import io.grpc.testing.TestMethodDescriptors;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 
 /** Unit tests for RetryPolicy. */
 @RunWith(JUnit4.class)
@@ -55,37 +61,96 @@ public class RetryPolicyTest {
 
       @SuppressWarnings("unchecked")
       Map<String, Object> serviceConfig = (Map<String, Object>) serviceConfigObj;
-      RetryPolicies retryPolicies = ServiceConfigUtil.getRetryPolicies(serviceConfig, 4);
-      assertNotNull(retryPolicies);
+
+      ServiceConfigInterceptor serviceConfigInterceptor = new ServiceConfigInterceptor(
+          true /* retryEnabled */, 4 /* maxRetryAttemptsLimit */);
+      serviceConfigInterceptor.handleUpdate(serviceConfig);
 
       MethodDescriptor.Builder<Void, Void> builder = TestMethodDescriptors.voidMethod().toBuilder();
 
+      MethodDescriptor<Void, Void> method = builder.setFullMethodName("not/exist").build();
       assertEquals(
           RetryPolicy.DEFAULT,
-          retryPolicies.get(builder.setFullMethodName("not/exist").build()));
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
+
+      method = builder.setFullMethodName("not_exist/Foo1").build();
       assertEquals(
           RetryPolicy.DEFAULT,
-          retryPolicies.get(builder.setFullMethodName("not_exist/Foo1").build()));
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
+
+      method = builder.setFullMethodName("SimpleService1/not_exist").build();
 
       assertEquals(
           new RetryPolicy(
-              3, parseDouble("2.1"), parseDouble("2.2"), parseDouble("3"),
-              Arrays.asList(Code.UNAVAILABLE, Code.RESOURCE_EXHAUSTED)),
-          retryPolicies.get(builder.setFullMethodName("SimpleService1/not_exist").build()));
+              3,
+              TimeUnit.MILLISECONDS.toNanos(2100),
+              TimeUnit.MILLISECONDS.toNanos(2200),
+              parseDouble("3"),
+              ImmutableSet.of(Code.UNAVAILABLE, Code.RESOURCE_EXHAUSTED)),
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
+
+      method = builder.setFullMethodName("SimpleService1/Foo1").build();
       assertEquals(
           new RetryPolicy(
-              4, parseDouble(".1"), parseDouble("1"), parseDouble("2"),
-              Arrays.asList(Code.UNAVAILABLE)),
-          retryPolicies.get(builder.setFullMethodName("SimpleService1/Foo1").build()));
+              4,
+              TimeUnit.MILLISECONDS.toNanos(100),
+              TimeUnit.MILLISECONDS.toNanos(1000),
+              parseDouble("2"),
+              ImmutableSet.of(Code.UNAVAILABLE)),
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
 
+      method = builder.setFullMethodName("SimpleService2/not_exist").build();
       assertEquals(
           RetryPolicy.DEFAULT,
-          retryPolicies.get(builder.setFullMethodName("SimpleService2/not_exist").build()));
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
+
+      method = builder.setFullMethodName("SimpleService2/Foo2").build();
       assertEquals(
           new RetryPolicy(
-              4, parseDouble(".1"), parseDouble("1"), parseDouble("2"),
-              Arrays.asList(Code.UNAVAILABLE)),
-          retryPolicies.get(builder.setFullMethodName("SimpleService2/Foo2").build()));
+              4,
+              TimeUnit.MILLISECONDS.toNanos(100),
+              TimeUnit.MILLISECONDS.toNanos(1000),
+              parseDouble("2"),
+              ImmutableSet.of(Code.UNAVAILABLE)),
+          serviceConfigInterceptor.getRetryPolicyFromConfig(method));
+    } finally {
+      if (reader != null) {
+        reader.close();
+      }
+    }
+  }
+
+  @Test
+  public void getRetryPolicies_retryDisabled() throws Exception {
+    Channel channel = mock(Channel.class);
+    ArgumentCaptor<CallOptions> callOptionsCap = ArgumentCaptor.forClass(CallOptions.class);
+    BufferedReader reader = null;
+    try {
+      reader = new BufferedReader(new InputStreamReader(RetryPolicyTest.class.getResourceAsStream(
+          "/io/grpc/internal/test_retry_service_config.json"), "UTF-8"));
+      StringBuilder sb = new StringBuilder();
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sb.append(line).append('\n');
+      }
+      Object serviceConfigObj = JsonParser.parse(sb.toString());
+      assertTrue(serviceConfigObj instanceof Map);
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> serviceConfig = (Map<String, Object>) serviceConfigObj;
+
+      ServiceConfigInterceptor serviceConfigInterceptor = new ServiceConfigInterceptor(
+          false /* retryEnabled */, 4 /* maxRetryAttemptsLimit */);
+      serviceConfigInterceptor.handleUpdate(serviceConfig);
+
+      MethodDescriptor.Builder<Void, Void> builder = TestMethodDescriptors.voidMethod().toBuilder();
+
+      MethodDescriptor<Void, Void> method =
+          builder.setFullMethodName("SimpleService1/Foo1").build();
+
+      serviceConfigInterceptor.interceptCall(method, CallOptions.DEFAULT, channel);
+      verify(channel).newCall(eq(method), callOptionsCap.capture());
+      assertThat(callOptionsCap.getValue().getOption(RETRY_POLICY_KEY)).isNull();
     } finally {
       if (reader != null) {
         reader.close();

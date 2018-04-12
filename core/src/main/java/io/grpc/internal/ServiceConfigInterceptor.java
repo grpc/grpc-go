@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.annotation.CheckForNull;
 
 /**
  * Modifies RPCs in in conformance with a Service Config.
@@ -56,7 +57,17 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   final AtomicReference<Map<String, MethodInfo>> serviceMap
       = new AtomicReference<Map<String, MethodInfo>>();
 
-  ServiceConfigInterceptor() {}
+  private final boolean retryEnabled;
+  private final int maxRetryAttemptsLimit;
+
+  // Setting this to true and observing this equal to true are run in different threads.
+  private volatile boolean nameResolveComplete;
+
+  ServiceConfigInterceptor(
+      boolean retryEnabled, int maxRetryAttemptsLimit) {
+    this.retryEnabled = retryEnabled;
+    this.maxRetryAttemptsLimit = maxRetryAttemptsLimit;
+  }
 
   void handleUpdate(Map<String, Object> serviceConfig) {
     Map<String, MethodInfo> newServiceMethodConfigs = new HashMap<String, MethodInfo>();
@@ -69,11 +80,12 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
         ServiceConfigUtil.getMethodConfigFromServiceConfig(serviceConfig);
     if (methodConfigs == null) {
       logger.log(Level.FINE, "No method configs found, skipping");
+      nameResolveComplete = true;
       return;
     }
 
     for (Map<String, Object> methodConfig : methodConfigs) {
-      MethodInfo info = new MethodInfo(methodConfig);
+      MethodInfo info = new MethodInfo(methodConfig, retryEnabled, maxRetryAttemptsLimit);
 
       List<Map<String, Object>> nameList =
           ServiceConfigUtil.getNameListFromMethodConfig(methodConfig);
@@ -104,10 +116,11 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     // Okay, service config is good, swap it.
     serviceMethodMap.set(Collections.unmodifiableMap(newServiceMethodConfigs));
     serviceMap.set(Collections.unmodifiableMap(newServiceConfigs));
+    nameResolveComplete = true;
   }
 
   /**
-   * Equivalent of MethodConfig from a ServiceConfig.
+   * Equivalent of MethodConfig from a ServiceConfig with restrictions from Channel setting.
    */
   static final class MethodInfo {
     final Long timeoutNanos;
@@ -116,7 +129,13 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     final Integer maxOutboundMessageSize;
     final RetryPolicy retryPolicy;
 
-    MethodInfo(Map<String, Object> methodConfig) {
+    /**
+     * Constructor.
+     *
+     * @param retryEnabled when false, the argument maxRetryAttemptsLimit will have no effect.
+     */
+    MethodInfo(
+        Map<String, Object> methodConfig, boolean retryEnabled, int maxRetryAttemptsLimit) {
       timeoutNanos = ServiceConfigUtil.getTimeoutFromMethodConfig(methodConfig);
       waitForReady = ServiceConfigUtil.getWaitForReadyFromMethodConfig(methodConfig);
       maxInboundMessageSize =
@@ -134,14 +153,16 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
             "maxOutboundMessageSize %s exceeds bounds", maxOutboundMessageSize);
       }
 
-      Map<String, Object> policy = ServiceConfigUtil.getRetryPolicyFromMethodConfig(methodConfig);
-      retryPolicy = policy == null ? null : new RetryPolicy(policy);
+      Map<String, Object> policy =
+          retryEnabled ? ServiceConfigUtil.getRetryPolicyFromMethodConfig(methodConfig) : null;
+      retryPolicy =
+          policy == null ? RetryPolicy.DEFAULT : retryPolicy(policy, maxRetryAttemptsLimit);
     }
 
     @Override
     public int hashCode() {
       return Objects.hashCode(
-          timeoutNanos, waitForReady, maxInboundMessageSize, maxOutboundMessageSize);
+          timeoutNanos, waitForReady, maxInboundMessageSize, maxOutboundMessageSize, retryPolicy);
     }
 
     @Override
@@ -153,7 +174,8 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
       return Objects.equal(this.timeoutNanos, that.timeoutNanos)
           && Objects.equal(this.waitForReady, that.waitForReady)
           && Objects.equal(this.maxInboundMessageSize, that.maxInboundMessageSize)
-          && Objects.equal(this.maxOutboundMessageSize, that.maxOutboundMessageSize);
+          && Objects.equal(this.maxOutboundMessageSize, that.maxOutboundMessageSize)
+          && Objects.equal(this.retryPolicy, that.retryPolicy);
     }
 
     @Override
@@ -163,125 +185,95 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           .add("waitForReady", waitForReady)
           .add("maxInboundMessageSize", maxInboundMessageSize)
           .add("maxOutboundMessageSize", maxOutboundMessageSize)
+          .add("retryPolicy", retryPolicy)
           .toString();
     }
 
-    static final class RetryPolicy {
-      final int maxAttempts;
-      final long initialBackoffNanos;
-      final long maxBackoffNanos;
-      final double backoffMultiplier;
-      final Set<Code> retryableStatusCodes;
+    private static RetryPolicy retryPolicy(Map<String, Object> retryPolicy, int maxAttemptsLimit) {
+      int maxAttempts = checkNotNull(
+          ServiceConfigUtil.getMaxAttemptsFromRetryPolicy(retryPolicy),
+          "maxAttempts cannot be empty");
+      checkArgument(maxAttempts >= 2, "maxAttempts must be greater than 1: %s", maxAttempts);
+      maxAttempts = Math.min(maxAttempts, maxAttemptsLimit);
 
-      RetryPolicy(Map<String, Object> retryPolicy) {
-        maxAttempts = checkNotNull(
-            ServiceConfigUtil.getMaxAttemptsFromRetryPolicy(retryPolicy),
-            "maxAttempts cannot be empty");
-        checkArgument(maxAttempts >= 2, "maxAttempts must be greater than 1: %s", maxAttempts);
+      long initialBackoffNanos = checkNotNull(
+          ServiceConfigUtil.getInitialBackoffNanosFromRetryPolicy(retryPolicy),
+          "initialBackoff cannot be empty");
+      checkArgument(
+          initialBackoffNanos > 0,
+          "initialBackoffNanos must be greater than 0: %s",
+          initialBackoffNanos);
 
-        initialBackoffNanos = checkNotNull(
-            ServiceConfigUtil.getInitialBackoffNanosFromRetryPolicy(retryPolicy),
-            "initialBackoff cannot be empty");
-        checkArgument(
-            initialBackoffNanos > 0,
-            "initialBackoffNanos must be greater than 0: %s",
-            initialBackoffNanos);
+      long maxBackoffNanos = checkNotNull(
+          ServiceConfigUtil.getMaxBackoffNanosFromRetryPolicy(retryPolicy),
+          "maxBackoff cannot be empty");
+      checkArgument(
+          maxBackoffNanos > 0, "maxBackoff must be greater than 0: %s", maxBackoffNanos);
 
-        maxBackoffNanos = checkNotNull(
-            ServiceConfigUtil.getMaxBackoffNanosFromRetryPolicy(retryPolicy),
-            "maxBackoff cannot be empty");
-        checkArgument(
-            maxBackoffNanos > 0, "maxBackoff must be greater than 0: %s", maxBackoffNanos);
+      double backoffMultiplier = checkNotNull(
+          ServiceConfigUtil.getBackoffMultiplierFromRetryPolicy(retryPolicy),
+          "backoffMultiplier cannot be empty");
+      checkArgument(
+          backoffMultiplier > 0,
+          "backoffMultiplier must be greater than 0: %s",
+          backoffMultiplier);
 
-        backoffMultiplier = checkNotNull(
-            ServiceConfigUtil.getBackoffMultiplierFromRetryPolicy(retryPolicy),
-            "backoffMultiplier cannot be empty");
-        checkArgument(
-            backoffMultiplier > 0,
-            "backoffMultiplier must be greater than 0: %s",
-            backoffMultiplier);
-
-        List<String> rawCodes =
-            ServiceConfigUtil.getRetryableStatusCodesFromRetryPolicy(retryPolicy);
-        checkNotNull(rawCodes, "rawCodes must be present");
-        checkArgument(!rawCodes.isEmpty(), "rawCodes can't be empty");
-        EnumSet<Code> codes = EnumSet.noneOf(Code.class);
-        // service config doesn't say if duplicates are allowed, so just accept them.
-        for (String rawCode : rawCodes) {
-          codes.add(Code.valueOf(rawCode));
-        }
-        retryableStatusCodes = Collections.unmodifiableSet(codes);
+      List<String> rawCodes =
+          ServiceConfigUtil.getRetryableStatusCodesFromRetryPolicy(retryPolicy);
+      checkNotNull(rawCodes, "rawCodes must be present");
+      checkArgument(!rawCodes.isEmpty(), "rawCodes can't be empty");
+      EnumSet<Code> codes = EnumSet.noneOf(Code.class);
+      // service config doesn't say if duplicates are allowed, so just accept them.
+      for (String rawCode : rawCodes) {
+        codes.add(Code.valueOf(rawCode));
       }
+      Set<Code> retryableStatusCodes = Collections.unmodifiableSet(codes);
 
-      @VisibleForTesting
-      RetryPolicy(
-          int maxAttempts,
-          long initialBackoffNanos,
-          long maxBackoffNanos,
-          double backoffMultiplier,
-          Set<Code> retryableStatusCodes) {
-        this.maxAttempts = maxAttempts;
-        this.initialBackoffNanos = initialBackoffNanos;
-        this.maxBackoffNanos = maxBackoffNanos;
-        this.backoffMultiplier = backoffMultiplier;
-        this.retryableStatusCodes = retryableStatusCodes;
-      }
-
-      @Override
-      public int hashCode() {
-        return Objects.hashCode(
-            maxAttempts,
-            initialBackoffNanos,
-            maxBackoffNanos,
-            backoffMultiplier,
-            retryableStatusCodes);
-      }
-
-      @Override
-      public boolean equals(Object other) {
-        if (!(other instanceof RetryPolicy)) {
-          return false;
-        }
-        RetryPolicy that = (RetryPolicy) other;
-        return Objects.equal(this.maxAttempts, that.maxAttempts)
-            && Objects.equal(this.initialBackoffNanos, that.initialBackoffNanos)
-            && Objects.equal(this.maxBackoffNanos, that.maxBackoffNanos)
-            && Objects.equal(this.backoffMultiplier, that.backoffMultiplier)
-            && Objects.equal(this.retryableStatusCodes, that.retryableStatusCodes);
-      }
-
-      @Override
-      public String toString() {
-        return MoreObjects.toStringHelper(this)
-            .add("maxAttempts", maxAttempts)
-            .add("initialBackoffNanos", initialBackoffNanos)
-            .add("maxBackoffNanos", maxBackoffNanos)
-            .add("backoffMultiplier", backoffMultiplier)
-            .add("retryableStatusCodes", retryableStatusCodes)
-            .toString();
-      }
-
+      return new RetryPolicy(
+          maxAttempts, initialBackoffNanos, maxBackoffNanos, backoffMultiplier,
+          retryableStatusCodes);
     }
   }
 
-  static final CallOptions.Key<MethodInfo.RetryPolicy> RETRY_POLICY_KEY =
+  static final CallOptions.Key<RetryPolicy.Provider> RETRY_POLICY_KEY =
       CallOptions.Key.of("internal-retry-policy", null);
 
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-      MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-    Map<String, MethodInfo> localServiceMethodMap = serviceMethodMap.get();
-    MethodInfo info = null;
-    if (localServiceMethodMap != null) {
-      info = localServiceMethodMap.get(method.getFullMethodName());
-    }
-    if (info == null) {
-      Map<String, MethodInfo> localServiceMap = serviceMap.get();
-      if (localServiceMap != null) {
-        info = localServiceMap.get(
-            MethodDescriptor.extractFullServiceName(method.getFullMethodName()));
+      final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+    if (retryEnabled) {
+      if (nameResolveComplete) {
+        final RetryPolicy retryPolicy = getRetryPolicyFromConfig(method);
+        final class ImmediateRetryPolicyProvider implements RetryPolicy.Provider {
+          @Override
+          public RetryPolicy get() {
+            return retryPolicy;
+          }
+        }
+
+        callOptions = callOptions.withOption(RETRY_POLICY_KEY, new ImmediateRetryPolicyProvider());
+      } else {
+        final class DelayedRetryPolicyProvider implements RetryPolicy.Provider {
+          /**
+           * Returns RetryPolicy.DEFAULT if name resolving is not complete at the moment the method
+           * is invoked, otherwise returns the RetryPolicy computed from service config.
+           *
+           * <p>Note that this method is used no more than once for each call.
+           */
+          @Override
+          public RetryPolicy get() {
+            if (!nameResolveComplete) {
+              return RetryPolicy.DEFAULT;
+            }
+            return getRetryPolicyFromConfig(method);
+          }
+        }
+
+        callOptions = callOptions.withOption(RETRY_POLICY_KEY, new DelayedRetryPolicyProvider());
       }
     }
+
+    MethodInfo info = getMethodInfo(method);
     if (info == null) {
       return next.newCall(method, callOptions);
     }
@@ -316,10 +308,33 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
         callOptions = callOptions.withMaxOutboundMessageSize(info.maxOutboundMessageSize);
       }
     }
-    if (info.retryPolicy != null) {
-      callOptions = callOptions.withOption(RETRY_POLICY_KEY, info.retryPolicy);
-    }
 
     return next.newCall(method, callOptions);
+  }
+
+  @CheckForNull
+  private MethodInfo getMethodInfo(MethodDescriptor<?, ?> method) {
+    Map<String, MethodInfo> localServiceMethodMap = serviceMethodMap.get();
+    MethodInfo info = null;
+    if (localServiceMethodMap != null) {
+      info = localServiceMethodMap.get(method.getFullMethodName());
+    }
+    if (info == null) {
+      Map<String, MethodInfo> localServiceMap = serviceMap.get();
+      if (localServiceMap != null) {
+        info = localServiceMap.get(
+            MethodDescriptor.extractFullServiceName(method.getFullMethodName()));
+      }
+    }
+    return info;
+  }
+
+  @VisibleForTesting
+  RetryPolicy getRetryPolicyFromConfig(MethodDescriptor<?, ?> method) {
+    MethodInfo info = getMethodInfo(method);
+    if (info == null || info.retryPolicy == null) {
+      return RetryPolicy.DEFAULT;
+    }
+    return info.retryPolicy;
   }
 }

@@ -393,16 +393,16 @@ public class AbstractManagedChannelImplBuilderTest {
     Builder builder = new Builder("target");
 
     builder.enableRetry();
-    assertFalse(builder.retryDisabled);
+    assertTrue(builder.retryEnabled);
 
     builder.disableRetry();
-    assertTrue(builder.retryDisabled);
+    assertFalse(builder.retryEnabled);
 
     builder.enableRetry();
-    assertFalse(builder.retryDisabled);
+    assertTrue(builder.retryEnabled);
 
     builder.disableRetry();
-    assertTrue(builder.retryDisabled);
+    assertFalse(builder.retryEnabled);
   }
 
   static class Builder extends AbstractManagedChannelImplBuilder<Builder> {

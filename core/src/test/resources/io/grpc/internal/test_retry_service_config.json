@@ -41,7 +41,7 @@
       "waitForReady":true,
       "retryPolicy":{
         "maxAttempts":5,
-        "initialBackoff":".1s",
+        "initialBackoff":"0.1s",
         "maxBackoff":"1s",
         "backoffMultiplier":2,
         "retryableStatusCodes":[
