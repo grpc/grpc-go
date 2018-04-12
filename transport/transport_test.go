@@ -1616,13 +1616,6 @@ func TestInvalidHeaderField(t *testing.T) {
 	if err != nil {
 		return
 	}
-	opts := Options{
-		Last:  true,
-		Delay: false,
-	}
-	if err := ct.Write(s, expectedRequest, &opts); err != nil && err != io.EOF {
-		t.Fatalf("Failed to write the request: %v", err)
-	}
 	_, _, err = s.Read(math.MaxInt32)
 	if se, ok := err.(StreamError); !ok || se.Code != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
