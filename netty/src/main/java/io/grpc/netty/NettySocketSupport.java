@@ -27,7 +27,7 @@ import javax.annotation.Nullable;
  * An class for getting low level socket info.
  */
 final class NettySocketSupport {
-  private static volatile Helper INSTANCE = new NettySocketHelperImpl();
+  private static volatile Helper instance = new NettySocketHelperImpl();
 
   interface Helper {
     /**
@@ -40,7 +40,7 @@ final class NettySocketSupport {
   /**
    * A TcpInfo and additional other info that will be turned into channelz socket options.
    */
-  public static final class NativeSocketOptions {
+  public static class NativeSocketOptions {
     @Nullable
     public final TcpInfo tcpInfo;
     public final ImmutableMap<String, String> otherInfo;
@@ -56,11 +56,11 @@ final class NettySocketSupport {
   }
 
   public static NativeSocketOptions getNativeSocketOptions(Channel ch) {
-    return INSTANCE.getNativeSocketOptions(ch);
+    return instance.getNativeSocketOptions(ch);
   }
 
   static void setHelper(Helper helper) {
-    INSTANCE = Preconditions.checkNotNull(helper);
+    instance = Preconditions.checkNotNull(helper);
   }
 
   private static final class NettySocketHelperImpl implements Helper {
