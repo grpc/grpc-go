@@ -92,8 +92,6 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
-	channelzID int64 // channelz unique identification number
-
 	mu sync.Mutex // guard the following
 
 	// drainChan is initialized when drain(...) is called the first time.
@@ -111,9 +109,14 @@ type http2Server struct {
 	// When the connection is busy, this value is set to 0.
 	idle time.Time
 
-	czmu              sync.RWMutex
-	kpCount           int64
-	streamsStarted    int64
+	// Fields below are for channelz metric collection.
+	channelzID int64 // channelz unique identification number
+	czmu       sync.RWMutex
+	kpCount    int64
+	// The number of streams that have started, including already finished ones.
+	streamsStarted int64
+	// The number of streams that have ended successfully with the EoS bit set for
+	// both end points.
 	streamsSucceeded  int64
 	streamsFailed     int64
 	lastStreamCreated time.Time
