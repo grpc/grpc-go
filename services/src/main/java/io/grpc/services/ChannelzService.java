@@ -48,7 +48,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   private final Channelz channelz;
   private final int maxPageSize;
 
-  public ChannelzService newInstance(int maxPageSize) {
+  public static ChannelzService newInstance(int maxPageSize) {
     return new ChannelzService(Channelz.instance(), maxPageSize);
   }
 
