@@ -293,7 +293,6 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 	c.maxReceiveMessageSize = &o.MaxRecvMsgSize
 	return nil
 }
-
 func (o MaxRecvMsgSizeCallOption) after(c *callInfo) { return }
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.

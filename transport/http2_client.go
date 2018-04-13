@@ -104,10 +104,14 @@ type http2Client struct {
 	// GoAway frame.
 	goAwayReason GoAwayReason
 
-	channelzID        int64 // channelz unique identification number
-	czmu              sync.RWMutex
-	kpCount           int64
-	streamsStarted    int64
+	// Fields below are for channelz metric collection.
+	channelzID int64 // channelz unique identification number
+	czmu       sync.RWMutex
+	kpCount    int64
+	// The number of streams that have started, including already finished ones.
+	streamsStarted int64
+	// The number of streams that have ended successfully with the EoS bit set for
+	// both end points.
 	streamsSucceeded  int64
 	streamsFailed     int64
 	lastStreamCreated time.Time
@@ -1266,12 +1270,16 @@ func (t *http2Client) IncrMsgRecv() {
 }
 
 func (t *http2Client) getOutFlowWindow() int64 {
-	resp := make(chan uint32)
+	resp := make(chan uint32, 1)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
 	t.controlBuf.put(&outFlowControlSizeRequest{resp})
 	select {
 	case sz := <-resp:
 		return int64(sz)
 	case <-t.ctxDone:
 		return -1
+	case <-timer.C:
+		return -2
 	}
 }
