@@ -152,7 +152,7 @@ type stInFlow struct {
 }
 
 // called by transport's reader goroutine to set a new limit on
-// incoming flow control based on BDP esitmation.
+// incoming flow control based on BDP estimation.
 func (s *stInFlow) newLimit(n uint32) {
 	s.limit = n
 }

@@ -42,7 +42,7 @@ type RecvMsg struct {
 	// Data payload of the message.
 	Data []byte
 
-	// Err occured while reading.
+	// Err occurred while reading.
 	// nil: received some data
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
@@ -51,6 +51,9 @@ type RecvMsg struct {
 	Next *RecvMsg
 }
 
+// MessageDecoder decodes bytes from HTTP2 data frames
+// and constructs a gRPC message which is then put in a
+// buffer that application(RPCs) read from.
 // gRPC Messages:
 // First 5 bytes is the message header:
 //   First byte: Payload format.
@@ -70,6 +73,8 @@ type MessageDecoder struct {
 	dispatch func(*RecvMsg)
 }
 
+// NewMessageDecoder creates an instance of MessageDecoder. It takes a callback
+// which is called to dispatch finished headers and messages to the application.
 func NewMessageDecoder(dispatch func(*RecvMsg)) *MessageDecoder {
 	return &MessageDecoder{
 		hdr:      make([]byte, 5),
@@ -77,6 +82,7 @@ func NewMessageDecoder(dispatch func(*RecvMsg)) *MessageDecoder {
 	}
 }
 
+// Decode consumes bytes from a HTTP2 data frame to create gRPC messages.
 func (m *MessageDecoder) Decode(b []byte, padding int) {
 	m.padding += padding
 	for len(b) > 0 {
@@ -145,6 +151,7 @@ func getMem(l []byte) []byte {
 	return make([]byte, length)
 }
 
+// GetMessageHeader creates a gRPC-specific message header.
 func GetMessageHeader(l int, isCompressed bool) []byte {
 	// TODO(mmukhi): Investigate if this memory is worth
 	// reusing.
