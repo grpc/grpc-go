@@ -246,8 +246,7 @@ type SocketInternalMetric struct {
 	// The number of streams that have ended successfully with the EoS bit set for
 	//  both end points.
 	StreamsSucceeded int64
-	// The number of incoming streams that have a completed with a non-OK status.
-	StreamsFailed int64
+	StreamsFailed    int64
 	// The number of messages successfully sent on this socket.
 	MessagesSent     int64
 	MessagesReceived int64

@@ -92,8 +92,6 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
-	channelzID int64 // channelz unique identification number
-
 	mu sync.Mutex // guard the following
 
 	// drainChan is initialized when drain(...) is called the first time.
@@ -111,9 +109,14 @@ type http2Server struct {
 	// When the connection is busy, this value is set to 0.
 	idle time.Time
 
-	czmu              sync.RWMutex
-	kpCount           int64
-	streamsStarted    int64
+	// Fields below are for channelz metric collection.
+	channelzID int64 // channelz unique identification number
+	czmu       sync.RWMutex
+	kpCount    int64
+	// The number of streams that have started, including already finished ones.
+	streamsStarted int64
+	// The number of streams that have ended successfully with the EoS bit set for
+	// both end points.
 	streamsSucceeded  int64
 	streamsFailed     int64
 	lastStreamCreated time.Time
@@ -1105,12 +1108,16 @@ func (t *http2Server) IncrMsgRecv() {
 
 func (t *http2Server) getOutFlowWindow() int64 {
 	resp := make(chan uint32)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
 	t.controlBuf.put(&outFlowControlSizeRequest{resp})
 	select {
 	case sz := <-resp:
 		return int64(sz)
 	case <-t.ctxDone:
 		return -1
+	case <-timer.C:
+		return -2
 	}
 }
 
