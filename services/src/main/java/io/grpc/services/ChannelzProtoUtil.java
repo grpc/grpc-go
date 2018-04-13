@@ -137,9 +137,7 @@ final class ChannelzProtoUtil {
     if (socketStats.remote != null) {
       builder.setRemote(toAddress(socketStats.remote));
     }
-    if (socketStats.data != null) {
-      builder.setData(extractSocketData(socketStats));
-    }
+    builder.setData(extractSocketData(socketStats));
     return builder.build();
   }
 
@@ -168,29 +166,31 @@ final class ChannelzProtoUtil {
   }
 
   static SocketData extractSocketData(SocketStats socketStats) {
-    TransportStats s = socketStats.data;
-    return SocketData
-        .newBuilder()
-        .setStreamsStarted(s.streamsStarted)
-        .setStreamsSucceeded(s.streamsSucceeded)
-        .setStreamsFailed(s.streamsFailed)
-        .setMessagesSent(s.messagesSent)
-        .setMessagesReceived(s.messagesReceived)
-        .setKeepAlivesSent(s.keepAlivesSent)
-        .setLastLocalStreamCreatedTimestamp(
-            Timestamps.fromNanos(s.lastLocalStreamCreatedTimeNanos))
-        .setLastRemoteStreamCreatedTimestamp(
-            Timestamps.fromNanos(s.lastRemoteStreamCreatedTimeNanos))
-        .setLastMessageSentTimestamp(
-            Timestamps.fromNanos(s.lastMessageSentTimeNanos))
-        .setLastMessageReceivedTimestamp(
-            Timestamps.fromNanos(s.lastMessageReceivedTimeNanos))
-        .setLocalFlowControlWindow(
-            Int64Value.newBuilder().setValue(s.localFlowControlWindow).build())
-        .setRemoteFlowControlWindow(
-            Int64Value.newBuilder().setValue(s.remoteFlowControlWindow).build())
-        .addAllOption(toSocketOptionsList(socketStats.socketOptions))
-        .build();
+    SocketData.Builder builder = SocketData.newBuilder();
+    if (socketStats.data != null) {
+      TransportStats s = socketStats.data;
+      builder
+          .setStreamsStarted(s.streamsStarted)
+          .setStreamsSucceeded(s.streamsSucceeded)
+          .setStreamsFailed(s.streamsFailed)
+          .setMessagesSent(s.messagesSent)
+          .setMessagesReceived(s.messagesReceived)
+          .setKeepAlivesSent(s.keepAlivesSent)
+          .setLastLocalStreamCreatedTimestamp(
+              Timestamps.fromNanos(s.lastLocalStreamCreatedTimeNanos))
+          .setLastRemoteStreamCreatedTimestamp(
+              Timestamps.fromNanos(s.lastRemoteStreamCreatedTimeNanos))
+          .setLastMessageSentTimestamp(
+              Timestamps.fromNanos(s.lastMessageSentTimeNanos))
+          .setLastMessageReceivedTimestamp(
+              Timestamps.fromNanos(s.lastMessageReceivedTimeNanos))
+          .setLocalFlowControlWindow(
+              Int64Value.of(s.localFlowControlWindow))
+          .setRemoteFlowControlWindow(
+              Int64Value.of(s.remoteFlowControlWindow));
+    }
+    builder.addAllOption(toSocketOptionsList(socketStats.socketOptions));
+    return builder.build();
   }
 
   public static final String SO_LINGER = "SO_LINGER";

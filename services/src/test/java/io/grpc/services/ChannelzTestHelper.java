@@ -89,7 +89,7 @@ final class ChannelzTestHelper {
               /*data=*/ null,
               listenAddress,
               /*remote=*/ null,
-              new SocketOptions.Builder().build(),
+              new SocketOptions.Builder().addOption("listen_option", "listen_option_value").build(),
               /*security=*/ null));
       return ret;
     }

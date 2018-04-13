@@ -89,6 +89,7 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1981,6 +1982,11 @@ public class OkHttpClientTransportTest {
     @Override
     public synchronized void close() {
       frameReader.nextFrameAtEndOfStream();
+    }
+
+    @Override
+    public SocketAddress getLocalSocketAddress() {
+      return InetSocketAddress.createUnresolved("localhost", 4000);
     }
   }
 

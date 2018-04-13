@@ -21,6 +21,7 @@ import static io.grpc.internal.Channelz.id;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Int64Value;
@@ -256,8 +257,7 @@ public final class ChannelzProtoUtilTest {
               .newBuilder()
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) listenSocket.listenAddress).getAddress().getAddress()))
-              .setPort(1234)
-              .build())
+              .setPort(1234))
       .build();
 
   private final TestSocket socket = new TestSocket();
@@ -266,7 +266,7 @@ public final class ChannelzProtoUtilTest {
       .setName(socket.toString())
       .setSocketId(socket.getLogId().getId())
       .build();
-  private final SocketData socketDataNoSockOpts = SocketData
+  private final SocketData socketDataWithDataNoSockOpts = SocketData
       .newBuilder()
       .setStreamsStarted(1)
       .setLastLocalStreamCreatedTimestamp(Timestamps.fromNanos(2))
@@ -278,8 +278,8 @@ public final class ChannelzProtoUtilTest {
       .setKeepAlivesSent(8)
       .setLastMessageSentTimestamp(Timestamps.fromNanos(9))
       .setLastMessageReceivedTimestamp(Timestamps.fromNanos(10))
-      .setLocalFlowControlWindow(Int64Value.newBuilder().setValue(11).build())
-      .setRemoteFlowControlWindow(Int64Value.newBuilder().setValue(12).build())
+      .setLocalFlowControlWindow(Int64Value.newBuilder().setValue(11))
+      .setRemoteFlowControlWindow(Int64Value.newBuilder().setValue(12))
       .build();
   private final Address localAddress = Address
       .newBuilder()
@@ -288,8 +288,7 @@ public final class ChannelzProtoUtilTest {
               .newBuilder()
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) socket.local).getAddress().getAddress()))
-              .setPort(1000)
-              .build())
+              .setPort(1000))
       .build();
   private final Address remoteAddress = Address
       .newBuilder()
@@ -298,8 +297,7 @@ public final class ChannelzProtoUtilTest {
               .newBuilder()
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) socket.remote).getAddress().getAddress()))
-              .setPort(1000)
-              .build())
+              .setPort(1000))
       .build();
 
   @Test
@@ -333,14 +331,53 @@ public final class ChannelzProtoUtilTest {
   }
 
   @Test
-  public void toSocket() throws Exception {
+  public void toSocket_withDataNoOptions() throws Exception {
     assertEquals(
         Socket
             .newBuilder()
             .setRef(socketRef)
             .setLocal(localAddress)
             .setRemote(remoteAddress)
-            .setData(socketDataNoSockOpts)
+            .setData(socketDataWithDataNoSockOpts)
+            .build(),
+        ChannelzProtoUtil.toSocket(socket));
+  }
+
+  @Test
+  public void toSocket_noDataWithOptions() throws Exception {
+    assertEquals(
+        Socket
+            .newBuilder()
+            .setRef(listenSocketRef)
+            .setLocal(listenAddress)
+            .setData(
+                SocketData
+                    .newBuilder()
+                    .addOption(
+                        SocketOption
+                            .newBuilder()
+                            .setName("listen_option")
+                            .setValue("listen_option_value")))
+            .build(),
+        ChannelzProtoUtil.toSocket(listenSocket));
+  }
+
+  @Test
+  public void toSocket_withDataWithOptions() throws Exception {
+    socket.socketOptions
+        = new SocketOptions(null, null, null, ImmutableMap.of("test_name", "test_value"));
+    assertEquals(
+        Socket
+            .newBuilder()
+            .setRef(socketRef)
+            .setLocal(localAddress)
+            .setRemote(remoteAddress)
+            .setData(
+                SocketData
+                    .newBuilder(socketDataWithDataNoSockOpts)
+                    .addOption(
+                        SocketOption.newBuilder()
+                            .setName("test_name").setValue("test_value")))
             .build(),
         ChannelzProtoUtil.toSocket(socket));
   }
@@ -349,7 +386,7 @@ public final class ChannelzProtoUtilTest {
   public void extractSocketData() throws Exception {
     // no options
     assertEquals(
-        socketDataNoSockOpts,
+        socketDataWithDataNoSockOpts,
         ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
 
     // with options
@@ -358,7 +395,7 @@ public final class ChannelzProtoUtilTest {
         .setTcpInfo(channelzTcpInfo)
         .build();
     assertEquals(
-        socketDataNoSockOpts
+        socketDataWithDataNoSockOpts
             .toBuilder()
             .addOption(sockOptlinger10s)
             .addOption(socketOptionTcpInfo)
@@ -367,20 +404,9 @@ public final class ChannelzProtoUtilTest {
   }
 
   @Test
-  public void toSocket_listenSocket() {
-    assertEquals(
-        Socket
-            .newBuilder()
-            .setRef(listenSocketRef)
-            .setLocal(listenAddress)
-            .build(),
-        ChannelzProtoUtil.toSocket(listenSocket));
-  }
-
-  @Test
   public void toSocketData() throws Exception {
     assertEquals(
-        socketDataNoSockOpts
+        socketDataWithDataNoSockOpts
             .toBuilder()
             .build(),
         ChannelzProtoUtil.extractSocketData(socket.getStats().get()));
@@ -394,8 +420,7 @@ public final class ChannelzProtoUtilTest {
             TcpIpAddress
                 .newBuilder()
                 .setIpAddress(ByteString.copyFrom(inet4.getAddress().getAddress()))
-                .setPort(1000)
-                .build())
+                .setPort(1000))
             .build(),
         ChannelzProtoUtil.toAddress(inet4));
   }
@@ -408,8 +433,7 @@ public final class ChannelzProtoUtilTest {
         Address.newBuilder().setUdsAddress(
             UdsAddress
                 .newBuilder()
-                .setFilename(path)
-                .build())
+                .setFilename(path))
             .build(),
         ChannelzProtoUtil.toAddress(uds));
   }
@@ -427,8 +451,7 @@ public final class ChannelzProtoUtilTest {
         Address.newBuilder().setOtherAddress(
             OtherAddress
                 .newBuilder()
-                .setName(name)
-                .build())
+                .setName(name))
             .build(),
         ChannelzProtoUtil.toAddress(other));
   }

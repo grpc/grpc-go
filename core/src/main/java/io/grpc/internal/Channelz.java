@@ -468,9 +468,9 @@ public final class Channelz {
         SocketOptions socketOptions,
         Security security) {
       this.data = data;
-      this.local = local;
+      this.local = Preconditions.checkNotNull(local, "local socket");
       this.remote = remote;
-      this.socketOptions = socketOptions;
+      this.socketOptions = Preconditions.checkNotNull(socketOptions);
       this.security = security;
     }
   }
