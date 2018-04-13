@@ -77,7 +77,7 @@ final class RetryPolicy {
     return this.maxAttempts == that.maxAttempts
         && this.initialBackoffNanos == that.initialBackoffNanos
         && this.maxBackoffNanos == that.maxBackoffNanos
-        && this.backoffMultiplier == that.backoffMultiplier
+        && Double.compare(this.backoffMultiplier, that.backoffMultiplier) == 0
         && Objects.equal(this.retryableStatusCodes, that.retryableStatusCodes);
   }
 
