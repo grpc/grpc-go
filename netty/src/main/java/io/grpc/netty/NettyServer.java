@@ -21,6 +21,7 @@ import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -302,6 +303,14 @@ class NettyServer implements InternalServer, WithLogId {
   @Override
   public LogId getLogId() {
     return logId;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId)
+        .add("address", address)
+        .toString();
   }
 
   class EventLoopReferenceCounter extends AbstractReferenceCounted {

@@ -25,6 +25,7 @@ import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -578,6 +579,14 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
     SettableFuture<ServerStats> ret = SettableFuture.create();
     ret.set(builder.build());
     return ret;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId)
+        .add("transportServer", transportServer)
+        .toString();
   }
 
   private static final class NoopListener implements ServerStreamListener {

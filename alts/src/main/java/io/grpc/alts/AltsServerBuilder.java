@@ -16,6 +16,7 @@
 
 package io.grpc.alts;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
@@ -247,6 +248,11 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
     @Override
     public void awaitTermination() throws InterruptedException {
       delegate.awaitTermination();
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this).add("delegate", delegate).toString();
     }
   }
 }

@@ -18,6 +18,7 @@ package io.grpc.inprocess;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.Instrumented;
@@ -93,6 +94,11 @@ final class InProcessServer implements InternalServer {
       shutdown = true;
       listener.serverShutdown();
     }
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("name", name).toString();
   }
 
   synchronized ServerTransportListener register(InProcessTransport transport) {
