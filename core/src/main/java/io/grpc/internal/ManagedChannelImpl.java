@@ -1160,17 +1160,18 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
           Map<String, Object> serviceConfig =
               config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
-
-          try {
-            serviceConfigInterceptor.handleUpdate(serviceConfig);
-            if (retryEnabled) {
-              throttle = getThrottle(config);
+          if (serviceConfig != null) {
+            try {
+              serviceConfigInterceptor.handleUpdate(serviceConfig);
+              if (retryEnabled) {
+                throttle = getThrottle(config);
+              }
+            } catch (RuntimeException re) {
+              logger.log(
+                  Level.WARNING,
+                  "[" + getLogId() + "] Unexpected exception from parsing service config",
+                  re);
             }
-          } catch (RuntimeException re) {
-            logger.log(
-                Level.WARNING,
-                "[" + getLogId() + "] Unexpected exception from parsing service config",
-                re);
           }
 
           helper.lb.handleResolvedAddressGroups(servers, config);

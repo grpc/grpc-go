@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 
 /**
  * Modifies RPCs in in conformance with a Service Config.
@@ -69,7 +70,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     this.maxRetryAttemptsLimit = maxRetryAttemptsLimit;
   }
 
-  void handleUpdate(Map<String, Object> serviceConfig) {
+  void handleUpdate(@Nonnull Map<String, Object> serviceConfig) {
     Map<String, MethodInfo> newServiceMethodConfigs = new HashMap<String, MethodInfo>();
     Map<String, MethodInfo> newServiceConfigs = new HashMap<String, MethodInfo>();
 
