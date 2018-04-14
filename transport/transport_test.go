@@ -1908,7 +1908,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 		}
 		// Read preface sent by client.
 		if _, err = io.ReadFull(s.conn, make([]byte, len(http2.ClientPreface))); err != nil {
-			t.Errorf("Error at server-side while reading preface from cleint. Err: %v", err)
+			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
 			return
 		}
 		reader := bufio.NewReaderSize(s.conn, defaultWriteBufSize)

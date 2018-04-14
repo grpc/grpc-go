@@ -95,7 +95,7 @@ func (ccr *ccResolverWrapper) start() {
 	go ccr.watcher()
 }
 
-// watcher processes address updates and service config updates sequencially.
+// watcher processes address updates and service config updates sequentially.
 // Otherwise, we need to resolve possible races between address and service
 // config (e.g. they specify different balancer types).
 func (ccr *ccResolverWrapper) watcher() {
