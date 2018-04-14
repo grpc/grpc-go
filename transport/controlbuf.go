@@ -357,10 +357,9 @@ func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimato
 const minBatchSize = 1000
 
 // run should be run in a separate goroutine.
-func (l *loopyWriter) run() {
+func (l *loopyWriter) run() (err error) {
 	var (
 		it      interface{}
-		err     error
 		isEmpty bool
 	)
 	defer func() {
