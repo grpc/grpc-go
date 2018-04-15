@@ -187,7 +187,7 @@ func (d *dnsResolver) watcher() {
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
 		d.t.Reset(d.freq)
-		d.cc.NewServiceConfig(string(sc))
+		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
 	}
 }

@@ -347,7 +347,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
 			return nil
 		}
-		d.addMetadata(f.Name, string(v))
+		d.addMetadata(f.Name, v)
 	}
 	return nil
 }
