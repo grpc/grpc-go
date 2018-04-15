@@ -1458,7 +1458,6 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(ac.channelzID)
 	}
-	return
 }
 
 func (ac *addrConn) getState() connectivity.State {
