@@ -110,8 +110,8 @@ type http2Client struct {
 	kpCount    int64
 	// The number of streams that have started, including already finished ones.
 	streamsStarted int64
-	// The number of streams that have ended successfully with the EoS bit set for
-	// both end points.
+	// The number of streams that have ended successfully by receiving EoS bit set
+	// frame from server.
 	streamsSucceeded  int64
 	streamsFailed     int64
 	lastStreamCreated time.Time
