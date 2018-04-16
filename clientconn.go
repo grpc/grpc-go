@@ -984,11 +984,13 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 		}
 	}
 
-	var newStickinessMDKey string
-	if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
-		newStickinessMDKey = *sc.stickinessMetadataKey
+	if envConfigStickinessOn {
+		var newStickinessMDKey string
+		if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
+			newStickinessMDKey = *sc.stickinessMetadataKey
+		}
+		cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
 	}
-	cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
 
 	cc.mu.Unlock()
 	return nil

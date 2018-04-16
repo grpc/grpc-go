@@ -63,6 +63,8 @@ func TestStickyKeyFromContext(t *testing.T) {
 }
 
 func TestStickinessServiceConfig(t *testing.T) {
+	envConfigStickinessOn = true
+	defer func() { envConfigStickinessOn = false }()
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
@@ -88,6 +90,8 @@ func TestStickinessServiceConfig(t *testing.T) {
 }
 
 func TestStickinessEnd2end(t *testing.T) {
+	envConfigStickinessOn = true
+	defer func() { envConfigStickinessOn = false }()
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
@@ -173,6 +177,8 @@ func TestStickinessEnd2end(t *testing.T) {
 
 // Changing stickinessMDKey in service config will clear the sticky map.
 func TestStickinessChangeMDKey(t *testing.T) {
+	envConfigStickinessOn = true
+	defer func() { envConfigStickinessOn = false }()
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
@@ -226,6 +232,8 @@ func TestStickinessChangeMDKey(t *testing.T) {
 
 // Switching balancer will clear the sticky map.
 func TestStickinessSwitchingBalancer(t *testing.T) {
+	envConfigStickinessOn = true
+	defer func() { envConfigStickinessOn = false }()
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
