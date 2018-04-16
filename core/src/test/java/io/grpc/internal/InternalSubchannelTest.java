@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
@@ -36,6 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.Iterables;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
@@ -929,6 +931,19 @@ public class InternalSubchannelTest {
     assertTrue(channelz.containsClientSocket(t0.transport.getLogId()));
     t0.listener.transportTerminated();
     assertFalse(channelz.containsClientSocket(t0.transport.getLogId()));
+  }
+
+  @Test
+  public void channelzStatContainsTransport() throws Exception {
+    SocketAddress addr = new SocketAddress() {};
+    assertThat(transports).isEmpty();
+    createInternalSubchannel(addr);
+    internalSubchannel.obtainActiveTransport();
+
+    WithLogId registeredTransport
+        = Iterables.getOnlyElement(internalSubchannel.getStats().get().sockets);
+    MockClientTransportInfo actualTransport = Iterables.getOnlyElement(transports);
+    assertEquals(actualTransport.transport.getLogId(), registeredTransport.getLogId());
   }
 
   private void createInternalSubchannel(SocketAddress ... addrs) {

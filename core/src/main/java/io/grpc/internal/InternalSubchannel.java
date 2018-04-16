@@ -457,6 +457,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     ChannelStats.Builder builder = new ChannelStats.Builder();
     synchronized (lock) {
       builder.setTarget(addressGroup.toString()).setState(getState());
+      builder.setSockets(new ArrayList<WithLogId>(transports));
     }
     callsTracer.updateBuilder(builder);
     ret.set(builder.build());
