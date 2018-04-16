@@ -376,7 +376,14 @@ final class ChannelzProtoUtil {
 
   private static <T> T getFuture(ListenableFuture<T> future) {
     try {
-      return future.get();
+      T ret = future.get();
+      if (ret == null) {
+        throw Status.UNIMPLEMENTED
+            .withDescription("The entity's stats can not be retrieved. "
+                + "If this is an InProcessTransport this is expected.")
+            .asRuntimeException();
+      }
+      return ret;
     } catch (InterruptedException e) {
       throw Status.INTERNAL.withCause(e).asRuntimeException();
     } catch (ExecutionException e) {

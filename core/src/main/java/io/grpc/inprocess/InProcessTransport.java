@@ -226,7 +226,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
   @Override
   public ListenableFuture<SocketStats> getStats() {
-    // TODO(zpencer): add transport tracing to in-process server
     SettableFuture<SocketStats> ret = SettableFuture.create();
     ret.set(null);
     return ret;
