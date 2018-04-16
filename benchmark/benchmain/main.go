@@ -420,7 +420,7 @@ func main() {
 	}
 	var stopTimer = func(count int32) {
 		runtime.ReadMemStats(&memStats)
-		results = testing.BenchmarkResult{N: int(count), T: time.Now().Sub(startTime),
+		results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
 			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
 	}
 	sharedPos := make([]bool, len(featuresPos))
