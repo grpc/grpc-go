@@ -362,7 +362,7 @@ func (o CompressorCallOption) after(c *callInfo) {}
 //
 // If CallCustomCodec is not also used, the content-subtype will be used to
 // look up the Codec to use in the registry controlled by RegisterCodec. See
-// the documention on RegisterCodec for details on registration. The lookup
+// the documentation on RegisterCodec for details on registration. The lookup
 // of content-subtype is case-insensitive. If no such Codec is found, the call
 // will result in an error with code codes.Internal.
 //

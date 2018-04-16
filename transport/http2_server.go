@@ -860,7 +860,7 @@ func (t *http2Server) keepalive() {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
 				t.drain(http2.ErrCodeNo, []byte{})
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
 				return
 			}
@@ -872,7 +872,7 @@ func (t *http2Server) keepalive() {
 			case <-maxAge.C:
 				// Close the connection after grace period.
 				t.Close()
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				maxAge.Reset(infinity)
 			case <-t.ctx.Done():
 			}
@@ -885,7 +885,7 @@ func (t *http2Server) keepalive() {
 			}
 			if pingSent {
 				t.Close()
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				keepalive.Reset(infinity)
 				return
 			}
