@@ -342,10 +342,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	if randomGen.Intn(100)+1 > *a {
-		return false
-	}
-	return true
+	return randomGen.Intn(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {
