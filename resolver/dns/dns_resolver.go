@@ -190,7 +190,7 @@ func (d *dnsResolver) watcher() {
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
 		d.t.Reset(d.freq)
-		d.cc.NewServiceConfig(string(sc))
+		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
 	}
 }
@@ -260,8 +260,7 @@ func (d *dnsResolver) lookupHost() []resolver.Address {
 }
 
 func (d *dnsResolver) lookup() ([]resolver.Address, string) {
-	var newAddrs []resolver.Address
-	newAddrs = d.lookupSRV()
+	newAddrs := d.lookupSRV()
 	// Support fallback to non-balancer address.
 	newAddrs = append(newAddrs, d.lookupHost()...)
 	sc := d.lookupTXT()

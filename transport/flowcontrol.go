@@ -33,14 +33,14 @@ const (
 	initialWindowSize             = defaultWindowSize // for an RPC
 	infinity                      = time.Duration(math.MaxInt64)
 	defaultClientKeepaliveTime    = infinity
-	defaultClientKeepaliveTimeout = time.Duration(20 * time.Second)
+	defaultClientKeepaliveTimeout = 20 * time.Second
 	defaultMaxStreamsClient       = 100
 	defaultMaxConnectionIdle      = infinity
 	defaultMaxConnectionAge       = infinity
 	defaultMaxConnectionAgeGrace  = infinity
-	defaultServerKeepaliveTime    = time.Duration(2 * time.Hour)
-	defaultServerKeepaliveTimeout = time.Duration(20 * time.Second)
-	defaultKeepalivePolicyMinTime = time.Duration(5 * time.Minute)
+	defaultServerKeepaliveTime    = 2 * time.Hour
+	defaultServerKeepaliveTimeout = 20 * time.Second
+	defaultKeepalivePolicyMinTime = 5 * time.Minute
 	// max window limit set by HTTP2 Specs.
 	maxWindowSize = math.MaxInt32
 	// defaultWriteQuota is the default value for number of data

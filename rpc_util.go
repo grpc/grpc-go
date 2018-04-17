@@ -228,8 +228,8 @@ func (o TrailerCallOption) after(c *callInfo) {
 	}
 }
 
-// Peer returns a CallOption that retrieves peer information for a
-// unary RPC.
+// Peer returns a CallOption that retrieves peer information for a unary RPC.
+// The peer field will be populated *after* the RPC completes.
 func Peer(p *peer.Peer) CallOption {
 	return PeerCallOption{PeerAddr: p}
 }
@@ -275,7 +275,7 @@ func (o FailFastCallOption) before(c *callInfo) error {
 	c.failFast = o.FailFast
 	return nil
 }
-func (o FailFastCallOption) after(c *callInfo) { return }
+func (o FailFastCallOption) after(c *callInfo) {}
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
 func MaxCallRecvMsgSize(s int) CallOption {
@@ -293,7 +293,7 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 	c.maxReceiveMessageSize = &o.MaxRecvMsgSize
 	return nil
 }
-func (o MaxRecvMsgSizeCallOption) after(c *callInfo) { return }
+func (o MaxRecvMsgSizeCallOption) after(c *callInfo) {}
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
 func MaxCallSendMsgSize(s int) CallOption {
@@ -311,7 +311,7 @@ func (o MaxSendMsgSizeCallOption) before(c *callInfo) error {
 	c.maxSendMessageSize = &o.MaxSendMsgSize
 	return nil
 }
-func (o MaxSendMsgSizeCallOption) after(c *callInfo) { return }
+func (o MaxSendMsgSizeCallOption) after(c *callInfo) {}
 
 // PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
 // for a call.
@@ -330,7 +330,7 @@ func (o PerRPCCredsCallOption) before(c *callInfo) error {
 	c.creds = o.Creds
 	return nil
 }
-func (o PerRPCCredsCallOption) after(c *callInfo) { return }
+func (o PerRPCCredsCallOption) after(c *callInfo) {}
 
 // UseCompressor returns a CallOption which sets the compressor used when
 // sending the request.  If WithCompressor is also set, UseCompressor has
@@ -351,7 +351,7 @@ func (o CompressorCallOption) before(c *callInfo) error {
 	c.compressorType = o.CompressorType
 	return nil
 }
-func (o CompressorCallOption) after(c *callInfo) { return }
+func (o CompressorCallOption) after(c *callInfo) {}
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type over
@@ -362,7 +362,7 @@ func (o CompressorCallOption) after(c *callInfo) { return }
 //
 // If CallCustomCodec is not also used, the content-subtype will be used to
 // look up the Codec to use in the registry controlled by RegisterCodec. See
-// the documention on RegisterCodec for details on registration. The lookup
+// the documentation on RegisterCodec for details on registration. The lookup
 // of content-subtype is case-insensitive. If no such Codec is found, the call
 // will result in an error with code codes.Internal.
 //
@@ -384,7 +384,7 @@ func (o ContentSubtypeCallOption) before(c *callInfo) error {
 	c.contentSubtype = o.ContentSubtype
 	return nil
 }
-func (o ContentSubtypeCallOption) after(c *callInfo) { return }
+func (o ContentSubtypeCallOption) after(c *callInfo) {}
 
 // CallCustomCodec returns a CallOption that will set the given Codec to be
 // used for all request and response messages for a call. The result of calling
@@ -413,7 +413,7 @@ func (o CustomCodecCallOption) before(c *callInfo) error {
 	c.codec = o.Codec
 	return nil
 }
-func (o CustomCodecCallOption) after(c *callInfo) { return }
+func (o CustomCodecCallOption) after(c *callInfo) {}
 
 // The format of the payload: compressed or not?
 type payloadFormat uint8

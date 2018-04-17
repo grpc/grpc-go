@@ -153,7 +153,7 @@ func DoServerStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
+		if size != respSizes[index] {
 			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++
@@ -198,7 +198,7 @@ func DoPingPong(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
+		if size != respSizes[index] {
 			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++

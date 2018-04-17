@@ -175,7 +175,7 @@ func (s *outStream) deleteSelf() {
 }
 
 type outStreamList struct {
-	// Following are sentinal objects that mark the
+	// Following are sentinel objects that mark the
 	// beginning and end of the list. They do not
 	// contain any item lists. All valid objects are
 	// inserted in between them.

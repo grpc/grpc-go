@@ -648,7 +648,6 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 		return
 	}
 	ss.s.SetTrailer(md)
-	return
 }
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
