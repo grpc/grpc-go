@@ -342,7 +342,6 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	randomGen.Seed(time.Now().UnixNano())
 	return randomGen.Intn(100)+1 <= *a
 }
 
