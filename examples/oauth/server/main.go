@@ -50,7 +50,7 @@ func main() {
 	opts := []grpc.ServerOption{
 		// The following grpc.ServerOption adds an interceptor for all unary
 		// RPCs. To configure an interceptor for streaming RPCs, see:
-		// https://godoc.org/google.golang.org/grpc#WithStreamInterceptor
+		// https://godoc.org/google.golang.org/grpc#StreamInterceptor
 		grpc.UnaryInterceptor(ensureValidToken),
 		// Enable TLS for all incoming connections.
 		grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
