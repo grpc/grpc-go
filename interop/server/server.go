@@ -35,6 +35,7 @@ import (
 var (
 	useTLS   = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	useALTS  = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
+	hsAddr   = flag.String("handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	certFile = flag.String("tls_cert_file", "", "The TLS cert file")
 	keyFile  = flag.String("tls_key_file", "", "The TLS key file")
 	port     = flag.Int("port", 10000, "The server port")
@@ -64,7 +65,11 @@ func main() {
 		}
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {
-		altsTC := alts.NewServerCreds()
+		altsOpts := alts.DefaultServerOptions()
+		if *hsAddr != "" {
+			altsOpts.HandshakerServiceAddress = *hsAddr
+		}
+		altsTC := alts.NewServerCreds(altsOpts)
 		opts = append(opts, grpc.Creds(altsTC))
 	}
 	server := grpc.NewServer(opts...)

@@ -24,6 +24,11 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
+const (
+	// The address is irrelevant in this test.
+	testAddress = "some_address"
+)
+
 func TestDial(t *testing.T) {
 	defer func() func() {
 		temp := hsDialer
@@ -39,24 +44,24 @@ func TestDial(t *testing.T) {
 	hsConn = nil
 
 	// First call to Dial, it should create set hsConn.
-	conn1, err := Dial()
+	conn1, err := Dial(testAddress)
 	if err != nil {
 		t.Fatalf("first call to Dial failed: %v", err)
 	}
 	if conn1 == nil {
-		t.Fatal("first call to Dial()=(nil, _), want not nil")
+		t.Fatal("first call to Dial(_)=(nil, _), want not nil")
 	}
 	if got, want := hsConn, conn1; got != want {
 		t.Fatalf("hsConn=%v, want %v", got, want)
 	}
 
-	// Second call to Dial() should return conn1 above.
-	conn2, err := Dial()
+	// Second call to Dial should return conn1 above.
+	conn2, err := Dial(testAddress)
 	if err != nil {
-		t.Fatalf("second call to Dial() failed: %v", err)
+		t.Fatalf("second call to Dial(_) failed: %v", err)
 	}
 	if got, want := conn2, conn1; got != want {
-		t.Fatalf("second call to Dial()=(%v, _), want (%v,. _)", got, want)
+		t.Fatalf("second call to Dial(_)=(%v, _), want (%v,. _)", got, want)
 	}
 	if got, want := hsConn, conn1; got != want {
 		t.Fatalf("hsConn=%v, want %v", got, want)

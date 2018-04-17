@@ -40,6 +40,9 @@ import (
 )
 
 const (
+	// hypervisorHandshakerServiceAddress represents the default ALTS gRPC
+	// handshaker service address in the hypervisor.
+	hypervisorHandshakerServiceAddress = "metadata.google.internal:8080"
 	// defaultTimeout specifies the server handshake timeout.
 	defaultTimeout = 30.0 * time.Second
 	// The following constants specify the minimum and maximum acceptable
@@ -95,39 +98,71 @@ type ClientOptions struct {
 	// TargetServiceAccounts contains a list of expected target service
 	// accounts.
 	TargetServiceAccounts []string
+	// HandshakerServiceAddress represents the ALTS handshaker gRPC service
+	// address to connect to.
+	HandshakerServiceAddress string
+}
+
+// DefaultClientOptions creates a new ClientOptions object with the default
+// values.
+func DefaultClientOptions() *ClientOptions {
+	return &ClientOptions{
+		HandshakerServiceAddress: hypervisorHandshakerServiceAddress,
+	}
+}
+
+// ServerOptions contains the server-side options of an ALTS channel. These
+// options will be passed to the underlying ALTS handshaker.
+type ServerOptions struct {
+	// HandshakerServiceAddress represents the ALTS handshaker gRPC service
+	// address to connect to.
+	HandshakerServiceAddress string
+}
+
+// DefaultServerOptions creates a new ServerOptions object with the default
+// values.
+func DefaultServerOptions() *ServerOptions {
+	return &ServerOptions{
+		HandshakerServiceAddress: hypervisorHandshakerServiceAddress,
+	}
 }
 
 // altsTC is the credentials required for authenticating a connection using ALTS.
 // It implements credentials.TransportCredentials interface.
 type altsTC struct {
-	info     *credentials.ProtocolInfo
-	hsAddr   string
-	side     core.Side
-	accounts []string
+	info      *credentials.ProtocolInfo
+	hsAddr    string
+	side      core.Side
+	accounts  []string
+	hsAddress string
 }
 
 // NewClientCreds constructs a client-side ALTS TransportCredentials object.
 func NewClientCreds(opts *ClientOptions) credentials.TransportCredentials {
-	return newALTS(core.ClientSide, opts.TargetServiceAccounts)
+	return newALTS(core.ClientSide, opts.TargetServiceAccounts, opts.HandshakerServiceAddress)
 }
 
 // NewServerCreds constructs a server-side ALTS TransportCredentials object.
-func NewServerCreds() credentials.TransportCredentials {
-	return newALTS(core.ServerSide, nil)
+func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
+	return newALTS(core.ServerSide, nil, opts.HandshakerServiceAddress)
 }
 
-func newALTS(side core.Side, accounts []string) credentials.TransportCredentials {
+func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
 	once.Do(func() {
 		vmOnGCP = isRunningOnGCP()
 	})
 
+	if hsAddress == "" {
+		hsAddress = hypervisorHandshakerServiceAddress
+	}
 	return &altsTC{
 		info: &credentials.ProtocolInfo{
 			SecurityProtocol: "alts",
 			SecurityVersion:  "1.0",
 		},
-		side:     side,
-		accounts: accounts,
+		side:      side,
+		accounts:  accounts,
+		hsAddress: hsAddress,
 	}
 }
 
@@ -138,7 +173,7 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 	}
 
 	// Connecting to ALTS handshaker service.
-	hsConn, err := service.Dial()
+	hsConn, err := service.Dial(g.hsAddress)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,7 +226,7 @@ func (g *altsTC) ServerHandshake(rawConn net.Conn) (_ net.Conn, _ credentials.Au
 		return nil, nil, ErrUntrustedPlatform
 	}
 	// Connecting to ALTS handshaker service.
-	hsConn, err := service.Dial()
+	hsConn, err := service.Dial(g.hsAddress)
 	if err != nil {
 		return nil, nil, err
 	}
