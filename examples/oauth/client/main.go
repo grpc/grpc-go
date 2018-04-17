@@ -20,8 +20,7 @@
 package main
 
 import (
-	"crypto/x509"
-	"io/ioutil"
+	"crypto/tls"
 	"log"
 	"time"
 
@@ -44,10 +43,10 @@ func main() {
 		// oauth.NewOauthAccess requires the configuration of transport
 		// credentials.
 		grpc.WithTransportCredentials(
-			credentials.NewClientTLSFromCert(loadSystemCertPool(), ""),
+			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}),
 		),
 	}
-	conn, err := grpc.Dial("localhost:8080", opts...)
+	conn, err := grpc.Dial(":8080", opts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -56,10 +55,6 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	// Include an authorization token within the outgoing context.
-	// md := metadata.Pairs("authorization", "some-secret-token")
-	// ctx = metadata.NewOutgoingContext(ctx, md)
-
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "authenticated-client"})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
@@ -74,22 +69,4 @@ func fetchToken() *oauth2.Token {
 	return &oauth2.Token{
 		AccessToken: "some-secret-token",
 	}
-}
-
-// loadSystemCertPool adds a self-signed cert to the system cert pool to avoid
-// having to provision a certificate from a trusted certificate authority for
-// this example.
-func loadSystemCertPool() *x509.CertPool {
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		log.Fatalf("failed to read system cert pool: %s", err)
-	}
-	caCert, err := ioutil.ReadFile("certs/ca.crt")
-	if err != nil {
-		log.Fatalf("failed to read ca.crt: %s", err)
-	}
-	if ok := pool.AppendCertsFromPEM(caCert); !ok {
-		log.Fatal("failed to append certs from PEM")
-	}
-	return pool
 }

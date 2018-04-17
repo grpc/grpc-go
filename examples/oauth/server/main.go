@@ -33,6 +33,7 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
@@ -42,11 +43,7 @@ var (
 
 func main() {
 	log.Println("server starting on port 8080...")
-	lis, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	cert, err := tls.LoadX509KeyPair("certs/localhost.crt", "certs/localhost.key")
+	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
@@ -60,6 +57,10 @@ func main() {
 	}
 	s := grpc.NewServer(opts...)
 	pb.RegisterGreeterServer(s, &server{})
+	lis, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
