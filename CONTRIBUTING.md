@@ -27,7 +27,8 @@ How to get your contributions merged smoothly and quickly.
 - Keep your PR up to date with upstream/master (if there are merge conflicts, we can't really merge your change).
  
 - **All tests need to be passing** before your change can be merged. We recommend you **run tests locally** before creating your PR to catch breakages early on.
-  - `./vet.sh` to catch vet errors
+  - `make all` to test everything, OR
+  - `make vet` to catch vet errors
   - `make test` to run the tests
   - `make testrace` to run tests in race mode
 
