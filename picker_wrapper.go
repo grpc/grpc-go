@@ -238,6 +238,7 @@ func (ss *stickyStore) clear() {
 func (ss *stickyStore) put(stickyKey string, acw *acBalancerWrapper) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+	// TODO(stickiness): limit the total number of entries.
 	ss.store[stickyKey] = &stickyStoreEntry{
 		acw:  acw,
 		addr: acw.getAddrConn().getCurAddr(),
