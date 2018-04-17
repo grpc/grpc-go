@@ -52,7 +52,7 @@ const (
 
 var (
 	errMissingAddr = errors.New("missing address")
-	randSource     = rand.NewSource(time.Now().UnixNano())
+	randomGen      = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
@@ -342,8 +342,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	r := rand.New(randSource)
-	if r.Intn(100)+1 > *a {
+	if randomGen.Intn(100)+1 > *a {
 		return false
 	}
 	return true
