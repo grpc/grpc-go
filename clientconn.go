@@ -111,6 +111,7 @@ type dialOptions struct {
 	resolverBuilder  resolver.Builder
 	waitForHandshake bool
 	channelzParentID int64
+	serviceConfigOff bool
 }
 
 const (
@@ -409,6 +410,14 @@ func WithAuthority(a string) DialOption {
 func WithChannelzParentID(id int64) DialOption {
 	return func(o *dialOptions) {
 		o.channelzParentID = id
+	}
+}
+
+// WithServiceConfigOff returns a DialOption that specifies whether resolver
+// should fetch service config.
+func WithServiceConfigOff(a bool) DialOption {
+	return func(o *dialOptions) {
+		o.serviceConfigOff = a
 	}
 }
 
