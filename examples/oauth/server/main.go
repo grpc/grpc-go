@@ -32,11 +32,12 @@ import (
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
-	errMissingMetadata = grpc.Errorf(codes.InvalidArgument, "missing metadata")
-	errInvalidToken    = grpc.Errorf(codes.Unauthenticated, "invalid token")
+	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
+	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
 )
 
 func main() {
