@@ -72,12 +72,15 @@ func (bp *pickerWrapper) connectionError() error {
 func (bp *pickerWrapper) updateStickinessMDKey(newKey string) {
 	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != newKey {
 		bp.stickinessMDKey.Store(newKey)
-		bp.stickiness.clear()
+		bp.stickiness.reset(newKey)
 	}
 }
 
 func (bp *pickerWrapper) clearStickinessState() {
-	bp.stickiness.clear()
+	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != "" {
+		// There's no need to reset store if mdKey was "".
+		bp.stickiness.reset(oldKey)
+	}
 }
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
@@ -106,8 +109,18 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 	mdKey, _ := bp.stickinessMDKey.Load().(string)
 	stickyKey, isSticky := stickyKeyFromContext(ctx, mdKey)
 
+	// Potential race here: if stickinessMDKey is updated after the above two
+	// lines, and this pick is a sticky pick, the following put could add an
+	// entry to sticky store with an outdated sticky key.
+	//
+	// The solution: keep the current md key in sticky store, and at the
+	// beginning of each get/put, check the mdkey against store.curMDKey.
+	//  - Cons: one more string comparing for each get/put.
+	//  - Pros: the string matching happens inside get/put, so the overhead for
+	//  non-sticky RPCs will be minimal.
+
 	if isSticky {
-		if t, ok := bp.stickiness.get(stickyKey); ok {
+		if t, ok := bp.stickiness.get(mdKey, stickyKey); ok {
 			// Done function returned is always nil.
 			return t, nil, nil
 		}
@@ -169,7 +182,7 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 		}
 		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
 			if isSticky {
-				bp.stickiness.put(stickyKey, acw)
+				bp.stickiness.put(mdKey, stickyKey, acw)
 			}
 			return t, done, nil
 		}
@@ -197,8 +210,11 @@ type stickyStoreEntry struct {
 }
 
 type stickyStore struct {
-	mu    sync.Mutex
-	store map[string]*stickyStoreEntry
+	mu sync.Mutex
+	// curMDKey is check before every get/put to avoid races. The operation will
+	// abort immediately when the given mdKey is different from the curMDKey.
+	curMDKey string
+	store    map[string]*stickyStoreEntry
 }
 
 func newStickyStore() *stickyStore {
@@ -207,15 +223,22 @@ func newStickyStore() *stickyStore {
 	}
 }
 
-func (ss *stickyStore) clear() {
+// reset clears the map in stickyStore, and set the currentMDKey to newMDKey.
+func (ss *stickyStore) reset(newMDKey string) {
 	ss.mu.Lock()
+	ss.curMDKey = newMDKey
 	ss.store = make(map[string]*stickyStoreEntry)
 	ss.mu.Unlock()
 }
 
-func (ss *stickyStore) put(stickyKey string, acw *acBalancerWrapper) {
+// stickyKey is the key to look up in store. mdKey will be checked against
+// curMDKey to avoid races.
+func (ss *stickyStore) put(mdKey, stickyKey string, acw *acBalancerWrapper) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+	if mdKey != ss.curMDKey {
+		return
+	}
 	// TODO(stickiness): limit the total number of entries.
 	ss.store[stickyKey] = &stickyStoreEntry{
 		acw:  acw,
@@ -223,9 +246,14 @@ func (ss *stickyStore) put(stickyKey string, acw *acBalancerWrapper) {
 	}
 }
 
-func (ss *stickyStore) get(stickyKey string) (transport.ClientTransport, bool) {
+// stickyKey is the key to look up in store. mdKey will be checked against
+// curMDKey to avoid races.
+func (ss *stickyStore) get(mdKey, stickyKey string) (transport.ClientTransport, bool) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+	if mdKey != ss.curMDKey {
+		return nil, false
+	}
 	entry, ok := ss.store[stickyKey]
 	if !ok {
 		return nil, false
