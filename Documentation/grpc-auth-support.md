@@ -28,23 +28,27 @@ For an example of how to configure client and server to use OAuth2 tokens, see
 
 ## Validating a token on the server
 
-To intercept all RPCs, a server must configure either a
+Clients may use
+[metadata.MD](https://godoc.org/google.golang.org/grpc/metadata#MD)
+to store tokens and other authentication-related data. To gain access to the
+`metadata.MD` object, a server may use
+[metadata.FromIncomingContext](https://godoc.org/google.golang.org/grpc/metadata#FromIncomingContext).
+With a reference to `metadata.MD` on the server, one needs to simply lookup the
+`authorization` key. Note, all keys stored within `metadata.MD` are normalized
+to lowercase. See [here](https://godoc.org/google.golang.org/grpc/metadata#New).
+
+It is possible to configure token validation for all RPCs using an interceptor.
+A server may configure either a
 [grpc.UnaryInterceptor](https://godoc.org/google.golang.org/grpc#UnaryInterceptor)
 or a
 [grpc.StreamInterceptor](https://godoc.org/google.golang.org/grpc#StreamInterceptor).
 
-Within the interceptor, use
-[metadata.FromIncomingContext](https://godoc.org/google.golang.org/grpc/metadata#FromIncomingContext)
-to access the `metadata.MD` object. From there, one must simply lookup the
-`authorization` key. Note, all keys stored within `metadata.MD` are normalized
-to lowercase. See [here](https://godoc.org/google.golang.org/grpc/metadata#New).
-
 ## Adding a token to all outgoing client RPCs
 
-To send an OAuth2 token with each RPC, a client must configure the
+To send an OAuth2 token with each RPC, a client may configure the
 `grpc.DialOption`
 [grpc.WithPerRPCCredentials](https://godoc.org/google.golang.org/grpc#WithPerRPCCredentials).
-Alternatively, one may use the `grpc.CallOption`
+Alternatively, a client may also use the `grpc.CallOption`
 [grpc.PerRPCCredentials](https://godoc.org/google.golang.org/grpc#PerRPCCredentials)
 on each invocation of an RPC.
 
