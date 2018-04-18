@@ -66,6 +66,9 @@ func invoke(ctx context.Context, method string, req, reply interface{}, cc *Clie
 	// TODO: implement retries in clientStream and make this simply
 	// newClientStream, SendMsg, RecvMsg.
 	firstAttempt := true
+	if cc.PrepareContextFunc != nil {
+		ctx = cc.PrepareContextFunc(ctx, method)
+	}
 	for {
 		csInt, err := newClientStream(ctx, unaryStreamDesc, cc, method, opts...)
 		if err != nil {
