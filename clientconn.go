@@ -654,6 +654,9 @@ type ClientConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// PrepareContextFunc: can be used to modify/prepare the context before each grpc request
+	PrepareContextFunc func(ctx context.Context, method string) context.Context
+
 	target       string
 	parsedTarget resolver.Target
 	authority    string
