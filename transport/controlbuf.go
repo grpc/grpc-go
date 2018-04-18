@@ -664,6 +664,8 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) error {
 					}
 				}
 			}
+		case http2.SettingHeaderTableSize:
+			l.hEnc.SetMaxDynamicTableSizeLimit(s.Val)
 		}
 	}
 	return nil
