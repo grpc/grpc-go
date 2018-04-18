@@ -22,6 +22,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
@@ -46,7 +47,7 @@ type pickerWrapper struct {
 	connErrMu sync.Mutex
 	connErr   error
 
-	stickinessMDKey atomic.Value
+	stickinessMDKey unsafe.Pointer
 	stickiness      *stickyStore
 }
 
@@ -72,14 +73,22 @@ func (bp *pickerWrapper) connectionError() error {
 }
 
 func (bp *pickerWrapper) updateStickinessMDKey(newKey string) {
-	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != newKey {
-		bp.stickinessMDKey.Store(newKey)
+	oldKeyUnsafePtr := atomic.SwapPointer(&bp.stickinessMDKey, unsafe.Pointer(&newKey))
+	if ptr := (*string)(oldKeyUnsafePtr); ptr == nil || *ptr != newKey {
 		bp.stickiness.reset(newKey)
 	}
 }
 
+func (bp *pickerWrapper) getStickinessMDKey() string {
+	mdKeyPtr := (*string)(atomic.LoadPointer(&bp.stickinessMDKey))
+	if mdKeyPtr != nil {
+		return *mdKeyPtr
+	}
+	return ""
+}
+
 func (bp *pickerWrapper) clearStickinessState() {
-	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != "" {
+	if oldKey := bp.getStickinessMDKey(); oldKey != "" {
 		// There's no need to reset store if mdKey was "".
 		bp.stickiness.reset(oldKey)
 	}
@@ -125,7 +134,7 @@ func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) f
 // When one of these situations happens, pick blocks until the picker gets updated.
 func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
 
-	mdKey, _ := bp.stickinessMDKey.Load().(string)
+	mdKey := bp.getStickinessMDKey()
 	stickyKey, isSticky := stickyKeyFromContext(ctx, mdKey)
 
 	// Potential race here: if stickinessMDKey is updated after the above two

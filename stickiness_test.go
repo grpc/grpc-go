@@ -81,7 +81,7 @@ func TestStickinessServiceConfig(t *testing.T) {
 	r.NewServiceConfig(fmt.Sprintf(`{"stickinessMetadataKey": "%v"}`, testInput)) // ToLower() will be applied to the input.
 
 	for i := 0; i < 1000; i++ {
-		if key, _ := cc.blockingpicker.stickinessMDKey.Load().(string); key == wantStr {
+		if key := cc.blockingpicker.getStickinessMDKey(); key == wantStr {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -169,7 +169,7 @@ func TestStickinessEnd2end(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	if picked[0] != 0 && picked[1] != 0 {
+	if (picked[0] != 0) == (picked[1] != 0) {
 		t.Fatalf("When doing sticky RPC, addr1 was picked %v times, addr2 was picked %v times, want at least one of them to be 0", picked[0], picked[1])
 	}
 

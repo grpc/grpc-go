@@ -1024,6 +1024,9 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 		if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
 			newStickinessMDKey = *sc.stickinessMetadataKey
 		}
+		// newStickinessMDKey is "" if one of the following happens:
+		// - stickinessMetadataKey is set to ""
+		// - stickinessMetadataKey field doesn't exist in service config
 		cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
 	}
 
