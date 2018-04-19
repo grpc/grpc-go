@@ -650,7 +650,7 @@ var (
 	errStreamDrain = streamErrorf(codes.Unavailable, "the connection is draining")
 	// errStreamDone is returned from write at the client side to indiacte application
 	// layer of an error.
-	errStreamDone = errors.New("tne stream is done")
+	errStreamDone = errors.New("the stream is done")
 	// StatusGoAway indicates that the server sent a GOAWAY that included this
 	// stream's ID in unprocessed RPCs.
 	statusGoAway = status.New(codes.Unavailable, "the stream is rejected because server is draining the connection")

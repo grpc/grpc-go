@@ -30,7 +30,7 @@ type Operation uint8
 const (
 	// Add indicates a new address is added.
 	Add Operation = iota
-	// Delete indicates an exisiting address is deleted.
+	// Delete indicates an existing address is deleted.
 	Delete
 )
 

@@ -529,7 +529,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
-				Val: uint32(n),
+				Val: n,
 			},
 		},
 	})
@@ -540,7 +540,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
-		sendBDPPing = t.bdpEst.add(uint32(size))
+		sendBDPPing = t.bdpEst.add(size)
 	}
 	// Decouple connection's flow control from application's read.
 	// An update on connection's flow control should not depend on
@@ -550,7 +550,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// Decoupling the connection flow control will prevent other
 	// active(fast) streams from starving in presence of slow or
 	// inactive streams.
-	if w := t.fc.onData(uint32(size)); w > 0 {
+	if w := t.fc.onData(size); w > 0 {
 		t.controlBuf.put(&outgoingWindowUpdate{
 			streamID:  0,
 			increment: w,
@@ -573,12 +573,12 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		return
 	}
 	if size > 0 {
-		if err := s.fc.onData(uint32(size)); err != nil {
+		if err := s.fc.onData(size); err != nil {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, nil, false)
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
+			if w := s.fc.onRead(size - uint32(len(f.Data()))); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
@@ -879,7 +879,7 @@ func (t *http2Server) keepalive() {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
 				t.drain(http2.ErrCodeNo, []byte{})
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
 				return
 			}
@@ -891,7 +891,7 @@ func (t *http2Server) keepalive() {
 			case <-maxAge.C:
 				// Close the connection after grace period.
 				t.Close()
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				maxAge.Reset(infinity)
 			case <-t.ctx.Done():
 			}
@@ -904,7 +904,7 @@ func (t *http2Server) keepalive() {
 			}
 			if pingSent {
 				t.Close()
-				// Reseting the timer so that the clean-up doesn't deadlock.
+				// Resetting the timer so that the clean-up doesn't deadlock.
 				keepalive.Reset(infinity)
 				return
 			}
