@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallCredentials;
 import io.grpc.CallCredentials.MetadataApplier;
@@ -62,8 +63,6 @@ import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
@@ -81,9 +80,7 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.NoopClientCall.NoopClientCallListener;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
-import io.grpc.internal.testing.SingleMessageProducer;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
@@ -2282,68 +2279,28 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void binaryLogInterceptor_eventOrdering() throws Exception {
-    final List<ClientInterceptor> recvInitialMetadata = new ArrayList<ClientInterceptor>();
-    final List<ClientInterceptor> sendInitialMetadata = new ArrayList<ClientInterceptor>();
-    final List<ClientInterceptor> sendReq = new ArrayList<ClientInterceptor>();
-    final List<ClientInterceptor> recvResp = new ArrayList<ClientInterceptor>();
-    final List<ClientInterceptor> recvTrailingMetadata = new ArrayList<ClientInterceptor>();
-    final class TracingClientInterceptor implements ClientInterceptor {
+  public void binaryLogInstalled() throws Exception {
+    final SettableFuture<Boolean> intercepted = SettableFuture.create();
+    channelBuilder.binlogProvider = new BinaryLogProvider() {
+      @Nullable
       @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-          MethodDescriptor<ReqT, RespT> method,
-          CallOptions callOptions,
-          Channel next) {
-        final ClientInterceptor ref = this;
-        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+      public ServerInterceptor getServerInterceptor(String fullMethodName) {
+        return null;
+      }
+
+      @Override
+      public ClientInterceptor getClientInterceptor(String fullMethodName) {
+        return new ClientInterceptor() {
           @Override
-          public void start(Listener<RespT> responseListener, Metadata headers) {
-            sendInitialMetadata.add(ref);
-            ClientCall.Listener<RespT> wListener =
-                new SimpleForwardingClientCallListener<RespT>(responseListener) {
-                  @Override
-                  public void onMessage(RespT message) {
-                    recvResp.add(ref);
-                    super.onMessage(message);
-                  }
-
-                  @Override
-                  public void onHeaders(Metadata headers) {
-                    recvInitialMetadata.add(ref);
-                    super.onHeaders(headers);
-                  }
-
-                  @Override
-                  public void onClose(Status status, Metadata trailers) {
-                    recvTrailingMetadata.add(ref);
-                    super.onClose(status, trailers);
-                  }
-                };
-            super.start(wListener, headers);
-          }
-
-          @Override
-          public void sendMessage(ReqT message) {
-            sendReq.add(ref);
-            super.sendMessage(message);
+          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+              MethodDescriptor<ReqT, RespT> method,
+              CallOptions callOptions,
+              Channel next) {
+            intercepted.set(true);
+            return next.newCall(method, callOptions);
           }
         };
       }
-    }
-
-    TracingClientInterceptor userInterceptor = new TracingClientInterceptor();
-    final TracingClientInterceptor binlogInterceptor = new TracingClientInterceptor();
-    channelBuilder.binlogProvider = new BinaryLogProvider() {
-      @Nullable
-      @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return null;
-      }
-
-      @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
-        return binlogInterceptor;
-      }
 
       @Override
       protected int priority() {
@@ -2356,108 +2313,10 @@ public class ManagedChannelImplTest {
       }
     };
 
-    // perform an RPC
-    Metadata headers = new Metadata();
-    ClientStream mockStream = mock(ClientStream.class);
-    createChannel(userInterceptor);
-    CallOptions options =
-        CallOptions.DEFAULT.withExecutor(executor.getScheduledExecutorService());
-    ClientCall<String, Integer> call = channel.newCall(method, options);
-    call.start(mockCallListener, headers);
-
-    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
-    subchannel.requestConnection();
-    MockClientTransportInfo transportInfo = transports.poll();
-    ConnectionClientTransport mockTransport = transportInfo.transport;
-    ManagedClientTransport.Listener transportListener = transportInfo.listener;
-    // binlog modifies the MethodDescriptor, so we can not use the same() matcher
-    when(mockTransport.newStream(
-        any(MethodDescriptor.class),
-        same(headers),
-        any(CallOptions.class)))
-        .thenReturn(mockStream);
-    transportListener.transportReady();
-    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
-        .thenReturn(PickResult.withSubchannel(subchannel));
-    helper.updateBalancingState(READY, mockPicker);
-
-    executor.runDueTasks();
-    verify(mockStream).start(streamListenerCaptor.capture());
-
-    ClientStreamListener streamListener = streamListenerCaptor.getValue();
-    streamListener.headersRead(new Metadata());
-    assertEquals(1, executor.runDueTasks());
-    String actualRequest = "hello world";
-    call.sendMessage(actualRequest);
-    streamListener.messagesAvailable(new SingleMessageProducer(method.streamResponse(1234)));
-    assertEquals(1, executor.runDueTasks());
-    call.halfClose();
-    streamListener.closed(Status.OK, new Metadata());
-    assertEquals(1, executor.runDueTasks());
-    // end: perform an RPC
-
-    assertThat(recvInitialMetadata).containsExactly(binlogInterceptor, userInterceptor).inOrder();
-    assertThat(sendInitialMetadata).containsExactly(userInterceptor, binlogInterceptor).inOrder();
-    assertThat(sendReq).containsExactly(userInterceptor, binlogInterceptor).inOrder();
-    assertThat(recvResp).containsExactly(binlogInterceptor, userInterceptor).inOrder();
-    assertThat(recvTrailingMetadata).containsExactly(binlogInterceptor, userInterceptor);
-  }
-
-  @Test
-  public void binaryLogInterceptor_intercept_reqResp() throws Exception {
-    final class TracingClientInterceptor implements ClientInterceptor {
-      final List<MethodDescriptor<?, ?>> interceptedMethods =
-          new ArrayList<MethodDescriptor<?, ?>>();
-
-      @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-          MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-        interceptedMethods.add(method);
-        return next.newCall(method, callOptions);
-      }
-    }
-
-    TracingClientInterceptor userInterceptor = new TracingClientInterceptor();
-    channelBuilder.binlogProvider = new BinaryLogProvider() {
-      @Nullable
-      @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return null;
-      }
-
-      @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
-        return new TracingClientInterceptor();
-      }
-
-      @Override
-      protected int priority() {
-        return 0;
-      }
-
-      @Override
-      protected boolean isAvailable() {
-        return true;
-      }
-    };
-    createChannel(userInterceptor);
-    ClientCall<String, Integer> call =
-        channel.newCall(method, CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.NANOSECONDS));
-    ClientCall.Listener<Integer> listener = new NoopClientCallListener<Integer>();
-    call.start(listener, new Metadata());
-    assertEquals(1, executor.runDueTasks());
-
-    String actualRequest = "hello world";
-    call.sendMessage(actualRequest);
-
-    // The user supplied interceptor must still operate on the original message types
-    assertThat(userInterceptor.interceptedMethods).hasSize(1);
-    assertSame(
-        method.getRequestMarshaller(),
-        userInterceptor.interceptedMethods.get(0).getRequestMarshaller());
-    assertSame(
-        method.getResponseMarshaller(),
-        userInterceptor.interceptedMethods.get(0).getResponseMarshaller());
+    createChannel();
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    assertTrue(intercepted.get());
   }
 
   private static final class ChannelBuilder

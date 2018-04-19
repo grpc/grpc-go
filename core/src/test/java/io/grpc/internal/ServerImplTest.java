@@ -51,14 +51,13 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.Compressor;
 import io.grpc.Context;
-import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
-import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
+import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
@@ -79,7 +78,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -1235,57 +1233,21 @@ public class ServerImplTest {
   }
 
   @Test
-  public void binaryLogInterceptor_eventOrdering() throws Exception {
-    // Ensure binlog interceptor is the first to see incoming events, last to see outgoing events
-    final List<ServerInterceptor> recvInitialMetadata = new ArrayList<ServerInterceptor>();
-    final List<ServerInterceptor> sendInitialMetadata = new ArrayList<ServerInterceptor>();
-    final List<ServerInterceptor> recvReq = new ArrayList<ServerInterceptor>();
-    final List<ServerInterceptor> sendResp = new ArrayList<ServerInterceptor>();
-    final List<ServerInterceptor> sendTrailingMetadata = new ArrayList<ServerInterceptor>();
-    final class TracingServerInterceptor implements ServerInterceptor {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          final ServerCall<ReqT, RespT> call,
-          Metadata headers,
-          ServerCallHandler<ReqT, RespT> next) {
-        final ServerInterceptor marker = this;
-        recvInitialMetadata.add(marker);
-        ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
-          @Override
-          public void sendMessage(RespT message) {
-            sendResp.add(marker);
-            super.sendMessage(message);
-          }
-
-          @Override
-          public void sendHeaders(Metadata headers) {
-            sendInitialMetadata.add(marker);
-            super.sendHeaders(headers);
-          }
-
-          @Override
-          public void close(Status status, Metadata trailers) {
-            sendTrailingMetadata.add(marker);
-            super.close(status, trailers);
-          }
-        };
-        return new SimpleForwardingServerCallListener<ReqT>(next.startCall(wCall, headers)) {
-          @Override
-          public void onMessage(ReqT message) {
-            recvReq.add(marker);
-            super.onMessage(message);
-          }
-        };
-      }
-    }
-
-    TracingServerInterceptor userInterceptor = new TracingServerInterceptor();
-    final TracingServerInterceptor binlogInterceptor = new TracingServerInterceptor();
-    builder.intercept(userInterceptor);
+  public void binaryLogInstalled() throws Exception {
+    final SettableFuture<Boolean> intercepted = SettableFuture.create();
     builder.binlogProvider = new BinaryLogProvider() {
+      @Nullable
       @Override
       public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return binlogInterceptor;
+        return new ServerInterceptor() {
+          @Override
+          public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+              Metadata headers,
+              ServerCallHandler<ReqT, RespT> next) {
+            intercepted.set(true);
+            return next.startCall(call, headers);
+          }
+        };
       }
 
       @Nullable
@@ -1305,76 +1267,8 @@ public class ServerImplTest {
       }
     };
     createAndStartServer();
-
-    // Begin: basic exchange
-    String request = "Lots of pizza, please";
-    int response = 314;
-    basicExchangeHelper(METHOD, request, response, null);
-    // End: basic exchange
-
-    assertThat(recvInitialMetadata).containsExactly(binlogInterceptor, userInterceptor).inOrder();
-    assertThat(sendInitialMetadata).containsExactly(userInterceptor, binlogInterceptor).inOrder();
-    assertThat(recvReq).containsExactly(binlogInterceptor, userInterceptor).inOrder();
-    assertThat(sendResp).containsExactly(userInterceptor, binlogInterceptor).inOrder();
-    assertThat(sendTrailingMetadata).containsExactly(userInterceptor, binlogInterceptor);
-  }
-
-  @Test
-  public void binaryLogInterceptor_intercept_reqResp() throws Exception {
-    final class TestInterceptor implements ServerInterceptor {
-      private final List<MethodDescriptor<?, ?>> interceptedMethods =
-          new ArrayList<MethodDescriptor<?, ?>>();
-
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          final ServerCall<ReqT, RespT> call,
-          Metadata headers,
-          ServerCallHandler<ReqT, RespT> next) {
-        interceptedMethods.add(call.getMethodDescriptor());
-        return next.startCall(call, headers);
-      }
-    }
-
-    TestInterceptor userInterceptor = new TestInterceptor();
-    builder.intercept(userInterceptor);
-    builder.binlogProvider = new BinaryLogProvider() {
-      @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return new TestInterceptor();
-      }
-
-      @Nullable
-      @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
-        return null;
-      }
-
-      @Override
-      protected int priority() {
-        return 0;
-      }
-
-      @Override
-      protected boolean isAvailable() {
-        return true;
-      }
-    };
-    createAndStartServer();
-
-    // Begin: basic exchange
-    String request = "Lots of pizza, please";
-    int response = 314;
-    basicExchangeHelper(METHOD, request, response, null);
-    // End: basic exchange
-
-    // The user supplied interceptor must still operate on the original message types
-    assertThat(userInterceptor.interceptedMethods).hasSize(1);
-    assertSame(
-        METHOD.getRequestMarshaller(),
-        userInterceptor.interceptedMethods.get(0).getRequestMarshaller());
-    assertSame(
-        METHOD.getResponseMarshaller(),
-        userInterceptor.interceptedMethods.get(0).getResponseMarshaller());
+    basicExchangeHelper(METHOD, "Lots of pizza, please", 314, 50);
+    assertTrue(intercepted.get());
   }
 
   @Test
