@@ -17,11 +17,13 @@
 package io.grpc;
 
 import static junit.framework.TestCase.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verify;
 
 import com.google.common.base.Defaults;
+import com.google.common.base.MoreObjects;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -67,6 +69,20 @@ public final class ForwardingTestUtil {
       } catch (InvocationTargetException e) {
         throw new AssertionError(String.format("Method was not forwarded: %s", method));
       }
+    }
+
+    boolean skipToString = false;
+    for (Method method : skippedMethods) {
+      if (method.getName().equals("toString")) {
+        skipToString = true;
+        break;
+      }
+    }
+    if (!skipToString) {
+      String actual = forwarder.toString();
+      String expected =
+          MoreObjects.toStringHelper(forwarder).add("delegate", mockDelegate).toString();
+      assertEquals("Method toString() was not forwarded properly", expected, actual);
     }
   }
 }

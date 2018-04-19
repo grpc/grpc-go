@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.NameResolver;
 
 /**
@@ -49,5 +50,10 @@ abstract class ForwardingNameResolver extends NameResolver {
   @Override
   public void refresh() {
     delegate.refresh();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate).toString();
   }
 }

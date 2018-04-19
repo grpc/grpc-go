@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -98,5 +99,10 @@ public abstract class ForwardingReadableBuffer implements ReadableBuffer {
   @Override
   public void close() {
     buf.close();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", buf).toString();
   }
 }

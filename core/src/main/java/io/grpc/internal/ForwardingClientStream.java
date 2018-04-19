@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.Attributes;
 import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
@@ -98,5 +99,10 @@ abstract class ForwardingClientStream implements ClientStream {
   @Override
   public Attributes getAttributes() {
     return delegate().getAttributes();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 }

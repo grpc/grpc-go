@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -217,6 +218,11 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
   @Override
   public ManagedChannel build() {
     return delegate().build();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 
   /**

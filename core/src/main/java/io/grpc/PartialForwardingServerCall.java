@@ -16,6 +16,8 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
+
 /**
  * A {@link ServerCall} which forwards all of it's methods to another {@link ServerCall} which
  * may have a different onMessage() message type.
@@ -72,5 +74,10 @@ abstract class PartialForwardingServerCall<ReqT, RespT> extends ServerCall<ReqT,
   @Override
   public String getAuthority() {
     return delegate().getAuthority();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 }

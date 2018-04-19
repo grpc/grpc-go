@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -46,5 +47,10 @@ abstract class ForwardingClientStreamListener implements ClientStreamListener {
   @Override
   public void onReady() {
     delegate().onReady();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 }

@@ -16,6 +16,8 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
+
 /**
  * A {@link ClientCall.Listener} which forwards all of its methods to another {@link
  * ClientCall.Listener} which may have a different parameterized type than the
@@ -40,5 +42,10 @@ abstract class PartialForwardingClientCallListener<RespT> extends ClientCall.Lis
   @Override
   public void onReady() {
     delegate().onReady();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 }

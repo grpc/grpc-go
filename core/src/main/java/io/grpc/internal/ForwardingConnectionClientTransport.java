@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
@@ -64,7 +65,7 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "[" + delegate().toString() + "]";
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 
   @Override

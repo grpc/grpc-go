@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
 import javax.annotation.Nullable;
 
 /**
@@ -56,5 +57,10 @@ abstract class PartialForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
   @Override
   public Attributes getAttributes() {
     return delegate().getAttributes();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }
 }

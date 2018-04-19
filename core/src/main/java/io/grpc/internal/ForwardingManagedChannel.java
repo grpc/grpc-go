@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.MoreObjects;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityState;
@@ -85,5 +86,10 @@ abstract class ForwardingManagedChannel extends ManagedChannel {
   @Override
   public void enterIdle() {
     delegate.enterIdle();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("delegate", delegate).toString();
   }
 }
