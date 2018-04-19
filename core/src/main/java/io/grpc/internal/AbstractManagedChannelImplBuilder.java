@@ -139,6 +139,7 @@ public abstract class AbstractManagedChannelImplBuilder
 
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
+  @Nullable
   BinaryLogProvider binlogProvider = BinaryLogProvider.provider();
 
   /**
