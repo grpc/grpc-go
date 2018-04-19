@@ -627,7 +627,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.closeStream(s, err, rst, rstCode, nil, nil, false)
 }
 
-func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, streamSucceeded bool) {
+func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
 		// If it was already done, return.
@@ -660,7 +660,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 			t.mu.Unlock()
 			if channelz.IsOn() {
 				t.czmu.Lock()
-				if streamSucceeded {
+				if eosReceived {
 					t.streamsSucceeded++
 				} else {
 					t.streamsFailed++
@@ -1190,9 +1190,11 @@ func (t *http2Client) keepalive() {
 				}
 			} else {
 				t.mu.Unlock()
-				t.czmu.Lock()
-				t.kpCount++
-				t.czmu.Unlock()
+				if channelz.IsOn() {
+					t.czmu.Lock()
+					t.kpCount++
+					t.czmu.Unlock()
+				}
 				// Send ping.
 				t.controlBuf.put(p)
 			}

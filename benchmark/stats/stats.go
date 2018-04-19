@@ -142,7 +142,6 @@ func (stats *Stats) GetBenchmarkResults() BenchResults {
 func (stats *Stats) BenchString() string {
 	stats.maybeUpdate()
 	s := stats.result
-
 	res := s.RunMode + "-" + s.Features.String() + ": \n"
 	if len(s.Latency) != 0 {
 		var statsUnit = s.Latency[0].Value

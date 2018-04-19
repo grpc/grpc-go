@@ -1030,6 +1030,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		Last:  true,
 		Delay: false,
 	}
+
 	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).

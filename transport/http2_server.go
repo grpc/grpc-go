@@ -909,9 +909,11 @@ func (t *http2Server) keepalive() {
 				return
 			}
 			pingSent = true
-			t.czmu.Lock()
-			t.kpCount++
-			t.czmu.Unlock()
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				t.kpCount++
+				t.czmu.Unlock()
+			}
 			t.controlBuf.put(p)
 			keepalive.Reset(t.kp.Timeout)
 		case <-t.ctx.Done():
@@ -952,7 +954,7 @@ func (t *http2Server) Close() error {
 
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
-func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, streamSucceeded bool) {
+func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
 	if s.swapState(streamDone) == streamDone {
 		// If the stream was already done, return.
 		return
@@ -976,7 +978,7 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 			t.mu.Unlock()
 			if channelz.IsOn() {
 				t.czmu.Lock()
-				if streamSucceeded {
+				if eosReceived {
 					t.streamsSucceeded++
 				} else {
 					t.streamsFailed++
