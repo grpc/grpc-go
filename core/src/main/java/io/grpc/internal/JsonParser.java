@@ -33,7 +33,7 @@ import java.util.logging.Logger;
 /**
  * Parses JSON with as few preconceived notions as possible.
  */
-final class JsonParser {
+public final class JsonParser {
 
   private static final Logger logger = Logger.getLogger(JsonParser.class.getName());
 
