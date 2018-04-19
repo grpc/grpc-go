@@ -22,7 +22,7 @@ package io.grpc;
  * @see <a href="https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md">
  * more information</a>
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4359")
 public enum ConnectivityState {
   /**
    * The channel is trying to establish a connection and is waiting to make progress on one of the

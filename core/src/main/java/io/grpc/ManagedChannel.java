@@ -78,7 +78,7 @@ public abstract class ManagedChannel extends Channel {
    * @throws UnsupportedOperationException if not supported by implementation
    * @since 1.1.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4359")
   public ConnectivityState getState(boolean requestConnection) {
     throw new UnsupportedOperationException("Not implemented");
   }
@@ -101,7 +101,7 @@ public abstract class ManagedChannel extends Channel {
    * @throws UnsupportedOperationException if not supported by implementation
    * @since 1.1.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4359")
   public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
     throw new UnsupportedOperationException("Not implemented");
   }
