@@ -44,7 +44,7 @@ type testWatcher struct {
 	update chan *naming.Update
 	// the side channel to get to know how many updates in a batch
 	side chan int
-	// the channel to notifiy update injector that the update reading is done
+	// the channel to notify update injector that the update reading is done
 	readDone chan int
 }
 

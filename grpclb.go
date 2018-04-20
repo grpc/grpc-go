@@ -220,7 +220,6 @@ func (lb *lbBalancer) regeneratePicker() {
 		subConns:   readySCs,
 		stats:      lb.clientStats,
 	}
-	return
 }
 
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -257,7 +256,6 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	}
 
 	lb.cc.UpdateBalancerState(lb.state, lb.picker)
-	return
 }
 
 // fallbackToBackendsAfter blocks for fallbackTimeout and falls back to use

@@ -767,7 +767,7 @@ func (t *http2Client) updateFlowControl(n uint32) {
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
-				Val: uint32(n),
+				Val: n,
 			},
 		},
 	})
@@ -800,8 +800,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// active(fast) streams from starving in presence of slow or
 	// inactive streams.
 	//
-	t.fc.onData(uint32(size))
-	if t.bdpEst != nil && t.bdpEst.add(uint32(size)) {
+	t.fc.onData(size)
+	if t.bdpEst != nil && t.bdpEst.add(size) {
 		// Avoid excessive ping detection (e.g. in an L7 proxy)
 		// by sending a window update prior to the BDP ping.
 		t.fc.reset()
@@ -833,12 +833,11 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		return
 	}
 	errorf("transport: client got RST_STREAM with error %v, for stream: %d", f.ErrCode, s.id)
-	code := http2.ErrCode(f.ErrCode)
-	if code == http2.ErrCodeRefusedStream {
+	if f.ErrCode == http2.ErrCodeRefusedStream {
 		// The stream was unprocessed by the server.
 		atomic.StoreUint32(&s.unprocessed, 1)
 	}
-	statusCode, ok := http2ErrConvTab[code]
+	statusCode, ok := http2ErrConvTab[f.ErrCode]
 	if !ok {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown

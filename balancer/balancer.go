@@ -165,7 +165,7 @@ var (
 )
 
 // Picker is used by gRPC to pick a SubConn to send an RPC.
-// Balancer is expected to generate a new picker from its snapshot everytime its
+// Balancer is expected to generate a new picker from its snapshot every time its
 // internal state has changed.
 //
 // The pickers used by gRPC can be updated by ClientConn.UpdateBalancerState().

@@ -198,7 +198,6 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 			entry.abortDeleting = true
 		}
 	}
-	return
 }
 
 func (ccc *lbCacheClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
