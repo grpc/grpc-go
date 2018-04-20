@@ -88,7 +88,7 @@ public abstract class BinaryLogProvider implements Closeable {
   /**
    * Wraps a channel to provide binary logging on {@link ClientCall}s as needed.
    */
-  Channel wrapChannel(Channel channel) {
+  public final Channel wrapChannel(Channel channel) {
     return ClientInterceptors.intercept(channel, binaryLogShim);
   }
 
@@ -100,7 +100,7 @@ public abstract class BinaryLogProvider implements Closeable {
   /**
    * Wraps a {@link ServerMethodDefinition} such that it performs binary logging if needed.
    */
-  final <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
+  public final <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
       ServerMethodDefinition<ReqT, RespT> oMethodDef) {
     ServerInterceptor binlogInterceptor =
         getServerInterceptor(oMethodDef.getMethodDescriptor().getFullMethodName());
@@ -125,7 +125,7 @@ public abstract class BinaryLogProvider implements Closeable {
    */
   // TODO(zpencer): ensure the interceptor properly handles retries and hedging
   @Nullable
-  public abstract ServerInterceptor getServerInterceptor(String fullMethodName);
+  protected abstract ServerInterceptor getServerInterceptor(String fullMethodName);
 
   /**
    * Returns a {@link ClientInterceptor} for binary logging. gRPC is free to cache the interceptor,
@@ -135,7 +135,7 @@ public abstract class BinaryLogProvider implements Closeable {
    */
   // TODO(zpencer): ensure the interceptor properly handles retries and hedging
   @Nullable
-  public abstract ClientInterceptor getClientInterceptor(String fullMethodName);
+  protected abstract ClientInterceptor getClientInterceptor(String fullMethodName);
 
   @Override
   public void close() throws IOException {
