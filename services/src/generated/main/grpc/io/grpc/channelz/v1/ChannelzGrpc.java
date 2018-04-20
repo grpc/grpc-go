@@ -19,7 +19,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
-    comments = "Source: io/grpc/channelz.proto")
+    comments = "Source: grpc/channelz/channelz.proto")
 public final class ChannelzGrpc {
 
   private ChannelzGrpc() {}
