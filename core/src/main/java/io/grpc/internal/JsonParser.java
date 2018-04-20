@@ -39,8 +39,12 @@ public final class JsonParser {
 
   private JsonParser() {}
 
+  /**
+   * Parses a json string, returning either a {@code Map<String, Object>}, {@code List<Object>},
+   * {@code String}, {@code Double}, {@code Boolean}, or {@code null}.
+   */
   @SuppressWarnings("unchecked")
-  static Object parse(String raw) throws IOException {
+  public static Object parse(String raw) throws IOException {
     JsonReader jr = new JsonReader(new StringReader(raw));
     try {
       return parseRecursive(jr);

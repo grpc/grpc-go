@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.math.LongMath.checkedAdd;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.grpc.internal.RetriableStream.Throttle;
 import java.text.ParseException;
 import java.util.List;
@@ -30,7 +31,8 @@ import javax.annotation.Nullable;
 /**
  * Helper utility to work with service configs.
  */
-final class ServiceConfigUtil {
+@VisibleForTesting
+public final class ServiceConfigUtil {
 
   private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
   private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY = "loadBalancingPolicy";
@@ -223,8 +225,12 @@ final class ServiceConfigUtil {
     return checkObjectList(getList(serviceConfig, SERVICE_CONFIG_METHOD_CONFIG_KEY));
   }
 
+  /**
+   * Extracts the load balancing policy from a service config, or {@code null}.
+   */
   @Nullable
-  static String getLoadBalancingPolicyFromServiceConfig(Map<String, Object> serviceConfig) {
+  @VisibleForTesting
+  public static String getLoadBalancingPolicyFromServiceConfig(Map<String, Object> serviceConfig) {
     if (!serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
       return null;
     }
