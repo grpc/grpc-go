@@ -248,33 +248,6 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     abstract int getMaxMessageBytes();
   }
 
-  private static final Factory DEFAULT_FACTORY;
-  private static final Factory NULL_FACTORY = new NullFactory();
-
-  static {
-    Factory defaultFactory = NULL_FACTORY;
-    try {
-      String configStr = System.getenv("GRPC_BINARY_LOG_CONFIG");
-      // TODO(zpencer): make BinaryLog.java implement isAvailable, and put this check there
-      BinaryLogSink sink = BinaryLogSinkProvider.provider();
-      if (sink != null && configStr != null && configStr.length() > 0) {
-        defaultFactory = new FactoryImpl(sink, configStr);
-      }
-    } catch (Throwable t) {
-      logger.log(Level.SEVERE, "Failed to initialize binary log. Disabling binary log.", t);
-      defaultFactory = NULL_FACTORY;
-    }
-    DEFAULT_FACTORY = defaultFactory;
-  }
-
-  /**
-   * Accepts the fullMethodName and returns the binary log that should be used. The log may be
-   * a log that does nothing.
-   */
-  static BinaryLog getLog(String fullMethodName) {
-    return DEFAULT_FACTORY.getLog(fullMethodName);
-  }
-
   static CallId getCallIdForServer(Context context) {
     CallId callId = BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY.get(context);
     if (callId == null) {
@@ -423,6 +396,7 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
      */
     @VisibleForTesting
     FactoryImpl(BinaryLogSink sink, String configurationString) {
+      Preconditions.checkNotNull(sink);
       Preconditions.checkState(configurationString != null && configurationString.length() > 0);
       BinaryLog globalLog = null;
       Map<String, BinaryLog> perServiceLogs = new HashMap<String, BinaryLog>();
@@ -539,13 +513,6 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
      */
     static boolean isServiceGlob(String input) {
       return input.endsWith("/*");
-    }
-  }
-
-  private static final class NullFactory implements Factory {
-    @Override
-    public BinaryLog getLog(String fullMethodName) {
-      return null;
     }
   }
 
