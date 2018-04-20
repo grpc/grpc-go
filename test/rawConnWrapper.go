@@ -20,12 +20,71 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 )
+
+type listenerWrapper struct {
+	net.Listener
+	mu  sync.Mutex
+	rcw *rawConnWrapper
+}
+
+func listenWithConnControl(network, address string) (net.Listener, error) {
+	l, err := net.Listen(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return &listenerWrapper{Listener: l}, nil
+}
+
+// Accept blocks until Dial is called, then returns a net.Conn for the server
+// half of the connection.
+func (l *listenerWrapper) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	l.rcw = newRawConnWrapperFromConn(c)
+	l.mu.Unlock()
+	return c, nil
+}
+
+// Close stops the listener.
+func (l *listenerWrapper) Close() error {
+	return l.Listener.Close()
+}
+
+func (l *listenerWrapper) getLastConn() *rawConnWrapper {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.rcw
+}
+
+// Addr reports the address of the listener.
+func (l *listenerWrapper) Addr() net.Addr { return l.Listener.Addr() }
+
+type dialerWrapper struct {
+	c   net.Conn
+	rcw *rawConnWrapper
+}
+
+func (d *dialerWrapper) dialer(target string, t time.Duration) (net.Conn, error) {
+	c, err := net.DialTimeout("tcp", target, t)
+	d.c = c
+	d.rcw = newRawConnWrapperFromConn(c)
+	return c, err
+}
+
+func (d *dialerWrapper) getRawConnWrapper() *rawConnWrapper {
+	return d.rcw
+}
 
 type rawConnWrapper struct {
 	cc io.ReadWriteCloser
@@ -279,14 +338,14 @@ func (rcw *rawConnWrapper) writeDataPadded(streamID uint32, endStream bool, data
 	return nil
 }
 
-func (rcw *rawConnWrapper) WriteGoAway(maxStreamID uint32, code http2.ErrCode, debugData []byte) error {
+func (rcw *rawConnWrapper) writeGoAway(maxStreamID uint32, code http2.ErrCode, debugData []byte) error {
 	if err := rcw.fr.WriteGoAway(maxStreamID, code, debugData); err != nil {
 		return fmt.Errorf("Error writing GoAway: %v", err)
 	}
 	return nil
 }
 
-func (rcw *rawConnWrapper) WriteRawFrame(t http2.FrameType, flags http2.Flags, streamID uint32, payload []byte) error {
+func (rcw *rawConnWrapper) writeRawFrame(t http2.FrameType, flags http2.Flags, streamID uint32, payload []byte) error {
 	if err := rcw.fr.WriteRawFrame(t, flags, streamID, payload); err != nil {
 		return fmt.Errorf("Error writing Raw Frame: %v", err)
 	}

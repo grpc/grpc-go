@@ -777,7 +777,7 @@ func doServerSideInitiatedFailedStreamWithGoAway(tc testpb.TestServiceClient, t 
 
 	rcw := l.getLastConn()
 	if rcw != nil {
-		rcw.WriteGoAway(tc.(*testServiceClientWrapper).getCurrentStreamID()-2, http2.ErrCodeCancel, []byte{})
+		rcw.writeGoAway(tc.(*testServiceClientWrapper).getCurrentStreamID()-2, http2.ErrCodeCancel, []byte{})
 	}
 	if _, err := s.Recv(); err == nil {
 		t.Fatalf("%v.Recv() = %v, want <non-nil>", s, err)
@@ -793,7 +793,7 @@ func doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc testpb.TestS
 	// sleep here to make sure header frame being sent before the the data frame we write directly below.
 	time.Sleep(10 * time.Millisecond)
 	payload := make([]byte, 65537, 65537)
-	dw.getRawConnWrapper().WriteRawFrame(http2.FrameData, 0, tc.(*testServiceClientWrapper).getCurrentStreamID(), payload)
+	dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.(*testServiceClientWrapper).getCurrentStreamID(), payload)
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = %v, want error code: %v", stream, err, codes.ResourceExhausted)
 	}
@@ -817,8 +817,7 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
 	te.maxClientReceiveMsgSize = newInt(20)
-	rcw, replace := te.startServerWithConnControl(&testServer{security: e.security})
-	defer replace()
+	rcw := te.startServerWithConnControl(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
 	tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
