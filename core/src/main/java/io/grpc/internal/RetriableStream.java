@@ -33,10 +33,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -78,7 +76,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   private final Throttle throttle;
 
   private volatile State state = new State(
-      new ArrayList<BufferEntry>(), Collections.<Substream>emptySet(), null, false, false);
+      new ArrayList<BufferEntry>(8), Collections.<Substream>emptyList(), null, false, false);
 
   /**
    * Either transparent retry happened or reached server's application logic.
@@ -218,10 +216,11 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
         int stop = Math.min(index + chunk, savedState.buffer.size());
         if (list == null) {
-          list = new ArrayList<BufferEntry>(stop - index);
+          list = new ArrayList<BufferEntry>(savedState.buffer.subList(index, stop));
+        } else {
+          list.clear();
+          list.addAll(savedState.buffer.subList(index, stop));
         }
-        list.clear();
-        list.addAll(savedState.buffer.subList(index, stop));
         index = stop;
       }
 
@@ -709,7 +708,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
         boolean passThrough) {
       this.buffer = buffer;
       this.drainedSubstreams =
-          Collections.unmodifiableCollection(checkNotNull(drainedSubstreams, "drainedSubstreams"));
+          checkNotNull(drainedSubstreams, "drainedSubstreams");
       this.winningSubstream = winningSubstream;
       this.cancelled = cancelled;
       this.passThrough = passThrough;
@@ -738,10 +737,17 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     State substreamDrained(Substream substream) {
       checkState(!passThrough, "Already passThrough");
 
-      Set<Substream> drainedSubstreams = new HashSet<Substream>(this.drainedSubstreams);
-
-      if (!substream.closed) {
+      Collection<Substream> drainedSubstreams;
+      
+      if (substream.closed) {
+        drainedSubstreams = this.drainedSubstreams;
+      } else if (this.drainedSubstreams.isEmpty()) {
+        // optimize for 0-retry, which is most of the cases.
+        drainedSubstreams = Collections.singletonList(substream);
+      } else {
+        drainedSubstreams = new ArrayList<Substream>(this.drainedSubstreams);
         drainedSubstreams.add(substream);
+        drainedSubstreams = Collections.unmodifiableCollection(drainedSubstreams);
       }
 
       boolean passThrough = winningSubstream != null;
@@ -762,8 +768,9 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     State substreamClosed(Substream substream) {
       substream.closed = true;
       if (this.drainedSubstreams.contains(substream)) {
-        Set<Substream> drainedSubstreams = new HashSet<Substream>(this.drainedSubstreams);
+        Collection<Substream> drainedSubstreams = new ArrayList<Substream>(this.drainedSubstreams);
         drainedSubstreams.remove(substream);
+        drainedSubstreams = Collections.unmodifiableCollection(drainedSubstreams);
         return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);
       } else {
         return this;
@@ -777,12 +784,14 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
       boolean passThrough = false;
       List<BufferEntry> buffer = this.buffer;
-      Collection<Substream> drainedSubstreams = Collections.emptySet();
+      Collection<Substream> drainedSubstreams;
 
       if (this.drainedSubstreams.contains(winningSubstream)) {
         passThrough = true;
         buffer = null;
         drainedSubstreams = Collections.singleton(winningSubstream);
+      } else {
+        drainedSubstreams = Collections.emptyList();
       }
 
       return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);
