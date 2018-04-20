@@ -20,8 +20,6 @@ set PATH=C:\Program Files\java\jdk1.8.0_152\bin;%PATH%
 cmd.exe /C "%WORKSPACE%\buildscripts\kokoro\windows32.bat" || exit /b 1
 cmd.exe /C "%WORKSPACE%\buildscripts\kokoro\windows64.bat" || exit /b 1
 
-IF DEFINED MVN_ARTIFACTS (
-  mkdir mvn-artifacts
-  move artifacts\x86_64 mvn-artifacts\x86_64
-  move artifacts\x86_32 mvn-artifacts\x86_32
-)
+mkdir mvn-artifacts
+move artifacts\x86_64 mvn-artifacts\x86_64
+move artifacts\x86_32 mvn-artifacts\x86_32

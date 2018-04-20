@@ -3,7 +3,6 @@
 # This file is used for both Linux and MacOS builds.
 # To run locally:
 #  ./buildscripts/kokoro/unix.sh
-# Optionally set MVN_ARTIFACTS=true to retain artifacts
 
 # This script assumes `set -e`. Removing it may lead to undefined behavior.
 set -exu -o pipefail
@@ -74,9 +73,6 @@ LOCAL_MVN_TEMP=$(mktemp -d)
 ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS -PtargetArch=x86_64 \
   -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
 
-if [[ -z "${MVN_ARTIFACTS:-}" ]]; then
-  exit 0
-fi
 MVN_ARTIFACT_DIR="$PWD/mvn-artifacts"
 mkdir $MVN_ARTIFACT_DIR
 mv $LOCAL_MVN_TEMP/* $MVN_ARTIFACT_DIR
