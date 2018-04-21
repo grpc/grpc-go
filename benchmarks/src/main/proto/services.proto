@@ -18,7 +18,6 @@ syntax = "proto3";
 
 import "messages.proto";
 import "control.proto";
-import "stats.proto";
 
 package grpc.testing;
 
