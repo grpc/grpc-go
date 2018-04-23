@@ -23,10 +23,16 @@ ln -s "/tmp/protobuf-${PROTOBUF_VERSION}/$(uname -s)-$(uname -p)" /tmp/protobuf
 
 ./gradlew install
 
-# Build Cronet
+# Build grpc-cronet
 
 pushd cronet
 ./cronet_deps.sh
+../gradlew build
+popd
+
+# Build grpc-android
+
+pushd android
 ../gradlew build
 popd
 
