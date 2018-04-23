@@ -48,8 +48,8 @@ android {
 }
 
 dependencies {
-    implementation 'io.grpc:grpc-core:1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    testImplementation 'io.grpc:grpc-testing:1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-core:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    testImplementation 'io.grpc:grpc-testing:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
     implementation files('libs/cronet_api.jar')
     implementation files('libs/cronet_impl_common_java.jar')
