@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	hsAddr     = flag.String("handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	hsAddr     = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	serverAddr = flag.String("server_address", ":8080", "The port on which the server is listening")
 )
 

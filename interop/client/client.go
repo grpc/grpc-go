@@ -37,7 +37,7 @@ var (
 	caFile                = flag.String("ca_file", "", "The file containning the CA root cert file")
 	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true")
 	useALTS               = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
-	hsAddr                = flag.String("handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	altsHSAddr            = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
 	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
@@ -112,8 +112,8 @@ func main() {
 		}
 	} else if *useALTS {
 		altsOpts := alts.DefaultClientOptions()
-		if *hsAddr != "" {
-			altsOpts.HandshakerServiceAddress = *hsAddr
+		if *altsHSAddr != "" {
+			altsOpts.HandshakerServiceAddress = *altsHSAddr
 		}
 		altsTC := alts.NewClientCreds(altsOpts)
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
