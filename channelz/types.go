@@ -243,10 +243,13 @@ type SocketMetric struct {
 type SocketInternalMetric struct {
 	// The number of streams that have been started.
 	StreamsStarted int64
-	// The number of streams that have ended successfully with the EoS bit set for
-	//  both end points.
+	// The number of streams that have ended successfully:
+	// On client side, receiving frame with eos bit set.
+	// On server side, sending frame with eos bit set.
 	StreamsSucceeded int64
-	// The number of incoming streams that have a completed with a non-OK status.
+	// The number of streams that have ended unsuccessfully:
+	// On client side, termination without receiving frame with eos bit set.
+	// On server side, termination without sending frame with eos bit set.
 	StreamsFailed int64
 	// The number of messages successfully sent on this socket.
 	MessagesSent     int64

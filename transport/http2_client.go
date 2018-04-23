@@ -104,7 +104,21 @@ type http2Client struct {
 	// GoAway frame.
 	goAwayReason GoAwayReason
 
+	// Fields below are for channelz metric collection.
 	channelzID int64 // channelz unique identification number
+	czmu       sync.RWMutex
+	kpCount    int64
+	// The number of streams that have started, including already finished ones.
+	streamsStarted int64
+	// The number of streams that have ended successfully by receiving EoS bit set
+	// frame from server.
+	streamsSucceeded  int64
+	streamsFailed     int64
+	lastStreamCreated time.Time
+	msgSent           int64
+	msgRecv           int64
+	lastMsgSent       time.Time
+	lastMsgRecv       time.Time
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -514,6 +528,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				return false, err
 			}
 			t.activeStreams[id] = s
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				t.streamsStarted++
+				t.lastStreamCreated = time.Now()
+				t.czmu.Unlock()
+			}
 			var sendPing bool
 			// If the number of active streams change from 0 to 1, then check if keepalive
 			// has gone dormant. If so, wake it up.
@@ -604,10 +624,10 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		rst = true
 		rstCode = http2.ErrCodeCancel
 	}
-	t.closeStream(s, err, rst, rstCode, nil, nil)
+	t.closeStream(s, err, rst, rstCode, nil, nil, false)
 }
 
-func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string) {
+func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
 		// If it was already done, return.
@@ -638,6 +658,15 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 				delete(t.activeStreams, s.id)
 			}
 			t.mu.Unlock()
+			if channelz.IsOn() {
+				t.czmu.Lock()
+				if eosReceived {
+					t.streamsSucceeded++
+				} else {
+					t.streamsFailed++
+				}
+				t.czmu.Unlock()
+			}
 		},
 		rst:     rst,
 		rstCode: rstCode,
@@ -677,7 +706,7 @@ func (t *http2Client) Close() error {
 	}
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, ErrConnClosing, false, http2.ErrCodeNo, nil, nil)
+		t.closeStream(s, ErrConnClosing, false, http2.ErrCodeNo, nil, nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
@@ -832,7 +861,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	}
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
-			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil)
+			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
@@ -852,7 +881,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
-		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil)
+		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
 }
 
@@ -870,7 +899,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown
 	}
-	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode), nil)
+	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode), nil, false)
 }
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
@@ -974,7 +1003,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.
 			atomic.StoreUint32(&stream.unprocessed, 1)
-			t.closeStream(stream, errStreamDrain, false, http2.ErrCodeNo, statusGoAway, nil)
+			t.closeStream(stream, errStreamDrain, false, http2.ErrCodeNo, statusGoAway, nil, false)
 		}
 	}
 	t.prevGoAwayID = id
@@ -1022,7 +1051,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	var state decodeState
 	if err := state.decodeResponseHeader(frame); err != nil {
 		// TODO(mmukhi, dfawley): Perhaps send a reset stream.
-		t.closeStream(s, err, false, http2.ErrCodeNo, nil, nil)
+		t.closeStream(s, err, false, http2.ErrCodeNo, nil, nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
@@ -1064,7 +1093,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if !endStream {
 		return
 	}
-	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, state.status(), state.mdata)
+	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, state.status(), state.mdata, true)
 }
 
 // reader runs as a separate goroutine in charge of reading data from network
@@ -1105,7 +1134,7 @@ func (t *http2Client) reader() {
 				if s != nil {
 					// use error detail to provide better err message
 					// TODO(mmukhi, dfawley): Perhaps send a RST_STREAM to the server.
-					t.closeStream(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()), false, http2.ErrCodeNo, nil, nil)
+					t.closeStream(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()), false, http2.ErrCodeNo, nil, nil, false)
 				}
 				continue
 			} else {
@@ -1161,6 +1190,11 @@ func (t *http2Client) keepalive() {
 				}
 			} else {
 				t.mu.Unlock()
+				if channelz.IsOn() {
+					t.czmu.Lock()
+					t.kpCount++
+					t.czmu.Unlock()
+				}
 				// Send ping.
 				t.controlBuf.put(p)
 			}
@@ -1199,8 +1233,54 @@ func (t *http2Client) GoAway() <-chan struct{} {
 }
 
 func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
-	return &channelz.SocketInternalMetric{}
+	t.czmu.RLock()
+	s := channelz.SocketInternalMetric{
+		StreamsStarted:                  t.streamsStarted,
+		StreamsSucceeded:                t.streamsSucceeded,
+		StreamsFailed:                   t.streamsFailed,
+		MessagesSent:                    t.msgSent,
+		MessagesReceived:                t.msgRecv,
+		KeepAlivesSent:                  t.kpCount,
+		LastLocalStreamCreatedTimestamp: t.lastStreamCreated,
+		LastMessageSentTimestamp:        t.lastMsgSent,
+		LastMessageReceivedTimestamp:    t.lastMsgRecv,
+		LocalFlowControlWindow:          int64(t.fc.getSize()),
+		//socket options
+		LocalAddr:  t.localAddr,
+		RemoteAddr: t.remoteAddr,
+		// Security
+		// RemoteName :
+	}
+	t.czmu.RUnlock()
+	s.RemoteFlowControlWindow = t.getOutFlowWindow()
+	return &s
 }
 
-func (t *http2Client) IncrMsgSent() {}
-func (t *http2Client) IncrMsgRecv() {}
+func (t *http2Client) IncrMsgSent() {
+	t.czmu.Lock()
+	t.msgSent++
+	t.lastMsgSent = time.Now()
+	t.czmu.Unlock()
+}
+
+func (t *http2Client) IncrMsgRecv() {
+	t.czmu.Lock()
+	t.msgRecv++
+	t.lastMsgRecv = time.Now()
+	t.czmu.Unlock()
+}
+
+func (t *http2Client) getOutFlowWindow() int64 {
+	resp := make(chan uint32, 1)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	t.controlBuf.put(&outFlowControlSizeRequest{resp})
+	select {
+	case sz := <-resp:
+		return int64(sz)
+	case <-t.ctxDone:
+		return -1
+	case <-timer.C:
+		return -2
+	}
+}

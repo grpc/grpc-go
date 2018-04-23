@@ -55,6 +55,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -473,6 +474,8 @@ type test struct {
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
+	cliKeepAlive                *keepalive.ClientParameters
+	svrKeepAlive                *keepalive.ServerParameters
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -495,14 +498,17 @@ func (te *test) tearDown() {
 		te.cancel()
 		te.cancel = nil
 	}
+
 	if te.cc != nil {
 		te.cc.Close()
 		te.cc = nil
 	}
+
 	if te.restoreLogs != nil {
 		te.restoreLogs()
 		te.restoreLogs = nil
 	}
+
 	if te.srv != nil {
 		te.srv.Stop()
 	}
@@ -526,9 +532,7 @@ func newTest(t *testing.T, e env) *test {
 	return te
 }
 
-// startServer starts a gRPC server listening. Callers should defer a
-// call to te.tearDown to clean up.
-func (te *test) startServer(ts testpb.TestServiceServer) {
+func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
 	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
@@ -571,7 +575,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
 		syscall.Unlink(la)
 	}
-	lis, err := net.Listen(te.e.network, la)
+	lis, err := listen(te.e.network, la)
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
@@ -587,6 +591,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.customCodec != nil {
 		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
+	}
+	if te.svrKeepAlive != nil {
+		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
@@ -612,6 +619,18 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 
 	go s.Serve(lis)
 	te.srvAddr = addr
+	return lis
+}
+
+func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
+	l := te.listenAndServe(ts, listenWithConnControl)
+	return l.(*listenerWrapper)
+}
+
+// startServer starts a gRPC server listening. Callers should defer a
+// call to te.tearDown to clean up.
+func (te *test) startServer(ts testpb.TestServiceServer) {
+	te.listenAndServe(ts, net.Listen)
 }
 
 type nopCompressor struct {
@@ -640,10 +659,7 @@ func (d *nopDecompressor) Type() string {
 	return "nop"
 }
 
-func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
-	if te.cc != nil {
-		return te.cc
-	}
+func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
 	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
 
 	if te.sc != nil {
@@ -724,7 +740,35 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
 	}
+	if te.cliKeepAlive != nil {
+		opts = append(opts, grpc.WithKeepaliveParams(*te.cliKeepAlive))
+	}
 	opts = append(opts, te.customDialOptions...)
+	return opts, scheme
+}
+
+func (te *test) clientConnWithConnControl() (*grpc.ClientConn, *dialerWrapper) {
+	if te.cc != nil {
+		return te.cc, nil
+	}
+	opts, scheme := te.configDial()
+	dw := &dialerWrapper{}
+	// overwrite the dialer before
+	opts = append(opts, grpc.WithDialer(dw.dialer))
+	var err error
+	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	if err != nil {
+		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
+	}
+	return te.cc, dw
+}
+
+func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
+	if te.cc != nil {
+		return te.cc
+	}
+	var scheme string
+	opts, scheme = te.configDial(opts...)
 	var err error
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
 	if err != nil {
