@@ -115,10 +115,13 @@ type decodeState struct {
 	timeout    time.Duration
 	method     string
 	// key-value metadata map from the peer.
-	mdata          map[string][]string
-	statsTags      []byte
-	statsTrace     []byte
-	contentSubtype string
+	mdata             map[string][]string
+	statsTags         []byte
+	statsTrace        []byte
+	contentSubtype    string
+	maxHeaderListSize *uint32
+	// whether decoding on server side or not
+	serverSide bool
 }
 
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
@@ -236,10 +239,24 @@ func decodeMetadataHeader(k, v string) (string, error) {
 }
 
 func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error {
+	var sz int64
 	for _, hf := range frame.Fields {
+		if d.maxHeaderListSize != nil {
+			if sz += int64(hf.Size()); sz > int64(*d.maxHeaderListSize) {
+				if d.serverSide {
+					errorf("server: " + fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
+					return streamErrorf(codes.Internal, "server: "+fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
+				}
+				return streamErrorf(codes.Internal, "client: "+fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
+			}
+		}
 		if err := d.processHeaderField(hf); err != nil {
 			return err
 		}
+	}
+
+	if d.serverSide {
+		return nil
 	}
 
 	// If grpc status exists, no need to check further.
@@ -270,7 +287,6 @@ func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error 
 	code := int(codes.Unknown)
 	d.rawStatusCode = &code
 	return nil
-
 }
 
 func (d *decodeState) addMetadata(k, v string) {

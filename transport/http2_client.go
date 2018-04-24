@@ -85,6 +85,12 @@ type http2Client struct {
 
 	initialWindowSize int32
 
+	// configured by peer through SETTINGS_MAX_HEADER_LIST_SIZE
+	maxSendHeaderListSize *uint32
+	// configured locally and corresponding SETTINGS_MAX_HEADER_LIST_SIZE setting
+	// is sent to peer.
+	maxRecvHeaderListSize *uint32
+
 	bdpEst *bdpEstimator
 	// onSuccess is a callback that client transport calls upon
 	// receiving server preface to signal that a succefull HTTP2
@@ -225,6 +231,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		onSuccess:             onSuccess,
 		nextID:                1,
 		maxConcurrentStreams:  defaultMaxStreamsClient,
+		maxRecvHeaderListSize: opts.MaxHeaderListSize,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 	}
@@ -273,14 +280,21 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.Close()
 		return nil, connectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
+	var ss []http2.Setting
+
 	if t.initialWindowSize != defaultWindowSize {
-		err = t.framer.fr.WriteSettings(http2.Setting{
+		ss = append(ss, http2.Setting{
 			ID:  http2.SettingInitialWindowSize,
 			Val: uint32(t.initialWindowSize),
 		})
-	} else {
-		err = t.framer.fr.WriteSettings()
 	}
+	if t.maxRecvHeaderListSize != nil {
+		ss = append(ss, http2.Setting{
+			ID:  http2.SettingMaxHeaderListSize,
+			Val: *t.maxRecvHeaderListSize,
+		})
+	}
+	err = t.framer.fr.WriteSettings(ss...)
 	if err != nil {
 		t.Close()
 		return nil, connectionErrorf(true, err, "transport: failed to write initial settings frame: %v", err)
@@ -588,13 +602,39 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		return true
 	}
+	var hdrListSizeErr error
+	checkForHeaderListSize := func(it interface{}) bool {
+		if t.maxSendHeaderListSize == nil {
+			return true
+		}
+		hdrFrame := it.(*headerFrame)
+		var sz int64
+		for _, f := range hdrFrame.hf {
+			if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
+				hdrListSizeErr = streamErrorf(codes.Internal, "header list size to send violates the maximum size (%d bytes) set by server", *t.maxSendHeaderListSize)
+				return false
+			}
+		}
+		return true
+	}
 	for {
-		success, err := t.controlBuf.executeAndPut(checkForStreamQuota, hdr)
+		success, err := t.controlBuf.executeAndPut(func(it interface{}) bool {
+			if !checkForStreamQuota(it) {
+				return false
+			}
+			if !checkForHeaderListSize(it) {
+				return false
+			}
+			return true
+		}, hdr)
 		if err != nil {
 			return nil, err
 		}
 		if success {
 			break
+		}
+		if hdrListSizeErr != nil {
+			return nil, hdrListSizeErr
 		}
 		firstTry = false
 		select {
@@ -917,13 +957,20 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	}
 	var maxStreams *uint32
 	var ss []http2.Setting
+	var updateFuncs []func()
 	f.ForeachSetting(func(s http2.Setting) error {
-		if s.ID == http2.SettingMaxConcurrentStreams {
+		switch s.ID {
+		case http2.SettingMaxConcurrentStreams:
 			maxStreams = new(uint32)
 			*maxStreams = s.Val
-			return nil
+		case http2.SettingMaxHeaderListSize:
+			updateFuncs = append(updateFuncs, func() {
+				t.maxSendHeaderListSize = new(uint32)
+				*t.maxSendHeaderListSize = s.Val
+			})
+		default:
+			ss = append(ss, s)
 		}
-		ss = append(ss, s)
 		return nil
 	})
 	if isFirst && maxStreams == nil {
@@ -933,21 +980,24 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	sf := &incomingSettings{
 		ss: ss,
 	}
-	if maxStreams == nil {
-		t.controlBuf.put(sf)
-		return
+	if maxStreams != nil {
+		updateStreamQuota := func() {
+			delta := int64(*maxStreams) - int64(t.maxConcurrentStreams)
+			t.maxConcurrentStreams = *maxStreams
+			t.streamQuota += delta
+			if delta > 0 && t.waitingStreams > 0 {
+				close(t.streamsQuotaAvailable) // wake all of them up.
+				t.streamsQuotaAvailable = make(chan struct{}, 1)
+			}
+		}
+		updateFuncs = append(updateFuncs, updateStreamQuota)
 	}
-	updateStreamQuota := func(interface{}) bool {
-		delta := int64(*maxStreams) - int64(t.maxConcurrentStreams)
-		t.maxConcurrentStreams = *maxStreams
-		t.streamQuota += delta
-		if delta > 0 && t.waitingStreams > 0 {
-			close(t.streamsQuotaAvailable) // wake all of them up.
-			t.streamsQuotaAvailable = make(chan struct{}, 1)
+	t.controlBuf.executeAndPut(func(interface{}) bool {
+		for _, f := range updateFuncs {
+			f()
 		}
 		return true
-	}
-	t.controlBuf.executeAndPut(updateStreamQuota, sf)
+	}, sf)
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -1057,7 +1107,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	atomic.StoreUint32(&s.bytesReceived, 1)
-	var state decodeState
+	state := decodeState{maxHeaderListSize: t.maxRecvHeaderListSize}
 	if err := state.decodeResponseHeader(frame); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.New(codes.Internal, err.Error()), nil, false)
 		// Something wrong. Stops reading even when there is remaining.
