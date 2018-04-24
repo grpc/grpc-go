@@ -573,7 +573,7 @@ func (l *loopyWriter) pingHandler(p *ping) error {
 
 }
 
-func (l *loopyWriter) outFlowControlSizeRequestHanlder(o *outFlowControlSizeRequest) error {
+func (l *loopyWriter) outFlowControlSizeRequestHandler(o *outFlowControlSizeRequest) error {
 	o.resp <- l.sendQuota
 	return nil
 }
@@ -643,7 +643,7 @@ func (l *loopyWriter) handle(i interface{}) error {
 	case *goAway:
 		return l.goAwayHandler(i)
 	case *outFlowControlSizeRequest:
-		return l.outFlowControlSizeRequestHanlder(i)
+		return l.outFlowControlSizeRequestHandler(i)
 	default:
 		return fmt.Errorf("transport: unknown control message type %T", i)
 	}

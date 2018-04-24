@@ -790,7 +790,7 @@ func doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc testpb.TestS
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
-	// sleep here to make sure header frame being sent before the the data frame we write directly below.
+	// sleep here to make sure header frame being sent before the data frame we write directly below.
 	time.Sleep(10 * time.Millisecond)
 	payload := make([]byte, 65537, 65537)
 	dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.(*testServiceClientWrapper).getCurrentStreamID(), payload)
