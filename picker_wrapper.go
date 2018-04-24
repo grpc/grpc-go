@@ -22,7 +22,6 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
@@ -47,7 +46,7 @@ type pickerWrapper struct {
 	connErrMu sync.Mutex
 	connErr   error
 
-	stickinessMDKey unsafe.Pointer
+	stickinessMDKey atomic.Value
 	stickiness      *stickyStore
 }
 
@@ -73,18 +72,17 @@ func (bp *pickerWrapper) connectionError() error {
 }
 
 func (bp *pickerWrapper) updateStickinessMDKey(newKey string) {
-	oldKeyUnsafePtr := atomic.SwapPointer(&bp.stickinessMDKey, unsafe.Pointer(&newKey))
-	if ptr := (*string)(oldKeyUnsafePtr); ptr == nil || *ptr != newKey {
+	// No need to check ok because mdKey == "" if ok == false.
+	if oldKey, _ := bp.stickinessMDKey.Load().(string); oldKey != newKey {
+		bp.stickinessMDKey.Store(newKey)
 		bp.stickiness.reset(newKey)
 	}
 }
 
 func (bp *pickerWrapper) getStickinessMDKey() string {
-	mdKeyPtr := (*string)(atomic.LoadPointer(&bp.stickinessMDKey))
-	if mdKeyPtr != nil {
-		return *mdKeyPtr
-	}
-	return ""
+	// No need to check ok because mdKey == "" if ok == false.
+	mdKey, _ := bp.stickinessMDKey.Load().(string)
+	return mdKey
 }
 
 func (bp *pickerWrapper) clearStickinessState() {
