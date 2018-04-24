@@ -532,55 +532,7 @@ func newTest(t *testing.T, e env) *test {
 	return te
 }
 
-type listenerWrapper struct {
-	net.Listener
-	mu    sync.Mutex
-	conns []*rawConnWrapper
-}
-
-func listenWithConnControl(network, address string) (net.Listener, error) {
-	l, err := net.Listen(network, address)
-	if err != nil {
-		return nil, err
-	}
-	return &listenerWrapper{Listener: l}, nil
-}
-
-// Accept blocks until Dial is called, then returns a net.Conn for the server
-// half of the connection.
-func (l *listenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	l.mu.Lock()
-	l.conns = append(l.conns, newRawConnWrapperFromConn(c))
-	l.mu.Unlock()
-	return c, nil
-}
-
-// Close stops the listener.
-func (l *listenerWrapper) Close() error {
-	return l.Listener.Close()
-}
-
-func (l *listenerWrapper) getLastConn() *rawConnWrapper {
-	l.mu.Lock()
-	if len(l.conns) == 0 {
-		l.mu.Unlock()
-		return nil
-	}
-	rcw := l.conns[len(l.conns)-1]
-	l.mu.Unlock()
-	return rcw
-}
-
-// Addr reports the address of the listener.
-func (l *listenerWrapper) Addr() net.Addr { return l.Listener.Addr() }
-
-var listen = net.Listen
-
-func (te *test) listenAndServe(ts testpb.TestServiceServer) net.Listener {
+func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
 	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
@@ -670,18 +622,15 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer) net.Listener {
 	return lis
 }
 
-type listenFuncReplace func()
-
-func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) (*listenerWrapper, listenFuncReplace) {
-	listen = listenWithConnControl
-	l := te.listenAndServe(ts)
-	return l.(*listenerWrapper), func() { listen = net.Listen }
+func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
+	l := te.listenAndServe(ts, listenWithConnControl)
+	return l.(*listenerWrapper)
 }
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
 func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.listenAndServe(ts)
+	te.listenAndServe(ts, net.Listen)
 }
 
 type nopCompressor struct {
@@ -708,22 +657,6 @@ func NewNopDecompressor() grpc.Decompressor {
 
 func (d *nopDecompressor) Type() string {
 	return "nop"
-}
-
-type dialerWrapper struct {
-	c   net.Conn
-	rcw *rawConnWrapper
-}
-
-func (d *dialerWrapper) dialer(target string, t time.Duration) (net.Conn, error) {
-	c, err := net.DialTimeout("tcp", target, t)
-	d.c = c
-	d.rcw = newRawConnWrapperFromConn(c)
-	return c, err
-}
-
-func (d *dialerWrapper) getRawConnWrapper() *rawConnWrapper {
-	return d.rcw
 }
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
@@ -6281,7 +6214,7 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, te.srvAddr, opts...)
 	if err != nil {

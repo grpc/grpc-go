@@ -412,10 +412,12 @@ func (cs *clientStream) finish(err error) {
 	}
 	cs.finished = true
 	cs.mu.Unlock()
-	if err != nil {
-		cs.cc.incrCallsFailed()
-	} else {
-		cs.cc.incrCallsSucceeded()
+	if channelz.IsOn() {
+		if err != nil {
+			cs.cc.incrCallsFailed()
+		} else {
+			cs.cc.incrCallsSucceeded()
+		}
 	}
 	// TODO(retry): commit current attempt if necessary.
 	cs.attempt.finish(err)
@@ -670,7 +672,6 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 		return
 	}
 	ss.s.SetTrailer(md)
-	return
 }
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {

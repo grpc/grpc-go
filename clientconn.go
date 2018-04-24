@@ -417,10 +417,18 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target. ctx can be used to
-// cancel or expire the pending connection. Once this function returns, the
-// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
-// to terminate all the pending operations after this function returns.
+// DialContext creates a client connection to the given target. By default, it's
+// a non-blocking dial (the function won't wait for connections to be
+// established, and connecting happens in the background). To make it a blocking
+// dial, use WithBlock() dial option.
+//
+// In the non-blocking case, the ctx does not act against the connection. It
+// only controls the setup steps.
+//
+// In the blocking case, ctx can be used to cancel or expire the pending
+// connection. Once this function returns, the cancellation and expiration of
+// ctx will be noop. Users should call ClientConn.Close to terminate all the
+// pending operations after this function returns.
 //
 // The target name syntax is defined in
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
@@ -797,6 +805,8 @@ func (cc *ClientConn) switchBalancer(name string) {
 	if cc.balancerWrapper != nil {
 		cc.balancerWrapper.close()
 	}
+	// Clear all stickiness state.
+	cc.blockingpicker.clearStickinessState()
 
 	builder := balancer.Get(name)
 	if builder == nil {
@@ -971,7 +981,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
-		m, _ = cc.sc.Methods[method[:i+1]]
+		m = cc.sc.Methods[method[:i+1]]
 	}
 	return m
 }
@@ -1007,6 +1017,18 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
 	}
+
+	if envConfigStickinessOn {
+		var newStickinessMDKey string
+		if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
+			newStickinessMDKey = *sc.stickinessMetadataKey
+		}
+		// newStickinessMDKey is "" if one of the following happens:
+		// - stickinessMetadataKey is set to ""
+		// - stickinessMetadataKey field doesn't exist in service config
+		cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
+	}
+
 	cc.mu.Unlock()
 	return nil
 }
@@ -1130,7 +1152,7 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // resetTransport recreates a transport to the address for ac.  The old
 // transport will close itself on error or when the clientconn is closed.
 // The created transport must receive initial settings frame from the server.
-// In case that doesnt happen, transportMonitor will kill the newly created
+// In case that doesn't happen, transportMonitor will kill the newly created
 // transport after connectDeadline has expired.
 // In case there was an error on the transport before the settings frame was
 // received, resetTransport resumes connecting to backends after the one that
@@ -1175,7 +1197,7 @@ func (ac *addrConn) resetTransport() error {
 			connectDeadline = start.Add(dialDuration)
 			ridx = 0 // Start connecting from the beginning.
 		} else {
-			// Continue trying to conect with the same deadlines.
+			// Continue trying to connect with the same deadlines.
 			connectRetryNum = ac.connectRetryNum
 			backoffDeadline = ac.backoffDeadline
 			connectDeadline = ac.connectDeadline
@@ -1492,13 +1514,19 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(ac.channelzID)
 	}
-	return
 }
 
 func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+func (ac *addrConn) getCurAddr() (ret resolver.Address) {
+	ac.mu.Lock()
+	ret = ac.curAddr
+	ac.mu.Unlock()
+	return
 }
 
 func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
