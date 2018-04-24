@@ -233,6 +233,8 @@ func (bp *pickerWrapper) close() {
 	close(bp.blockingCh)
 }
 
+const stickinessKeyCountLimit = 1000
+
 type stickyStoreEntry struct {
 	acw  *acBalancerWrapper
 	addr resolver.Address
@@ -273,6 +275,9 @@ func (ss *stickyStore) put(mdKey, stickyKey string, acw *acBalancerWrapper) {
 		acw:  acw,
 		addr: acw.getAddrConn().getCurAddr(),
 	})
+	if ss.store.len() > stickinessKeyCountLimit {
+		ss.store.removeOldest()
+	}
 }
 
 // stickyKey is the key to look up in store. mdKey will be checked against
