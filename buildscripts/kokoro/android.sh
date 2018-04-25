@@ -65,6 +65,10 @@ cp "$BASE_DIR/github/grpc-java/buildscripts/set_github_status.py" "$SET_GITHUB_S
 read -r ignored new_dex_count < \
   <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references app/build/outputs/apk/release/app-release-unsigned.apk)
 
+set +x
+all_new_methods=`"${ANDROID_HOME}/tools/bin/apkanalyzer" dex packages --proguard-mapping app/build/outputs/mapping/release/mapping.txt app/build/outputs/apk/release/app-release-unsigned.apk | grep ^M | cut -f4 | sort`
+set -x
+
 new_apk_size="$(stat --printf=%s app/build/outputs/apk/release/app-release-unsigned.apk)"
 
 
@@ -79,12 +83,24 @@ cd examples/android/helloworld/
 read -r ignored old_dex_count < \
   <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references app/build/outputs/apk/release/app-release-unsigned.apk)
 
+set +x
+all_old_methods=`"${ANDROID_HOME}/tools/bin/apkanalyzer" dex packages --proguard-mapping app/build/outputs/mapping/release/mapping.txt app/build/outputs/apk/release/app-release-unsigned.apk | grep ^M | cut -f4 | sort`
+set -x
+
 old_apk_size="$(stat --printf=%s app/build/outputs/apk/release/app-release-unsigned.apk)"
 
 dex_count_delta="$((new_dex_count-old_dex_count))"
 
 apk_size_delta="$((new_apk_size-old_apk_size))"
 
+set +x
+dex_method_diff=`diff -u <(echo "$all_old_methods") <(echo "$all_new_methods") || true`
+set -x
+
+if [[ -n "$dex_method_diff" ]]
+then
+  echo "Method diff: ${dex_method_diff}"
+fi
 
 # Update the statuses with the deltas
 
