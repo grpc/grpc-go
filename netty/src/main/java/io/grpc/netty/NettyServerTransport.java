@@ -59,6 +59,8 @@ class NettyServerTransport implements ServerTransport {
   private final ChannelPromise channelUnused;
   private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreams;
+  // only accessed from channel event loop
+  private NettyServerHandler grpcHandler;
   private ServerTransportListener listener;
   private boolean terminated;
   private final int flowControlWindow;
@@ -115,7 +117,7 @@ class NettyServerTransport implements ServerTransport {
     this.listener = listener;
 
     // Create the Netty handler for the pipeline.
-    final NettyServerHandler grpcHandler = createHandler(listener, channelUnused);
+    grpcHandler = createHandler(listener, channelUnused);
     NettyHandlerSettings.setAutoWindow(grpcHandler);
 
     // Notify when the channel closes.
@@ -199,30 +201,17 @@ class NettyServerTransport implements ServerTransport {
   @Override
   public ListenableFuture<SocketStats> getStats() {
     final SettableFuture<SocketStats> result = SettableFuture.create();
-    // TODO: fill in security
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      result.set(
-          new SocketStats(
-              transportTracer.getStats(),
-              channel.localAddress(),
-              channel.remoteAddress(),
-              Utils.getSocketOptions(channel),
-              /*security=*/ null));
+      result.set(getStatsHelper(channel));
       return result;
     }
     channel.eventLoop().submit(
         new Runnable() {
           @Override
           public void run() {
-            result.set(
-                new SocketStats(
-                    transportTracer.getStats(),
-                    channel.localAddress(),
-                    channel.remoteAddress(),
-                    Utils.getSocketOptions(channel),
-                    /*security=*/ null));
+            result.set(getStatsHelper(channel));
           }
         })
         .addListener(
@@ -235,6 +224,16 @@ class NettyServerTransport implements ServerTransport {
               }
             });
     return result;
+  }
+
+  private SocketStats getStatsHelper(Channel ch) {
+    Preconditions.checkState(ch.eventLoop().inEventLoop());
+    return new SocketStats(
+        transportTracer.getStats(),
+        channel.localAddress(),
+        channel.remoteAddress(),
+        Utils.getSocketOptions(ch),
+        grpcHandler == null ? null : grpcHandler.getSecurityInfo());
   }
 
   /**

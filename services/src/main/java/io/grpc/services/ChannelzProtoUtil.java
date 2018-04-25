@@ -36,6 +36,9 @@ import io.grpc.channelz.v1.ChannelRef;
 import io.grpc.channelz.v1.GetServerSocketsResponse;
 import io.grpc.channelz.v1.GetServersResponse;
 import io.grpc.channelz.v1.GetTopChannelsResponse;
+import io.grpc.channelz.v1.Security;
+import io.grpc.channelz.v1.Security.OtherSecurity;
+import io.grpc.channelz.v1.Security.Tls;
 import io.grpc.channelz.v1.Server;
 import io.grpc.channelz.v1.ServerData;
 import io.grpc.channelz.v1.ServerRef;
@@ -61,15 +64,20 @@ import io.grpc.internal.Instrumented;
 import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.security.cert.CertificateEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A static utility class for turning internal data structures into protos.
  */
 final class ChannelzProtoUtil {
+  private static final Logger logger = Logger.getLogger(ChannelzProtoUtil.class.getName());
+
   private ChannelzProtoUtil() {
     // do not instantiate.
   }
@@ -128,11 +136,44 @@ final class ChannelzProtoUtil {
         .build();
   }
 
+  static Security toSecurity(Channelz.Security security) {
+    Preconditions.checkNotNull(security);
+    Preconditions.checkState(
+        security.tls != null ^ security.other != null,
+        "one of tls or othersecurity must be non null");
+    if (security.tls != null) {
+      Tls.Builder tlsBuilder
+          = Tls.newBuilder().setStandardName(security.tls.cipherSuiteStandardName);
+      try {
+        if (security.tls.localCert != null) {
+          tlsBuilder.setLocalCertificate(ByteString.copyFrom(
+              security.tls.localCert.getEncoded()));
+        }
+        if (security.tls.remoteCert != null) {
+          tlsBuilder.setRemoteCertificate(ByteString.copyFrom(
+              security.tls.remoteCert.getEncoded()));
+        }
+      } catch (CertificateEncodingException e) {
+        logger.log(Level.FINE, "Caught exception", e);
+      }
+      return Security.newBuilder().setTls(tlsBuilder).build();
+    } else {
+      OtherSecurity.Builder builder = OtherSecurity.newBuilder().setName(security.other.name);
+      if (security.other.any != null) {
+        builder.setValue((Any) security.other.any);
+      }
+      return Security.newBuilder().setOther(builder).build();
+    }
+  }
+
   static Socket toSocket(Instrumented<SocketStats> obj) {
     SocketStats socketStats = getFuture(obj.getStats());
     Builder builder = Socket.newBuilder()
         .setRef(toSocketRef(obj))
         .setLocal(toAddress(socketStats.local));
+    if (socketStats.security != null) {
+      builder.setSecurity(toSecurity(socketStats.security));
+    }
     // listen sockets do not have remote nor data
     if (socketStats.remote != null) {
       builder.setRemote(toAddress(socketStats.remote));

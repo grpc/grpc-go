@@ -36,6 +36,7 @@ import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.LogExceptionRunnable;
@@ -112,6 +113,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   private final KeepAliveEnforcer keepAliveEnforcer;
   /** Incomplete attributes produced by negotiator. */
   private Attributes negotiationAttributes;
+  private Channelz.Security securityInfo;
   /** Completed attributes produced by transportReady. */
   private Attributes attributes;
   private Throwable connectionError;
@@ -504,8 +506,14 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   @Override
-  public void handleProtocolNegotiationCompleted(Attributes attrs) {
+  public void handleProtocolNegotiationCompleted(
+      Attributes attrs, Channelz.Security securityInfo) {
     negotiationAttributes = attrs;
+    this.securityInfo = securityInfo;
+  }
+
+  Channelz.Security getSecurityInfo() {
+    return securityInfo;
   }
 
   @VisibleForTesting

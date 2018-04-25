@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,10 +31,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
 
 public final class Channelz {
+  private static final Logger log = Logger.getLogger(Channelz.class.getName());
   private static final Channelz INSTANCE = new Channelz();
 
   private final ConcurrentNavigableMap<Long, Instrumented<ServerStats>> servers
@@ -450,21 +456,100 @@ public final class Channelz {
   }
 
   public static final class Security {
-    // TODO(zpencer): fill this in
+    @Nullable
+    public final Tls tls;
+    @Nullable
+    public final OtherSecurity other;
+
+    public Security(Tls tls) {
+      this.tls = Preconditions.checkNotNull(tls);
+      this.other = null;
+    }
+
+    public Security(OtherSecurity other) {
+      this.tls = null;
+      this.other = Preconditions.checkNotNull(other);
+    }
+  }
+
+  public static final class OtherSecurity {
+    public final String name;
+    @Nullable
+    public final Object any;
+
+    /**
+     * Creates an instance.
+     * @param name the name.
+     * @param any a com.google.protobuf.Any object
+     */
+    public OtherSecurity(String name, @Nullable Object any) {
+      this.name = Preconditions.checkNotNull(name);
+      Preconditions.checkState(
+          any == null || any.getClass().getName().endsWith("com.google.protobuf.Any"),
+          "the 'any' object must be of type com.google.protobuf.Any");
+      this.any = any;
+    }
+  }
+
+  @Immutable
+  public static final class Tls {
+    public final String cipherSuiteStandardName;
+    @Nullable public final Certificate localCert;
+    @Nullable public final Certificate remoteCert;
+
+    /**
+     * A constructor only for testing.
+     */
+    public Tls(String cipherSuiteName, Certificate localCert, Certificate remoteCert) {
+      this.cipherSuiteStandardName = cipherSuiteName;
+      this.localCert = localCert;
+      this.remoteCert = remoteCert;
+    }
+
+    /**
+     * Creates an instance.
+     */
+    public Tls(SSLSession session) {
+      String cipherSuiteStandardName = session.getCipherSuite();
+      Certificate localCert = null;
+      Certificate remoteCert = null;
+      Certificate[] localCerts = session.getLocalCertificates();
+      if (localCerts != null) {
+        localCert = localCerts[0];
+      }
+      try {
+        Certificate[] peerCerts = session.getPeerCertificates();
+        if (peerCerts != null) {
+          // The javadoc of getPeerCertificate states that the peer's own certificate is the first
+          // element of the list.
+          remoteCert = peerCerts[0];
+        }
+      } catch (SSLPeerUnverifiedException e) {
+        // peer cert is not available
+        log.log(
+            Level.FINE,
+            String.format("Peer cert not available for peerHost=%s", session.getPeerHost()),
+            e);
+      }
+      this.cipherSuiteStandardName = cipherSuiteStandardName;
+      this.localCert = localCert;
+      this.remoteCert = remoteCert;
+    }
   }
 
   public static final class SocketStats {
     @Nullable public final TransportStats data;
-    public final SocketAddress local;
+    @Nullable public final SocketAddress local;
     @Nullable public final SocketAddress remote;
     public final SocketOptions socketOptions;
+    // Can be null if plaintext
     @Nullable public final Security security;
 
     /** Creates an instance. */
     public SocketStats(
         TransportStats data,
-        SocketAddress local,
-        SocketAddress remote,
+        @Nullable SocketAddress local,
+        @Nullable SocketAddress remote,
         SocketOptions socketOptions,
         Security security) {
       this.data = data;

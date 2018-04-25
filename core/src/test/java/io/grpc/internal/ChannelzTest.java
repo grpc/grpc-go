@@ -19,10 +19,13 @@ package io.grpc.internal;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.Channelz.id;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.internal.Channelz.ChannelStats;
@@ -31,6 +34,9 @@ import io.grpc.internal.Channelz.ServerList;
 import io.grpc.internal.Channelz.ServerSocketsList;
 import io.grpc.internal.Channelz.ServerStats;
 import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.internal.Channelz.Tls;
+import java.security.cert.Certificate;
+import javax.net.ssl.SSLSession;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -270,6 +276,21 @@ public final class ChannelzTest {
     assertNotNull(list2);
     assertTrue(list2.end);
     assertThat(list2.sockets).containsExactly(socket2);
+  }
+
+  @Test
+  public void tlsSecurityInfo() throws Exception {
+    Certificate local = io.grpc.internal.testing.TestUtils.loadX509Cert("client.pem");
+    Certificate remote = io.grpc.internal.testing.TestUtils.loadX509Cert("server0.pem");
+    final SSLSession session = mock(SSLSession.class);
+    when(session.getCipherSuite()).thenReturn("TLS_NULL_WITH_NULL_NULL");
+    when(session.getLocalCertificates()).thenReturn(new Certificate[]{local});
+    when(session.getPeerCertificates()).thenReturn(new Certificate[]{remote});
+
+    Tls tls = new Tls(session);
+    assertEquals(local, tls.localCert);
+    assertEquals(remote, tls.remoteCert);
+    assertEquals("TLS_NULL_WITH_NULL_NULL", tls.cipherSuiteStandardName);
   }
 
   private void assertEmptyServerSocketsPage(long serverId, long socketId) {

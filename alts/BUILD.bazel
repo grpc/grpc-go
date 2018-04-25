@@ -9,6 +9,7 @@ java_library(
         ":handshaker_java_grpc",
         ":handshaker_java_proto",
         "//core",
+        "//core:internal",
         "//netty",
         "//stub",
         "@com_google_code_findbugs_jsr305//jar",

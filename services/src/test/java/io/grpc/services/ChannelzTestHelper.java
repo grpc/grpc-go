@@ -57,6 +57,7 @@ final class ChannelzTestHelper {
     SocketAddress local = new InetSocketAddress("10.0.0.1", 1000);
     SocketAddress remote = new InetSocketAddress("10.0.0.2", 1000);
     Channelz.SocketOptions socketOptions = new Channelz.SocketOptions.Builder().build();
+    Security security = null;
 
     @Override
     public ListenableFuture<SocketStats> getStats() {
@@ -67,7 +68,7 @@ final class ChannelzTestHelper {
               local,
               remote,
               socketOptions,
-              new Security()));
+              security));
       return ret;
     }
 

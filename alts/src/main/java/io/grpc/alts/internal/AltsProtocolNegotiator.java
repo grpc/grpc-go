@@ -18,11 +18,14 @@ package io.grpc.alts.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.protobuf.Any;
 import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.Status;
 import io.grpc.alts.internal.RpcProtocolVersionsUtil.RpcVersionsCheckResult;
 import io.grpc.alts.internal.TsiHandshakeHandler.TsiHandshakeCompletionEvent;
+import io.grpc.internal.Channelz.OtherSecurity;
+import io.grpc.internal.Channelz.Security;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
 import io.grpc.netty.ProtocolNegotiator;
 import io.grpc.netty.ProtocolNegotiators.AbstractBufferingHandler;
@@ -119,7 +122,8 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
                     .set(TSI_PEER_KEY, altsEvt.peer())
                     .set(ALTS_CONTEXT_KEY, altsContext)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                    .build());
+                    .build(),
+                new Security(new OtherSecurity("alts", Any.pack(altsContext.context))));
           }
 
           // Now write any buffered data and remove this handler.

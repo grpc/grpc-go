@@ -193,7 +193,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     handler().setKeepAliveManagerForTest(spyKeepAliveManager);
 
     // Simulate receipt of the connection preface
-    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY);
+    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY, /*securityInfo=*/ null);
     channelRead(Http2CodecUtil.connectionPrefaceBuf());
     // Simulate receipt of initial remote settings.
     ByteBuf serializedSettings = serializeSettings(new Http2Settings());
@@ -204,7 +204,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void transportReadyDelayedUntilConnectionPreface() throws Exception {
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
-    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY);
+    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY, /*securityInfo=*/ null);
     verify(transportListener, never()).transportReady(any(Attributes.class));
 
     // Simulate receipt of the connection preface

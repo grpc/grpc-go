@@ -28,7 +28,6 @@ import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.Security;
 import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
@@ -80,7 +79,6 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final long keepAliveTimeoutNanos;
   private final boolean keepAliveWithoutCalls;
   private final Runnable tooManyPingsRunnable;
-
   private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
   // We should not send on the channel until negotiation completes. This is a hard requirement
@@ -320,26 +318,14 @@ class NettyClientTransport implements ConnectionClientTransport {
     if (channel.eventLoop().inEventLoop()) {
       // This is necessary, otherwise we will block forever if we get the future from inside
       // the event loop.
-      result.set(
-          new SocketStats(
-              transportTracer.getStats(),
-              channel.localAddress(),
-              channel.remoteAddress(),
-              Utils.getSocketOptions(channel),
-              new Security()));
+      result.set(getStatsHelper(channel));
       return result;
     }
     channel.eventLoop().submit(
         new Runnable() {
           @Override
           public void run() {
-            result.set(
-                new SocketStats(
-                    transportTracer.getStats(),
-                    channel.localAddress(),
-                    channel.remoteAddress(),
-                    Utils.getSocketOptions(channel),
-                    new Security()));
+            result.set(getStatsHelper(channel));
           }
         })
         .addListener(
@@ -352,6 +338,16 @@ class NettyClientTransport implements ConnectionClientTransport {
               }
             });
     return result;
+  }
+
+  private SocketStats getStatsHelper(Channel ch) {
+    assert ch.eventLoop().inEventLoop();
+    return new SocketStats(
+        transportTracer.getStats(),
+        channel.localAddress(),
+        channel.remoteAddress(),
+        Utils.getSocketOptions(ch),
+        handler == null ? null : handler.getSecurityInfo());
   }
 
   @VisibleForTesting

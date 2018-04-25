@@ -25,6 +25,7 @@ import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.Internal;
 import io.grpc.Status;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
@@ -62,6 +63,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSession;
 
 /**
  * Common {@link ProtocolNegotiator}s used by gRPC.
@@ -86,7 +88,8 @@ public final class ProtocolNegotiators {
             // Set sttributes before replace to be sure we pass it before accepting any requests.
             handler.handleProtocolNegotiationCompleted(Attributes.newBuilder()
                 .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                .build());
+                .build(),
+                /*securityInfo=*/ null);
             // Just replace this handler with the gRPC handler.
             ctx.pipeline().replace(this, null, handler);
           }
@@ -145,14 +148,15 @@ public final class ProtocolNegotiators {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
           if (NEXT_PROTOCOL_VERSIONS.contains(sslHandler(ctx.pipeline()).applicationProtocol())) {
+            SSLSession session = sslHandler(ctx.pipeline()).engine().getSession();
             // Successfully negotiated the protocol.
             // Notify about completion and pass down SSLSession in attributes.
             grpcHandler.handleProtocolNegotiationCompleted(
                 Attributes.newBuilder()
-                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION,
-                        sslHandler(ctx.pipeline()).engine().getSession())
+                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                    .build());
+                    .build(),
+                new Channelz.Security(new Channelz.Tls(session)));
             // Replace this handler with the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
           } else {
@@ -634,13 +638,15 @@ public final class ProtocolNegotiators {
             // will fail before we see the userEvent, and the channel is closed down prematurely.
             ctx.pipeline().addBefore(ctx.name(), null, grpcHandler);
 
+            SSLSession session = handler.engine().getSession();
             // Successfully negotiated the protocol.
             // Notify about completion and pass down SSLSession in attributes.
             grpcHandler.handleProtocolNegotiationCompleted(
                 Attributes.newBuilder()
-                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, handler.engine().getSession())
+                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                    .build());
+                    .build(),
+                new Channelz.Security(new Channelz.Tls(session)));
             writeBufferedAndRemove(ctx);
           } else {
             Exception ex = new Exception(
@@ -686,7 +692,8 @@ public final class ProtocolNegotiators {
           Attributes
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-              .build());
+              .build(),
+          /*securityInfo=*/ null);
       super.channelActive(ctx);
     }
   }
@@ -727,7 +734,8 @@ public final class ProtocolNegotiators {
             Attributes
                 .newBuilder()
                 .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                .build());
+                .build(),
+            /*securityInfo=*/ null);
       } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
         fail(ctx, unavailableException("HTTP/2 upgrade rejected"));
       }

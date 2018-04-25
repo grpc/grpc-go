@@ -38,7 +38,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.Channelz.Security;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.ConnectionClientTransport;
@@ -81,6 +81,8 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import okio.Buffer;
 import okio.BufferedSink;
@@ -185,6 +187,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private final Runnable tooManyPingsRunnable;
   @GuardedBy("lock")
   private final TransportTracer transportTracer;
+  @GuardedBy("lock")
+  private Channelz.Security securityInfo;
 
   @VisibleForTesting
   @Nullable
@@ -454,6 +458,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         Variant variant = new Http2();
         BufferedSink sink;
         Socket sock;
+        SSLSession sslSession = null;
         try {
           if (proxy == null) {
             sock = new Socket(address.getAddress(), address.getPort());
@@ -463,9 +468,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           }
 
           if (sslSocketFactory != null) {
-            sock = OkHttpTlsUpgrader.upgrade(
+            SSLSocket sslSocket = OkHttpTlsUpgrader.upgrade(
                 sslSocketFactory, hostnameVerifier, sock, getOverridenHost(), getOverridenPort(),
                 connectionSpec);
+            sslSession = sslSocket.getSession();
+            sock = sslSocket;
           }
           sock.setTcpNoDelay(true);
           source = Okio.buffer(Okio.source(sock));
@@ -475,6 +482,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           attributes = Attributes
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, sock.getRemoteSocketAddress())
+              .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
               .build();
         } catch (StatusException e) {
           startGoAway(0, ErrorCode.INTERNAL_ERROR, e.getStatus());
@@ -489,10 +497,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
         FrameWriter rawFrameWriter;
         synchronized (lock) {
-          socket = sock;
+          socket = Preconditions.checkNotNull(sock, "socket");
           maxConcurrentStreams = Integer.MAX_VALUE;
-
           startPendingStreams();
+          if (sslSession != null) {
+            securityInfo = new Channelz.Security(new Channelz.Tls(sslSession));
+          }
         }
 
         rawFrameWriter = variant.newWriter(sink, true);
@@ -905,14 +915,23 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @Override
   public ListenableFuture<SocketStats> getStats() {
+    SettableFuture<SocketStats> ret = SettableFuture.create();
     synchronized (lock) {
-      SettableFuture<SocketStats> ret = SettableFuture.create();
-      ret.set(new SocketStats(
-          transportTracer.getStats(),
-          socket.getLocalSocketAddress(),
-          socket.getRemoteSocketAddress(),
-          Utils.getSocketOptions(socket),
-          new Security()));
+      if (socket == null) {
+        ret.set(new SocketStats(
+            transportTracer.getStats(),
+            /*local=*/ null,
+            /*remote=*/ null,
+            new Channelz.SocketOptions.Builder().build(),
+            /*security=*/ null));
+      } else {
+        ret.set(new SocketStats(
+            transportTracer.getStats(),
+            socket.getLocalSocketAddress(),
+            socket.getRemoteSocketAddress(),
+            Utils.getSocketOptions(socket),
+            securityInfo));
+      }
       return ret;
     }
   }

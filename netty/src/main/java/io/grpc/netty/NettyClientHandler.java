@@ -27,6 +27,7 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.grpc.internal.Channelz;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
@@ -104,6 +105,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
   private Attributes attributes = Attributes.EMPTY;
+  private Channelz.Security securityInfo;
 
   static NettyClientHandler newHandler(
       ClientTransportLifecycleManager lifecycleManager,
@@ -407,9 +409,15 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   @Override
-  public void handleProtocolNegotiationCompleted(Attributes attributes) {
+  public void handleProtocolNegotiationCompleted(
+      Attributes attributes, Channelz.Security securityInfo) {
     this.attributes = attributes;
-    super.handleProtocolNegotiationCompleted(attributes);
+    this.securityInfo = securityInfo;
+    super.handleProtocolNegotiationCompleted(attributes, securityInfo);
+  }
+
+  Channelz.Security getSecurityInfo() {
+    return securityInfo;
   }
 
 
