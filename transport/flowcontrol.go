@@ -95,8 +95,9 @@ func (w *writeQuota) replenish(n int) {
 }
 
 type trInFlow struct {
-	limit   uint32
-	unacked uint32
+	limit               uint32 // accessed by reader goroutine.
+	unacked             uint32 // accessed by reader goroutine.
+	effectiveWindowSize uint32 // accessed by reader and channelz request goroutine.
 	// Callback used to schedule window update.
 	scheduleWU func(uint32)
 }
@@ -107,6 +108,7 @@ func (f *trInFlow) newLimit(n uint32) {
 		f.scheduleWU(n - f.limit)
 	}
 	f.limit = n
+	f.updateEffectiveWindowSize()
 }
 
 func (f *trInFlow) onData(n uint32) {
@@ -116,6 +118,7 @@ func (f *trInFlow) onData(n uint32) {
 		f.unacked = 0
 		f.scheduleWU(w)
 	}
+	f.updateEffectiveWindowSize()
 }
 
 func (f *trInFlow) reset() {
@@ -124,6 +127,15 @@ func (f *trInFlow) reset() {
 	}
 	f.scheduleWU(f.unacked)
 	f.unacked = 0
+	f.updateEffectiveWindowSize()
+}
+
+func (f *trInFlow) updateEffectiveWindowSize() {
+	atomic.StoreUint32(&f.effectiveWindowSize, f.limit-f.unacked)
+}
+
+func (f *trInFlow) getSize() uint32 {
+	return atomic.LoadUint32(&f.effectiveWindowSize)
 }
 
 // stInFlow deals with inbound flow control for stream.

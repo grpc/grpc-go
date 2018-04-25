@@ -36,7 +36,7 @@ func main() {
 	perRPC := oauth.NewOauthAccess(fetchToken())
 	opts := []grpc.DialOption{
 		// In addition to the following grpc.DialOption, callers may also use
-		// the grpc.CallOption grpc.PerRPCCredentials with the RPC invokation
+		// the grpc.CallOption grpc.PerRPCCredentials with the RPC invocation
 		// itself.
 		// See: https://godoc.org/google.golang.org/grpc#PerRPCCredentials
 		grpc.WithPerRPCCredentials(perRPC),
