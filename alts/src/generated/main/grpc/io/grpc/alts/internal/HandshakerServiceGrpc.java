@@ -19,7 +19,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
-    comments = "Source: handshaker.proto")
+    comments = "Source: grpc/gcp/handshaker.proto")
 public final class HandshakerServiceGrpc {
 
   private HandshakerServiceGrpc() {}

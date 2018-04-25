@@ -45,23 +45,23 @@ java_library(
 # bazel only accepts proto import with absolute path.
 genrule(
     name = "protobuf_imports",
-    srcs = glob(["src/main/proto/*.proto"]),
+    srcs = glob(["src/main/proto/grpc/gcp/*.proto"]),
     outs = [
-        "protobuf_out/altscontext.proto",
-        "protobuf_out/handshaker.proto",
-        "protobuf_out/transport_security_common.proto",
+        "protobuf_out/grpc/gcp/altscontext.proto",
+        "protobuf_out/grpc/gcp/handshaker.proto",
+        "protobuf_out/grpc/gcp/transport_security_common.proto",
     ],
     cmd = "for fname in $(SRCS); do " +
           "sed 's,import \",import \"alts/protobuf_out/,g' $$fname > " +
-          "$(@D)/protobuf_out/$$(basename $$fname); done",
+          "$(@D)/protobuf_out/grpc/gcp/$$(basename $$fname); done",
 )
 
 proto_library(
     name = "handshaker_proto",
     srcs = [
-        "protobuf_out/altscontext.proto",
-        "protobuf_out/handshaker.proto",
-        "protobuf_out/transport_security_common.proto",
+        "protobuf_out/grpc/gcp/altscontext.proto",
+        "protobuf_out/grpc/gcp/handshaker.proto",
+        "protobuf_out/grpc/gcp/transport_security_common.proto",
     ],
 )
 

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "transport_security_common.proto";
+import "grpc/gcp/transport_security_common.proto";
 
 package grpc.gcp;
 
