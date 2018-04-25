@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -eu -o pipefail
 
 if [ $# -ne 2 ]; then
   cat <<EOF
@@ -46,7 +46,11 @@ if [ -z "$DIR" ]; then
   exit 1
 fi
 
+CONF="$HOME/.config/sonatype-upload"
 [ -f "$CONF" ] && . "$CONF"
+
+USERNAME="${USERNAME:-}"
+PASSWORD="${PASSWORD:-}"
 
 if [ -z "$USERNAME" -o -z "$PASSWORD" ]; then
   # TODO(ejona86): if people would use it, could prompt for values to avoid
@@ -55,7 +59,6 @@ if [ -z "$USERNAME" -o -z "$PASSWORD" ]; then
   exit 1
 fi
 
-CONF="$HOME/.config/sonatype-upload"
 STAGING_URL="https://oss.sonatype.org/service/local/staging"
 
 # We go through the effort of using deloyByRepositoryId/ because it is
