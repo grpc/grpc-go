@@ -12,3 +12,14 @@ java_library(
         "@com_google_guava_guava//jar",
     ],
 )
+
+# javax.annotation.Generated is not included in the default root modules in 9,
+# see: http://openjdk.java.net/jeps/320.
+java_import(
+    name = "javax_annotation",
+    jars = [
+        "@javax_annotation_api//file",
+    ],
+    neverlink = 1,  # @Generated is source-retention
+    visibility = ["//visibility:public"],
+)

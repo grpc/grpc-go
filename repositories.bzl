@@ -27,6 +27,7 @@ def grpc_java_repositories(
     omit_io_netty_tcnative_boringssl_static=False,
     omit_io_opencensus_api=False,
     omit_io_opencensus_grpc_metrics=False,
+    omit_javax_annotation=False,
     omit_junit_junit=False,
     omit_org_apache_commons_lang3=False):
   """Imports dependencies for grpc-java."""
@@ -82,6 +83,8 @@ def grpc_java_repositories(
     io_opencensus_api()
   if not omit_io_opencensus_grpc_metrics:
     io_opencensus_grpc_metrics()
+  if not omit_javax_annotation:
+    javax_annotation()
   if not omit_junit_junit:
     junit_junit()
   if not omit_org_apache_commons_lang3:
@@ -275,6 +278,15 @@ def io_opencensus_grpc_metrics():
       name = "io_opencensus_opencensus_contrib_grpc_metrics",
       artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.11.0",
       sha1 = "d57b877f1a28a613452d45e35c7faae5af585258",
+  )
+
+def javax_annotation():
+  # TODO(davido): maven_jar does not support neverlink attribute.
+  # To circumvent use http_file following by java_import.
+  native.http_file(
+      name = "javax_annotation_api",
+      sha256 = "5909b396ca3a2be10d0eea32c74ef78d816e1b4ead21de1d78de1f890d033e04",
+      urls = ["http://central.maven.org/maven2/javax/annotation/javax.annotation-api/1.2/javax.annotation-api-1.2.jar"],
   )
 
 def junit_junit():
