@@ -28,7 +28,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// DecodeKeyValue returns k, v, nil.  It is deprecated and should not be used.
+// DecodeKeyValue returns k, v, nil.
+// Deprecated; should not be used.
 func DecodeKeyValue(k, v string) (string, string, error) {
 	return k, v, nil
 }
