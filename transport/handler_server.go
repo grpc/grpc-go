@@ -92,7 +92,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 	}
 	for k, vv := range r.Header {
 		k = strings.ToLower(k)
-		if isReservedHeader(k) && !isWhitelistedPseudoHeader(k) {
+		if isReservedHeader(k) && !isWhitelistedHeader(k) {
 			continue
 		}
 		for _, v := range vv {

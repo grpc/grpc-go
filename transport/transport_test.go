@@ -1657,6 +1657,8 @@ func TestIsReservedHeader(t *testing.T) {
 		{"", false}, // but should be rejected earlier
 		{"foo", false},
 		{"content-type", true},
+		{"user-agent", true},
+		{":anything", true},
 		{"grpc-message-type", true},
 		{"grpc-encoding", true},
 		{"grpc-message", true},
