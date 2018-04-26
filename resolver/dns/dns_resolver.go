@@ -187,7 +187,7 @@ func (d *dnsResolver) watcher() {
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
 		d.t.Reset(d.freq)
-		d.cc.NewServiceConfig(string(sc))
+		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
 	}
 }
@@ -202,7 +202,7 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	for _, s := range srvs {
 		lbAddrs, err := lookupHost(d.ctx, s.Target)
 		if err != nil {
-			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
+			grpclog.Warningf("grpc: failed load balancer address dns lookup due to %v.\n", err)
 			continue
 		}
 		for _, a := range lbAddrs {
@@ -257,8 +257,7 @@ func (d *dnsResolver) lookupHost() []resolver.Address {
 }
 
 func (d *dnsResolver) lookup() ([]resolver.Address, string) {
-	var newAddrs []resolver.Address
-	newAddrs = d.lookupSRV()
+	newAddrs := d.lookupSRV()
 	// Support fallback to non-balancer address.
 	newAddrs = append(newAddrs, d.lookupHost()...)
 	sc := d.lookupTXT()
@@ -341,10 +340,7 @@ func chosenByPercentage(a *int) bool {
 	}
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	if r.Intn(100)+1 > *a {
-		return false
-	}
-	return true
+	return r.Intn(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {

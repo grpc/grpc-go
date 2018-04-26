@@ -66,6 +66,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 const (
@@ -100,6 +101,7 @@ var (
 	memProfile, cpuProfile string
 	memProfileRate         int
 	enableCompressor       []bool
+	enableChannelz         []bool
 	networkMode            string
 	benchmarkResultFile    string
 	networks               = map[string]latency.Network{
@@ -137,13 +139,31 @@ func makeFuncUnary(benchFeatures stats.Features) (func(int), func()) {
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
-	opts = append(opts, grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-		return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-	}))
 	opts = append(opts, grpc.WithInsecure())
 
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, sopts...)
-	conn := bm.NewClientConn(target, opts...)
+	var lis net.Listener
+	if *useBufconn {
+		bcLis := bufconn.Listen(256 * 1024)
+		lis = bcLis
+		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(
+				func(string, string, time.Duration) (net.Conn, error) {
+					return bcLis.Dial()
+				})("", "", 0)
+		}))
+	} else {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			grpclog.Fatalf("Failed to listen: %v", err)
+		}
+		opts = append(opts, grpc.WithDialer(func(_ string, timeout time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(net.DialTimeout)("tcp", lis.Addr().String(), timeout)
+		}))
+	}
+	lis = nw.Listener(lis)
+	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
+	conn := bm.NewClientConn("" /* target not used */, opts...)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 	return func(int) {
 			unaryCaller(tc, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
@@ -154,6 +174,7 @@ func makeFuncUnary(benchFeatures stats.Features) (func(int), func()) {
 }
 
 func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
+	// TODO: Refactor to remove duplication with makeFuncUnary.
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -168,13 +189,31 @@ func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
-	opts = append(opts, grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-		return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-	}))
 	opts = append(opts, grpc.WithInsecure())
 
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, sopts...)
-	conn := bm.NewClientConn(target, opts...)
+	var lis net.Listener
+	if *useBufconn {
+		bcLis := bufconn.Listen(256 * 1024)
+		lis = bcLis
+		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(
+				func(string, string, time.Duration) (net.Conn, error) {
+					return bcLis.Dial()
+				})("", "", 0)
+		}))
+	} else {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			grpclog.Fatalf("Failed to listen: %v", err)
+		}
+		opts = append(opts, grpc.WithDialer(func(_ string, timeout time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(net.DialTimeout)("tcp", lis.Addr().String(), timeout)
+		}))
+	}
+	lis = nw.Listener(lis)
+	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
+	conn := bm.NewClientConn("" /* target not used */, opts...)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
 	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
@@ -240,18 +279,21 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 	stopTimer(count)
 }
 
+var useBufconn = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
+
 // Initiate main function to get settings of features.
 func init() {
 	var (
-		workloads, traceMode, compressorMode, readLatency string
-		readKbps, readMtu, readMaxConcurrentCalls         intSliceType
-		readReqSizeBytes, readRespSizeBytes               intSliceType
+		workloads, traceMode, compressorMode, readLatency, channelzOn string
+		readKbps, readMtu, readMaxConcurrentCalls                     intSliceType
+		readReqSizeBytes, readRespSizeBytes                           intSliceType
 	)
 	flag.StringVar(&workloads, "workloads", workloadsAll,
 		fmt.Sprintf("Workloads to execute - One of: %v", strings.Join(allWorkloads, ", ")))
 	flag.StringVar(&traceMode, "trace", modeOff,
 		fmt.Sprintf("Trace mode - One of: %v", strings.Join(allTraceModes, ", ")))
 	flag.StringVar(&readLatency, "latency", "", "Simulated one-way network latency - may be a comma-separated list")
+	flag.StringVar(&channelzOn, "channelz", modeOff, "whether channelz should be turned on")
 	flag.DurationVar(&benchtime, "benchtime", time.Second, "Configures the amount of time to run each benchmark")
 	flag.Var(&readKbps, "kbps", "Simulated network throughput (in kbps) - may be a comma-separated list")
 	flag.Var(&readMtu, "mtu", "Simulated network MTU (Maximum Transmission Unit) - may be a comma-separated list")
@@ -287,6 +329,7 @@ func init() {
 	}
 	enableCompressor = setMode(compressorMode)
 	enableTrace = setMode(traceMode)
+	enableChannelz = setMode(channelzOn)
 	// Time input formats as (time + unit).
 	readTimeFromInput(&ltc, readLatency)
 	readIntFromIntSlice(&kbps, readKbps)
@@ -360,10 +403,10 @@ func readTimeFromInput(values *[]time.Duration, replace string) {
 
 func main() {
 	before()
-	featuresPos := make([]int, 8)
+	featuresPos := make([]int, 9)
 	// 0:enableTracing 1:ltc 2:kbps 3:mtu 4:maxC 5:reqSize 6:respSize
 	featuresNum := []int{len(enableTrace), len(ltc), len(kbps), len(mtu),
-		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor)}
+		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor), len(enableChannelz)}
 	initalPos := make([]int, len(featuresPos))
 	s := stats.NewStats(10)
 	s.SortLatency()
@@ -380,7 +423,7 @@ func main() {
 	}
 	var stopTimer = func(count int32) {
 		runtime.ReadMemStats(&memStats)
-		results = testing.BenchmarkResult{N: int(count), T: time.Now().Sub(startTime),
+		results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
 			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
 	}
 	sharedPos := make([]bool, len(featuresPos))
@@ -404,9 +447,13 @@ func main() {
 			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
 			RespSizeBytes:      respSizeBytes[featuresPos[6]],
 			EnableCompressor:   enableCompressor[featuresPos[7]],
+			EnableChannelz:     enableChannelz[featuresPos[8]],
 		}
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
+		if enableChannelz[featuresPos[8]] {
+			grpc.RegisterChannelz()
+		}
 		if runMode[0] {
 			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
 			s.SetBenchmarkResult("Unary", benchFeature, results.N,
