@@ -49,7 +49,7 @@ var (
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
 	// ErrClientConnTimeout indicates that the ClientConn cannot establish the
 	// underlying connections within the specified timeout.
-	// DEPRECATED: Please use context.DeadlineExceeded instead.
+	// Deprecated: Please use context.DeadlineExceeded instead.
 	ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
 	errConnDrain = errors.New("grpc: the connection is drained")
@@ -154,7 +154,9 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	}
 }
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
+//
+// Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
 func WithMaxMsgSize(s int) DialOption {
 	return WithDefaultCallOptions(MaxCallRecvMsgSize(s))
 }
@@ -245,7 +247,8 @@ func WithResolverUserOptions(userOpt interface{}) DialOption {
 }
 
 // WithServiceConfig returns a DialOption which has a channel to read the service configuration.
-// DEPRECATED: service config should be received through name resolver, as specified here.
+//
+// Deprecated: service config should be received through name resolver, as specified here.
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
 func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	return func(o *dialOptions) {
@@ -316,6 +319,7 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 
 // WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn
 // initially. This is valid if and only if WithBlock() is present.
+//
 // Deprecated: use DialContext and context.WithTimeout instead.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {

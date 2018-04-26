@@ -150,7 +150,7 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 // Invoke sends the RPC request on the wire and returns after response is
 // received.  This is typically called by generated code.
 //
-// DEPRECATED: Use ClientConn.Invoke instead.
+// Deprecated: Use ClientConn.Invoke instead.
 func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) error {
 	return cc.Invoke(ctx, method, args, reply, opts...)
 }

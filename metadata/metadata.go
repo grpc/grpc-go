@@ -29,7 +29,8 @@ import (
 )
 
 // DecodeKeyValue returns k, v, nil.
-// Deprecated; should not be used.
+//
+// Deprecated: use k and v directly instead.
 func DecodeKeyValue(k, v string) (string, string, error) {
 	return k, v, nil
 }

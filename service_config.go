@@ -32,7 +32,8 @@ const maxInt = int(^uint(0) >> 1)
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
-// DEPRECATED: Users should not use this struct. Service config should be received
+//
+// Deprecated: Users should not use this struct. Service config should be received
 // through name resolver, as specified here
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
 type MethodConfig struct {
@@ -59,7 +60,8 @@ type MethodConfig struct {
 
 // ServiceConfig is provided by the service provider and contains parameters for how
 // clients that connect to the service should behave.
-// DEPRECATED: Users should not use this struct. Service config should be received
+//
+// Deprecated: Users should not use this struct. Service config should be received
 // through name resolver, as specified here
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
 type ServiceConfig struct {

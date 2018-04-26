@@ -213,7 +213,9 @@ func RPCDecompressor(dc Decompressor) ServerOption {
 }
 
 // MaxMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
-// If this is not set, gRPC uses the default limit. Deprecated: use MaxRecvMsgSize instead.
+// If this is not set, gRPC uses the default limit.
+//
+// Deprecated: use MaxRecvMsgSize instead.
 func MaxMsgSize(m int) ServerOption {
 	return MaxRecvMsgSize(m)
 }
