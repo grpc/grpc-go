@@ -42,43 +42,6 @@ const (
 	streamDone                  // the entire stream is finished.
 )
 
-type recvMsgList struct {
-	head *msgdecoder.RecvMsg
-	tail *msgdecoder.RecvMsg
-}
-
-func (l *recvMsgList) isEmpty() bool {
-	if l.tail == nil {
-		return true
-	}
-	return false
-}
-
-func (l *recvMsgList) enqueue(r *msgdecoder.RecvMsg) {
-	if l.isEmpty() {
-		l.head, l.tail = r, r
-		return
-	}
-	t := l.tail
-	l.tail = r
-	t.Next = r
-}
-
-func (l *recvMsgList) dequeue() *msgdecoder.RecvMsg {
-	if l.head == nil {
-		// Note to developer: Instead of calling isEmpty() which
-		// checks the same condition on l.tail, we check it directly
-		// on l.head so that in non-nil cases, there aren't cache misses.
-		return nil
-	}
-	r := l.head
-	l.head = l.head.Next
-	if l.head == nil {
-		l.tail = nil
-	}
-	return r
-}
-
 // transport's reader goroutine adds msgdecoder.RecvMsg to it which are later
 // read by RPC's reading goroutine.
 //
@@ -89,7 +52,7 @@ type recvBuffer struct {
 	c       chan *msgdecoder.RecvMsg
 	mu      sync.Mutex
 	waiting bool
-	list    *recvMsgList
+	list    *msgdecoder.RecvMsgList
 }
 
 func newRecvBuffer(ctx context.Context, ctxDone <-chan struct{}) *recvBuffer {
@@ -97,14 +60,12 @@ func newRecvBuffer(ctx context.Context, ctxDone <-chan struct{}) *recvBuffer {
 		ctx:     ctx,
 		ctxDone: ctxDone,
 		c:       make(chan *msgdecoder.RecvMsg, 1),
-		list:    &recvMsgList{},
+		list:    &msgdecoder.RecvMsgList{},
 	}
 }
 
 // put adds r to the underlying list if there's no consumer
 // waiting, otherwise, it writes on the chan directly.
-//
-// put must synchronize with GetNoBlock().
 func (b *recvBuffer) put(r *msgdecoder.RecvMsg) {
 	b.mu.Lock()
 	if b.waiting {
@@ -113,7 +74,7 @@ func (b *recvBuffer) put(r *msgdecoder.RecvMsg) {
 		b.c <- r
 		return
 	}
-	b.list.enqueue(r)
+	b.list.Enqueue(r)
 	b.mu.Unlock()
 }
 
@@ -121,11 +82,9 @@ func (b *recvBuffer) put(r *msgdecoder.RecvMsg) {
 // any available.
 // If the status is false, the caller must then call
 // getWithBlock() before calling getNoBlock() again.
-//
-// It must synchronize with put().
 func (b *recvBuffer) getNoBlock() (*msgdecoder.RecvMsg, bool) {
 	b.mu.Lock()
-	r := b.list.dequeue()
+	r := b.list.Dequeue()
 	if r != nil {
 		b.mu.Unlock()
 		return r, true
@@ -136,7 +95,7 @@ func (b *recvBuffer) getNoBlock() (*msgdecoder.RecvMsg, bool) {
 
 }
 
-// GetWithBlock() blocks until a complete message has been
+// getWithBlock() blocks until a complete message has been
 // received, or an error has occurred or the underlying
 // context has expired.
 // It must only be called after having called GetNoBlock()
@@ -148,6 +107,18 @@ func (b *recvBuffer) getWithBlock() (*msgdecoder.RecvMsg, error) {
 	case r := <-b.c:
 		return r, nil
 	}
+}
+
+func (b *recvBuffer) get() (*msgdecoder.RecvMsg, error) {
+	m, ok := b.getNoBlock()
+	if ok {
+		return m, nil
+	}
+	m, err := b.getWithBlock()
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Stream represents an RPC in the transport layer.
@@ -240,15 +211,12 @@ func (s *Stream) Read(maxRecvMsgSize int) (bool, []byte, error) {
 	}
 	var (
 		m   *msgdecoder.RecvMsg
-		ok  bool
 		err error
 	)
 	// First read the underlying message header
-	if m, ok = s.rbuf.getNoBlock(); !ok {
-		if m, err = s.rbuf.getWithBlock(); err != nil {
-			s.readErr = err
-			return false, nil, err
-		}
+	if m, err = s.rbuf.get(); err != nil {
+		s.readErr = err
+		return false, nil, err
 	}
 	if m.Err != nil {
 		s.readErr = m.Err
@@ -269,11 +237,9 @@ func (s *Stream) Read(maxRecvMsgSize int) (bool, []byte, error) {
 	}
 	isCompressed := m.IsCompressed
 	// Read the message.
-	if m, ok = s.rbuf.getNoBlock(); !ok {
-		if m, err = s.rbuf.getWithBlock(); err != nil {
-			s.readErr = err
-			return false, nil, err
-		}
+	if m, err = s.rbuf.get(); err != nil {
+		s.readErr = err
+		return false, nil, err
 	}
 	if m.Err != nil {
 		if m.Err == io.EOF {

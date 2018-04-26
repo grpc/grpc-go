@@ -779,7 +779,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 	}
 	// Get a gRPC-specific header for this message.
-	hdr := msgdecoder.GetMessageHeader(len(data), opts.IsCompressed)
+	hdr := msgdecoder.CreateMessageHeader(len(data), opts.IsCompressed)
 	// Add some data to header frame so that we can equally distribute bytes across frames.
 	emptyLen := http2MaxFrameLen - len(hdr)
 	if emptyLen > len(data) {

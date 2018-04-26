@@ -755,7 +755,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	}
 	if data != nil { // If it's not an empty data frame.
 		// Get a gRPC-specific header for this message.
-		hdr := msgdecoder.GetMessageHeader(len(data), opts.IsCompressed)
+		hdr := msgdecoder.CreateMessageHeader(len(data), opts.IsCompressed)
 		// Add some data to grpc message header so that we can equally
 		// distribute bytes across frames.
 		emptyLen := http2MaxFrameLen - len(hdr)

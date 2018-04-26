@@ -273,7 +273,7 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 func (ht *serverHandlerTransport) Write(s *Stream, data []byte, opts *Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
-		ht.rw.Write(msgdecoder.GetMessageHeader(len(data), opts.IsCompressed))
+		ht.rw.Write(msgdecoder.CreateMessageHeader(len(data), opts.IsCompressed))
 		ht.rw.Write(data)
 		if !opts.Delay {
 			ht.rw.(http.Flusher).Flush()

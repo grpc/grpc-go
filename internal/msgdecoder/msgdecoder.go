@@ -51,6 +51,47 @@ type RecvMsg struct {
 	Next *RecvMsg
 }
 
+// RecvMsgList is a linked-list of RecvMsg.
+type RecvMsgList struct {
+	head *RecvMsg
+	tail *RecvMsg
+}
+
+// IsEmpty returns true when l is empty.
+func (l *RecvMsgList) IsEmpty() bool {
+	if l.tail == nil {
+		return true
+	}
+	return false
+}
+
+// Enqueue adds r to l at the back.
+func (l *RecvMsgList) Enqueue(r *RecvMsg) {
+	if l.IsEmpty() {
+		l.head, l.tail = r, r
+		return
+	}
+	t := l.tail
+	l.tail = r
+	t.Next = r
+}
+
+// Dequeue removes a RcvMsg from the end of l.
+func (l *RecvMsgList) Dequeue() *RecvMsg {
+	if l.head == nil {
+		// Note to developer: Instead of calling isEmpty() which
+		// checks the same condition on l.tail, we check it directly
+		// on l.head so that in non-nil cases, there aren't cache misses.
+		return nil
+	}
+	r := l.head
+	l.head = l.head.Next
+	if l.head == nil {
+		l.tail = nil
+	}
+	return r
+}
+
 // MessageDecoder decodes bytes from HTTP2 data frames
 // and constructs a gRPC message which is then put in a
 // buffer that application(RPCs) read from.
@@ -124,10 +165,10 @@ func (m *MessageDecoder) Decode(b []byte, padding int) {
 }
 
 func (m *MessageDecoder) parseHeader(b []byte) {
-	buf := getMem(b[1:5])
+	length := int(binary.BigEndian.Uint32(b[1:5]))
 	hdr := &RecvMsg{
 		IsCompressed: int(b[0]) == 1,
-		Length:       len(buf),
+		Length:       length,
 		Overhead:     m.padding + 5,
 	}
 	m.padding = 0
@@ -135,24 +176,22 @@ func (m *MessageDecoder) parseHeader(b []byte) {
 	// that the RPC goroutine can send a proactive window update as we
 	// wait for the rest of it.
 	m.dispatch(hdr)
+	if length == 0 {
+		m.dispatch(&RecvMsg{})
+		return
+	}
 	m.current = &RecvMsg{
-		Data: buf,
-	}
-	if len(buf) == 0 {
-		m.dispatch(m.current)
-		m.current = nil
-		m.dataOfst = 0
+		Data: getMem(length),
 	}
 }
 
-func getMem(l []byte) []byte {
-	length := binary.BigEndian.Uint32(l)
+func getMem(l int) []byte {
 	// TODO(mmukhi): Reuse this memory.
-	return make([]byte, length)
+	return make([]byte, l)
 }
 
-// GetMessageHeader creates a gRPC-specific message header.
-func GetMessageHeader(l int, isCompressed bool) []byte {
+// CreateMessageHeader creates a gRPC-specific message header.
+func CreateMessageHeader(l int, isCompressed bool) []byte {
 	// TODO(mmukhi): Investigate if this memory is worth
 	// reusing.
 	hdr := make([]byte, 5)
