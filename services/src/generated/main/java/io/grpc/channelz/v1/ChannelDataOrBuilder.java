@@ -8,13 +8,17 @@ public interface ChannelDataOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
-  int getStateValue();
+  boolean hasState();
   /**
-   * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
-  io.grpc.channelz.v1.ChannelData.State getState();
+  io.grpc.channelz.v1.ChannelConnectivityState getState();
+  /**
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+   */
+  io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder();
 
   /**
    * <pre>

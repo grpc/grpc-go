@@ -8,17 +8,17 @@ public interface ServerDataOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
   boolean hasTrace();
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
-  io.grpc.channelz.v1.ServerChannelTrace getTrace();
+  io.grpc.channelz.v1.ChannelTrace getTrace();
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
-  io.grpc.channelz.v1.ServerChannelTraceOrBuilder getTraceOrBuilder();
+  io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder();
 
   /**
    * <pre>

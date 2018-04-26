@@ -30,8 +30,9 @@ import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
 import io.grpc.channelz.v1.Address.UdsAddress;
 import io.grpc.channelz.v1.Channel;
+import io.grpc.channelz.v1.ChannelConnectivityState;
+import io.grpc.channelz.v1.ChannelConnectivityState.State;
 import io.grpc.channelz.v1.ChannelData;
-import io.grpc.channelz.v1.ChannelData.State;
 import io.grpc.channelz.v1.ChannelRef;
 import io.grpc.channelz.v1.GetServerSocketsResponse;
 import io.grpc.channelz.v1.GetServersResponse;
@@ -350,12 +351,16 @@ final class ChannelzProtoUtil {
     return ChannelData
         .newBuilder()
         .setTarget(stats.target)
-        .setState(toState(stats.state))
+        .setState(toChannelConnectivityState(stats.state))
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
         .setLastCallStartedTimestamp(Timestamps.fromMillis(stats.lastCallStartedMillis))
         .build();
+  }
+
+  static ChannelConnectivityState toChannelConnectivityState(ConnectivityState s) {
+    return ChannelConnectivityState.newBuilder().setState(toState(s)).build();
   }
 
   static State toState(ConnectivityState state) {

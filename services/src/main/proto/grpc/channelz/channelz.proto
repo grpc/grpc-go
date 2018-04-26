@@ -1,3 +1,21 @@
+// Copyright 2018 gRPC authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// This file defines an interface for exporting monitoring information
+// out of gRPC servers.  See the full design at
+// https://github.com/grpc/proposal/blob/master/A14-channelz.md
+
 syntax = "proto3";
 
 package grpc.channelz;
@@ -58,7 +76,9 @@ message Subchannel {
   repeated SocketRef socket_ref = 5;
 }
 
-message ChannelData {
+// These come from the specified states in this document:
+// https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md
+message ChannelConnectivityState {
   enum State {
     UNKNOWN = 0;
     IDLE = 1;
@@ -68,6 +88,11 @@ message ChannelData {
     SHUTDOWN = 5;
   }
   State state = 1;
+}
+
+message ChannelData {
+
+  ChannelConnectivityState state = 1;
 
   // The target this channel originally tried to connect to.  May be absent
   string target = 2;
@@ -86,7 +111,8 @@ message ChannelData {
 }
 
 message ChannelTrace {
-  // TODO: fill this in.
+  // see the proto in the gRFC for channel tracing:
+  // A3-channel-tracing.md
 }
 
 message ChannelRef {
@@ -134,7 +160,7 @@ message Server {
 }
 
 message ServerData {
-  ServerChannelTrace trace = 1;
+  ChannelTrace trace = 1;
 
   // The number of incoming calls started on the server
   int64 calls_started = 2;
@@ -145,10 +171,6 @@ message ServerData {
 
   // The last time a call was started on the server.
   google.protobuf.Timestamp last_call_started_timestamp = 5;
-}
-
-message ServerChannelTrace {
-  // TODO: fill this in.
 }
 
 // Information about an actual connection.  Pronounced "sock-ay".

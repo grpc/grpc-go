@@ -53,11 +53,11 @@ private static final long serialVersionUID = 0L;
             break;
           }
           case 10: {
-            io.grpc.channelz.v1.ServerChannelTrace.Builder subBuilder = null;
+            io.grpc.channelz.v1.ChannelTrace.Builder subBuilder = null;
             if (trace_ != null) {
               subBuilder = trace_.toBuilder();
             }
-            trace_ = input.readMessage(io.grpc.channelz.v1.ServerChannelTrace.parser(), extensionRegistry);
+            trace_ = input.readMessage(io.grpc.channelz.v1.ChannelTrace.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(trace_);
               trace_ = subBuilder.buildPartial();
@@ -118,23 +118,23 @@ private static final long serialVersionUID = 0L;
   }
 
   public static final int TRACE_FIELD_NUMBER = 1;
-  private io.grpc.channelz.v1.ServerChannelTrace trace_;
+  private io.grpc.channelz.v1.ChannelTrace trace_;
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
   public boolean hasTrace() {
     return trace_ != null;
   }
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
-  public io.grpc.channelz.v1.ServerChannelTrace getTrace() {
-    return trace_ == null ? io.grpc.channelz.v1.ServerChannelTrace.getDefaultInstance() : trace_;
+  public io.grpc.channelz.v1.ChannelTrace getTrace() {
+    return trace_ == null ? io.grpc.channelz.v1.ChannelTrace.getDefaultInstance() : trace_;
   }
   /**
-   * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+   * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
-  public io.grpc.channelz.v1.ServerChannelTraceOrBuilder getTraceOrBuilder() {
+  public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
     return getTrace();
   }
 
@@ -590,29 +590,29 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private io.grpc.channelz.v1.ServerChannelTrace trace_ = null;
+    private io.grpc.channelz.v1.ChannelTrace trace_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.channelz.v1.ServerChannelTrace, io.grpc.channelz.v1.ServerChannelTrace.Builder, io.grpc.channelz.v1.ServerChannelTraceOrBuilder> traceBuilder_;
+        io.grpc.channelz.v1.ChannelTrace, io.grpc.channelz.v1.ChannelTrace.Builder, io.grpc.channelz.v1.ChannelTraceOrBuilder> traceBuilder_;
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public boolean hasTrace() {
       return traceBuilder_ != null || trace_ != null;
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
-    public io.grpc.channelz.v1.ServerChannelTrace getTrace() {
+    public io.grpc.channelz.v1.ChannelTrace getTrace() {
       if (traceBuilder_ == null) {
-        return trace_ == null ? io.grpc.channelz.v1.ServerChannelTrace.getDefaultInstance() : trace_;
+        return trace_ == null ? io.grpc.channelz.v1.ChannelTrace.getDefaultInstance() : trace_;
       } else {
         return traceBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
-    public Builder setTrace(io.grpc.channelz.v1.ServerChannelTrace value) {
+    public Builder setTrace(io.grpc.channelz.v1.ChannelTrace value) {
       if (traceBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -626,10 +626,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder setTrace(
-        io.grpc.channelz.v1.ServerChannelTrace.Builder builderForValue) {
+        io.grpc.channelz.v1.ChannelTrace.Builder builderForValue) {
       if (traceBuilder_ == null) {
         trace_ = builderForValue.build();
         onChanged();
@@ -640,13 +640,13 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
-    public Builder mergeTrace(io.grpc.channelz.v1.ServerChannelTrace value) {
+    public Builder mergeTrace(io.grpc.channelz.v1.ChannelTrace value) {
       if (traceBuilder_ == null) {
         if (trace_ != null) {
           trace_ =
-            io.grpc.channelz.v1.ServerChannelTrace.newBuilder(trace_).mergeFrom(value).buildPartial();
+            io.grpc.channelz.v1.ChannelTrace.newBuilder(trace_).mergeFrom(value).buildPartial();
         } else {
           trace_ = value;
         }
@@ -658,7 +658,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder clearTrace() {
       if (traceBuilder_ == null) {
@@ -672,33 +672,33 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
-    public io.grpc.channelz.v1.ServerChannelTrace.Builder getTraceBuilder() {
+    public io.grpc.channelz.v1.ChannelTrace.Builder getTraceBuilder() {
       
       onChanged();
       return getTraceFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
-    public io.grpc.channelz.v1.ServerChannelTraceOrBuilder getTraceOrBuilder() {
+    public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
       if (traceBuilder_ != null) {
         return traceBuilder_.getMessageOrBuilder();
       } else {
         return trace_ == null ?
-            io.grpc.channelz.v1.ServerChannelTrace.getDefaultInstance() : trace_;
+            io.grpc.channelz.v1.ChannelTrace.getDefaultInstance() : trace_;
       }
     }
     /**
-     * <code>.grpc.channelz.ServerChannelTrace trace = 1;</code>
+     * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.channelz.v1.ServerChannelTrace, io.grpc.channelz.v1.ServerChannelTrace.Builder, io.grpc.channelz.v1.ServerChannelTraceOrBuilder> 
+        io.grpc.channelz.v1.ChannelTrace, io.grpc.channelz.v1.ChannelTrace.Builder, io.grpc.channelz.v1.ChannelTraceOrBuilder> 
         getTraceFieldBuilder() {
       if (traceBuilder_ == null) {
         traceBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.channelz.v1.ServerChannelTrace, io.grpc.channelz.v1.ServerChannelTrace.Builder, io.grpc.channelz.v1.ServerChannelTraceOrBuilder>(
+            io.grpc.channelz.v1.ChannelTrace, io.grpc.channelz.v1.ChannelTrace.Builder, io.grpc.channelz.v1.ChannelTraceOrBuilder>(
                 getTrace(),
                 getParentForChildren(),
                 isClean());

@@ -16,7 +16,6 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private ChannelData() {
-    state_ = 0;
     target_ = "";
     callsStarted_ = 0L;
     callsSucceeded_ = 0L;
@@ -54,10 +53,17 @@ private static final long serialVersionUID = 0L;
             }
             break;
           }
-          case 8: {
-            int rawValue = input.readEnum();
+          case 10: {
+            io.grpc.channelz.v1.ChannelConnectivityState.Builder subBuilder = null;
+            if (state_ != null) {
+              subBuilder = state_.toBuilder();
+            }
+            state_ = input.readMessage(io.grpc.channelz.v1.ChannelConnectivityState.parser(), extensionRegistry);
+            if (subBuilder != null) {
+              subBuilder.mergeFrom(state_);
+              state_ = subBuilder.buildPartial();
+            }
 
-            state_ = rawValue;
             break;
           }
           case 18: {
@@ -131,154 +137,25 @@ private static final long serialVersionUID = 0L;
             io.grpc.channelz.v1.ChannelData.class, io.grpc.channelz.v1.ChannelData.Builder.class);
   }
 
-  /**
-   * Protobuf enum {@code grpc.channelz.ChannelData.State}
-   */
-  public enum State
-      implements com.google.protobuf.ProtocolMessageEnum {
-    /**
-     * <code>UNKNOWN = 0;</code>
-     */
-    UNKNOWN(0),
-    /**
-     * <code>IDLE = 1;</code>
-     */
-    IDLE(1),
-    /**
-     * <code>CONNECTING = 2;</code>
-     */
-    CONNECTING(2),
-    /**
-     * <code>READY = 3;</code>
-     */
-    READY(3),
-    /**
-     * <code>TRANSIENT_FAILURE = 4;</code>
-     */
-    TRANSIENT_FAILURE(4),
-    /**
-     * <code>SHUTDOWN = 5;</code>
-     */
-    SHUTDOWN(5),
-    UNRECOGNIZED(-1),
-    ;
-
-    /**
-     * <code>UNKNOWN = 0;</code>
-     */
-    public static final int UNKNOWN_VALUE = 0;
-    /**
-     * <code>IDLE = 1;</code>
-     */
-    public static final int IDLE_VALUE = 1;
-    /**
-     * <code>CONNECTING = 2;</code>
-     */
-    public static final int CONNECTING_VALUE = 2;
-    /**
-     * <code>READY = 3;</code>
-     */
-    public static final int READY_VALUE = 3;
-    /**
-     * <code>TRANSIENT_FAILURE = 4;</code>
-     */
-    public static final int TRANSIENT_FAILURE_VALUE = 4;
-    /**
-     * <code>SHUTDOWN = 5;</code>
-     */
-    public static final int SHUTDOWN_VALUE = 5;
-
-
-    public final int getNumber() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalArgumentException(
-            "Can't get the number of an unknown enum value.");
-      }
-      return value;
-    }
-
-    /**
-     * @deprecated Use {@link #forNumber(int)} instead.
-     */
-    @java.lang.Deprecated
-    public static State valueOf(int value) {
-      return forNumber(value);
-    }
-
-    public static State forNumber(int value) {
-      switch (value) {
-        case 0: return UNKNOWN;
-        case 1: return IDLE;
-        case 2: return CONNECTING;
-        case 3: return READY;
-        case 4: return TRANSIENT_FAILURE;
-        case 5: return SHUTDOWN;
-        default: return null;
-      }
-    }
-
-    public static com.google.protobuf.Internal.EnumLiteMap<State>
-        internalGetValueMap() {
-      return internalValueMap;
-    }
-    private static final com.google.protobuf.Internal.EnumLiteMap<
-        State> internalValueMap =
-          new com.google.protobuf.Internal.EnumLiteMap<State>() {
-            public State findValueByNumber(int number) {
-              return State.forNumber(number);
-            }
-          };
-
-    public final com.google.protobuf.Descriptors.EnumValueDescriptor
-        getValueDescriptor() {
-      return getDescriptor().getValues().get(ordinal());
-    }
-    public final com.google.protobuf.Descriptors.EnumDescriptor
-        getDescriptorForType() {
-      return getDescriptor();
-    }
-    public static final com.google.protobuf.Descriptors.EnumDescriptor
-        getDescriptor() {
-      return io.grpc.channelz.v1.ChannelData.getDescriptor().getEnumTypes().get(0);
-    }
-
-    private static final State[] VALUES = values();
-
-    public static State valueOf(
-        com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
-      if (desc.getType() != getDescriptor()) {
-        throw new java.lang.IllegalArgumentException(
-          "EnumValueDescriptor is not for this type.");
-      }
-      if (desc.getIndex() == -1) {
-        return UNRECOGNIZED;
-      }
-      return VALUES[desc.getIndex()];
-    }
-
-    private final int value;
-
-    private State(int value) {
-      this.value = value;
-    }
-
-    // @@protoc_insertion_point(enum_scope:grpc.channelz.ChannelData.State)
-  }
-
   public static final int STATE_FIELD_NUMBER = 1;
-  private int state_;
+  private io.grpc.channelz.v1.ChannelConnectivityState state_;
   /**
-   * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
-  public int getStateValue() {
-    return state_;
+  public boolean hasState() {
+    return state_ != null;
   }
   /**
-   * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
-  public io.grpc.channelz.v1.ChannelData.State getState() {
-    io.grpc.channelz.v1.ChannelData.State result = io.grpc.channelz.v1.ChannelData.State.valueOf(state_);
-    return result == null ? io.grpc.channelz.v1.ChannelData.State.UNRECOGNIZED : result;
+  public io.grpc.channelz.v1.ChannelConnectivityState getState() {
+    return state_ == null ? io.grpc.channelz.v1.ChannelConnectivityState.getDefaultInstance() : state_;
+  }
+  /**
+   * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+   */
+  public io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder() {
+    return getState();
   }
 
   public static final int TARGET_FIELD_NUMBER = 2;
@@ -428,8 +305,8 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (state_ != io.grpc.channelz.v1.ChannelData.State.UNKNOWN.getNumber()) {
-      output.writeEnum(1, state_);
+    if (state_ != null) {
+      output.writeMessage(1, getState());
     }
     if (!getTargetBytes().isEmpty()) {
       com.google.protobuf.GeneratedMessageV3.writeString(output, 2, target_);
@@ -457,9 +334,9 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (state_ != io.grpc.channelz.v1.ChannelData.State.UNKNOWN.getNumber()) {
+    if (state_ != null) {
       size += com.google.protobuf.CodedOutputStream
-        .computeEnumSize(1, state_);
+        .computeMessageSize(1, getState());
     }
     if (!getTargetBytes().isEmpty()) {
       size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, target_);
@@ -500,7 +377,11 @@ private static final long serialVersionUID = 0L;
     io.grpc.channelz.v1.ChannelData other = (io.grpc.channelz.v1.ChannelData) obj;
 
     boolean result = true;
-    result = result && state_ == other.state_;
+    result = result && (hasState() == other.hasState());
+    if (hasState()) {
+      result = result && getState()
+          .equals(other.getState());
+    }
     result = result && getTarget()
         .equals(other.getTarget());
     result = result && (hasTrace() == other.hasTrace());
@@ -530,8 +411,10 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + STATE_FIELD_NUMBER;
-    hash = (53 * hash) + state_;
+    if (hasState()) {
+      hash = (37 * hash) + STATE_FIELD_NUMBER;
+      hash = (53 * hash) + getState().hashCode();
+    }
     hash = (37 * hash) + TARGET_FIELD_NUMBER;
     hash = (53 * hash) + getTarget().hashCode();
     if (hasTrace()) {
@@ -680,8 +563,12 @@ private static final long serialVersionUID = 0L;
     }
     public Builder clear() {
       super.clear();
-      state_ = 0;
-
+      if (stateBuilder_ == null) {
+        state_ = null;
+      } else {
+        state_ = null;
+        stateBuilder_ = null;
+      }
       target_ = "";
 
       if (traceBuilder_ == null) {
@@ -724,7 +611,11 @@ private static final long serialVersionUID = 0L;
 
     public io.grpc.channelz.v1.ChannelData buildPartial() {
       io.grpc.channelz.v1.ChannelData result = new io.grpc.channelz.v1.ChannelData(this);
-      result.state_ = state_;
+      if (stateBuilder_ == null) {
+        result.state_ = state_;
+      } else {
+        result.state_ = stateBuilder_.build();
+      }
       result.target_ = target_;
       if (traceBuilder_ == null) {
         result.trace_ = trace_;
@@ -780,8 +671,8 @@ private static final long serialVersionUID = 0L;
 
     public Builder mergeFrom(io.grpc.channelz.v1.ChannelData other) {
       if (other == io.grpc.channelz.v1.ChannelData.getDefaultInstance()) return this;
-      if (other.state_ != 0) {
-        setStateValue(other.getStateValue());
+      if (other.hasState()) {
+        mergeState(other.getState());
       }
       if (!other.getTarget().isEmpty()) {
         target_ = other.target_;
@@ -829,48 +720,121 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private int state_ = 0;
+    private io.grpc.channelz.v1.ChannelConnectivityState state_ = null;
+    private com.google.protobuf.SingleFieldBuilderV3<
+        io.grpc.channelz.v1.ChannelConnectivityState, io.grpc.channelz.v1.ChannelConnectivityState.Builder, io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder> stateBuilder_;
     /**
-     * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
-    public int getStateValue() {
-      return state_;
+    public boolean hasState() {
+      return stateBuilder_ != null || state_ != null;
     }
     /**
-     * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
-    public Builder setStateValue(int value) {
-      state_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>.grpc.channelz.ChannelData.State state = 1;</code>
-     */
-    public io.grpc.channelz.v1.ChannelData.State getState() {
-      io.grpc.channelz.v1.ChannelData.State result = io.grpc.channelz.v1.ChannelData.State.valueOf(state_);
-      return result == null ? io.grpc.channelz.v1.ChannelData.State.UNRECOGNIZED : result;
-    }
-    /**
-     * <code>.grpc.channelz.ChannelData.State state = 1;</code>
-     */
-    public Builder setState(io.grpc.channelz.v1.ChannelData.State value) {
-      if (value == null) {
-        throw new NullPointerException();
+    public io.grpc.channelz.v1.ChannelConnectivityState getState() {
+      if (stateBuilder_ == null) {
+        return state_ == null ? io.grpc.channelz.v1.ChannelConnectivityState.getDefaultInstance() : state_;
+      } else {
+        return stateBuilder_.getMessage();
       }
-      
-      state_ = value.getNumber();
-      onChanged();
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    public Builder setState(io.grpc.channelz.v1.ChannelConnectivityState value) {
+      if (stateBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        state_ = value;
+        onChanged();
+      } else {
+        stateBuilder_.setMessage(value);
+      }
+
       return this;
     }
     /**
-     * <code>.grpc.channelz.ChannelData.State state = 1;</code>
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    public Builder setState(
+        io.grpc.channelz.v1.ChannelConnectivityState.Builder builderForValue) {
+      if (stateBuilder_ == null) {
+        state_ = builderForValue.build();
+        onChanged();
+      } else {
+        stateBuilder_.setMessage(builderForValue.build());
+      }
+
+      return this;
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    public Builder mergeState(io.grpc.channelz.v1.ChannelConnectivityState value) {
+      if (stateBuilder_ == null) {
+        if (state_ != null) {
+          state_ =
+            io.grpc.channelz.v1.ChannelConnectivityState.newBuilder(state_).mergeFrom(value).buildPartial();
+        } else {
+          state_ = value;
+        }
+        onChanged();
+      } else {
+        stateBuilder_.mergeFrom(value);
+      }
+
+      return this;
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public Builder clearState() {
-      
-      state_ = 0;
-      onChanged();
+      if (stateBuilder_ == null) {
+        state_ = null;
+        onChanged();
+      } else {
+        state_ = null;
+        stateBuilder_ = null;
+      }
+
       return this;
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    public io.grpc.channelz.v1.ChannelConnectivityState.Builder getStateBuilder() {
+      
+      onChanged();
+      return getStateFieldBuilder().getBuilder();
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    public io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder() {
+      if (stateBuilder_ != null) {
+        return stateBuilder_.getMessageOrBuilder();
+      } else {
+        return state_ == null ?
+            io.grpc.channelz.v1.ChannelConnectivityState.getDefaultInstance() : state_;
+      }
+    }
+    /**
+     * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilderV3<
+        io.grpc.channelz.v1.ChannelConnectivityState, io.grpc.channelz.v1.ChannelConnectivityState.Builder, io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder> 
+        getStateFieldBuilder() {
+      if (stateBuilder_ == null) {
+        stateBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+            io.grpc.channelz.v1.ChannelConnectivityState, io.grpc.channelz.v1.ChannelConnectivityState.Builder, io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder>(
+                getState(),
+                getParentForChildren(),
+                isClean());
+        state_ = null;
+      }
+      return stateBuilder_;
     }
 
     private java.lang.Object target_ = "";

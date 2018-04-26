@@ -5,7 +5,8 @@ package io.grpc.channelz.v1;
 
 /**
  * <pre>
- * TODO: fill this in.
+ * see the proto in the gRFC for channel tracing:
+ * A3-channel-tracing.md
  * </pre>
  *
  * Protobuf type {@code grpc.channelz.ChannelTrace}
@@ -218,7 +219,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * TODO: fill this in.
+   * see the proto in the gRFC for channel tracing:
+   * A3-channel-tracing.md
    * </pre>
    *
    * Protobuf type {@code grpc.channelz.ChannelTrace}

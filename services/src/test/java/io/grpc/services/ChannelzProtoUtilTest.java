@@ -37,8 +37,9 @@ import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
 import io.grpc.channelz.v1.Address.UdsAddress;
 import io.grpc.channelz.v1.Channel;
+import io.grpc.channelz.v1.ChannelConnectivityState;
+import io.grpc.channelz.v1.ChannelConnectivityState.State;
 import io.grpc.channelz.v1.ChannelData;
-import io.grpc.channelz.v1.ChannelData.State;
 import io.grpc.channelz.v1.ChannelRef;
 import io.grpc.channelz.v1.GetChannelRequest;
 import io.grpc.channelz.v1.GetServerSocketsResponse;
@@ -96,7 +97,7 @@ public final class ChannelzProtoUtilTest {
   private final ChannelData channelData = ChannelData
       .newBuilder()
       .setTarget("sometarget")
-      .setState(State.READY)
+      .setState(ChannelConnectivityState.newBuilder().setState(State.READY))
       .setCallsStarted(1)
       .setCallsSucceeded(2)
       .setCallsFailed(3)
@@ -117,7 +118,7 @@ public final class ChannelzProtoUtilTest {
   private final ChannelData subchannelData = ChannelData
       .newBuilder()
       .setTarget("sometarget")
-      .setState(State.READY)
+      .setState(ChannelConnectivityState.newBuilder().setState(State.READY))
       .setCallsStarted(1)
       .setCallsSucceeded(2)
       .setCallsFailed(3)
