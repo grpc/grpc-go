@@ -50,7 +50,10 @@ const (
 	txtAttribute = "grpc_config="
 )
 
-var errMissingAddr = errors.New("missing address")
+var (
+	errMissingAddr = errors.New("missing address")
+	randomGen      = rand.New(rand.NewSource(time.Now().UnixNano()))
+)
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
 func NewBuilder() resolver.Builder {
@@ -338,9 +341,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	return r.Intn(100)+1 <= *a
+	return randomGen.Intn(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {
