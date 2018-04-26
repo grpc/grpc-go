@@ -16,6 +16,7 @@
 
 package io.grpc.services;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ConnectivityState;
@@ -76,6 +77,13 @@ final class ChannelzTestHelper {
     public LogId getLogId() {
       return id;
     }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("logId", getLogId())
+          .toString();
+    }
   }
 
   static final class TestListenSocket implements Instrumented<SocketStats> {
@@ -99,6 +107,13 @@ final class ChannelzTestHelper {
     public LogId getLogId() {
       return id;
     }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("logId", getLogId())
+          .toString();
+    }
   }
 
   static final class TestServer implements Instrumented<ServerStats> {
@@ -120,6 +135,13 @@ final class ChannelzTestHelper {
     @Override
     public LogId getLogId() {
       return id;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("logId", getLogId())
+          .toString();
     }
   }
 
@@ -146,6 +168,13 @@ final class ChannelzTestHelper {
     @Override
     public LogId getLogId() {
       return id;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("logId", getLogId())
+          .toString();
     }
   }
 }
