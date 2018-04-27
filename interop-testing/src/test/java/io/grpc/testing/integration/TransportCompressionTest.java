@@ -86,7 +86,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
   @Override
   protected AbstractServerImplBuilder<?> getServerBuilder() {
     return NettyServerBuilder.forPort(0)
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .compressorRegistry(compressors)
         .decompressorRegistry(decompressors)
         .intercept(new ServerInterceptor() {

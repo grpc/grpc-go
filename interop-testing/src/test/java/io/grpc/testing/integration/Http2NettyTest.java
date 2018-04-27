@@ -46,7 +46,7 @@ public class Http2NettyTest extends AbstractInteropTest {
     try {
       return NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
-          .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+          .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
           .sslContext(GrpcSslContexts
               .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
               .clientAuth(ClientAuth.REQUIRE)

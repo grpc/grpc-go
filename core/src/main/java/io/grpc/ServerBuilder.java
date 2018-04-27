@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import com.google.common.base.Preconditions;
 import java.io.File;
 import java.io.InputStream;
 import java.util.concurrent.Executor;
@@ -204,6 +205,27 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   }
 
   /**
+   * Sets the maximum message size allowed to be received on the server. If not called,
+   * defaults to 4 MiB. The default provides protection to servers who haven't considered the
+   * possibility of receiving large messages while trying to be large enough to not be hit in normal
+   * usage.
+   *
+   * <p>This method is advisory, and implementations may decide to not enforce this.  Currently,
+   * the only known transport to not enforce this is {@code InProcessServer}.
+   *
+   * @param bytes the maximum number of bytes a single message can be.
+   * @return this
+   * @throws IllegalArgumentException if bytes is negative.
+   * @throws UnsupportedOperationException if unsupported.
+   * @since 1.13.0
+   */
+  public T maxInboundMessageSize(int bytes) {
+    // intentional noop rather than throw, this method is only advisory.
+    Preconditions.checkArgument(bytes >= 0, "bytes must be >= 0");
+    return thisT();
+  }
+
+  /**
    * Builds a server using the given parameters.
    *
    * <p>The returned service will not been started or be bound a port. You will need to start it
@@ -213,4 +235,13 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * @since 1.0.0
    */
   public abstract Server build();
+
+  /**
+   * Returns the correctly typed version of the builder.
+   */
+  private T thisT() {
+    @SuppressWarnings("unchecked")
+    T thisT = (T) this;
+    return thisT;
+  }
 }

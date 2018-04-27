@@ -259,10 +259,20 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * defaults to 4 MiB. The default provides protection to services who haven't considered the
    * possibility of receiving large messages while trying to be large enough to not be hit in normal
    * usage.
+   *
+   * @deprecated Call {@link #maxInboundMessageSize} instead. This method will be removed in a
+   *     future release.
    */
+  @Deprecated
   public NettyServerBuilder maxMessageSize(int maxMessageSize) {
-    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
-    this.maxMessageSize = maxMessageSize;
+    return maxInboundMessageSize(maxMessageSize);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public NettyServerBuilder maxInboundMessageSize(int bytes) {
+    checkArgument(bytes >= 0, "bytes must be >= 0");
+    this.maxMessageSize = bytes;
     return this;
   }
 

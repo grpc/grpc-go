@@ -37,7 +37,8 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
 
   @Override
   protected AbstractServerImplBuilder<?> getServerBuilder() {
-    return NettyServerBuilder.forPort(0).maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
+    return NettyServerBuilder.forPort(0)
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
   }
 
   @Override
