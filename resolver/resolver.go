@@ -86,6 +86,7 @@ type Address struct {
 // BuildOption includes additional information for the builder to create
 // the resolver.
 type BuildOption struct {
+	// ServiceConfigOff indicates whether resolver should fetch service config data.
 	ServiceConfigOff bool
 }
 

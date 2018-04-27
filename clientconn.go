@@ -414,7 +414,9 @@ func WithChannelzParentID(id int64) DialOption {
 }
 
 // WithServiceConfigOff returns a DialOption that specifies whether resolver
-// should fetch service config.
+// should fetch service config. Note that if the serviceConfigOff is set to true,
+// but resolver doesn't honor the setting and still fetch the service config and
+// returns it, grpc will ignore the config.
 func WithServiceConfigOff(a bool) DialOption {
 	return func(o *dialOptions) {
 		o.serviceConfigOff = a
@@ -962,6 +964,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
+	if cc.dopts.serviceConfigOff {
+		return nil
+	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
 		return err
