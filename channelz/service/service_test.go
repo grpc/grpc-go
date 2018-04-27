@@ -16,7 +16,7 @@
  *
  */
 
-package service_test
+package service
 
 import (
 	"net"
@@ -28,7 +28,6 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/channelz"
-	"google.golang.org/grpc/channelz/service"
 	pb "google.golang.org/grpc/channelz/service_proto"
 	"google.golang.org/grpc/connectivity"
 )
@@ -258,12 +257,13 @@ func TestGetTopChannels(t *testing.T) {
 			callsSucceeded: 0,
 			callsFailed:    0,
 		},
+		{},
 	}
 	channelz.NewChannelzStorage()
 	for _, c := range tcs {
 		channelz.RegisterChannel(c, 0, "")
 	}
-	s := service.NewCZServer()
+	s := newCZServer()
 	resp, _ := s.GetTopChannels(context.Background(), &pb.GetTopChannelsRequest{StartChannelId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -307,7 +307,7 @@ func TestGetServers(t *testing.T) {
 	for _, s := range ss {
 		channelz.RegisterServer(s, "")
 	}
-	svr := service.NewCZServer()
+	svr := newCZServer()
 	resp, _ := svr.GetServers(context.Background(), &pb.GetServersRequest{StartServerId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -334,7 +334,7 @@ func TestGetServerSockets(t *testing.T) {
 	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrId, refNames[0])
 	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrId, refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrId, refNames[2])
-	svr := service.NewCZServer()
+	svr := newCZServer()
 	resp, _ := svr.GetServerSockets(context.Background(), &pb.GetServerSocketsRequest{ServerId: svrId, StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
@@ -365,7 +365,7 @@ func TestGetChannel(t *testing.T) {
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
-	svr := service.NewCZServer()
+	svr := newCZServer()
 	resp, _ := svr.GetChannel(context.Background(), &pb.GetChannelRequest{ChannelId: ids[0]})
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
@@ -393,7 +393,7 @@ func TestGetSubChannel(t *testing.T) {
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
-	svr := service.NewCZServer()
+	svr := newCZServer()
 	resp, _ := svr.GetSubchannel(context.Background(), &pb.GetSubchannelRequest{SubchannelId: ids[1]})
 	metrics := resp.GetSubchannel()
 	want := map[int64]string{
@@ -461,7 +461,7 @@ func TestGetSocket(t *testing.T) {
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
 		},
 	}
-	svr := service.NewCZServer()
+	svr := newCZServer()
 	ids := make([]int64, len(ss))
 	svrId := channelz.RegisterServer(&dummyServer{}, "")
 	for i, s := range ss {
