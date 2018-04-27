@@ -1051,7 +1051,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	var state decodeState
 	if err := state.decodeResponseHeader(frame); err != nil {
 		// TODO(mmukhi, dfawley): Perhaps send a reset stream.
-		t.closeStream(s, err, false, http2.ErrCodeNo, nil, nil, false)
+		t.closeStream(s, err, true, http2.ErrCodeProtocol, nil, nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
@@ -1134,7 +1134,7 @@ func (t *http2Client) reader() {
 				if s != nil {
 					// use error detail to provide better err message
 					// TODO(mmukhi, dfawley): Perhaps send a RST_STREAM to the server.
-					t.closeStream(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()), false, http2.ErrCodeNo, nil, nil, false)
+					t.closeStream(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()), true, http2.ErrCodeProtocol, nil, nil, false)
 				}
 				continue
 			} else {
