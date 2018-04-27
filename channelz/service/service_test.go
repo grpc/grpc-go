@@ -328,14 +328,14 @@ func TestGetServers(t *testing.T) {
 
 func TestGetServerSockets(t *testing.T) {
 	channelz.NewChannelzStorage()
-	svrId := channelz.RegisterServer(&dummyServer{}, "")
+	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
 	ids := make([]int64, 3)
-	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrId, refNames[0])
-	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrId, refNames[1])
-	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrId, refNames[2])
+	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
+	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
+	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
 	svr := newCZServer()
-	resp, _ := svr.GetServerSockets(context.Background(), &pb.GetServerSocketsRequest{ServerId: svrId, StartSocketId: 0})
+	resp, _ := svr.GetServerSockets(context.Background(), &pb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
 	}
@@ -349,9 +349,9 @@ func TestGetServerSockets(t *testing.T) {
 	}
 
 	for i := 0; i < 50; i++ {
-		channelz.RegisterNormalSocket(&dummySocket{}, svrId, "")
+		channelz.RegisterNormalSocket(&dummySocket{}, svrID, "")
 	}
-	resp, _ = svr.GetServerSockets(context.Background(), &pb.GetServerSocketsRequest{ServerId: svrId, StartSocketId: 0})
+	resp, _ = svr.GetServerSockets(context.Background(), &pb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
 	}
@@ -463,9 +463,9 @@ func TestGetSocket(t *testing.T) {
 	}
 	svr := newCZServer()
 	ids := make([]int64, len(ss))
-	svrId := channelz.RegisterServer(&dummyServer{}, "")
+	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	for i, s := range ss {
-		ids[i] = channelz.RegisterNormalSocket(s, svrId, strconv.Itoa(i))
+		ids[i] = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
 	}
 	for i, s := range ss {
 		resp, _ := svr.GetSocket(context.Background(), &pb.GetSocketRequest{SocketId: ids[i]})
