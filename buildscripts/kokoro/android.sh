@@ -19,7 +19,6 @@ export OS_NAME=$(uname)
 
 # Proto deps
 buildscripts/make_dependencies.sh
-ln -s "/tmp/protobuf-${PROTOBUF_VERSION}/$(uname -s)-$(uname -p)" /tmp/protobuf
 
 ./gradlew install
 

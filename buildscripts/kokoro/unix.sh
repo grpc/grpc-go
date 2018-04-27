@@ -1,11 +1,18 @@
 #!/bin/bash
 
 # This file is used for both Linux and MacOS builds.
+# For Linux, this script is called inside a docker container with
+# the correct environment for releases.
 # To run locally:
 #  ./buildscripts/kokoro/unix.sh
+# For 32 bit:
+#  ARCH=32 ./buildscripts/kokoro/unix.sh
 
 # This script assumes `set -e`. Removing it may lead to undefined behavior.
 set -exu -o pipefail
+
+# It would be nicer to use 'readlink -f' here but osx does not support it.
+readonly GRPC_JAVA_DIR="$(cd "$(dirname "$0")"/../.. && pwd)"
 
 if [[ -f /VERSION ]]; then
   cat /VERSION
@@ -19,26 +26,14 @@ cd $(dirname $0)/../..
 # Proto deps
 export PROTOBUF_VERSION=3.5.1
 
-# TODO(zpencer): if linux builds use this script, then also repeat this process for 32bit (-m32)
-# Today, only macos uses this script and macos targets 64bit only
+# ARCH is 64 bit unless otherwise specified.
+ARCH="${ARCH:-64}"
 
-CXX_FLAGS="-m64" LDFLAGS="" LD_LIBRARY_PATH="" buildscripts/make_dependencies.sh
-
-# the install dir is hardcoded in make_dependencies.sh
-PROTO_INSTALL_DIR="/tmp/protobuf-${PROTOBUF_VERSION}/$(uname -s)-$(uname -p)"
-
-if [[ ! -e /tmp/protobuf ]]; then
-  ln -s $PROTO_INSTALL_DIR /tmp/protobuf;
-fi
-
-# It's better to use 'readlink -f' but it's not available on macos
-if [[ "$(readlink /tmp/protobuf)" != "$PROTO_INSTALL_DIR" ]]; then
-  echo "/tmp/protobuf already exists but is not a symlink to $PROTO_INSTALL_DIR"
-  exit 1;
-fi
+ARCH="$ARCH" buildscripts/make_dependencies.sh
 
 # Set properties via flags, do not pollute gradle.properties
 GRADLE_FLAGS="${GRADLE_FLAGS:-}"
+GRADLE_FLAGS+=" -PtargetArch=x86_$ARCH $GRADLE_FLAGS"
 GRADLE_FLAGS+=" -Pcheckstyle.ignoreFailures=false"
 GRADLE_FLAGS+=" -PfailOnWarnings=true"
 GRADLE_FLAGS+=" -PerrorProne=true"
@@ -70,10 +65,10 @@ popd
 
 LOCAL_MVN_TEMP=$(mktemp -d)
 # Note that this disables parallel=true from GRADLE_FLAGS
-./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS -PtargetArch=x86_64 \
-  -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
+./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS \
+  -Dorg.gradle.parallel=false -PrepositoryDir="$LOCAL_MVN_TEMP"
 
-MVN_ARTIFACT_DIR="$PWD/mvn-artifacts"
-mkdir $MVN_ARTIFACT_DIR
-mv $LOCAL_MVN_TEMP/* $MVN_ARTIFACT_DIR
-rmdir $LOCAL_MVN_TEMP
+readonly MVN_ARTIFACT_DIR="${MVN_ARTIFACT_DIR:-$GRPC_JAVA_DIR/mvn-artifacts}"
+
+mkdir -p "$MVN_ARTIFACT_DIR"
+cp -r "$LOCAL_MVN_TEMP"/* "$MVN_ARTIFACT_DIR"/
