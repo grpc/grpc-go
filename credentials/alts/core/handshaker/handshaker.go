@@ -136,7 +136,7 @@ func DefaultServerHandshakerOptions() *ServerHandshakerOptions {
 // server.
 type altsHandshaker struct {
 	// RPC stream used to access the ALTS Handshaker service.
-	stream altspb.HandshakerService_DoHandshakeClient
+	stream altsgrpc.HandshakerService_DoHandshakeClient
 	// the connection to the peer.
 	conn net.Conn
 	// client handshake options.
