@@ -21,16 +21,12 @@
 package service
 
 import (
-	"flag"
 	"sync"
 
 	grpc "google.golang.org/grpc"
 )
 
 var (
-	// hsServiceAddr specifies the default ALTS handshaker service address in
-	// the hypervisor.
-	hsServiceAddr = flag.String("handshaker_service_address", "metadata.google.internal:8080", "ALTS handshaker gRPC service address")
 	// hsConn represents a connection to hypervisor handshaker service.
 	hsConn *grpc.ClientConn
 	mu     sync.Mutex
@@ -42,8 +38,8 @@ type dialer func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, erro
 
 // Dial dials the handshake service in the hypervisor. If a connection has
 // already been established, this function returns it. Otherwise, a new
-// connection is created,
-func Dial() (*grpc.ClientConn, error) {
+// connection is created.
+func Dial(hsAddress string) (*grpc.ClientConn, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -51,7 +47,7 @@ func Dial() (*grpc.ClientConn, error) {
 		// Create a new connection to the handshaker service. Note that
 		// this connection stays open until the application is closed.
 		var err error
-		hsConn, err = hsDialer(*hsServiceAddr, grpc.WithInsecure())
+		hsConn, err = hsDialer(hsAddress, grpc.WithInsecure())
 		if err != nil {
 			return nil, err
 		}

@@ -417,10 +417,18 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target. ctx can be used to
-// cancel or expire the pending connection. Once this function returns, the
-// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
-// to terminate all the pending operations after this function returns.
+// DialContext creates a client connection to the given target. By default, it's
+// a non-blocking dial (the function won't wait for connections to be
+// established, and connecting happens in the background). To make it a blocking
+// dial, use WithBlock() dial option.
+//
+// In the non-blocking case, the ctx does not act against the connection. It
+// only controls the setup steps.
+//
+// In the blocking case, ctx can be used to cancel or expire the pending
+// connection. Once this function returns, the cancellation and expiration of
+// ctx will be noop. Users should call ClientConn.Close to terminate all the
+// pending operations after this function returns.
 //
 // The target name syntax is defined in
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
@@ -467,7 +475,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.copts.Dialer == nil {
 		cc.dopts.copts.Dialer = newProxyDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {
-				return dialContext(ctx, "tcp", addr)
+				network, addr := parseDialTarget(addr)
+				return dialContext(ctx, network, addr)
 			},
 		)
 	}
@@ -511,7 +520,25 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
-	cc.parsedTarget = parseTarget(cc.target)
+	if cc.dopts.resolverBuilder == nil {
+		// Only try to parse target when resolver builder is not already set.
+		cc.parsedTarget = parseTarget(cc.target)
+		grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
+		cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+		if cc.dopts.resolverBuilder == nil {
+			// If resolver builder is still nil, the parse target's scheme is
+			// not registered. Fallback to default resolver and set Endpoint to
+			// the original unparsed target.
+			grpclog.Infof("scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
+			cc.parsedTarget = resolver.Target{
+				Scheme:   resolver.GetDefaultScheme(),
+				Endpoint: target,
+			}
+			cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
+		}
+	} else {
+		cc.parsedTarget = resolver.Target{Endpoint: target}
+	}
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
@@ -778,6 +805,8 @@ func (cc *ClientConn) switchBalancer(name string) {
 	if cc.balancerWrapper != nil {
 		cc.balancerWrapper.close()
 	}
+	// Clear all stickiness state.
+	cc.blockingpicker.clearStickinessState()
 
 	builder := balancer.Get(name)
 	if builder == nil {
@@ -952,7 +981,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
-		m, _ = cc.sc.Methods[method[:i+1]]
+		m = cc.sc.Methods[method[:i+1]]
 	}
 	return m
 }
@@ -988,6 +1017,18 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
 	}
+
+	if envConfigStickinessOn {
+		var newStickinessMDKey string
+		if sc.stickinessMetadataKey != nil && *sc.stickinessMetadataKey != "" {
+			newStickinessMDKey = *sc.stickinessMetadataKey
+		}
+		// newStickinessMDKey is "" if one of the following happens:
+		// - stickinessMetadataKey is set to ""
+		// - stickinessMetadataKey field doesn't exist in service config
+		cc.blockingpicker.updateStickinessMDKey(strings.ToLower(newStickinessMDKey))
+	}
+
 	cc.mu.Unlock()
 	return nil
 }
@@ -1111,7 +1152,7 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // resetTransport recreates a transport to the address for ac.  The old
 // transport will close itself on error or when the clientconn is closed.
 // The created transport must receive initial settings frame from the server.
-// In case that doesnt happen, transportMonitor will kill the newly created
+// In case that doesn't happen, transportMonitor will kill the newly created
 // transport after connectDeadline has expired.
 // In case there was an error on the transport before the settings frame was
 // received, resetTransport resumes connecting to backends after the one that
@@ -1156,7 +1197,7 @@ func (ac *addrConn) resetTransport() error {
 			connectDeadline = start.Add(dialDuration)
 			ridx = 0 // Start connecting from the beginning.
 		} else {
-			// Continue trying to conect with the same deadlines.
+			// Continue trying to connect with the same deadlines.
 			connectRetryNum = ac.connectRetryNum
 			backoffDeadline = ac.backoffDeadline
 			connectDeadline = ac.connectDeadline
@@ -1275,6 +1316,10 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		return true, nil
 	}
 	ac.mu.Lock()
+	if ac.state == connectivity.Shutdown {
+		ac.mu.Unlock()
+		return false, errConnClosing
+	}
 	ac.state = connectivity.TransientFailure
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.cc.resolveNow(resolver.ResolveNowOption{})
@@ -1309,7 +1354,20 @@ func (ac *addrConn) transportMonitor() {
 		// Block until we receive a goaway or an error occurs.
 		select {
 		case <-t.GoAway():
+			done := t.Error()
+			cleanup := t.Close
+			// Since this transport will be orphaned (won't have a transportMonitor)
+			// we need to launch a goroutine to keep track of clientConn.Close()
+			// happening since it might not be noticed by any other goroutine for a while.
+			go func() {
+				<-done
+				cleanup()
+			}()
 		case <-t.Error():
+			// In case this is triggered because clientConn.Close()
+			// was called, we want to immeditately close the transport
+			// since no other goroutine might notice it for a while.
+			t.Close()
 		case <-cdeadline:
 			ac.mu.Lock()
 			// This implies that client received server preface.
@@ -1456,13 +1514,19 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(ac.channelzID)
 	}
-	return
 }
 
 func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+func (ac *addrConn) getCurAddr() (ret resolver.Address) {
+	ac.mu.Lock()
+	ret = ac.curAddr
+	ac.mu.Unlock()
+	return
 }
 
 func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {

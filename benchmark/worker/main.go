@@ -187,7 +187,7 @@ func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*
 }
 
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
-	grpclog.Printf("quiting worker")
+	grpclog.Printf("quitting worker")
 	s.stop <- true
 	return &testpb.Void{}, nil
 }

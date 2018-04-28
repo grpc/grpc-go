@@ -49,6 +49,7 @@ if git status --porcelain | read; then
 fi
 
 git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | tee /dev/stderr | (! read)
+git ls-files "*.go" | xargs grep -l "\"unsafe\"" 2>&1 | (! grep -v '_test.go') | tee /dev/stderr | (! read)
 gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)
 goimports -l . 2>&1 | tee /dev/stderr | (! read)
 golint ./... 2>&1 | (grep -vE "(_mock|\.pb)\.go:" || true) | tee /dev/stderr | (! read)
@@ -80,5 +81,8 @@ google.golang.org/grpc/transport/transport_test.go:SA2002
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/end2end_test.go:SA1019
+google.golang.org/grpc/balancer_test.go:SA1019
+google.golang.org/grpc/balancer.go:SA1019
+google.golang.org/grpc/clientconn_test.go:SA1019
 ' ./...
 misspell -error .

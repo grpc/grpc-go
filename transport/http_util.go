@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -262,9 +261,9 @@ func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error 
 	// gRPC status doesn't exist and http status is OK.
 	// Set rawStatusCode to be unknown and return nil error.
 	// So that, if the stream has ended this Unknown status
-	// will be propogated to the user.
+	// will be propagated to the user.
 	// Otherwise, it will be ignored. In which case, status from
-	// a later trailer, that has StreamEnded flag set, is propogated.
+	// a later trailer, that has StreamEnded flag set, is propagated.
 	code := int(codes.Unknown)
 	d.rawStatusCode = &code
 	return nil
@@ -348,7 +347,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
 			return nil
 		}
-		d.addMetadata(f.Name, string(v))
+		d.addMetadata(f.Name, v)
 	}
 	return nil
 }
@@ -509,19 +508,63 @@ func decodeGrpcMessageUnchecked(msg string) string {
 	return buf.String()
 }
 
+type bufWriter struct {
+	buf       []byte
+	offset    int
+	batchSize int
+	conn      net.Conn
+	err       error
+
+	onFlush func()
+}
+
+func newBufWriter(conn net.Conn, batchSize int) *bufWriter {
+	return &bufWriter{
+		buf:       make([]byte, batchSize*2),
+		batchSize: batchSize,
+		conn:      conn,
+	}
+}
+
+func (w *bufWriter) Write(b []byte) (n int, err error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	n = copy(w.buf[w.offset:], b)
+	w.offset += n
+	if w.offset >= w.batchSize {
+		err = w.Flush()
+	}
+	return n, err
+}
+
+func (w *bufWriter) Flush() error {
+	if w.err != nil {
+		return w.err
+	}
+	if w.offset == 0 {
+		return nil
+	}
+	if w.onFlush != nil {
+		w.onFlush()
+	}
+	_, w.err = w.conn.Write(w.buf[:w.offset])
+	w.offset = 0
+	return w.err
+}
+
 type framer struct {
-	numWriters int32
-	reader     io.Reader
-	writer     *bufio.Writer
-	fr         *http2.Framer
+	writer *bufWriter
+	fr     *http2.Framer
 }
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
+	r := bufio.NewReaderSize(conn, readBufferSize)
+	w := newBufWriter(conn, writeBufferSize)
 	f := &framer{
-		reader: bufio.NewReaderSize(conn, readBufferSize),
-		writer: bufio.NewWriterSize(conn, writeBufferSize),
+		writer: w,
+		fr:     http2.NewFramer(w, r),
 	}
-	f.fr = http2.NewFramer(f.writer, f.reader)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
 	// Frames aren't safe to read from after a subsequent call to ReadFrame.
 	f.fr.SetReuseFrames()

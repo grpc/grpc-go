@@ -95,6 +95,30 @@ func (md MD) Copy() MD {
 	return Join(md)
 }
 
+// Get obtains the values for a given key.
+func (md MD) Get(k string) []string {
+	k = strings.ToLower(k)
+	return md[k]
+}
+
+// Set sets the value of a given key with a slice of values.
+func (md MD) Set(k string, vals ...string) {
+	if len(vals) == 0 {
+		return
+	}
+	k = strings.ToLower(k)
+	md[k] = vals
+}
+
+// Append adds the values to key k, not overwriting what was already stored at that key.
+func (md MD) Append(k string, vals ...string) {
+	if len(vals) == 0 {
+		return
+	}
+	k = strings.ToLower(k)
+	md[k] = append(md[k], vals...)
+}
+
 // Join joins any number of mds into a single MD.
 // The order of values for each key is determined by the order in which
 // the mds containing those values are presented to Join.
@@ -131,7 +155,11 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
 	}
 	md, _ := ctx.Value(mdOutgoingKey{}).(rawMD)
-	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: append(md.added, kv)})
+	added := make([][]string, len(md.added)+1)
+	copy(added, md.added)
+	added[len(added)-1] = make([]string, len(kv))
+	copy(added[len(added)-1], kv)
+	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.  The
@@ -159,7 +187,7 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.  The
 // returned MD should not be modified. Writing to it may cause races.
-// Modification should be made to the copies of the returned MD.
+// Modification should be made to copies of the returned MD.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {

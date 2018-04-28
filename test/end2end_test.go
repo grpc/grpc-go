@@ -532,55 +532,7 @@ func newTest(t *testing.T, e env) *test {
 	return te
 }
 
-type listenerWrapper struct {
-	net.Listener
-	mu    sync.Mutex
-	conns []*rawConnWrapper
-}
-
-func listenWithConnControl(network, address string) (net.Listener, error) {
-	l, err := net.Listen(network, address)
-	if err != nil {
-		return nil, err
-	}
-	return &listenerWrapper{Listener: l}, nil
-}
-
-// Accept blocks until Dial is called, then returns a net.Conn for the server
-// half of the connection.
-func (l *listenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	l.mu.Lock()
-	l.conns = append(l.conns, newRawConnWrapperFromConn(c))
-	l.mu.Unlock()
-	return c, nil
-}
-
-// Close stops the listener.
-func (l *listenerWrapper) Close() error {
-	return l.Listener.Close()
-}
-
-func (l *listenerWrapper) getLastConn() *rawConnWrapper {
-	l.mu.Lock()
-	if len(l.conns) == 0 {
-		l.mu.Unlock()
-		return nil
-	}
-	rcw := l.conns[len(l.conns)-1]
-	l.mu.Unlock()
-	return rcw
-}
-
-// Addr reports the address of the listener.
-func (l *listenerWrapper) Addr() net.Addr { return l.Listener.Addr() }
-
-var listen = net.Listen
-
-func (te *test) listenAndServe(ts testpb.TestServiceServer) net.Listener {
+func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network, address string) (net.Listener, error)) net.Listener {
 	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
@@ -670,18 +622,15 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer) net.Listener {
 	return lis
 }
 
-type listenFuncReplace func()
-
-func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) (*listenerWrapper, listenFuncReplace) {
-	listen = listenWithConnControl
-	l := te.listenAndServe(ts)
-	return l.(*listenerWrapper), func() { listen = net.Listen }
+func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
+	l := te.listenAndServe(ts, listenWithConnControl)
+	return l.(*listenerWrapper)
 }
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
 func (te *test) startServer(ts testpb.TestServiceServer) {
-	te.listenAndServe(ts)
+	te.listenAndServe(ts, net.Listen)
 }
 
 type nopCompressor struct {
@@ -708,22 +657,6 @@ func NewNopDecompressor() grpc.Decompressor {
 
 func (d *nopDecompressor) Type() string {
 	return "nop"
-}
-
-type dialerWrapper struct {
-	c   net.Conn
-	rcw *rawConnWrapper
-}
-
-func (d *dialerWrapper) dialer(target string, t time.Duration) (net.Conn, error) {
-	c, err := net.DialTimeout("tcp", target, t)
-	d.c = c
-	d.rcw = newRawConnWrapperFromConn(c)
-	return c, err
-}
-
-func (d *dialerWrapper) getRawConnWrapper() *rawConnWrapper {
-	return d.rcw
 }
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
@@ -872,7 +805,6 @@ type lazyConn struct {
 
 func (l *lazyConn) Write(b []byte) (int, error) {
 	if atomic.LoadInt32(&(l.beLazy)) == 1 {
-		// The sleep duration here needs to less than the leakCheck deadline.
 		time.Sleep(time.Second)
 	}
 	return l.Conn.Write(b)
@@ -1087,7 +1019,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	// The existing RPC should be still good to proceed.
 	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
 	}
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
@@ -1368,7 +1300,7 @@ func testFailFast(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	// Stop the server and tear down all the exisiting connections.
+	// Stop the server and tear down all the existing connections.
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
@@ -3177,7 +3109,6 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
 	}
-
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
@@ -3277,44 +3208,6 @@ func testRetry(t *testing.T, e env) {
 		if status.Code(err) != tc.errCode {
 			t.Errorf("%+v: tsc.EmptyCall(_, _) = _, %v, want _, Code=%v", tc, err, tc.errCode)
 		}
-	}
-}
-
-func TestRPCTimeout(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testRPCTimeout(t, e)
-	}
-}
-
-// TODO(zhaoq): Have a better test coverage of timeout and cancellation mechanism.
-func testRPCTimeout(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, unaryCallSleepTime: 50 * time.Millisecond})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-
-	const argSize = 2718
-	const respSize = 314
-
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: respSize,
-		Payload:      payload,
-	}
-	for i := -1; i <= 10; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
-		if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
-		}
-		cancel()
 	}
 }
 
@@ -3811,7 +3704,7 @@ func testClientStreaming(t *testing.T, e env, sizes []int) {
 			Payload: payload,
 		}
 		if err := stream.Send(req); err != nil {
-			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+			t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
 		}
 		sum += s
 	}
@@ -4992,6 +4885,34 @@ func (ss *stubServer) Stop() {
 	}
 }
 
+func TestGRPCMethod(t *testing.T) {
+	defer leakcheck.Check(t)
+	var method string
+	var ok bool
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			method, ok = grpc.Method(ctx)
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	if want := "/grpc.testing.TestService/EmptyCall"; !ok || method != want {
+		t.Fatalf("grpc.Method(_) = %q, %v; want %q, true", method, ok, want)
+	}
+}
+
 func TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	const mdkey = "somedata"
 
@@ -5174,7 +5095,7 @@ func TestTapTimeout(t *testing.T) {
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			<-ctx.Done()
-			return &testpb.Empty{}, nil
+			return nil, status.Errorf(codes.Canceled, ctx.Err().Error())
 		},
 	}
 	if err := ss.Start(sopts); err != nil {
@@ -6025,7 +5946,6 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 		maxSendSize []int
 		compressor  []string
 		subtype     []string
-		codec       []grpc.Codec
 	}
 	var observedOpts observedOptions
 	populateOpts := func(opts []grpc.CallOption) {
@@ -6049,8 +5969,6 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 				observedOpts.compressor = append(observedOpts.compressor, o.CompressorType)
 			case grpc.ContentSubtypeCallOption:
 				observedOpts.subtype = append(observedOpts.subtype, o.ContentSubtype)
-			case grpc.CustomCodecCallOption:
-				observedOpts.codec = append(observedOpts.codec, o.Codec)
 			}
 		}
 	}
@@ -6096,20 +6014,17 @@ func TestInterceptorCanAccessCallOptions(t *testing.T) {
 
 	observedOpts = observedOptions{} // reset
 
-	var codec errCodec
 	tc.StreamingInputCall(context.Background(),
 		grpc.FailFast(true),
 		grpc.MaxCallSendMsgSize(2020),
 		grpc.UseCompressor("comp-type"),
-		grpc.CallContentSubtype("json"),
-		grpc.CallCustomCodec(&codec))
+		grpc.CallContentSubtype("json"))
 	expected = observedOptions{
 		failFast:    []bool{false, true},
 		maxRecvSize: []int{1010},
 		maxSendSize: []int{2020},
 		compressor:  []string{"comp-type"},
 		subtype:     []string{"json"},
-		codec:       []grpc.Codec{&codec},
 	}
 
 	if !reflect.DeepEqual(expected, observedOpts) {
@@ -6299,7 +6214,7 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, te.srvAddr, opts...)
 	if err != nil {
@@ -6319,4 +6234,41 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
+}
+
+func TestRPCTimeout(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testRPCTimeout(t, e)
+	}
+}
+
+func testRPCTimeout(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, unaryCallSleepTime: 500 * time.Millisecond})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	const argSize = 2718
+	const respSize = 314
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
+		Payload:      payload,
+	}
+	for i := -1; i <= 10; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
+		if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
+		}
+		cancel()
+	}
 }

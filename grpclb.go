@@ -127,7 +127,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	}
 
 	lb := &lbBalancer{
-		cc:              cc,
+		cc:              newLBCacheClientConn(cc),
 		target:          target,
 		opt:             opt,
 		fallbackTimeout: b.fallbackTimeout,
@@ -145,7 +145,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 }
 
 type lbBalancer struct {
-	cc              balancer.ClientConn
+	cc              *lbCacheClientConn
 	target          string
 	opt             balancer.BuildOptions
 	fallbackTimeout time.Duration
@@ -220,7 +220,6 @@ func (lb *lbBalancer) regeneratePicker() {
 		subConns:   readySCs,
 		stats:      lb.clientStats,
 	}
-	return
 }
 
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -257,7 +256,6 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	}
 
 	lb.cc.UpdateBalancerState(lb.state, lb.picker)
-	return
 }
 
 // fallbackToBackendsAfter blocks for fallbackTimeout and falls back to use
@@ -339,4 +337,5 @@ func (lb *lbBalancer) Close() {
 	if lb.ccRemoteLB != nil {
 		lb.ccRemoteLB.Close()
 	}
+	lb.cc.close()
 }
