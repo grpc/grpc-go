@@ -48,10 +48,10 @@ import org.robolectric.shadows.ShadowNetworkInfo;
 @RunWith(RobolectricTestRunner.class)
 @Config(shadows = {AndroidChannelBuilderTest.ShadowDefaultNetworkListenerConnectivityManager.class})
 public final class AndroidChannelBuilderTest {
-  private static final NetworkInfo WIFI_CONNECTED =
+  private final NetworkInfo WIFI_CONNECTED =
       ShadowNetworkInfo.newInstance(
           NetworkInfo.DetailedState.CONNECTED, ConnectivityManager.TYPE_WIFI, 0, true, true);
-  private static final NetworkInfo WIFI_DISCONNECTED =
+  private final NetworkInfo WIFI_DISCONNECTED =
       ShadowNetworkInfo.newInstance(
           NetworkInfo.DetailedState.DISCONNECTED, ConnectivityManager.TYPE_WIFI, 0, true, false);
   private final NetworkInfo MOBILE_CONNECTED =
