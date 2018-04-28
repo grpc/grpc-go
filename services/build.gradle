@@ -16,14 +16,6 @@ description = "gRPC: Services"
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
-    compile (libraries.instrumentation_api) {
-        // prefer 2.0.19 from libraries instead of 2.0.11
-        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
-        // prefer 20.0 from libraries instead of 19.0
-        exclude group: 'com.google.guava', module: 'guava'
-        // we'll always be more up-to-date
-        exclude group: 'io.grpc', module: 'grpc-context'
-    }
     compileOnly libraries.javax_annotation
     testCompile project(':grpc-testing'),
             libraries.netty_epoll // for DomainSocketAddress
