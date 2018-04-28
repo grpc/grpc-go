@@ -28,7 +28,6 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
-import io.grpc.Context;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
@@ -51,7 +50,6 @@ import io.grpc.binarylog.MetadataEntry;
 import io.grpc.binarylog.Peer;
 import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
-import io.grpc.internal.BinaryLogProvider;
 import io.grpc.internal.BinaryLogProvider.CallId;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -73,7 +71,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * A binary log class that is configured for a specific {@link MethodDescriptor}.
  */
 @ThreadSafe
-final class BinaryLog implements ServerInterceptor, ClientInterceptor {
+final class BinaryLog {
   private static final Logger logger = Logger.getLogger(BinaryLog.class.getName());
   private static final int IP_PORT_BYTES = 2;
   private static final int IP_PORT_UPPER_MASK = 0xff00;
@@ -248,22 +246,6 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     abstract int getMaxMessageBytes();
   }
 
-  static CallId getCallIdForServer(Context context) {
-    CallId callId = BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY.get(context);
-    if (callId == null) {
-      return emptyCallId;
-    }
-    return callId;
-  }
-
-  static CallId getCallIdForClient(CallOptions callOptions) {
-    CallId callId = callOptions.getOption(BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY);
-    if (callId == null) {
-      return emptyCallId;
-    }
-    return callId;
-  }
-
   static SocketAddress getPeerSocket(Attributes streamAttributes) {
     SocketAddress peer = streamAttributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
     if (peer == null) {
@@ -272,97 +254,105 @@ final class BinaryLog implements ServerInterceptor, ClientInterceptor {
     return peer;
   }
 
-  @Override
-  public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-      final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-    final CallId callId = getCallIdForClient(callOptions);
-    return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+  public ClientInterceptor getClientInterceptor(final CallId callId) {
+    return new ClientInterceptor() {
       @Override
-      public void start(Listener<RespT> responseListener, Metadata headers) {
-        writer.logSendInitialMetadata(headers, CLIENT, callId);
-        ClientCall.Listener<RespT> wListener =
-            new SimpleForwardingClientCallListener<RespT>(responseListener) {
-              @Override
-              public void onMessage(RespT message) {
-                writer.logInboundMessage(
-                    method.getResponseMarshaller(),
-                    message,
-                    DUMMY_IS_COMPRESSED,
-                    CLIENT,
-                    callId);
-                super.onMessage(message);
-              }
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+          @Override
+          public void start(Listener<RespT> responseListener, Metadata headers) {
+            writer.logSendInitialMetadata(headers, CLIENT, callId);
+            ClientCall.Listener<RespT> wListener =
+                new SimpleForwardingClientCallListener<RespT>(responseListener) {
+                  @Override
+                  public void onMessage(RespT message) {
+                    writer.logInboundMessage(
+                        method.getResponseMarshaller(),
+                        message,
+                        DUMMY_IS_COMPRESSED,
+                        CLIENT,
+                        callId);
+                    super.onMessage(message);
+                  }
 
-              @Override
-              public void onHeaders(Metadata headers) {
-                SocketAddress peer = getPeerSocket(getAttributes());
-                writer.logRecvInitialMetadata(headers, CLIENT, callId, peer);
-                super.onHeaders(headers);
-              }
+                  @Override
+                  public void onHeaders(Metadata headers) {
+                    SocketAddress peer = getPeerSocket(getAttributes());
+                    writer.logRecvInitialMetadata(headers, CLIENT, callId, peer);
+                    super.onHeaders(headers);
+                  }
 
-              @Override
-              public void onClose(Status status, Metadata trailers) {
-                writer.logTrailingMetadata(trailers, CLIENT, callId);
-                super.onClose(status, trailers);
-              }
-            };
-        super.start(wListener, headers);
-      }
+                  @Override
+                  public void onClose(Status status, Metadata trailers) {
+                    writer.logTrailingMetadata(trailers, CLIENT, callId);
+                    super.onClose(status, trailers);
+                  }
+                };
+            super.start(wListener, headers);
+          }
 
-      @Override
-      public void sendMessage(ReqT message) {
-        writer.logOutboundMessage(
-            method.getRequestMarshaller(),
-            message,
-            DUMMY_IS_COMPRESSED,
-            CLIENT,
-            callId);
-        super.sendMessage(message);
+          @Override
+          public void sendMessage(ReqT message) {
+            writer.logOutboundMessage(
+                method.getRequestMarshaller(),
+                message,
+                DUMMY_IS_COMPRESSED,
+                CLIENT,
+                callId);
+            super.sendMessage(message);
+          }
+        };
       }
     };
   }
 
-  @Override
-  public <ReqT, RespT> Listener<ReqT> interceptCall(
-      final ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-    final CallId callId = getCallIdForServer(Context.current());
-    SocketAddress peer = getPeerSocket(call.getAttributes());
-    writer.logRecvInitialMetadata(headers, SERVER, callId, peer);
-    ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
+  public ServerInterceptor getServerInterceptor(final CallId callId) {
+    return new ServerInterceptor() {
       @Override
-      public void sendMessage(RespT message) {
-        writer.logOutboundMessage(
-            call.getMethodDescriptor().getResponseMarshaller(),
-            message,
-            DUMMY_IS_COMPRESSED,
-            SERVER,
-            callId);
-        super.sendMessage(message);
-      }
+      public <ReqT, RespT> Listener<ReqT> interceptCall(
+          final ServerCall<ReqT, RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        SocketAddress peer = getPeerSocket(call.getAttributes());
+        writer.logRecvInitialMetadata(headers, SERVER, callId, peer);
+        ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendMessage(RespT message) {
+            writer.logOutboundMessage(
+                call.getMethodDescriptor().getResponseMarshaller(),
+                message,
+                DUMMY_IS_COMPRESSED,
+                SERVER,
+                callId);
+            super.sendMessage(message);
+          }
 
-      @Override
-      public void sendHeaders(Metadata headers) {
-        writer.logSendInitialMetadata(headers, SERVER, callId);
-        super.sendHeaders(headers);
-      }
+          @Override
+          public void sendHeaders(Metadata headers) {
+            writer.logSendInitialMetadata(headers, SERVER, callId);
+            super.sendHeaders(headers);
+          }
 
-      @Override
-      public void close(Status status, Metadata trailers) {
-        writer.logTrailingMetadata(trailers, SERVER, callId);
-        super.close(status, trailers);
-      }
-    };
+          @Override
+          public void close(Status status, Metadata trailers) {
+            writer.logTrailingMetadata(trailers, SERVER, callId);
+            super.close(status, trailers);
+          }
+        };
 
-    return new SimpleForwardingServerCallListener<ReqT>(next.startCall(wCall, headers)) {
-      @Override
-      public void onMessage(ReqT message) {
-        writer.logInboundMessage(
-            call.getMethodDescriptor().getRequestMarshaller(),
-            message,
-            DUMMY_IS_COMPRESSED,
-            SERVER,
-            callId);
-        super.onMessage(message);
+        return new SimpleForwardingServerCallListener<ReqT>(next.startCall(wCall, headers)) {
+          @Override
+          public void onMessage(ReqT message) {
+            writer.logInboundMessage(
+                call.getMethodDescriptor().getRequestMarshaller(),
+                message,
+                DUMMY_IS_COMPRESSED,
+                SERVER,
+                callId);
+            super.onMessage(message);
+          }
+        };
       }
     };
   }

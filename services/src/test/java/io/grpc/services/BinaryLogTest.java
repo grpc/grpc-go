@@ -18,9 +18,6 @@ package io.grpc.services;
 
 import static io.grpc.internal.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 import static io.grpc.services.BinaryLog.DUMMY_SOCKET;
-import static io.grpc.services.BinaryLog.emptyCallId;
-import static io.grpc.services.BinaryLog.getCallIdForClient;
-import static io.grpc.services.BinaryLog.getCallIdForServer;
 import static io.grpc.services.BinaryLog.getPeerSocket;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,7 +34,6 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
-import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -65,7 +61,6 @@ import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Arrays;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
@@ -683,28 +678,6 @@ public final class BinaryLogTest {
   }
 
   @Test
-  public void getCallIdServer() {
-    assertSame(emptyCallId, getCallIdForServer(Context.ROOT));
-    assertSame(
-        CALL_ID,
-        getCallIdForServer(
-            Context.ROOT.withValue(
-                BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY,
-                CALL_ID)));
-  }
-
-  @Test
-  public void getCallIdClient() {
-    assertSame(emptyCallId, getCallIdForClient(CallOptions.DEFAULT));
-    assertSame(
-        CALL_ID,
-        getCallIdForClient(
-            CallOptions.DEFAULT.withOption(
-                BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY,
-                CALL_ID)));
-  }
-
-  @Test
   public void getPeerSocketTest() {
     assertSame(DUMMY_SOCKET, getPeerSocket(Attributes.EMPTY));
     assertSame(
@@ -761,6 +734,7 @@ public final class BinaryLogTest {
             .build();
     ClientCall<byte[], byte[]> interceptedCall =
         new BinaryLog(mockSinkWriter)
+            .getClientInterceptor(CALL_ID)
             .interceptCall(
                 method,
                 CallOptions.DEFAULT.withOption(
@@ -835,20 +809,8 @@ public final class BinaryLogTest {
   }
 
   @Test
-  public void serverInterceptor() throws Exception {
-    Context.current()
-        .withValue(BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY, CALL_ID)
-        .call(new Callable<Void>() {
-          @Override
-          public Void call() throws Exception {
-            serverInterceptor0();
-            return null;
-          }
-        });
-  }
-
   @SuppressWarnings({"rawtypes", "unchecked"})
-  private void serverInterceptor0() throws Exception {
+  public void serverInterceptor() throws Exception {
     final AtomicReference<ServerCall> interceptedCall =
         new AtomicReference<ServerCall>();
     ServerCall.Listener<byte[]> capturedListener;
@@ -871,6 +833,7 @@ public final class BinaryLogTest {
               .build();
       capturedListener =
           new BinaryLog(mockSinkWriter)
+              .getServerInterceptor(CALL_ID)
               .interceptCall(
                   new NoopServerCall<byte[], byte[]>() {
                     @Override

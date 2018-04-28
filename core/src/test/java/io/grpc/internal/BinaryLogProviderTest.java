@@ -17,17 +17,18 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
-import io.grpc.Context;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
@@ -41,12 +42,14 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
-import io.grpc.ServerStreamTracer;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.BinaryLogProvider.CallId;
 import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
 import io.grpc.testing.TestMethodDescriptors;
-import io.opencensus.trace.Tracing;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.SpanBuilder;
+import io.opencensus.trace.Tracer;
+import io.opencensus.trace.propagation.BinaryFormat;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,7 +57,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -96,7 +98,8 @@ public class BinaryLogProviderTest {
     }
 
     @Override
-    public ClientInterceptor getClientInterceptor(String fullMethodName) {
+    public ClientInterceptor getClientInterceptor(
+        String fullMethodName, CallOptions callOptions) {
       return new TestBinaryLogClientInterceptor();
     }
 
@@ -308,6 +311,39 @@ public class BinaryLogProviderTest {
         .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());
   }
 
+  @Test
+  public void censusTracerSetsCallId() throws Exception {
+    Tracer tracer = mock(Tracer.class);
+    SpanBuilder builder = mock(SpanBuilder.class);
+    when(tracer.spanBuilderWithExplicitParent(any(String.class), any(Span.class)))
+        .thenReturn(builder);
+    when(builder.setRecordEvents(any(Boolean.class))).thenReturn(builder);
+    MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
+    when(builder.startSpan()).thenReturn(mockableSpan);
+
+    final SettableFuture<CallOptions> options = SettableFuture.create();
+    Channel c = new Channel() {
+      @Override
+      public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
+          MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
+        options.set(callOptions);
+        return null;
+      }
+
+      @Override
+      public String authority() {
+        return null;
+      }
+    };
+    new CensusTracingModule(tracer, mock(BinaryFormat.class))
+        .getClientInterceptor()
+        .interceptCall(TestMethodDescriptors.voidMethod(), CallOptions.DEFAULT, c);
+    CallId callId = options.get().getOption(BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY);
+    assertThat(callId.hi).isEqualTo(0);
+    assertThat(callId.lo)
+        .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());
+  }
+
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static void onServerMessageHelper(ServerCall.Listener listener, Object request) {
     listener.onMessage(request);
@@ -328,56 +364,6 @@ public class BinaryLogProviderTest {
       }
     };
     return methodDef.getServerCallHandler().startCall(serverCall, new Metadata());
-  }
-
-  @Test
-  public void serverCallIdSetter() {
-    ServerStreamTracer tracer = binlogProvider
-        .getServerCallIdSetter()
-        .newServerStreamTracer("service/method", new Metadata());
-    MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
-    Context context = Context.current().withValue(CONTEXT_SPAN_KEY, mockableSpan);
-    Context filtered = tracer.filterContext(context);
-    CallId callId = BinaryLogProvider.SERVER_CALL_ID_CONTEXT_KEY.get(filtered);
-    assertThat(callId.hi).isEqualTo(0);
-    assertThat(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong())
-        .isEqualTo(callId.lo);
-  }
-
-  @Test
-  public void clientCallIdSetter() throws Exception {
-    final MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
-    Tracing.getTracer().withSpan(mockableSpan, new Callable<Void>() {
-      @Override
-      public Void call() throws Exception {
-        final SettableFuture<CallOptions> future = SettableFuture.create();
-        Channel channel = new Channel() {
-          @Override
-          public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
-              MethodDescriptor<RequestT, ResponseT> methodDescriptor,
-              CallOptions callOptions) {
-            future.set(callOptions);
-            return null;
-          }
-
-          @Override
-          public String authority() {
-            return null;
-          }
-        };
-        binlogProvider.getClientCallIdSetter().interceptCall(
-            TestMethodDescriptors.voidMethod(),
-            CallOptions.DEFAULT,
-            channel);
-        CallOptions callOptions = future.get();
-        CallId callId = callOptions
-            .getOption(BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY);
-        assertThat(callId.hi).isEqualTo(0);
-        assertThat(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong())
-            .isEqualTo(callId.lo);
-        return null;
-      }
-    }).call();
   }
 
   private final class TestBinaryLogClientInterceptor implements ClientInterceptor {

@@ -2289,7 +2289,8 @@ public class ManagedChannelImplTest {
       }
 
       @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
+      public ClientInterceptor getClientInterceptor(
+          String fullMethodName, CallOptions callOptions) {
         return new ClientInterceptor() {
           @Override
           public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(

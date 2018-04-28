@@ -266,9 +266,6 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
               Tracing.getPropagationComponent().getBinaryFormat());
       tracerFactories.add(censusTracing.getServerTracerFactory());
     }
-    if (binlogProvider != null) {
-      tracerFactories.add(binlogProvider.getServerCallIdSetter());
-    }
     tracerFactories.addAll(streamTracerFactories);
     return tracerFactories;
   }

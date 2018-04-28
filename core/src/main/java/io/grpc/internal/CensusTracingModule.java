@@ -379,7 +379,12 @@ final class CensusTracingModule {
       // for the direct access and BlankSpan when Tracer API is used.
       final ClientCallTracer tracerFactory = newClientCallTracer(CONTEXT_SPAN_KEY.get(), method);
       ClientCall<ReqT, RespT> call =
-          next.newCall(method, callOptions.withStreamTracerFactory(tracerFactory));
+          next.newCall(
+              method,
+              callOptions.withStreamTracerFactory(tracerFactory)
+                  .withOption(
+                      BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY,
+                      BinaryLogProvider.CallId.fromCensusSpan(tracerFactory.span)));
       return new SimpleForwardingClientCall<ReqT, RespT>(call) {
         @Override
         public void start(Listener<RespT> responseListener, Metadata headers) {

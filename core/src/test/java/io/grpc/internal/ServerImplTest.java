@@ -48,6 +48,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.ClientInterceptor;
 import io.grpc.Compressor;
 import io.grpc.Context;
@@ -1252,7 +1253,8 @@ public class ServerImplTest {
 
       @Nullable
       @Override
-      public ClientInterceptor getClientInterceptor(String fullMethodName) {
+      public ClientInterceptor getClientInterceptor(
+          String fullMethodName, CallOptions callOptions) {
         return null;
       }
 
