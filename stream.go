@@ -274,6 +274,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			return nil, err
 		}
 
+		// TODO(deklerk) what??
+		if t == nil {
+			continue
+		}
+
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if done != nil {

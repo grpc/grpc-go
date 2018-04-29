@@ -396,10 +396,10 @@ func setUpServerOnly(t *testing.T, port int, serverConfig *ServerConfig, ht hTyp
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
-	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{}, func() {})
+	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
 }
 
-func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions, onHandshake func()) (*server, ClientTransport) {
+func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, ClientTransport) {
 	server := setUpServerOnly(t, port, serverConfig, ht)
 	addr := "localhost:" + server.port
 	var (
@@ -410,7 +410,7 @@ func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hTy
 		Addr: addr,
 	}
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr = NewClientTransport(connectCtx, context.Background(), target, copts, onHandshake)
+	ct, connErr = NewClientTransport(connectCtx, context.Background(), target, copts, func() {}, func() {}, func() {})
 	if connErr != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
@@ -435,7 +435,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		done <- conn
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, func() {})
+	tr, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, func() {}, func() {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		// Server clean-up.
@@ -452,7 +452,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 // sends StreamError to concurrent stream reader.
 func TestInflightStreamClosing(t *testing.T) {
 	serverConfig := &ServerConfig{}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 
@@ -494,7 +494,7 @@ func TestMaxConnectionIdle(t *testing.T) {
 			MaxConnectionIdle: 2 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 	stream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
@@ -521,7 +521,7 @@ func TestMaxConnectionIdleNegative(t *testing.T) {
 			MaxConnectionIdle: 2 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 	_, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
@@ -547,7 +547,7 @@ func TestMaxConnectionAge(t *testing.T) {
 			MaxConnectionAge: 2 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 	_, err := client.NewStream(context.Background(), &CallHdr{})
@@ -574,7 +574,7 @@ func TestKeepaliveServer(t *testing.T) {
 			Timeout: 1 * time.Second,
 		},
 	}
-	server, c := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, c := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer c.Close()
 	client, err := net.Dial("tcp", server.lis.Addr().String())
@@ -617,7 +617,7 @@ func TestKeepaliveServerNegative(t *testing.T) {
 			Timeout: 1 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 	// Give keepalive logic some time by sleeping.
@@ -711,7 +711,7 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
 		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
-	}}, func() {})
+	}})
 	defer s.stop()
 	defer tr.Close()
 	// Give keep alive some time.
@@ -738,7 +738,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -772,7 +772,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 			Timeout: 1 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -811,7 +811,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -838,7 +838,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 			Timeout: 1 * time.Second,
 		},
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -1166,7 +1166,7 @@ func TestMaxStreams(t *testing.T) {
 	serverConfig := &ServerConfig{
 		MaxStreams: 1,
 	}
-	server, ct := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, ct := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer ct.Close()
 	defer server.stop()
 	callHdr := &CallHdr{
@@ -1303,7 +1303,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 	}
-	server, client := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions, func() {})
+	server, client := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -1389,7 +1389,7 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 	}
-	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer server.stop()
 	defer client.Close()
 	waitWhileTrue(t, func() (bool, error) {
@@ -1618,7 +1618,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	ct, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {})
+	ct, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func() {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -1782,7 +1782,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		InitialWindowSize:     wc.clientStream,
 		InitialConnWindowSize: wc.clientConn,
 	}
-	server, client := setUpWithOptions(t, 0, sc, pingpong, co, func() {})
+	server, client := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer server.stop()
 	defer client.Close()
 	waitWhileTrue(t, func() (bool, error) {
@@ -2019,7 +2019,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 	}
 	server.start(t, lis)
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {})
+	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func() {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("Error creating client. Err: %v", err)
