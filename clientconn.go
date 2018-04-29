@@ -1238,20 +1238,10 @@ func (ac *addrConn) resetTransport() error {
 		grpclog.Warningf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
 		t := ac.transport
 		ac.mu.Unlock()
-		if t != nil {
-			t.Close()
-		}
-
-		err := ac.nextAddr()
-		if err != nil {
-			grpclog.Error(err)
+		if t == nil {
 			return
 		}
-
-		err = ac.resetTransport()
-		if err != nil {
-			grpclog.Error(err)
-		}
+		t.Close()
 	}
 
 	shutdownLock := &sync.Mutex{}
