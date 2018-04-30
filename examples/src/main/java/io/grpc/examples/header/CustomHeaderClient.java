@@ -44,7 +44,7 @@ public class CustomHeaderClient {
    */
   private CustomHeaderClient(String host, int port) {
     originChannel = ManagedChannelBuilder.forAddress(host, port)
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     ClientInterceptor interceptor = new HeaderClientInterceptor();
     Channel channel = ClientInterceptors.intercept(originChannel, interceptor);

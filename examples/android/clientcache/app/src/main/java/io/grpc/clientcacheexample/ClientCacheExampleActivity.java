@@ -110,7 +110,7 @@ public final class ClientCacheExampleActivity extends AppCompatActivity {
       boolean onlyIfCached = (boolean) params[5];
       int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
       try {
-        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
+        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
         Channel channelToUse =
             ClientInterceptors.intercept(
                 channel, SafeMethodCachingInterceptor.newSafeMethodCachingInterceptor(cache));

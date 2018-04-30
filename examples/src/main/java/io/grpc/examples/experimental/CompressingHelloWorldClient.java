@@ -43,7 +43,7 @@ public class CompressingHelloWorldClient {
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public CompressingHelloWorldClient(String host, int port) {
     channel = ManagedChannelBuilder.forAddress(host, port)
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     blockingStub = GreeterGrpc.newBlockingStub(channel);
   }

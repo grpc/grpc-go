@@ -52,7 +52,7 @@ public final class HelloJsonClient {
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public HelloJsonClient(String host, int port) {
     channel = ManagedChannelBuilder.forAddress(host, port)
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     blockingStub = new HelloJsonStub(channel);
   }

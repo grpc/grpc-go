@@ -84,7 +84,7 @@ public class HelloworldActivity extends AppCompatActivity {
       String portStr = params[2];
       int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
       try {
-        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
+        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
         GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
         HelloRequest request = HelloRequest.newBuilder().setName(message).build();
         HelloReply reply = stub.sayHello(request);

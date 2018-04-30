@@ -64,7 +64,7 @@ class TesterOkHttpChannelBuilder {
         throw new RuntimeException(e);
       }
     } else {
-      channelBuilder.usePlaintext(true);
+      channelBuilder.usePlaintext();
     }
     return channelBuilder.build();
   }

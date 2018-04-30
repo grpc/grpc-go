@@ -63,7 +63,7 @@ public class ErrorHandlingClient {
       }
     }).build().start();
     channel =
-        ManagedChannelBuilder.forAddress("localhost", server.getPort()).usePlaintext(true).build();
+        ManagedChannelBuilder.forAddress("localhost", server.getPort()).usePlaintext().build();
 
     blockingCall();
     futureCallDirect();

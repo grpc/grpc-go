@@ -38,7 +38,7 @@ public class ManualFlowControlClient {
     // Create a channel and a stub
     ManagedChannel channel = ManagedChannelBuilder
         .forAddress("localhost", 50051)
-        .usePlaintext(true)
+        .usePlaintext()
         .build();
     StreamingGreeterGrpc.StreamingGreeterStub stub = StreamingGreeterGrpc.newStub(channel);
 

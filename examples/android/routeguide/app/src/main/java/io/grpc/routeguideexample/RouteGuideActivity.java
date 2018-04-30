@@ -79,7 +79,7 @@ public class RouteGuideActivity extends AppCompatActivity {
     int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
     ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))
         .hideSoftInputFromWindow(hostEdit.getWindowToken(), 0);
-    channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
+    channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
     hostEdit.setEnabled(false);
     portEdit.setEnabled(false);
     startRouteGuideButton.setEnabled(false);

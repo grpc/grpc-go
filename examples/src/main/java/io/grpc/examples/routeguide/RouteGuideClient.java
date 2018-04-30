@@ -49,7 +49,7 @@ public class RouteGuideClient {
 
   /** Construct client for accessing RouteGuide server at {@code host:port}. */
   public RouteGuideClient(String host, int port) {
-    this(ManagedChannelBuilder.forAddress(host, port).usePlaintext(true));
+    this(ManagedChannelBuilder.forAddress(host, port).usePlaintext());
   }
 
   /** Construct client for accessing RouteGuide server using the existing channel. */
