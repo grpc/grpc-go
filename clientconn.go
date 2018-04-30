@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"sync/atomic"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -46,7 +48,6 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
-	"sync/atomic"
 )
 
 const (
@@ -1397,7 +1398,7 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 	ac.transports[id] = newTr
 	ac.mu.Unlock()
 	return nil
-};
+}
 
 // nextAddr increments the addrIdx if there are more addresses to try. If
 // there are no more addrs to try it will re-resolve, set addrIdx to 0, and
@@ -1406,13 +1407,13 @@ func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
 
 	if ac.addrIdx < len(ac.addrs)-1 {
-		ac.addrIdx += 1
+		ac.addrIdx++
 		ac.mu.Unlock()
 		return nil
 	}
 
 	ac.addrIdx = 0
-	ac.backoffIdx += 1
+	ac.backoffIdx++
 
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
