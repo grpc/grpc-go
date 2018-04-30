@@ -36,6 +36,7 @@ public final class ServiceConfigUtil {
 
   private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
   private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY = "loadBalancingPolicy";
+  private static final String SERVICE_CONFIG_STICKINESS_METADATA_KEY = "stickinessMetadataKey";
   private static final String METHOD_CONFIG_NAME_KEY = "name";
   private static final String METHOD_CONFIG_TIMEOUT_KEY = "timeout";
   private static final String METHOD_CONFIG_WAIT_FOR_READY_KEY = "waitForReady";
@@ -235,6 +236,18 @@ public final class ServiceConfigUtil {
       return null;
     }
     return getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
+  }
+
+  /**
+   * Extracts the stickiness metadata key from a service config, or {@code null}.
+   */
+  @Nullable
+  public static String getStickinessMetadataKeyFromServiceConfig(
+      Map<String, Object> serviceConfig) {
+    if (!serviceConfig.containsKey(SERVICE_CONFIG_STICKINESS_METADATA_KEY)) {
+      return null;
+    }
+    return getString(serviceConfig, SERVICE_CONFIG_STICKINESS_METADATA_KEY);
   }
 
   /**
