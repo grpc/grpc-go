@@ -19,7 +19,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
-    comments = "Source: load_balancer.proto")
+    comments = "Source: grpc/lb/v1/load_balancer.proto")
 public final class LoadBalancerGrpc {
 
   private LoadBalancerGrpc() {}
