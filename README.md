@@ -1,8 +1,9 @@
 gRPC-Java - An RPC library and framework
 ========================================
 
-gRPC-Java works with JDK 6. On Android, gRPC-Java supports Android API levels
-14 and up (Ice Cream Sandwich and later).
+gRPC-Java works with JDK 6. gRPC-Java clients are supported on Android API
+levels 14 and up (Ice Cream Sandwich and later). Deploying gRPC servers on an
+Android device is not supported.
 
 TLS usage typically requires using Java 8, or Play Services Dynamic Security
 Provider on Android. Please see the [Security Readme](SECURITY.md).
