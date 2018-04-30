@@ -172,7 +172,7 @@ func (m *MessageDecoder) parseHeader(b []byte) {
 		Overhead:     m.padding + 5,
 	}
 	m.padding = 0
-	// Dispatch the information retreived from message header so
+	// Dispatch the information retrieved from message header so
 	// that the RPC goroutine can send a proactive window update as we
 	// wait for the rest of it.
 	m.dispatch(hdr)
