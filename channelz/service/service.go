@@ -25,7 +25,7 @@ import (
 	"net"
 
 	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/wrappers"
+	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz"
@@ -173,8 +173,8 @@ func socketMetricToProto(sm *channelz.SocketMetric) *pb.Socket {
 	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageReceivedTimestamp); err == nil {
 		s.Data.LastMessageReceivedTimestamp = ts
 	}
-	s.Data.LocalFlowControlWindow = &wrappers.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
-	s.Data.RemoteFlowControlWindow = &wrappers.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
+	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
+	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
 
 	if sm.SocketData.LocalAddr != nil {
 		s.Local = addrToProto(sm.SocketData.LocalAddr)
