@@ -14,8 +14,8 @@
 // limitations under the License.
 syntax = "proto3";
 
-import "payloads.proto";
-import "stats.proto";
+import "grpc/testing/payloads.proto";
+import "grpc/testing/stats.proto";
 
 package grpc.testing;
 

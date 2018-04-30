@@ -16,8 +16,8 @@
 // of unary/streaming requests/responses.
 syntax = "proto3";
 
-import "messages.proto";
-import "control.proto";
+import "grpc/testing/messages.proto";
+import "grpc/testing/control.proto";
 
 package grpc.testing;
 
