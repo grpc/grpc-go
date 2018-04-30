@@ -459,7 +459,7 @@ func main() {
 			s.SetBenchmarkResult("Unary", benchFeature, results.N,
 				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
 			fmt.Println(s.BenchString())
-			// fmt.Println(s.String())
+			fmt.Println(s.String())
 			resultSlice = append(resultSlice, s.GetBenchmarkResults())
 			s.Clear()
 		}
@@ -468,7 +468,7 @@ func main() {
 			s.SetBenchmarkResult("Stream", benchFeature, results.N,
 				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
 			fmt.Println(s.BenchString())
-			// fmt.Println(s.String())
+			fmt.Println(s.String())
 			resultSlice = append(resultSlice, s.GetBenchmarkResults())
 			s.Clear()
 		}

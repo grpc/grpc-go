@@ -142,37 +142,20 @@ func (stats *Stats) GetBenchmarkResults() BenchResults {
 func (stats *Stats) BenchString() string {
 	stats.maybeUpdate()
 	s := stats.result
-	// res := s.RunMode + "-" + s.Features.String() + ","
-	res := s.RunMode + "-" + s.Features.ConciseString() + ","
-
+	res := s.RunMode + "-" + s.Features.String() + ": \n"
 	if len(s.Latency) != 0 {
 		var statsUnit = s.Latency[0].Value
 		var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
 		for i := 1; i < len(s.Latency)-1; i++ {
-			res += fmt.Sprintf("%d_Latency,%s,%s,", s.Latency[i].Percent,
+			res += fmt.Sprintf("%d_Latency: %s %s \t", s.Latency[i].Percent,
 				strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 		}
-		res += fmt.Sprintf("Avg latency,%s,%s,",
+		res += fmt.Sprintf("Avg latency: %s %s \t",
 			strconv.FormatFloat(float64(s.Latency[len(s.Latency)-1].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 	}
-	res += fmt.Sprintf("Count,%v,", s.Operations)
-	res += fmt.Sprintf("Bytes/op,%v,", s.AllocedBytesPerOp)
-	res += fmt.Sprintf("Allocs/op,%v", s.AllocsPerOp)
-
-	// res := s.RunMode + "-" + s.Features.String() + ": \n"
-	// if len(s.Latency) != 0 {
-	// 	var statsUnit = s.Latency[0].Value
-	// 	var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
-	// 	for i := 1; i < len(s.Latency)-1; i++ {
-	// 		res += fmt.Sprintf("%d_Latency: %s %s \t", s.Latency[i].Percent,
-	// 			strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
-	// 	}
-	// 	res += fmt.Sprintf("Avg latency: %s %s \t",
-	// 		strconv.FormatFloat(float64(s.Latency[len(s.Latency)-1].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
-	// }
-	// res += fmt.Sprintf("Count: %v \t", s.Operations)
-	// res += fmt.Sprintf("%v Bytes/op\t", s.AllocedBytesPerOp)
-	// res += fmt.Sprintf("%v Allocs/op\t", s.AllocsPerOp)
+	res += fmt.Sprintf("Count: %v \t", s.Operations)
+	res += fmt.Sprintf("%v Bytes/op\t", s.AllocedBytesPerOp)
+	res += fmt.Sprintf("%v Allocs/op\t", s.AllocsPerOp)
 
 	return res
 }
