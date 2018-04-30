@@ -17,8 +17,8 @@
 // of unary/streaming requests/responses.
 syntax = "proto3";
 
-import "io/grpc/android/integrationtest/empty.proto";
-import "io/grpc/android/integrationtest/messages.proto";
+import "grpc/testing/empty.proto";
+import "grpc/testing/messages.proto";
 
 package grpc.testing;
 
