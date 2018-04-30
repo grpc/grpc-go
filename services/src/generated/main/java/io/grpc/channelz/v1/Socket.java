@@ -152,18 +152,30 @@ private static final long serialVersionUID = 0L;
   public static final int REF_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.SocketRef ref_;
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   public boolean hasRef() {
     return ref_ != null;
   }
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   public io.grpc.channelz.v1.SocketRef getRef() {
     return ref_ == null ? io.grpc.channelz.v1.SocketRef.getDefaultInstance() : ref_;
   }
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   public io.grpc.channelz.v1.SocketRefOrBuilder getRefOrBuilder() {
@@ -173,18 +185,30 @@ private static final long serialVersionUID = 0L;
   public static final int DATA_FIELD_NUMBER = 2;
   private io.grpc.channelz.v1.SocketData data_;
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   public boolean hasData() {
     return data_ != null;
   }
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   public io.grpc.channelz.v1.SocketData getData() {
     return data_ == null ? io.grpc.channelz.v1.SocketData.getDefaultInstance() : data_;
   }
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   public io.grpc.channelz.v1.SocketDataOrBuilder getDataOrBuilder() {
@@ -260,18 +284,33 @@ private static final long serialVersionUID = 0L;
   public static final int SECURITY_FIELD_NUMBER = 5;
   private io.grpc.channelz.v1.Security security_;
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   public boolean hasSecurity() {
     return security_ != null;
   }
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   public io.grpc.channelz.v1.Security getSecurity() {
     return security_ == null ? io.grpc.channelz.v1.Security.getDefaultInstance() : security_;
   }
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   public io.grpc.channelz.v1.SecurityOrBuilder getSecurityOrBuilder() {
@@ -763,12 +802,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.SocketRef, io.grpc.channelz.v1.SocketRef.Builder, io.grpc.channelz.v1.SocketRefOrBuilder> refBuilder_;
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public boolean hasRef() {
       return refBuilder_ != null || ref_ != null;
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.SocketRef getRef() {
@@ -779,6 +826,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public Builder setRef(io.grpc.channelz.v1.SocketRef value) {
@@ -795,6 +846,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public Builder setRef(
@@ -809,6 +864,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public Builder mergeRef(io.grpc.channelz.v1.SocketRef value) {
@@ -827,6 +886,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public Builder clearRef() {
@@ -841,6 +904,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.SocketRef.Builder getRefBuilder() {
@@ -849,6 +916,10 @@ private static final long serialVersionUID = 0L;
       return getRefFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.SocketRefOrBuilder getRefOrBuilder() {
@@ -860,6 +931,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The identifier for the Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketRef ref = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -880,12 +955,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.SocketData, io.grpc.channelz.v1.SocketData.Builder, io.grpc.channelz.v1.SocketDataOrBuilder> dataBuilder_;
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public boolean hasData() {
       return dataBuilder_ != null || data_ != null;
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public io.grpc.channelz.v1.SocketData getData() {
@@ -896,6 +979,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public Builder setData(io.grpc.channelz.v1.SocketData value) {
@@ -912,6 +999,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public Builder setData(
@@ -926,6 +1017,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public Builder mergeData(io.grpc.channelz.v1.SocketData value) {
@@ -944,6 +1039,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public Builder clearData() {
@@ -958,6 +1057,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public io.grpc.channelz.v1.SocketData.Builder getDataBuilder() {
@@ -966,6 +1069,10 @@ private static final long serialVersionUID = 0L;
       return getDataFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     public io.grpc.channelz.v1.SocketDataOrBuilder getDataOrBuilder() {
@@ -977,6 +1084,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Data specific to this Socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.SocketData data = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -1303,12 +1414,22 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.Security, io.grpc.channelz.v1.Security.Builder, io.grpc.channelz.v1.SecurityOrBuilder> securityBuilder_;
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public boolean hasSecurity() {
       return securityBuilder_ != null || security_ != null;
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public io.grpc.channelz.v1.Security getSecurity() {
@@ -1319,6 +1440,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public Builder setSecurity(io.grpc.channelz.v1.Security value) {
@@ -1335,6 +1461,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public Builder setSecurity(
@@ -1349,6 +1480,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public Builder mergeSecurity(io.grpc.channelz.v1.Security value) {
@@ -1367,6 +1503,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public Builder clearSecurity() {
@@ -1381,6 +1522,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public io.grpc.channelz.v1.Security.Builder getSecurityBuilder() {
@@ -1389,6 +1535,11 @@ private static final long serialVersionUID = 0L;
       return getSecurityFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     public io.grpc.channelz.v1.SecurityOrBuilder getSecurityOrBuilder() {
@@ -1400,6 +1551,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Security details for this socket.  May be absent if not available, or
+     * there is no security on the socket.
+     * </pre>
+     *
      * <code>.grpc.channelz.Security security = 5;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<

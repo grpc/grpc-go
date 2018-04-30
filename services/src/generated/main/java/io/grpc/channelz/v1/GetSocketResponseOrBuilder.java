@@ -8,14 +8,29 @@ public interface GetSocketResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   boolean hasSocket();
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   io.grpc.channelz.v1.Socket getSocket();
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   io.grpc.channelz.v1.SocketOrBuilder getSocketOrBuilder();

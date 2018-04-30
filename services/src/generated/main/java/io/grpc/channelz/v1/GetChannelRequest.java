@@ -82,6 +82,10 @@ private static final long serialVersionUID = 0L;
   public static final int CHANNEL_ID_FIELD_NUMBER = 1;
   private long channelId_;
   /**
+   * <pre>
+   * channel_id is the the identifier of the specific channel to get.
+   * </pre>
+   *
    * <code>int64 channel_id = 1;</code>
    */
   public long getChannelId() {
@@ -374,12 +378,20 @@ private static final long serialVersionUID = 0L;
 
     private long channelId_ ;
     /**
+     * <pre>
+     * channel_id is the the identifier of the specific channel to get.
+     * </pre>
+     *
      * <code>int64 channel_id = 1;</code>
      */
     public long getChannelId() {
       return channelId_;
     }
     /**
+     * <pre>
+     * channel_id is the the identifier of the specific channel to get.
+     * </pre>
+     *
      * <code>int64 channel_id = 1;</code>
      */
     public Builder setChannelId(long value) {
@@ -389,6 +401,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * channel_id is the the identifier of the specific channel to get.
+     * </pre>
+     *
      * <code>int64 channel_id = 1;</code>
      */
     public Builder clearChannelId() {

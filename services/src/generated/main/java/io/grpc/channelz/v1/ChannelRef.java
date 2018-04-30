@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * ChannelRef is a reference to a Channel.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.ChannelRef}
  */
 public  final class ChannelRef extends
@@ -304,6 +308,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * ChannelRef is a reference to a Channel.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.ChannelRef}
    */
   public static final class Builder extends

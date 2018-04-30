@@ -8,6 +8,10 @@ public interface GetSocketRequestOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * socket_id is the the identifier of the specific socket to get.
+   * </pre>
+   *
    * <code>int64 socket_id = 1;</code>
    */
   long getSocketId();

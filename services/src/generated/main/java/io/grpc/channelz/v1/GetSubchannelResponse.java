@@ -89,18 +89,33 @@ private static final long serialVersionUID = 0L;
   public static final int SUBCHANNEL_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.Subchannel subchannel_;
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   public boolean hasSubchannel() {
     return subchannel_ != null;
   }
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   public io.grpc.channelz.v1.Subchannel getSubchannel() {
     return subchannel_ == null ? io.grpc.channelz.v1.Subchannel.getDefaultInstance() : subchannel_;
   }
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   public io.grpc.channelz.v1.SubchannelOrBuilder getSubchannelOrBuilder() {
@@ -407,12 +422,22 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.Subchannel, io.grpc.channelz.v1.Subchannel.Builder, io.grpc.channelz.v1.SubchannelOrBuilder> subchannelBuilder_;
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public boolean hasSubchannel() {
       return subchannelBuilder_ != null || subchannel_ != null;
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public io.grpc.channelz.v1.Subchannel getSubchannel() {
@@ -423,6 +448,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public Builder setSubchannel(io.grpc.channelz.v1.Subchannel value) {
@@ -439,6 +469,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public Builder setSubchannel(
@@ -453,6 +488,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public Builder mergeSubchannel(io.grpc.channelz.v1.Subchannel value) {
@@ -471,6 +511,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public Builder clearSubchannel() {
@@ -485,6 +530,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public io.grpc.channelz.v1.Subchannel.Builder getSubchannelBuilder() {
@@ -493,6 +543,11 @@ private static final long serialVersionUID = 0L;
       return getSubchannelFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     public io.grpc.channelz.v1.SubchannelOrBuilder getSubchannelOrBuilder() {
@@ -504,6 +559,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Subchannel that corresponds to the requested subchannel_id.  This
+     * field should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<

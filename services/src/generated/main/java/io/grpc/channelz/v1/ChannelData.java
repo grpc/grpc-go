@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * Channel data is data related to a specific Channel or Subchannel.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.ChannelData}
  */
 public  final class ChannelData extends
@@ -140,18 +144,33 @@ private static final long serialVersionUID = 0L;
   public static final int STATE_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.ChannelConnectivityState state_;
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   public boolean hasState() {
     return state_ != null;
   }
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   public io.grpc.channelz.v1.ChannelConnectivityState getState() {
     return state_ == null ? io.grpc.channelz.v1.ChannelConnectivityState.getDefaultInstance() : state_;
   }
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   public io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder() {
@@ -203,18 +222,30 @@ private static final long serialVersionUID = 0L;
   public static final int TRACE_FIELD_NUMBER = 3;
   private io.grpc.channelz.v1.ChannelTrace trace_;
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   public boolean hasTrace() {
     return trace_ != null;
   }
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   public io.grpc.channelz.v1.ChannelTrace getTrace() {
     return trace_ == null ? io.grpc.channelz.v1.ChannelTrace.getDefaultInstance() : trace_;
   }
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
@@ -251,7 +282,7 @@ private static final long serialVersionUID = 0L;
   private long callsFailed_;
   /**
    * <pre>
-   * The number of calls that have a completed with a non-OK status
+   * The number of calls that have completed with a non-OK status
    * </pre>
    *
    * <code>int64 calls_failed = 6;</code>
@@ -528,6 +559,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * Channel data is data related to a specific Channel or Subchannel.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.ChannelData}
    */
   public static final class Builder extends
@@ -724,12 +759,22 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.ChannelConnectivityState, io.grpc.channelz.v1.ChannelConnectivityState.Builder, io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder> stateBuilder_;
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public boolean hasState() {
       return stateBuilder_ != null || state_ != null;
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelConnectivityState getState() {
@@ -740,6 +785,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public Builder setState(io.grpc.channelz.v1.ChannelConnectivityState value) {
@@ -756,6 +806,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public Builder setState(
@@ -770,6 +825,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public Builder mergeState(io.grpc.channelz.v1.ChannelConnectivityState value) {
@@ -788,6 +848,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public Builder clearState() {
@@ -802,6 +867,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelConnectivityState.Builder getStateBuilder() {
@@ -810,6 +880,11 @@ private static final long serialVersionUID = 0L;
       return getStateFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder() {
@@ -821,6 +896,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The connectivity state of the channel or subchannel.  Implementations
+     * should always set this.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -930,12 +1010,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.ChannelTrace, io.grpc.channelz.v1.ChannelTrace.Builder, io.grpc.channelz.v1.ChannelTraceOrBuilder> traceBuilder_;
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public boolean hasTrace() {
       return traceBuilder_ != null || trace_ != null;
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public io.grpc.channelz.v1.ChannelTrace getTrace() {
@@ -946,6 +1034,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public Builder setTrace(io.grpc.channelz.v1.ChannelTrace value) {
@@ -962,6 +1054,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public Builder setTrace(
@@ -976,6 +1072,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public Builder mergeTrace(io.grpc.channelz.v1.ChannelTrace value) {
@@ -994,6 +1094,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public Builder clearTrace() {
@@ -1008,6 +1112,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public io.grpc.channelz.v1.ChannelTrace.Builder getTraceBuilder() {
@@ -1016,6 +1124,10 @@ private static final long serialVersionUID = 0L;
       return getTraceFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
@@ -1027,6 +1139,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * A trace of recent events on the channel.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -1122,7 +1238,7 @@ private static final long serialVersionUID = 0L;
     private long callsFailed_ ;
     /**
      * <pre>
-     * The number of calls that have a completed with a non-OK status
+     * The number of calls that have completed with a non-OK status
      * </pre>
      *
      * <code>int64 calls_failed = 6;</code>
@@ -1132,7 +1248,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of calls that have a completed with a non-OK status
+     * The number of calls that have completed with a non-OK status
      * </pre>
      *
      * <code>int64 calls_failed = 6;</code>
@@ -1145,7 +1261,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of calls that have a completed with a non-OK status
+     * The number of calls that have completed with a non-OK status
      * </pre>
      *
      * <code>int64 calls_failed = 6;</code>

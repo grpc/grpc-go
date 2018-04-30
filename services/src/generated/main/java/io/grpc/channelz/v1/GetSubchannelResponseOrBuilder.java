@@ -8,14 +8,29 @@ public interface GetSubchannelResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   boolean hasSubchannel();
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   io.grpc.channelz.v1.Subchannel getSubchannel();
   /**
+   * <pre>
+   * The Subchannel that corresponds to the requested subchannel_id.  This
+   * field should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Subchannel subchannel = 1;</code>
    */
   io.grpc.channelz.v1.SubchannelOrBuilder getSubchannelOrBuilder();

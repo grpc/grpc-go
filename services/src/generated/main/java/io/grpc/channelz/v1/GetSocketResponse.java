@@ -89,18 +89,33 @@ private static final long serialVersionUID = 0L;
   public static final int SOCKET_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.Socket socket_;
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   public boolean hasSocket() {
     return socket_ != null;
   }
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   public io.grpc.channelz.v1.Socket getSocket() {
     return socket_ == null ? io.grpc.channelz.v1.Socket.getDefaultInstance() : socket_;
   }
   /**
+   * <pre>
+   * The Socket that corresponds to the requested socket_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Socket socket = 1;</code>
    */
   public io.grpc.channelz.v1.SocketOrBuilder getSocketOrBuilder() {
@@ -407,12 +422,22 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.Socket, io.grpc.channelz.v1.Socket.Builder, io.grpc.channelz.v1.SocketOrBuilder> socketBuilder_;
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public boolean hasSocket() {
       return socketBuilder_ != null || socket_ != null;
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public io.grpc.channelz.v1.Socket getSocket() {
@@ -423,6 +448,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public Builder setSocket(io.grpc.channelz.v1.Socket value) {
@@ -439,6 +469,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public Builder setSocket(
@@ -453,6 +488,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public Builder mergeSocket(io.grpc.channelz.v1.Socket value) {
@@ -471,6 +511,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public Builder clearSocket() {
@@ -485,6 +530,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public io.grpc.channelz.v1.Socket.Builder getSocketBuilder() {
@@ -493,6 +543,11 @@ private static final long serialVersionUID = 0L;
       return getSocketFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     public io.grpc.channelz.v1.SocketOrBuilder getSocketOrBuilder() {
@@ -504,6 +559,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Socket that corresponds to the requested socket_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Socket socket = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<

@@ -8,27 +8,51 @@ public interface SocketOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   boolean hasRef();
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   io.grpc.channelz.v1.SocketRef getRef();
   /**
+   * <pre>
+   * The identifier for the Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketRef ref = 1;</code>
    */
   io.grpc.channelz.v1.SocketRefOrBuilder getRefOrBuilder();
 
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   boolean hasData();
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   io.grpc.channelz.v1.SocketData getData();
   /**
+   * <pre>
+   * Data specific to this Socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.SocketData data = 2;</code>
    */
   io.grpc.channelz.v1.SocketDataOrBuilder getDataOrBuilder();
@@ -84,14 +108,29 @@ public interface SocketOrBuilder extends
   io.grpc.channelz.v1.AddressOrBuilder getRemoteOrBuilder();
 
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   boolean hasSecurity();
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   io.grpc.channelz.v1.Security getSecurity();
   /**
+   * <pre>
+   * Security details for this socket.  May be absent if not available, or
+   * there is no security on the socket.
+   * </pre>
+   *
    * <code>.grpc.channelz.Security security = 5;</code>
    */
   io.grpc.channelz.v1.SecurityOrBuilder getSecurityOrBuilder();

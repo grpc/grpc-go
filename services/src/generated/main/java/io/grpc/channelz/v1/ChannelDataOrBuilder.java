@@ -8,14 +8,29 @@ public interface ChannelDataOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   boolean hasState();
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   io.grpc.channelz.v1.ChannelConnectivityState getState();
   /**
+   * <pre>
+   * The connectivity state of the channel or subchannel.  Implementations
+   * should always set this.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelConnectivityState state = 1;</code>
    */
   io.grpc.channelz.v1.ChannelConnectivityStateOrBuilder getStateOrBuilder();
@@ -39,14 +54,26 @@ public interface ChannelDataOrBuilder extends
       getTargetBytes();
 
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   boolean hasTrace();
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   io.grpc.channelz.v1.ChannelTrace getTrace();
   /**
+   * <pre>
+   * A trace of recent events on the channel.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 3;</code>
    */
   io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder();
@@ -71,7 +98,7 @@ public interface ChannelDataOrBuilder extends
 
   /**
    * <pre>
-   * The number of calls that have a completed with a non-OK status
+   * The number of calls that have completed with a non-OK status
    * </pre>
    *
    * <code>int64 calls_failed = 6;</code>

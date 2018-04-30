@@ -9,7 +9,7 @@ public interface ChannelOrBuilder extends
 
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -17,7 +17,7 @@ public interface ChannelOrBuilder extends
   boolean hasRef();
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -25,7 +25,7 @@ public interface ChannelOrBuilder extends
   io.grpc.channelz.v1.ChannelRef getRef();
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>

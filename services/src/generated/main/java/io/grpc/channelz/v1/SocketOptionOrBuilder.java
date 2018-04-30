@@ -8,10 +8,20 @@ public interface SocketOptionOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The full name of the socket option.  Typically this will be the upper case
+   * name, such as "SO_REUSEPORT".
+   * </pre>
+   *
    * <code>string name = 1;</code>
    */
   java.lang.String getName();
   /**
+   * <pre>
+   * The full name of the socket option.  Typically this will be the upper case
+   * name, such as "SO_REUSEPORT".
+   * </pre>
+   *
    * <code>string name = 1;</code>
    */
   com.google.protobuf.ByteString

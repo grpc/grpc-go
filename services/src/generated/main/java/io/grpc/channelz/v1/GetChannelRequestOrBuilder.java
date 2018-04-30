@@ -8,6 +8,10 @@ public interface GetChannelRequestOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * channel_id is the the identifier of the specific channel to get.
+   * </pre>
+   *
    * <code>int64 channel_id = 1;</code>
    */
   long getChannelId();

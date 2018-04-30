@@ -8,6 +8,10 @@ public interface GetSubchannelRequestOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * subchannel_id is the the identifier of the specific subchannel to get.
+   * </pre>
+   *
    * <code>int64 subchannel_id = 1;</code>
    */
   long getSubchannelId();

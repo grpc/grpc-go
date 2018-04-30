@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * Security represents details about how secure the socket is.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.Security}
  */
 public  final class Security extends
@@ -2236,6 +2240,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * Security represents details about how secure the socket is.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.Security}
    */
   public static final class Builder extends

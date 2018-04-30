@@ -147,7 +147,7 @@ private static final long serialVersionUID = 0L;
   private io.grpc.channelz.v1.ChannelRef ref_;
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -157,7 +157,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -167,7 +167,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * The identifier for this channel.
+   * The identifier for this channel. This should bet set.
    * </pre>
    *
    * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -903,7 +903,7 @@ private static final long serialVersionUID = 0L;
         io.grpc.channelz.v1.ChannelRef, io.grpc.channelz.v1.ChannelRef.Builder, io.grpc.channelz.v1.ChannelRefOrBuilder> refBuilder_;
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -913,7 +913,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -927,7 +927,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -947,7 +947,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -965,7 +965,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -987,7 +987,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -1005,7 +1005,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -1017,7 +1017,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>
@@ -1032,7 +1032,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The identifier for this channel.
+     * The identifier for this channel. This should bet set.
      * </pre>
      *
      * <code>.grpc.channelz.ChannelRef ref = 1;</code>

@@ -4,6 +4,11 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * SocketOption represents socket options for a socket.  Specifically, these
+ * are the options returned by getsockopt().
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.SocketOption}
  */
 public  final class SocketOption extends
@@ -103,6 +108,11 @@ private static final long serialVersionUID = 0L;
   public static final int NAME_FIELD_NUMBER = 1;
   private volatile java.lang.Object name_;
   /**
+   * <pre>
+   * The full name of the socket option.  Typically this will be the upper case
+   * name, such as "SO_REUSEPORT".
+   * </pre>
+   *
    * <code>string name = 1;</code>
    */
   public java.lang.String getName() {
@@ -118,6 +128,11 @@ private static final long serialVersionUID = 0L;
     }
   }
   /**
+   * <pre>
+   * The full name of the socket option.  Typically this will be the upper case
+   * name, such as "SO_REUSEPORT".
+   * </pre>
+   *
    * <code>string name = 1;</code>
    */
   public com.google.protobuf.ByteString
@@ -391,6 +406,11 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * SocketOption represents socket options for a socket.  Specifically, these
+   * are the options returned by getsockopt().
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.SocketOption}
    */
   public static final class Builder extends
@@ -546,6 +566,11 @@ private static final long serialVersionUID = 0L;
 
     private java.lang.Object name_ = "";
     /**
+     * <pre>
+     * The full name of the socket option.  Typically this will be the upper case
+     * name, such as "SO_REUSEPORT".
+     * </pre>
+     *
      * <code>string name = 1;</code>
      */
     public java.lang.String getName() {
@@ -561,6 +586,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The full name of the socket option.  Typically this will be the upper case
+     * name, such as "SO_REUSEPORT".
+     * </pre>
+     *
      * <code>string name = 1;</code>
      */
     public com.google.protobuf.ByteString
@@ -577,6 +607,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The full name of the socket option.  Typically this will be the upper case
+     * name, such as "SO_REUSEPORT".
+     * </pre>
+     *
      * <code>string name = 1;</code>
      */
     public Builder setName(
@@ -590,6 +625,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The full name of the socket option.  Typically this will be the upper case
+     * name, such as "SO_REUSEPORT".
+     * </pre>
+     *
      * <code>string name = 1;</code>
      */
     public Builder clearName() {
@@ -599,6 +639,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The full name of the socket option.  Typically this will be the upper case
+     * name, such as "SO_REUSEPORT".
+     * </pre>
+     *
      * <code>string name = 1;</code>
      */
     public Builder setNameBytes(

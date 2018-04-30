@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * ServerRef is a reference to a Server.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.ServerRef}
  */
 public  final class ServerRef extends
@@ -90,7 +94,7 @@ private static final long serialVersionUID = 0L;
   private long serverId_;
   /**
    * <pre>
-   * A globally unique identifier for this server.   Must be a positive number.
+   * A globally unique identifier for this server.  Must be a positive number.
    * </pre>
    *
    * <code>int64 server_id = 5;</code>
@@ -304,6 +308,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * ServerRef is a reference to a Server.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.ServerRef}
    */
   public static final class Builder extends
@@ -445,7 +453,7 @@ private static final long serialVersionUID = 0L;
     private long serverId_ ;
     /**
      * <pre>
-     * A globally unique identifier for this server.   Must be a positive number.
+     * A globally unique identifier for this server.  Must be a positive number.
      * </pre>
      *
      * <code>int64 server_id = 5;</code>
@@ -455,7 +463,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * A globally unique identifier for this server.   Must be a positive number.
+     * A globally unique identifier for this server.  Must be a positive number.
      * </pre>
      *
      * <code>int64 server_id = 5;</code>
@@ -468,7 +476,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * A globally unique identifier for this server.   Must be a positive number.
+     * A globally unique identifier for this server.  Must be a positive number.
      * </pre>
      *
      * <code>int64 server_id = 5;</code>

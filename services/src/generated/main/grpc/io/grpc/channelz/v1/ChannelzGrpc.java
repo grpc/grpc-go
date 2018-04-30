@@ -16,6 +16,10 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 /**
+ * <pre>
+ * Channelz is a service exposed by gRPC servers that provides detailed debug
+ * information.
+ * </pre>
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -274,12 +278,16 @@ public final class ChannelzGrpc {
   }
 
   /**
+   * <pre>
+   * Channelz is a service exposed by gRPC servers that provides detailed debug
+   * information.
+   * </pre>
    */
   public static abstract class ChannelzImplBase implements io.grpc.BindableService {
 
     /**
      * <pre>
-     * Gets all root channels (e.g. channels the application has directly
+     * Gets all root channels (i.e. channels the application has directly
      * created). This does not include subchannels nor non-top level channels.
      * </pre>
      */
@@ -387,6 +395,10 @@ public final class ChannelzGrpc {
   }
 
   /**
+   * <pre>
+   * Channelz is a service exposed by gRPC servers that provides detailed debug
+   * information.
+   * </pre>
    */
   public static final class ChannelzStub extends io.grpc.stub.AbstractStub<ChannelzStub> {
     private ChannelzStub(io.grpc.Channel channel) {
@@ -406,7 +418,7 @@ public final class ChannelzGrpc {
 
     /**
      * <pre>
-     * Gets all root channels (e.g. channels the application has directly
+     * Gets all root channels (i.e. channels the application has directly
      * created). This does not include subchannels nor non-top level channels.
      * </pre>
      */
@@ -473,6 +485,10 @@ public final class ChannelzGrpc {
   }
 
   /**
+   * <pre>
+   * Channelz is a service exposed by gRPC servers that provides detailed debug
+   * information.
+   * </pre>
    */
   public static final class ChannelzBlockingStub extends io.grpc.stub.AbstractStub<ChannelzBlockingStub> {
     private ChannelzBlockingStub(io.grpc.Channel channel) {
@@ -492,7 +508,7 @@ public final class ChannelzGrpc {
 
     /**
      * <pre>
-     * Gets all root channels (e.g. channels the application has directly
+     * Gets all root channels (i.e. channels the application has directly
      * created). This does not include subchannels nor non-top level channels.
      * </pre>
      */
@@ -553,6 +569,10 @@ public final class ChannelzGrpc {
   }
 
   /**
+   * <pre>
+   * Channelz is a service exposed by gRPC servers that provides detailed debug
+   * information.
+   * </pre>
    */
   public static final class ChannelzFutureStub extends io.grpc.stub.AbstractStub<ChannelzFutureStub> {
     private ChannelzFutureStub(io.grpc.Channel channel) {
@@ -572,7 +592,7 @@ public final class ChannelzGrpc {
 
     /**
      * <pre>
-     * Gets all root channels (e.g. channels the application has directly
+     * Gets all root channels (i.e. channels the application has directly
      * created). This does not include subchannels nor non-top level channels.
      * </pre>
      */

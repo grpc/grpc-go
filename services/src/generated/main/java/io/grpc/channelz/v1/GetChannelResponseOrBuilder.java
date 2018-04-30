@@ -8,14 +8,29 @@ public interface GetChannelResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   boolean hasChannel();
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   io.grpc.channelz.v1.Channel getChannel();
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   io.grpc.channelz.v1.ChannelOrBuilder getChannelOrBuilder();

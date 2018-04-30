@@ -8,19 +8,35 @@ public interface SocketOptionLingerOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * active maps to `struct linger.l_onoff`
+   * </pre>
+   *
    * <code>bool active = 1;</code>
    */
   boolean getActive();
 
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   boolean hasDuration();
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   com.google.protobuf.Duration getDuration();
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   com.google.protobuf.DurationOrBuilder getDurationOrBuilder();

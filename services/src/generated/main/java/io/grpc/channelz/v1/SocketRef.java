@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * SocketRef is a reference to a Socket.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.SocketRef}
  */
 public  final class SocketRef extends
@@ -300,6 +304,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * SocketRef is a reference to a Socket.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.SocketRef}
    */
   public static final class Builder extends

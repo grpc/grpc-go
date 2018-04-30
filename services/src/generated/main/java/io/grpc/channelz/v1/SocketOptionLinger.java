@@ -4,6 +4,11 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * For use with SocketOption's additional field.  This is primarily used for
+ * SO_LINGER.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.SocketOptionLinger}
  */
 public  final class SocketOptionLinger extends
@@ -95,6 +100,10 @@ private static final long serialVersionUID = 0L;
   public static final int ACTIVE_FIELD_NUMBER = 1;
   private boolean active_;
   /**
+   * <pre>
+   * active maps to `struct linger.l_onoff`
+   * </pre>
+   *
    * <code>bool active = 1;</code>
    */
   public boolean getActive() {
@@ -104,18 +113,30 @@ private static final long serialVersionUID = 0L;
   public static final int DURATION_FIELD_NUMBER = 2;
   private com.google.protobuf.Duration duration_;
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   public boolean hasDuration() {
     return duration_ != null;
   }
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   public com.google.protobuf.Duration getDuration() {
     return duration_ == null ? com.google.protobuf.Duration.getDefaultInstance() : duration_;
   }
   /**
+   * <pre>
+   * duration maps to `struct linger.l_linger`
+   * </pre>
+   *
    * <code>.google.protobuf.Duration duration = 2;</code>
    */
   public com.google.protobuf.DurationOrBuilder getDurationOrBuilder() {
@@ -291,6 +312,11 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * For use with SocketOption's additional field.  This is primarily used for
+   * SO_LINGER.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.SocketOptionLinger}
    */
   public static final class Builder extends
@@ -438,12 +464,20 @@ private static final long serialVersionUID = 0L;
 
     private boolean active_ ;
     /**
+     * <pre>
+     * active maps to `struct linger.l_onoff`
+     * </pre>
+     *
      * <code>bool active = 1;</code>
      */
     public boolean getActive() {
       return active_;
     }
     /**
+     * <pre>
+     * active maps to `struct linger.l_onoff`
+     * </pre>
+     *
      * <code>bool active = 1;</code>
      */
     public Builder setActive(boolean value) {
@@ -453,6 +487,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * active maps to `struct linger.l_onoff`
+     * </pre>
+     *
      * <code>bool active = 1;</code>
      */
     public Builder clearActive() {
@@ -466,12 +504,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> durationBuilder_;
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public boolean hasDuration() {
       return durationBuilder_ != null || duration_ != null;
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public com.google.protobuf.Duration getDuration() {
@@ -482,6 +528,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public Builder setDuration(com.google.protobuf.Duration value) {
@@ -498,6 +548,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public Builder setDuration(
@@ -512,6 +566,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public Builder mergeDuration(com.google.protobuf.Duration value) {
@@ -530,6 +588,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public Builder clearDuration() {
@@ -544,6 +606,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public com.google.protobuf.Duration.Builder getDurationBuilder() {
@@ -552,6 +618,10 @@ private static final long serialVersionUID = 0L;
       return getDurationFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     public com.google.protobuf.DurationOrBuilder getDurationOrBuilder() {
@@ -563,6 +633,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * duration maps to `struct linger.l_linger`
+     * </pre>
+     *
      * <code>.google.protobuf.Duration duration = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<

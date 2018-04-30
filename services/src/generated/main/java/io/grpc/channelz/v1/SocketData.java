@@ -4,6 +4,12 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * SocketData is data associated for a specific Socket.  The fields present
+ * are specific to the implementation, so there may be minor differences in
+ * the semantics.  (e.g. flow control windows)
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.SocketData}
  */
 public  final class SocketData extends
@@ -218,8 +224,9 @@ private static final long serialVersionUID = 0L;
   private long streamsSucceeded_;
   /**
    * <pre>
-   * The number of streams that have ended successfully with the EoS bit set for
-   *  both end points
+   * The number of streams that have ended successfully:
+   * On client side, received frame with eos bit set;
+   * On server side, sent frame with eos bit set.
    * </pre>
    *
    * <code>int64 streams_succeeded = 2;</code>
@@ -232,7 +239,9 @@ private static final long serialVersionUID = 0L;
   private long streamsFailed_;
   /**
    * <pre>
-   * The number of incoming streams that have a completed with a non-OK status
+   * The number of streams that have ended unsuccessfully:
+   * On client side, ended without receiving frame with eos bit set;
+   * On server side, ended without sending frame with eos bit set.
    * </pre>
    *
    * <code>int64 streams_failed = 3;</code>
@@ -245,7 +254,7 @@ private static final long serialVersionUID = 0L;
   private long messagesSent_;
   /**
    * <pre>
-   * The number of messages successfully sent on this socket.
+   * The number of grpc messages successfully sent on this socket.
    * </pre>
    *
    * <code>int64 messages_sent = 4;</code>
@@ -257,6 +266,10 @@ private static final long serialVersionUID = 0L;
   public static final int MESSAGES_RECEIVED_FIELD_NUMBER = 5;
   private long messagesReceived_;
   /**
+   * <pre>
+   * The number of grpc messages received on this socket.
+   * </pre>
+   *
    * <code>int64 messages_received = 5;</code>
    */
   public long getMessagesReceived() {
@@ -496,12 +509,20 @@ private static final long serialVersionUID = 0L;
   public static final int OPTION_FIELD_NUMBER = 13;
   private java.util.List<io.grpc.channelz.v1.SocketOption> option_;
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   public java.util.List<io.grpc.channelz.v1.SocketOption> getOptionList() {
     return option_;
   }
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   public java.util.List<? extends io.grpc.channelz.v1.SocketOptionOrBuilder> 
@@ -509,18 +530,30 @@ private static final long serialVersionUID = 0L;
     return option_;
   }
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   public int getOptionCount() {
     return option_.size();
   }
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   public io.grpc.channelz.v1.SocketOption getOption(int index) {
     return option_.get(index);
   }
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   public io.grpc.channelz.v1.SocketOptionOrBuilder getOptionOrBuilder(
@@ -850,6 +883,12 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * SocketData is data associated for a specific Socket.  The fields present
+   * are specific to the implementation, so there may be minor differences in
+   * the semantics.  (e.g. flow control windows)
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.SocketData}
    */
   public static final class Builder extends
@@ -1182,8 +1221,9 @@ private static final long serialVersionUID = 0L;
     private long streamsSucceeded_ ;
     /**
      * <pre>
-     * The number of streams that have ended successfully with the EoS bit set for
-     *  both end points
+     * The number of streams that have ended successfully:
+     * On client side, received frame with eos bit set;
+     * On server side, sent frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_succeeded = 2;</code>
@@ -1193,8 +1233,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of streams that have ended successfully with the EoS bit set for
-     *  both end points
+     * The number of streams that have ended successfully:
+     * On client side, received frame with eos bit set;
+     * On server side, sent frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_succeeded = 2;</code>
@@ -1207,8 +1248,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of streams that have ended successfully with the EoS bit set for
-     *  both end points
+     * The number of streams that have ended successfully:
+     * On client side, received frame with eos bit set;
+     * On server side, sent frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_succeeded = 2;</code>
@@ -1223,7 +1265,9 @@ private static final long serialVersionUID = 0L;
     private long streamsFailed_ ;
     /**
      * <pre>
-     * The number of incoming streams that have a completed with a non-OK status
+     * The number of streams that have ended unsuccessfully:
+     * On client side, ended without receiving frame with eos bit set;
+     * On server side, ended without sending frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_failed = 3;</code>
@@ -1233,7 +1277,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of incoming streams that have a completed with a non-OK status
+     * The number of streams that have ended unsuccessfully:
+     * On client side, ended without receiving frame with eos bit set;
+     * On server side, ended without sending frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_failed = 3;</code>
@@ -1246,7 +1292,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of incoming streams that have a completed with a non-OK status
+     * The number of streams that have ended unsuccessfully:
+     * On client side, ended without receiving frame with eos bit set;
+     * On server side, ended without sending frame with eos bit set.
      * </pre>
      *
      * <code>int64 streams_failed = 3;</code>
@@ -1261,7 +1309,7 @@ private static final long serialVersionUID = 0L;
     private long messagesSent_ ;
     /**
      * <pre>
-     * The number of messages successfully sent on this socket.
+     * The number of grpc messages successfully sent on this socket.
      * </pre>
      *
      * <code>int64 messages_sent = 4;</code>
@@ -1271,7 +1319,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of messages successfully sent on this socket.
+     * The number of grpc messages successfully sent on this socket.
      * </pre>
      *
      * <code>int64 messages_sent = 4;</code>
@@ -1284,7 +1332,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The number of messages successfully sent on this socket.
+     * The number of grpc messages successfully sent on this socket.
      * </pre>
      *
      * <code>int64 messages_sent = 4;</code>
@@ -1298,12 +1346,20 @@ private static final long serialVersionUID = 0L;
 
     private long messagesReceived_ ;
     /**
+     * <pre>
+     * The number of grpc messages received on this socket.
+     * </pre>
+     *
      * <code>int64 messages_received = 5;</code>
      */
     public long getMessagesReceived() {
       return messagesReceived_;
     }
     /**
+     * <pre>
+     * The number of grpc messages received on this socket.
+     * </pre>
+     *
      * <code>int64 messages_received = 5;</code>
      */
     public Builder setMessagesReceived(long value) {
@@ -1313,6 +1369,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The number of grpc messages received on this socket.
+     * </pre>
+     *
      * <code>int64 messages_received = 5;</code>
      */
     public Builder clearMessagesReceived() {
@@ -2348,6 +2408,10 @@ private static final long serialVersionUID = 0L;
         io.grpc.channelz.v1.SocketOption, io.grpc.channelz.v1.SocketOption.Builder, io.grpc.channelz.v1.SocketOptionOrBuilder> optionBuilder_;
 
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public java.util.List<io.grpc.channelz.v1.SocketOption> getOptionList() {
@@ -2358,6 +2422,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public int getOptionCount() {
@@ -2368,6 +2436,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public io.grpc.channelz.v1.SocketOption getOption(int index) {
@@ -2378,6 +2450,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder setOption(
@@ -2395,6 +2471,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder setOption(
@@ -2409,6 +2489,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder addOption(io.grpc.channelz.v1.SocketOption value) {
@@ -2425,6 +2509,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder addOption(
@@ -2442,6 +2530,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder addOption(
@@ -2456,6 +2548,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder addOption(
@@ -2470,6 +2566,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder addAllOption(
@@ -2485,6 +2585,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder clearOption() {
@@ -2498,6 +2602,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public Builder removeOption(int index) {
@@ -2511,6 +2619,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public io.grpc.channelz.v1.SocketOption.Builder getOptionBuilder(
@@ -2518,6 +2630,10 @@ private static final long serialVersionUID = 0L;
       return getOptionFieldBuilder().getBuilder(index);
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public io.grpc.channelz.v1.SocketOptionOrBuilder getOptionOrBuilder(
@@ -2528,6 +2644,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public java.util.List<? extends io.grpc.channelz.v1.SocketOptionOrBuilder> 
@@ -2539,6 +2659,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public io.grpc.channelz.v1.SocketOption.Builder addOptionBuilder() {
@@ -2546,6 +2670,10 @@ private static final long serialVersionUID = 0L;
           io.grpc.channelz.v1.SocketOption.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public io.grpc.channelz.v1.SocketOption.Builder addOptionBuilder(
@@ -2554,6 +2682,10 @@ private static final long serialVersionUID = 0L;
           index, io.grpc.channelz.v1.SocketOption.getDefaultInstance());
     }
     /**
+     * <pre>
+     * Socket options set on this socket.  May be absent.
+     * </pre>
+     *
      * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
      */
     public java.util.List<io.grpc.channelz.v1.SocketOption.Builder> 

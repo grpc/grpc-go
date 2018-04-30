@@ -8,27 +8,51 @@ public interface ServerOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   boolean hasRef();
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   io.grpc.channelz.v1.ServerRef getRef();
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   io.grpc.channelz.v1.ServerRefOrBuilder getRefOrBuilder();
 
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   boolean hasData();
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   io.grpc.channelz.v1.ServerData getData();
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   io.grpc.channelz.v1.ServerDataOrBuilder getDataOrBuilder();
@@ -36,7 +60,7 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -46,7 +70,7 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -55,7 +79,7 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -64,7 +88,7 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -74,7 +98,7 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>

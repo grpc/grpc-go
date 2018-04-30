@@ -9,7 +9,7 @@ public interface ServerRefOrBuilder extends
 
   /**
    * <pre>
-   * A globally unique identifier for this server.   Must be a positive number.
+   * A globally unique identifier for this server.  Must be a positive number.
    * </pre>
    *
    * <code>int64 server_id = 5;</code>

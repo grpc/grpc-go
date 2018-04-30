@@ -82,6 +82,10 @@ private static final long serialVersionUID = 0L;
   public static final int SOCKET_ID_FIELD_NUMBER = 1;
   private long socketId_;
   /**
+   * <pre>
+   * socket_id is the the identifier of the specific socket to get.
+   * </pre>
+   *
    * <code>int64 socket_id = 1;</code>
    */
   public long getSocketId() {
@@ -374,12 +378,20 @@ private static final long serialVersionUID = 0L;
 
     private long socketId_ ;
     /**
+     * <pre>
+     * socket_id is the the identifier of the specific socket to get.
+     * </pre>
+     *
      * <code>int64 socket_id = 1;</code>
      */
     public long getSocketId() {
       return socketId_;
     }
     /**
+     * <pre>
+     * socket_id is the the identifier of the specific socket to get.
+     * </pre>
+     *
      * <code>int64 socket_id = 1;</code>
      */
     public Builder setSocketId(long value) {
@@ -389,6 +401,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * socket_id is the the identifier of the specific socket to get.
+     * </pre>
+     *
      * <code>int64 socket_id = 1;</code>
      */
     public Builder clearSocketId() {

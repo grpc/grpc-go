@@ -82,6 +82,10 @@ private static final long serialVersionUID = 0L;
   public static final int SUBCHANNEL_ID_FIELD_NUMBER = 1;
   private long subchannelId_;
   /**
+   * <pre>
+   * subchannel_id is the the identifier of the specific subchannel to get.
+   * </pre>
+   *
    * <code>int64 subchannel_id = 1;</code>
    */
   public long getSubchannelId() {
@@ -374,12 +378,20 @@ private static final long serialVersionUID = 0L;
 
     private long subchannelId_ ;
     /**
+     * <pre>
+     * subchannel_id is the the identifier of the specific subchannel to get.
+     * </pre>
+     *
      * <code>int64 subchannel_id = 1;</code>
      */
     public long getSubchannelId() {
       return subchannelId_;
     }
     /**
+     * <pre>
+     * subchannel_id is the the identifier of the specific subchannel to get.
+     * </pre>
+     *
      * <code>int64 subchannel_id = 1;</code>
      */
     public Builder setSubchannelId(long value) {
@@ -389,6 +401,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * subchannel_id is the the identifier of the specific subchannel to get.
+     * </pre>
+     *
      * <code>int64 subchannel_id = 1;</code>
      */
     public Builder clearSubchannelId() {

@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * Address represents the address used to create the socket.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.Address}
  */
 public  final class Address extends
@@ -121,7 +125,7 @@ private static final long serialVersionUID = 0L;
 
     /**
      * <pre>
-     * Either the IPv4 or IPv6 address in bytes.  Will either be 4 bytes or 16
+     * Either the IPv4 or IPv6 address in bytes.  Will be either 4 bytes or 16
      * bytes in length.
      * </pre>
      *
@@ -224,7 +228,7 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.ByteString ipAddress_;
     /**
      * <pre>
-     * Either the IPv4 or IPv6 address in bytes.  Will either be 4 bytes or 16
+     * Either the IPv4 or IPv6 address in bytes.  Will be either 4 bytes or 16
      * bytes in length.
      * </pre>
      *
@@ -550,7 +554,7 @@ private static final long serialVersionUID = 0L;
       private com.google.protobuf.ByteString ipAddress_ = com.google.protobuf.ByteString.EMPTY;
       /**
        * <pre>
-       * Either the IPv4 or IPv6 address in bytes.  Will either be 4 bytes or 16
+       * Either the IPv4 or IPv6 address in bytes.  Will be either 4 bytes or 16
        * bytes in length.
        * </pre>
        *
@@ -561,7 +565,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * Either the IPv4 or IPv6 address in bytes.  Will either be 4 bytes or 16
+       * Either the IPv4 or IPv6 address in bytes.  Will be either 4 bytes or 16
        * bytes in length.
        * </pre>
        *
@@ -578,7 +582,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * Either the IPv4 or IPv6 address in bytes.  Will either be 4 bytes or 16
+       * Either the IPv4 or IPv6 address in bytes.  Will be either 4 bytes or 16
        * bytes in length.
        * </pre>
        *
@@ -1216,7 +1220,7 @@ private static final long serialVersionUID = 0L;
 
     /**
      * <pre>
-     * The human readable version of the value.
+     * The human readable version of the value.  This value should be set.
      * </pre>
      *
      * <code>string name = 1;</code>
@@ -1224,7 +1228,7 @@ private static final long serialVersionUID = 0L;
     java.lang.String getName();
     /**
      * <pre>
-     * The human readable version of the value.
+     * The human readable version of the value.  This value should be set.
      * </pre>
      *
      * <code>string name = 1;</code>
@@ -1355,7 +1359,7 @@ private static final long serialVersionUID = 0L;
     private volatile java.lang.Object name_;
     /**
      * <pre>
-     * The human readable version of the value.
+     * The human readable version of the value.  This value should be set.
      * </pre>
      *
      * <code>string name = 1;</code>
@@ -1374,7 +1378,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The human readable version of the value.
+     * The human readable version of the value.  This value should be set.
      * </pre>
      *
      * <code>string name = 1;</code>
@@ -1746,7 +1750,7 @@ private static final long serialVersionUID = 0L;
       private java.lang.Object name_ = "";
       /**
        * <pre>
-       * The human readable version of the value.
+       * The human readable version of the value.  This value should be set.
        * </pre>
        *
        * <code>string name = 1;</code>
@@ -1765,7 +1769,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The human readable version of the value.
+       * The human readable version of the value.  This value should be set.
        * </pre>
        *
        * <code>string name = 1;</code>
@@ -1785,7 +1789,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The human readable version of the value.
+       * The human readable version of the value.  This value should be set.
        * </pre>
        *
        * <code>string name = 1;</code>
@@ -1802,7 +1806,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The human readable version of the value.
+       * The human readable version of the value.  This value should be set.
        * </pre>
        *
        * <code>string name = 1;</code>
@@ -1815,7 +1819,7 @@ private static final long serialVersionUID = 0L;
       }
       /**
        * <pre>
-       * The human readable version of the value.
+       * The human readable version of the value.  This value should be set.
        * </pre>
        *
        * <code>string name = 1;</code>
@@ -2348,6 +2352,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * Address represents the address used to create the socket.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.Address}
    */
   public static final class Builder extends

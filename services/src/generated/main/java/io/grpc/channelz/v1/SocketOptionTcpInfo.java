@@ -5,7 +5,8 @@ package io.grpc.channelz.v1;
 
 /**
  * <pre>
- * Tcp info for SOL_TCP, TCP_INFO
+ * For use with SocketOption's additional field.  Tcp info for
+ * SOL_TCP and TCP_INFO.
  * </pre>
  *
  * Protobuf type {@code grpc.channelz.SocketOptionTcpInfo}
@@ -973,7 +974,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Tcp info for SOL_TCP, TCP_INFO
+   * For use with SocketOption's additional field.  Tcp info for
+   * SOL_TCP and TCP_INFO.
    * </pre>
    *
    * Protobuf type {@code grpc.channelz.SocketOptionTcpInfo}

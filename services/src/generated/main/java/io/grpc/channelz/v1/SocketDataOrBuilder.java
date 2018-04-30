@@ -18,8 +18,9 @@ public interface SocketDataOrBuilder extends
 
   /**
    * <pre>
-   * The number of streams that have ended successfully with the EoS bit set for
-   *  both end points
+   * The number of streams that have ended successfully:
+   * On client side, received frame with eos bit set;
+   * On server side, sent frame with eos bit set.
    * </pre>
    *
    * <code>int64 streams_succeeded = 2;</code>
@@ -28,7 +29,9 @@ public interface SocketDataOrBuilder extends
 
   /**
    * <pre>
-   * The number of incoming streams that have a completed with a non-OK status
+   * The number of streams that have ended unsuccessfully:
+   * On client side, ended without receiving frame with eos bit set;
+   * On server side, ended without sending frame with eos bit set.
    * </pre>
    *
    * <code>int64 streams_failed = 3;</code>
@@ -37,7 +40,7 @@ public interface SocketDataOrBuilder extends
 
   /**
    * <pre>
-   * The number of messages successfully sent on this socket.
+   * The number of grpc messages successfully sent on this socket.
    * </pre>
    *
    * <code>int64 messages_sent = 4;</code>
@@ -45,6 +48,10 @@ public interface SocketDataOrBuilder extends
   long getMessagesSent();
 
   /**
+   * <pre>
+   * The number of grpc messages received on this socket.
+   * </pre>
+   *
    * <code>int64 messages_received = 5;</code>
    */
   long getMessagesReceived();
@@ -228,24 +235,44 @@ public interface SocketDataOrBuilder extends
   com.google.protobuf.Int64ValueOrBuilder getRemoteFlowControlWindowOrBuilder();
 
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   java.util.List<io.grpc.channelz.v1.SocketOption> 
       getOptionList();
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   io.grpc.channelz.v1.SocketOption getOption(int index);
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   int getOptionCount();
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   java.util.List<? extends io.grpc.channelz.v1.SocketOptionOrBuilder> 
       getOptionOrBuilderList();
   /**
+   * <pre>
+   * Socket options set on this socket.  May be absent.
+   * </pre>
+   *
    * <code>repeated .grpc.channelz.SocketOption option = 13;</code>
    */
   io.grpc.channelz.v1.SocketOptionOrBuilder getOptionOrBuilder(

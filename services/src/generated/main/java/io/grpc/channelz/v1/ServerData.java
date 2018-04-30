@@ -4,6 +4,10 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * ServerData is data for a specific Server.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.ServerData}
  */
 public  final class ServerData extends
@@ -120,18 +124,30 @@ private static final long serialVersionUID = 0L;
   public static final int TRACE_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.ChannelTrace trace_;
   /**
+   * <pre>
+   * A trace of recent events on the server.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
   public boolean hasTrace() {
     return trace_ != null;
   }
   /**
+   * <pre>
+   * A trace of recent events on the server.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
   public io.grpc.channelz.v1.ChannelTrace getTrace() {
     return trace_ == null ? io.grpc.channelz.v1.ChannelTrace.getDefaultInstance() : trace_;
   }
   /**
+   * <pre>
+   * A trace of recent events on the server.  May be absent.
+   * </pre>
+   *
    * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
    */
   public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
@@ -419,6 +435,10 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * ServerData is data for a specific Server.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.ServerData}
    */
   public static final class Builder extends
@@ -594,12 +614,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.ChannelTrace, io.grpc.channelz.v1.ChannelTrace.Builder, io.grpc.channelz.v1.ChannelTraceOrBuilder> traceBuilder_;
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public boolean hasTrace() {
       return traceBuilder_ != null || trace_ != null;
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelTrace getTrace() {
@@ -610,6 +638,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder setTrace(io.grpc.channelz.v1.ChannelTrace value) {
@@ -626,6 +658,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder setTrace(
@@ -640,6 +676,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder mergeTrace(io.grpc.channelz.v1.ChannelTrace value) {
@@ -658,6 +698,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public Builder clearTrace() {
@@ -672,6 +716,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelTrace.Builder getTraceBuilder() {
@@ -680,6 +728,10 @@ private static final long serialVersionUID = 0L;
       return getTraceFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelTraceOrBuilder getTraceOrBuilder() {
@@ -691,6 +743,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * A trace of recent events on the server.  May be absent.
+     * </pre>
+     *
      * <code>.grpc.channelz.ChannelTrace trace = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<

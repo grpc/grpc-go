@@ -5,8 +5,7 @@ package io.grpc.channelz.v1;
 
 /**
  * <pre>
- * see the proto in the gRFC for channel tracing:
- * A3-channel-tracing.md
+ * ChannelTrace represents the recent events that have occurred on the channel.
  * </pre>
  *
  * Protobuf type {@code grpc.channelz.ChannelTrace}
@@ -219,8 +218,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * see the proto in the gRFC for channel tracing:
-   * A3-channel-tracing.md
+   * ChannelTrace represents the recent events that have occurred on the channel.
    * </pre>
    *
    * Protobuf type {@code grpc.channelz.ChannelTrace}

@@ -4,6 +4,11 @@
 package io.grpc.channelz.v1;
 
 /**
+ * <pre>
+ * Server represents a single server.  There may be multiple servers in a single
+ * program.
+ * </pre>
+ *
  * Protobuf type {@code grpc.channelz.Server}
  */
 public  final class Server extends
@@ -116,18 +121,30 @@ private static final long serialVersionUID = 0L;
   public static final int REF_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.ServerRef ref_;
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   public boolean hasRef() {
     return ref_ != null;
   }
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   public io.grpc.channelz.v1.ServerRef getRef() {
     return ref_ == null ? io.grpc.channelz.v1.ServerRef.getDefaultInstance() : ref_;
   }
   /**
+   * <pre>
+   * The identifier for a Server.  This should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerRef ref = 1;</code>
    */
   public io.grpc.channelz.v1.ServerRefOrBuilder getRefOrBuilder() {
@@ -137,18 +154,30 @@ private static final long serialVersionUID = 0L;
   public static final int DATA_FIELD_NUMBER = 2;
   private io.grpc.channelz.v1.ServerData data_;
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   public boolean hasData() {
     return data_ != null;
   }
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   public io.grpc.channelz.v1.ServerData getData() {
     return data_ == null ? io.grpc.channelz.v1.ServerData.getDefaultInstance() : data_;
   }
   /**
+   * <pre>
+   * The associated data of the Server.
+   * </pre>
+   *
    * <code>.grpc.channelz.ServerData data = 2;</code>
    */
   public io.grpc.channelz.v1.ServerDataOrBuilder getDataOrBuilder() {
@@ -160,7 +189,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -171,7 +200,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -183,7 +212,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -194,7 +223,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -205,7 +234,7 @@ private static final long serialVersionUID = 0L;
   /**
    * <pre>
    * The sockets that the server is listening on.  There are no ordering
-   * guarantees.
+   * guarantees.  This may be absent.
    * </pre>
    *
    * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -401,6 +430,11 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
+   * <pre>
+   * Server represents a single server.  There may be multiple servers in a single
+   * program.
+   * </pre>
+   *
    * Protobuf type {@code grpc.channelz.Server}
    */
   public static final class Builder extends
@@ -604,12 +638,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.ServerRef, io.grpc.channelz.v1.ServerRef.Builder, io.grpc.channelz.v1.ServerRefOrBuilder> refBuilder_;
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public boolean hasRef() {
       return refBuilder_ != null || ref_ != null;
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.ServerRef getRef() {
@@ -620,6 +662,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public Builder setRef(io.grpc.channelz.v1.ServerRef value) {
@@ -636,6 +682,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public Builder setRef(
@@ -650,6 +700,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public Builder mergeRef(io.grpc.channelz.v1.ServerRef value) {
@@ -668,6 +722,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public Builder clearRef() {
@@ -682,6 +740,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.ServerRef.Builder getRefBuilder() {
@@ -690,6 +752,10 @@ private static final long serialVersionUID = 0L;
       return getRefFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     public io.grpc.channelz.v1.ServerRefOrBuilder getRefOrBuilder() {
@@ -701,6 +767,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The identifier for a Server.  This should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerRef ref = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -721,12 +791,20 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.ServerData, io.grpc.channelz.v1.ServerData.Builder, io.grpc.channelz.v1.ServerDataOrBuilder> dataBuilder_;
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public boolean hasData() {
       return dataBuilder_ != null || data_ != null;
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public io.grpc.channelz.v1.ServerData getData() {
@@ -737,6 +815,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public Builder setData(io.grpc.channelz.v1.ServerData value) {
@@ -753,6 +835,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public Builder setData(
@@ -767,6 +853,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public Builder mergeData(io.grpc.channelz.v1.ServerData value) {
@@ -785,6 +875,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public Builder clearData() {
@@ -799,6 +893,10 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public io.grpc.channelz.v1.ServerData.Builder getDataBuilder() {
@@ -807,6 +905,10 @@ private static final long serialVersionUID = 0L;
       return getDataFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     public io.grpc.channelz.v1.ServerDataOrBuilder getDataOrBuilder() {
@@ -818,6 +920,10 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The associated data of the Server.
+     * </pre>
+     *
      * <code>.grpc.channelz.ServerData data = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -849,7 +955,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -864,7 +970,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -879,7 +985,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -894,7 +1000,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -916,7 +1022,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -935,7 +1041,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -956,7 +1062,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -978,7 +1084,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -997,7 +1103,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1016,7 +1122,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1036,7 +1142,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1054,7 +1160,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1072,7 +1178,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1084,7 +1190,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1099,7 +1205,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1115,7 +1221,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1127,7 +1233,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>
@@ -1140,7 +1246,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <pre>
      * The sockets that the server is listening on.  There are no ordering
-     * guarantees.
+     * guarantees.  This may be absent.
      * </pre>
      *
      * <code>repeated .grpc.channelz.SocketRef listen_socket = 3;</code>

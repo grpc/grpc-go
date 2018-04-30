@@ -89,18 +89,33 @@ private static final long serialVersionUID = 0L;
   public static final int CHANNEL_FIELD_NUMBER = 1;
   private io.grpc.channelz.v1.Channel channel_;
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   public boolean hasChannel() {
     return channel_ != null;
   }
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   public io.grpc.channelz.v1.Channel getChannel() {
     return channel_ == null ? io.grpc.channelz.v1.Channel.getDefaultInstance() : channel_;
   }
   /**
+   * <pre>
+   * The Channel that corresponds to the requested channel_id.  This field
+   * should be set.
+   * </pre>
+   *
    * <code>.grpc.channelz.Channel channel = 1;</code>
    */
   public io.grpc.channelz.v1.ChannelOrBuilder getChannelOrBuilder() {
@@ -407,12 +422,22 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.channelz.v1.Channel, io.grpc.channelz.v1.Channel.Builder, io.grpc.channelz.v1.ChannelOrBuilder> channelBuilder_;
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public boolean hasChannel() {
       return channelBuilder_ != null || channel_ != null;
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public io.grpc.channelz.v1.Channel getChannel() {
@@ -423,6 +448,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public Builder setChannel(io.grpc.channelz.v1.Channel value) {
@@ -439,6 +469,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public Builder setChannel(
@@ -453,6 +488,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public Builder mergeChannel(io.grpc.channelz.v1.Channel value) {
@@ -471,6 +511,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public Builder clearChannel() {
@@ -485,6 +530,11 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public io.grpc.channelz.v1.Channel.Builder getChannelBuilder() {
@@ -493,6 +543,11 @@ private static final long serialVersionUID = 0L;
       return getChannelFieldBuilder().getBuilder();
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     public io.grpc.channelz.v1.ChannelOrBuilder getChannelOrBuilder() {
@@ -504,6 +559,11 @@ private static final long serialVersionUID = 0L;
       }
     }
     /**
+     * <pre>
+     * The Channel that corresponds to the requested channel_id.  This field
+     * should be set.
+     * </pre>
+     *
      * <code>.grpc.channelz.Channel channel = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
