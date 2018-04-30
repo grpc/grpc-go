@@ -1,0 +1,25 @@
+# Concurrency
+
+In general, gRPC-go provides a concurrency-friendly API. What follows are some
+guidelines.
+
+A [ClientConn][client-conn] can safely be accessed concurrently. Using
+[helloworld][helloworld] as an example, one could share the `ClientConn` across
+multiple goroutines to create multiple `GreeterClient` types. In this case, RPCs
+would be sent in parallel.
+
+However, when using streams, one must take care to avoid calling either
+`SendMsg` or `RecvMsg` multiple times against the same [Stream][stream] from
+different goroutines. In other words, it's safe to have a goroutine calling
+`SendMsg` and another goroutine calling `RecvMsg` on the same stream at the same
+time. But it is not safe to call `SendMsg` on the same stream in different
+goroutines, or to call `RecvMsg` on the same stream in different goroutines.
+
+Each RPC handler attached to a registered server will be invoked in its own
+goroutine. For example, [SayHello][say-hello] will be invoked in its own
+goroutine.
+
+[helloworld]: https://github.com/grpc/grpc-go/blob/master/examples/helloworld/greeter_client/main.go#L43
+[client-conn]: https://godoc.org/google.golang.org/grpc#ClientConn
+[stream]: https://godoc.org/google.golang.org/grpc#Stream
+[say-hello]: https://github.com/grpc/grpc-go/blob/master/examples/helloworld/greeter_server/main.go#L41
