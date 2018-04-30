@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/alts/core"
 	"google.golang.org/grpc/credentials/alts/core/authinfo"
 	"google.golang.org/grpc/credentials/alts/core/conn"
+	altsgrpc "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
 )
 
@@ -135,7 +136,7 @@ func DefaultServerHandshakerOptions() *ServerHandshakerOptions {
 // server.
 type altsHandshaker struct {
 	// RPC stream used to access the ALTS Handshaker service.
-	stream altspb.HandshakerService_DoHandshakeClient
+	stream altsgrpc.HandshakerService_DoHandshakeClient
 	// the connection to the peer.
 	conn net.Conn
 	// client handshake options.
@@ -150,7 +151,7 @@ type altsHandshaker struct {
 // stub created using the passed conn and used to talk to the ALTS Handshaker
 // service in the metadata server.
 func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ClientHandshakerOptions) (core.Handshaker, error) {
-	stream, err := altspb.NewHandshakerServiceClient(conn).DoHandshake(ctx, grpc.FailFast(false))
+	stream, err := altsgrpc.NewHandshakerServiceClient(conn).DoHandshake(ctx, grpc.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +167,7 @@ func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 // stub created using the passed conn and used to talk to the ALTS Handshaker
 // service in the metadata server.
 func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ServerHandshakerOptions) (core.Handshaker, error) {
-	stream, err := altspb.NewHandshakerServiceClient(conn).DoHandshake(ctx, grpc.FailFast(false))
+	stream, err := altsgrpc.NewHandshakerServiceClient(conn).DoHandshake(ctx, grpc.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
