@@ -16,7 +16,8 @@ dependencies {
     // they'd have to resolve it like normal anyway.
     compileOnly libraries.truth
 
-    testCompile project(':grpc-testing-proto')
+    testCompile project(':grpc-testing-proto'),
+                project(':grpc-core').sourceSets.test.output
 }
 
 javadoc {
