@@ -442,35 +442,33 @@ func encode(c baseCodec, msg interface{}, cp Compressor, outPayload *stats.OutPa
 		b    []byte
 		cbuf *bytes.Buffer
 	)
-	if msg != nil {
-		var err error
-		b, err = c.Marshal(msg)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
-		}
-		if outPayload != nil {
-			outPayload.Payload = msg
-			// TODO truncate large payload.
-			outPayload.Data = b
-			outPayload.Length = len(b)
-		}
-		if compressor != nil || cp != nil {
-			cbuf = new(bytes.Buffer)
-			// Has compressor, check Compressor is set by UseCompressor first.
-			if compressor != nil {
-				z, _ := compressor.Compress(cbuf)
-				if _, err := z.Write(b); err != nil {
-					return nil, status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
-				}
-				z.Close()
-			} else {
-				// If Compressor is not set by UseCompressor, use default Compressor
-				if err := cp.Do(cbuf, b); err != nil {
-					return nil, status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
-				}
+	var err error
+	b, err = c.Marshal(msg)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
+	}
+	if outPayload != nil {
+		outPayload.Payload = msg
+		// TODO truncate large payload.
+		outPayload.Data = b
+		outPayload.Length = len(b)
+	}
+	if compressor != nil || cp != nil {
+		cbuf = new(bytes.Buffer)
+		// Has compressor, check Compressor is set by UseCompressor first.
+		if compressor != nil {
+			z, _ := compressor.Compress(cbuf)
+			if _, err := z.Write(b); err != nil {
+				return nil, status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
 			}
-			b = cbuf.Bytes()
+			z.Close()
+		} else {
+			// If Compressor is not set by UseCompressor, use default Compressor
+			if err := cp.Do(cbuf, b); err != nil {
+				return nil, status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
+			}
 		}
+		b = cbuf.Bytes()
 	}
 	if uint(len(b)) > math.MaxUint32 {
 		return nil, status.Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
