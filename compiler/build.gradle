@@ -326,7 +326,7 @@ def configureTestTask(Task task, String dep, String extraPackage) {
   }
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
-  task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/integration${extraPackage}${slash}TestServiceGrpc.java",
+  task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/compiler${extraPackage}${slash}TestServiceGrpc.java",
        "$projectDir/src/test${dep}/golden/TestService.java.txt"
 }
 
