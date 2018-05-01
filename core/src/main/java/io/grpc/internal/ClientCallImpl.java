@@ -30,6 +30,7 @@ import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static java.lang.Math.max;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -469,6 +470,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   private void closeObserver(Listener<RespT> observer, Status status, Metadata trailers) {
     observer.onClose(status, trailers);
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this).add("method", method).toString();
   }
 
   private class ClientStreamListenerImpl implements ClientStreamListener {

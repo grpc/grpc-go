@@ -18,6 +18,7 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -490,6 +491,10 @@ public final class ClientCalls {
     @Override
     protected boolean setException(Throwable throwable) {
       return super.setException(throwable);
+    }
+
+    protected String pendingToString() {
+      return MoreObjects.toStringHelper(this).add("clientCall", call).toString();
     }
   }
 
