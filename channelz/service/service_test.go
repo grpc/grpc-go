@@ -370,18 +370,18 @@ func TestGetChannel(t *testing.T) {
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
 	if len(subChans) != 1 || subChans[0].GetName() != refNames[2] || subChans[0].GetSubchannelId() != ids[2] {
-		t.Fatalf("GetSubChannelRef() want %#v, got %#v", []*pb.SubchannelRef{{ids[2], refNames[2]}}, subChans)
+		t.Fatalf("GetSubChannelRef() want %#v, got %#v", []*pb.SubchannelRef{{SubchannelId: ids[2], Name: refNames[2]}}, subChans)
 	}
 	nestedChans := metrics.GetChannelRef()
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[1] || nestedChans[0].GetChannelId() != ids[1] {
-		t.Fatalf("GetChannelRef() want %#v, got %#v", []*pb.ChannelRef{{ids[1], refNames[1]}}, nestedChans)
+		t.Fatalf("GetChannelRef() want %#v, got %#v", []*pb.ChannelRef{{ChannelId: ids[1], Name: refNames[1]}}, nestedChans)
 	}
 
 	resp, _ = svr.GetChannel(context.Background(), &pb.GetChannelRequest{ChannelId: ids[1]})
 	metrics = resp.GetChannel()
 	nestedChans = metrics.GetChannelRef()
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3] {
-		t.Fatalf("GetChannelRef() want %#v, got %#v", []*pb.ChannelRef{{ids[3], refNames[3]}}, nestedChans)
+		t.Fatalf("GetChannelRef() want %#v, got %#v", []*pb.ChannelRef{{ChannelId: ids[3], Name: refNames[3]}}, nestedChans)
 	}
 }
 
