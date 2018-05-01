@@ -1,0 +1,88 @@
+apply plugin: 'kotlin'
+apply plugin: 'com.google.protobuf'
+
+// Generate IntelliJ IDEA's .idea & .iml project files
+// Starting with 0.8.4 of protobuf-gradle-plugin, *.proto and the gen output files are added
+// to IntelliJ as sources. It is no longer necessary to add them manually to the idea {} block
+// to jump to definitions from Java and Kotlin files.
+// For best results, install the Protobuf and Kotlin plugins for IntelliJ.
+apply plugin: 'idea'
+
+// Provide convenience executables for trying out the examples.
+apply plugin: 'application'
+
+
+buildscript {
+  ext.kotlin_version = '1.2.21'
+
+  repositories {
+    mavenCentral()
+    mavenLocal()
+  }
+  dependencies {
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5'
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+  }
+}
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+}
+
+// IMPORTANT: You probably want the non-SNAPSHOT version of gRPC. Make sure you
+// are looking at a tagged version of the example and not "master"!
+
+// Feel free to delete the comment at the next line. It is just for safely
+// updating the version in our release process.
+def grpcVersion = '1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+
+dependencies {
+  compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+  compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
+  compile "io.grpc:grpc-netty:${grpcVersion}"
+  compile "io.grpc:grpc-protobuf:${grpcVersion}"
+  compile "io.grpc:grpc-stub:${grpcVersion}"
+
+  testCompile "io.grpc:grpc-testing:${grpcVersion}" // gRCP testing utilities
+  testCompile "junit:junit:4.12"
+  testCompile "org.mockito:mockito-core:1.9.5"
+}
+
+protobuf {
+  protoc {
+    artifact = 'com.google.protobuf:protoc:3.5.1-1'
+  }
+  plugins {
+    grpc {
+      artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+    }
+  }
+  generateProtoTasks {
+    all()*.plugins {
+      grpc {}
+    }
+  }
+}
+
+startScripts.enabled = false
+
+task helloWorldServer(type: CreateStartScripts) {
+  mainClassName = 'io.grpc.examples.helloworld.HelloWorldServer'
+  applicationName = 'hello-world-server'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task helloWorldClient(type: CreateStartScripts) {
+  mainClassName = 'io.grpc.examples.helloworld.HelloWorldClient'
+  applicationName = 'hello-world-client'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
+}
+
+applicationDistribution.into('bin') {
+  from(helloWorldServer)
+  from(helloWorldClient)
+  fileMode = 0755
+}

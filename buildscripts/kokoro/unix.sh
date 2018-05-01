@@ -56,11 +56,18 @@ fi
 
 # Run tests
 ./gradlew build $GRADLE_FLAGS
+./gradlew install
+
 pushd examples
 ./gradlew build $GRADLE_FLAGS
 # --batch-mode reduces log spam
 mvn verify --batch-mode
 popd
+
+pushd examples/example-kotlin/
+./gradlew build $GRADLE_FLAGS
+popd
+
 # TODO(zpencer): also build the GAE examples
 
 LOCAL_MVN_TEMP=$(mktemp -d)

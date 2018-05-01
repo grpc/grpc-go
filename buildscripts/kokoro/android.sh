@@ -44,6 +44,8 @@ cd ../routeguide
 cd ../helloworld
 ./gradlew build
 
+cd $BASE_DIR/github/grpc-java/examples/example-kotlin/android/helloworld/
+./gradlew build
 
 # Skip APK size and dex count comparisons for non-PR builds
 

@@ -72,6 +72,8 @@ $ VERSION_FILES=(
   examples/android/clientcache/app/build.gradle
   examples/android/helloworld/app/build.gradle
   examples/android/routeguide/app/build.gradle
+  examples/example-kotlin/build.gradle
+  examples/example-kotlin/android/helloworld/app/build.gradle
   )
 ```
 

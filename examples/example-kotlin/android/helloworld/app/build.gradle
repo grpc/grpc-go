@@ -1,0 +1,91 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'com.google.protobuf'
+
+android {
+    compileSdkVersion 27
+
+    defaultConfig {
+        applicationId "io.grpc.helloworldexample"
+        // API level 14+ is required for TLS since Google Play Services v10.2
+        minSdkVersion 14
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    lintOptions {
+        disable 'GoogleAppIndexingWarning', 'HardcodedText', 'InvalidPackage'
+        textReport true
+        textOutput "stdout"
+    }
+    // Android Studio 3.1 does not automatically pick up '<src_set>/kotlin' as source input
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+        main.java.srcDirs += 'src/test/kotlin'
+        androidTest.java.srcDirs += 'src/androidTest/kotlin'
+    }
+
+    lintOptions {
+        // Do not complain about outdated deps, so that this can javax.annotation-api can be same
+        // as other projects in this repo. Your project is not required to do this, and can
+        // upgrade the dep.
+        disable 'GradleDependency'
+        // The Android linter does not correctly detect resources used in Kotlin.
+        // See:
+        //   - https://youtrack.jetbrains.com/issue/KT-7729
+        //   - https://youtrack.jetbrains.com/issue/KT-12499
+        disable 'UnusedResources'
+        textReport true
+        textOutput "stdout"
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.5.1-1'
+    }
+    plugins {
+        javalite {
+            artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0"
+        }
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.plugins {
+                javalite {}
+                grpc {
+                    // Options added to --grpc_out
+                    option 'lite'
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    compile 'com.android.support:appcompat-v7:27.0.2'
+    compile 'javax.annotation:javax.annotation-api:1.2'
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    // You need to build grpc-java to obtain these libraries below.
+    compile 'io.grpc:grpc-okhttp:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-protobuf-lite:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-stub:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+}
+
+repositories {
+    mavenCentral()
+}
