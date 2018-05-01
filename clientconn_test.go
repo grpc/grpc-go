@@ -645,11 +645,11 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	}
 }
 
-func TestServiceConfigOffOption(t *testing.T) {
+func TestDisableServiceConfigOption(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	addr := r.Scheme() + ":///non.existent"
-	cc, err := Dial(addr, WithInsecure(), WithServiceConfigOff(true))
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(true))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}

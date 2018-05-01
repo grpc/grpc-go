@@ -87,15 +87,15 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &dnsResolver{
-		freq:             b.freq,
-		host:             host,
-		port:             port,
-		ctx:              ctx,
-		cancel:           cancel,
-		cc:               cc,
-		t:                time.NewTimer(0),
-		rn:               make(chan struct{}, 1),
-		serviceConfigOff: opts.ServiceConfigOff,
+		freq:                 b.freq,
+		host:                 host,
+		port:                 port,
+		ctx:                  ctx,
+		cancel:               cancel,
+		cc:                   cc,
+		t:                    time.NewTimer(0),
+		rn:                   make(chan struct{}, 1),
+		disableServiceConfig: opts.DisableServiceConfig,
 	}
 
 	d.wg.Add(1)
@@ -158,8 +158,8 @@ type dnsResolver struct {
 	// If Close() doesn't wait for watcher() goroutine finishes, race detector sometimes
 	// will warns lookup (READ the lookup function pointers) inside watcher() goroutine
 	// has data race with replaceNetFunc (WRITE the lookup function pointers).
-	wg               sync.WaitGroup
-	serviceConfigOff bool
+	wg                   sync.WaitGroup
+	disableServiceConfig bool
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
@@ -263,7 +263,7 @@ func (d *dnsResolver) lookup() ([]resolver.Address, string) {
 	newAddrs = d.lookupSRV()
 	// Support fallback to non-balancer address.
 	newAddrs = append(newAddrs, d.lookupHost()...)
-	if d.serviceConfigOff {
+	if d.disableServiceConfig {
 		return newAddrs, ""
 	}
 	sc := d.lookupTXT()

@@ -893,12 +893,12 @@ func TestResolveFunc(t *testing.T) {
 	}
 }
 
-func TestServiceConfigOff(t *testing.T) {
+func TestDisableServiceConfig(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
-		target           string
-		scWant           string
-		serviceConfigOff bool
+		target               string
+		scWant               string
+		disableServiceConfig bool
 	}{
 		{
 			"foo.bar.com",
@@ -915,7 +915,7 @@ func TestServiceConfigOff(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{ServiceConfigOff: a.serviceConfigOff})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{DisableServiceConfig: a.disableServiceConfig})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
