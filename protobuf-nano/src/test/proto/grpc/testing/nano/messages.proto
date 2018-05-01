@@ -15,7 +15,7 @@
 // limitations under the License.
 syntax = "proto3";
 
-package grpc;
+package grpc.testing.nano;
 
 option java_package = "io.grpc.protobuf";
 
