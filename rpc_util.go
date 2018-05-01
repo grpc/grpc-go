@@ -448,6 +448,12 @@ func encode(c baseCodec, msg interface{}, cp Compressor, outPayload *stats.OutPa
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 		}
+		if b == nil {
+			// If there was no error while marshalling, yet payload was nil,
+			// we update it to an empty slice, since a nil payload leads to
+			// an empty data frame(no gRPC message header is added).
+			b = []byte{}
+		}
 		if outPayload != nil {
 			outPayload.Payload = msg
 			// TODO truncate large payload.
