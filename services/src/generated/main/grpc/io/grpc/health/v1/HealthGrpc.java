@@ -19,7 +19,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
-    comments = "Source: health.proto")
+    comments = "Source: grpc/health/v1/health.proto")
 public final class HealthGrpc {
 
   private HealthGrpc() {}
