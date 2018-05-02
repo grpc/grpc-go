@@ -23,12 +23,12 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
-    comments = "Source: grpc/channelz/channelz.proto")
+    comments = "Source: grpc/channelz/v1/channelz.proto")
 public final class ChannelzGrpc {
 
   private ChannelzGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.channelz.Channelz";
+  public static final String SERVICE_NAME = "grpc.channelz.v1.Channelz";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
@@ -55,7 +55,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetTopChannelsRequest, io.grpc.channelz.v1.GetTopChannelsResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetTopChannels"))
+                  "grpc.channelz.v1.Channelz", "GetTopChannels"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetTopChannelsRequest.getDefaultInstance()))
@@ -92,7 +92,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetServersRequest, io.grpc.channelz.v1.GetServersResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetServers"))
+                  "grpc.channelz.v1.Channelz", "GetServers"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetServersRequest.getDefaultInstance()))
@@ -129,7 +129,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetServerSocketsRequest, io.grpc.channelz.v1.GetServerSocketsResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetServerSockets"))
+                  "grpc.channelz.v1.Channelz", "GetServerSockets"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetServerSocketsRequest.getDefaultInstance()))
@@ -166,7 +166,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetChannelRequest, io.grpc.channelz.v1.GetChannelResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetChannel"))
+                  "grpc.channelz.v1.Channelz", "GetChannel"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetChannelRequest.getDefaultInstance()))
@@ -203,7 +203,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetSubchannelRequest, io.grpc.channelz.v1.GetSubchannelResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetSubchannel"))
+                  "grpc.channelz.v1.Channelz", "GetSubchannel"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetSubchannelRequest.getDefaultInstance()))
@@ -240,7 +240,7 @@ public final class ChannelzGrpc {
               io.grpc.MethodDescriptor.<io.grpc.channelz.v1.GetSocketRequest, io.grpc.channelz.v1.GetSocketResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
-                  "grpc.channelz.Channelz", "GetSocket"))
+                  "grpc.channelz.v1.Channelz", "GetSocket"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.channelz.v1.GetSocketRequest.getDefaultInstance()))

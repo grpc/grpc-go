@@ -17,11 +17,11 @@
 // https://github.com/grpc/proposal/blob/master/A14-channelz.md
 //
 // The canonical version of this proto can be found at
-// https://github.com/grpc/grpc-proto/blob/master/grpc/channelz/channelz.proto
+// https://github.com/grpc/grpc-proto/blob/master/grpc/channelz/v1/channelz.proto
 
 syntax = "proto3";
 
-package grpc.channelz;
+package grpc.channelz.v1;
 
 import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
