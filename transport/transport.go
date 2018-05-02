@@ -24,10 +24,7 @@ package transport // externally used as import "google.golang.org/grpc/transport
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"sync"
-	"sync/atomic"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -38,359 +35,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 )
-
-// recvMsg represents the received msg from the transport. All transport
-// protocol specific info has been removed.
-type recvMsg struct {
-	data []byte
-	// nil: received some data
-	// io.EOF: stream is completed. data is nil.
-	// other non-nil error: transport failure. data is nil.
-	err error
-}
-
-// recvBuffer is an unbounded channel of recvMsg structs.
-// Note recvBuffer differs from controlBuffer only in that recvBuffer
-// holds a channel of only recvMsg structs instead of objects implementing "item" interface.
-// recvBuffer is written to much more often than
-// controlBuffer and using strict recvMsg structs helps avoid allocation in "recvBuffer.put"
-type recvBuffer struct {
-	c       chan recvMsg
-	mu      sync.Mutex
-	backlog []recvMsg
-	err     error
-}
-
-func newRecvBuffer() *recvBuffer {
-	b := &recvBuffer{
-		c: make(chan recvMsg, 1),
-	}
-	return b
-}
-
-func (b *recvBuffer) put(r recvMsg) {
-	b.mu.Lock()
-	if b.err != nil {
-		b.mu.Unlock()
-		// An error had occurred earlier, don't accept more
-		// data or errors.
-		return
-	}
-	b.err = r.err
-	if len(b.backlog) == 0 {
-		select {
-		case b.c <- r:
-			b.mu.Unlock()
-			return
-		default:
-		}
-	}
-	b.backlog = append(b.backlog, r)
-	b.mu.Unlock()
-}
-
-func (b *recvBuffer) load() {
-	b.mu.Lock()
-	if len(b.backlog) > 0 {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog[0] = recvMsg{}
-			b.backlog = b.backlog[1:]
-		default:
-		}
-	}
-	b.mu.Unlock()
-}
-
-// get returns the channel that receives a recvMsg in the buffer.
-//
-// Upon receipt of a recvMsg, the caller should call load to send another
-// recvMsg onto the channel if there is any.
-func (b *recvBuffer) get() <-chan recvMsg {
-	return b.c
-}
-
-//
-// recvBufferReader implements io.Reader interface to read the data from
-// recvBuffer.
-type recvBufferReader struct {
-	ctx     context.Context
-	ctxDone <-chan struct{} // cache of ctx.Done() (for performance).
-	recv    *recvBuffer
-	last    []byte // Stores the remaining data in the previous calls.
-	err     error
-}
-
-// Read reads the next len(p) bytes from last. If last is drained, it tries to
-// read additional data from recv. It blocks if there no additional data available
-// in recv. If Read returns any non-nil error, it will continue to return that error.
-func (r *recvBufferReader) Read(p []byte) (n int, err error) {
-	if r.err != nil {
-		return 0, r.err
-	}
-	n, r.err = r.read(p)
-	return n, r.err
-}
-
-func (r *recvBufferReader) read(p []byte) (n int, err error) {
-	if r.last != nil && len(r.last) > 0 {
-		// Read remaining data left in last call.
-		copied := copy(p, r.last)
-		r.last = r.last[copied:]
-		return copied, nil
-	}
-	select {
-	case <-r.ctxDone:
-		return 0, ContextErr(r.ctx.Err())
-	case m := <-r.recv.get():
-		r.recv.load()
-		if m.err != nil {
-			return 0, m.err
-		}
-		copied := copy(p, m.data)
-		r.last = m.data[copied:]
-		return copied, nil
-	}
-}
-
-type streamState uint32
-
-const (
-	streamActive    streamState = iota
-	streamWriteDone             // EndStream sent
-	streamReadDone              // EndStream received
-	streamDone                  // the entire stream is finished.
-)
-
-// Stream represents an RPC in the transport layer.
-type Stream struct {
-	id           uint32
-	st           ServerTransport    // nil for client side Stream
-	ctx          context.Context    // the associated context of the stream
-	cancel       context.CancelFunc // always nil for client side Stream
-	done         chan struct{}      // closed at the end of stream to unblock writers. On the client side.
-	ctxDone      <-chan struct{}    // same as done chan but for server side. Cache of ctx.Done() (for performance)
-	method       string             // the associated RPC method of the stream
-	recvCompress string
-	sendCompress string
-	buf          *recvBuffer
-	trReader     io.Reader
-	fc           *inFlow
-	recvQuota    uint32
-	wq           *writeQuota
-
-	// Callback to state application's intentions to read data. This
-	// is used to adjust flow control, if needed.
-	requestRead func(int)
-
-	headerChan chan struct{} // closed to indicate the end of header metadata.
-	headerDone uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
-	header     metadata.MD   // the received header metadata.
-	trailer    metadata.MD   // the key-value map of trailer metadata.
-
-	headerOk bool // becomes true from the first header is about to send
-	state    streamState
-
-	status *status.Status // the status error received from the server
-
-	bytesReceived uint32 // indicates whether any bytes have been received on this stream
-	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
-
-	// contentSubtype is the content-subtype for requests.
-	// this must be lowercase or the behavior is undefined.
-	contentSubtype string
-}
-
-func (s *Stream) swapState(st streamState) streamState {
-	return streamState(atomic.SwapUint32((*uint32)(&s.state), uint32(st)))
-}
-
-func (s *Stream) compareAndSwapState(oldState, newState streamState) bool {
-	return atomic.CompareAndSwapUint32((*uint32)(&s.state), uint32(oldState), uint32(newState))
-}
-
-func (s *Stream) getState() streamState {
-	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
-}
-
-func (s *Stream) waitOnHeader() error {
-	if s.headerChan == nil {
-		// On the server headerChan is always nil since a stream originates
-		// only after having received headers.
-		return nil
-	}
-	select {
-	case <-s.ctx.Done():
-		return ContextErr(s.ctx.Err())
-	case <-s.headerChan:
-		return nil
-	}
-}
-
-// RecvCompress returns the compression algorithm applied to the inbound
-// message. It is empty string if there is no compression applied.
-func (s *Stream) RecvCompress() string {
-	if err := s.waitOnHeader(); err != nil {
-		return ""
-	}
-	return s.recvCompress
-}
-
-// SetSendCompress sets the compression algorithm to the stream.
-func (s *Stream) SetSendCompress(str string) {
-	s.sendCompress = str
-}
-
-// Done returns a chanel which is closed when it receives the final status
-// from the server.
-func (s *Stream) Done() <-chan struct{} {
-	return s.done
-}
-
-// Header acquires the key-value pairs of header metadata once it
-// is available. It blocks until i) the metadata is ready or ii) there is no
-// header metadata or iii) the stream is canceled/expired.
-func (s *Stream) Header() (metadata.MD, error) {
-	err := s.waitOnHeader()
-	// Even if the stream is closed, header is returned if available.
-	select {
-	case <-s.headerChan:
-		if s.header == nil {
-			return nil, nil
-		}
-		return s.header.Copy(), nil
-	default:
-	}
-	return nil, err
-}
-
-// Trailer returns the cached trailer metedata. Note that if it is not called
-// after the entire stream is done, it could return an empty MD. Client
-// side only.
-// It can be safely read only after stream has ended that is either read
-// or write have returned io.EOF.
-func (s *Stream) Trailer() metadata.MD {
-	c := s.trailer.Copy()
-	return c
-}
-
-// ServerTransport returns the underlying ServerTransport for the stream.
-// The client side stream always returns nil.
-func (s *Stream) ServerTransport() ServerTransport {
-	return s.st
-}
-
-// ContentSubtype returns the content-subtype for a request. For example, a
-// content-subtype of "proto" will result in a content-type of
-// "application/grpc+proto". This will always be lowercase.  See
-// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
-// more details.
-func (s *Stream) ContentSubtype() string {
-	return s.contentSubtype
-}
-
-// Context returns the context of the stream.
-func (s *Stream) Context() context.Context {
-	return s.ctx
-}
-
-// Method returns the method for the stream.
-func (s *Stream) Method() string {
-	return s.method
-}
-
-// Status returns the status received from the server.
-// Status can be read safely only after the stream has ended,
-// that is, read or write has returned io.EOF.
-func (s *Stream) Status() *status.Status {
-	return s.status
-}
-
-// SetHeader sets the header metadata. This can be called multiple times.
-// Server side only.
-// This should not be called in parallel to other data writes.
-func (s *Stream) SetHeader(md metadata.MD) error {
-	if md.Len() == 0 {
-		return nil
-	}
-	if s.headerOk || atomic.LoadUint32((*uint32)(&s.state)) == uint32(streamDone) {
-		return ErrIllegalHeaderWrite
-	}
-	s.header = metadata.Join(s.header, md)
-	return nil
-}
-
-// SendHeader sends the given header metadata. The given metadata is
-// combined with any metadata set by previous calls to SetHeader and
-// then written to the transport stream.
-func (s *Stream) SendHeader(md metadata.MD) error {
-	t := s.ServerTransport()
-	return t.WriteHeader(s, md)
-}
-
-// SetTrailer sets the trailer metadata which will be sent with the RPC status
-// by the server. This can be called multiple times. Server side only.
-// This should not be called parallel to other data writes.
-func (s *Stream) SetTrailer(md metadata.MD) error {
-	if md.Len() == 0 {
-		return nil
-	}
-	s.trailer = metadata.Join(s.trailer, md)
-	return nil
-}
-
-func (s *Stream) write(m recvMsg) {
-	s.buf.put(m)
-}
-
-// Read reads all p bytes from the wire for this stream.
-func (s *Stream) Read(p []byte) (n int, err error) {
-	// Don't request a read if there was an error earlier
-	if er := s.trReader.(*transportReader).er; er != nil {
-		return 0, er
-	}
-	s.requestRead(len(p))
-	return io.ReadFull(s.trReader, p)
-}
-
-// tranportReader reads all the data available for this Stream from the transport and
-// passes them into the decoder, which converts them into a gRPC message stream.
-// The error is io.EOF when the stream is done or another non-nil error if
-// the stream broke.
-type transportReader struct {
-	reader io.Reader
-	// The handler to control the window update procedure for both this
-	// particular stream and the associated transport.
-	windowHandler func(int)
-	er            error
-}
-
-func (t *transportReader) Read(p []byte) (n int, err error) {
-	n, err = t.reader.Read(p)
-	if err != nil {
-		t.er = err
-		return
-	}
-	t.windowHandler(n)
-	return
-}
-
-// BytesReceived indicates whether any bytes have been received on this stream.
-func (s *Stream) BytesReceived() bool {
-	return atomic.LoadUint32(&s.bytesReceived) == 1
-}
-
-// Unprocessed indicates whether the server did not process this stream --
-// i.e. it sent a refused stream or GOAWAY including this stream ID.
-func (s *Stream) Unprocessed() bool {
-	return atomic.LoadUint32(&s.unprocessed) == 1
-}
-
-// GoString is implemented by Stream so context.String() won't
-// race when printing %#v.
-func (s *Stream) GoString() string {
-	return fmt.Sprintf("<stream: %p, %v>", s, s.method)
-}
 
 // state of transport
 type transportState int
@@ -476,7 +120,13 @@ type Options struct {
 	// Delay is a hint to the transport implementation for whether
 	// the data could be buffered for a batching write. The
 	// transport implementation may ignore the hint.
+	// TODO(mmukhi, dfawley): Should this be deleted?
 	Delay bool
+
+	// IsCompressed indicates weather the message being written
+	// was compressed or not. Transport relays this information
+	// to the API that generates gRPC-specific message header.
+	IsCompressed bool
 }
 
 // CallHdr carries the information of a particular RPC.
@@ -525,7 +175,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
+	Write(s *Stream, data []byte, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -573,7 +223,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data []byte, opts *Options) error
+	Write(s *Stream, data []byte, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.

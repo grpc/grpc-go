@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/wrappers"
+	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz"
@@ -41,31 +41,29 @@ const (
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
-	pb.RegisterChannelzServer(s, NewCZServer())
+	pb.RegisterChannelzServer(s, &serverImpl{})
 }
 
-// NewCZServer returns a ChannelzServer implementation.
-func NewCZServer() pb.ChannelzServer {
+func newCZServer() pb.ChannelzServer {
 	return &serverImpl{}
 }
 
-type serverImpl struct {
-}
+type serverImpl struct{}
 
 func connectivityStateToProto(s connectivity.State) *pb.ChannelConnectivityState {
 	switch s {
 	case connectivity.Idle:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_IDLE}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_IDLE}
 	case connectivity.Connecting:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_CONNECTING}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_CONNECTING}
 	case connectivity.Ready:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_READY}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_READY}
 	case connectivity.TransientFailure:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_TRANSIENT_FAILURE}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_TRANSIENT_FAILURE}
 	case connectivity.Shutdown:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_SHUTDOWN}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_SHUTDOWN}
 	default:
-		return &pb.ChannelConnectivityState{pb.ChannelConnectivityState_UNKNOWN}
+		return &pb.ChannelConnectivityState{State: pb.ChannelConnectivityState_UNKNOWN}
 	}
 }
 
@@ -85,19 +83,19 @@ func channelMetricToProto(cm *channelz.ChannelMetric) *pb.Channel {
 	}
 	nestedChans := make([]*pb.ChannelRef, 0, len(cm.NestedChans))
 	for id, ref := range cm.NestedChans {
-		nestedChans = append(nestedChans, &pb.ChannelRef{id, ref})
+		nestedChans = append(nestedChans, &pb.ChannelRef{ChannelId: id, Name: ref})
 	}
 	c.ChannelRef = nestedChans
 
 	subChans := make([]*pb.SubchannelRef, 0, len(cm.SubChans))
 	for id, ref := range cm.SubChans {
-		subChans = append(subChans, &pb.SubchannelRef{id, ref})
+		subChans = append(subChans, &pb.SubchannelRef{SubchannelId: id, Name: ref})
 	}
 	c.SubchannelRef = subChans
 
 	sockets := make([]*pb.SocketRef, 0, len(cm.Sockets))
 	for id, ref := range cm.Sockets {
-		sockets = append(sockets, &pb.SocketRef{id, ref})
+		sockets = append(sockets, &pb.SocketRef{SocketId: id, Name: ref})
 	}
 	c.SocketRef = sockets
 	return c
@@ -119,19 +117,19 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *pb.Subchannel {
 	}
 	nestedChans := make([]*pb.ChannelRef, 0, len(cm.NestedChans))
 	for id, ref := range cm.NestedChans {
-		nestedChans = append(nestedChans, &pb.ChannelRef{id, ref})
+		nestedChans = append(nestedChans, &pb.ChannelRef{ChannelId: id, Name: ref})
 	}
 	sc.ChannelRef = nestedChans
 
 	subChans := make([]*pb.SubchannelRef, 0, len(cm.SubChans))
 	for id, ref := range cm.SubChans {
-		subChans = append(subChans, &pb.SubchannelRef{id, ref})
+		subChans = append(subChans, &pb.SubchannelRef{SubchannelId: id, Name: ref})
 	}
 	sc.SubchannelRef = subChans
 
 	sockets := make([]*pb.SocketRef, 0, len(cm.Sockets))
 	for id, ref := range cm.Sockets {
-		sockets = append(sockets, &pb.SocketRef{id, ref})
+		sockets = append(sockets, &pb.SocketRef{SocketId: id, Name: ref})
 	}
 	sc.SocketRef = sockets
 	return sc
@@ -234,18 +232,18 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
 func addrToProto(a net.Addr) *pb.Address {
 	switch a.Network() {
 	case "udp":
-	// TODO: Address_OtherAddress{}. Need proto def for Value.
+		// TODO: Address_OtherAddress{}. Need proto def for Value.
 	case "ip":
 		// Note zone info is discarded through the conversion.
-		return &pb.Address{&pb.Address_TcpipAddress{&pb.Address_TcpIpAddress{IpAddress: a.(*net.IPAddr).IP}}}
+		return &pb.Address{Address: &pb.Address_TcpipAddress{TcpipAddress: &pb.Address_TcpIpAddress{IpAddress: a.(*net.IPAddr).IP}}}
 	case "ip+net":
 		// Note mask info is discarded through the conversion.
-		return &pb.Address{&pb.Address_TcpipAddress{&pb.Address_TcpIpAddress{IpAddress: a.(*net.IPNet).IP}}}
+		return &pb.Address{Address: &pb.Address_TcpipAddress{TcpipAddress: &pb.Address_TcpIpAddress{IpAddress: a.(*net.IPNet).IP}}}
 	case "tcp":
 		// Note zone info is discarded through the conversion.
-		return &pb.Address{&pb.Address_TcpipAddress{&pb.Address_TcpIpAddress{IpAddress: a.(*net.TCPAddr).IP, Port: int32(a.(*net.TCPAddr).Port)}}}
+		return &pb.Address{Address: &pb.Address_TcpipAddress{TcpipAddress: &pb.Address_TcpIpAddress{IpAddress: a.(*net.TCPAddr).IP, Port: int32(a.(*net.TCPAddr).Port)}}}
 	case "unix", "unixgram", "unixpacket":
-		return &pb.Address{&pb.Address_UdsAddress_{&pb.Address_UdsAddress{Filename: a.String()}}}
+		return &pb.Address{Address: &pb.Address_UdsAddress_{UdsAddress: &pb.Address_UdsAddress{Filename: a.String()}}}
 	default:
 	}
 	return &pb.Address{}
@@ -275,8 +273,8 @@ func socketMetricToProto(sm *channelz.SocketMetric) *pb.Socket {
 	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageReceivedTimestamp); err == nil {
 		s.Data.LastMessageReceivedTimestamp = ts
 	}
-	s.Data.LocalFlowControlWindow = &wrappers.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
-	s.Data.RemoteFlowControlWindow = &wrappers.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
+	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
+	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
 
 	if sm.SocketData.SocketOptions != nil {
 		s.Data.Option = sockoptToProto(sm.SocketData.SocketOptions)
@@ -284,6 +282,7 @@ func socketMetricToProto(sm *channelz.SocketMetric) *pb.Socket {
 	if sm.SocketData.Security != nil {
 		s.Security = securityToProto(sm.SocketData.Security)
 	}
+
 	if sm.SocketData.LocalAddr != nil {
 		s.Local = addrToProto(sm.SocketData.LocalAddr)
 	}
@@ -319,7 +318,7 @@ func serverMetricToProto(sm *channelz.ServerMetric) *pb.Server {
 	}
 	sockets := make([]*pb.SocketRef, 0, len(sm.ListenSockets))
 	for id, ref := range sm.ListenSockets {
-		sockets = append(sockets, &pb.SocketRef{id, ref})
+		sockets = append(sockets, &pb.SocketRef{SocketId: id, Name: ref})
 	}
 	s.ListenSocket = sockets
 	return s

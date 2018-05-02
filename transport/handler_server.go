@@ -38,6 +38,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/msgdecoder"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -269,10 +270,10 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	}
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, data []byte, opts *Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
-		ht.rw.Write(hdr)
+		ht.rw.Write(msgdecoder.CreateMessageHeader(len(data), opts.IsCompressed))
 		ht.rw.Write(data)
 		if !opts.Delay {
 			ht.rw.(http.Flusher).Flush()
@@ -337,16 +338,13 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 
 	req := ht.req
 
-	s := &Stream{
-		id:             0, // irrelevant
-		requestRead:    func(int) {},
-		cancel:         cancel,
-		buf:            newRecvBuffer(),
-		st:             ht,
-		method:         req.URL.Path,
-		recvCompress:   req.Header.Get("grpc-encoding"),
-		contentSubtype: ht.contentSubtype,
-	}
+	s := newStream(ctx)
+	s.cancel = cancel
+	s.st = ht
+	s.method = req.URL.Path
+	s.recvCompress = req.Header.Get("grpc-encoding")
+	s.contentSubtype = ht.contentSubtype
+
 	pr := &peer.Peer{
 		Addr: ht.RemoteAddr(),
 	}
@@ -364,10 +362,6 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		}
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
-	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
-		windowHandler: func(int) {},
-	}
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.
 	readerDone := make(chan struct{})
@@ -379,11 +373,11 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		for buf := make([]byte, readSize); ; {
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				s.buf.put(recvMsg{data: buf[:n:n]})
+				s.consume(buf[:n:n], 0)
 				buf = buf[n:]
 			}
 			if err != nil {
-				s.buf.put(recvMsg{err: mapRecvMsgError(err)})
+				s.notifyErr(mapRecvMsgError(err))
 				return
 			}
 			if len(buf) == 0 {

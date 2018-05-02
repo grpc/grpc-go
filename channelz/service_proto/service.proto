@@ -1,3 +1,21 @@
+// Copyright 2018 gRPC authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// This file defines an interface for exporting monitoring information
+// out of gRPC servers.  See the full design at
+// https://github.com/grpc/proposal/blob/master/A14-channelz.md
+
 syntax = "proto3";
 
 package grpc.channelz;
@@ -6,6 +24,10 @@ import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
+
+option java_multiple_files = true;
+option java_package = "io.grpc.channelz.v1";
+option java_outer_classname = "ChannelzProto";
 
 // Channel is a logical grouping of channels, subchannels, and sockets.
 message Channel {
@@ -170,10 +192,13 @@ message Socket {
 message SocketData {
   // The number of streams that have been started.
   int64 streams_started = 1;
-  // The number of streams that have ended successfully with the EoS bit set for
-  //  both end points
+  // The number of streams that have ended successfully:
+  // On client side, received frame with eos bit set;
+  // On server side, sent frame with eos bit set.
   int64 streams_succeeded = 2;
-  // The number of incoming streams that have a completed with a non-OK status
+  // The number of streams that have ended unsuccessfully:
+  // On client side, ended without receiving frame with eos bit set;
+  // On server side, ended without sending frame with eos bit set.
   int64 streams_failed = 3;
 
   // The number of messages successfully sent on this socket.
@@ -238,7 +263,7 @@ message Address {
 
 message Security {
   message Tls {
-     oneof cipher_suite {
+    oneof cipher_suite {
       // The cipher suite name in the RFC 4346 format:
       // https://tools.ietf.org/html/rfc4346#appendix-C
       string standard_name = 1;
