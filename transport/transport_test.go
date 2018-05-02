@@ -2087,11 +2087,34 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	}
 }
 
+type tableSizeLimit struct {
+	mu     sync.Mutex
+	limits []uint32
+}
+
+func (t *tableSizeLimit) add(limit uint32) {
+	t.mu.Lock()
+	t.limits = append(t.limits, limit)
+	t.mu.Unlock()
+}
+
+func (t *tableSizeLimit) getLen() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.limits)
+}
+
+func (t *tableSizeLimit) getIndex(i int) uint32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.limits[i]
+}
+
 func TestHeaderTblSize(t *testing.T) {
-	var limits []uint32
+	limits := &tableSizeLimit{}
 	updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 		e.SetMaxDynamicTableSizeLimit(v)
-		limits = append(limits, v)
+		limits.add(v)
 	}
 	defer func() {
 		updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
@@ -2110,10 +2133,14 @@ func TestHeaderTblSize(t *testing.T) {
 	var svrTransport ServerTransport
 	var i int
 	for i := 0; i < 1000; i++ {
-		if len(server.conns) == 0 {
-			time.Sleep(10 * time.Millisecond)
-			continue
+		server.mu.Lock()
+		if len(server.conns) != 0 {
+			server.mu.Unlock()
+			break
 		}
+		server.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+		continue
 	}
 	if i == 1000 {
 		t.Fatalf("unable to create any server transport after 10s")
@@ -2133,17 +2160,17 @@ func TestHeaderTblSize(t *testing.T) {
 	})
 
 	for i := 0; i < 1000; i++ {
-		if len(limits) != 1 {
+		if limits.getLen() != 1 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		if limits[0] != uint32(100) {
-			t.Fatalf("expected limits[0] = 100, got %d", limits[0])
+		if val := limits.getIndex(0); val != uint32(100) {
+			t.Fatalf("expected limits[0] = 100, got %d", val)
 		}
 		break
 	}
 	if i == 1000 {
-		t.Fatalf("expected len(limits) = 1, got %d", len(limits))
+		t.Fatalf("expected len(limits) = 1 within 10s, got != 1")
 	}
 
 	ct.(*http2Client).controlBuf.put(&outgoingSettings{
@@ -2156,16 +2183,16 @@ func TestHeaderTblSize(t *testing.T) {
 	})
 
 	for i := 0; i < 1000; i++ {
-		if len(limits) != 2 {
+		if limits.getLen() != 2 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		if limits[1] != uint32(200) {
-			t.Fatalf("expected limits[1] = 200, got %d", limits[1])
+		if val := limits.getIndex(1); val != uint32(200) {
+			t.Fatalf("expected limits[1] = 200, got %d", val)
 		}
 		break
 	}
 	if i == 1000 {
-		t.Fatalf("expected len(limits) = 2, got %d", len(limits))
+		t.Fatalf("expected len(limits) = 2 within 10s, got != 2")
 	}
 }
