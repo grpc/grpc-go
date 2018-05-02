@@ -49,8 +49,6 @@ import (
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/test/leakcheck"
-
-	_ "google.golang.org/grpc/grpclog/glogger"
 )
 
 var (
@@ -847,7 +845,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		for i := 0; i < countRPC-1; i++ {
-			grpc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil, cc)
+			cc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil)
 		}
 	})
 
@@ -968,7 +966,7 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 			}
 		}
 		for i := 0; i < countRPC-1; i++ {
-			grpc.NewClientStream(context.Background(), &grpc.StreamDesc{}, cc, failtosendURI)
+			cc.NewStream(context.Background(), &grpc.StreamDesc{}, failtosendURI)
 		}
 	})
 

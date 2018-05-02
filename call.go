@@ -67,7 +67,7 @@ func invoke(ctx context.Context, method string, req, reply interface{}, cc *Clie
 	// newClientStream, SendMsg, RecvMsg.
 	firstAttempt := true
 	for {
-		csInt, err := newClientStream(ctx, unaryStreamDesc, cc, method, opts...)
+		csInt, err := cc.NewStream(ctx, unaryStreamDesc, method, opts...)
 		if err != nil {
 			return err
 		}

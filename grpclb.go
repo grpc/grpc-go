@@ -58,7 +58,7 @@ func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption
 		ServerStreams: true,
 		ClientStreams: true,
 	}
-	stream, err := NewClientStream(ctx, desc, c.cc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
+	stream, err := c.cc.NewStream(ctx, desc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
 	if err != nil {
 		return nil, err
 	}
