@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -35,6 +36,7 @@ import javax.annotation.concurrent.Immutable;
  * <p>A field that is not set is {@code null}.
  */
 @Immutable
+@CheckReturnValue
 public final class CallOptions {
   /**
    * A blank {@code CallOptions} that all fields are not set.
