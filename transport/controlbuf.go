@@ -28,6 +28,10 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
+var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
+	e.SetMaxDynamicTableSizeLimit(v)
+}
+
 type itemNode struct {
 	it   interface{}
 	next *itemNode
@@ -665,7 +669,7 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) error {
 				}
 			}
 		case http2.SettingHeaderTableSize:
-			l.hEnc.SetMaxDynamicTableSizeLimit(s.Val)
+			updateHeaderTblSize(l.hEnc, s.Val)
 		}
 	}
 	return nil

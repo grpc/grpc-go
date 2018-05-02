@@ -2086,3 +2086,86 @@ func runPingPongTest(t *testing.T, msgSize int) {
 		}
 	}
 }
+
+func TestHeaderTblSize(t *testing.T) {
+	var limits []uint32
+	updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
+		e.SetMaxDynamicTableSizeLimit(v)
+		limits = append(limits, v)
+	}
+	defer func() {
+		updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
+			e.SetMaxDynamicTableSizeLimit(v)
+		}
+	}()
+
+	server, ct := setUp(t, 0, math.MaxUint32, normal)
+	defer ct.Close()
+	defer server.stop()
+	_, err := ct.NewStream(context.Background(), &CallHdr{})
+	if err != nil {
+		t.Fatalf("failed to open stream: %v", err)
+	}
+
+	var svrTransport ServerTransport
+	var i int
+	for i := 0; i < 1000; i++ {
+		if len(server.conns) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+	}
+	if i == 1000 {
+		t.Fatalf("unable to create any server transport after 10s")
+	}
+
+	for st := range server.conns {
+		svrTransport = st
+		break
+	}
+	svrTransport.(*http2Server).controlBuf.put(&outgoingSettings{
+		ss: []http2.Setting{
+			{
+				ID:  http2.SettingHeaderTableSize,
+				Val: uint32(100),
+			},
+		},
+	})
+
+	for i := 0; i < 1000; i++ {
+		if len(limits) != 1 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if limits[0] != uint32(100) {
+			t.Fatalf("expected limits[0] = 100, got %d", limits[0])
+		}
+		break
+	}
+	if i == 1000 {
+		t.Fatalf("expected len(limits) = 1, got %d", len(limits))
+	}
+
+	ct.(*http2Client).controlBuf.put(&outgoingSettings{
+		ss: []http2.Setting{
+			{
+				ID:  http2.SettingHeaderTableSize,
+				Val: uint32(200),
+			},
+		},
+	})
+
+	for i := 0; i < 1000; i++ {
+		if len(limits) != 2 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if limits[1] != uint32(200) {
+			t.Fatalf("expected limits[1] = 200, got %d", limits[1])
+		}
+		break
+	}
+	if i == 1000 {
+		t.Fatalf("expected len(limits) = 2, got %d", len(limits))
+	}
+}
