@@ -470,19 +470,23 @@ func (a *csAttempt) sendMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	data, err := encode(cs.codec, m, cs.cp, outPayload, cs.comp)
+	data, err := encode(cs.codec, m, outPayload)
 	if err != nil {
 		return err
 	}
 	if len(data) > *cs.c.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
 	}
+	data, isCompressed, err := compress(data, cs.cp, cs.comp, outPayload)
+	if err != nil {
+		return err
+	}
 	if !cs.desc.ClientStreams {
 		cs.sentLast = true
 	}
 	opts := &transport.Options{
 		Last:         !cs.desc.ClientStreams,
-		IsCompressed: cs.cp != nil || cs.comp != nil,
+		IsCompressed: isCompressed,
 	}
 	err = a.t.Write(a.s, data, opts)
 	if err == nil {
@@ -701,16 +705,20 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	data, err := encode(ss.codec, m, ss.cp, outPayload, ss.comp)
+	data, err := encode(ss.codec, m, outPayload)
 	if err != nil {
 		return err
 	}
 	if len(data) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
 	}
+	data, isCompressed, err := compress(data, ss.cp, ss.comp, outPayload)
+	if err != nil {
+		return err
+	}
 	opts := &transport.Options{
 		Last:         false,
-		IsCompressed: ss.cp != nil || ss.comp != nil,
+		IsCompressed: isCompressed,
 	}
 	if err := ss.t.Write(ss.s, data, opts); err != nil {
 		return toRPCErr(err)

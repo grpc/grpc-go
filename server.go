@@ -833,7 +833,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, outPayload, comp)
+	data, err := encode(s.getCodec(stream.ContentSubtype()), msg, outPayload)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
@@ -841,7 +841,12 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if len(data) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), s.opts.maxSendMessageSize)
 	}
-	opts.IsCompressed = cp != nil || comp != nil
+	data, isCompressed, err := compress(data, cp, comp, outPayload)
+	opts.IsCompressed = isCompressed
+	if err != nil {
+		grpclog.Errorln("grpc: server failed to compress response: ", err)
+		return err
+	}
 	err = t.Write(stream, data, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
