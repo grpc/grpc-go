@@ -464,7 +464,7 @@ public class RoundRobinLoadBalancerTest {
 
     verify(mockArgs, atLeast(4)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
-    assertThat(loadBalancer.getStickinessMapForTest().size()).isEqualTo(1);
+    assertThat(loadBalancer.getStickinessMapForTest()).hasSize(1);
   }
 
   @Test
@@ -506,7 +506,7 @@ public class RoundRobinLoadBalancerTest {
 
     verify(mockArgs, atLeast(4)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
-    assertThat(loadBalancer.getStickinessMapForTest().size()).isEqualTo(2);
+    assertThat(loadBalancer.getStickinessMapForTest()).hasSize(2);
   }
 
   @Test
@@ -556,7 +556,7 @@ public class RoundRobinLoadBalancerTest {
 
     verify(mockArgs, atLeast(3)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
-    assertThat(loadBalancer.getStickinessMapForTest().size()).isEqualTo(1);
+    assertThat(loadBalancer.getStickinessMapForTest()).hasSize(1);
   }
 
   @Test
@@ -610,7 +610,7 @@ public class RoundRobinLoadBalancerTest {
 
     verify(mockArgs, atLeast(3)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
-    assertThat(loadBalancer.getStickinessMapForTest().size()).isEqualTo(2);
+    assertThat(loadBalancer.getStickinessMapForTest()).hasSize(2);
   }
 
   @Test
@@ -644,7 +644,7 @@ public class RoundRobinLoadBalancerTest {
     assertNull(loadBalancer.getStickinessMapForTest().get("my-sticky-value").value);
 
     assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertThat(loadBalancer.getStickinessMapForTest().size()).isEqualTo(1);
+    assertThat(loadBalancer.getStickinessMapForTest()).hasSize(1);
     verify(mockArgs, atLeast(2)).getHeaders();
   }
 

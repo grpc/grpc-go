@@ -493,6 +493,7 @@ public final class ClientCalls {
       return super.setException(throwable);
     }
 
+    @SuppressWarnings("MissingOverride") // Add @Override once Java 6 support is dropped
     protected String pendingToString() {
       return MoreObjects.toStringHelper(this).add("clientCall", call).toString();
     }

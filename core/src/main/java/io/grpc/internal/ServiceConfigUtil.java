@@ -279,20 +279,6 @@ public final class ServiceConfigUtil {
   }
 
   /**
-   * Gets an object from a list of objects for the given index.
-   */
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> getObject(List<Object> list, int i) {
-    assert i >= 0 && i < list.size();
-    Object value = checkNotNull(list.get(i), "idx %s in %s is null", i, list);
-    if (value instanceof Map) {
-      return (Map<String, Object>) value;
-    }
-    throw new ClassCastException(
-        String.format("value %s for idx %d in %s is not a map", value, i, list));
-  }
-
-  /**
    * Gets a double from an object for the given key.
    */
   @SuppressWarnings("unchecked")
