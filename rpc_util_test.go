@@ -48,16 +48,15 @@ func TestEncode(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		msg proto.Message
-		cp  Compressor
 		// outputs
 		data []byte
 		err  error
 	}{
-		{&perfpb.Buffer{}, nil, []byte{}, nil},
+		{&perfpb.Buffer{}, []byte{}, nil},
 	} {
-		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil, nil, nil)
+		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil)
 		if err != test.err || !bytes.Equal(data, test.data) {
-			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, data, err, test.data, test.err)
+			t.Fatalf("encode(_, _, _, _) = %v, %v\nwant %v, %v", data, err, test.data, test.err)
 		}
 	}
 }
@@ -156,7 +155,7 @@ func TestParseDialTarget(t *testing.T) {
 func bmEncode(b *testing.B, mSize int) {
 	cdc := encoding.GetCodec(protoenc.Name)
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encodeData, _ := encode(cdc, msg, nil, nil, nil)
+	encodeData, _ := encode(cdc, msg, nil)
 	// 5 bytes of gRPC-specific message header
 	// is added to the message before it is written
 	// to the wire.
@@ -164,7 +163,7 @@ func bmEncode(b *testing.B, mSize int) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(cdc, msg, nil, nil, nil)
+		encode(cdc, msg, nil)
 	}
 	b.SetBytes(encodedSz)
 }
