@@ -18,9 +18,11 @@ package io.grpc.internal;
 
 import io.grpc.Attributes;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
 import java.io.InputStream;
+import javax.annotation.Nonnull;
 
 /**
  * An implementation of {@link ClientStream} that silently does nothing for the operations.
@@ -78,4 +80,7 @@ public class NoopClientStream implements ClientStream {
 
   @Override
   public void setMaxOutboundMessageSize(int maxSize) {}
+
+  @Override
+  public void setDeadline(@Nonnull Deadline deadline) {}
 }

@@ -17,12 +17,15 @@
 package io.grpc.inprocess;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
+import static java.lang.Math.max;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Grpc;
@@ -53,6 +56,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.CheckReturnValue;
@@ -664,6 +668,13 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       @Override
       public void setMaxOutboundMessageSize(int maxSize) {}
+
+      @Override
+      public void setDeadline(Deadline deadline) {
+        headers.discardAll(TIMEOUT_KEY);
+        long effectiveTimeout = max(0, deadline.timeRemaining(TimeUnit.NANOSECONDS));
+        headers.put(TIMEOUT_KEY, effectiveTimeout);
+      }
     }
   }
 

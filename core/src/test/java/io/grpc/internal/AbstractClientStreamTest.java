@@ -34,6 +34,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
 import io.grpc.Codec;
+import io.grpc.Deadline;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -44,6 +45,7 @@ import io.grpc.internal.testing.TestClientStreamTracer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -378,6 +380,27 @@ public class AbstractClientStreamTest {
     InputStream input = mock(InputStream.class, delegatesTo(new ByteArrayInputStream(new byte[1])));
     stream.writeMessage(input);
     verify(input).close();
+  }
+
+  @Test
+  public void deadlineTimeoutPopulatedToHeaders() {
+    AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
+    ClientStream stream = new BaseAbstractClientStream(
+        allocator, new BaseTransportState(statsTraceCtx, transportTracer), sink, statsTraceCtx,
+        transportTracer);
+
+    stream.setDeadline(Deadline.after(1, TimeUnit.SECONDS));
+    stream.start(mockListener);
+
+    ArgumentCaptor<Metadata> headersCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(sink).writeHeaders(headersCaptor.capture(), any(byte[].class));
+
+    Metadata headers = headersCaptor.getValue();
+    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
+    assertThat(headers.get(GrpcUtil.TIMEOUT_KEY).longValue())
+        .isLessThan(TimeUnit.SECONDS.toNanos(1));
+    assertThat(headers.get(GrpcUtil.TIMEOUT_KEY).longValue())
+        .isGreaterThan(TimeUnit.MILLISECONDS.toNanos(600));
   }
 
   /**

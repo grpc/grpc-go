@@ -21,7 +21,6 @@ import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -671,11 +670,10 @@ public class ClientCallImplTest {
   }
 
   @Test
-  public void contextDeadlineShouldBePropagatedInMetadata() {
-    long deadlineNanos = TimeUnit.SECONDS.toNanos(1);
-    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
-        deadlineCancellationExecutor);
-    context.attach();
+  public void contextDeadlineShouldBePropagatedToStream() {
+    Context context = Context.current()
+        .withDeadlineAfter(1000, TimeUnit.MILLISECONDS, deadlineCancellationExecutor);
+    Context origContext = context.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
@@ -685,27 +683,23 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor,
         channelCallTracer,
         false /* retryEnabled */);
+    call.start(callListener, new Metadata());
 
-    Metadata headers = new Metadata();
+    context.detach(origContext);
 
-    call.start(callListener, headers);
+    ArgumentCaptor<Deadline> deadlineCaptor = ArgumentCaptor.forClass(Deadline.class);
+    verify(stream).setDeadline(deadlineCaptor.capture());
 
-    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
-    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
-    assertNotNull(timeout);
-
-    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
-    assertTimeoutBetween(timeout, deadlineNanos - deltaNanos, deadlineNanos);
+    assertTimeoutBetween(deadlineCaptor.getValue().timeRemaining(TimeUnit.MILLISECONDS), 600, 1000);
   }
 
   @Test
-  public void contextDeadlineShouldOverrideLargerMetadataTimeout() {
-    long deadlineNanos = TimeUnit.SECONDS.toNanos(1);
-    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
-        deadlineCancellationExecutor);
-    context.attach();
+  public void contextDeadlineShouldOverrideLargerCallOptionsDeadline() {
+    Context context = Context.current()
+        .withDeadlineAfter(1000, TimeUnit.MILLISECONDS, deadlineCancellationExecutor);
+    Context origContext = context.attach();
 
-    CallOptions callOpts = baseCallOptions.withDeadlineAfter(2, TimeUnit.SECONDS);
+    CallOptions callOpts = baseCallOptions.withDeadlineAfter(2000, TimeUnit.MILLISECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
@@ -714,27 +708,23 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor,
         channelCallTracer,
         false /* retryEnabled */);
+    call.start(callListener, new Metadata());
 
-    Metadata headers = new Metadata();
+    context.detach(origContext);
 
-    call.start(callListener, headers);
+    ArgumentCaptor<Deadline> deadlineCaptor = ArgumentCaptor.forClass(Deadline.class);
+    verify(stream).setDeadline(deadlineCaptor.capture());
 
-    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
-    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
-    assertNotNull(timeout);
-
-    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
-    assertTimeoutBetween(timeout, deadlineNanos - deltaNanos, deadlineNanos);
+    assertTimeoutBetween(deadlineCaptor.getValue().timeRemaining(TimeUnit.MILLISECONDS), 600, 1000);
   }
 
   @Test
-  public void contextDeadlineShouldNotOverrideSmallerMetadataTimeout() {
-    long deadlineNanos = TimeUnit.SECONDS.toNanos(2);
-    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
-        deadlineCancellationExecutor);
-    context.attach();
+  public void contextDeadlineShouldNotOverrideSmallerCallOptionsDeadline() {
+    Context context = Context.current()
+        .withDeadlineAfter(2000, TimeUnit.MILLISECONDS, deadlineCancellationExecutor);
+    Context origContext = context.attach();
 
-    CallOptions callOpts = baseCallOptions.withDeadlineAfter(1, TimeUnit.SECONDS);
+    CallOptions callOpts = baseCallOptions.withDeadlineAfter(1000, TimeUnit.MILLISECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
@@ -743,18 +733,48 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor,
         channelCallTracer,
         false /* retryEnabled */);
+    call.start(callListener, new Metadata());
 
-    Metadata headers = new Metadata();
+    context.detach(origContext);
 
-    call.start(callListener, headers);
+    ArgumentCaptor<Deadline> deadlineCaptor = ArgumentCaptor.forClass(Deadline.class);
+    verify(stream).setDeadline(deadlineCaptor.capture());
 
-    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
-    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
-    assertNotNull(timeout);
+    assertTimeoutBetween(deadlineCaptor.getValue().timeRemaining(TimeUnit.MILLISECONDS), 600, 1000);
+  }
 
-    long callOptsNanos = TimeUnit.SECONDS.toNanos(1);
-    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
-    assertTimeoutBetween(timeout, callOptsNanos - deltaNanos, callOptsNanos);
+  @Test
+  public void callOptionsDeadlineShouldBePropagatedToStream() {
+    CallOptions callOpts = baseCallOptions.withDeadlineAfter(1000, TimeUnit.MILLISECONDS);
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        MoreExecutors.directExecutor(),
+        callOpts,
+        provider,
+        deadlineCancellationExecutor,
+        channelCallTracer,
+        false /* retryEnabled */);
+    call.start(callListener, new Metadata());
+
+    ArgumentCaptor<Deadline> deadlineCaptor = ArgumentCaptor.forClass(Deadline.class);
+    verify(stream).setDeadline(deadlineCaptor.capture());
+
+    assertTimeoutBetween(deadlineCaptor.getValue().timeRemaining(TimeUnit.MILLISECONDS), 600, 1000);
+  }
+
+  @Test
+  public void noDeadlineShouldBePropagatedToStream() {
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        MoreExecutors.directExecutor(),
+        baseCallOptions,
+        provider,
+        deadlineCancellationExecutor,
+        channelCallTracer,
+        false /* retryEnabled */);
+    call.start(callListener, new Metadata());
+
+    verify(stream, never()).setDeadline(any(Deadline.class));
   }
 
   @Test
@@ -941,4 +961,3 @@ public class ClientCallImplTest {
     }
   }
 }
-

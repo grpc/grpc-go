@@ -26,7 +26,6 @@ import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
-import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static java.lang.Math.max;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -234,8 +233,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     Deadline effectiveDeadline = effectiveDeadline();
     boolean deadlineExceeded = effectiveDeadline != null && effectiveDeadline.isExpired();
     if (!deadlineExceeded) {
-      updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
-          context.getDeadline(), headers);
+      logIfContextNarrowedTimeout(
+          effectiveDeadline, callOptions.getDeadline(), context.getDeadline());
       if (retryEnabled) {
         stream = clientTransportProvider.newRetriableStream(method, callOptions, headers, context);
       } else {
@@ -262,8 +261,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     if (callOptions.getMaxOutboundMessageSize() != null) {
       stream.setMaxOutboundMessageSize(callOptions.getMaxOutboundMessageSize());
     }
+    if (effectiveDeadline != null) {
+      stream.setDeadline(effectiveDeadline);
+    }
     stream.setCompressor(compressor);
-    stream.setFullStreamDecompression(fullStreamDecompression);
+    if (fullStreamDecompression) {
+      stream.setFullStreamDecompression(fullStreamDecompression);
+    }
     stream.setDecompressorRegistry(decompressorRegistry);
     channelCallsTracer.reportCallStarted();
     stream.start(new ClientStreamListenerImpl(observer));
@@ -289,34 +293,17 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
   }
 
-  /**
-   * Based on the deadline, calculate and set the timeout to the given headers.
-   */
-  private static void updateTimeoutHeaders(@Nullable Deadline effectiveDeadline,
-      @Nullable Deadline callDeadline, @Nullable Deadline outerCallDeadline, Metadata headers) {
-    headers.discardAll(TIMEOUT_KEY);
-
-    if (effectiveDeadline == null) {
+  private static void logIfContextNarrowedTimeout(
+      Deadline effectiveDeadline, @Nullable Deadline outerCallDeadline,
+      @Nullable Deadline callDeadline) {
+    if (!log.isLoggable(Level.FINE) || effectiveDeadline == null
+        || outerCallDeadline != effectiveDeadline) {
       return;
     }
 
     long effectiveTimeout = max(0, effectiveDeadline.timeRemaining(TimeUnit.NANOSECONDS));
-    headers.put(TIMEOUT_KEY, effectiveTimeout);
-
-    logIfContextNarrowedTimeout(effectiveTimeout, effectiveDeadline, outerCallDeadline,
-        callDeadline);
-  }
-
-  private static void logIfContextNarrowedTimeout(long effectiveTimeout,
-      Deadline effectiveDeadline, @Nullable Deadline outerCallDeadline,
-      @Nullable Deadline callDeadline) {
-    if (!log.isLoggable(Level.FINE) || outerCallDeadline != effectiveDeadline) {
-      return;
-    }
-
-    StringBuilder builder = new StringBuilder();
-    builder.append(String.format("Call timeout set to '%d' ns, due to context deadline.",
-        effectiveTimeout));
+    StringBuilder builder = new StringBuilder(String.format(
+        "Call timeout set to '%d' ns, due to context deadline.", effectiveTimeout));
     if (callDeadline == null) {
       builder.append(" Explicit call timeout was not set.");
     } else {

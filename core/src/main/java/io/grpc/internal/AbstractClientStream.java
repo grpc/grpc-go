@@ -19,17 +19,21 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
+import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
+import static java.lang.Math.max;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -114,6 +118,13 @@ public abstract class AbstractClientStream extends AbstractStream
     } else {
       framer = new GetFramer(headers, statsTraceCtx);
     }
+  }
+
+  @Override
+  public void setDeadline(Deadline deadline) {
+    headers.discardAll(TIMEOUT_KEY);
+    long effectiveTimeout = max(0, deadline.timeRemaining(TimeUnit.NANOSECONDS));
+    headers.put(TIMEOUT_KEY, effectiveTimeout);
   }
 
   @Override

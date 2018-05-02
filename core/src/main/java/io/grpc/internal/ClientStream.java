@@ -17,8 +17,10 @@
 package io.grpc.internal;
 
 import io.grpc.Attributes;
+import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
+import javax.annotation.Nonnull;
 
 /**
  * Extension of {@link Stream} to support client-side termination semantics.
@@ -85,6 +87,11 @@ public interface ClientStream extends Stream {
    * Sets the max size sent to the remote endpoint.
    */
   void setMaxOutboundMessageSize(int maxSize);
+
+  /**
+   * Sets the effective deadline of the RPC.
+   */
+  void setDeadline(@Nonnull Deadline deadline);
 
   /**
    * Attributes that the stream holds at the current moment.

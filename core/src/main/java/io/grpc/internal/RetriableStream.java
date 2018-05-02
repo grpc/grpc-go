@@ -25,6 +25,7 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -483,6 +484,18 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     }
 
     delayOrExecute(new MaxOutboundMessageSizeEntry());
+  }
+
+  @Override
+  public final void setDeadline(final Deadline deadline) {
+    class DeadlineEntry implements BufferEntry {
+      @Override
+      public void runWith(Substream substream) {
+        substream.stream.setDeadline(deadline);
+      }
+    }
+
+    delayOrExecute(new DeadlineEntry());
   }
 
   @Override

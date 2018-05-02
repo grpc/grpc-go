@@ -137,7 +137,7 @@ public class ForwardingClientStreamTest {
   public void setMaxInboundMessageSizeTest() {
     int size = 4567;
     forward.setMaxInboundMessageSize(size);
-    verify(mock).setMaxInboundMessageSize(size);;
+    verify(mock).setMaxInboundMessageSize(size);
   }
 
   @Test

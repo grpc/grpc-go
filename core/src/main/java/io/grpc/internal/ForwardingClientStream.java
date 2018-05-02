@@ -19,6 +19,7 @@ package io.grpc.internal;
 import com.google.common.base.MoreObjects;
 import io.grpc.Attributes;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
 import java.io.InputStream;
@@ -94,6 +95,11 @@ abstract class ForwardingClientStream implements ClientStream {
   @Override
   public void setMaxOutboundMessageSize(int maxSize) {
     delegate().setMaxOutboundMessageSize(maxSize);
+  }
+
+  @Override
+  public void setDeadline(Deadline deadline) {
+    delegate().setDeadline(deadline);
   }
 
   @Override

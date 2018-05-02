@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
 import io.grpc.Compressor;
+import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -81,6 +82,16 @@ class DelayedStream implements ClientStream {
         }
       });
     }
+  }
+
+  @Override
+  public void setDeadline(final Deadline deadline) {
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.setDeadline(deadline);
+      }
+    });
   }
 
   /**
