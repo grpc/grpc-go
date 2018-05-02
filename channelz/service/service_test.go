@@ -28,7 +28,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/channelz"
-	pb "google.golang.org/grpc/channelz/service_proto"
+	pb "google.golang.org/grpc/channelz/grpc_channelz"
 	"google.golang.org/grpc/connectivity"
 )
 

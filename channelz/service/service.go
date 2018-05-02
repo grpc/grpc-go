@@ -16,7 +16,7 @@
  *
  */
 
-//go:generate protoc -I ../service_proto --go_out=plugins=grpc:../service_proto ../service_proto/service.proto
+//go:generate protoc -I ../grpc_channelz --go_out=plugins=grpc:../grpc_channelz ../grpc_channelz/service.proto
 
 // Package service provides an implementation for channelz service server.
 package service
@@ -29,7 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz"
-	pb "google.golang.org/grpc/channelz/service_proto"
+	pb "google.golang.org/grpc/channelz/grpc_channelz"
 	"google.golang.org/grpc/connectivity"
 )
 
