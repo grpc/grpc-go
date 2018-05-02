@@ -503,17 +503,10 @@ public class NettyClientTransportTest {
     address = TestUtils.testServerAddress(12345);
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
 
-    NettyClientTransport transport = newTransport(
-        new ProtocolNegotiator() {
-          @Override
-          public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
-            return null;
-          }
-        });
+    NettyClientTransport transport = newTransport(new NoopProtocolNegotiator());
+    callMeMaybe(transport.start(clientTransportListener));
 
     assertEquals(Attributes.EMPTY, transport.getAttributes());
-
-    transports.clear();
   }
 
   @Test

@@ -44,6 +44,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Grpc;
@@ -56,6 +57,7 @@ import io.grpc.internal.Channelz.TransportStats;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
+import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.Instrumented;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.IoUtils;
@@ -332,6 +334,19 @@ public abstract class AbstractTransportTest {
     assertTrue(serverListener.waitForShutdown(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     server = null;
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
+  }
+
+  @Test
+  public void checkClientAttributes() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    assumeTrue(client instanceof ConnectionClientTransport);
+    ConnectionClientTransport connectionClient = (ConnectionClientTransport) client;
+    startTransport(connectionClient, mockClientTransportListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
+
+    assertNotNull("security level should be set in client attributes",
+        connectionClient.getAttributes().get(CallCredentials.ATTR_SECURITY_LEVEL));
   }
 
   @Test

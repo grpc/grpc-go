@@ -24,6 +24,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Compressor;
 import io.grpc.Deadline;
@@ -32,6 +33,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.SecurityLevel;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.Channelz.SocketStats;
@@ -88,6 +90,9 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   private Set<InProcessStream> streams = new HashSet<InProcessStream>();
   @GuardedBy("this")
   private List<ServerStreamTracer.Factory> serverStreamTracerFactories;
+  private final Attributes attributes = Attributes.newBuilder()
+      .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+      .build();
 
   public InProcessTransport(String name, String authority, String userAgent) {
     this.name = name;
@@ -224,7 +229,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
   @Override
   public Attributes getAttributes() {
-    return Attributes.EMPTY;
+    return attributes;
   }
 
   @Override

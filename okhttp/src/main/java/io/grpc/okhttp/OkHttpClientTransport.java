@@ -31,11 +31,13 @@ import com.squareup.okhttp.HttpUrl;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.internal.http.StatusLine;
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
@@ -478,12 +480,13 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           sock.setTcpNoDelay(true);
           source = Okio.buffer(Okio.source(sock));
           sink = Okio.buffer(Okio.sink(sock));
-          // TODO(zhangkun83): fill channel security attributes
           // The return value of OkHttpTlsUpgrader.upgrade is an SSLSocket that has this info
           attributes = Attributes
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, sock.getRemoteSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
+              .set(CallCredentials.ATTR_SECURITY_LEVEL,
+                  sslSession == null ? SecurityLevel.NONE : SecurityLevel.PRIVACY_AND_INTEGRITY)
               .build();
         } catch (StatusException e) {
           startGoAway(0, ErrorCode.INTERNAL_ERROR, e.getStatus());
