@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [[ `uname -a` = *"Darwin"* ]]; then
+  echo "It seems you are running on Mac. This script does not work on Mac. See https://github.com/grpc/grpc-go/issues/2047"
+  exit 1
+fi
+
 set -ex  # Exit on error; debugging enabled.
 set -o pipefail  # Fail a pipe if any sub-command fails.
 
