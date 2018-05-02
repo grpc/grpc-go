@@ -53,7 +53,7 @@ func TestEncode(t *testing.T) {
 		data []byte
 		err  error
 	}{
-		{nil, nil, []byte{}, nil},
+		{&perfpb.Buffer{}, nil, []byte{}, nil},
 	} {
 		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil, nil, nil)
 		if err != test.err || !bytes.Equal(data, test.data) {

@@ -482,7 +482,7 @@ func (a *csAttempt) sendMsg(m interface{}) (err error) {
 	}
 	opts := &transport.Options{
 		Last:         !cs.desc.ClientStreams,
-		IsCompressed: cs.cp != nil || cs.comp != nil,
+		IsCompressed: len(data) > 0 && (cs.cp != nil || cs.comp != nil),
 	}
 	err = a.t.Write(a.s, data, opts)
 	if err == nil {
@@ -710,7 +710,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}
 	opts := &transport.Options{
 		Last:         false,
-		IsCompressed: ss.cp != nil || ss.comp != nil,
+		IsCompressed: len(data) > 0 && (ss.cp != nil || ss.comp != nil),
 	}
 	if err := ss.t.Write(ss.s, data, opts); err != nil {
 		return toRPCErr(err)

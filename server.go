@@ -841,7 +841,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if len(data) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), s.opts.maxSendMessageSize)
 	}
-	opts.IsCompressed = cp != nil || comp != nil
+	opts.IsCompressed = len(data) > 0 && (cp != nil || comp != nil)
 	err = t.Write(stream, data, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()

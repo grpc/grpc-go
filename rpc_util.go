@@ -435,17 +435,17 @@ func recvMsg(s *transport.Stream, maxRecvMsgSize int) (bool, []byte, error) {
 }
 
 // encode serializes msg and returns a buffer of msg.
-// If msg is nil, it generates an empty buffer.
 // TODO(ddyihai): eliminate extra Compressor parameter.
 func encode(c baseCodec, msg interface{}, cp Compressor, outPayload *stats.OutPayload, compressor encoding.Compressor) ([]byte, error) {
-	var (
-		b    []byte
-		cbuf *bytes.Buffer
-	)
-	var err error
-	b, err = c.Marshal(msg)
+	b, err := c.Marshal(msg)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
+	}
+	if b == nil {
+		// If there was no error while marshalling, yet payload was nil,
+		// we update it to an empty slice, since a nil payload leads to
+		// an empty data frame(no gRPC message header is added).
+		b = []byte{}
 	}
 	if outPayload != nil {
 		outPayload.Payload = msg
@@ -453,8 +453,8 @@ func encode(c baseCodec, msg interface{}, cp Compressor, outPayload *stats.OutPa
 		outPayload.Data = b
 		outPayload.Length = len(b)
 	}
-	if compressor != nil || cp != nil {
-		cbuf = new(bytes.Buffer)
+	if len(b) > 0 && (compressor != nil || cp != nil) {
+		cbuf := new(bytes.Buffer)
 		// Has compressor, check Compressor is set by UseCompressor first.
 		if compressor != nil {
 			z, _ := compressor.Compress(cbuf)
