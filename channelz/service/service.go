@@ -138,33 +138,27 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *pb.Subchannel {
 func securityToProto(se channelz.SecurityValue) *pb.Security {
 	switch v := se.(type) {
 	case *channelz.TLSSecurityValue:
-		return &pb.Security{
-			&pb.Security_Tls_{
-				&pb.Security_Tls{
-					CipherSuite:       &pb.Security_Tls_StandardName{v.StandardName},
-					LocalCertificate:  v.LocalCertificate,
-					RemoteCertificate: v.RemoteCertificate,
-				},
-			},
+		return &pb.Security{Model: &pb.Security_Tls_{Tls: &pb.Security_Tls{
+			CipherSuite:       &pb.Security_Tls_StandardName{StandardName: v.StandardName},
+			LocalCertificate:  v.LocalCertificate,
+			RemoteCertificate: v.RemoteCertificate,
+		},
+		},
 		}
 	case *channelz.OtherSecurityValue:
 		anyval, err := ptypes.MarshalAny(v.Value)
 		if err != nil {
-			return &pb.Security{
-				&pb.Security_Other{
-					&pb.Security_OtherSecurity{
-						Name: v.Name,
-					},
-				},
+			return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
+				Name: v.Name,
+			},
+			},
 			}
 		}
-		return &pb.Security{
-			&pb.Security_Other{
-				&pb.Security_OtherSecurity{
-					Name:  v.Name,
-					Value: anyval,
-				},
-			},
+		return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
+			Name:  v.Name,
+			Value: anyval,
+		},
+		},
 		}
 	}
 	return nil
@@ -179,13 +173,13 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
 		}
 	}
 	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{ptypes.DurationProto(time.Duration(skopts.RecvTimeout.Sec*secToNano + skopts.RecvTimeout.Usec*usecToNano))})
+		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(skopts.RecvTimeout.Sec*secToNano + skopts.RecvTimeout.Usec*usecToNano))})
 		if err == nil {
 			opts = append(opts, &pb.SocketOption{Name: "SO_RCVTIMEO", Additional: additional})
 		}
 	}
 	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{ptypes.DurationProto(time.Duration(skopts.SendTimeout.Sec*secToNano + skopts.SendTimeout.Usec*usecToNano))})
+		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(skopts.SendTimeout.Sec*secToNano + skopts.SendTimeout.Usec*usecToNano))})
 		if err == nil {
 			opts = append(opts, &pb.SocketOption{Name: "SO_SNDTIMEO", Additional: additional})
 		}

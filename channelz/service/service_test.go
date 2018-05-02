@@ -196,7 +196,7 @@ func protoToTime(protoTime *pb.SocketOptionTimeout) *unix.Timeval {
 func protoToSecurity(protoSecurity *pb.Security) channelz.SecurityValue {
 	switch v := protoSecurity.Model.(type) {
 	case *pb.Security_Tls_:
-		return &channelz.TLSSecurityValue{v.Tls.GetStandardName(), v.Tls.GetLocalCertificate(), v.Tls.GetRemoteCertificate()}
+		return &channelz.TLSSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
 	case *pb.Security_Other:
 		sv := &channelz.OtherSecurityValue{Name: v.Other.GetName()}
 		var x ptypes.DynamicAny
