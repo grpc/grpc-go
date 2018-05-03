@@ -65,9 +65,6 @@ func marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 }
 
 func (codec) Marshal(v interface{}) ([]byte, error) {
-	if v == nil {
-		return nil, nil
-	}
 	if pm, ok := v.(proto.Marshaler); ok {
 		// object can marshal itself, no need for buffer
 		return pm.Marshal()
