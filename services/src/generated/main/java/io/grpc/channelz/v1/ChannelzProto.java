@@ -344,9 +344,10 @@ public final class ChannelzProto {
       "nelz.v1.GetSubchannelRequest\032\'.grpc.chan" +
       "nelz.v1.GetSubchannelResponse\022T\n\tGetSock" +
       "et\022\".grpc.channelz.v1.GetSocketRequest\032#" +
-      ".grpc.channelz.v1.GetSocketResponseB0\n\023i" +
-      "o.grpc.channelz.v1B\rChannelzProtoP\001Z\010cha" +
-      "nnelzb\006proto3"
+      ".grpc.channelz.v1.GetSocketResponseBX\n\023i" +
+      "o.grpc.channelz.v1B\rChannelzProtoP\001Z0goo" +
+      "gle.golang.org/grpc/channelz/grpc_channe" +
+      "lz_v1b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
