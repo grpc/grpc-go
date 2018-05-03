@@ -649,28 +649,6 @@ func doServerSideFailedUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
 	}
 }
 
-// This func is to be used to test server side counting of streams succeeded.
-// It cannot be used for client side counting due to race between receiving
-// server trailer (streamsSucceeded++) and CloseStream on error (streamsFailed++)
-// on client side.
-func doClientSideFailedUnaryCall(tc testpb.TestServiceClient, t *testing.T) {
-	const smallSize = 1
-	const largeSize = 2000
-
-	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: int32(largeSize),
-		Payload:      smallPayload,
-	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || status.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
-	}
-}
-
 func doClientSideInitiatedFailedStream(tc testpb.TestServiceClient, t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := tc.FullDuplexCall(ctx)
@@ -1176,24 +1154,12 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	doClientSideFailedUnaryCall(tc, t)
-	if err := verifyResultWithDelay(func() (bool, error) {
-		ns, _ := channelz.GetServerSockets(svrID, 0)
-		sktData := ns[0].SocketData
-		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 2 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 3, 0, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
-		}
-		return true, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
 	doClientSideInitiatedFailedStream(tc, t)
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		sktData := ns[0].SocketData
-		if sktData.StreamsStarted != 4 || sktData.StreamsSucceeded != 3 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 3 || sktData.MessagesReceived != 3 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (4, 3, 1, 3, 3), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 2 {
+			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
 		}
 		return true, nil
 	}); err != nil {
