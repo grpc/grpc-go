@@ -1,5 +1,7 @@
 apply plugin: 'com.android.library'
 
+group = "io.grpc"
+version = "1.13.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 description = 'gRPC: Android'
 
 buildscript {
@@ -14,10 +16,12 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:3.0.1'
         classpath "net.ltgt.gradle:gradle-errorprone-plugin:0.0.13"
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:2.0'
     }
 }
 
 apply plugin: "net.ltgt.errorprone"
+apply plugin: 'com.github.dcendents.android-maven'
 
 android {
     compileSdkVersion 27
@@ -27,11 +31,6 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
-    }
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
-        }
     }
     lintOptions {
         abortOnError false
@@ -45,9 +44,99 @@ repositories {
 
 dependencies {
     implementation 'io.grpc:grpc-core:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    testImplementation 'io.grpc:grpc-okhttp:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
+    testImplementation 'io.grpc:grpc-okhttp:1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.robolectric:robolectric:3.7.1'
     testImplementation 'com.google.truth:truth:0.39'
+}
+
+task javadocs(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    // TODO(ericgribkoff) Fix javadoc errors
+    failOnError false
+    options {
+        // Disable JavaDoc doclint on Java 8.
+        if (JavaVersion.current().isJava8Compatible()) {
+            addStringOption('Xdoclint:none', '-quiet')
+        }
+    }
+}
+
+task javadocsJar(type: Jar, dependsOn: javadocs) {
+    classifier = 'javadoc'
+    from javadocs.destinationDir
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocsJar
+}
+
+uploadArchives.repositories.mavenDeployer {
+    beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+    if (rootProject.hasProperty('repositoryDir')) {
+        repository(url: new File(rootProject.repositoryDir).toURI())
+    } else {
+        String stagingUrl
+        if (rootProject.hasProperty('repositoryId')) {
+            stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
+                    rootProject.repositoryId
+        } else {
+            stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+        }
+        def configureAuth = {
+            if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
+                authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
+            }
+        }
+        repository(url: stagingUrl, configureAuth)
+        snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
+    }
+}
+
+[
+    install.repositories.mavenInstaller,
+    uploadArchives.repositories.mavenDeployer,
+]*.pom*.whenConfigured { pom ->
+    pom.project {
+        name "$project.group:$project.name"
+        description project.description
+        url 'https://conscrypt.org/'
+
+        scm {
+            connection 'scm:git:https://github.com/grpc/grpc-java.git'
+            developerConnection 'scm:git:git@github.com:grpc/grpc-java.git'
+            url 'https://github.com/grpc/grpc-java'
+        }
+
+        licenses {
+            license {
+                name 'Apache 2.0'
+                url 'https://opensource.org/licenses/Apache-2.0'
+            }
+        }
+
+        developers {
+            developer {
+                id "grpc.io"
+                name "gRPC Contributors"
+                email "grpc-io@googlegroups.com"
+                url "https://grpc.io/"
+                // https://issues.gradle.org/browse/GRADLE-2719
+                organization = "gRPC Authors"
+                organizationUrl "https://www.google.com"
+            }
+        }
+    }
+    def core = pom.dependencies.find {dep -> dep.artifactId == 'grpc-core'}
+    if (core != null) {
+        // Depend on specific version of grpc-core because internal package is unstable
+        core.version = "[" + core.version + "]"
+    }
 }
