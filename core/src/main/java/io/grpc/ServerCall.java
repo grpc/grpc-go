@@ -109,8 +109,8 @@ public abstract class ServerCall<ReqT, RespT> {
    * Send response header metadata prior to sending a response message. This method may
    * only be called once and cannot be called after calls to {@link #sendMessage} or {@link #close}.
    *
-   * <p>Since {@link Metadata} is not thread-safe, the caller must not access {@code headers} after
-   * this point.
+   * <p>Since {@link Metadata} is not thread-safe, the caller must not access (read or write) {@code
+   * headers} after this point.
    *
    * @param headers metadata to send prior to any response body.
    * @throws IllegalStateException if {@code close} has been called, a message has been sent, or
@@ -147,8 +147,8 @@ public abstract class ServerCall<ReqT, RespT> {
    * notification should be expected, independent of {@code status}. Otherwise {@link
    * Listener#onCancel} has been or will be called.
    *
-   * <p>Since {@link Metadata} is not thread-safe, the caller must not access {@code trailers} after
-   * this point.
+   * <p>Since {@link Metadata} is not thread-safe, the caller must not access (read or write) {@code
+   * trailers} after this point.
    *
    * @throws IllegalStateException if call is already {@code close}d
    */
