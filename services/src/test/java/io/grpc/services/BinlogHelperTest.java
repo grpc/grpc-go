@@ -17,8 +17,8 @@
 package io.grpc.services;
 
 import static io.grpc.internal.BinaryLogProvider.BYTEARRAY_MARSHALLER;
-import static io.grpc.services.BinaryLog.DUMMY_SOCKET;
-import static io.grpc.services.BinaryLog.getPeerSocket;
+import static io.grpc.services.BinlogHelper.DUMMY_SOCKET;
+import static io.grpc.services.BinlogHelper.getPeerSocket;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -51,9 +51,9 @@ import io.grpc.internal.BinaryLogProvider;
 import io.grpc.internal.BinaryLogProvider.CallId;
 import io.grpc.internal.NoopClientCall;
 import io.grpc.internal.NoopServerCall;
-import io.grpc.services.BinaryLog.FactoryImpl;
-import io.grpc.services.BinaryLog.SinkWriter;
-import io.grpc.services.BinaryLog.SinkWriterImpl;
+import io.grpc.services.BinlogHelper.FactoryImpl;
+import io.grpc.services.BinlogHelper.SinkWriter;
+import io.grpc.services.BinlogHelper.SinkWriterImpl;
 import io.netty.channel.unix.DomainSocketAddress;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -67,16 +67,16 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests for {@link BinaryLog}. */
+/** Tests for {@link BinlogHelper}. */
 @RunWith(JUnit4.class)
-public final class BinaryLogTest {
+public final class BinlogHelperTest {
   private static final Charset US_ASCII = Charset.forName("US-ASCII");
-  private static final BinaryLog HEADER_FULL = new Builder().header(Integer.MAX_VALUE).build();
-  private static final BinaryLog HEADER_256 = new Builder().header(256).build();
-  private static final BinaryLog MSG_FULL = new Builder().msg(Integer.MAX_VALUE).build();
-  private static final BinaryLog MSG_256 = new Builder().msg(256).build();
-  private static final BinaryLog BOTH_256 = new Builder().header(256).msg(256).build();
-  private static final BinaryLog BOTH_FULL =
+  private static final BinlogHelper HEADER_FULL = new Builder().header(Integer.MAX_VALUE).build();
+  private static final BinlogHelper HEADER_256 = new Builder().header(256).build();
+  private static final BinlogHelper MSG_FULL = new Builder().msg(Integer.MAX_VALUE).build();
+  private static final BinlogHelper MSG_256 = new Builder().msg(256).build();
+  private static final BinlogHelper BOTH_256 = new Builder().header(256).msg(256).build();
+  private static final BinlogHelper BOTH_FULL =
       new Builder().header(Integer.MAX_VALUE).msg(Integer.MAX_VALUE).build();
 
   private static final String DATA_A = "aaaaaaaaa";
@@ -308,7 +308,7 @@ public final class BinaryLogTest {
             .setHigh(0x1112131415161718L)
             .setLow(0x19101a1b1c1d1e1fL)
             .build(),
-        BinaryLog.callIdToProto(callId));
+        BinlogHelper.callIdToProto(callId));
   }
 
   @Test
@@ -325,7 +325,7 @@ public final class BinaryLogTest {
             .setPeerType(Peer.PeerType.PEER_IPV4)
             .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
             .build(),
-        BinaryLog.socketToProto(socketAddress));
+        BinlogHelper.socketToProto(socketAddress));
   }
 
   @Test
@@ -343,7 +343,7 @@ public final class BinaryLogTest {
             .setPeerType(Peer.PeerType.PEER_IPV6)
             .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
             .build(),
-        BinaryLog.socketToProto(socketAddress));
+        BinlogHelper.socketToProto(socketAddress));
   }
 
   @Test
@@ -356,7 +356,7 @@ public final class BinaryLogTest {
             .setPeerType(Peer.PeerType.PEER_UNIX)
             .setPeer(ByteString.copyFrom(path.getBytes(US_ASCII)))
             .build(),
-        BinaryLog.socketToProto(socketAddress)
+        BinlogHelper.socketToProto(socketAddress)
     );
   }
 
@@ -368,14 +368,14 @@ public final class BinaryLogTest {
             .setPeerType(PeerType.UNKNOWN_PEERTYPE)
             .setPeer(ByteString.copyFrom(unknownSocket.toString(), US_ASCII))
             .build(),
-        BinaryLog.socketToProto(unknownSocket));
+        BinlogHelper.socketToProto(unknownSocket));
   }
 
   @Test
   public void metadataToProto_empty() throws Exception {
     assertEquals(
         io.grpc.binarylog.Metadata.getDefaultInstance(),
-        BinaryLog.metadataToProto(new Metadata(), Integer.MAX_VALUE));
+        BinlogHelper.metadataToProto(new Metadata(), Integer.MAX_VALUE));
   }
 
   @Test
@@ -387,7 +387,7 @@ public final class BinaryLogTest {
             .addEntry(ENTRY_B)
             .addEntry(ENTRY_C)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, Integer.MAX_VALUE));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, Integer.MAX_VALUE));
   }
 
   @Test
@@ -395,39 +395,39 @@ public final class BinaryLogTest {
     // 0 byte limit not enough for any metadata
     assertEquals(
         io.grpc.binarylog.Metadata.getDefaultInstance(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 0));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 0));
     // not enough bytes for first key value
     assertEquals(
         io.grpc.binarylog.Metadata.getDefaultInstance(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 9));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 9));
     // enough for first key value
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 10));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 10));
     // Test edge cases for >= 2 key values
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 19));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 19));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .addEntry(ENTRY_B)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 20));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 20));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
             .addEntry(ENTRY_A)
             .addEntry(ENTRY_B)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 29));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 29));
     assertEquals(
         io.grpc.binarylog.Metadata
             .newBuilder()
@@ -435,14 +435,14 @@ public final class BinaryLogTest {
             .addEntry(ENTRY_B)
             .addEntry(ENTRY_C)
             .build(),
-        BinaryLog.metadataToProto(nonEmptyMetadata, 30));
+        BinlogHelper.metadataToProto(nonEmptyMetadata, 30));
   }
 
   @Test
   public void messageToProto() throws Exception {
     byte[] bytes
         = "this is a long message: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".getBytes(US_ASCII);
-    Message message = BinaryLog.messageToProto(bytes, false, Integer.MAX_VALUE);
+    Message message = BinlogHelper.messageToProto(bytes, false, Integer.MAX_VALUE);
     assertEquals(
         Message
             .newBuilder()
@@ -463,7 +463,7 @@ public final class BinaryLogTest {
             .setFlags(0)
             .setLength(bytes.length)
             .build(),
-        BinaryLog.messageToProto(bytes, false, 0));
+        BinlogHelper.messageToProto(bytes, false, 0));
 
     int limit = 10;
     String truncatedMessage = "this is a ";
@@ -474,13 +474,13 @@ public final class BinaryLogTest {
             .setFlags(0)
             .setLength(bytes.length)
             .build(),
-        BinaryLog.messageToProto(bytes, false, limit));
+        BinlogHelper.messageToProto(bytes, false, limit));
   }
 
   @Test
   public void toFlag() throws Exception {
-    assertEquals(0, BinaryLog.flagsForMessage(IS_UNCOMPRESSED));
-    assertEquals(1, BinaryLog.flagsForMessage(IS_COMPRESSED));
+    assertEquals(0, BinlogHelper.flagsForMessage(IS_UNCOMPRESSED));
+    assertEquals(1, BinlogHelper.flagsForMessage(IS_COMPRESSED));
   }
 
   @Test
@@ -491,8 +491,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -504,8 +504,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -520,9 +520,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setPeer(BinlogHelper.socketToProto(socketAddress))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -537,9 +537,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setPeer(BinaryLog.socketToProto(socketAddress))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setPeer(BinlogHelper.socketToProto(socketAddress))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -551,8 +551,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -564,8 +564,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMetadata(BinaryLog.metadataToProto(nonEmptyMetadata, 10))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMetadata(BinlogHelper.metadataToProto(nonEmptyMetadata, 10))
             .build());
   }
 
@@ -578,8 +578,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMessage(BinaryLog.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMessage(BinlogHelper.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
             .build());
 
     sinkWriterImpl.logOutboundMessage(
@@ -589,9 +589,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .setMessage(
-                BinaryLog.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
+                BinlogHelper.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
             .build());
     verifyNoMoreInteractions(sink);
   }
@@ -605,8 +605,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMessage(BinaryLog.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMessage(BinlogHelper.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
             .build());
 
     sinkWriterImpl.logOutboundMessage(
@@ -616,9 +616,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .setMessage(
-                BinaryLog.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
+                BinlogHelper.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
             .build());
     verifyNoMoreInteractions(sink);
   }
@@ -632,8 +632,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMessage(BinaryLog.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMessage(BinlogHelper.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
             .build());
 
     sinkWriterImpl.logInboundMessage(
@@ -643,9 +643,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .setMessage(
-                BinaryLog.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
+                BinlogHelper.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
             .build());
     verifyNoMoreInteractions(sink);
   }
@@ -659,8 +659,8 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
-            .setMessage(BinaryLog.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setMessage(BinlogHelper.messageToProto(message, IS_COMPRESSED, MESSAGE_LIMIT))
             .build());
 
     sinkWriterImpl.logInboundMessage(
@@ -670,9 +670,9 @@ public final class BinaryLogTest {
             .newBuilder()
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
-            .setCallId(BinaryLog.callIdToProto(CALL_ID))
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .setMessage(
-                BinaryLog.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
+                BinlogHelper.messageToProto(message, IS_UNCOMPRESSED, MESSAGE_LIMIT))
             .build());
     verifyNoMoreInteractions(sink);
   }
@@ -733,7 +733,7 @@ public final class BinaryLogTest {
             .setResponseMarshaller(BYTEARRAY_MARSHALLER)
             .build();
     ClientCall<byte[], byte[]> interceptedCall =
-        new BinaryLog(mockSinkWriter)
+        new BinlogHelper(mockSinkWriter)
             .getClientInterceptor(CALL_ID)
             .interceptCall(
                 method,
@@ -772,7 +772,7 @@ public final class BinaryLogTest {
       verify(mockSinkWriter).logOutboundMessage(
           same(BYTEARRAY_MARSHALLER),
           same(request),
-          eq(BinaryLog.DUMMY_IS_COMPRESSED),
+          eq(BinlogHelper.DUMMY_IS_COMPRESSED),
           eq(IS_CLIENT),
           same(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
@@ -786,7 +786,7 @@ public final class BinaryLogTest {
       verify(mockSinkWriter).logInboundMessage(
           same(BYTEARRAY_MARSHALLER),
           eq(response),
-          eq(BinaryLog.DUMMY_IS_COMPRESSED),
+          eq(BinlogHelper.DUMMY_IS_COMPRESSED),
           eq(IS_CLIENT),
           same(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
@@ -832,7 +832,7 @@ public final class BinaryLogTest {
               .setResponseMarshaller(BYTEARRAY_MARSHALLER)
               .build();
       capturedListener =
-          new BinaryLog(mockSinkWriter)
+          new BinlogHelper(mockSinkWriter)
               .getServerInterceptor(CALL_ID)
               .interceptCall(
                   new NoopServerCall<byte[], byte[]>() {
@@ -902,7 +902,7 @@ public final class BinaryLogTest {
       verify(mockSinkWriter).logInboundMessage(
           same(BYTEARRAY_MARSHALLER),
           same(request),
-          eq(BinaryLog.DUMMY_IS_COMPRESSED),
+          eq(BinlogHelper.DUMMY_IS_COMPRESSED),
           eq(IS_SERVER),
           same(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
@@ -916,7 +916,7 @@ public final class BinaryLogTest {
       verify(mockSinkWriter).logOutboundMessage(
           same(BYTEARRAY_MARSHALLER),
           same(response),
-          eq(BinaryLog.DUMMY_IS_COMPRESSED),
+          eq(BinlogHelper.DUMMY_IS_COMPRESSED),
           eq(IS_SERVER),
           same(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
@@ -953,22 +953,22 @@ public final class BinaryLogTest {
       return this;
     }
 
-    BinaryLog build() {
-      return new BinaryLog(
+    BinlogHelper build() {
+      return new BinlogHelper(
           new SinkWriterImpl(mock(BinaryLogSink.class), maxHeaderBytes, maxMessageBytes));
     }
   }
 
-  private static void assertSameLimits(BinaryLog a, BinaryLog b) {
+  private static void assertSameLimits(BinlogHelper a, BinlogHelper b) {
     assertEquals(a.writer.getMaxMessageBytes(), b.writer.getMaxMessageBytes());
     assertEquals(a.writer.getMaxHeaderBytes(), b.writer.getMaxHeaderBytes());
   }
 
-  private BinaryLog makeLog(String factoryConfigStr, String lookup) {
-    return new BinaryLog.FactoryImpl(sink, factoryConfigStr).getLog(lookup);
+  private BinlogHelper makeLog(String factoryConfigStr, String lookup) {
+    return new BinlogHelper.FactoryImpl(sink, factoryConfigStr).getLog(lookup);
   }
 
-  private BinaryLog makeLog(String logConfigStr) {
+  private BinlogHelper makeLog(String logConfigStr) {
     return FactoryImpl.createBinaryLog(sink, logConfigStr);
   }
 }

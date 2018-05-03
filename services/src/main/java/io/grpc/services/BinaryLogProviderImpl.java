@@ -32,7 +32,7 @@ import javax.annotation.Nullable;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
 public class BinaryLogProviderImpl extends BinaryLogProvider {
   private static final Logger logger = Logger.getLogger(BinaryLogProviderImpl.class.getName());
-  private final BinaryLog.Factory factory;
+  private final BinlogHelper.Factory factory;
   private final AtomicLong counter = new AtomicLong();
 
   public BinaryLogProviderImpl() {
@@ -40,9 +40,9 @@ public class BinaryLogProviderImpl extends BinaryLogProvider {
   }
 
   BinaryLogProviderImpl(BinaryLogSink sink, String configStr) {
-    BinaryLog.Factory factory = null;
+    BinlogHelper.Factory factory = null;
     try {
-      factory = new BinaryLog.FactoryImpl(sink, configStr);
+      factory = new BinlogHelper.FactoryImpl(sink, configStr);
     } catch (RuntimeException e) {
       logger.log(Level.SEVERE, "Caught exception, binary log will be disabled", e);
     } catch (Error err) {

@@ -71,8 +71,8 @@ import javax.annotation.concurrent.ThreadSafe;
  * A binary log class that is configured for a specific {@link MethodDescriptor}.
  */
 @ThreadSafe
-final class BinaryLog {
-  private static final Logger logger = Logger.getLogger(BinaryLog.class.getName());
+final class BinlogHelper {
+  private static final Logger logger = Logger.getLogger(BinlogHelper.class.getName());
   private static final int IP_PORT_BYTES = 2;
   private static final int IP_PORT_UPPER_MASK = 0xff00;
   private static final int IP_PORT_LOWER_MASK = 0xff;
@@ -90,7 +90,7 @@ final class BinaryLog {
   final SinkWriter writer;
 
   @VisibleForTesting
-  BinaryLog(SinkWriter writer) {
+  BinlogHelper(SinkWriter writer) {
     this.writer = writer;
   }
 
@@ -359,7 +359,7 @@ final class BinaryLog {
 
   interface Factory {
     @Nullable
-    BinaryLog getLog(String fullMethodName);
+    BinlogHelper getLog(String fullMethodName);
   }
 
   static final class FactoryImpl implements Factory {
@@ -377,9 +377,9 @@ final class BinaryLog {
     // The form: {h:256,m:256}
     private static final Pattern bothRe = Pattern.compile("\\{h(?::(\\d+))?;m(?::(\\d+))?}");
 
-    private final BinaryLog globalLog;
-    private final Map<String, BinaryLog> perServiceLogs;
-    private final Map<String, BinaryLog> perMethodLogs;
+    private final BinlogHelper globalLog;
+    private final Map<String, BinlogHelper> perServiceLogs;
+    private final Map<String, BinlogHelper> perMethodLogs;
 
     /**
      * Accepts a string in the format specified by the binary log spec.
@@ -388,9 +388,9 @@ final class BinaryLog {
     FactoryImpl(BinaryLogSink sink, String configurationString) {
       Preconditions.checkNotNull(sink);
       Preconditions.checkState(configurationString != null && configurationString.length() > 0);
-      BinaryLog globalLog = null;
-      Map<String, BinaryLog> perServiceLogs = new HashMap<String, BinaryLog>();
-      Map<String, BinaryLog> perMethodLogs = new HashMap<String, BinaryLog>();
+      BinlogHelper globalLog = null;
+      Map<String, BinlogHelper> perServiceLogs = new HashMap<String, BinlogHelper>();
+      Map<String, BinlogHelper> perMethodLogs = new HashMap<String, BinlogHelper>();
 
       for (String configuration : Splitter.on(',').split(configurationString)) {
         Matcher configMatcher = configRe.matcher(configuration);
@@ -399,7 +399,7 @@ final class BinaryLog {
         }
         String methodOrSvc = configMatcher.group(1);
         String binlogOptionStr = configMatcher.group(2);
-        BinaryLog binLog = createBinaryLog(sink, binlogOptionStr);
+        BinlogHelper binLog = createBinaryLog(sink, binlogOptionStr);
         if (binLog == null) {
           continue;
         }
@@ -437,12 +437,12 @@ final class BinaryLog {
      * Accepts a full method name and returns the log that should be used.
      */
     @Override
-    public BinaryLog getLog(String fullMethodName) {
-      BinaryLog methodLog = perMethodLogs.get(fullMethodName);
+    public BinlogHelper getLog(String fullMethodName) {
+      BinlogHelper methodLog = perMethodLogs.get(fullMethodName);
       if (methodLog != null) {
         return methodLog;
       }
-      BinaryLog serviceLog = perServiceLogs.get(
+      BinlogHelper serviceLog = perServiceLogs.get(
           MethodDescriptor.extractFullServiceName(fullMethodName));
       if (serviceLog != null) {
         return serviceLog;
@@ -461,9 +461,9 @@ final class BinaryLog {
      */
     @VisibleForTesting
     @Nullable
-    static BinaryLog createBinaryLog(BinaryLogSink sink, @Nullable String logConfig) {
+    static BinlogHelper createBinaryLog(BinaryLogSink sink, @Nullable String logConfig) {
       if (logConfig == null) {
-        return new BinaryLog(
+        return new BinlogHelper(
             new SinkWriterImpl(sink, Integer.MAX_VALUE, Integer.MAX_VALUE));
       }
       try {
@@ -491,7 +491,7 @@ final class BinaryLog {
           logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
           return null;
         }
-        return new BinaryLog(new SinkWriterImpl(sink, maxHeaderBytes, maxMsgBytes));
+        return new BinlogHelper(new SinkWriterImpl(sink, maxHeaderBytes, maxMsgBytes));
       } catch (NumberFormatException e) {
         logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
         return null;
