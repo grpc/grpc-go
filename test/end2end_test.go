@@ -5923,7 +5923,7 @@ func TestMethodFromServerStream(t *testing.T) {
 
 	te.startServer(nil)
 	defer te.tearDown()
-	_ = te.clientConn().Invoke(context.Background(), testMethod, &testpb.Empty{}, &testpb.Empty{})
+	_ = te.clientConn().Invoke(context.Background(), testMethod, nil, nil)
 	if !ok || method != testMethod {
 		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
