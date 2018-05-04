@@ -45,35 +45,37 @@ export LD_LIBRARY_PATH=/tmp/protobuf/lib
 export LDFLAGS=-L/tmp/protobuf/lib
 export CXXFLAGS="-I/tmp/protobuf/include"
 
-# Ensure all *.proto changes include *.java generated code
-./gradlew assemble generateTestProto install $GRADLE_FLAGS
+./gradlew clean $GRADLE_FLAGS
 
-if [[ -z "${SKIP_CLEAN_CHECK:-}" && ! -z $(git status --porcelain) ]]; then
-  git status
-  echo "Error Working directory is not clean. Forget to commit generated files?"
-  exit 1
+if [[ -z "${SKIP_TESTS:-}" ]]; then
+  # Ensure all *.proto changes include *.java generated code
+  ./gradlew assemble generateTestProto install $GRADLE_FLAGS
+
+  if [[ -z "${SKIP_CLEAN_CHECK:-}" && ! -z $(git status --porcelain) ]]; then
+    git status
+    echo "Error Working directory is not clean. Forget to commit generated files?"
+    exit 1
+  fi
+  # Run tests
+  ./gradlew build $GRADLE_FLAGS
+  pushd examples
+  ./gradlew clean $GRADLE_FLAGS
+  ./gradlew build $GRADLE_FLAGS
+  # --batch-mode reduces log spam
+  mvn clean verify --batch-mode
+  popd
+  # TODO(zpencer): also build the GAE examples
 fi
-
-# Run tests
-./gradlew build $GRADLE_FLAGS
-./gradlew install
-
-pushd examples
-./gradlew build $GRADLE_FLAGS
-# --batch-mode reduces log spam
-mvn verify --batch-mode
-popd
-
-pushd examples/example-kotlin/
-./gradlew build $GRADLE_FLAGS
-popd
-
-# TODO(zpencer): also build the GAE examples
 
 LOCAL_MVN_TEMP=$(mktemp -d)
 # Note that this disables parallel=true from GRADLE_FLAGS
-./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS \
-  -Dorg.gradle.parallel=false -PrepositoryDir="$LOCAL_MVN_TEMP"
+if [[ -z "${ALL_ARTIFACTS:-}" ]]; then
+  ./gradlew grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
+else
+  ./gradlew uploadArchives $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
+fi
 
 readonly MVN_ARTIFACT_DIR="${MVN_ARTIFACT_DIR:-$GRPC_JAVA_DIR/mvn-artifacts}"
 
