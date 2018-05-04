@@ -452,7 +452,7 @@ message GetServerSocketsResponse {
 }
 
 message GetChannelRequest {
-  // channel_id is the the identifier of the specific channel to get.
+  // channel_id is the identifier of the specific channel to get.
   int64 channel_id = 1;
 }
 
@@ -463,7 +463,7 @@ message GetChannelResponse {
 }
 
 message GetSubchannelRequest {
-  // subchannel_id is the the identifier of the specific subchannel to get.
+  // subchannel_id is the identifier of the specific subchannel to get.
   int64 subchannel_id = 1;
 }
 
@@ -474,7 +474,7 @@ message GetSubchannelResponse {
 }
 
 message GetSocketRequest {
-  // socket_id is the the identifier of the specific socket to get.
+  // socket_id is the identifier of the specific socket to get.
   int64 socket_id = 1;
 }
 
