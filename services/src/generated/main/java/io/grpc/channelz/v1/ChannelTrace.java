@@ -20,6 +20,8 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private ChannelTrace() {
+    numEventsLogged_ = 0L;
+    events_ = java.util.Collections.emptyList();
   }
 
   @java.lang.Override
@@ -35,6 +37,7 @@ private static final long serialVersionUID = 0L;
     if (extensionRegistry == null) {
       throw new java.lang.NullPointerException();
     }
+    int mutable_bitField0_ = 0;
     com.google.protobuf.UnknownFieldSet.Builder unknownFields =
         com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
@@ -52,6 +55,33 @@ private static final long serialVersionUID = 0L;
             }
             break;
           }
+          case 8: {
+
+            numEventsLogged_ = input.readInt64();
+            break;
+          }
+          case 18: {
+            com.google.protobuf.Timestamp.Builder subBuilder = null;
+            if (creationTimestamp_ != null) {
+              subBuilder = creationTimestamp_.toBuilder();
+            }
+            creationTimestamp_ = input.readMessage(com.google.protobuf.Timestamp.parser(), extensionRegistry);
+            if (subBuilder != null) {
+              subBuilder.mergeFrom(creationTimestamp_);
+              creationTimestamp_ = subBuilder.buildPartial();
+            }
+
+            break;
+          }
+          case 26: {
+            if (!((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+              events_ = new java.util.ArrayList<io.grpc.channelz.v1.ChannelTraceEvent>();
+              mutable_bitField0_ |= 0x00000004;
+            }
+            events_.add(
+                input.readMessage(io.grpc.channelz.v1.ChannelTraceEvent.parser(), extensionRegistry));
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -60,6 +90,9 @@ private static final long serialVersionUID = 0L;
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      if (((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+        events_ = java.util.Collections.unmodifiableList(events_);
+      }
       this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
@@ -76,6 +109,110 @@ private static final long serialVersionUID = 0L;
             io.grpc.channelz.v1.ChannelTrace.class, io.grpc.channelz.v1.ChannelTrace.Builder.class);
   }
 
+  private int bitField0_;
+  public static final int NUM_EVENTS_LOGGED_FIELD_NUMBER = 1;
+  private long numEventsLogged_;
+  /**
+   * <pre>
+   * Number of events ever logged in this tracing object. This can differ from
+   * events.size() because events can be overwritten or garbage collected by
+   * implementations.
+   * </pre>
+   *
+   * <code>int64 num_events_logged = 1;</code>
+   */
+  public long getNumEventsLogged() {
+    return numEventsLogged_;
+  }
+
+  public static final int CREATION_TIMESTAMP_FIELD_NUMBER = 2;
+  private com.google.protobuf.Timestamp creationTimestamp_;
+  /**
+   * <pre>
+   * Time that this channel was created.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+   */
+  public boolean hasCreationTimestamp() {
+    return creationTimestamp_ != null;
+  }
+  /**
+   * <pre>
+   * Time that this channel was created.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+   */
+  public com.google.protobuf.Timestamp getCreationTimestamp() {
+    return creationTimestamp_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : creationTimestamp_;
+  }
+  /**
+   * <pre>
+   * Time that this channel was created.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+   */
+  public com.google.protobuf.TimestampOrBuilder getCreationTimestampOrBuilder() {
+    return getCreationTimestamp();
+  }
+
+  public static final int EVENTS_FIELD_NUMBER = 3;
+  private java.util.List<io.grpc.channelz.v1.ChannelTraceEvent> events_;
+  /**
+   * <pre>
+   * List of events that have occurred on this channel.
+   * </pre>
+   *
+   * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+   */
+  public java.util.List<io.grpc.channelz.v1.ChannelTraceEvent> getEventsList() {
+    return events_;
+  }
+  /**
+   * <pre>
+   * List of events that have occurred on this channel.
+   * </pre>
+   *
+   * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+   */
+  public java.util.List<? extends io.grpc.channelz.v1.ChannelTraceEventOrBuilder> 
+      getEventsOrBuilderList() {
+    return events_;
+  }
+  /**
+   * <pre>
+   * List of events that have occurred on this channel.
+   * </pre>
+   *
+   * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+   */
+  public int getEventsCount() {
+    return events_.size();
+  }
+  /**
+   * <pre>
+   * List of events that have occurred on this channel.
+   * </pre>
+   *
+   * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+   */
+  public io.grpc.channelz.v1.ChannelTraceEvent getEvents(int index) {
+    return events_.get(index);
+  }
+  /**
+   * <pre>
+   * List of events that have occurred on this channel.
+   * </pre>
+   *
+   * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+   */
+  public io.grpc.channelz.v1.ChannelTraceEventOrBuilder getEventsOrBuilder(
+      int index) {
+    return events_.get(index);
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -88,6 +225,15 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    if (numEventsLogged_ != 0L) {
+      output.writeInt64(1, numEventsLogged_);
+    }
+    if (creationTimestamp_ != null) {
+      output.writeMessage(2, getCreationTimestamp());
+    }
+    for (int i = 0; i < events_.size(); i++) {
+      output.writeMessage(3, events_.get(i));
+    }
     unknownFields.writeTo(output);
   }
 
@@ -96,6 +242,18 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
+    if (numEventsLogged_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(1, numEventsLogged_);
+    }
+    if (creationTimestamp_ != null) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(2, getCreationTimestamp());
+    }
+    for (int i = 0; i < events_.size(); i++) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(3, events_.get(i));
+    }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
@@ -112,6 +270,15 @@ private static final long serialVersionUID = 0L;
     io.grpc.channelz.v1.ChannelTrace other = (io.grpc.channelz.v1.ChannelTrace) obj;
 
     boolean result = true;
+    result = result && (getNumEventsLogged()
+        == other.getNumEventsLogged());
+    result = result && (hasCreationTimestamp() == other.hasCreationTimestamp());
+    if (hasCreationTimestamp()) {
+      result = result && getCreationTimestamp()
+          .equals(other.getCreationTimestamp());
+    }
+    result = result && getEventsList()
+        .equals(other.getEventsList());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -123,6 +290,17 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
+    hash = (37 * hash) + NUM_EVENTS_LOGGED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getNumEventsLogged());
+    if (hasCreationTimestamp()) {
+      hash = (37 * hash) + CREATION_TIMESTAMP_FIELD_NUMBER;
+      hash = (53 * hash) + getCreationTimestamp().hashCode();
+    }
+    if (getEventsCount() > 0) {
+      hash = (37 * hash) + EVENTS_FIELD_NUMBER;
+      hash = (53 * hash) + getEventsList().hashCode();
+    }
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -252,10 +430,25 @@ private static final long serialVersionUID = 0L;
     private void maybeForceBuilderInitialization() {
       if (com.google.protobuf.GeneratedMessageV3
               .alwaysUseFieldBuilders) {
+        getEventsFieldBuilder();
       }
     }
     public Builder clear() {
       super.clear();
+      numEventsLogged_ = 0L;
+
+      if (creationTimestampBuilder_ == null) {
+        creationTimestamp_ = null;
+      } else {
+        creationTimestamp_ = null;
+        creationTimestampBuilder_ = null;
+      }
+      if (eventsBuilder_ == null) {
+        events_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000004);
+      } else {
+        eventsBuilder_.clear();
+      }
       return this;
     }
 
@@ -278,6 +471,24 @@ private static final long serialVersionUID = 0L;
 
     public io.grpc.channelz.v1.ChannelTrace buildPartial() {
       io.grpc.channelz.v1.ChannelTrace result = new io.grpc.channelz.v1.ChannelTrace(this);
+      int from_bitField0_ = bitField0_;
+      int to_bitField0_ = 0;
+      result.numEventsLogged_ = numEventsLogged_;
+      if (creationTimestampBuilder_ == null) {
+        result.creationTimestamp_ = creationTimestamp_;
+      } else {
+        result.creationTimestamp_ = creationTimestampBuilder_.build();
+      }
+      if (eventsBuilder_ == null) {
+        if (((bitField0_ & 0x00000004) == 0x00000004)) {
+          events_ = java.util.Collections.unmodifiableList(events_);
+          bitField0_ = (bitField0_ & ~0x00000004);
+        }
+        result.events_ = events_;
+      } else {
+        result.events_ = eventsBuilder_.build();
+      }
+      result.bitField0_ = to_bitField0_;
       onBuilt();
       return result;
     }
@@ -319,6 +530,38 @@ private static final long serialVersionUID = 0L;
 
     public Builder mergeFrom(io.grpc.channelz.v1.ChannelTrace other) {
       if (other == io.grpc.channelz.v1.ChannelTrace.getDefaultInstance()) return this;
+      if (other.getNumEventsLogged() != 0L) {
+        setNumEventsLogged(other.getNumEventsLogged());
+      }
+      if (other.hasCreationTimestamp()) {
+        mergeCreationTimestamp(other.getCreationTimestamp());
+      }
+      if (eventsBuilder_ == null) {
+        if (!other.events_.isEmpty()) {
+          if (events_.isEmpty()) {
+            events_ = other.events_;
+            bitField0_ = (bitField0_ & ~0x00000004);
+          } else {
+            ensureEventsIsMutable();
+            events_.addAll(other.events_);
+          }
+          onChanged();
+        }
+      } else {
+        if (!other.events_.isEmpty()) {
+          if (eventsBuilder_.isEmpty()) {
+            eventsBuilder_.dispose();
+            eventsBuilder_ = null;
+            events_ = other.events_;
+            bitField0_ = (bitField0_ & ~0x00000004);
+            eventsBuilder_ = 
+              com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                 getEventsFieldBuilder() : null;
+          } else {
+            eventsBuilder_.addAllMessages(other.events_);
+          }
+        }
+      }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
@@ -344,6 +587,516 @@ private static final long serialVersionUID = 0L;
         }
       }
       return this;
+    }
+    private int bitField0_;
+
+    private long numEventsLogged_ ;
+    /**
+     * <pre>
+     * Number of events ever logged in this tracing object. This can differ from
+     * events.size() because events can be overwritten or garbage collected by
+     * implementations.
+     * </pre>
+     *
+     * <code>int64 num_events_logged = 1;</code>
+     */
+    public long getNumEventsLogged() {
+      return numEventsLogged_;
+    }
+    /**
+     * <pre>
+     * Number of events ever logged in this tracing object. This can differ from
+     * events.size() because events can be overwritten or garbage collected by
+     * implementations.
+     * </pre>
+     *
+     * <code>int64 num_events_logged = 1;</code>
+     */
+    public Builder setNumEventsLogged(long value) {
+      
+      numEventsLogged_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Number of events ever logged in this tracing object. This can differ from
+     * events.size() because events can be overwritten or garbage collected by
+     * implementations.
+     * </pre>
+     *
+     * <code>int64 num_events_logged = 1;</code>
+     */
+    public Builder clearNumEventsLogged() {
+      
+      numEventsLogged_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.Timestamp creationTimestamp_ = null;
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> creationTimestampBuilder_;
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public boolean hasCreationTimestamp() {
+      return creationTimestampBuilder_ != null || creationTimestamp_ != null;
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public com.google.protobuf.Timestamp getCreationTimestamp() {
+      if (creationTimestampBuilder_ == null) {
+        return creationTimestamp_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : creationTimestamp_;
+      } else {
+        return creationTimestampBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public Builder setCreationTimestamp(com.google.protobuf.Timestamp value) {
+      if (creationTimestampBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        creationTimestamp_ = value;
+        onChanged();
+      } else {
+        creationTimestampBuilder_.setMessage(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public Builder setCreationTimestamp(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      if (creationTimestampBuilder_ == null) {
+        creationTimestamp_ = builderForValue.build();
+        onChanged();
+      } else {
+        creationTimestampBuilder_.setMessage(builderForValue.build());
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public Builder mergeCreationTimestamp(com.google.protobuf.Timestamp value) {
+      if (creationTimestampBuilder_ == null) {
+        if (creationTimestamp_ != null) {
+          creationTimestamp_ =
+            com.google.protobuf.Timestamp.newBuilder(creationTimestamp_).mergeFrom(value).buildPartial();
+        } else {
+          creationTimestamp_ = value;
+        }
+        onChanged();
+      } else {
+        creationTimestampBuilder_.mergeFrom(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public Builder clearCreationTimestamp() {
+      if (creationTimestampBuilder_ == null) {
+        creationTimestamp_ = null;
+        onChanged();
+      } else {
+        creationTimestamp_ = null;
+        creationTimestampBuilder_ = null;
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public com.google.protobuf.Timestamp.Builder getCreationTimestampBuilder() {
+      
+      onChanged();
+      return getCreationTimestampFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    public com.google.protobuf.TimestampOrBuilder getCreationTimestampOrBuilder() {
+      if (creationTimestampBuilder_ != null) {
+        return creationTimestampBuilder_.getMessageOrBuilder();
+      } else {
+        return creationTimestamp_ == null ?
+            com.google.protobuf.Timestamp.getDefaultInstance() : creationTimestamp_;
+      }
+    }
+    /**
+     * <pre>
+     * Time that this channel was created.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp creation_timestamp = 2;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> 
+        getCreationTimestampFieldBuilder() {
+      if (creationTimestampBuilder_ == null) {
+        creationTimestampBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+            com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder>(
+                getCreationTimestamp(),
+                getParentForChildren(),
+                isClean());
+        creationTimestamp_ = null;
+      }
+      return creationTimestampBuilder_;
+    }
+
+    private java.util.List<io.grpc.channelz.v1.ChannelTraceEvent> events_ =
+      java.util.Collections.emptyList();
+    private void ensureEventsIsMutable() {
+      if (!((bitField0_ & 0x00000004) == 0x00000004)) {
+        events_ = new java.util.ArrayList<io.grpc.channelz.v1.ChannelTraceEvent>(events_);
+        bitField0_ |= 0x00000004;
+       }
+    }
+
+    private com.google.protobuf.RepeatedFieldBuilderV3<
+        io.grpc.channelz.v1.ChannelTraceEvent, io.grpc.channelz.v1.ChannelTraceEvent.Builder, io.grpc.channelz.v1.ChannelTraceEventOrBuilder> eventsBuilder_;
+
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public java.util.List<io.grpc.channelz.v1.ChannelTraceEvent> getEventsList() {
+      if (eventsBuilder_ == null) {
+        return java.util.Collections.unmodifiableList(events_);
+      } else {
+        return eventsBuilder_.getMessageList();
+      }
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public int getEventsCount() {
+      if (eventsBuilder_ == null) {
+        return events_.size();
+      } else {
+        return eventsBuilder_.getCount();
+      }
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public io.grpc.channelz.v1.ChannelTraceEvent getEvents(int index) {
+      if (eventsBuilder_ == null) {
+        return events_.get(index);
+      } else {
+        return eventsBuilder_.getMessage(index);
+      }
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder setEvents(
+        int index, io.grpc.channelz.v1.ChannelTraceEvent value) {
+      if (eventsBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureEventsIsMutable();
+        events_.set(index, value);
+        onChanged();
+      } else {
+        eventsBuilder_.setMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder setEvents(
+        int index, io.grpc.channelz.v1.ChannelTraceEvent.Builder builderForValue) {
+      if (eventsBuilder_ == null) {
+        ensureEventsIsMutable();
+        events_.set(index, builderForValue.build());
+        onChanged();
+      } else {
+        eventsBuilder_.setMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder addEvents(io.grpc.channelz.v1.ChannelTraceEvent value) {
+      if (eventsBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureEventsIsMutable();
+        events_.add(value);
+        onChanged();
+      } else {
+        eventsBuilder_.addMessage(value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder addEvents(
+        int index, io.grpc.channelz.v1.ChannelTraceEvent value) {
+      if (eventsBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureEventsIsMutable();
+        events_.add(index, value);
+        onChanged();
+      } else {
+        eventsBuilder_.addMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder addEvents(
+        io.grpc.channelz.v1.ChannelTraceEvent.Builder builderForValue) {
+      if (eventsBuilder_ == null) {
+        ensureEventsIsMutable();
+        events_.add(builderForValue.build());
+        onChanged();
+      } else {
+        eventsBuilder_.addMessage(builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder addEvents(
+        int index, io.grpc.channelz.v1.ChannelTraceEvent.Builder builderForValue) {
+      if (eventsBuilder_ == null) {
+        ensureEventsIsMutable();
+        events_.add(index, builderForValue.build());
+        onChanged();
+      } else {
+        eventsBuilder_.addMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder addAllEvents(
+        java.lang.Iterable<? extends io.grpc.channelz.v1.ChannelTraceEvent> values) {
+      if (eventsBuilder_ == null) {
+        ensureEventsIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, events_);
+        onChanged();
+      } else {
+        eventsBuilder_.addAllMessages(values);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder clearEvents() {
+      if (eventsBuilder_ == null) {
+        events_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000004);
+        onChanged();
+      } else {
+        eventsBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public Builder removeEvents(int index) {
+      if (eventsBuilder_ == null) {
+        ensureEventsIsMutable();
+        events_.remove(index);
+        onChanged();
+      } else {
+        eventsBuilder_.remove(index);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public io.grpc.channelz.v1.ChannelTraceEvent.Builder getEventsBuilder(
+        int index) {
+      return getEventsFieldBuilder().getBuilder(index);
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public io.grpc.channelz.v1.ChannelTraceEventOrBuilder getEventsOrBuilder(
+        int index) {
+      if (eventsBuilder_ == null) {
+        return events_.get(index);  } else {
+        return eventsBuilder_.getMessageOrBuilder(index);
+      }
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public java.util.List<? extends io.grpc.channelz.v1.ChannelTraceEventOrBuilder> 
+         getEventsOrBuilderList() {
+      if (eventsBuilder_ != null) {
+        return eventsBuilder_.getMessageOrBuilderList();
+      } else {
+        return java.util.Collections.unmodifiableList(events_);
+      }
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public io.grpc.channelz.v1.ChannelTraceEvent.Builder addEventsBuilder() {
+      return getEventsFieldBuilder().addBuilder(
+          io.grpc.channelz.v1.ChannelTraceEvent.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public io.grpc.channelz.v1.ChannelTraceEvent.Builder addEventsBuilder(
+        int index) {
+      return getEventsFieldBuilder().addBuilder(
+          index, io.grpc.channelz.v1.ChannelTraceEvent.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * List of events that have occurred on this channel.
+     * </pre>
+     *
+     * <code>repeated .grpc.channelz.v1.ChannelTraceEvent events = 3;</code>
+     */
+    public java.util.List<io.grpc.channelz.v1.ChannelTraceEvent.Builder> 
+         getEventsBuilderList() {
+      return getEventsFieldBuilder().getBuilderList();
+    }
+    private com.google.protobuf.RepeatedFieldBuilderV3<
+        io.grpc.channelz.v1.ChannelTraceEvent, io.grpc.channelz.v1.ChannelTraceEvent.Builder, io.grpc.channelz.v1.ChannelTraceEventOrBuilder> 
+        getEventsFieldBuilder() {
+      if (eventsBuilder_ == null) {
+        eventsBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+            io.grpc.channelz.v1.ChannelTraceEvent, io.grpc.channelz.v1.ChannelTraceEvent.Builder, io.grpc.channelz.v1.ChannelTraceEventOrBuilder>(
+                events_,
+                ((bitField0_ & 0x00000004) == 0x00000004),
+                getParentForChildren(),
+                isClean());
+        events_ = null;
+      }
+      return eventsBuilder_;
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {

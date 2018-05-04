@@ -35,6 +35,11 @@ public final class ChannelzProto {
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_channelz_v1_ChannelData_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_channelz_v1_ChannelTraceEvent_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_channelz_v1_ChannelTraceEvent_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_channelz_v1_ChannelTrace_descriptor;
   static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
@@ -231,123 +236,135 @@ public final class ChannelzProto {
       "hannelz.v1.ChannelTrace\022\025\n\rcalls_started" +
       "\030\004 \001(\003\022\027\n\017calls_succeeded\030\005 \001(\003\022\024\n\014calls" +
       "_failed\030\006 \001(\003\022?\n\033last_call_started_times" +
-      "tamp\030\007 \001(\0132\032.google.protobuf.Timestamp\"\016" +
-      "\n\014ChannelTrace\"R\n\nChannelRef\022\022\n\nchannel_" +
-      "id\030\001 \001(\003\022\014\n\004name\030\002 \001(\tJ\004\010\003\020\004J\004\010\004\020\005J\004\010\005\020\006" +
-      "J\004\010\006\020\007J\004\010\007\020\010J\004\010\010\020\t\"X\n\rSubchannelRef\022\025\n\rs" +
-      "ubchannel_id\030\007 \001(\003\022\014\n\004name\030\010 \001(\tJ\004\010\001\020\002J\004" +
-      "\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005J\004\010\005\020\006J\004\010\006\020\007\"P\n\tSocketRe" +
-      "f\022\021\n\tsocket_id\030\003 \001(\003\022\014\n\004name\030\004 \001(\tJ\004\010\001\020\002" +
-      "J\004\010\002\020\003J\004\010\005\020\006J\004\010\006\020\007J\004\010\007\020\010J\004\010\010\020\t\"P\n\tServer" +
-      "Ref\022\021\n\tserver_id\030\005 \001(\003\022\014\n\004name\030\006 \001(\tJ\004\010\001" +
-      "\020\002J\004\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005J\004\010\007\020\010J\004\010\010\020\t\"\222\001\n\006Ser" +
-      "ver\022(\n\003ref\030\001 \001(\0132\033.grpc.channelz.v1.Serv" +
-      "erRef\022*\n\004data\030\002 \001(\0132\034.grpc.channelz.v1.S" +
-      "erverData\0222\n\rlisten_socket\030\003 \003(\0132\033.grpc." +
-      "channelz.v1.SocketRef\"\302\001\n\nServerData\022-\n\005" +
-      "trace\030\001 \001(\0132\036.grpc.channelz.v1.ChannelTr" +
-      "ace\022\025\n\rcalls_started\030\002 \001(\003\022\027\n\017calls_succ" +
-      "eeded\030\003 \001(\003\022\024\n\014calls_failed\030\004 \001(\003\022?\n\033las" +
-      "t_call_started_timestamp\030\005 \001(\0132\032.google." +
-      "protobuf.Timestamp\"\366\001\n\006Socket\022(\n\003ref\030\001 \001" +
-      "(\0132\033.grpc.channelz.v1.SocketRef\022*\n\004data\030" +
-      "\002 \001(\0132\034.grpc.channelz.v1.SocketData\022(\n\005l" +
-      "ocal\030\003 \001(\0132\031.grpc.channelz.v1.Address\022)\n" +
-      "\006remote\030\004 \001(\0132\031.grpc.channelz.v1.Address" +
-      "\022,\n\010security\030\005 \001(\0132\032.grpc.channelz.v1.Se" +
-      "curity\022\023\n\013remote_name\030\006 \001(\t\"\356\004\n\nSocketDa" +
-      "ta\022\027\n\017streams_started\030\001 \001(\003\022\031\n\021streams_s" +
-      "ucceeded\030\002 \001(\003\022\026\n\016streams_failed\030\003 \001(\003\022\025" +
-      "\n\rmessages_sent\030\004 \001(\003\022\031\n\021messages_receiv" +
-      "ed\030\005 \001(\003\022\030\n\020keep_alives_sent\030\006 \001(\003\022G\n#la" +
-      "st_local_stream_created_timestamp\030\007 \001(\0132" +
-      "\032.google.protobuf.Timestamp\022H\n$last_remo" +
-      "te_stream_created_timestamp\030\010 \001(\0132\032.goog" +
-      "le.protobuf.Timestamp\022?\n\033last_message_se" +
-      "nt_timestamp\030\t \001(\0132\032.google.protobuf.Tim" +
-      "estamp\022C\n\037last_message_received_timestam" +
-      "p\030\n \001(\0132\032.google.protobuf.Timestamp\022>\n\031l" +
-      "ocal_flow_control_window\030\013 \001(\0132\033.google." +
-      "protobuf.Int64Value\022?\n\032remote_flow_contr" +
-      "ol_window\030\014 \001(\0132\033.google.protobuf.Int64V" +
-      "alue\022.\n\006option\030\r \003(\0132\036.grpc.channelz.v1." +
-      "SocketOption\"\350\002\n\007Address\022?\n\rtcpip_addres" +
-      "s\030\001 \001(\0132&.grpc.channelz.v1.Address.TcpIp" +
-      "AddressH\000\022;\n\013uds_address\030\002 \001(\0132$.grpc.ch" +
-      "annelz.v1.Address.UdsAddressH\000\022?\n\rother_" +
-      "address\030\003 \001(\0132&.grpc.channelz.v1.Address" +
-      ".OtherAddressH\000\0320\n\014TcpIpAddress\022\022\n\nip_ad" +
-      "dress\030\001 \001(\014\022\014\n\004port\030\002 \001(\005\032\036\n\nUdsAddress\022" +
-      "\020\n\010filename\030\001 \001(\t\032A\n\014OtherAddress\022\014\n\004nam" +
-      "e\030\001 \001(\t\022#\n\005value\030\002 \001(\0132\024.google.protobuf" +
-      ".AnyB\t\n\007address\"\276\002\n\010Security\022-\n\003tls\030\001 \001(" +
-      "\0132\036.grpc.channelz.v1.Security.TlsH\000\0229\n\005o" +
-      "ther\030\002 \001(\0132(.grpc.channelz.v1.Security.O" +
-      "therSecurityH\000\032{\n\003Tls\022\027\n\rstandard_name\030\001" +
-      " \001(\tH\000\022\024\n\nother_name\030\002 \001(\tH\000\022\031\n\021local_ce" +
-      "rtificate\030\003 \001(\014\022\032\n\022remote_certificate\030\004 " +
-      "\001(\014B\016\n\014cipher_suite\032B\n\rOtherSecurity\022\014\n\004" +
-      "name\030\001 \001(\t\022#\n\005value\030\002 \001(\0132\024.google.proto" +
-      "buf.AnyB\007\n\005model\"U\n\014SocketOption\022\014\n\004name" +
-      "\030\001 \001(\t\022\r\n\005value\030\002 \001(\t\022(\n\nadditional\030\003 \001(" +
-      "\0132\024.google.protobuf.Any\"B\n\023SocketOptionT" +
-      "imeout\022+\n\010duration\030\001 \001(\0132\031.google.protob" +
-      "uf.Duration\"Q\n\022SocketOptionLinger\022\016\n\006act" +
-      "ive\030\001 \001(\010\022+\n\010duration\030\002 \001(\0132\031.google.pro" +
-      "tobuf.Duration\"\256\005\n\023SocketOptionTcpInfo\022\022" +
-      "\n\ntcpi_state\030\001 \001(\r\022\025\n\rtcpi_ca_state\030\002 \001(" +
-      "\r\022\030\n\020tcpi_retransmits\030\003 \001(\r\022\023\n\013tcpi_prob" +
-      "es\030\004 \001(\r\022\024\n\014tcpi_backoff\030\005 \001(\r\022\024\n\014tcpi_o" +
-      "ptions\030\006 \001(\r\022\027\n\017tcpi_snd_wscale\030\007 \001(\r\022\027\n" +
-      "\017tcpi_rcv_wscale\030\010 \001(\r\022\020\n\010tcpi_rto\030\t \001(\r" +
-      "\022\020\n\010tcpi_ato\030\n \001(\r\022\024\n\014tcpi_snd_mss\030\013 \001(\r" +
-      "\022\024\n\014tcpi_rcv_mss\030\014 \001(\r\022\024\n\014tcpi_unacked\030\r" +
-      " \001(\r\022\023\n\013tcpi_sacked\030\016 \001(\r\022\021\n\ttcpi_lost\030\017" +
-      " \001(\r\022\024\n\014tcpi_retrans\030\020 \001(\r\022\024\n\014tcpi_facke" +
-      "ts\030\021 \001(\r\022\033\n\023tcpi_last_data_sent\030\022 \001(\r\022\032\n" +
-      "\022tcpi_last_ack_sent\030\023 \001(\r\022\033\n\023tcpi_last_d" +
-      "ata_recv\030\024 \001(\r\022\032\n\022tcpi_last_ack_recv\030\025 \001" +
-      "(\r\022\021\n\ttcpi_pmtu\030\026 \001(\r\022\031\n\021tcpi_rcv_ssthre" +
-      "sh\030\027 \001(\r\022\020\n\010tcpi_rtt\030\030 \001(\r\022\023\n\013tcpi_rttva" +
-      "r\030\031 \001(\r\022\031\n\021tcpi_snd_ssthresh\030\032 \001(\r\022\025\n\rtc" +
-      "pi_snd_cwnd\030\033 \001(\r\022\023\n\013tcpi_advmss\030\034 \001(\r\022\027" +
-      "\n\017tcpi_reordering\030\035 \001(\r\"1\n\025GetTopChannel" +
-      "sRequest\022\030\n\020start_channel_id\030\001 \001(\003\"Q\n\026Ge" +
-      "tTopChannelsResponse\022*\n\007channel\030\001 \003(\0132\031." +
-      "grpc.channelz.v1.Channel\022\013\n\003end\030\002 \001(\010\",\n" +
-      "\021GetServersRequest\022\027\n\017start_server_id\030\001 " +
-      "\001(\003\"K\n\022GetServersResponse\022(\n\006server\030\001 \003(" +
-      "\0132\030.grpc.channelz.v1.Server\022\013\n\003end\030\002 \001(\010" +
-      "\"E\n\027GetServerSocketsRequest\022\021\n\tserver_id" +
-      "\030\001 \001(\003\022\027\n\017start_socket_id\030\002 \001(\003\"X\n\030GetSe" +
-      "rverSocketsResponse\022/\n\nsocket_ref\030\001 \003(\0132" +
-      "\033.grpc.channelz.v1.SocketRef\022\013\n\003end\030\002 \001(" +
-      "\010\"\'\n\021GetChannelRequest\022\022\n\nchannel_id\030\001 \001" +
-      "(\003\"@\n\022GetChannelResponse\022*\n\007channel\030\001 \001(" +
-      "\0132\031.grpc.channelz.v1.Channel\"-\n\024GetSubch" +
-      "annelRequest\022\025\n\rsubchannel_id\030\001 \001(\003\"I\n\025G" +
-      "etSubchannelResponse\0220\n\nsubchannel\030\001 \001(\013" +
-      "2\034.grpc.channelz.v1.Subchannel\"%\n\020GetSoc" +
-      "ketRequest\022\021\n\tsocket_id\030\001 \001(\003\"=\n\021GetSock" +
-      "etResponse\022(\n\006socket\030\001 \001(\0132\030.grpc.channe" +
-      "lz.v1.Socket2\304\004\n\010Channelz\022c\n\016GetTopChann" +
-      "els\022\'.grpc.channelz.v1.GetTopChannelsReq" +
-      "uest\032(.grpc.channelz.v1.GetTopChannelsRe" +
-      "sponse\022W\n\nGetServers\022#.grpc.channelz.v1." +
-      "GetServersRequest\032$.grpc.channelz.v1.Get" +
-      "ServersResponse\022i\n\020GetServerSockets\022).gr" +
-      "pc.channelz.v1.GetServerSocketsRequest\032*" +
-      ".grpc.channelz.v1.GetServerSocketsRespon" +
-      "se\022W\n\nGetChannel\022#.grpc.channelz.v1.GetC" +
-      "hannelRequest\032$.grpc.channelz.v1.GetChan" +
-      "nelResponse\022`\n\rGetSubchannel\022&.grpc.chan" +
-      "nelz.v1.GetSubchannelRequest\032\'.grpc.chan" +
-      "nelz.v1.GetSubchannelResponse\022T\n\tGetSock" +
-      "et\022\".grpc.channelz.v1.GetSocketRequest\032#" +
-      ".grpc.channelz.v1.GetSocketResponseBX\n\023i" +
-      "o.grpc.channelz.v1B\rChannelzProtoP\001Z0goo" +
-      "gle.golang.org/grpc/channelz/grpc_channe" +
-      "lz_v1b\006proto3"
+      "tamp\030\007 \001(\0132\032.google.protobuf.Timestamp\"\333" +
+      "\002\n\021ChannelTraceEvent\022\023\n\013description\030\001 \001(" +
+      "\t\022>\n\010severity\030\002 \001(\0162,.grpc.channelz.v1.C" +
+      "hannelTraceEvent.Severity\022-\n\ttimestamp\030\003" +
+      " \001(\0132\032.google.protobuf.Timestamp\0223\n\013chan" +
+      "nel_ref\030\004 \001(\0132\034.grpc.channelz.v1.Channel" +
+      "RefH\000\0229\n\016subchannel_ref\030\005 \001(\0132\037.grpc.cha" +
+      "nnelz.v1.SubchannelRefH\000\"E\n\010Severity\022\016\n\n" +
+      "CT_UNKNOWN\020\000\022\013\n\007CT_INFO\020\001\022\016\n\nCT_WARNING\020" +
+      "\002\022\014\n\010CT_ERROR\020\003B\013\n\tchild_ref\"\226\001\n\014Channel" +
+      "Trace\022\031\n\021num_events_logged\030\001 \001(\003\0226\n\022crea" +
+      "tion_timestamp\030\002 \001(\0132\032.google.protobuf.T" +
+      "imestamp\0223\n\006events\030\003 \003(\0132#.grpc.channelz" +
+      ".v1.ChannelTraceEvent\"R\n\nChannelRef\022\022\n\nc" +
+      "hannel_id\030\001 \001(\003\022\014\n\004name\030\002 \001(\tJ\004\010\003\020\004J\004\010\004\020" +
+      "\005J\004\010\005\020\006J\004\010\006\020\007J\004\010\007\020\010J\004\010\010\020\t\"X\n\rSubchannelR" +
+      "ef\022\025\n\rsubchannel_id\030\007 \001(\003\022\014\n\004name\030\010 \001(\tJ" +
+      "\004\010\001\020\002J\004\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005J\004\010\005\020\006J\004\010\006\020\007\"P\n\tS" +
+      "ocketRef\022\021\n\tsocket_id\030\003 \001(\003\022\014\n\004name\030\004 \001(" +
+      "\tJ\004\010\001\020\002J\004\010\002\020\003J\004\010\005\020\006J\004\010\006\020\007J\004\010\007\020\010J\004\010\010\020\t\"P\n" +
+      "\tServerRef\022\021\n\tserver_id\030\005 \001(\003\022\014\n\004name\030\006 " +
+      "\001(\tJ\004\010\001\020\002J\004\010\002\020\003J\004\010\003\020\004J\004\010\004\020\005J\004\010\007\020\010J\004\010\010\020\t\"" +
+      "\222\001\n\006Server\022(\n\003ref\030\001 \001(\0132\033.grpc.channelz." +
+      "v1.ServerRef\022*\n\004data\030\002 \001(\0132\034.grpc.channe" +
+      "lz.v1.ServerData\0222\n\rlisten_socket\030\003 \003(\0132" +
+      "\033.grpc.channelz.v1.SocketRef\"\302\001\n\nServerD" +
+      "ata\022-\n\005trace\030\001 \001(\0132\036.grpc.channelz.v1.Ch" +
+      "annelTrace\022\025\n\rcalls_started\030\002 \001(\003\022\027\n\017cal" +
+      "ls_succeeded\030\003 \001(\003\022\024\n\014calls_failed\030\004 \001(\003" +
+      "\022?\n\033last_call_started_timestamp\030\005 \001(\0132\032." +
+      "google.protobuf.Timestamp\"\366\001\n\006Socket\022(\n\003" +
+      "ref\030\001 \001(\0132\033.grpc.channelz.v1.SocketRef\022*" +
+      "\n\004data\030\002 \001(\0132\034.grpc.channelz.v1.SocketDa" +
+      "ta\022(\n\005local\030\003 \001(\0132\031.grpc.channelz.v1.Add" +
+      "ress\022)\n\006remote\030\004 \001(\0132\031.grpc.channelz.v1." +
+      "Address\022,\n\010security\030\005 \001(\0132\032.grpc.channel" +
+      "z.v1.Security\022\023\n\013remote_name\030\006 \001(\t\"\356\004\n\nS" +
+      "ocketData\022\027\n\017streams_started\030\001 \001(\003\022\031\n\021st" +
+      "reams_succeeded\030\002 \001(\003\022\026\n\016streams_failed\030" +
+      "\003 \001(\003\022\025\n\rmessages_sent\030\004 \001(\003\022\031\n\021messages" +
+      "_received\030\005 \001(\003\022\030\n\020keep_alives_sent\030\006 \001(" +
+      "\003\022G\n#last_local_stream_created_timestamp" +
+      "\030\007 \001(\0132\032.google.protobuf.Timestamp\022H\n$la" +
+      "st_remote_stream_created_timestamp\030\010 \001(\013" +
+      "2\032.google.protobuf.Timestamp\022?\n\033last_mes" +
+      "sage_sent_timestamp\030\t \001(\0132\032.google.proto" +
+      "buf.Timestamp\022C\n\037last_message_received_t" +
+      "imestamp\030\n \001(\0132\032.google.protobuf.Timesta" +
+      "mp\022>\n\031local_flow_control_window\030\013 \001(\0132\033." +
+      "google.protobuf.Int64Value\022?\n\032remote_flo" +
+      "w_control_window\030\014 \001(\0132\033.google.protobuf" +
+      ".Int64Value\022.\n\006option\030\r \003(\0132\036.grpc.chann" +
+      "elz.v1.SocketOption\"\350\002\n\007Address\022?\n\rtcpip" +
+      "_address\030\001 \001(\0132&.grpc.channelz.v1.Addres" +
+      "s.TcpIpAddressH\000\022;\n\013uds_address\030\002 \001(\0132$." +
+      "grpc.channelz.v1.Address.UdsAddressH\000\022?\n" +
+      "\rother_address\030\003 \001(\0132&.grpc.channelz.v1." +
+      "Address.OtherAddressH\000\0320\n\014TcpIpAddress\022\022" +
+      "\n\nip_address\030\001 \001(\014\022\014\n\004port\030\002 \001(\005\032\036\n\nUdsA" +
+      "ddress\022\020\n\010filename\030\001 \001(\t\032A\n\014OtherAddress" +
+      "\022\014\n\004name\030\001 \001(\t\022#\n\005value\030\002 \001(\0132\024.google.p" +
+      "rotobuf.AnyB\t\n\007address\"\276\002\n\010Security\022-\n\003t" +
+      "ls\030\001 \001(\0132\036.grpc.channelz.v1.Security.Tls" +
+      "H\000\0229\n\005other\030\002 \001(\0132(.grpc.channelz.v1.Sec" +
+      "urity.OtherSecurityH\000\032{\n\003Tls\022\027\n\rstandard" +
+      "_name\030\001 \001(\tH\000\022\024\n\nother_name\030\002 \001(\tH\000\022\031\n\021l" +
+      "ocal_certificate\030\003 \001(\014\022\032\n\022remote_certifi" +
+      "cate\030\004 \001(\014B\016\n\014cipher_suite\032B\n\rOtherSecur" +
+      "ity\022\014\n\004name\030\001 \001(\t\022#\n\005value\030\002 \001(\0132\024.googl" +
+      "e.protobuf.AnyB\007\n\005model\"U\n\014SocketOption\022" +
+      "\014\n\004name\030\001 \001(\t\022\r\n\005value\030\002 \001(\t\022(\n\naddition" +
+      "al\030\003 \001(\0132\024.google.protobuf.Any\"B\n\023Socket" +
+      "OptionTimeout\022+\n\010duration\030\001 \001(\0132\031.google" +
+      ".protobuf.Duration\"Q\n\022SocketOptionLinger" +
+      "\022\016\n\006active\030\001 \001(\010\022+\n\010duration\030\002 \001(\0132\031.goo" +
+      "gle.protobuf.Duration\"\256\005\n\023SocketOptionTc" +
+      "pInfo\022\022\n\ntcpi_state\030\001 \001(\r\022\025\n\rtcpi_ca_sta" +
+      "te\030\002 \001(\r\022\030\n\020tcpi_retransmits\030\003 \001(\r\022\023\n\013tc" +
+      "pi_probes\030\004 \001(\r\022\024\n\014tcpi_backoff\030\005 \001(\r\022\024\n" +
+      "\014tcpi_options\030\006 \001(\r\022\027\n\017tcpi_snd_wscale\030\007" +
+      " \001(\r\022\027\n\017tcpi_rcv_wscale\030\010 \001(\r\022\020\n\010tcpi_rt" +
+      "o\030\t \001(\r\022\020\n\010tcpi_ato\030\n \001(\r\022\024\n\014tcpi_snd_ms" +
+      "s\030\013 \001(\r\022\024\n\014tcpi_rcv_mss\030\014 \001(\r\022\024\n\014tcpi_un" +
+      "acked\030\r \001(\r\022\023\n\013tcpi_sacked\030\016 \001(\r\022\021\n\ttcpi" +
+      "_lost\030\017 \001(\r\022\024\n\014tcpi_retrans\030\020 \001(\r\022\024\n\014tcp" +
+      "i_fackets\030\021 \001(\r\022\033\n\023tcpi_last_data_sent\030\022" +
+      " \001(\r\022\032\n\022tcpi_last_ack_sent\030\023 \001(\r\022\033\n\023tcpi" +
+      "_last_data_recv\030\024 \001(\r\022\032\n\022tcpi_last_ack_r" +
+      "ecv\030\025 \001(\r\022\021\n\ttcpi_pmtu\030\026 \001(\r\022\031\n\021tcpi_rcv" +
+      "_ssthresh\030\027 \001(\r\022\020\n\010tcpi_rtt\030\030 \001(\r\022\023\n\013tcp" +
+      "i_rttvar\030\031 \001(\r\022\031\n\021tcpi_snd_ssthresh\030\032 \001(" +
+      "\r\022\025\n\rtcpi_snd_cwnd\030\033 \001(\r\022\023\n\013tcpi_advmss\030" +
+      "\034 \001(\r\022\027\n\017tcpi_reordering\030\035 \001(\r\"1\n\025GetTop" +
+      "ChannelsRequest\022\030\n\020start_channel_id\030\001 \001(" +
+      "\003\"Q\n\026GetTopChannelsResponse\022*\n\007channel\030\001" +
+      " \003(\0132\031.grpc.channelz.v1.Channel\022\013\n\003end\030\002" +
+      " \001(\010\",\n\021GetServersRequest\022\027\n\017start_serve" +
+      "r_id\030\001 \001(\003\"K\n\022GetServersResponse\022(\n\006serv" +
+      "er\030\001 \003(\0132\030.grpc.channelz.v1.Server\022\013\n\003en" +
+      "d\030\002 \001(\010\"E\n\027GetServerSocketsRequest\022\021\n\tse" +
+      "rver_id\030\001 \001(\003\022\027\n\017start_socket_id\030\002 \001(\003\"X" +
+      "\n\030GetServerSocketsResponse\022/\n\nsocket_ref" +
+      "\030\001 \003(\0132\033.grpc.channelz.v1.SocketRef\022\013\n\003e" +
+      "nd\030\002 \001(\010\"\'\n\021GetChannelRequest\022\022\n\nchannel" +
+      "_id\030\001 \001(\003\"@\n\022GetChannelResponse\022*\n\007chann" +
+      "el\030\001 \001(\0132\031.grpc.channelz.v1.Channel\"-\n\024G" +
+      "etSubchannelRequest\022\025\n\rsubchannel_id\030\001 \001" +
+      "(\003\"I\n\025GetSubchannelResponse\0220\n\nsubchanne" +
+      "l\030\001 \001(\0132\034.grpc.channelz.v1.Subchannel\"%\n" +
+      "\020GetSocketRequest\022\021\n\tsocket_id\030\001 \001(\003\"=\n\021" +
+      "GetSocketResponse\022(\n\006socket\030\001 \001(\0132\030.grpc" +
+      ".channelz.v1.Socket2\304\004\n\010Channelz\022c\n\016GetT" +
+      "opChannels\022\'.grpc.channelz.v1.GetTopChan" +
+      "nelsRequest\032(.grpc.channelz.v1.GetTopCha" +
+      "nnelsResponse\022W\n\nGetServers\022#.grpc.chann" +
+      "elz.v1.GetServersRequest\032$.grpc.channelz" +
+      ".v1.GetServersResponse\022i\n\020GetServerSocke" +
+      "ts\022).grpc.channelz.v1.GetServerSocketsRe" +
+      "quest\032*.grpc.channelz.v1.GetServerSocket" +
+      "sResponse\022W\n\nGetChannel\022#.grpc.channelz." +
+      "v1.GetChannelRequest\032$.grpc.channelz.v1." +
+      "GetChannelResponse\022`\n\rGetSubchannel\022&.gr" +
+      "pc.channelz.v1.GetSubchannelRequest\032\'.gr" +
+      "pc.channelz.v1.GetSubchannelResponse\022T\n\t" +
+      "GetSocket\022\".grpc.channelz.v1.GetSocketRe" +
+      "quest\032#.grpc.channelz.v1.GetSocketRespon" +
+      "seBX\n\023io.grpc.channelz.v1B\rChannelzProto" +
+      "P\001Z0google.golang.org/grpc/channelz/grpc" +
+      "_channelz_v1b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -389,62 +406,68 @@ public final class ChannelzProto {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_ChannelData_descriptor,
         new java.lang.String[] { "State", "Target", "Trace", "CallsStarted", "CallsSucceeded", "CallsFailed", "LastCallStartedTimestamp", });
-    internal_static_grpc_channelz_v1_ChannelTrace_descriptor =
+    internal_static_grpc_channelz_v1_ChannelTraceEvent_descriptor =
       getDescriptor().getMessageTypes().get(4);
+    internal_static_grpc_channelz_v1_ChannelTraceEvent_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_channelz_v1_ChannelTraceEvent_descriptor,
+        new java.lang.String[] { "Description", "Severity", "Timestamp", "ChannelRef", "SubchannelRef", "ChildRef", });
+    internal_static_grpc_channelz_v1_ChannelTrace_descriptor =
+      getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_channelz_v1_ChannelTrace_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_ChannelTrace_descriptor,
-        new java.lang.String[] { });
+        new java.lang.String[] { "NumEventsLogged", "CreationTimestamp", "Events", });
     internal_static_grpc_channelz_v1_ChannelRef_descriptor =
-      getDescriptor().getMessageTypes().get(5);
+      getDescriptor().getMessageTypes().get(6);
     internal_static_grpc_channelz_v1_ChannelRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_ChannelRef_descriptor,
         new java.lang.String[] { "ChannelId", "Name", });
     internal_static_grpc_channelz_v1_SubchannelRef_descriptor =
-      getDescriptor().getMessageTypes().get(6);
+      getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_channelz_v1_SubchannelRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SubchannelRef_descriptor,
         new java.lang.String[] { "SubchannelId", "Name", });
     internal_static_grpc_channelz_v1_SocketRef_descriptor =
-      getDescriptor().getMessageTypes().get(7);
+      getDescriptor().getMessageTypes().get(8);
     internal_static_grpc_channelz_v1_SocketRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketRef_descriptor,
         new java.lang.String[] { "SocketId", "Name", });
     internal_static_grpc_channelz_v1_ServerRef_descriptor =
-      getDescriptor().getMessageTypes().get(8);
+      getDescriptor().getMessageTypes().get(9);
     internal_static_grpc_channelz_v1_ServerRef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_ServerRef_descriptor,
         new java.lang.String[] { "ServerId", "Name", });
     internal_static_grpc_channelz_v1_Server_descriptor =
-      getDescriptor().getMessageTypes().get(9);
+      getDescriptor().getMessageTypes().get(10);
     internal_static_grpc_channelz_v1_Server_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_Server_descriptor,
         new java.lang.String[] { "Ref", "Data", "ListenSocket", });
     internal_static_grpc_channelz_v1_ServerData_descriptor =
-      getDescriptor().getMessageTypes().get(10);
+      getDescriptor().getMessageTypes().get(11);
     internal_static_grpc_channelz_v1_ServerData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_ServerData_descriptor,
         new java.lang.String[] { "Trace", "CallsStarted", "CallsSucceeded", "CallsFailed", "LastCallStartedTimestamp", });
     internal_static_grpc_channelz_v1_Socket_descriptor =
-      getDescriptor().getMessageTypes().get(11);
+      getDescriptor().getMessageTypes().get(12);
     internal_static_grpc_channelz_v1_Socket_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_Socket_descriptor,
         new java.lang.String[] { "Ref", "Data", "Local", "Remote", "Security", "RemoteName", });
     internal_static_grpc_channelz_v1_SocketData_descriptor =
-      getDescriptor().getMessageTypes().get(12);
+      getDescriptor().getMessageTypes().get(13);
     internal_static_grpc_channelz_v1_SocketData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketData_descriptor,
         new java.lang.String[] { "StreamsStarted", "StreamsSucceeded", "StreamsFailed", "MessagesSent", "MessagesReceived", "KeepAlivesSent", "LastLocalStreamCreatedTimestamp", "LastRemoteStreamCreatedTimestamp", "LastMessageSentTimestamp", "LastMessageReceivedTimestamp", "LocalFlowControlWindow", "RemoteFlowControlWindow", "Option", });
     internal_static_grpc_channelz_v1_Address_descriptor =
-      getDescriptor().getMessageTypes().get(13);
+      getDescriptor().getMessageTypes().get(14);
     internal_static_grpc_channelz_v1_Address_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_Address_descriptor,
@@ -468,7 +491,7 @@ public final class ChannelzProto {
         internal_static_grpc_channelz_v1_Address_OtherAddress_descriptor,
         new java.lang.String[] { "Name", "Value", });
     internal_static_grpc_channelz_v1_Security_descriptor =
-      getDescriptor().getMessageTypes().get(14);
+      getDescriptor().getMessageTypes().get(15);
     internal_static_grpc_channelz_v1_Security_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_Security_descriptor,
@@ -486,97 +509,97 @@ public final class ChannelzProto {
         internal_static_grpc_channelz_v1_Security_OtherSecurity_descriptor,
         new java.lang.String[] { "Name", "Value", });
     internal_static_grpc_channelz_v1_SocketOption_descriptor =
-      getDescriptor().getMessageTypes().get(15);
+      getDescriptor().getMessageTypes().get(16);
     internal_static_grpc_channelz_v1_SocketOption_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketOption_descriptor,
         new java.lang.String[] { "Name", "Value", "Additional", });
     internal_static_grpc_channelz_v1_SocketOptionTimeout_descriptor =
-      getDescriptor().getMessageTypes().get(16);
+      getDescriptor().getMessageTypes().get(17);
     internal_static_grpc_channelz_v1_SocketOptionTimeout_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketOptionTimeout_descriptor,
         new java.lang.String[] { "Duration", });
     internal_static_grpc_channelz_v1_SocketOptionLinger_descriptor =
-      getDescriptor().getMessageTypes().get(17);
+      getDescriptor().getMessageTypes().get(18);
     internal_static_grpc_channelz_v1_SocketOptionLinger_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketOptionLinger_descriptor,
         new java.lang.String[] { "Active", "Duration", });
     internal_static_grpc_channelz_v1_SocketOptionTcpInfo_descriptor =
-      getDescriptor().getMessageTypes().get(18);
+      getDescriptor().getMessageTypes().get(19);
     internal_static_grpc_channelz_v1_SocketOptionTcpInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_SocketOptionTcpInfo_descriptor,
         new java.lang.String[] { "TcpiState", "TcpiCaState", "TcpiRetransmits", "TcpiProbes", "TcpiBackoff", "TcpiOptions", "TcpiSndWscale", "TcpiRcvWscale", "TcpiRto", "TcpiAto", "TcpiSndMss", "TcpiRcvMss", "TcpiUnacked", "TcpiSacked", "TcpiLost", "TcpiRetrans", "TcpiFackets", "TcpiLastDataSent", "TcpiLastAckSent", "TcpiLastDataRecv", "TcpiLastAckRecv", "TcpiPmtu", "TcpiRcvSsthresh", "TcpiRtt", "TcpiRttvar", "TcpiSndSsthresh", "TcpiSndCwnd", "TcpiAdvmss", "TcpiReordering", });
     internal_static_grpc_channelz_v1_GetTopChannelsRequest_descriptor =
-      getDescriptor().getMessageTypes().get(19);
+      getDescriptor().getMessageTypes().get(20);
     internal_static_grpc_channelz_v1_GetTopChannelsRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetTopChannelsRequest_descriptor,
         new java.lang.String[] { "StartChannelId", });
     internal_static_grpc_channelz_v1_GetTopChannelsResponse_descriptor =
-      getDescriptor().getMessageTypes().get(20);
+      getDescriptor().getMessageTypes().get(21);
     internal_static_grpc_channelz_v1_GetTopChannelsResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetTopChannelsResponse_descriptor,
         new java.lang.String[] { "Channel", "End", });
     internal_static_grpc_channelz_v1_GetServersRequest_descriptor =
-      getDescriptor().getMessageTypes().get(21);
+      getDescriptor().getMessageTypes().get(22);
     internal_static_grpc_channelz_v1_GetServersRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetServersRequest_descriptor,
         new java.lang.String[] { "StartServerId", });
     internal_static_grpc_channelz_v1_GetServersResponse_descriptor =
-      getDescriptor().getMessageTypes().get(22);
+      getDescriptor().getMessageTypes().get(23);
     internal_static_grpc_channelz_v1_GetServersResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetServersResponse_descriptor,
         new java.lang.String[] { "Server", "End", });
     internal_static_grpc_channelz_v1_GetServerSocketsRequest_descriptor =
-      getDescriptor().getMessageTypes().get(23);
+      getDescriptor().getMessageTypes().get(24);
     internal_static_grpc_channelz_v1_GetServerSocketsRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetServerSocketsRequest_descriptor,
         new java.lang.String[] { "ServerId", "StartSocketId", });
     internal_static_grpc_channelz_v1_GetServerSocketsResponse_descriptor =
-      getDescriptor().getMessageTypes().get(24);
+      getDescriptor().getMessageTypes().get(25);
     internal_static_grpc_channelz_v1_GetServerSocketsResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetServerSocketsResponse_descriptor,
         new java.lang.String[] { "SocketRef", "End", });
     internal_static_grpc_channelz_v1_GetChannelRequest_descriptor =
-      getDescriptor().getMessageTypes().get(25);
+      getDescriptor().getMessageTypes().get(26);
     internal_static_grpc_channelz_v1_GetChannelRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetChannelRequest_descriptor,
         new java.lang.String[] { "ChannelId", });
     internal_static_grpc_channelz_v1_GetChannelResponse_descriptor =
-      getDescriptor().getMessageTypes().get(26);
+      getDescriptor().getMessageTypes().get(27);
     internal_static_grpc_channelz_v1_GetChannelResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetChannelResponse_descriptor,
         new java.lang.String[] { "Channel", });
     internal_static_grpc_channelz_v1_GetSubchannelRequest_descriptor =
-      getDescriptor().getMessageTypes().get(27);
+      getDescriptor().getMessageTypes().get(28);
     internal_static_grpc_channelz_v1_GetSubchannelRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetSubchannelRequest_descriptor,
         new java.lang.String[] { "SubchannelId", });
     internal_static_grpc_channelz_v1_GetSubchannelResponse_descriptor =
-      getDescriptor().getMessageTypes().get(28);
+      getDescriptor().getMessageTypes().get(29);
     internal_static_grpc_channelz_v1_GetSubchannelResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetSubchannelResponse_descriptor,
         new java.lang.String[] { "Subchannel", });
     internal_static_grpc_channelz_v1_GetSocketRequest_descriptor =
-      getDescriptor().getMessageTypes().get(29);
+      getDescriptor().getMessageTypes().get(30);
     internal_static_grpc_channelz_v1_GetSocketRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetSocketRequest_descriptor,
         new java.lang.String[] { "SocketId", });
     internal_static_grpc_channelz_v1_GetSocketResponse_descriptor =
-      getDescriptor().getMessageTypes().get(30);
+      getDescriptor().getMessageTypes().get(31);
     internal_static_grpc_channelz_v1_GetSocketResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_channelz_v1_GetSocketResponse_descriptor,

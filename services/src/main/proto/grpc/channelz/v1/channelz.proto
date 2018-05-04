@@ -117,10 +117,42 @@ message ChannelData {
   google.protobuf.Timestamp last_call_started_timestamp = 7;
 }
 
+// A trace event is an interesting thing that happened to a channel or
+// subchannel, such as creation, address resolution, subchannel creation, etc.
+message ChannelTraceEvent {
+  // High level description of the event.
+  string description = 1;
+  // The supported severity levels of trace events.
+  enum Severity {
+    CT_UNKNOWN = 0;
+    CT_INFO = 1;
+    CT_WARNING = 2;
+    CT_ERROR = 3;
+  }
+  // the severity of the trace event
+  Severity severity = 2;
+  // When this event occurred.
+  google.protobuf.Timestamp timestamp = 3;
+  // ref of referenced channel or subchannel.
+  // Optional, only present if this event refers to a child object. For example,
+  // this field would be filled if this trace event was for a subchannel being
+  // created.
+  oneof child_ref {
+    ChannelRef channel_ref = 4;
+    SubchannelRef subchannel_ref = 5;
+  }
+}
+
 // ChannelTrace represents the recent events that have occurred on the channel.
 message ChannelTrace {
-  // see the proto in the gRFC for channel tracing:
-  // A3-channel-tracing.md
+  // Number of events ever logged in this tracing object. This can differ from
+  // events.size() because events can be overwritten or garbage collected by
+  // implementations.
+  int64 num_events_logged = 1;
+  // Time that this channel was created.
+  google.protobuf.Timestamp creation_timestamp = 2;
+  // List of events that have occurred on this channel.
+  repeated ChannelTraceEvent events = 3;
 }
 
 // ChannelRef is a reference to a Channel.
