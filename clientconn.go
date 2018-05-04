@@ -417,9 +417,9 @@ func WithChannelzParentID(id int64) DialOption {
 // should fetch service config. Note that if the disableServiceConfig is set to true,
 // but resolver doesn't honor the setting and still fetch the service config and
 // returns it, grpc will ignore the config.
-func WithDisableServiceConfig(a bool) DialOption {
+func WithDisableServiceConfig() DialOption {
 	return func(o *dialOptions) {
-		o.disableServiceConfig = a
+		o.disableServiceConfig = true
 	}
 }
 

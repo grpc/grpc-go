@@ -649,7 +649,7 @@ func TestDisableServiceConfigOption(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	addr := r.Scheme() + ":///non.existent"
-	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(true))
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig())
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
