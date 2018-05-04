@@ -22,6 +22,7 @@ buildscript {
 
 apply plugin: "net.ltgt.errorprone"
 apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: "signing"
 
 android {
     compileSdkVersion 27
@@ -49,6 +50,11 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.robolectric:robolectric:3.7.1'
     testImplementation 'com.google.truth:truth:0.39'
+}
+
+signing {
+    required false
+    sign configurations.archives
 }
 
 task javadocs(type: Javadoc) {
