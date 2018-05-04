@@ -29,6 +29,7 @@ import io.grpc.ExperimentalApi;
 import io.grpc.ManagedChannelBuilder;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -45,6 +46,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 @DoNotMock
+@CheckReturnValue
 public abstract class AbstractStub<S extends AbstractStub<S>> {
   private final Channel channel;
   private final CallOptions callOptions;
