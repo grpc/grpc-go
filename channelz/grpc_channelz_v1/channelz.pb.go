@@ -59,7 +59,7 @@ func (x ChannelConnectivityState_State) String() string {
 	return proto.EnumName(ChannelConnectivityState_State_name, int32(x))
 }
 func (ChannelConnectivityState_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{2, 0}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{2, 0}
 }
 
 // Channel is a logical grouping of channels, subchannels, and sockets.
@@ -88,7 +88,7 @@ func (m *Channel) Reset()         { *m = Channel{} }
 func (m *Channel) String() string { return proto.CompactTextString(m) }
 func (*Channel) ProtoMessage()    {}
 func (*Channel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{0}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{0}
 }
 func (m *Channel) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Channel.Unmarshal(m, b)
@@ -170,7 +170,7 @@ func (m *Subchannel) Reset()         { *m = Subchannel{} }
 func (m *Subchannel) String() string { return proto.CompactTextString(m) }
 func (*Subchannel) ProtoMessage()    {}
 func (*Subchannel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{1}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{1}
 }
 func (m *Subchannel) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Subchannel.Unmarshal(m, b)
@@ -238,7 +238,7 @@ func (m *ChannelConnectivityState) Reset()         { *m = ChannelConnectivitySta
 func (m *ChannelConnectivityState) String() string { return proto.CompactTextString(m) }
 func (*ChannelConnectivityState) ProtoMessage()    {}
 func (*ChannelConnectivityState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{2}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{2}
 }
 func (m *ChannelConnectivityState) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelConnectivityState.Unmarshal(m, b)
@@ -291,7 +291,7 @@ func (m *ChannelData) Reset()         { *m = ChannelData{} }
 func (m *ChannelData) String() string { return proto.CompactTextString(m) }
 func (*ChannelData) ProtoMessage()    {}
 func (*ChannelData) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{3}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{3}
 }
 func (m *ChannelData) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelData.Unmarshal(m, b)
@@ -371,7 +371,7 @@ func (m *ChannelTrace) Reset()         { *m = ChannelTrace{} }
 func (m *ChannelTrace) String() string { return proto.CompactTextString(m) }
 func (*ChannelTrace) ProtoMessage()    {}
 func (*ChannelTrace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{4}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{4}
 }
 func (m *ChannelTrace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelTrace.Unmarshal(m, b)
@@ -406,7 +406,7 @@ func (m *ChannelRef) Reset()         { *m = ChannelRef{} }
 func (m *ChannelRef) String() string { return proto.CompactTextString(m) }
 func (*ChannelRef) ProtoMessage()    {}
 func (*ChannelRef) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{5}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{5}
 }
 func (m *ChannelRef) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChannelRef.Unmarshal(m, b)
@@ -455,7 +455,7 @@ func (m *SubchannelRef) Reset()         { *m = SubchannelRef{} }
 func (m *SubchannelRef) String() string { return proto.CompactTextString(m) }
 func (*SubchannelRef) ProtoMessage()    {}
 func (*SubchannelRef) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{6}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{6}
 }
 func (m *SubchannelRef) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SubchannelRef.Unmarshal(m, b)
@@ -503,7 +503,7 @@ func (m *SocketRef) Reset()         { *m = SocketRef{} }
 func (m *SocketRef) String() string { return proto.CompactTextString(m) }
 func (*SocketRef) ProtoMessage()    {}
 func (*SocketRef) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{7}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{7}
 }
 func (m *SocketRef) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketRef.Unmarshal(m, b)
@@ -552,7 +552,7 @@ func (m *ServerRef) Reset()         { *m = ServerRef{} }
 func (m *ServerRef) String() string { return proto.CompactTextString(m) }
 func (*ServerRef) ProtoMessage()    {}
 func (*ServerRef) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{8}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{8}
 }
 func (m *ServerRef) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ServerRef.Unmarshal(m, b)
@@ -605,7 +605,7 @@ func (m *Server) Reset()         { *m = Server{} }
 func (m *Server) String() string { return proto.CompactTextString(m) }
 func (*Server) ProtoMessage()    {}
 func (*Server) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{9}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{9}
 }
 func (m *Server) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Server.Unmarshal(m, b)
@@ -667,7 +667,7 @@ func (m *ServerData) Reset()         { *m = ServerData{} }
 func (m *ServerData) String() string { return proto.CompactTextString(m) }
 func (*ServerData) ProtoMessage()    {}
 func (*ServerData) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{10}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{10}
 }
 func (m *ServerData) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ServerData.Unmarshal(m, b)
@@ -747,7 +747,7 @@ func (m *Socket) Reset()         { *m = Socket{} }
 func (m *Socket) String() string { return proto.CompactTextString(m) }
 func (*Socket) ProtoMessage()    {}
 func (*Socket) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{11}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{11}
 }
 func (m *Socket) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Socket.Unmarshal(m, b)
@@ -859,7 +859,7 @@ func (m *SocketData) Reset()         { *m = SocketData{} }
 func (m *SocketData) String() string { return proto.CompactTextString(m) }
 func (*SocketData) ProtoMessage()    {}
 func (*SocketData) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{12}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{12}
 }
 func (m *SocketData) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketData.Unmarshal(m, b)
@@ -986,7 +986,7 @@ func (m *Address) Reset()         { *m = Address{} }
 func (m *Address) String() string { return proto.CompactTextString(m) }
 func (*Address) ProtoMessage()    {}
 func (*Address) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{13}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{13}
 }
 func (m *Address) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address.Unmarshal(m, b)
@@ -1160,7 +1160,7 @@ func (m *Address_TcpIpAddress) Reset()         { *m = Address_TcpIpAddress{} }
 func (m *Address_TcpIpAddress) String() string { return proto.CompactTextString(m) }
 func (*Address_TcpIpAddress) ProtoMessage()    {}
 func (*Address_TcpIpAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{13, 0}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{13, 0}
 }
 func (m *Address_TcpIpAddress) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address_TcpIpAddress.Unmarshal(m, b)
@@ -1206,7 +1206,7 @@ func (m *Address_UdsAddress) Reset()         { *m = Address_UdsAddress{} }
 func (m *Address_UdsAddress) String() string { return proto.CompactTextString(m) }
 func (*Address_UdsAddress) ProtoMessage()    {}
 func (*Address_UdsAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{13, 1}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{13, 1}
 }
 func (m *Address_UdsAddress) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address_UdsAddress.Unmarshal(m, b)
@@ -1248,7 +1248,7 @@ func (m *Address_OtherAddress) Reset()         { *m = Address_OtherAddress{} }
 func (m *Address_OtherAddress) String() string { return proto.CompactTextString(m) }
 func (*Address_OtherAddress) ProtoMessage()    {}
 func (*Address_OtherAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{13, 2}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{13, 2}
 }
 func (m *Address_OtherAddress) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address_OtherAddress.Unmarshal(m, b)
@@ -1297,7 +1297,7 @@ func (m *Security) Reset()         { *m = Security{} }
 func (m *Security) String() string { return proto.CompactTextString(m) }
 func (*Security) ProtoMessage()    {}
 func (*Security) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{14}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{14}
 }
 func (m *Security) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Security.Unmarshal(m, b)
@@ -1444,7 +1444,7 @@ func (m *Security_Tls) Reset()         { *m = Security_Tls{} }
 func (m *Security_Tls) String() string { return proto.CompactTextString(m) }
 func (*Security_Tls) ProtoMessage()    {}
 func (*Security_Tls) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{14, 0}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{14, 0}
 }
 func (m *Security_Tls) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Security_Tls.Unmarshal(m, b)
@@ -1593,7 +1593,7 @@ func (m *Security_OtherSecurity) Reset()         { *m = Security_OtherSecurity{}
 func (m *Security_OtherSecurity) String() string { return proto.CompactTextString(m) }
 func (*Security_OtherSecurity) ProtoMessage()    {}
 func (*Security_OtherSecurity) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{14, 1}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{14, 1}
 }
 func (m *Security_OtherSecurity) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Security_OtherSecurity.Unmarshal(m, b)
@@ -1648,7 +1648,7 @@ func (m *SocketOption) Reset()         { *m = SocketOption{} }
 func (m *SocketOption) String() string { return proto.CompactTextString(m) }
 func (*SocketOption) ProtoMessage()    {}
 func (*SocketOption) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{15}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{15}
 }
 func (m *SocketOption) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketOption.Unmarshal(m, b)
@@ -1702,7 +1702,7 @@ func (m *SocketOptionTimeout) Reset()         { *m = SocketOptionTimeout{} }
 func (m *SocketOptionTimeout) String() string { return proto.CompactTextString(m) }
 func (*SocketOptionTimeout) ProtoMessage()    {}
 func (*SocketOptionTimeout) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{16}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{16}
 }
 func (m *SocketOptionTimeout) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketOptionTimeout.Unmarshal(m, b)
@@ -1745,7 +1745,7 @@ func (m *SocketOptionLinger) Reset()         { *m = SocketOptionLinger{} }
 func (m *SocketOptionLinger) String() string { return proto.CompactTextString(m) }
 func (*SocketOptionLinger) ProtoMessage()    {}
 func (*SocketOptionLinger) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{17}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{17}
 }
 func (m *SocketOptionLinger) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketOptionLinger.Unmarshal(m, b)
@@ -1820,7 +1820,7 @@ func (m *SocketOptionTcpInfo) Reset()         { *m = SocketOptionTcpInfo{} }
 func (m *SocketOptionTcpInfo) String() string { return proto.CompactTextString(m) }
 func (*SocketOptionTcpInfo) ProtoMessage()    {}
 func (*SocketOptionTcpInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{18}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{18}
 }
 func (m *SocketOptionTcpInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketOptionTcpInfo.Unmarshal(m, b)
@@ -2056,7 +2056,7 @@ func (m *GetTopChannelsRequest) Reset()         { *m = GetTopChannelsRequest{} }
 func (m *GetTopChannelsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetTopChannelsRequest) ProtoMessage()    {}
 func (*GetTopChannelsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{19}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{19}
 }
 func (m *GetTopChannelsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetTopChannelsRequest.Unmarshal(m, b)
@@ -2100,7 +2100,7 @@ func (m *GetTopChannelsResponse) Reset()         { *m = GetTopChannelsResponse{}
 func (m *GetTopChannelsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetTopChannelsResponse) ProtoMessage()    {}
 func (*GetTopChannelsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{20}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{20}
 }
 func (m *GetTopChannelsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetTopChannelsResponse.Unmarshal(m, b)
@@ -2147,7 +2147,7 @@ func (m *GetServersRequest) Reset()         { *m = GetServersRequest{} }
 func (m *GetServersRequest) String() string { return proto.CompactTextString(m) }
 func (*GetServersRequest) ProtoMessage()    {}
 func (*GetServersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{21}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{21}
 }
 func (m *GetServersRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetServersRequest.Unmarshal(m, b)
@@ -2191,7 +2191,7 @@ func (m *GetServersResponse) Reset()         { *m = GetServersResponse{} }
 func (m *GetServersResponse) String() string { return proto.CompactTextString(m) }
 func (*GetServersResponse) ProtoMessage()    {}
 func (*GetServersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{22}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{22}
 }
 func (m *GetServersResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetServersResponse.Unmarshal(m, b)
@@ -2239,7 +2239,7 @@ func (m *GetServerSocketsRequest) Reset()         { *m = GetServerSocketsRequest
 func (m *GetServerSocketsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetServerSocketsRequest) ProtoMessage()    {}
 func (*GetServerSocketsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{23}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{23}
 }
 func (m *GetServerSocketsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetServerSocketsRequest.Unmarshal(m, b)
@@ -2290,7 +2290,7 @@ func (m *GetServerSocketsResponse) Reset()         { *m = GetServerSocketsRespon
 func (m *GetServerSocketsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetServerSocketsResponse) ProtoMessage()    {}
 func (*GetServerSocketsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{24}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{24}
 }
 func (m *GetServerSocketsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetServerSocketsResponse.Unmarshal(m, b)
@@ -2325,7 +2325,7 @@ func (m *GetServerSocketsResponse) GetEnd() bool {
 }
 
 type GetChannelRequest struct {
-	// channel_id is the the identifier of the specific channel to get.
+	// channel_id is the identifier of the specific channel to get.
 	ChannelId            int64    `protobuf:"varint,1,opt,name=channel_id,json=channelId" json:"channel_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -2336,7 +2336,7 @@ func (m *GetChannelRequest) Reset()         { *m = GetChannelRequest{} }
 func (m *GetChannelRequest) String() string { return proto.CompactTextString(m) }
 func (*GetChannelRequest) ProtoMessage()    {}
 func (*GetChannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{25}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{25}
 }
 func (m *GetChannelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetChannelRequest.Unmarshal(m, b)
@@ -2376,7 +2376,7 @@ func (m *GetChannelResponse) Reset()         { *m = GetChannelResponse{} }
 func (m *GetChannelResponse) String() string { return proto.CompactTextString(m) }
 func (*GetChannelResponse) ProtoMessage()    {}
 func (*GetChannelResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{26}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{26}
 }
 func (m *GetChannelResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetChannelResponse.Unmarshal(m, b)
@@ -2404,7 +2404,7 @@ func (m *GetChannelResponse) GetChannel() *Channel {
 }
 
 type GetSubchannelRequest struct {
-	// subchannel_id is the the identifier of the specific subchannel to get.
+	// subchannel_id is the identifier of the specific subchannel to get.
 	SubchannelId         int64    `protobuf:"varint,1,opt,name=subchannel_id,json=subchannelId" json:"subchannel_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -2415,7 +2415,7 @@ func (m *GetSubchannelRequest) Reset()         { *m = GetSubchannelRequest{} }
 func (m *GetSubchannelRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSubchannelRequest) ProtoMessage()    {}
 func (*GetSubchannelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{27}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{27}
 }
 func (m *GetSubchannelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSubchannelRequest.Unmarshal(m, b)
@@ -2455,7 +2455,7 @@ func (m *GetSubchannelResponse) Reset()         { *m = GetSubchannelResponse{} }
 func (m *GetSubchannelResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSubchannelResponse) ProtoMessage()    {}
 func (*GetSubchannelResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{28}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{28}
 }
 func (m *GetSubchannelResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSubchannelResponse.Unmarshal(m, b)
@@ -2483,7 +2483,7 @@ func (m *GetSubchannelResponse) GetSubchannel() *Subchannel {
 }
 
 type GetSocketRequest struct {
-	// socket_id is the the identifier of the specific socket to get.
+	// socket_id is the identifier of the specific socket to get.
 	SocketId             int64    `protobuf:"varint,1,opt,name=socket_id,json=socketId" json:"socket_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -2494,7 +2494,7 @@ func (m *GetSocketRequest) Reset()         { *m = GetSocketRequest{} }
 func (m *GetSocketRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSocketRequest) ProtoMessage()    {}
 func (*GetSocketRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{29}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{29}
 }
 func (m *GetSocketRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSocketRequest.Unmarshal(m, b)
@@ -2534,7 +2534,7 @@ func (m *GetSocketResponse) Reset()         { *m = GetSocketResponse{} }
 func (m *GetSocketResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSocketResponse) ProtoMessage()    {}
 func (*GetSocketResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channelz_0abefd010d144cb9, []int{30}
+	return fileDescriptor_channelz_544d5edb3d49afb2, []int{30}
 }
 func (m *GetSocketResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSocketResponse.Unmarshal(m, b)
@@ -2852,9 +2852,9 @@ var _Channelz_serviceDesc = grpc.ServiceDesc{
 	Metadata: "channelz.proto",
 }
 
-func init() { proto.RegisterFile("channelz.proto", fileDescriptor_channelz_0abefd010d144cb9) }
+func init() { proto.RegisterFile("channelz.proto", fileDescriptor_channelz_544d5edb3d49afb2) }
 
-var fileDescriptor_channelz_0abefd010d144cb9 = []byte{
+var fileDescriptor_channelz_544d5edb3d49afb2 = []byte{
 	// 2317 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe4, 0x59, 0xcd, 0x6f, 0xdb, 0xc8,
 	0x15, 0x8f, 0xbe, 0x2c, 0xea, 0x59, 0x52, 0xe8, 0x49, 0x36, 0x4b, 0x2b, 0x1f, 0x4e, 0x99, 0x6c,
