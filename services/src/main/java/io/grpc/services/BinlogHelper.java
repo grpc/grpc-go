@@ -16,7 +16,7 @@
 
 package io.grpc.services;
 
-import static io.grpc.internal.BinaryLogProvider.BYTEARRAY_MARSHALLER;
+import static io.grpc.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -24,6 +24,7 @@ import com.google.common.base.Splitter;
 import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
+import io.grpc.BinaryLogProvider.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -50,7 +51,6 @@ import io.grpc.binarylog.MetadataEntry;
 import io.grpc.binarylog.Peer;
 import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
-import io.grpc.internal.BinaryLogProvider.CallId;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

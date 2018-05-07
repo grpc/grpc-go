@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.grpc.BinaryLog;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -107,7 +108,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   private boolean recordFinishedRpcs = true;
   private boolean tracingEnabled = true;
 
-  protected BinaryLogProvider binlogProvider = BinaryLogProvider.provider();
+  @Nullable
+  protected BinaryLog binlog;
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
   protected Channelz channelz = Channelz.instance();

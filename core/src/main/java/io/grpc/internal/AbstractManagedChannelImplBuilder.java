@@ -22,6 +22,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
+import io.grpc.BinaryLog;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
@@ -140,7 +141,7 @@ public abstract class AbstractManagedChannelImplBuilder
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
   @Nullable
-  BinaryLogProvider binlogProvider = BinaryLogProvider.provider();
+  BinaryLog binlog;
 
   /**
    * Sets the maximum message size allowed for a single gRPC frame. If an inbound messages

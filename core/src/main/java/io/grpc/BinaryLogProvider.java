@@ -14,33 +14,24 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ClientInterceptors;
-import io.grpc.InternalClientInterceptors;
-import io.grpc.InternalServerInterceptors;
-import io.grpc.InternalServiceProviders;
-import io.grpc.InternalServiceProviders.PriorityAccessor;
-import io.grpc.MethodDescriptor;
+import com.google.common.base.Preconditions;
 import io.grpc.MethodDescriptor.Marshaller;
-import io.grpc.ServerCallHandler;
-import io.grpc.ServerInterceptor;
-import io.grpc.ServerMethodDefinition;
 import io.opencensus.trace.Span;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
+// TODO(zpencer): rename class to AbstractBinaryLog
+@Internal
 public abstract class BinaryLogProvider implements Closeable {
   public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
       = CallOptions.Key.of("binarylog-calloptions-key", null);
@@ -48,31 +39,8 @@ public abstract class BinaryLogProvider implements Closeable {
   public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
 
   private static final Logger logger = Logger.getLogger(BinaryLogProvider.class.getName());
-  private static final BinaryLogProvider PROVIDER = InternalServiceProviders.load(
-      BinaryLogProvider.class,
-      Collections.<Class<?>>emptyList(),
-      BinaryLogProvider.class.getClassLoader(),
-      new PriorityAccessor<BinaryLogProvider>() {
-        @Override
-        public boolean isAvailable(BinaryLogProvider provider) {
-          return provider.isAvailable();
-        }
-
-        @Override
-        public int getPriority(BinaryLogProvider provider) {
-          return provider.priority();
-        }
-      });
 
   private final ClientInterceptor binaryLogShim = new BinaryLogShim();
-
-  /**
-   * Returns a {@code BinaryLogProvider}, or {@code null} if there is no provider.
-   */
-  @Nullable
-  public static BinaryLogProvider provider() {
-    return PROVIDER;
-  }
 
   /**
    * Wraps a channel to provide binary logging on {@link ClientCall}s as needed.
@@ -132,20 +100,6 @@ public abstract class BinaryLogProvider implements Closeable {
     // TODO(zpencer): make BinaryLogProvider provide a BinaryLog, and this method belongs there
   }
 
-  /**
-   * A priority, from 0 to 10 that this provider should be used, taking the current environment into
-   * consideration. 5 should be considered the default, and then tweaked based on environment
-   * detection. A priority of 0 does not imply that the provider wouldn't work; just that it should
-   * be last in line.
-   */
-  protected abstract int priority();
-
-  /**
-   * Whether this provider is available for use, taking the current environment into consideration.
-   * If {@code false}, no other methods are safe to be called.
-   */
-  protected abstract boolean isAvailable();
-
   // Creating a named class makes debugging easier
   private static final class ByteArrayMarshaller implements Marshaller<byte[]> {
     @Override
@@ -172,7 +126,7 @@ public abstract class BinaryLogProvider implements Closeable {
   }
 
   /**
-   * The pipeline of interceptors is hard coded when the {@link ManagedChannelImpl} is created.
+   * The pipeline of interceptors is hard coded when the {@link ManagedChannel} is created.
    * This shim interceptor should always be installed as a placeholder. When a call starts,
    * this interceptor checks with the {@link BinaryLogProvider} to see if logging should happen
    * for this particular {@link ClientCall}'s method.
@@ -216,6 +170,37 @@ public abstract class BinaryLogProvider implements Closeable {
 
     public static CallId fromCensusSpan(Span span) {
       return new CallId(0, ByteBuffer.wrap(span.getContext().getSpanId().getBytes()).getLong());
+    }
+  }
+
+  // Copied from internal
+  private static final class IoUtils {
+    /** maximum buffer to be read is 16 KB. */
+    private static final int MAX_BUFFER_LENGTH = 16384;
+
+    /** Returns the byte array. */
+    public static byte[] toByteArray(InputStream in) throws IOException {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      copy(in, out);
+      return out.toByteArray();
+    }
+
+    /** Copies the data from input stream to output stream. */
+    public static long copy(InputStream from, OutputStream to) throws IOException {
+      // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
+      Preconditions.checkNotNull(from);
+      Preconditions.checkNotNull(to);
+      byte[] buf = new byte[MAX_BUFFER_LENGTH];
+      long total = 0;
+      while (true) {
+        int r = from.read(buf);
+        if (r == -1) {
+          break;
+        }
+        to.write(buf, 0, r);
+        total += r;
+      }
+      return total;
     }
   }
 }

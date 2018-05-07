@@ -14,20 +14,14 @@
  * limitations under the License.
  */
 
-package io.grpc.services.internal;
+package io.grpc.services;
 
+import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
-import io.grpc.internal.BinaryLogProvider;
-import io.grpc.services.BinaryLogProviderImpl;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.Tracing;
 
-public final class CensusBinaryLogProvider extends BinaryLogProviderImpl {
-  @Override
-  protected int priority() {
-    return 6;
-  }
-
+final class CensusBinaryLogProvider extends BinaryLogProviderImpl {
   @Override
   protected CallId getServerCallId() {
     Span currentSpan = Tracing.getTracer().getCurrentSpan();

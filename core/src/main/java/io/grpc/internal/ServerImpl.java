@@ -30,11 +30,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.BinaryLog;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
+import io.grpc.InternalBinaryLogs;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -108,7 +110,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
 
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
-  private final BinaryLogProvider binlogProvider;
+  private final BinaryLog binlog;
 
   private final Channelz channelz;
   private final CallTracer serverCallTracer;
@@ -139,7 +141,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
     this.interceptors =
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
     this.handshakeTimeoutMillis = builder.handshakeTimeoutMillis;
-    this.binlogProvider = builder.binlogProvider;
+    this.binlog = builder.binlog;
     this.channelz = builder.channelz;
     this.serverCallTracer = builder.callTracerFactory.create();
 
@@ -535,8 +537,8 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
         handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
       }
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
-      ServerMethodDefinition<?, ?> wMethodDef = binlogProvider == null
-          ? interceptedDef : binlogProvider.wrapMethodDefinition(interceptedDef);
+      ServerMethodDefinition<?, ?> wMethodDef = binlog == null
+          ? interceptedDef : InternalBinaryLogs.wrapMethodDefinition(binlog, interceptedDef);
       return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context);
     }
 
