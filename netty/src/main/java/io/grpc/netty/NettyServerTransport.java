@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -234,6 +235,15 @@ class NettyServerTransport implements ServerTransport {
         channel.remoteAddress(),
         Utils.getSocketOptions(ch),
         grpcHandler == null ? null : grpcHandler.getSecurityInfo());
+
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId.getId())
+        .add("channel", channel)
+        .toString();
   }
 
   /**

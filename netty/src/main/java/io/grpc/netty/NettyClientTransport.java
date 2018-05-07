@@ -20,6 +20,7 @@ import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -298,7 +299,11 @@ class NettyClientTransport implements ConnectionClientTransport {
 
   @Override
   public String toString() {
-    return getLogId() + "(" + address + ")";
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId.getId())
+        .add("address", address)
+        .add("channel", channel)
+        .toString();
   }
 
   @Override

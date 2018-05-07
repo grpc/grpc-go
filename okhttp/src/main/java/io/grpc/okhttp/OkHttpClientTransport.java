@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -618,7 +619,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @Override
   public String toString() {
-    return getLogId() + "(" + address + ")";
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId.getId())
+        .add("address", address)
+        .toString();
   }
 
   @Override

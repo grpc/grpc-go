@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -272,6 +273,14 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   @Override
   public LogId getLogId() {
     return logId;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("logId", logId.getId())
+        .add("authority", authority)
+        .toString();
   }
 
   @Override

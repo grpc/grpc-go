@@ -1322,7 +1322,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("logId", logId)
+        .add("logId", logId.getId())
         .add("target", target)
         .toString();
   }

@@ -308,7 +308,7 @@ class NettyServer implements InternalServer, WithLogId {
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("logId", logId)
+        .add("logId", logId.getId())
         .add("address", address)
         .toString();
   }
@@ -391,6 +391,14 @@ class NettyServer implements InternalServer, WithLogId {
     @Override
     public LogId getLogId() {
       return id;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("logId", id.getId())
+          .add("channel", ch)
+          .toString();
     }
   }
 }

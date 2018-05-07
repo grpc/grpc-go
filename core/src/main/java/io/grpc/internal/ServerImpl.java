@@ -586,7 +586,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("logId", logId)
+        .add("logId", logId.getId())
         .add("transportServer", transportServer)
         .toString();
   }
