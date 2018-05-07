@@ -170,8 +170,11 @@ Tagging the Release
    ```
 6. Close the release milestone.
 
-Setup Build Environment
+Setup Build Environment (External only)
 ---------------------------
+
+**This section describes the external release process. See go/grpc/java/releasing for the internal
+automated release process.**
 
 ### Linux
 The deployment for Linux uses [Docker](https://www.docker.com/) running
@@ -289,8 +292,12 @@ We only build 64-bit artifact for Mac.
      LDFLAGS="$HOME/protobuf/lib/libprotobuf.a $HOME/protobuf/lib/libprotoc.a"
    ```
 
-Build and Deploy
+Build and Deploy (External only)
 ----------------
+
+**This section describes the external release process. See go/grpc/java/releasing for the internal
+automated release process.**
+
 We currently distribute the following OSes and architectures:
 
 | OS | x86_32 | x86_64 |
