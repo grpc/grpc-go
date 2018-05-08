@@ -84,7 +84,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	var err error
-	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{})
+	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{DisableServiceConfig: cc.dopts.disableServiceConfig})
 	if err != nil {
 		return nil, err
 	}

@@ -108,9 +108,10 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder  resolver.Builder
-	waitForHandshake bool
-	channelzParentID int64
+	resolverBuilder      resolver.Builder
+	waitForHandshake     bool
+	channelzParentID     int64
+	disableServiceConfig bool
 }
 
 const (
@@ -413,6 +414,15 @@ func WithAuthority(a string) DialOption {
 func WithChannelzParentID(id int64) DialOption {
 	return func(o *dialOptions) {
 		o.channelzParentID = id
+	}
+}
+
+// WithDisableServiceConfig returns a DialOption that causes grpc to ignore any
+// service config provided by the resolver and provides a hint to the resolver
+// to not fetch service configs.
+func WithDisableServiceConfig() DialOption {
+	return func(o *dialOptions) {
+		o.disableServiceConfig = true
 	}
 }
 
@@ -1002,6 +1012,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
+	if cc.dopts.disableServiceConfig {
+		return nil
+	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
 		return err
