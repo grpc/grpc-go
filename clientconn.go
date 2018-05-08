@@ -719,6 +719,16 @@ func (cc *ClientConn) GetState() connectivity.State {
 	return cc.csMgr.getState()
 }
 
+// GetStatus returns the status of cc as an error produced by the status
+// package.  If the state is TransientFailure, the status error will be
+// non-nil.  Otherwise, it will always be nil.
+func (cc *ClientConn) GetStatus() error {
+	if cc.GetState() != connectivity.TransientFailure {
+		return nil
+	}
+	return status.Errorf(codes.Unavailable, "latest connection error: %v", cc.blockingpicker.connectionError())
+}
+
 func (cc *ClientConn) scWatcher() {
 	for {
 		select {
@@ -877,6 +887,9 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 		return
 	}
 	delete(cc.conns, ac)
+	if len(cc.conns) == 0 {
+		cc.blockingpicker.updateConnectionError(errors.New("no backends returned by resolver"))
+	}
 	cc.mu.Unlock()
 	ac.tearDown(err)
 }
