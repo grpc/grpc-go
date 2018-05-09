@@ -26,12 +26,6 @@ public final class InternalServerInterceptors {
     return ServerInterceptors.InterceptCallHandler.create(interceptor, callHandler);
   }
 
-  public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> wrapMethod(
-      ServerMethodDefinition<?, ?> definition,
-      MethodDescriptor<ReqT, RespT> wrappedMethod) {
-    return ServerInterceptors.wrapMethod(definition, wrappedMethod);
-  }
-
   private InternalServerInterceptors() {
   }
 }

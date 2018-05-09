@@ -66,10 +66,11 @@ public abstract class BinaryLogProvider implements Closeable {
     }
     MethodDescriptor<byte[], byte[]> binMethod =
         BinaryLogProvider.toByteBufferMethod(oMethodDef.getMethodDescriptor());
-    ServerMethodDefinition<byte[], byte[]> binDef = InternalServerInterceptors
-        .wrapMethod(oMethodDef, binMethod);
-    ServerCallHandler<byte[], byte[]> binlogHandler = InternalServerInterceptors
-        .interceptCallHandler(binlogInterceptor, binDef.getServerCallHandler());
+    ServerMethodDefinition<byte[], byte[]> binDef =
+        ServerInterceptors.wrapMethod(oMethodDef, binMethod);
+    ServerCallHandler<byte[], byte[]> binlogHandler =
+        ServerInterceptors.InterceptCallHandler.create(
+            binlogInterceptor, binDef.getServerCallHandler());
     return ServerMethodDefinition.create(binMethod, binlogHandler);
   }
 
@@ -142,7 +143,7 @@ public abstract class BinaryLogProvider implements Closeable {
       if (binlogInterceptor == null) {
         return next.newCall(method, callOptions);
       } else {
-        return InternalClientInterceptors
+        return ClientInterceptors
             .wrapClientInterceptor(
                 binlogInterceptor,
                 BYTEARRAY_MARSHALLER,
