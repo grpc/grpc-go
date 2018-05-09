@@ -87,38 +87,18 @@ func (d *delayListener) Dial(to time.Duration) (net.Conn, error) {
 	return d.cc, nil
 }
 
-func (d *delayListener) clientWriteCalledChan() <-chan struct{} {
-	return d.cc.writeCalledChan()
-}
-
 type delayConn struct {
 	net.Conn
-	blockRead   chan struct{}
-	mu          sync.Mutex
-	writeCalled chan struct{}
+	blockRead chan struct{}
 }
 
-func (d *delayConn) writeCalledChan() <-chan struct{} {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.writeCalled = make(chan struct{})
-	return d.writeCalled
-}
 func (d *delayConn) allowRead() {
 	close(d.blockRead)
 }
+
 func (d *delayConn) Read(b []byte) (n int, err error) {
 	<-d.blockRead
 	return d.Conn.Read(b)
-}
-func (d *delayConn) Write(b []byte) (n int, err error) {
-	d.mu.Lock()
-	if d.writeCalled != nil {
-		close(d.writeCalled)
-		d.writeCalled = nil
-	}
-	d.mu.Unlock()
-	return d.Conn.Write(b)
 }
 
 func TestGracefulStop(t *testing.T) {
@@ -197,6 +177,7 @@ func TestGracefulStop(t *testing.T) {
 	cancel()
 	client := testpb.NewTestServiceClient(cc)
 	defer cc.Close()
+	dlis.allowClose()
 
 	// 4. Send an RPC on the new connection.
 	// The server would send a GOAWAY first, but we are delaying the server's
@@ -206,12 +187,10 @@ func TestGracefulStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <nil>", err)
 	}
-	//wcch := dlis.clientWriteCalledChan()
 	go func() {
 		// 5. Allow the client to read the GoAway.  The RPC should complete
 		//    successfully.
 		<-serverGotReq
-		dlis.allowClose()
 		dlis.allowClientRead()
 	}()
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
