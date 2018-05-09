@@ -466,27 +466,27 @@ func (a *csAttempt) sendMsg(m interface{}) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	var outPayload *stats.OutPayload
-	if a.statsHandler != nil {
-		outPayload = &stats.OutPayload{
-			Client: true,
-		}
-	}
-	hdr, data, err := encode(cs.codec, m, cs.cp, outPayload, cs.comp)
+	data, err := encode(cs.codec, m)
 	if err != nil {
 		return err
 	}
-	if len(data) > *cs.c.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
+	compData, err := compress(data, cs.cp, cs.comp)
+	if err != nil {
+		return err
 	}
+	hdr, payload := msgHeader(data, compData)
+	// TODO(dfawley): should we be checking len(data) instead?
+	if len(payload) > *cs.c.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.c.maxSendMessageSize)
+	}
+
 	if !cs.desc.ClientStreams {
 		cs.sentLast = true
 	}
-	err = a.t.Write(a.s, hdr, data, &transport.Options{Last: !cs.desc.ClientStreams})
+	err = a.t.Write(a.s, hdr, payload, &transport.Options{Last: !cs.desc.ClientStreams})
 	if err == nil {
-		if outPayload != nil {
-			outPayload.SentTime = time.Now()
-			a.statsHandler.HandleRPC(a.ctx, outPayload)
+		if a.statsHandler != nil {
+			a.statsHandler.HandleRPC(a.ctx, outPayload(true, m, data, payload, time.Now()))
 		}
 		if channelz.IsOn() {
 			a.t.IncrMsgSent()
@@ -696,23 +696,24 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.t.IncrMsgSent()
 		}
 	}()
-	var outPayload *stats.OutPayload
-	if ss.statsHandler != nil {
-		outPayload = &stats.OutPayload{}
-	}
-	hdr, data, err := encode(ss.codec, m, ss.cp, outPayload, ss.comp)
+	data, err := encode(ss.codec, m)
 	if err != nil {
 		return err
 	}
-	if len(data) > ss.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
+	compData, err := compress(data, ss.cp, ss.comp)
+	if err != nil {
+		return err
 	}
-	if err := ss.t.Write(ss.s, hdr, data, &transport.Options{Last: false}); err != nil {
+	hdr, payload := msgHeader(data, compData)
+	// TODO(dfawley): should we be checking len(data) instead?
+	if len(payload) > ss.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
+	}
+	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
-	if outPayload != nil {
-		outPayload.SentTime = time.Now()
-		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload)
+	if ss.statsHandler != nil {
+		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, time.Now()))
 	}
 	return nil
 }
