@@ -18,17 +18,18 @@ more than once every 5 minutes under normal operation.
 
 ### Warning
 
-Warning messages indicate problems that are non-fatal for the operation being
-performed, but could lead to unexpected behavior or subsequent errors.
+Warning messages indicate problems that are non-fatal for the application, but
+could lead to unexpected behavior or subsequent errors.
 
 Examples:
 - Resolver could not resolve target name.
 - Error received while connecting to a server.
+- Lost or corrupt connection with remote endpoint.
 
 ### Error
 
-Error messages represent errors in the usage of gRPC or internal gRPC-Go errors
-that are recoverable.
+Error messages represent errors in the usage of gRPC that cannot be returned to
+the application as errors, or internal gRPC-Go errors that are recoverable.
 
 Internal errors are detected during gRPC tests and will result in test failures.
 
