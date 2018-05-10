@@ -114,7 +114,7 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 }
 
 // NewClientStream creates a new Stream for the client side. This is typically
-// called by generated code.
+// called by generated code. ctx is used for the lifetime of the stream.
 //
 // DEPRECATED: Use ClientConn.NewStream instead.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
