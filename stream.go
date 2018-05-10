@@ -101,7 +101,7 @@ type ClientStream interface {
 }
 
 // NewStream creates a new Stream for the client side. This is typically
-// called by generated code.
+// called by generated code. ctx is used for the lifetime of the stream.
 func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
