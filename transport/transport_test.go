@@ -2132,7 +2132,7 @@ func TestHeaderTblSize(t *testing.T) {
 
 	var svrTransport ServerTransport
 	var i int
-	for i := 0; i < 1000; i++ {
+	for i = 0; i < 1000; i++ {
 		server.mu.Lock()
 		if len(server.conns) != 0 {
 			server.mu.Unlock()
@@ -2159,7 +2159,7 @@ func TestHeaderTblSize(t *testing.T) {
 		},
 	})
 
-	for i := 0; i < 1000; i++ {
+	for i = 0; i < 1000; i++ {
 		if limits.getLen() != 1 {
 			time.Sleep(10 * time.Millisecond)
 			continue
