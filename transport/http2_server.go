@@ -273,7 +273,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		t.loopy.run()
+		err := t.loopy.run()
+		errorf("transport: loopyWriter.run returning. Err: %v", err)
 		t.conn.Close()
 		close(t.writerDone)
 	}()
