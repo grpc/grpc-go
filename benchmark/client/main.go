@@ -37,14 +37,14 @@ import (
 )
 
 var (
-	port    = flag.String("port", "50051", "Localhost port to connect to.")
-	r       = flag.Int("r", 1, "The number of concurrent RPCs on each connection.")
-	c       = flag.Int("c", 1, "The number of parallel connections.")
-	w       = flag.Int("w", 10, "Warm-up duration in seconds")
-	d       = flag.Int("d", 60, "Benchmark duration in seconds")
-	rqSize  = flag.Int("req", 1, "Request message size in bytes.")
-	rspSize = flag.Int("resp", 1, "Response message size in bytes.")
-	rpcType = flag.String("rpc_type", "unary",
+	port      = flag.String("port", "50051", "Localhost port to connect to.")
+	numRPC    = flag.Int("r", 1, "The number of concurrent RPCs on each connection.")
+	numConn   = flag.Int("c", 1, "The number of parallel connections.")
+	warmupDur = flag.Int("w", 10, "Warm-up duration in seconds")
+	duration  = flag.Int("d", 60, "Benchmark duration in seconds")
+	rqSize    = flag.Int("req", 1, "Request message size in bytes.")
+	rspSize   = flag.Int("resp", 1, "Response message size in bytes.")
+	rpcType   = flag.String("rpc_type", "unary",
 		`Configure different client rpc type. Valid options are:
 		   unary;
 		   streaming.`)
@@ -74,8 +74,8 @@ func main() {
 	connectCtx, connectCancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer connectCancel()
 	ccs := buildConnections(connectCtx)
-	warmDeadline := time.Now().Add(time.Duration(*w) * time.Second)
-	endDeadline := warmDeadline.Add(time.Duration(*d) * time.Second)
+	warmDeadline := time.Now().Add(time.Duration(*warmupDur) * time.Second)
+	endDeadline := warmDeadline.Add(time.Duration(*duration) * time.Second)
 	cf, err := os.Create("/tmp/" + *testName + ".cpu")
 	if err != nil {
 		grpclog.Fatalf("Error creating file: %v", err)
@@ -109,7 +109,7 @@ func main() {
 }
 
 func buildConnections(ctx context.Context) []*grpc.ClientConn {
-	ccs := make([]*grpc.ClientConn, *c)
+	ccs := make([]*grpc.ClientConn, *numConn)
 	for i := range ccs {
 		ccs[i] = benchmark.NewClientConnWithContext(ctx, "localhost:"+*port, grpc.WithInsecure(), grpc.WithBlock())
 	}
@@ -117,7 +117,7 @@ func buildConnections(ctx context.Context) []*grpc.ClientConn {
 }
 
 func runWithConn(cc *grpc.ClientConn, req *testpb.SimpleRequest, warmDeadline, endDeadline time.Time) {
-	for i := 0; i < *r; i++ {
+	for i := 0; i < *numRPC; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -165,7 +165,7 @@ func makeCaller(cc *grpc.ClientConn, req *testpb.SimpleRequest) func() {
 }
 
 func parseHist(hist *stats.Histogram) {
-	fmt.Println("qps:", float64(hist.Count)/float64(*d))
+	fmt.Println("qps:", float64(hist.Count)/float64(*duration))
 	fmt.Printf("Latency: (50/90/99 %%ile): %v/%v/%v\n",
 		time.Duration(median(.5, hist)),
 		time.Duration(median(.9, hist)),
