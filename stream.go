@@ -124,19 +124,7 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 	return newClientStream(ctx, desc, cc, method, opts...)
 }
 
-// NewClientStream creates a new Stream for the client side. This is typically
-// called by generated code. ctx is used for the lifetime of the stream.
-//
-// To ensure resources are not leaked due to the stream returned, one of the following
-// actions must be performed:
-//
-// 1. call Close on the ClientConn,
-// 2. cancel the context provided,
-// 3. call RecvMsg until a non-nil error is returned, or
-// 4. receive a non-nil, non-io.EOF error from Header or SendMsg.
-//
-// If none of the above happen, a goroutine and a context will be leaked, and grpc
-// will not call the optionally-configured stats handler with a stats.End message.
+// NewClientStream is a wrapper for ClientConn.NewStream.
 //
 // DEPRECATED: Use ClientConn.NewStream instead.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
