@@ -67,6 +67,9 @@ type dnsBuilder struct {
 
 // Build creates and starts a DNS resolver that watches the name resolution of the target.
 func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+	if target.Authority != "" {
+		return nil, fmt.Errorf("non-default DNS resolver %q not supported", target.Authority)
+	}
 	host, port, err := parseTarget(target.Endpoint)
 	if err != nil {
 		return nil, err
