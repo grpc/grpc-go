@@ -2609,8 +2609,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Channelz service
-
+// ChannelzClient is the client API for Channelz service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ChannelzClient interface {
 	// Gets all root channels (i.e. channels the application has directly
 	// created). This does not include subchannels nor non-top level channels.
@@ -2637,7 +2638,7 @@ func NewChannelzClient(cc *grpc.ClientConn) ChannelzClient {
 
 func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsRequest, opts ...grpc.CallOption) (*GetTopChannelsResponse, error) {
 	out := new(GetTopChannelsResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetTopChannels", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetTopChannels", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2646,7 +2647,7 @@ func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsR
 
 func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, opts ...grpc.CallOption) (*GetServersResponse, error) {
 	out := new(GetServersResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServers", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2655,7 +2656,7 @@ func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, 
 
 func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSocketsRequest, opts ...grpc.CallOption) (*GetServerSocketsResponse, error) {
 	out := new(GetServerSocketsResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServerSockets", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServerSockets", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2664,7 +2665,7 @@ func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSock
 
 func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*GetChannelResponse, error) {
 	out := new(GetChannelResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetChannel", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetChannel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2673,7 +2674,7 @@ func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, 
 
 func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelRequest, opts ...grpc.CallOption) (*GetSubchannelResponse, error) {
 	out := new(GetSubchannelResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSubchannel", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSubchannel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2682,7 +2683,7 @@ func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelReq
 
 func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, opts ...grpc.CallOption) (*GetSocketResponse, error) {
 	out := new(GetSocketResponse)
-	err := grpc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSocket", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSocket", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -275,8 +275,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for MetricsService service
-
+// MetricsServiceClient is the client API for MetricsService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type MetricsServiceClient interface {
 	// Returns the values of all the gauges that are currently being maintained by
 	// the service
@@ -294,7 +295,7 @@ func NewMetricsServiceClient(cc *grpc.ClientConn) MetricsServiceClient {
 }
 
 func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_MetricsService_serviceDesc.Streams[0], c.cc, "/grpc.testing.MetricsService/GetAllGauges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_MetricsService_serviceDesc.Streams[0], "/grpc.testing.MetricsService/GetAllGauges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +328,7 @@ func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
 
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
 	out := new(GaugeResponse)
-	err := grpc.Invoke(ctx, "/grpc.testing.MetricsService/GetGauge", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.MetricsService/GetGauge", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
