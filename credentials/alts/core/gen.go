@@ -16,6 +16,7 @@
  *
  */
 
+// Package core contains common core functionality for ALTS.
 //go:generate /bin/sh -exu -o pipefail -c "tail -n +22 ./gen.go | /bin/sh -exu -o pipefail"
 package core // import "google.golang.org/grpc/credentials/alts/core"
 /*
@@ -32,7 +33,6 @@ curl https://raw.githubusercontent.com/grpc/grpc-proto/master/grpc/gcp/altsconte
 curl https://raw.githubusercontent.com/grpc/grpc-proto/master/grpc/gcp/handshaker.proto > proto/grpc_gcp/grpc/gcp/handshaker.proto
 curl https://raw.githubusercontent.com/grpc/grpc-proto/master/grpc/gcp/transport_security_common.proto > proto/grpc_gcp/grpc/gcp/transport_security_common.proto
 protoc --go_out=plugins=grpc,paths=source_relative:proto/grpc_gcp/ -Iproto/grpc_gcp/ proto/grpc_gcp/grpc/gcp/*.proto
-rm -f *.pb.go
 mv proto/grpc_gcp/grpc/gcp/*.pb.go proto/grpc_gcp/
 exit 0
 */
