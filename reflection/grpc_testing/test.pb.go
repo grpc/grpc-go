@@ -167,8 +167,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for SearchService service
-
+// SearchServiceClient is the client API for SearchService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type SearchServiceClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error)
@@ -184,7 +185,7 @@ func NewSearchServiceClient(cc *grpc.ClientConn) SearchServiceClient {
 
 func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
 	out := new(SearchResponse)
-	err := grpc.Invoke(ctx, "/grpc.testing.SearchService/Search", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.SearchService/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +193,7 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 }
 
 func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_SearchService_serviceDesc.Streams[0], c.cc, "/grpc.testing.SearchService/StreamingSearch", opts...)
+	stream, err := c.cc.NewStream(ctx, &_SearchService_serviceDesc.Streams[0], "/grpc.testing.SearchService/StreamingSearch", opts...)
 	if err != nil {
 		return nil, err
 	}

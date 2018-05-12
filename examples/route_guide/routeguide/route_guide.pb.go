@@ -310,8 +310,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for RouteGuide service
-
+// RouteGuideClient is the client API for RouteGuide service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RouteGuideClient interface {
 	// A simple RPC.
 	//
@@ -349,7 +350,7 @@ func NewRouteGuideClient(cc *grpc.ClientConn) RouteGuideClient {
 
 func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...grpc.CallOption) (*Feature, error) {
 	out := new(Feature)
-	err := grpc.Invoke(ctx, "/routeguide.RouteGuide/GetFeature", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/routeguide.RouteGuide/GetFeature", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +358,7 @@ func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...gr
 }
 
 func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_RouteGuide_serviceDesc.Streams[0], c.cc, "/routeguide.RouteGuide/ListFeatures", opts...)
+	stream, err := c.cc.NewStream(ctx, &_RouteGuide_serviceDesc.Streams[0], "/routeguide.RouteGuide/ListFeatures", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +390,7 @@ func (x *routeGuideListFeaturesClient) Recv() (*Feature, error) {
 }
 
 func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_RouteGuide_serviceDesc.Streams[1], c.cc, "/routeguide.RouteGuide/RecordRoute", opts...)
+	stream, err := c.cc.NewStream(ctx, &_RouteGuide_serviceDesc.Streams[1], "/routeguide.RouteGuide/RecordRoute", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +424,7 @@ func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
 }
 
 func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_RouteGuide_serviceDesc.Streams[2], c.cc, "/routeguide.RouteGuide/RouteChat", opts...)
+	stream, err := c.cc.NewStream(ctx, &_RouteGuide_serviceDesc.Streams[2], "/routeguide.RouteGuide/RouteChat", opts...)
 	if err != nil {
 		return nil, err
 	}

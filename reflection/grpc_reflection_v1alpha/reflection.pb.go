@@ -775,8 +775,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for ServerReflection service
-
+// ServerReflectionClient is the client API for ServerReflection service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ServerReflectionClient interface {
 	// The reflection service is structured as a bidirectional stream, ensuring
 	// all related requests go to a single server.
@@ -792,7 +793,7 @@ func NewServerReflectionClient(cc *grpc.ClientConn) ServerReflectionClient {
 }
 
 func (c *serverReflectionClient) ServerReflectionInfo(ctx context.Context, opts ...grpc.CallOption) (ServerReflection_ServerReflectionInfoClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_ServerReflection_serviceDesc.Streams[0], c.cc, "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ServerReflection_serviceDesc.Streams[0], "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo", opts...)
 	if err != nil {
 		return nil, err
 	}
