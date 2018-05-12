@@ -147,6 +147,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
 		clientStats:    newRPCStats(),
+		backoff:        grpc.DefaultBackoffConfig, // TODO: make backoff configurable
 	}
 
 	return lb
@@ -165,6 +166,8 @@ type lbBalancer struct {
 	manualResolver *lbManualResolver
 	// The ClientConn to talk to the remote balancer.
 	ccRemoteLB *grpc.ClientConn
+	// backoff for calling remote balancer.
+	backoff grpc.BackoffConfig
 
 	// Support client side load reporting. Each picker gets a reference to this,
 	// and will update its content.
