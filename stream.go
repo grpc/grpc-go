@@ -109,12 +109,10 @@ type ClientStream interface {
 //		1. Call Close on the ClientConn.
 //		2. Cancel the context provided.
 //		3. Call RecvMsg until a non-nil error is returned. For protobuf-generated clients:
-//			- Unidirectional clients should call CloseAndRecv (in the unidirectional case,
-//			  the server should only ever respond in the "closing" case). Note that
-//			  CloseSend will may not release all goroutines; CloseAndRecv guarantees
-//			  release of resources.
-//			- Bidirectional clients should call Close and then call Recv until a non-nil
-// 			  error is returned.
+//			- Unidirectional clients should call CloseAndRecv. Note that CloseSend may not
+// 			  release all goroutines; CloseAndRecv guarantees release of resources.
+//			- Bidirectional clients should call Close and then repeatedly call Recv until
+// 			  a non-nil error is returned.
 //		4. Receive a non-nil, non-io.EOF error from Header or SendMsg.
 //
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
