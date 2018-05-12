@@ -34,10 +34,11 @@ import (
 	"google.golang.org/grpc/channelz"
 	pb "google.golang.org/grpc/channelz/service_proto"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 )
 
 func init() {
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.channelz.OtherSecurityValue")
+	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherSecurityValue")
 	channelz.TurnOn()
 }
 
@@ -100,7 +101,7 @@ type dummySocket struct {
 	SocketOptions                    *channelz.SocketOptionData
 	localAddr                        net.Addr
 	remoteAddr                       net.Addr
-	Security                         channelz.SecurityValue
+	Security                         credentials.SecurityValue
 	remoteName                       string
 }
 
@@ -193,12 +194,12 @@ func protoToTime(protoTime *pb.SocketOptionTimeout) *unix.Timeval {
 	return timeout
 }
 
-func protoToSecurity(protoSecurity *pb.Security) channelz.SecurityValue {
+func protoToSecurity(protoSecurity *pb.Security) credentials.SecurityValue {
 	switch v := protoSecurity.Model.(type) {
 	case *pb.Security_Tls_:
-		return &channelz.TLSSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
+		return &credentials.TLSSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
 	case *pb.Security_Other:
-		sv := &channelz.OtherSecurityValue{Name: v.Other.GetName()}
+		sv := &credentials.OtherSecurityValue{Name: v.Other.GetName()}
 		var x ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(v.Other.GetValue(), &x); err == nil {
 			sv.Value = x.Message
@@ -588,18 +589,18 @@ func TestGetSocket(t *testing.T) {
 			},
 		},
 		{
-			Security: &channelz.TLSSecurityValue{
+			Security: &credentials.TLSSecurityValue{
 				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
 			},
 		},
 		{
-			Security: &channelz.OtherSecurityValue{
+			Security: &credentials.OtherSecurityValue{
 				Name: "XXXX",
 			},
 		},
 		{
-			Security: &channelz.OtherSecurityValue{
+			Security: &credentials.OtherSecurityValue{
 				Name:  "YYYY",
 				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
 			},

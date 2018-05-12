@@ -31,8 +31,7 @@ import (
 	"net"
 	"strings"
 
-	"google.golang.org/grpc/channelz"
-
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
@@ -121,8 +120,8 @@ func (t TLSInfo) AuthType() string {
 }
 
 // GetSecurityValue returns security info requested by channelz.
-func (t TLSInfo) GetSecurityValue() channelz.SecurityValue {
-	v := &channelz.TLSSecurityValue{
+func (t TLSInfo) GetSecurityValue() SecurityValue {
+	v := &TLSSecurityValue{
 		StandardName: cipherSuiteLookup[t.State.CipherSuite],
 	}
 	// Currently there's no way to get LocalCertificate info from tls package.
@@ -169,7 +168,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return tlsConn{conn, rawConn}, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -177,7 +176,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if err := conn.Handshake(); err != nil {
 		return nil, nil, err
 	}
-	return tlsConn{conn, rawConn}, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {
@@ -232,3 +231,35 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportCredentials, error
 	}
 	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
 }
+
+// Security defines the interface that security protocols should implement in order
+// to provide security info to channelz.
+type Security interface {
+	GetSecurityValue() SecurityValue
+}
+
+// SecurityValue defines the interface that GetSecurityValue() return value should
+// satisfy. This interface should only be satisfied by *TLSSecurityValue and
+// *OtherSecurityValue.
+type SecurityValue interface {
+	isSecurityValue()
+}
+
+// TLSSecurityValue defines the struct that TLS protocol should return from GetSecurityValue(),
+// containing security info like cipher and certificate used.
+type TLSSecurityValue struct {
+	StandardName      string
+	LocalCertificate  []byte
+	RemoteCertificate []byte
+}
+
+func (*TLSSecurityValue) isSecurityValue() {}
+
+// OtherSecurityValue defines the struct that non-TLS protocol should return from
+// GetSecurityValue(), which contains protocol specific security info.
+type OtherSecurityValue struct {
+	Name  string
+	Value proto.Message
+}
+
+func (*OtherSecurityValue) isSecurityValue() {}

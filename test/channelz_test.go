@@ -122,7 +122,6 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 			te.srvAddr = ""
 			ccs = append(ccs, cc)
 		}
-
 		if err := verifyResultWithDelay(func() (bool, error) {
 			if tcs, end := channelz.GetTopChannels(c.start); len(tcs) != c.length || end != c.end {
 				return false, fmt.Errorf("GetTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)

@@ -32,12 +32,16 @@ import (
 	"google.golang.org/grpc/channelz"
 	pb "google.golang.org/grpc/channelz/service_proto"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 )
 
-const (
-	secToNano  = 1e9
-	usecToNano = 1e3
-)
+func secToNano(i int64) int64 {
+	return i * 1e9
+}
+
+func usecToNano(i int64) int64 {
+	return i * 1e3
+}
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
@@ -135,31 +139,25 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *pb.Subchannel {
 	return sc
 }
 
-func securityToProto(se channelz.SecurityValue) *pb.Security {
+func securityToProto(se credentials.SecurityValue) *pb.Security {
 	switch v := se.(type) {
-	case *channelz.TLSSecurityValue:
+	case *credentials.TLSSecurityValue:
 		return &pb.Security{Model: &pb.Security_Tls_{Tls: &pb.Security_Tls{
 			CipherSuite:       &pb.Security_Tls_StandardName{StandardName: v.StandardName},
 			LocalCertificate:  v.LocalCertificate,
 			RemoteCertificate: v.RemoteCertificate,
-		},
-		},
-		}
-	case *channelz.OtherSecurityValue:
+		}}}
+	case *credentials.OtherSecurityValue:
 		anyval, err := ptypes.MarshalAny(v.Value)
 		if err != nil {
 			return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
 				Name: v.Name,
-			},
-			},
-			}
+			}}}
 		}
 		return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
 			Name:  v.Name,
 			Value: anyval,
-		},
-		},
-		}
+		}}}
 	}
 	return nil
 }
@@ -167,19 +165,19 @@ func securityToProto(se channelz.SecurityValue) *pb.Security {
 func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
 	var opts []*pb.SocketOption
 	if skopts.Linger != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionLinger{Active: skopts.Linger.Onoff != 0, Duration: ptypes.DurationProto(time.Duration(int64(skopts.Linger.Linger) * secToNano))})
+		additional, err := ptypes.MarshalAny(&pb.SocketOptionLinger{Active: skopts.Linger.Onoff != 0, Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.Linger.Linger))))})
 		if err == nil {
 			opts = append(opts, &pb.SocketOption{Name: "SO_LINGER", Additional: additional})
 		}
 	}
 	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(skopts.RecvTimeout.Sec*secToNano + skopts.RecvTimeout.Usec*usecToNano))})
+		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.RecvTimeout.Sec)) + usecToNano(int64(skopts.RecvTimeout.Usec))))})
 		if err == nil {
 			opts = append(opts, &pb.SocketOption{Name: "SO_RCVTIMEO", Additional: additional})
 		}
 	}
 	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(skopts.SendTimeout.Sec*secToNano + skopts.SendTimeout.Usec*usecToNano))})
+		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.SendTimeout.Sec)) + usecToNano(int64(skopts.SendTimeout.Usec))))})
 		if err == nil {
 			opts = append(opts, &pb.SocketOption{Name: "SO_SNDTIMEO", Additional: additional})
 		}

@@ -22,8 +22,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -284,7 +284,7 @@ type SocketInternalMetric struct {
 	// the original target name.
 	RemoteName    string
 	SocketOptions *SocketOptionData
-	Security      SecurityValue
+	Security      credentials.SecurityValue
 }
 
 // Socket is the interface that should be satisfied in order to be tracked by
@@ -417,35 +417,3 @@ func (s *server) deleteSelfIfReady() {
 	}
 	s.cm.deleteEntry(s.id)
 }
-
-// Security defines the interface that security protocols should implement in order
-// to provide security info to channelz.
-type Security interface {
-	GetSecurityValue() SecurityValue
-}
-
-// SecurityValue defines the interface that GetSecurityValue() return value should
-// satisfy. This interface should only be satisfied by *TLSSecurityValue and
-// *OtherSecurityValue.
-type SecurityValue interface {
-	isSecurityValue()
-}
-
-// TLSSecurityValue defines the struct that TLS protocol should return from GetSecurityValue(),
-// containing security info like cipher and certificate used.
-type TLSSecurityValue struct {
-	StandardName      string
-	LocalCertificate  []byte
-	RemoteCertificate []byte
-}
-
-func (*TLSSecurityValue) isSecurityValue() {}
-
-// OtherSecurityValue defines the struct that non-TLS protocol should return from
-// GetSecurityValue(), which contains protocol specific security info.
-type OtherSecurityValue struct {
-	Name  string
-	Value proto.Message
-}
-
-func (*OtherSecurityValue) isSecurityValue() {}
