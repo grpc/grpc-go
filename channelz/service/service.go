@@ -29,8 +29,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz"
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
 )
 
