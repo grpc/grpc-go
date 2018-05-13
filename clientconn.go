@@ -1,3 +1,11 @@
+/**
+TODO(deklerk): so, let's not do recursion. let's have one master for loop
+- onDeadline: cause loop to step
+- onClose: cause loop to step
+- onGoAway: cause loop to step
+- onPrefaceReceipt: return?? but then future onClose/etc would not work
+*/
+
 /*
  *
  * Copyright 2014 gRPC authors.
@@ -866,6 +874,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		addrs:      addrs,
 		dopts:      cc.dopts,
 		transports: map[int32]transport.ClientTransport{},
+		donezo:     make(chan struct{}, 1),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -1151,6 +1160,8 @@ type addrConn struct {
 	callsSucceeded      int64
 	callsFailed         int64
 	lastCallStartedTime time.Time
+
+	donezo chan struct{}
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1197,121 +1208,145 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 //
 // TODO(bar) make sure all state transitions are valid.
 func (ac *addrConn) resetTransport() error {
-	ac.mu.Lock()
-	if ac.state == connectivity.Shutdown {
+	c := make(chan struct{}, 1)
+	c <- struct{}{}
+	first := true
+
+	for {
+		select {
+		case <-c:
+		case <-ac.donezo:
+			return nil
+		}
+
+		if first {
+			first = false
+		} else {
+			err := ac.nextAddr()
+			if err != nil {
+				grpclog.Error(err)
+			}
+		}
+
+		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			select {
+			case c <- struct{}{}:
+			default:
+			}
+			continue
+		}
+		if ac.ready != nil {
+			close(ac.ready)
+			ac.ready = nil
+		}
+		ac.transport = nil
 		ac.mu.Unlock()
-		return errConnClosing
-	}
-	if ac.ready != nil {
-		close(ac.ready)
-		ac.ready = nil
-	}
-	ac.transport = nil
-	ac.mu.Unlock()
-	ac.cc.mu.RLock()
-	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
-	ac.cc.mu.RUnlock()
+		ac.cc.mu.RLock()
+		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
+		ac.cc.mu.RUnlock()
 
 	ac.mu.Lock()
 	backoffIdx := ac.backoffIdx
 	backoffFor := ac.dopts.bs.Backoff(backoffIdx)
 
-	// This will be the duration that dial gets to finish.
-	dialDuration := getMinConnectTimeout()
-	if backoffFor > dialDuration {
-		// Give dial more time as we keep failing to connect.
-		dialDuration = backoffFor
-	}
-	start := time.Now()
-	ac.backoffDeadline = start.Add(backoffFor)
-	ac.connectDeadline = start.Add(dialDuration)
+		// This will be the duration that dial gets to finish.
+		dialDuration := getMinConnectTimeout()
+		if backoffFor > dialDuration {
+			// Give dial more time as we keep failing to connect.
+			dialDuration = backoffFor
+		}
+		start := time.Now()
+		ac.backoffDeadline = start.Add(backoffFor)
+		ac.connectDeadline = start.Add(dialDuration)
 
-	ac.mu.Unlock()
+		ac.mu.Unlock()
 
-	onDeadline := func() {
-		ac.mu.Lock()
-		if ac.backoffDeadline.IsZero() {
+		onDeadline := func() {
+			ac.mu.Lock()
+			if ac.backoffDeadline.IsZero() {
+				ac.mu.Unlock()
+				return
+			}
+
+			// No server preface received until deadline. Kill the connection.
+			grpclog.Warningf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
+			t := ac.transport
 			ac.mu.Unlock()
-			return
+			if t == nil {
+				return
+			}
+			t.Close()
 		}
 
-		// No server preface received until deadline. Kill the connection.
-		grpclog.Warningf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
-		t := ac.transport
+		shutdownLock := &sync.Mutex{}
+		var timer *time.Timer
+		ac.mu.Lock()
+		if !ac.connectDeadline.IsZero() {
+			timer = time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
+		}
 		ac.mu.Unlock()
-		if t == nil {
-			return
+		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
+
+		onGoAway := func() {
+			shutdownLock.Lock()
+			defer shutdownLock.Unlock()
+
+			if timer != nil {
+				timer.Stop()
+			}
+
+			ac.mu.Lock()
+			ac.adjustParams(ac.transport.GetGoAwayReason())
+			ac.mu.Unlock()
 		}
-		t.Close()
-	}
 
-	shutdownLock := &sync.Mutex{}
-	var timer *time.Timer
-	ac.mu.Lock()
-	if !ac.connectDeadline.IsZero() {
-		timer = time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
-	}
-	ac.mu.Unlock()
-	newTrID := atomic.AddInt32(&ac.transportIdx, 1)
+		// onClose causes another reconnect loop.
+		onClose := func() {
+			shutdownLock.Lock()
+			defer shutdownLock.Unlock()
 
-	onGoAway := func() {
-		shutdownLock.Lock()
-		defer shutdownLock.Unlock()
+			if timer != nil {
+				timer.Stop()
+			}
 
-		if timer != nil {
-			timer.Stop()
+			ac.mu.Lock()
+			delete(ac.transports, newTrID)
+			ac.mu.Unlock()
+
+			select {
+			case c <- struct{}{}:
+			default:
+			}
 		}
 
 		ac.mu.Lock()
-		ac.adjustParams(ac.transport.GetGoAwayReason())
-		ac.mu.Unlock()
-	}
 
-	// onClose recurses into createTransport and will continue to recurse until
-	// either a shutdown event or the addrConn is connected.
-	onClose := func() {
-		shutdownLock.Lock()
-		defer shutdownLock.Unlock()
-
-		if timer != nil {
-			timer.Stop()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			c <- struct{}{}
+			continue
 		}
 
-		ac.mu.Lock()
-		delete(ac.transports, newTrID)
-		ac.mu.Unlock()
-
-		err := ac.nextAddr()
-		if err != nil {
-			grpclog.Error(err)
-			return
+		ac.printf("connecting")
+		if ac.state != connectivity.Connecting {
+			ac.state = connectivity.Connecting
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
 
-		err = ac.resetTransport()
-		if err != nil {
-			grpclog.Error(err)
+		// copy ac.addrs in case of race
+		addr := ac.addrs[ac.addrIdx]
+		copts := ac.dopts.copts
+		ac.mu.Unlock()
+
+		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, onGoAway, onClose); err != nil {
+			select {
+			case c <- struct{}{}:
+			default:
+			}
 		}
 	}
-
-	ac.mu.Lock()
-
-	if ac.state == connectivity.Shutdown {
-		ac.mu.Unlock()
-		return errConnClosing
-	}
-
-	ac.printf("connecting")
-	if ac.state != connectivity.Connecting {
-		ac.state = connectivity.Connecting
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-	}
-
-	// copy ac.addrs in case of race
-	addr := ac.addrs[ac.addrIdx]
-	copts := ac.dopts.copts
-	ac.mu.Unlock()
-
-	return ac.createTransport(newTrID, backoffIdx, addr, copts, onGoAway, onClose)
 }
 
 // createTransport creates a connection to one of the backends in addrs.
@@ -1357,11 +1392,7 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 
-		err = ac.nextAddr()
-		if err != nil {
-			return err
-		}
-		return ac.resetTransport()
+		return err
 	}
 
 	if ac.dopts.waitForHandshake {
@@ -1550,6 +1581,8 @@ func (ac *addrConn) tearDown(err error) {
 			grpclog.Error(err)
 		}
 	}
+
+	ac.donezo <- struct{}{}
 }
 
 func (ac *addrConn) getState() connectivity.State {
