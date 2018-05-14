@@ -77,7 +77,7 @@ public class CallCredentialsApplyingTest {
   private static final String AUTHORITY = "testauthority";
   private static final String USER_AGENT = "testuseragent";
   private static final ProxyParameters NO_PROXY = null;
-  private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.of("somekey");
+  private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.create("somekey");
   private static final String ATTR_VALUE = "somevalue";
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()

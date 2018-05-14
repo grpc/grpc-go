@@ -32,12 +32,12 @@ public final class Grpc {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   public static final Attributes.Key<SocketAddress> TRANSPORT_ATTR_REMOTE_ADDR =
-          Attributes.Key.of("remote-addr");
+          Attributes.Key.create("remote-addr");
 
   /**
    * Attribute key for SSL session of a transport.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   public static final Attributes.Key<SSLSession> TRANSPORT_ATTR_SSL_SESSION =
-          Attributes.Key.of("ssl-session");
+          Attributes.Key.create("ssl-session");
 }

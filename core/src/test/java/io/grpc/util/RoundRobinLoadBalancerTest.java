@@ -83,7 +83,7 @@ public class RoundRobinLoadBalancerTest {
   private RoundRobinLoadBalancer loadBalancer;
   private List<EquivalentAddressGroup> servers = Lists.newArrayList();
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Maps.newLinkedHashMap();
-  private static final Attributes.Key<String> MAJOR_KEY = Attributes.Key.of("major-key");
+  private static final Attributes.Key<String> MAJOR_KEY = Attributes.Key.create("major-key");
   private Attributes affinity = Attributes.newBuilder().set(MAJOR_KEY, "I got the keys").build();
 
   @Captor

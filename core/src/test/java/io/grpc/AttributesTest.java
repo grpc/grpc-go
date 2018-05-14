@@ -27,13 +27,13 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link Attributes}. */
 @RunWith(JUnit4.class)
 public class AttributesTest {
-  private static final Attributes.Key<String> YOLO_KEY = Attributes.Key.of("yolo");
+  private static final Attributes.Key<String> YOLO_KEY = Attributes.Key.create("yolo");
 
   @Test
   public void buildAttributes() {
     Attributes attrs = Attributes.newBuilder().set(YOLO_KEY, "To be, or not to be?").build();
     assertSame("To be, or not to be?", attrs.get(YOLO_KEY));
-    assertEquals(1, attrs.keys().size());
+    assertEquals(1, attrs.keysForTest().size());
   }
 
   @Test
@@ -41,15 +41,28 @@ public class AttributesTest {
     Attributes attrs = Attributes.newBuilder()
         .set(YOLO_KEY, "To be?")
         .set(YOLO_KEY, "Or not to be?")
-        .set(Attributes.Key.of("yolo"), "I'm not a duplicate")
+        .set(Attributes.Key.create("yolo"), "I'm not a duplicate")
         .build();
     assertSame("Or not to be?", attrs.get(YOLO_KEY));
-    assertEquals(2, attrs.keys().size());
+    assertEquals(2, attrs.keysForTest().size());
+  }
+
+  @Test
+  public void toBuilder() {
+    Attributes attrs = Attributes.newBuilder()
+        .set(YOLO_KEY, "To be?")
+        .build()
+        .toBuilder()
+        .set(YOLO_KEY, "Or not to be?")
+        .set(Attributes.Key.create("yolo"), "I'm not a duplicate")
+        .build();
+    assertSame("Or not to be?", attrs.get(YOLO_KEY));
+    assertEquals(2, attrs.keysForTest().size());
   }
 
   @Test
   public void empty() {
-    assertEquals(0, Attributes.EMPTY.keys().size());
+    assertEquals(0, Attributes.EMPTY.keysForTest().size());
   }
 
   @Test
@@ -64,7 +77,7 @@ public class AttributesTest {
       }
     }
 
-    Attributes.Key<EqualObject> key = Attributes.Key.of("ints");
+    Attributes.Key<EqualObject> key = Attributes.Key.create("ints");
     EqualObject v1 = new EqualObject();
     EqualObject v2 = new EqualObject();
 

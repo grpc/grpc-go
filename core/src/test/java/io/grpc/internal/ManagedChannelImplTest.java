@@ -126,7 +126,7 @@ public class ManagedChannelImplTest {
           .setResponseMarshaller(new IntegerMarshaller())
           .build();
   private static final Attributes.Key<String> SUBCHANNEL_ATTR_KEY =
-      Attributes.Key.of("subchannel-attr-key");
+      Attributes.Key.create("subchannel-attr-key");
   private static final long RECONNECT_BACKOFF_INTERVAL_NANOS = 10;
   private static final String SERVICE_NAME = "fake.example.com";
   private static final String AUTHORITY = SERVICE_NAME;

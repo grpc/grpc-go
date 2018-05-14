@@ -38,7 +38,7 @@ public final class GrpclbConstants {
    * An attribute of a name resolution result, designating the LB policy.
    */
   public static final Attributes.Key<LbPolicy> ATTR_LB_POLICY =
-      Attributes.Key.of("io.grpc.grpclb.lbPolicy");
+      Attributes.Key.create("io.grpc.grpclb.lbPolicy");
 
   /**
    * The opaque token given by the remote balancer for each returned server address.  The client

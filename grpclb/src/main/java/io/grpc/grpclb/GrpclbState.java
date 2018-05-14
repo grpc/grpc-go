@@ -100,7 +100,7 @@ final class GrpclbState {
   private final ScheduledExecutorService timerService;
 
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
-      Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
+      Attributes.Key.create("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
 
   // Scheduled only once.  Never reset.
   @Nullable

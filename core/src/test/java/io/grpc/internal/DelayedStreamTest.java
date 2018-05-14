@@ -182,7 +182,7 @@ public class DelayedStreamTest {
   @Test
   public void setStream_getAttributes() {
     Attributes attributes =
-        Attributes.newBuilder().set(Key.<String>of("fakeKey"), "fakeValue").build();
+        Attributes.newBuilder().set(Key.<String>create("fakeKey"), "fakeValue").build();
     when(realStream.getAttributes()).thenReturn(attributes);
 
     stream.start(listener);

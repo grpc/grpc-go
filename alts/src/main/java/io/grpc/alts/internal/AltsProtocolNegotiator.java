@@ -39,9 +39,9 @@ import io.netty.util.AsciiString;
  */
 public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
 
-  private static final Attributes.Key<TsiPeer> TSI_PEER_KEY = Attributes.Key.of("TSI_PEER");
+  private static final Attributes.Key<TsiPeer> TSI_PEER_KEY = Attributes.Key.create("TSI_PEER");
   private static final Attributes.Key<AltsAuthContext> ALTS_CONTEXT_KEY =
-      Attributes.Key.of("ALTS_CONTEXT_KEY");
+      Attributes.Key.create("ALTS_CONTEXT_KEY");
   private static final AsciiString scheme = AsciiString.of("https");
 
   public static Attributes.Key<TsiPeer> getTsiPeerAttributeKey() {

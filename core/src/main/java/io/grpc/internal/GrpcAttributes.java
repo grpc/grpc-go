@@ -27,14 +27,14 @@ public final class GrpcAttributes {
    * Attribute key for service config.
    */
   public static final Attributes.Key<Map<String, Object>> NAME_RESOLVER_SERVICE_CONFIG =
-      Attributes.Key.of("service-config");
+      Attributes.Key.create("service-config");
 
   /**
    * The naming authority of a gRPC LB server address.  It is an address-group-level attribute,
    * present when the address group is a LoadBalancer.
    */
   public static final Attributes.Key<String> ATTR_LB_ADDR_AUTHORITY =
-      Attributes.Key.of("io.grpc.grpclb.lbAddrAuthority");
+      Attributes.Key.create("io.grpc.grpclb.lbAddrAuthority");
 
 
   private GrpcAttributes() {}

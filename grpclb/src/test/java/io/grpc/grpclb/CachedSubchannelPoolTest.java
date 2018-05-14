@@ -54,7 +54,7 @@ public class CachedSubchannelPoolTest {
       new EquivalentAddressGroup(new FakeSocketAddress("fake-address-1"), Attributes.EMPTY);
   private static final EquivalentAddressGroup EAG2 =
       new EquivalentAddressGroup(new FakeSocketAddress("fake-address-2"), Attributes.EMPTY);
-  private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.of("test-attr");
+  private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.create("test-attr");
   private static final Attributes ATTRS1 = Attributes.newBuilder().set(ATTR_KEY, "1").build();
   private static final Attributes ATTRS2 = Attributes.newBuilder().set(ATTR_KEY, "2").build();
   private static final FakeClock.TaskFilter SHUTDOWN_SCHEDULED_TASK_FILTER =

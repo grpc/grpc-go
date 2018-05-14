@@ -98,7 +98,7 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
   static final class RoundRobinLoadBalancer extends LoadBalancer {
     @VisibleForTesting
     static final Attributes.Key<Ref<ConnectivityStateInfo>> STATE_INFO =
-        Attributes.Key.of("state-info");
+        Attributes.Key.create("state-info");
 
     private static final Logger logger = Logger.getLogger(RoundRobinLoadBalancer.class.getName());
 

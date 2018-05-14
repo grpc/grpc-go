@@ -43,7 +43,7 @@ public interface CallCredentials {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
   public static final Key<SecurityLevel> ATTR_SECURITY_LEVEL =
-      Key.of("io.grpc.CallCredentials.securityLevel");
+      Key.create("io.grpc.CallCredentials.securityLevel");
 
   /**
    * The authority string used to authenticate the server. Usually it's the server's host name. It
@@ -52,7 +52,7 @@ public interface CallCredentials {
    * io.grpc.CallOptions} with increasing precedence.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
-  public static final Key<String> ATTR_AUTHORITY = Key.of("io.grpc.CallCredentials.authority");
+  public static final Key<String> ATTR_AUTHORITY = Key.create("io.grpc.CallCredentials.authority");
 
   /**
    * Pass the credential data to the given {@link MetadataApplier}, which will propagate it to

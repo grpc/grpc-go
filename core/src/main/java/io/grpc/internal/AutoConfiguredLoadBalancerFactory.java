@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -74,9 +75,9 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddressGroups(
         List<EquivalentAddressGroup> servers, Attributes attributes) {
-      if (attributes.keys().contains(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG)) {
-        Factory newlbf = decideLoadBalancerFactory(
-            servers, attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG));
+      Map<String, Object> configMap = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+      if (configMap != null) {
+        Factory newlbf = decideLoadBalancerFactory(servers, configMap);
         if (newlbf != null && newlbf != delegateFactory) {
           helper.updateBalancingState(ConnectivityState.CONNECTING, new EmptySubchannelPicker());
           getDelegate().shutdown();
@@ -141,7 +142,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     @VisibleForTesting
     static LoadBalancer.Factory decideLoadBalancerFactory(
         List<EquivalentAddressGroup> servers, Map<String, Object> config) {
-
+      Preconditions.checkNotNull(config);
       // Check for balancer addresses
       boolean haveBalancerAddress = false;
       for (EquivalentAddressGroup s : servers) {

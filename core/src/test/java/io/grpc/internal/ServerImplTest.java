@@ -562,9 +562,9 @@ public class ServerImplTest {
   @Test
   public void transportFilters() throws Exception {
     final SocketAddress remoteAddr = mock(SocketAddress.class);
-    final Attributes.Key<String> key1 = Attributes.Key.of("test-key1");
-    final Attributes.Key<String> key2 = Attributes.Key.of("test-key2");
-    final Attributes.Key<String> key3 = Attributes.Key.of("test-key3");
+    final Attributes.Key<String> key1 = Attributes.Key.create("test-key1");
+    final Attributes.Key<String> key2 = Attributes.Key.create("test-key2");
+    final Attributes.Key<String> key3 = Attributes.Key.create("test-key3");
     final AtomicReference<Attributes> filter1TerminationCallbackArgument =
         new AtomicReference<Attributes>();
     final AtomicReference<Attributes> filter2TerminationCallbackArgument =
@@ -578,7 +578,7 @@ public class ServerImplTest {
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, remoteAddr)
               .build(), attrs);
           readyCallbackCalled.incrementAndGet();
-          return Attributes.newBuilder(attrs)
+          return attrs.toBuilder()
               .set(key1, "yalayala")
               .set(key2, "blabla")
               .build();
@@ -599,7 +599,7 @@ public class ServerImplTest {
               .set(key2, "blabla")
               .build(), attrs);
           readyCallbackCalled.incrementAndGet();
-          return Attributes.newBuilder(attrs)
+          return attrs.toBuilder()
               .set(key1, "ouch")
               .set(key3, "puff")
               .build();

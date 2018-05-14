@@ -931,7 +931,7 @@ public class ClientCallImplTest {
         method, MoreExecutors.directExecutor(), baseCallOptions, provider,
         deadlineCancellationExecutor, channelCallTracer, false /* retryEnabled */);
     Attributes attrs =
-        Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
+        Attributes.newBuilder().set(Key.<String>create("fake key"), "fake value").build();
     when(stream.getAttributes()).thenReturn(attrs);
 
     assertNotEquals(attrs, call.getAttributes());

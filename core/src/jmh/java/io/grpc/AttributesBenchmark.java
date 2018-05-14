@@ -46,8 +46,8 @@ public class AttributesBenchmark {
   public void setUp() {
     keys = new Attributes.Key[iterations];
     for (int i = 0; i < iterations; i++) {
-      keys[i] = Attributes.Key.of("any");
-      withValue = Attributes.newBuilder(withValue).set(keys[i], "yes").build();
+      keys[i] = Attributes.Key.create("any");
+      withValue = withValue.toBuilder().set(keys[i], "yes").build();
     }
   }
 
@@ -63,7 +63,7 @@ public class AttributesBenchmark {
   public Attributes chain() {
     Attributes attr = base;
     for (int i = 0; i < iterations; i++) {
-      attr = Attributes.newBuilder(attr).set(keys[i], new Object()).build();
+      attr = attr.toBuilder().set(keys[i], new Object()).build();
     }
     return attr;
   }
