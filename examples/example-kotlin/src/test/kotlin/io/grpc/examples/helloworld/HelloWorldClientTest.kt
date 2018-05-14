@@ -21,8 +21,11 @@ import org.mockito.AdditionalAnswers.delegatesTo
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 
+
+import io.grpc.inprocess.InProcessChannelBuilder
+import io.grpc.inprocess.InProcessServerBuilder
 import io.grpc.stub.StreamObserver
-import io.grpc.testing.GrpcServerRule
+import io.grpc.testing.GrpcCleanupRule
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -43,11 +46,11 @@ import org.mockito.Matchers
 @RunWith(JUnit4::class)
 class HelloWorldClientTest {
     /**
-     * This creates and starts an in-process server, and creates a client with an in-process channel.
-     * When the test is done, it also shuts down the in-process client and server.
+     * This rule manages automatic graceful shutdown for the registered servers and channels at the
+     * end of test.
      */
     @get:Rule
-    val grpcServerRule = GrpcServerRule().directExecutor()
+    val grpcCleanup = GrpcCleanupRule()
 
     private val serviceImpl = mock(GreeterGrpc.GreeterImplBase::class.java, delegatesTo<Any>(object : GreeterGrpc.GreeterImplBase() {
 
@@ -57,10 +60,19 @@ class HelloWorldClientTest {
     @Before
     @Throws(Exception::class)
     fun setUp() {
-        // Add service.
-        grpcServerRule.serviceRegistry.addService(serviceImpl)
+        // Generate a unique in-process server name.
+        val serverName = InProcessServerBuilder.generateName()
+
+        // Create a server, add service, start, and register for automatic graceful shutdown.
+        grpcCleanup.register(InProcessServerBuilder
+                .forName(serverName).directExecutor().addService(serviceImpl).build().start())
+
+        // Create a client channel and register for automatic graceful shutdown.
+        val channel = grpcCleanup.register(
+                InProcessChannelBuilder.forName(serverName).directExecutor().build())
+
         // Create a HelloWorldClient using the in-process channel;
-        client = HelloWorldClient(grpcServerRule.channel)
+        client = HelloWorldClient(channel)
     }
 
     /**
@@ -70,12 +82,11 @@ class HelloWorldClientTest {
     @Test
     fun greet_messageDeliveredToServer() {
         val requestCaptor = ArgumentCaptor.forClass(HelloRequest::class.java)
-        val testName = "test name"
 
-        client!!.greet(testName)
+        client!!.greet("test name")
 
         verify<GreeterGrpc.GreeterImplBase>(serviceImpl)
                 .sayHello(requestCaptor.capture(), Matchers.any<StreamObserver<HelloReply>>())
-        assertEquals(testName, requestCaptor.value.name)
+        assertEquals("test name", requestCaptor.value.name)
     }
 }

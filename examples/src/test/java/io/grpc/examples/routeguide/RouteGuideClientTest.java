@@ -24,7 +24,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.google.protobuf.Message;
-import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.examples.routeguide.RouteGuideClient.TestHelper;
@@ -32,6 +31,7 @@ import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideImplBase;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.GrpcCleanupRule;
 import io.grpc.util.MutableHandlerRegistry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -57,6 +58,12 @@ import org.mockito.ArgumentCaptor;
  */
 @RunWith(JUnit4.class)
 public class RouteGuideClientTest {
+  /**
+   * This rule manages automatic graceful shutdown for the registered server at the end of test.
+   */
+  @Rule
+  public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
+
   private final MutableHandlerRegistry serviceRegistry = new MutableHandlerRegistry();
   private final TestHelper testHelper = mock(TestHelper.class);
   private final Random noRandomness =
@@ -76,25 +83,23 @@ public class RouteGuideClientTest {
           return retVal;
         }
       };
-  private Server fakeServer;
   private RouteGuideClient client;
 
   @Before
   public void setUp() throws Exception {
-    String uniqueServerName = "fake server for " + getClass();
-
-    // use a mutable service registry for later registering the service impl for each test case.
-    fakeServer = InProcessServerBuilder.forName(uniqueServerName)
-        .fallbackHandlerRegistry(serviceRegistry).directExecutor().build().start();
+    // Generate a unique in-process server name.
+    String serverName = InProcessServerBuilder.generateName();
+    // Use a mutable service registry for later registering the service impl for each test case.
+    grpcCleanup.register(InProcessServerBuilder.forName(serverName)
+        .fallbackHandlerRegistry(serviceRegistry).directExecutor().build().start());
     client =
-        new RouteGuideClient(InProcessChannelBuilder.forName(uniqueServerName).directExecutor());
+        new RouteGuideClient(InProcessChannelBuilder.forName(serverName).directExecutor());
     client.setTestHelper(testHelper);
   }
 
   @After
   public void tearDown() throws Exception {
     client.shutdown();
-    fakeServer.shutdownNow();
   }
 
   /**

@@ -35,8 +35,10 @@ import io.grpc.examples.helloworld.GreeterGrpc.GreeterBlockingStub;
 import io.grpc.examples.helloworld.GreeterGrpc.GreeterImplBase;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.GrpcServerRule;
+import io.grpc.testing.GrpcCleanupRule;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -55,11 +57,13 @@ import org.mockito.ArgumentCaptor;
 @RunWith(JUnit4.class)
 public class HeaderServerInterceptorTest {
   /**
-   * This creates and starts an in-process server, and creates a client with an in-process channel.
-   * When the test is done, it also shuts down the in-process client and server.
+   * This rule manages automatic graceful shutdown for the registered servers and channels at the
+   * end of test.
    */
   @Rule
-  public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
+  public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
+
+  private Channel channel;
 
   @Before
   public void setUp() throws Exception {
@@ -71,8 +75,15 @@ public class HeaderServerInterceptorTest {
             responseObserver.onCompleted();
           }
         };
-    grpcServerRule.getServiceRegistry()
-        .addService(ServerInterceptors.intercept(greeterImplBase, new HeaderServerInterceptor()));
+    // Generate a unique in-process server name.
+    String serverName = InProcessServerBuilder.generateName();
+    // Create a server, add service, start, and register for automatic graceful shutdown.
+    grpcCleanup.register(InProcessServerBuilder.forName(serverName).directExecutor()
+        .addService(ServerInterceptors.intercept(greeterImplBase, new HeaderServerInterceptor()))
+        .build().start());
+    // Create a client channel and register for automatic graceful shutdown.
+    channel =
+        grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build());
   }
 
   @Test
@@ -95,7 +106,7 @@ public class HeaderServerInterceptorTest {
     }
 
     SpyingClientInterceptor clientInterceptor = new SpyingClientInterceptor();
-    GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(grpcServerRule.getChannel())
+    GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(channel)
         .withInterceptors(clientInterceptor);
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 

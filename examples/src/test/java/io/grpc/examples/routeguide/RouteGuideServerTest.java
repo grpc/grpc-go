@@ -29,6 +29,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.GrpcCleanupRule;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,6 +38,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -52,26 +54,34 @@ import org.mockito.ArgumentCaptor;
  */
 @RunWith(JUnit4.class)
 public class RouteGuideServerTest {
+  /**
+   * This rule manages automatic graceful shutdown for the registered channel at the end of test.
+   */
+  @Rule
+  public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
+
   private RouteGuideServer server;
   private ManagedChannel inProcessChannel;
   private Collection<Feature> features;
 
   @Before
   public void setUp() throws Exception {
-    String uniqueServerName = "in-process server for " + getClass();
+    // Generate a unique in-process server name.
+    String serverName = InProcessServerBuilder.generateName();
     features = new ArrayList<Feature>();
-    // use directExecutor for both InProcessServerBuilder and InProcessChannelBuilder can reduce the
+    // Use directExecutor for both InProcessServerBuilder and InProcessChannelBuilder can reduce the
     // usage timeouts and latches in test. But we still add timeout and latches where they would be
     // needed if no directExecutor were used, just for demo purpose.
     server = new RouteGuideServer(
-        InProcessServerBuilder.forName(uniqueServerName).directExecutor(), 0, features);
+        InProcessServerBuilder.forName(serverName).directExecutor(), 0, features);
     server.start();
-    inProcessChannel = InProcessChannelBuilder.forName(uniqueServerName).directExecutor().build();
+    // Create a client channel and register for automatic graceful shutdown.
+    inProcessChannel = grpcCleanup.register(
+        InProcessChannelBuilder.forName(serverName).directExecutor().build());
   }
 
   @After
-  public void tearDown() throws Exception {
-    inProcessChannel.shutdownNow();
+  public void tearDown() {
     server.stop();
   }
 

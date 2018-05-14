@@ -19,7 +19,9 @@ package io.grpc.examples.helloworld
 import org.junit.Assert.assertEquals
 
 import io.grpc.examples.helloworld.HelloWorldServer.GreeterImpl
-import io.grpc.testing.GrpcServerRule
+import io.grpc.inprocess.InProcessChannelBuilder
+import io.grpc.inprocess.InProcessServerBuilder
+import io.grpc.testing.GrpcCleanupRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,11 +39,11 @@ import org.junit.runners.JUnit4
 @RunWith(JUnit4::class)
 class HelloWorldServerTest {
     /**
-     * This creates and starts an in-process server, and creates a client with an in-process channel.
-     * When the test is done, it also shuts down the in-process client and server.
+     * This rule manages automatic graceful shutdown for the registered servers and channels at the
+     * end of test.
      */
     @get:Rule
-    val grpcServerRule = GrpcServerRule().directExecutor()
+    val grpcCleanup = GrpcCleanupRule()
 
     /**
      * To test the server, make calls with a real stub using the in-process channel, and verify
@@ -50,14 +52,21 @@ class HelloWorldServerTest {
     @Test
     @Throws(Exception::class)
     fun greeterImpl_replyMessage() {
-        // Add the service to the in-process server.
-        grpcServerRule.serviceRegistry.addService(GreeterImpl())
+        // Generate a unique in-process server name.
+        val serverName = InProcessServerBuilder.generateName()
 
-        val blockingStub = GreeterGrpc.newBlockingStub(grpcServerRule.channel)
-        val testName = "test name"
+        // Create a server, add service, start, and register for automatic graceful shutdown.
+        grpcCleanup.register(InProcessServerBuilder
+                .forName(serverName).directExecutor().addService(GreeterImpl()).build().start())
 
-        val reply = blockingStub.sayHello(HelloRequest.newBuilder().setName(testName).build())
+        val blockingStub = GreeterGrpc.newBlockingStub(
+                // Create a client channel and register for automatic graceful shutdown.
+                grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor()
+                        .build()))
 
-        assertEquals("Hello $testName", reply.message)
+
+        val reply = blockingStub.sayHello(HelloRequest.newBuilder().setName("test name").build())
+
+        assertEquals("Hello test name", reply.message)
     }
 }
