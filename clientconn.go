@@ -1400,11 +1400,6 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 	if ac.dopts.waitForHandshake {
 		select {
 		case <-done:
-		case <-connectCtx.Done():
-			// Didn't receive server preface, must kill this new transport now.
-			grpclog.Warningf("grpc: addrConn.createTransport failed to receive server preface before deadline.")
-			newTr.Close()
-			break
 		case <-ac.ctx.Done():
 		}
 	}
