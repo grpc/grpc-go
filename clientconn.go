@@ -1295,11 +1295,10 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 
 		onGoAway := func() {
 			shutdownLock.Lock()
-			defer shutdownLock.Unlock()
-
 			if timer != nil {
 				timer.Stop()
 			}
+			shutdownLock.Unlock()
 
 			ac.mu.Lock()
 			ac.adjustParams(ac.transport.GetGoAwayReason())
@@ -1309,11 +1308,10 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 		// onClose causes another reconnect loop.
 		onClose := func() {
 			shutdownLock.Lock()
-			defer shutdownLock.Unlock()
-
 			if timer != nil {
 				timer.Stop()
 			}
+			shutdownLock.Unlock()
 
 			ac.mu.Lock()
 			delete(ac.transports, newTrID)
