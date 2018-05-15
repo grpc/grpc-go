@@ -43,8 +43,8 @@ public class CallOptionsTest {
   private Deadline.Ticker ticker = new FakeTicker();
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private CallCredentials sampleCreds = mock(CallCredentials.class);
-  private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
-  private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
+  private CallOptions.Key<String> option1 = CallOptions.Key.createWithDefault("option1", "default");
+  private CallOptions.Key<String> option2 = CallOptions.Key.createWithDefault("option2", "default");
   private ClientStreamTracer.Factory tracerFactory1 = new FakeTracerFactory("tracerFactory1");
   private ClientStreamTracer.Factory tracerFactory2 = new FakeTracerFactory("tracerFactory2");
   private CallOptions allSet = CallOptions.DEFAULT

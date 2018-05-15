@@ -34,7 +34,7 @@ import javax.annotation.Nullable;
 @Internal
 public abstract class BinaryLogProvider implements Closeable {
   public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
-      = CallOptions.Key.of("binarylog-calloptions-key", null);
+      = CallOptions.Key.create("binarylog-calloptions-key");
   @VisibleForTesting
   public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
 

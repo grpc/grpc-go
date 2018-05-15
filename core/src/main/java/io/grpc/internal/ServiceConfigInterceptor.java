@@ -237,7 +237,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   }
 
   static final CallOptions.Key<RetryPolicy.Provider> RETRY_POLICY_KEY =
-      CallOptions.Key.of("internal-retry-policy", null);
+      CallOptions.Key.create("internal-retry-policy");
 
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(

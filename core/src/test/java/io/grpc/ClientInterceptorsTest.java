@@ -395,7 +395,7 @@ public class ClientInterceptorsTest {
 
   @Test
   public void customOptionAccessible() {
-    CallOptions.Key<String> customOption = CallOptions.Key.of("custom", null);
+    CallOptions.Key<String> customOption = CallOptions.Key.create("custom");
     CallOptions callOptions = CallOptions.DEFAULT.withOption(customOption, "value");
     ArgumentCaptor<CallOptions> passedOptions = ArgumentCaptor.forClass(CallOptions.class);
     ClientInterceptor interceptor =

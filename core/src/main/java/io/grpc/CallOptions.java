@@ -231,13 +231,12 @@ public final class CallOptions {
   /**
    * Key for a key-value pair. Uses reference equality.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   public static final class Key<T> {
-    private final String name;
+    private final String debugString;
     private final T defaultValue;
 
-    private Key(String name, T defaultValue) {
-      this.name = name;
+    private Key(String debugString, T defaultValue) {
+      this.debugString = debugString;
       this.defaultValue = defaultValue;
     }
 
@@ -250,20 +249,50 @@ public final class CallOptions {
 
     @Override
     public String toString() {
-      return name;
+      return debugString;
     }
 
     /**
      * Factory method for creating instances of {@link Key}.
      *
-     * @param name the name of Key.
+     * @param debugString a string used to describe this key, used for debugging.
      * @param defaultValue default value to return when value for key not set
      * @param <T> Key type
      * @return Key object
+     * @deprecated Use {@link #create} or {@link #createWithDefault} instead.
      */
-    public static <T> Key<T> of(String name, T defaultValue) {
-      Preconditions.checkNotNull(name, "name");
-      return new Key<T>(name, defaultValue);
+    @Deprecated
+    public static <T> Key<T> of(String debugString, T defaultValue) {
+      Preconditions.checkNotNull(debugString, "debugString");
+      return new Key<T>(debugString, defaultValue);
+    }
+
+    /**
+     * Factory method for creating instances of {@link Key}. The default value of the
+     * key is {@code null}.
+     *
+     * @param debugString a debug string that describes this key.
+     * @param <T> Key type
+     * @return Key object
+     * @since 1.13.0
+     */
+    public static <T> Key<T> create(String debugString) {
+      Preconditions.checkNotNull(debugString, "debugString");
+      return new Key<T>(debugString, /*defaultValue=*/ null);
+    }
+
+    /**
+     * Factory method for creating instances of {@link Key}.
+     *
+     * @param debugString a debug string that describes this key.
+     * @param defaultValue default value to return when value for key not set
+     * @param <T> Key type
+     * @return Key object
+     * @since 1.13.0
+     */
+    public static <T> Key<T> createWithDefault(String debugString, T defaultValue) {
+      Preconditions.checkNotNull(debugString, "debugString");
+      return new Key<T>(debugString, defaultValue);
     }
   }
 
@@ -272,8 +301,8 @@ public final class CallOptions {
    *
    * @param key The option key
    * @param value The option value.
+   * @since 1.13.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   public <T> CallOptions withOption(Key<T> key, T value) {
     Preconditions.checkNotNull(key, "key");
     Preconditions.checkNotNull(value, "value");

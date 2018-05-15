@@ -51,7 +51,7 @@ public class CallOptionsBenchmark {
   public void setUp() throws Exception {
     customOptions = new ArrayList<CallOptions.Key<String>>(customOptionsCount);
     for (int i = 0; i < customOptionsCount; i++) {
-      customOptions.add(CallOptions.Key.of("name " + i, "defaultvalue"));
+      customOptions.add(CallOptions.Key.createWithDefault("name " + i, "defaultvalue"));
     }
 
     allOpts = CallOptions.DEFAULT;

@@ -104,7 +104,7 @@ import org.mockito.MockitoAnnotations;
 @RunWith(JUnit4.class)
 public class CensusModulesTest {
   private static final CallOptions.Key<String> CUSTOM_OPTION =
-      CallOptions.Key.of("option1", "default");
+      CallOptions.Key.createWithDefault("option1", "default");
   private static final CallOptions CALL_OPTIONS =
       CallOptions.DEFAULT.withOption(CUSTOM_OPTION, "customvalue");
 

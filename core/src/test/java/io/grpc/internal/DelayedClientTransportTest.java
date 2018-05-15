@@ -78,7 +78,8 @@ public class DelayedClientTransportTest {
   @Captor private ArgumentCaptor<Status> statusCaptor;
   @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
 
-  private static final CallOptions.Key<Integer> SHARD_ID = CallOptions.Key.of("shard-id", -1);
+  private static final CallOptions.Key<Integer> SHARD_ID
+      = CallOptions.Key.createWithDefault("shard-id", -1);
   private static final Status SHUTDOWN_STATUS =
       Status.UNAVAILABLE.withDescription("shutdown called");
 
