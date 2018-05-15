@@ -259,8 +259,10 @@ public final class CallOptions {
      * @param defaultValue default value to return when value for key not set
      * @param <T> Key type
      * @return Key object
-     * @deprecated Use {@link #create} or {@link #createWithDefault} instead.
+     * @deprecated Use {@link #create} or {@link #createWithDefault} instead. This method will
+     *     be removed.
      */
+    @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
     @Deprecated
     public static <T> Key<T> of(String debugString, T defaultValue) {
       Preconditions.checkNotNull(debugString, "debugString");
