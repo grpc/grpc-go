@@ -52,14 +52,22 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
   @Nullable
   @Override
   public ServerInterceptor getServerInterceptor(String fullMethodName) {
-    return factory.getLog(fullMethodName).getServerInterceptor(getServerCallId());
+    BinlogHelper helperForMethod = factory.getLog(fullMethodName);
+    if (helperForMethod == null) {
+      return null;
+    }
+    return helperForMethod.getServerInterceptor(getServerCallId());
   }
 
   @Nullable
   @Override
   public ClientInterceptor getClientInterceptor(
       String fullMethodName, CallOptions callOptions) {
-    return factory.getLog(fullMethodName).getClientInterceptor(getClientCallId(callOptions));
+    BinlogHelper helperForMethod = factory.getLog(fullMethodName);
+    if (helperForMethod == null) {
+      return null;
+    }
+    return helperForMethod.getClientInterceptor(getClientCallId(callOptions));
   }
 
   protected CallId getServerCallId() {

@@ -387,45 +387,45 @@ final class BinlogHelper {
     @VisibleForTesting
     FactoryImpl(BinaryLogSink sink, String configurationString) {
       Preconditions.checkNotNull(sink);
-      Preconditions.checkState(configurationString != null && configurationString.length() > 0);
       BinlogHelper globalLog = null;
       Map<String, BinlogHelper> perServiceLogs = new HashMap<String, BinlogHelper>();
       Map<String, BinlogHelper> perMethodLogs = new HashMap<String, BinlogHelper>();
-
-      for (String configuration : Splitter.on(',').split(configurationString)) {
-        Matcher configMatcher = configRe.matcher(configuration);
-        if (!configMatcher.matches()) {
-          throw new IllegalArgumentException("Bad input: " + configuration);
-        }
-        String methodOrSvc = configMatcher.group(1);
-        String binlogOptionStr = configMatcher.group(2);
-        BinlogHelper binLog = createBinaryLog(sink, binlogOptionStr);
-        if (binLog == null) {
-          continue;
-        }
-        if (methodOrSvc.equals("*")) {
-          if (globalLog != null) {
-            logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+      if (configurationString != null && configurationString.length() > 0) {
+        for (String configuration : Splitter.on(',').split(configurationString)) {
+          Matcher configMatcher = configRe.matcher(configuration);
+          if (!configMatcher.matches()) {
+            throw new IllegalArgumentException("Bad input: " + configuration);
+          }
+          String methodOrSvc = configMatcher.group(1);
+          String binlogOptionStr = configMatcher.group(2);
+          BinlogHelper binLog = createBinaryLog(sink, binlogOptionStr);
+          if (binLog == null) {
             continue;
           }
-          globalLog = binLog;
-          logger.info("Global binlog: " + globalLog);
-        } else if (isServiceGlob(methodOrSvc)) {
-          String service = MethodDescriptor.extractFullServiceName(methodOrSvc);
-          if (perServiceLogs.containsKey(service)) {
-            logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
-            continue;
+          if (methodOrSvc.equals("*")) {
+            if (globalLog != null) {
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              continue;
+            }
+            globalLog = binLog;
+            logger.info("Global binlog: " + globalLog);
+          } else if (isServiceGlob(methodOrSvc)) {
+            String service = MethodDescriptor.extractFullServiceName(methodOrSvc);
+            if (perServiceLogs.containsKey(service)) {
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              continue;
+            }
+            perServiceLogs.put(service, binLog);
+            logger.info(String.format("Service binlog: service=%s log=%s", service, binLog));
+          } else {
+            // assume fully qualified method name
+            if (perMethodLogs.containsKey(methodOrSvc)) {
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              continue;
+            }
+            perMethodLogs.put(methodOrSvc, binLog);
+            logger.info(String.format("Method binlog: method=%s log=%s", methodOrSvc, binLog));
           }
-          perServiceLogs.put(service, binLog);
-          logger.info(String.format("Service binlog: service=%s log=%s", service, binLog));
-        } else {
-          // assume fully qualified method name
-          if (perMethodLogs.containsKey(methodOrSvc)) {
-            logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
-            continue;
-          }
-          perMethodLogs.put(methodOrSvc, binLog);
-          logger.info(String.format("Method binlog: method=%s log=%s", methodOrSvc, binLog));
         }
       }
       this.globalLog = globalLog;
