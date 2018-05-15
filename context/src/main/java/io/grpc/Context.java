@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import io.grpc.Context.CheckReturnValue;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
@@ -93,6 +94,7 @@ import java.util.logging.Logger;
  * </ul>
  */
 /* @DoNotMock("Use ROOT for a non-null Context") // commented out to avoid dependencies  */
+@CheckReturnValue
 public class Context {
 
   private static final Logger log = Logger.getLogger(Context.class.getName());
@@ -571,6 +573,7 @@ public class Context {
    * @param c {@link Callable} to call.
    * @return result of call.
    */
+  @CanIgnoreReturnValue
   public <V> V call(Callable<V> c) throws Exception {
     Context previous = attach();
     try {
@@ -776,6 +779,7 @@ public class Context {
      * @return {@code true} if this context cancelled the context and notified listeners,
      *    {@code false} if the context was already cancelled.
      */
+    @CanIgnoreReturnValue
     public boolean cancel(Throwable cause) {
       boolean triggeredCancel = false;
       synchronized (this) {
@@ -1008,6 +1012,7 @@ public class Context {
     }
   }
 
+  @CanIgnoreReturnValue
   private static <T> T checkNotNull(T reference, Object errorMessage) {
     if (reference == null) {
       throw new NullPointerException(String.valueOf(errorMessage));
@@ -1059,4 +1064,10 @@ public class Context {
           new Exception());
     }
   }
+
+  // Not using the standard com.google.errorprone.annotations.CheckReturnValue because that will
+  // introduce dependencies that some io.grpc.Context API consumers may not want.
+  @interface CheckReturnValue {}
+
+  @interface CanIgnoreReturnValue {}
 }

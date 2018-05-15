@@ -137,7 +137,6 @@ public class ClientCallImplTest {
 
   @After
   public void tearDown() {
-    Context.ROOT.attach();
     verifyZeroInteractions(streamTracerFactory);
   }
 
@@ -500,7 +499,8 @@ public class ClientCallImplTest {
   public void callerContextPropagatedToListener() throws Exception {
     // Attach the context which is recorded when the call is created
     final Context.Key<String> testKey = Context.key("testing");
-    Context.current().withValue(testKey, "testValue").attach();
+    Context context = Context.current().withValue(testKey, "testValue");
+    Context previous = context.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
@@ -512,10 +512,11 @@ public class ClientCallImplTest {
         false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
-    Context.ROOT.attach();
+    context.detach(previous);
 
     // Override the value after creating the call, this should not be seen by callbacks
-    Context.current().withValue(testKey, "badValue").attach();
+    context = Context.current().withValue(testKey, "badValue");
+    previous = context.attach();
 
     final AtomicBoolean onHeadersCalled = new AtomicBoolean();
     final AtomicBoolean onMessageCalled = new AtomicBoolean();
@@ -555,6 +556,8 @@ public class ClientCallImplTest {
       }
     }, new Metadata());
 
+    context.detach(previous);
+
     verify(stream).start(listenerArgumentCaptor.capture());
     ClientStreamListener listener = listenerArgumentCaptor.getValue();
     listener.onReady();
@@ -587,7 +590,7 @@ public class ClientCallImplTest {
         false /* retryEnabled */)
             .setDecompressorRegistry(decompressorRegistry);
 
-    previous.attach();
+    cancellableContext.detach(previous);
 
     call.start(callListener, new Metadata());
 
@@ -617,7 +620,7 @@ public class ClientCallImplTest {
         false /* retryEnabled */)
         .setDecompressorRegistry(decompressorRegistry);
 
-    previous.attach();
+    cancellableContext.detach(previous);
 
     final SettableFuture<Status> statusFuture = SettableFuture.create();
     call.start(new ClientCall.Listener<Void>() {
@@ -803,9 +806,9 @@ public class ClientCallImplTest {
   public void expiredDeadlineCancelsStream_Context() {
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
 
-    Context.current()
-        .withDeadlineAfter(1, TimeUnit.SECONDS, deadlineCancellationExecutor)
-        .attach();
+    Context context = Context.current()
+        .withDeadlineAfter(1, TimeUnit.SECONDS, deadlineCancellationExecutor);
+    Context origContext = context.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
@@ -815,6 +818,8 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor,
         channelCallTracer,
         false /* retryEnabled */);
+
+    context.detach(origContext);
 
     call.start(callListener, new Metadata());
 

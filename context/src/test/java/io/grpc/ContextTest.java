@@ -60,6 +60,7 @@ import org.junit.runners.JUnit4;
  * Tests for {@link Context}.
  */
 @RunWith(JUnit4.class)
+@SuppressWarnings("CheckReturnValue") // false-positive in test for current ver errorprone plugin
 public class ContextTest {
 
   private static final Context.Key<String> PET = Context.key("pet");
