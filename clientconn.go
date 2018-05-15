@@ -961,7 +961,7 @@ func (ac *addrConn) connect() error {
 
 	// Start a goroutine connecting to the server asynchronously.
 	go func() {
-		if err := ac.resetTransport(); err != nil {
+		if err := ac.continuallyRejuvenateTransport(); err != nil {
 			grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
 			if err != errConnClosing {
 				// Keep this ac in cc.conns, to get the reason it's torn down.
@@ -1147,7 +1147,7 @@ type addrConn struct {
 	tearDownErr error // The reason this addrConn is torn down.
 
 	backoffIdx int
-	// backoffDeadline is the time until which resetTransport needs to
+	// backoffDeadline is the time until which continuallyRejuvenateTransport needs to
 	// wait before increasing backoffIdx count.
 	backoffDeadline time.Time
 	// connectDeadline is the time by which all connection
@@ -1194,20 +1194,24 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 	}
 }
 
-// resetTransport recreates a transport to the address for ac.  The old
-// transport will close itself on error or when the clientconn is closed.
-// The created transport must receive initial settings frame from the server.
-// In case that doesn't happen, transportMonitor will kill the newly created
-// transport after connectDeadline has expired.
-// In case there was an error on the transport before the settings frame was
-// received, resetTransport resumes connecting to backends after the one that
-// was previously connected to. In case end of the list is reached, resetTransport
-// backs off until the original deadline.
+// continuallyRejuvenateTransport makes sure that a healthy ac.transport exists.
+// This method will close the transport when it encounters an error, or on
+// goaway, or on deadline waiting for server preface, or when the clientconn is
+// closed. In the event of any of these conditions, this method will close
+// the existing transport and replace it with a healthy transport. Each iteration
+// creating a new transport will try a different address that the resolver
+// resolved to, until it has tried all addresses. Once it has tried all addresses,
+// it will re-resolve to get a new address list.
+//
+// This method has backoff built in. The backoff amount starts at 0 and increases
+// each time resolution occurs (addresses are exhausted). The backoff amount is
+// reset to 0 each time a server preface is encountered.
+//
 // If the DialOption WithWaitForHandshake was set, resetTrasport returns
 // successfully only after server settings are received.
 //
 // TODO(bar) make sure all state transitions are valid.
-func (ac *addrConn) resetTransport() error {
+func (ac *addrConn) continuallyRejuvenateTransport() error {
 	c := make(chan struct{}, 1)
 	c <- struct{}{}
 	first := true
