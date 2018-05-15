@@ -16,9 +16,10 @@
  *
  */
 
+//go:generate ./regenerate.sh
+
 // Package core contains common core functionality for ALTS.
 // Disclaimer: users should NEVER reference this package directly.
-//go:generate ./regenerate.sh
 package core
 
 import (
