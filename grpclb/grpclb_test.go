@@ -313,7 +313,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 	return
 }
 
-func TestGRPCLB(t *testing.T) {
+func testGRPCLBSimple(t *testing.T, target string) {
 	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
@@ -341,7 +341,7 @@ func TestGRPCLB(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+target,
 		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -358,6 +358,17 @@ func TestGRPCLB(t *testing.T) {
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
+}
+
+func TestGRPCLB(t *testing.T) {
+	testGRPCLBSimple(t, beServerName)
+}
+
+// TestGRPCLBWithPort is same as TestGRPCLB, expect that the dialing target
+// contains fake port number ":8080". The purpose of this test is to make sure
+// that grpclb strips port number from the dialing target in init request.
+func TestGRPCLBWithPort(t *testing.T) {
+	testGRPCLBSimple(t, beServerName+":8080")
 }
 
 // The remote balancer sends response with duplicates to grpclb client.
