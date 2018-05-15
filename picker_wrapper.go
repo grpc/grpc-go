@@ -258,7 +258,7 @@ func newStickyStore() *stickyStore {
 func (ss *stickyStore) reset(newMDKey string) {
 	ss.mu.Lock()
 	ss.curMDKey = newMDKey
-	ss.store = newLinkedMap()
+	ss.store.clear()
 	ss.mu.Unlock()
 }
 
