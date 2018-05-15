@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 )
 
 type balancerWrapperBuilder struct {
@@ -173,10 +174,10 @@ func (bw *balancerWrapper) lbWatcher() {
 					sc.Connect()
 				}
 			} else {
-				oldSC.UpdateAddresses(newAddrs)
 				bw.mu.Lock()
 				bw.connSt[oldSC].addr = addrs[0]
 				bw.mu.Unlock()
+				oldSC.UpdateAddresses(newAddrs)
 			}
 		} else {
 			var (
@@ -256,7 +257,6 @@ func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s conne
 		// Remove state for this sc.
 		delete(bw.connSt, sc)
 	}
-	return
 }
 
 func (bw *balancerWrapper) HandleResolvedAddrs([]resolver.Address, error) {
@@ -269,7 +269,6 @@ func (bw *balancerWrapper) HandleResolvedAddrs([]resolver.Address, error) {
 	}
 	// There should be a resolver inside the balancer.
 	// All updates here, if any, are ignored.
-	return
 }
 
 func (bw *balancerWrapper) Close() {
@@ -281,7 +280,6 @@ func (bw *balancerWrapper) Close() {
 		close(bw.startCh)
 	}
 	bw.balancer.Close()
-	return
 }
 
 // The picker is the balancerWrapper itself.
@@ -317,12 +315,12 @@ func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) 
 			Metadata:   a.Metadata,
 		}]
 		if !ok && failfast {
-			return nil, nil, Errorf(codes.Unavailable, "there is no connection available")
+			return nil, nil, status.Errorf(codes.Unavailable, "there is no connection available")
 		}
 		if s, ok := bw.connSt[sc]; failfast && (!ok || s.s != connectivity.Ready) {
 			// If the returned sc is not ready and RPC is failfast,
 			// return error, and this RPC will fail.
-			return nil, nil, Errorf(codes.Unavailable, "there is no connection available")
+			return nil, nil, status.Errorf(codes.Unavailable, "there is no connection available")
 		}
 	}
 

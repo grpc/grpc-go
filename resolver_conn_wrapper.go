@@ -48,23 +48,30 @@ func split2(s, sep string) (string, string, bool) {
 
 // parseTarget splits target into a struct containing scheme, authority and
 // endpoint.
+//
+// If target is not a valid scheme://authority/endpoint, it returns {Endpoint:
+// target}.
 func parseTarget(target string) (ret resolver.Target) {
 	var ok bool
 	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
 	if !ok {
 		return resolver.Target{Endpoint: target}
 	}
-	ret.Authority, ret.Endpoint, _ = split2(ret.Endpoint, "/")
+	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
+	if !ok {
+		return resolver.Target{Endpoint: target}
+	}
 	return ret
 }
 
 // newCCResolverWrapper parses cc.target for scheme and gets the resolver
 // builder for this scheme. It then builds the resolver and starts the
 // monitoring goroutine for it.
+//
+// If withResolverBuilder dial option is set, the specified resolver will be
+// used instead.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	grpclog.Infof("dialing to target with scheme: %q", cc.parsedTarget.Scheme)
-
-	rb := resolver.Get(cc.parsedTarget.Scheme)
+	rb := cc.dopts.resolverBuilder
 	if rb == nil {
 		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
 	}
@@ -77,15 +84,18 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	var err error
-	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{})
+	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{DisableServiceConfig: cc.dopts.disableServiceConfig})
 	if err != nil {
 		return nil, err
 	}
-	go ccr.watcher()
 	return ccr, nil
 }
 
-// watcher processes address updates and service config updates sequencially.
+func (ccr *ccResolverWrapper) start() {
+	go ccr.watcher()
+}
+
+// watcher processes address updates and service config updates sequentially.
 // Otherwise, we need to resolve possible races between address and service
 // config (e.g. they specify different balancer types).
 func (ccr *ccResolverWrapper) watcher() {
@@ -117,6 +127,10 @@ func (ccr *ccResolverWrapper) watcher() {
 			return
 		}
 	}
+}
+
+func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOption) {
+	ccr.resolver.ResolveNow(o)
 }
 
 func (ccr *ccResolverWrapper) close() {

@@ -104,7 +104,7 @@ func closeLoopUnary() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	grpclog.Infoln(s.String())
 
 }
 
@@ -155,7 +155,7 @@ func closeLoopStream() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	grpclog.Infoln(s.String())
 }
 
 func main() {
@@ -166,7 +166,7 @@ func main() {
 		if err != nil {
 			grpclog.Fatalf("Failed to listen: %v", err)
 		}
-		grpclog.Println("Client profiling address: ", lis.Addr().String())
+		grpclog.Infoln("Client profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
 			grpclog.Fatalf("Failed to serve: %v", err)
 		}

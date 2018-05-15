@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -152,7 +153,7 @@ func DoServerStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
+		if size != respSizes[index] {
 			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++
@@ -197,7 +198,7 @@ func DoPingPong(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
+		if size != respSizes[index] {
 			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++
@@ -230,7 +231,7 @@ func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOpt
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
-		if grpc.Code(err) == codes.DeadlineExceeded {
+		if status.Code(err) == codes.DeadlineExceeded {
 			return
 		}
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
@@ -240,12 +241,10 @@ func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOpt
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		Payload:      pl,
 	}
-	if err := stream.Send(req); err != nil {
-		if grpc.Code(err) != codes.DeadlineExceeded {
-			grpclog.Fatalf("%v.Send(_) = %v", stream, err)
-		}
+	if err := stream.Send(req); err != nil && err != io.EOF {
+		grpclog.Fatalf("%v.Send(_) = %v", stream, err)
 	}
-	if _, err := stream.Recv(); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := stream.Recv(); status.Code(err) != codes.DeadlineExceeded {
 		grpclog.Fatalf("%v.Recv() = _, %v, want error code %d", stream, err, codes.DeadlineExceeded)
 	}
 }
@@ -408,8 +407,8 @@ func DoCancelAfterBegin(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	}
 	cancel()
 	_, err = stream.CloseAndRecv()
-	if grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if status.Code(err) != codes.Canceled {
+		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, status.Code(err), codes.Canceled)
 	}
 }
 
@@ -438,8 +437,8 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient, args ...grpc.CallOp
 		grpclog.Fatalf("%v.Recv() = %v", stream, err)
 	}
 	cancel()
-	if _, err := stream.Recv(); grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
+		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, status.Code(err), codes.Canceled)
 	}
 }
 
@@ -533,7 +532,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	var code int32 = 2
 	msg := "test status message"
-	expectedErr := grpc.Errorf(codes.Code(code), msg)
+	expectedErr := status.Error(codes.Code(code), msg)
 	respStatus := &testpb.EchoStatus{
 		Code:    code,
 		Message: msg,
@@ -567,16 +566,16 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption
 // DoUnimplementedService attempts to call a method from an unimplemented service.
 func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
-	if grpc.Code(err) != codes.Unimplemented {
-		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unimplemented)
+	if status.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, status.Code(err), codes.Unimplemented)
 	}
 }
 
 // DoUnimplementedMethod attempts to call an unimplemented method.
 func DoUnimplementedMethod(cc *grpc.ClientConn) {
 	var req, reply proto.Message
-	if err := grpc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
-		grpclog.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
+	if err := cc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply); err == nil || status.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("ClientConn.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
 	}
 }
 
@@ -611,7 +610,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	status := in.GetResponseStatus()
+	st := in.GetResponseStatus()
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
@@ -622,8 +621,8 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			grpc.SetTrailer(ctx, trailer)
 		}
 	}
-	if status != nil && status.Code != 0 {
-		return nil, grpc.Errorf(codes.Code(status.Code), status.Message)
+	if st != nil && st.Code != 0 {
+		return nil, status.Error(codes.Code(st.Code), st.Message)
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
@@ -690,9 +689,9 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		if err != nil {
 			return err
 		}
-		status := in.GetResponseStatus()
-		if status != nil && status.Code != 0 {
-			return grpc.Errorf(codes.Code(status.Code), status.Message)
+		st := in.GetResponseStatus()
+		if st != nil && st.Code != 0 {
+			return status.Error(codes.Code(st.Code), st.Message)
 		}
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
