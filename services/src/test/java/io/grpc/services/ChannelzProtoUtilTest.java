@@ -41,6 +41,8 @@ import io.grpc.channelz.v1.ChannelConnectivityState;
 import io.grpc.channelz.v1.ChannelConnectivityState.State;
 import io.grpc.channelz.v1.ChannelData;
 import io.grpc.channelz.v1.ChannelRef;
+import io.grpc.channelz.v1.ChannelTrace;
+import io.grpc.channelz.v1.ChannelTraceEvent;
 import io.grpc.channelz.v1.GetChannelRequest;
 import io.grpc.channelz.v1.GetServerSocketsResponse;
 import io.grpc.channelz.v1.GetServersResponse;
@@ -62,6 +64,8 @@ import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
 import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.ChannelStats;
+import io.grpc.internal.Channelz.ChannelTrace.Event;
+import io.grpc.internal.Channelz.ChannelTrace.Event.Severity;
 import io.grpc.internal.Channelz.RootChannelList;
 import io.grpc.internal.Channelz.ServerList;
 import io.grpc.internal.Channelz.ServerSocketsList;
@@ -79,6 +83,7 @@ import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.cert.Certificate;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map.Entry;
 import org.junit.Test;
@@ -308,6 +313,12 @@ public final class ChannelzProtoUtilTest {
               .setIpAddress(ByteString.copyFrom(
                   ((InetSocketAddress) socket.remote).getAddress().getAddress()))
               .setPort(1000))
+      .build();
+
+  private final ChannelTrace channelTrace = ChannelTrace
+      .newBuilder()
+      .setNumEventsLogged(1234)
+      .setCreationTimestamp(Timestamps.fromNanos(1000))
       .build();
 
   @Test
@@ -830,6 +841,68 @@ public final class ChannelzProtoUtilTest {
                 .addOption("SO_MADE_UP_OPTION2", "some-made-up-value2")
                 .build()))
         .containsExactly(sockOptAdditional, otherOption);
+  }
+
+  @Test
+  public void channelTrace_withoutEvents() {
+    ChannelStats stats = toBuilder(channel.stats)
+        .setChannelTrace(new Channelz.ChannelTrace.Builder()
+            .setNumEventsLogged(1234)
+            .setCreationTimeNanos(1000)
+            .build())
+        .build();
+
+    ChannelData protoStats = channelData.toBuilder().setTrace(channelTrace).build();
+    assertEquals(ChannelzProtoUtil.extractChannelData(stats), protoStats);
+  }
+
+  @Test
+  public void channelTrace_withEvents() {
+    Event event1 = new Event.Builder()
+        .setDescription("event1")
+        .setSeverity(Severity.CT_ERROR)
+        .setTimestampNaonos(12)
+        .setSubchannelRef(subchannel)
+        .build();
+    Event event2 = new Event.Builder()
+        .setDescription("event2")
+        .setTimestampNaonos(34)
+        .setSeverity(Severity.CT_INFO)
+        .setChannelRef(channel)
+        .build();
+
+    ChannelStats stats =
+        toBuilder(channel.stats)
+            .setChannelTrace(
+                new Channelz.ChannelTrace.Builder()
+                    .setNumEventsLogged(1234)
+                    .setCreationTimeNanos(1000)
+                    .setEvents(Arrays.asList(event1, event2))
+                    .build())
+            .build();
+
+    ChannelTraceEvent protoEvent1 = ChannelTraceEvent
+        .newBuilder()
+        .setDescription("event1")
+        .setTimestamp(Timestamps.fromNanos(12))
+        .setSeverity(ChannelTraceEvent.Severity.CT_ERROR)
+        .setSubchannelRef(subchannelRef)
+        .build();
+    ChannelTraceEvent protoEvent2 = ChannelTraceEvent
+        .newBuilder()
+        .setDescription("event2")
+        .setTimestamp(Timestamps.fromNanos(34))
+        .setSeverity(ChannelTraceEvent.Severity.CT_INFO)
+        .setChannelRef(channelRef)
+        .build();
+    ChannelData protoStats = channelData
+        .toBuilder()
+        .setTrace(channelTrace
+            .toBuilder()
+            .addAllEvents(Arrays.asList(protoEvent1, protoEvent2))
+            .build())
+        .build();
+    assertEquals(ChannelzProtoUtil.extractChannelData(stats), protoStats);
   }
 
   private static ChannelStats.Builder toBuilder(ChannelStats stats) {

@@ -148,15 +148,16 @@ final class ChannelzTestHelper {
   static final class TestChannel implements Instrumented<ChannelStats> {
     private final LogId id = LogId.allocate("channel-or-subchannel");
 
-    ChannelStats stats = new ChannelStats(
-      /*target=*/ "sometarget",
-      /*state=*/ ConnectivityState.READY,
-      /*callsStarted=*/ 1,
-      /*callsSucceeded=*/ 2,
-      /*callsFailed=*/ 3,
-      /*lastCallStartedMillis=*/ 4,
-      /*subchannels=*/ Collections.<WithLogId>emptyList(),
-      /*sockets=*/ Collections.<WithLogId>emptyList());
+    ChannelStats stats = new ChannelStats.Builder()
+        .setTarget("sometarget")
+        .setState(ConnectivityState.READY)
+        .setCallsStarted(1)
+        .setCallsSucceeded(2)
+        .setCallsFailed(3)
+        .setLastCallStartedMillis(4)
+        .setSubchannels(Collections.<WithLogId>emptyList())
+        .setSockets(Collections.<WithLogId>emptyList())
+        .build();
 
     @Override
     public ListenableFuture<ChannelStats> getStats() {

@@ -16,6 +16,9 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.ConnectivityState;
@@ -244,7 +247,7 @@ public final class Channelz {
 
     /** Creates an instance. */
     public RootChannelList(List<Instrumented<ChannelStats>> channels, boolean end) {
-      this.channels = Preconditions.checkNotNull(channels);
+      this.channels = checkNotNull(channels);
       this.end = end;
     }
   }
@@ -255,7 +258,7 @@ public final class Channelz {
 
     /** Creates an instance. */
     public ServerList(List<Instrumented<ServerStats>> servers, boolean end) {
-      this.servers = Preconditions.checkNotNull(servers);
+      this.servers = checkNotNull(servers);
       this.end = end;
     }
   }
@@ -292,7 +295,7 @@ public final class Channelz {
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
       this.lastCallStartedMillis = lastCallStartedMillis;
-      this.listenSockets = Preconditions.checkNotNull(listenSockets);
+      this.listenSockets = checkNotNull(listenSockets);
     }
 
     public static final class Builder {
@@ -324,7 +327,7 @@ public final class Channelz {
 
       /** Sets the listen sockets. */
       public Builder setListenSockets(List<Instrumented<SocketStats>> listenSockets) {
-        Preconditions.checkNotNull(listenSockets);
+        checkNotNull(listenSockets);
         this.listenSockets = Collections.unmodifiableList(
             new ArrayList<Instrumented<SocketStats>>(listenSockets));
         return this;
@@ -351,6 +354,7 @@ public final class Channelz {
   public static final class ChannelStats {
     public final String target;
     public final ConnectivityState state;
+    @Nullable public final ChannelTrace channelTrace;
     public final long callsStarted;
     public final long callsSucceeded;
     public final long callsFailed;
@@ -361,9 +365,10 @@ public final class Channelz {
     /**
      * Creates an instance.
      */
-    public ChannelStats(
+    private ChannelStats(
         String target,
         ConnectivityState state,
+        @Nullable ChannelTrace channelTrace,
         long callsStarted,
         long callsSucceeded,
         long callsFailed,
@@ -376,17 +381,19 @@ public final class Channelz {
               + "neither can have both");
       this.target = target;
       this.state = state;
+      this.channelTrace = channelTrace;
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
       this.lastCallStartedMillis = lastCallStartedMillis;
-      this.subchannels = Preconditions.checkNotNull(subchannels);
-      this.sockets = Preconditions.checkNotNull(sockets);
+      this.subchannels = checkNotNull(subchannels);
+      this.sockets = checkNotNull(sockets);
     }
 
     public static final class Builder {
       private String target;
       private ConnectivityState state;
+      private ChannelTrace channelTrace;
       private long callsStarted;
       private long callsSucceeded;
       private long callsFailed;
@@ -401,6 +408,11 @@ public final class Channelz {
 
       public Builder setState(ConnectivityState state) {
         this.state = state;
+        return this;
+      }
+
+      public Builder setChannelTrace(ChannelTrace channelTrace) {
+        this.channelTrace = channelTrace;
         return this;
       }
 
@@ -427,14 +439,14 @@ public final class Channelz {
       /** Sets the subchannels. */
       public Builder setSubchannels(List<WithLogId> subchannels) {
         Preconditions.checkState(sockets.isEmpty());
-        this.subchannels = Collections.unmodifiableList(Preconditions.checkNotNull(subchannels));
+        this.subchannels = Collections.unmodifiableList(checkNotNull(subchannels));
         return this;
       }
 
       /** Sets the sockets. */
       public Builder setSockets(List<WithLogId> sockets) {
         Preconditions.checkState(subchannels.isEmpty());
-        this.sockets = Collections.unmodifiableList(Preconditions.checkNotNull(sockets));
+        this.sockets = Collections.unmodifiableList(checkNotNull(sockets));
         return this;
       }
 
@@ -445,12 +457,116 @@ public final class Channelz {
         return new ChannelStats(
             target,
             state,
+            channelTrace,
             callsStarted,
             callsSucceeded,
             callsFailed,
             lastCallStartedMillis,
             subchannels,
             sockets);
+      }
+    }
+  }
+
+  @Immutable
+  public static final class ChannelTrace {
+    public final long numEventsLogged;
+    public final long creationTimeNanos;
+    public final List<Event> events;
+
+    private ChannelTrace(long numEventsLogged, long creationTimeNanos, List<Event> events) {
+      this.numEventsLogged = numEventsLogged;
+      this.creationTimeNanos = creationTimeNanos;
+      this.events = events;
+    }
+
+    public static final class Builder {
+      private long numEventsLogged;
+      private long creationTimeNanos;
+      private List<Event> events = Collections.emptyList();
+
+      public Builder setNumEventsLogged(long numEventsLogged) {
+        this.numEventsLogged = numEventsLogged;
+        return this;
+      }
+
+      public Builder setCreationTimeNanos(long creationTimeNanos) {
+        this.creationTimeNanos = creationTimeNanos;
+        return this;
+      }
+
+      public Builder setEvents(List<Event> events) {
+        this.events = Collections.unmodifiableList(new ArrayList<Event>(events));
+        return this;
+      }
+
+      public ChannelTrace build() {
+        return new ChannelTrace(numEventsLogged, creationTimeNanos, events);
+      }
+    }
+
+    @Immutable
+    public static final class Event {
+      public final String description;
+      public final Severity severity;
+      public final long timestampNanos;
+
+      // the oneof child_ref field in proto: one of channelRef and channelRef
+      @Nullable public final WithLogId channelRef;
+      @Nullable public final WithLogId subchannelRef;
+
+      public enum Severity {
+        CT_UNKNOWN, CT_INFO, CT_WARNING, CT_ERROR
+      }
+
+      private Event(
+          String description, Severity severity, long timestampNanos,
+          @Nullable WithLogId channelRef, @Nullable WithLogId subchannelRef) {
+        checkArgument(
+            channelRef == null || subchannelRef == null,
+            "at least one of channelRef and subchannelRef must be null");
+        this.description = checkNotNull(description, "description");
+        this.severity = checkNotNull(severity, "severity");
+        this.timestampNanos = timestampNanos;
+        this.channelRef = channelRef;
+        this.subchannelRef = subchannelRef;
+      }
+
+      public static final class Builder {
+        private String description;
+        private Severity severity;
+        private long timestampNanos;
+        private WithLogId channelRef;
+        private WithLogId subchannelRef;
+
+        public Builder setDescription(String description) {
+          this.description = description;
+          return this;
+        }
+
+        public Builder setTimestampNaonos(long timestampNanos) {
+          this.timestampNanos = timestampNanos;
+          return this;
+        }
+
+        public Builder setSeverity(Severity severity) {
+          this.severity = severity;
+          return this;
+        }
+
+        public Builder setChannelRef(WithLogId channelRef) {
+          this.channelRef = channelRef;
+          return this;
+        }
+
+        public Builder setSubchannelRef(WithLogId subchannelRef) {
+          this.subchannelRef = subchannelRef;
+          return this;
+        }
+
+        public Event build() {
+          return new Event(description, severity, timestampNanos, channelRef, subchannelRef);
+        }
       }
     }
   }
@@ -462,13 +578,13 @@ public final class Channelz {
     public final OtherSecurity other;
 
     public Security(Tls tls) {
-      this.tls = Preconditions.checkNotNull(tls);
+      this.tls = checkNotNull(tls);
       this.other = null;
     }
 
     public Security(OtherSecurity other) {
       this.tls = null;
-      this.other = Preconditions.checkNotNull(other);
+      this.other = checkNotNull(other);
     }
   }
 
@@ -483,7 +599,7 @@ public final class Channelz {
      * @param any a com.google.protobuf.Any object
      */
     public OtherSecurity(String name, @Nullable Object any) {
-      this.name = Preconditions.checkNotNull(name);
+      this.name = checkNotNull(name);
       Preconditions.checkState(
           any == null || any.getClass().getName().endsWith("com.google.protobuf.Any"),
           "the 'any' object must be of type com.google.protobuf.Any");
@@ -553,9 +669,9 @@ public final class Channelz {
         SocketOptions socketOptions,
         Security security) {
       this.data = data;
-      this.local = Preconditions.checkNotNull(local, "local socket");
+      this.local = checkNotNull(local, "local socket");
       this.remote = remote;
-      this.socketOptions = Preconditions.checkNotNull(socketOptions);
+      this.socketOptions = checkNotNull(socketOptions);
       this.security = security;
     }
   }
@@ -827,7 +943,7 @@ public final class Channelz {
         @Nullable Integer lingerSeconds,
         @Nullable TcpInfo tcpInfo,
         Map<String, String> others) {
-      Preconditions.checkNotNull(others);
+      checkNotNull(others);
       this.soTimeoutMillis = timeoutMillis;
       this.lingerSeconds = lingerSeconds;
       this.tcpInfo = tcpInfo;
@@ -861,7 +977,7 @@ public final class Channelz {
       }
 
       public Builder addOption(String name, String value) {
-        others.put(name, Preconditions.checkNotNull(value));
+        others.put(name, checkNotNull(value));
         return this;
       }
 

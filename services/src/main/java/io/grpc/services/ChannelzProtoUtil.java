@@ -34,6 +34,9 @@ import io.grpc.channelz.v1.ChannelConnectivityState;
 import io.grpc.channelz.v1.ChannelConnectivityState.State;
 import io.grpc.channelz.v1.ChannelData;
 import io.grpc.channelz.v1.ChannelRef;
+import io.grpc.channelz.v1.ChannelTrace;
+import io.grpc.channelz.v1.ChannelTraceEvent;
+import io.grpc.channelz.v1.ChannelTraceEvent.Severity;
 import io.grpc.channelz.v1.GetServerSocketsResponse;
 import io.grpc.channelz.v1.GetServersResponse;
 import io.grpc.channelz.v1.GetTopChannelsResponse;
@@ -55,6 +58,7 @@ import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
 import io.grpc.internal.Channelz;
 import io.grpc.internal.Channelz.ChannelStats;
+import io.grpc.internal.Channelz.ChannelTrace.Event;
 import io.grpc.internal.Channelz.RootChannelList;
 import io.grpc.internal.Channelz.ServerList;
 import io.grpc.internal.Channelz.ServerSocketsList;
@@ -67,6 +71,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.cert.CertificateEncodingException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
@@ -348,19 +353,47 @@ final class ChannelzProtoUtil {
   }
 
   static ChannelData extractChannelData(Channelz.ChannelStats stats) {
-    return ChannelData
-        .newBuilder()
-        .setTarget(stats.target)
+    ChannelData.Builder builder = ChannelData.newBuilder();
+    builder.setTarget(stats.target)
         .setState(toChannelConnectivityState(stats.state))
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
-        .setLastCallStartedTimestamp(Timestamps.fromMillis(stats.lastCallStartedMillis))
-        .build();
+        .setLastCallStartedTimestamp(Timestamps.fromMillis(stats.lastCallStartedMillis));
+    if (stats.channelTrace != null) {
+      builder.setTrace(toChannelTrace(stats.channelTrace));
+    }
+    return builder.build();
   }
 
   static ChannelConnectivityState toChannelConnectivityState(ConnectivityState s) {
     return ChannelConnectivityState.newBuilder().setState(toState(s)).build();
+  }
+
+  private static ChannelTrace toChannelTrace(Channelz.ChannelTrace channelTrace) {
+    return ChannelTrace.newBuilder()
+        .setNumEventsLogged(channelTrace.numEventsLogged)
+        .setCreationTimestamp(Timestamps.fromNanos(channelTrace.creationTimeNanos))
+        .addAllEvents(toChannelTraceEvents(channelTrace.events))
+        .build();
+  }
+
+  private static List<ChannelTraceEvent> toChannelTraceEvents(List<Event> events) {
+    List<ChannelTraceEvent> channelTraceEvents = new ArrayList<ChannelTraceEvent>();
+    for (Event event : events) {
+      ChannelTraceEvent.Builder builder = ChannelTraceEvent.newBuilder()
+          .setDescription(event.description)
+          .setSeverity(Severity.valueOf(event.severity.name()))
+          .setTimestamp(Timestamps.fromNanos(event.timestampNanos));
+      if (event.channelRef != null) {
+        builder.setChannelRef(toChannelRef(event.channelRef));
+      }
+      if (event.subchannelRef != null) {
+        builder.setSubchannelRef(toSubchannelRef(event.subchannelRef));
+      }
+      channelTraceEvents.add(builder.build());
+    }
+    return Collections.unmodifiableList(channelTraceEvents);
   }
 
   static State toState(ConnectivityState state) {
