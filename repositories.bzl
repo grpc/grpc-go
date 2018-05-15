@@ -291,12 +291,11 @@ def io_opencensus_grpc_metrics():
     )
 
 def javax_annotation():
-    # TODO(davido): maven_jar does not support neverlink attribute.
-    # To circumvent use http_file following by java_import.
-    native.http_file(
-        name = "javax_annotation_api",
-        sha256 = "5909b396ca3a2be10d0eea32c74ef78d816e1b4ead21de1d78de1f890d033e04",
-        urls = ["http://central.maven.org/maven2/javax/annotation/javax.annotation-api/1.2/javax.annotation-api-1.2.jar"],
+    # Use //stub:javax_annotation for neverlink=1 support.
+    native.maven_jar(
+        name = "javax_annotation_javax_annotation_api",
+        artifact = "javax.annotation:javax.annotation-api:1.2",
+        sha1 = "479c1e06db31c432330183f5cae684163f186146",
     )
 
 def junit_junit():
