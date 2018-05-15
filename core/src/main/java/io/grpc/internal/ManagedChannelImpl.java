@@ -283,13 +283,13 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   @Override
   public ListenableFuture<ChannelStats> getStats() {
     final SettableFuture<ChannelStats> ret = SettableFuture.create();
-    final ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
-    channelCallTracer.updateBuilder(builder);
-    builder.setTarget(target).setState(channelStateManager.getState());
     // subchannels and oobchannels can only be accessed from channelExecutor
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
+        ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
+        channelCallTracer.updateBuilder(builder);
+        builder.setTarget(target).setState(channelStateManager.getState());
         List<WithLogId> children = new ArrayList<WithLogId>();
         children.addAll(subchannels);
         children.addAll(oobChannels);
