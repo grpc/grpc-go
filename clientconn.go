@@ -1285,11 +1285,8 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 		}
 
 		shutdownLock := &sync.Mutex{}
-		var timer *time.Timer
 		ac.mu.Lock()
-		if !ac.connectDeadline.IsZero() {
-			timer = time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
-		}
+		timer := time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
 		ac.mu.Unlock()
 		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
 
