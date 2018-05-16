@@ -990,8 +990,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for HandshakerService service
-
+// HandshakerServiceClient is the client API for HandshakerService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type HandshakerServiceClient interface {
 	// Handshaker service accepts a stream of handshaker request, returning a
 	// stream of handshaker response. Client is expected to send exactly one
@@ -1011,7 +1012,7 @@ func NewHandshakerServiceClient(cc *grpc.ClientConn) HandshakerServiceClient {
 }
 
 func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_HandshakerService_serviceDesc.Streams[0], c.cc, "/grpc.gcp.HandshakerService/DoHandshake", opts...)
+	stream, err := c.cc.NewStream(ctx, &_HandshakerService_serviceDesc.Streams[0], "/grpc.gcp.HandshakerService/DoHandshake", opts...)
 	if err != nil {
 		return nil, err
 	}
