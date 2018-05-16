@@ -1284,18 +1284,13 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 			t.Close()
 		}
 
-		shutdownLock := &sync.Mutex{}
 		ac.mu.Lock()
 		timer := time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
 		ac.mu.Unlock()
 		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
 
 		onGoAway := func() {
-			shutdownLock.Lock()
-			if timer != nil {
-				timer.Stop()
-			}
-			shutdownLock.Unlock()
+			timer.Stop()
 
 			ac.mu.Lock()
 			ac.adjustParams(ac.transport.GetGoAwayReason())
@@ -1304,11 +1299,7 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 
 		// onClose causes another reconnect loop.
 		onClose := func() {
-			shutdownLock.Lock()
-			if timer != nil {
-				timer.Stop()
-			}
-			shutdownLock.Unlock()
+			timer.Stop()
 
 			ac.mu.Lock()
 			delete(ac.transports, newTrID)
