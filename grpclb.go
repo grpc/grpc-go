@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -125,16 +124,6 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		target = cc.Target()
 	} else {
 		target = targetSplitted[1]
-	}
-
-	// Remove port number from target if it exists.
-	if host, _, err := net.SplitHostPort(target); err == nil {
-		// When err is not nil, target remains unchanged.
-		//
-		// Possible non-nil err values:
-		// - missing port in address: no port to strip
-		// - other errors: failed to parse
-		target = host
 	}
 
 	lb := &lbBalancer{
