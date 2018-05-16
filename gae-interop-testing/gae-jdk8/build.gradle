@@ -22,7 +22,7 @@ buildscript {    // Configuration for building
     }
   }
   dependencies {
-    classpath 'com.google.cloud.tools:appengine-gradle-plugin:1.3.3'
+    classpath 'com.google.cloud.tools:appengine-gradle-plugin:1.3.5'
     classpath 'com.squareup.okhttp:okhttp:2.5.0'
   }
 }

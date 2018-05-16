@@ -10,7 +10,7 @@ buildscript {
     classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.4.0'
     classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.13'
     classpath 'net.ltgt.gradle:gradle-apt-plugin:0.13'
-    classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.4"
+    classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.5"
     classpath 'me.champeau.gradle:japicmp-gradle-plugin:0.2.5'
   }
 }

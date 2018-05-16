@@ -48,6 +48,13 @@ model {
     // set 'vcDisable=true'
     if (!vcDisable) {
       visualCpp(VisualCpp) {
+        // Prefer vcvars-provided environment over registry-discovered environment
+        def String vsDir = System.getenv("VSINSTALLDIR")
+        def String winDir = System.getenv("WindowsSdkDir")
+        if (vsDir != null && winDir != null) {
+          installDir = vsDir
+          windowsSdkDir = winDir
+        }
       }
     }
     gcc(Gcc) {
