@@ -238,6 +238,8 @@ func decodeMetadataHeader(k, v string) (string, error) {
 }
 
 func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error {
+	// frame.Truncated is set to true when framer detects that the current header
+	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
 		return streamErrorf(codes.Internal, "peer header list size exceeded limit")
 	}
