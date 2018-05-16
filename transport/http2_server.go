@@ -52,6 +52,10 @@ import (
 // the stream's state.
 var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
 
+const (
+	defaultServerMaxHeaderListSize = uint32(16 << 20)
+)
+
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
 	ctx         context.Context
@@ -93,7 +97,6 @@ type http2Server struct {
 	initialWindowSize     int32
 	bdpEst                *bdpEstimator
 	maxSendHeaderListSize *uint32
-	maxRecvHeaderListSize *uint32
 
 	mu sync.Mutex // guard the following
 
@@ -134,7 +137,11 @@ type http2Server struct {
 func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	writeBufSize := config.WriteBufferSize
 	readBufSize := config.ReadBufferSize
-	framer := newFramer(conn, writeBufSize, readBufSize)
+	maxHeaderListSize := defaultServerMaxHeaderListSize
+	if config.MaxHeaderListSize != nil {
+		maxHeaderListSize = *config.MaxHeaderListSize
+	}
+	framer := newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize)
 	// Send initial settings as connection preface to client.
 	var isettings []http2.Setting
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
@@ -203,27 +210,26 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &http2Server{
-		ctx:                   ctx,
-		cancel:                cancel,
-		ctxDone:               ctx.Done(),
-		conn:                  conn,
-		remoteAddr:            conn.RemoteAddr(),
-		localAddr:             conn.LocalAddr(),
-		authInfo:              config.AuthInfo,
-		framer:                framer,
-		readerDone:            make(chan struct{}),
-		writerDone:            make(chan struct{}),
-		maxStreams:            maxStreams,
-		inTapHandle:           config.InTapHandle,
-		fc:                    &trInFlow{limit: uint32(icwz)},
-		state:                 reachable,
-		activeStreams:         make(map[uint32]*Stream),
-		stats:                 config.StatsHandler,
-		kp:                    kp,
-		idle:                  time.Now(),
-		kep:                   kep,
-		initialWindowSize:     iwz,
-		maxRecvHeaderListSize: config.MaxHeaderListSize,
+		ctx:               ctx,
+		cancel:            cancel,
+		ctxDone:           ctx.Done(),
+		conn:              conn,
+		remoteAddr:        conn.RemoteAddr(),
+		localAddr:         conn.LocalAddr(),
+		authInfo:          config.AuthInfo,
+		framer:            framer,
+		readerDone:        make(chan struct{}),
+		writerDone:        make(chan struct{}),
+		maxStreams:        maxStreams,
+		inTapHandle:       config.InTapHandle,
+		fc:                &trInFlow{limit: uint32(icwz)},
+		state:             reachable,
+		activeStreams:     make(map[uint32]*Stream),
+		stats:             config.StatsHandler,
+		kp:                kp,
+		idle:              time.Now(),
+		kep:               kep,
+		initialWindowSize: iwz,
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if dynamicWindow {
@@ -290,7 +296,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 // operateHeader takes action on the decoded headers.
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (close bool) {
 	streamID := frame.Header().StreamID
-	state := decodeState{maxHeaderListSize: t.maxRecvHeaderListSize, serverSide: true}
+	state := decodeState{serverSide: true}
 	if err := state.decodeResponseHeader(frame); err != nil {
 		if se, ok := err.(StreamError); ok {
 			t.controlBuf.put(&cleanupStream{

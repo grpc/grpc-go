@@ -42,6 +42,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	defaultClientMaxHeaderListSize = uint32(16 << 20)
+)
+
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
 	ctx        context.Context
@@ -87,9 +91,6 @@ type http2Client struct {
 
 	// configured by peer through SETTINGS_MAX_HEADER_LIST_SIZE
 	maxSendHeaderListSize *uint32
-	// configured locally and corresponding SETTINGS_MAX_HEADER_LIST_SIZE setting
-	// is sent to peer.
-	maxRecvHeaderListSize *uint32
 
 	bdpEst *bdpEstimator
 	// onSuccess is a callback that client transport calls upon
@@ -205,33 +206,37 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	}
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
+	maxHeaderListSize := defaultClientMaxHeaderListSize
+	if opts.MaxHeaderListSize != nil {
+		maxHeaderListSize = *opts.MaxHeaderListSize
+	}
 	t := &http2Client{
-		ctx:                   ctx,
-		ctxDone:               ctx.Done(), // Cache Done chan.
-		cancel:                cancel,
-		userAgent:             opts.UserAgent,
-		md:                    addr.Metadata,
-		conn:                  conn,
-		remoteAddr:            conn.RemoteAddr(),
-		localAddr:             conn.LocalAddr(),
-		authInfo:              authInfo,
-		readerDone:            make(chan struct{}),
-		writerDone:            make(chan struct{}),
-		goAway:                make(chan struct{}),
-		awakenKeepalive:       make(chan struct{}, 1),
-		framer:                newFramer(conn, writeBufSize, readBufSize),
-		fc:                    &trInFlow{limit: uint32(icwz)},
-		scheme:                scheme,
-		activeStreams:         make(map[uint32]*Stream),
-		isSecure:              isSecure,
-		creds:                 opts.PerRPCCredentials,
-		kp:                    kp,
-		statsHandler:          opts.StatsHandler,
-		initialWindowSize:     initialWindowSize,
-		onSuccess:             onSuccess,
-		nextID:                1,
-		maxConcurrentStreams:  defaultMaxStreamsClient,
-		maxRecvHeaderListSize: opts.MaxHeaderListSize,
+		ctx:                  ctx,
+		ctxDone:              ctx.Done(), // Cache Done chan.
+		cancel:               cancel,
+		userAgent:            opts.UserAgent,
+		md:                   addr.Metadata,
+		conn:                 conn,
+		remoteAddr:           conn.RemoteAddr(),
+		localAddr:            conn.LocalAddr(),
+		authInfo:             authInfo,
+		readerDone:           make(chan struct{}),
+		writerDone:           make(chan struct{}),
+		goAway:               make(chan struct{}),
+		awakenKeepalive:      make(chan struct{}, 1),
+		framer:               newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize),
+		fc:                   &trInFlow{limit: uint32(icwz)},
+		scheme:               scheme,
+		activeStreams:        make(map[uint32]*Stream),
+		isSecure:             isSecure,
+		creds:                opts.PerRPCCredentials,
+		kp:                   kp,
+		statsHandler:         opts.StatsHandler,
+		initialWindowSize:    initialWindowSize,
+		onSuccess:            onSuccess,
+		nextID:               1,
+		maxConcurrentStreams: defaultMaxStreamsClient,
+		// maxRecvHeaderListSize: opts.MaxHeaderListSize,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 	}
@@ -288,10 +293,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 			Val: uint32(t.initialWindowSize),
 		})
 	}
-	if t.maxRecvHeaderListSize != nil {
+	if opts.MaxHeaderListSize != nil {
 		ss = append(ss, http2.Setting{
 			ID:  http2.SettingMaxHeaderListSize,
-			Val: *t.maxRecvHeaderListSize,
+			Val: *opts.MaxHeaderListSize,
 		})
 	}
 	err = t.framer.fr.WriteSettings(ss...)
@@ -1107,7 +1112,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	atomic.StoreUint32(&s.bytesReceived, 1)
-	state := decodeState{maxHeaderListSize: t.maxRecvHeaderListSize}
+	var state decodeState
 	if err := state.decodeResponseHeader(frame); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.New(codes.Internal, err.Error()), nil, false)
 		// Something wrong. Stops reading even when there is remaining.

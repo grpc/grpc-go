@@ -115,11 +115,10 @@ type decodeState struct {
 	timeout    time.Duration
 	method     string
 	// key-value metadata map from the peer.
-	mdata             map[string][]string
-	statsTags         []byte
-	statsTrace        []byte
-	contentSubtype    string
-	maxHeaderListSize *uint32
+	mdata          map[string][]string
+	statsTags      []byte
+	statsTrace     []byte
+	contentSubtype string
 	// whether decoding on server side or not
 	serverSide bool
 }
@@ -239,17 +238,10 @@ func decodeMetadataHeader(k, v string) (string, error) {
 }
 
 func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error {
-	var sz int64
+	if frame.Truncated {
+		return streamErrorf(codes.Internal, "peer header list size exceeded limit")
+	}
 	for _, hf := range frame.Fields {
-		if d.maxHeaderListSize != nil {
-			if sz += int64(hf.Size()); sz > int64(*d.maxHeaderListSize) {
-				if d.serverSide {
-					errorf("server: " + fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
-					return streamErrorf(codes.Internal, "server: "+fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
-				}
-				return streamErrorf(codes.Internal, "client: "+fmt.Sprintf("receiving header list size larger than limit: %d bytes", *d.maxHeaderListSize))
-			}
-		}
 		if err := d.processHeaderField(hf); err != nil {
 			return err
 		}
@@ -597,7 +589,7 @@ type framer struct {
 	fr     *http2.Framer
 }
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
 	}
@@ -613,6 +605,7 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
 	// Opt-in to Frame reuse API on framer to reduce garbage.
 	// Frames aren't safe to read from after a subsequent call to ReadFrame.
 	f.fr.SetReuseFrames()
+	f.fr.MaxHeaderListSize = maxHeaderListSize
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
 }
