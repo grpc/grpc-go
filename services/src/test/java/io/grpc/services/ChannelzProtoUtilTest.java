@@ -229,7 +229,7 @@ public final class ChannelzProtoUtilTest {
               SocketOptionTcpInfo.newBuilder()
                   .setTcpiState(70)
                   .setTcpiCaState(71)
-                  .setTcpiRetrans(72)
+                  .setTcpiRetransmits(72)
                   .setTcpiProbes(73)
                   .setTcpiBackoff(74)
                   .setTcpiOptions(75)

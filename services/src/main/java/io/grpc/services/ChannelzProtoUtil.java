@@ -280,7 +280,7 @@ final class ChannelzProtoUtil {
     SocketOptionTcpInfo tcpInfo = SocketOptionTcpInfo.newBuilder()
         .setTcpiState(i.state)
         .setTcpiCaState(i.caState)
-        .setTcpiRetrans(i.retransmits)
+        .setTcpiRetransmits(i.retransmits)
         .setTcpiProbes(i.probes)
         .setTcpiBackoff(i.backoff)
         .setTcpiOptions(i.options)
