@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate protoc -I ../grpc_channelz_v1 --go_out=plugins=grpc,paths=source_relative:../grpc_channelz_v1 ../grpc_channelz_v1/channelz.proto
-
 // Package service provides an implementation for channelz service server.
 package service
 
