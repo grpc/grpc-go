@@ -28,7 +28,6 @@ import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloWorldClient;
-import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.AbstractStub;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -98,8 +97,8 @@ public final class HelloJsonClient {
     static final MethodDescriptor<HelloRequest, HelloReply> METHOD_SAY_HELLO =
         GreeterGrpc.getSayHelloMethod()
             .toBuilder(
-                ProtoUtils.jsonMarshaller(HelloRequest.getDefaultInstance()),
-                ProtoUtils.jsonMarshaller(HelloReply.getDefaultInstance()))
+                JsonMarshaller.jsonMarshaller(HelloRequest.getDefaultInstance()),
+                JsonMarshaller.jsonMarshaller(HelloReply.getDefaultInstance()))
             .build();
 
     protected HelloJsonStub(Channel channel) {

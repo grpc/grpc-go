@@ -30,6 +30,8 @@ repositories {
 // updating the version in our release process.
 def grpcVersion = '1.13.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 def nettyTcNativeVersion = '2.0.7.Final'
+def protobufVersion = '3.5.1'
+def protocVersion = '3.5.1-1'
 
 dependencies {
   compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
@@ -42,6 +44,8 @@ dependencies {
   // Used for TLS in HelloWorldServerTls
   compile "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
 
+  compile "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
   testCompile "io.grpc:grpc-testing:${grpcVersion}"
   testCompile "junit:junit:4.12"
   testCompile "org.mockito:mockito-core:1.9.5"
@@ -49,7 +53,7 @@ dependencies {
 
 protobuf {
   protoc {
-    artifact = 'com.google.protobuf:protoc:3.5.1-1'
+    artifact = "com.google.protobuf:protoc:${protocVersion}"
   }
   plugins {
     grpc {

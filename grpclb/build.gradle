@@ -17,6 +17,10 @@ dependencies {
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             libraries.protobuf
+    compile (libraries.protobuf_util) {
+        // prefer 20.0 from libraries instead of 19.0
+        exclude group: 'com.google.guava', module: 'guava'
+    }
     compileOnly libraries.javax_annotation
     testCompile libraries.truth,
                 project(':grpc-core').sourceSets.test.output
