@@ -46,7 +46,7 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
 
   /**
    * Same as {@link #handleProtocolNegotiationCompleted(Attributes, Channelz.Security)}
-   * but with no {@link Channelz.Security}.
+   * but with no {@link io.grpc.internal.Channelz.Security}.
    *
    * @deprecated Use the two argument method instead.
    */
