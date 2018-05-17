@@ -473,7 +473,6 @@ public class CensusModulesTest {
   public void clientTracingSampledToLocalSpanStore() {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(null, sampledMethod);
-    Metadata headers = new Metadata();
     callTracer.callEnded(Status.OK);
 
     verify(spyClientSpan).end(

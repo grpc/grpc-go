@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 // TODO(zpencer): rename class to AbstractBinaryLog
@@ -37,8 +36,6 @@ public abstract class BinaryLogProvider implements Closeable {
       = CallOptions.Key.create("binarylog-calloptions-key");
   @VisibleForTesting
   public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
-
-  private static final Logger logger = Logger.getLogger(BinaryLogProvider.class.getName());
 
   private final ClientInterceptor binaryLogShim = new BinaryLogShim();
 

@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
@@ -33,7 +34,7 @@ public class AttributesTest {
   public void buildAttributes() {
     Attributes attrs = Attributes.newBuilder().set(YOLO_KEY, "To be, or not to be?").build();
     assertSame("To be, or not to be?", attrs.get(YOLO_KEY));
-    assertEquals(1, attrs.keysForTest().size());
+    assertThat(attrs.keysForTest()).hasSize(1);
   }
 
   @Test
@@ -43,8 +44,8 @@ public class AttributesTest {
         .set(YOLO_KEY, "Or not to be?")
         .set(Attributes.Key.create("yolo"), "I'm not a duplicate")
         .build();
-    assertSame("Or not to be?", attrs.get(YOLO_KEY));
-    assertEquals(2, attrs.keysForTest().size());
+    assertThat(attrs.get(YOLO_KEY)).isEqualTo("Or not to be?");
+    assertThat(attrs.keysForTest()).hasSize(2);
   }
 
   @Test
@@ -56,13 +57,13 @@ public class AttributesTest {
         .set(YOLO_KEY, "Or not to be?")
         .set(Attributes.Key.create("yolo"), "I'm not a duplicate")
         .build();
-    assertSame("Or not to be?", attrs.get(YOLO_KEY));
-    assertEquals(2, attrs.keysForTest().size());
+    assertThat(attrs.get(YOLO_KEY)).isEqualTo("Or not to be?");
+    assertThat(attrs.keysForTest()).hasSize(2);
   }
 
   @Test
   public void empty() {
-    assertEquals(0, Attributes.EMPTY.keysForTest().size());
+    assertThat(Attributes.EMPTY.keysForTest()).isEmpty();
   }
 
   @Test

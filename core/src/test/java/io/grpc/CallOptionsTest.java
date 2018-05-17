@@ -38,13 +38,15 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
+  private static final CallOptions.Key<String> OPTION_1
+      = CallOptions.Key.createWithDefault("option1", "default");
+  private static final CallOptions.Key<String> OPTION_2
+      = CallOptions.Key.createWithDefault("option2", "default");
   private String sampleAuthority = "authority";
   private String sampleCompressor = "compressor";
   private Deadline.Ticker ticker = new FakeTicker();
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private CallCredentials sampleCreds = mock(CallCredentials.class);
-  private CallOptions.Key<String> option1 = CallOptions.Key.createWithDefault("option1", "default");
-  private CallOptions.Key<String> option2 = CallOptions.Key.createWithDefault("option2", "default");
   private ClientStreamTracer.Factory tracerFactory1 = new FakeTracerFactory("tracerFactory1");
   private ClientStreamTracer.Factory tracerFactory2 = new FakeTracerFactory("tracerFactory2");
   private CallOptions allSet = CallOptions.DEFAULT
@@ -54,9 +56,9 @@ public class CallOptionsTest {
       .withCompression(sampleCompressor)
       .withWaitForReady()
       .withExecutor(directExecutor())
-      .withOption(option1, "value1")
+      .withOption(OPTION_1, "value1")
       .withStreamTracerFactory(tracerFactory1)
-      .withOption(option2, "value2")
+      .withOption(OPTION_2, "value2")
       .withStreamTracerFactory(tracerFactory2);
 
   @Test
@@ -84,8 +86,8 @@ public class CallOptionsTest {
     assertThat(allSet.getCredentials()).isSameAs(sampleCreds);
     assertThat(allSet.getCompressor()).isSameAs(sampleCompressor);
     assertThat(allSet.getExecutor()).isSameAs(directExecutor());
-    assertThat(allSet.getOption(option1)).isSameAs("value1");
-    assertThat(allSet.getOption(option2)).isSameAs("value2");
+    assertThat(allSet.getOption(OPTION_1)).isSameAs("value1");
+    assertThat(allSet.getOption(OPTION_2)).isSameAs("value2");
     assertThat(allSet.isWaitForReady()).isTrue();
   }
 
@@ -172,26 +174,26 @@ public class CallOptionsTest {
   @Test
   public void withCustomOptionDefault() {
     CallOptions opts = CallOptions.DEFAULT;
-    assertThat(opts.getOption(option1)).isEqualTo("default");
+    assertThat(opts.getOption(OPTION_1)).isEqualTo("default");
   }
 
   @Test
   public void withCustomOption() {
-    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1");
-    assertThat(opts.getOption(option1)).isEqualTo("v1");
+    CallOptions opts = CallOptions.DEFAULT.withOption(OPTION_1, "v1");
+    assertThat(opts.getOption(OPTION_1)).isEqualTo("v1");
   }
 
   @Test
   public void withCustomOptionLastOneWins() {
-    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1").withOption(option1, "v2");
-    assertThat(opts.getOption(option1)).isEqualTo("v2");
+    CallOptions opts = CallOptions.DEFAULT.withOption(OPTION_1, "v1").withOption(OPTION_1, "v2");
+    assertThat(opts.getOption(OPTION_1)).isEqualTo("v2");
   }
 
   @Test
   public void withMultipleCustomOption() {
-    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1").withOption(option2, "v2");
-    assertThat(opts.getOption(option1)).isEqualTo("v1");
-    assertThat(opts.getOption(option2)).isEqualTo("v2");
+    CallOptions opts = CallOptions.DEFAULT.withOption(OPTION_1, "v1").withOption(OPTION_2, "v2");
+    assertThat(opts.getOption(OPTION_1)).isEqualTo("v1");
+    assertThat(opts.getOption(OPTION_2)).isEqualTo("v2");
   }
 
   @Test
