@@ -685,10 +685,12 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 
 // WriteHeader sends the header metedata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
-	if s.headerOk || s.getState() == streamDone {
+	if s.getState() == streamDone {
 		return ErrIllegalHeaderWrite
 	}
-	s.headerOk = true
+	if !atomic.CompareAndSwapUint32(&s.headerOk, 0, 1) {
+		return ErrIllegalHeaderWrite
+	}
 	if md.Len() > 0 {
 		if s.header.Len() > 0 {
 			s.header = metadata.Join(s.header, md)
@@ -737,19 +739,18 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
-	if !s.headerOk && s.header.Len() > 0 {
-		if err := t.WriteHeader(s, nil); err != nil {
+	if s.header.Len() > 0 {
+		if err := t.WriteHeader(s, nil); err != nil && err != ErrIllegalHeaderWrite {
 			return err
 		}
-	} else {
-		if s.getState() == streamDone {
-			return nil
-		}
+	}
+	if s.getState() == streamDone {
+		return nil
 	}
 	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
-	if !s.headerOk {
+	if !s.headerSent() {
 		headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
 		headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: contentType(s.contentSubtype)})
 	}
@@ -794,24 +795,22 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	if !s.headerOk { // Headers haven't been written yet.
-		if err := t.WriteHeader(s, nil); err != nil {
-			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
-			return streamErrorf(codes.Internal, "transport: %v", err)
-		}
-	} else {
-		// Writing headers checks for this condition.
-		if s.getState() == streamDone {
-			// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
-			s.cancel()
-			select {
-			case <-t.ctx.Done():
-				return ErrConnClosing
-			default:
-			}
-			return ContextErr(s.ctx.Err())
-		}
+	if err := t.WriteHeader(s, nil); err != nil && err != ErrIllegalHeaderWrite {
+		// TODO(mmukhi, dfawley): Make sure this is the right code to return.
+		return streamErrorf(codes.Internal, "transport: %v", err)
 	}
+
+	if s.getState() == streamDone {
+		// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
+		s.cancel()
+		select {
+		case <-t.ctx.Done():
+			return ErrConnClosing
+		default:
+		}
+		return ContextErr(s.ctx.Err())
+	}
+
 	// Add some data to header frame so that we can equally distribute bytes across frames.
 	emptyLen := http2MaxFrameLen - len(hdr)
 	if emptyLen > len(data) {
