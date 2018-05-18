@@ -683,7 +683,7 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	})
 }
 
-func createHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) []hpack.HeaderField {
+func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) []hpack.HeaderField {
 	for k, vv := range md {
 		if isReservedHeader(k) {
 			// Clients don't tolerate reading restricted headers after some non restricted ones were sent.
@@ -723,7 +723,7 @@ func (t *http2Server) writeHeaderLocked(s *Stream) {
 	if s.sendCompress != "" {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
-	headerFields = createHeaderFieldsFromMD(headerFields, s.header)
+	headerFields = appendHeaderFieldsFromMD(headerFields, s.header)
 	t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
@@ -775,7 +775,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	}
 
 	// Attach the trailer metadata.
-	headerFields = createHeaderFieldsFromMD(headerFields, s.trailer)
+	headerFields = appendHeaderFieldsFromMD(headerFields, s.trailer)
 	trailingHeader := &headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,

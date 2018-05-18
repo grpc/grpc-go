@@ -185,16 +185,19 @@ type Stream struct {
 
 	headerChan chan struct{} // closed to indicate the end of header metadata.
 	headerDone uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
+
 	// hdrMu protects header and trailer metadata on the server-side.
 	hdrMu   sync.Mutex
 	header  metadata.MD // the received header metadata.
 	trailer metadata.MD // the key-value map of trailer metadata.
 
-	// On the server-side, headerOK is atomically set to 1 when the headers are sent out.
+	// On the server-side, headerSent is atomically set to 1 when the headers are sent out.
 	headerSent uint32
-	state      streamState
+
+	state streamState
 
 	// On client-side it is the status error received from the server.
+	// On server-side it is unused.
 	status *status.Status
 
 	bytesReceived uint32 // indicates whether any bytes have been received on this stream
