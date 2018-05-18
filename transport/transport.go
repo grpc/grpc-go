@@ -188,7 +188,7 @@ type Stream struct {
 	header     metadata.MD   // the received header metadata.
 	trailer    metadata.MD   // the key-value map of trailer metadata.
 
-	headerOk bool // becomes true from the first header is about to send
+	headerOk uint32 // atomically set from 0 to 1 when the first header is about to send
 	state    streamState
 
 	status *status.Status // the status error received from the server
@@ -313,7 +313,7 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	if s.headerOk || atomic.LoadUint32((*uint32)(&s.state)) == uint32(streamDone) {
+	if s.headerSent() || s.getState() == streamDone {
 		return ErrIllegalHeaderWrite
 	}
 	s.header = metadata.Join(s.header, md)
@@ -326,6 +326,10 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 func (s *Stream) SendHeader(md metadata.MD) error {
 	t := s.ServerTransport()
 	return t.WriteHeader(s, md)
+}
+
+func (s *Stream) headerSent() bool {
+	return atomic.LoadUint32(&s.headerOk) != 0
 }
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
