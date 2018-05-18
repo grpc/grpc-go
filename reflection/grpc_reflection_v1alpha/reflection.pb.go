@@ -823,8 +823,7 @@ func (x *serverReflectionServerReflectionInfoClient) Recv() (*ServerReflectionRe
 	return m, nil
 }
 
-// Server API for ServerReflection service
-
+// ServerReflectionServer is the server API for ServerReflection service.
 type ServerReflectionServer interface {
 	// The reflection service is structured as a bidirectional stream, ensuring
 	// all related requests go to a single server.

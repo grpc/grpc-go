@@ -1042,8 +1042,7 @@ func (x *handshakerServiceDoHandshakeClient) Recv() (*HandshakerResp, error) {
 	return m, nil
 }
 
-// Server API for HandshakerService service
-
+// HandshakerServiceServer is the server API for HandshakerService service.
 type HandshakerServiceServer interface {
 	// Handshaker service accepts a stream of handshaker request, returning a
 	// stream of handshaker response. Client is expected to send exactly one
