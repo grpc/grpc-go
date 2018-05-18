@@ -29,6 +29,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	pdur "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/channelz"
@@ -38,7 +39,6 @@ import (
 )
 
 func init() {
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherSecurityValue")
 	channelz.TurnOn()
 }
 
@@ -170,27 +170,29 @@ func serverProtoToStruct(s *pb.Server) *dummyServer {
 	return ds
 }
 
+func convertToDuration(d *pdur.Duration) (sec int64, usec int64) {
+	if d != nil {
+		if dur, err := ptypes.Duration(d); err == nil {
+			sec = int64(int64(dur) / 1e9)
+			usec = (int64(dur) - sec*1e9) / 1e3
+		}
+	}
+	return
+}
+
 func protoToLinger(protoLinger *pb.SocketOptionLinger) *unix.Linger {
 	linger := &unix.Linger{}
 	if protoLinger.GetActive() {
 		linger.Onoff = 1
 	}
-	if protoDuration := protoLinger.GetDuration(); protoDuration != nil {
-		if dur, err := ptypes.Duration(protoDuration); err == nil {
-			linger.Linger = int32(int64(dur) / 1e9)
-		}
-	}
+	lv, _ := convertToDuration(protoLinger.GetDuration())
+	linger.Linger = int32(lv)
 	return linger
 }
 
 func protoToTime(protoTime *pb.SocketOptionTimeout) *unix.Timeval {
 	timeout := &unix.Timeval{}
-	if protoDuration := protoTime.GetDuration(); protoDuration != nil {
-		if dur, err := ptypes.Duration(protoDuration); err == nil {
-			timeout.Sec = int64(dur) / 1e9
-			timeout.Usec = (int64(dur) - timeout.Sec*1e9) / 1e3
-		}
-	}
+	timeout.Sec, timeout.Usec = convertToDuration(protoTime.GetDuration())
 	return timeout
 }
 
@@ -351,6 +353,11 @@ type OtherSecurityValue struct {
 func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
 func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
 func (*OtherSecurityValue) ProtoMessage()    {}
+
+func init() {
+	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
+	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherSecurityValue")
+}
 
 func TestGetTopChannels(t *testing.T) {
 	tcs := []*dummyChannel{

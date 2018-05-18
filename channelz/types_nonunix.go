@@ -20,58 +20,10 @@
 
 package channelz
 
-// The three types of dummy defined here are to make channel/service package build
-// under environment where x/sys/ doesn't have a definition for Linger, Timeval,
-// and TCPInfo.
-
-type tcpInfoDummy struct {
-	State          uint8
-	Ca_state       uint8
-	Retransmits    uint8
-	Probes         uint8
-	Backoff        uint8
-	Options        uint8
-	Rto            uint32
-	Ato            uint32
-	Snd_mss        uint32
-	Rcv_mss        uint32
-	Unacked        uint32
-	Sacked         uint32
-	Lost           uint32
-	Retrans        uint32
-	Fackets        uint32
-	Last_data_sent uint32
-	Last_ack_sent  uint32
-	Last_data_recv uint32
-	Last_ack_recv  uint32
-	Pmtu           uint32
-	Rcv_ssthresh   uint32
-	Rtt            uint32
-	Rttvar         uint32
-	Snd_ssthresh   uint32
-	Snd_cwnd       uint32
-	Advmss         uint32
-	Reordering     uint32
-}
-
-type lingerDummy struct {
-	Onoff  int32
-	Linger int32
-}
-
-type timevalDummy struct {
-	Sec  int32
-	Usec int32
-}
-
 // SocketOptionData defines the struct to hold socket option data, and related
 // getter function to obtain info from fd.
 // Windows OS doesn't support Socket Option
 type SocketOptionData struct {
-	Linger      *lingerDummy
-	RecvTimeout *timevalDummy
-	SendTimeout *timevalDummy
-	TCPInfo     *tcpInfoDummy
 }
 
 // Getsockopt defines the function to get socket options requested by channelz.

@@ -1,4 +1,4 @@
-// +build go1.9
+// +build !darwin,!dragonfly,!freebsd,!linux,!netbsd,!openbsd,!solaris
 
 /*
  *
@@ -18,25 +18,13 @@
  *
  */
 
-package credentials
+package service
 
 import (
-	"crypto/tls"
-	"errors"
-	"net"
-	"syscall"
+	"google.golang.org/grpc/channelz"
+	pb "google.golang.org/grpc/channelz/service_proto"
 )
 
-type tlsConn struct {
-	*tls.Conn
-	rawConn net.Conn
-}
-
-// implements the syscall.Conn interface
-func (c tlsConn) SyscallConn() (syscall.RawConn, error) {
-	conn, ok := c.rawConn.(syscall.Conn)
-	if !ok {
-		return nil, errors.New("RawConn does not implement syscall.Conn")
-	}
-	return conn.SyscallConn()
+func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
+	return nil
 }

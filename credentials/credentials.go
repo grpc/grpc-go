@@ -232,9 +232,9 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportCredentials, error
 	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
 }
 
-// Security defines the interface that security protocols should implement in order
+// ExtraSecurityInfo defines the interface that security protocols should implement in order
 // to provide security info to channelz.
-type Security interface {
+type ExtraSecurityInfo interface {
 	GetSecurityValue() SecurityValue
 }
 

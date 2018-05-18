@@ -27,25 +27,18 @@ import (
 	"syscall"
 	"testing"
 
-	"google.golang.org/grpc/channelz"
-
 	"golang.org/x/sys/unix"
+	"google.golang.org/grpc/channelz"
 )
 
 func startServer(ln net.Listener) chan struct{} {
 	c := make(chan struct{})
 	go func() {
 		for {
-			conn, err := ln.Accept()
+			_, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			go func(conn net.Conn) {
-				select {
-				case <-c:
-					return
-				}
-			}(conn)
 			select {
 			case <-c:
 				return
@@ -62,8 +55,11 @@ func TestGetSocketOpt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen(%s,%s) failed with err: %v", network, addr, err)
 	}
+	defer ln.Close()
 	done := startServer(ln)
+	defer close(done)
 	conn, _ := net.Dial(network, ln.Addr().String())
+	defer conn.Close()
 	tcpc := conn.(*net.TCPConn)
 	raw, err := tcpc.SyscallConn()
 	if err != nil {
@@ -106,8 +102,4 @@ func TestGetSocketOpt(t *testing.T) {
 	if sktopt == nil || sktopt.TCPInfo == nil || sktopt.TCPInfo.State != 10 {
 		t.Fatalf("TCPInfo.State want 10 (TCP_LISTEN), got %v", sktopt)
 	}
-
-	ln.Close()
-	conn.Close()
-	close(done)
 }

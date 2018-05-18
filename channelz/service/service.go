@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
+	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,12 +36,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func secToNano(i int64) int64 {
-	return i * 1e9
-}
-
-func usecToNano(i int64) int64 {
-	return i * 1e3
+func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
+	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
 }
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
@@ -148,77 +145,15 @@ func securityToProto(se credentials.SecurityValue) *pb.Security {
 			RemoteCertificate: v.RemoteCertificate,
 		}}}
 	case *credentials.OtherSecurityValue:
-		anyval, err := ptypes.MarshalAny(v.Value)
-		if err != nil {
-			return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
-				Name: v.Name,
-			}}}
+		otherSecurity := &pb.Security_OtherSecurity{
+			Name: v.Name,
 		}
-		return &pb.Security{Model: &pb.Security_Other{Other: &pb.Security_OtherSecurity{
-			Name:  v.Name,
-			Value: anyval,
-		}}}
+		if anyval, err := ptypes.MarshalAny(v.Value); err == nil {
+			otherSecurity.Value = anyval
+		}
+		return &pb.Security{Model: &pb.Security_Other{Other: otherSecurity}}
 	}
 	return nil
-}
-
-func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
-	var opts []*pb.SocketOption
-	if skopts.Linger != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionLinger{Active: skopts.Linger.Onoff != 0, Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.Linger.Linger))))})
-		if err == nil {
-			opts = append(opts, &pb.SocketOption{Name: "SO_LINGER", Additional: additional})
-		}
-	}
-	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.RecvTimeout.Sec)) + usecToNano(int64(skopts.RecvTimeout.Usec))))})
-		if err == nil {
-			opts = append(opts, &pb.SocketOption{Name: "SO_RCVTIMEO", Additional: additional})
-		}
-	}
-	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{Duration: ptypes.DurationProto(time.Duration(secToNano(int64(skopts.SendTimeout.Sec)) + usecToNano(int64(skopts.SendTimeout.Usec))))})
-		if err == nil {
-			opts = append(opts, &pb.SocketOption{Name: "SO_SNDTIMEO", Additional: additional})
-		}
-	}
-	if skopts.TCPInfo != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTcpInfo{
-			TcpiState:       uint32(skopts.TCPInfo.State),
-			TcpiCaState:     uint32(skopts.TCPInfo.Ca_state),
-			TcpiRetransmits: uint32(skopts.TCPInfo.Retransmits),
-			TcpiProbes:      uint32(skopts.TCPInfo.Probes),
-			TcpiBackoff:     uint32(skopts.TCPInfo.Backoff),
-			TcpiOptions:     uint32(skopts.TCPInfo.Options),
-			// https://golang.org/pkg/syscall/#TCPInfo
-			// TCPInfo struct does not contain info about TcpiSndWscale and TcpiRcvWscale.
-			TcpiRto:          skopts.TCPInfo.Rto,
-			TcpiAto:          skopts.TCPInfo.Ato,
-			TcpiSndMss:       skopts.TCPInfo.Snd_mss,
-			TcpiRcvMss:       skopts.TCPInfo.Rcv_mss,
-			TcpiUnacked:      skopts.TCPInfo.Unacked,
-			TcpiSacked:       skopts.TCPInfo.Sacked,
-			TcpiLost:         skopts.TCPInfo.Lost,
-			TcpiRetrans:      skopts.TCPInfo.Retrans,
-			TcpiFackets:      skopts.TCPInfo.Fackets,
-			TcpiLastDataSent: skopts.TCPInfo.Last_data_sent,
-			TcpiLastAckSent:  skopts.TCPInfo.Last_ack_sent,
-			TcpiLastDataRecv: skopts.TCPInfo.Last_data_recv,
-			TcpiLastAckRecv:  skopts.TCPInfo.Last_ack_recv,
-			TcpiPmtu:         skopts.TCPInfo.Pmtu,
-			TcpiRcvSsthresh:  skopts.TCPInfo.Rcv_ssthresh,
-			TcpiRtt:          skopts.TCPInfo.Rtt,
-			TcpiRttvar:       skopts.TCPInfo.Rttvar,
-			TcpiSndSsthresh:  skopts.TCPInfo.Snd_ssthresh,
-			TcpiSndCwnd:      skopts.TCPInfo.Snd_cwnd,
-			TcpiAdvmss:       skopts.TCPInfo.Advmss,
-			TcpiReordering:   skopts.TCPInfo.Reordering,
-		})
-		if err == nil {
-			opts = append(opts, &pb.SocketOption{Name: "TCP_INFO", Additional: additional})
-		}
-	}
-	return opts
 }
 
 func addrToProto(a net.Addr) *pb.Address {
