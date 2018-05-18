@@ -404,27 +404,33 @@ final class BinlogHelper {
           }
           if (methodOrSvc.equals("*")) {
             if (globalLog != null) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
               continue;
             }
             globalLog = binLog;
-            logger.info("Global binlog: " + globalLog);
+            logger.log(Level.INFO, "Global binlog: {0}", binlogOptionStr);
           } else if (isServiceGlob(methodOrSvc)) {
             String service = MethodDescriptor.extractFullServiceName(methodOrSvc);
             if (perServiceLogs.containsKey(service)) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
               continue;
             }
             perServiceLogs.put(service, binLog);
-            logger.info(String.format("Service binlog: service=%s log=%s", service, binLog));
+            logger.log(
+                Level.INFO,
+                "Service binlog: service={0} config={1}",
+                new Object[] {service, binlogOptionStr});
           } else {
             // assume fully qualified method name
             if (perMethodLogs.containsKey(methodOrSvc)) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: " + configuration);
+              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
               continue;
             }
             perMethodLogs.put(methodOrSvc, binLog);
-            logger.info(String.format("Method binlog: method=%s log=%s", methodOrSvc, binLog));
+            logger.log(
+                Level.INFO,
+                "Method binlog: method={0} config={1}",
+                new Object[] {methodOrSvc, binlogOptionStr});
           }
         }
       }
