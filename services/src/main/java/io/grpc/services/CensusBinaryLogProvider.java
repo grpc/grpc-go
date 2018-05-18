@@ -20,12 +20,16 @@ import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.Tracing;
+import java.nio.ByteBuffer;
 
 final class CensusBinaryLogProvider extends BinaryLogProviderImpl {
   @Override
   protected CallId getServerCallId() {
     Span currentSpan = Tracing.getTracer().getCurrentSpan();
-    return CallId.fromCensusSpan(currentSpan);
+    return new CallId(
+        0,
+        ByteBuffer.wrap(
+            currentSpan.getContext().getSpanId().getBytes()).getLong());
   }
 
   @Override

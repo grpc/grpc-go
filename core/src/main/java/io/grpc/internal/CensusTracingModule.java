@@ -21,6 +21,7 @@ import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.BinaryLogProvider;
+import io.grpc.BinaryLogProvider.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -40,6 +41,7 @@ import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.propagation.BinaryFormat;
+import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -385,7 +387,10 @@ final class CensusTracingModule {
               callOptions.withStreamTracerFactory(tracerFactory)
                   .withOption(
                       BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY,
-                      BinaryLogProvider.CallId.fromCensusSpan(tracerFactory.span)));
+                      new CallId(
+                          0,
+                          ByteBuffer.wrap(
+                              tracerFactory.span.getContext().getSpanId().getBytes()).getLong())));
       return new SimpleForwardingClientCall<ReqT, RespT>(call) {
         @Override
         public void start(Listener<RespT> responseListener, Metadata headers) {

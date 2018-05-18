@@ -961,7 +961,10 @@ public class CensusModulesTest {
   @Test
   public void callIdFromSpan() {
     MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
-    CallId callId = CallId.fromCensusSpan(mockableSpan);
+    CallId callId = new CallId(
+        0,
+        ByteBuffer.wrap(
+            mockableSpan.getContext().getSpanId().getBytes()).getLong());
     assertThat(callId.hi).isEqualTo(0);
     assertThat(callId.lo)
         .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());

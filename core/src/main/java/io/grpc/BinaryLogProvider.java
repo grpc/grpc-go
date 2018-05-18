@@ -19,14 +19,12 @@ package io.grpc;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.MethodDescriptor.Marshaller;
-import io.opencensus.trace.Span;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import javax.annotation.Nullable;
 
 // TODO(zpencer): rename class to AbstractBinaryLog
@@ -164,10 +162,6 @@ public abstract class BinaryLogProvider implements Closeable {
     public CallId(long hi, long lo) {
       this.hi = hi;
       this.lo = lo;
-    }
-
-    public static CallId fromCensusSpan(Span span) {
-      return new CallId(0, ByteBuffer.wrap(span.getContext().getSpanId().getBytes()).getLong());
     }
   }
 
