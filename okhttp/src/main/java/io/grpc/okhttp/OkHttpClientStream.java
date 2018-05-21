@@ -277,9 +277,9 @@ class OkHttpClientStream extends AbstractClientStream {
 
     @Override
     @GuardedBy("lock")
-    public void deframerClosed(boolean hasPartialMessageIgnored) {
+    public void deframerClosed(boolean hasPartialMessage) {
       onEndOfStream();
-      super.deframerClosed(hasPartialMessageIgnored);
+      super.deframerClosed(hasPartialMessage);
     }
 
     @Override

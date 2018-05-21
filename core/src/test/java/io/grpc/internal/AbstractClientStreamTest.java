@@ -21,6 +21,7 @@ import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
@@ -40,6 +41,7 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream.TransportState;
+import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import io.grpc.internal.testing.TestClientStreamTracer;
 import java.io.ByteArrayInputStream;
@@ -324,11 +326,50 @@ public class AbstractClientStreamTest {
     stream.transportState().requestMessagesFromDeframer(1);
     // Send first byte of 2 byte message
     stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
-    Status status = Status.INTERNAL;
+    Status status = Status.INTERNAL.withDescription("rst___stream");
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
 
-    verify(mockListener).closed(any(Status.class), same(PROCESSED), any(Metadata.class));
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockListener)
+        .closed(statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
+    assertSame(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals("rst___stream", statusCaptor.getValue().getDescription());
+  }
+
+  @Test
+  public void trailerOkWithTruncatedMessage() {
+    AbstractClientStream stream =
+        new BaseAbstractClientStream(allocator, statsTraceCtx, transportTracer);
+    stream.start(mockListener);
+
+    stream.transportState().requestMessagesFromDeframer(1);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
+    stream.transportState().inboundTrailersReceived(new Metadata(), Status.OK);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockListener)
+        .closed(statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
+    assertSame(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals("Encountered end-of-stream mid-frame", statusCaptor.getValue().getDescription());
+  }
+
+  @Test
+  public void trailerNotOkWithTruncatedMessage() {
+    AbstractClientStream stream =
+        new BaseAbstractClientStream(allocator, statsTraceCtx, transportTracer);
+    stream.start(mockListener);
+
+    stream.transportState().requestMessagesFromDeframer(1);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
+    stream.transportState().inboundTrailersReceived(
+        new Metadata(), Status.DATA_LOSS.withDescription("data___loss"));
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockListener)
+        .closed(statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
+    assertSame(Status.Code.DATA_LOSS, statusCaptor.getValue().getCode());
+    assertEquals("data___loss", statusCaptor.getValue().getDescription());
   }
   
   @Test

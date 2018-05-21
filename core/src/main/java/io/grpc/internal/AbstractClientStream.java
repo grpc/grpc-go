@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
@@ -227,6 +228,8 @@ public abstract class AbstractClientStream extends AbstractStream
      * #listenerClosed} because there may still be messages buffered to deliver to the application.
      */
     private boolean statusReported;
+    private Metadata trailers;
+    private Status trailerStatus;
 
     protected TransportState(
         int maxMessageSize,
@@ -241,20 +244,31 @@ public abstract class AbstractClientStream extends AbstractStream
     }
 
     private void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
-      Preconditions.checkState(this.listener == null, "Already called start");
+      checkState(this.listener == null, "Already called start");
       this.decompressorRegistry =
           checkNotNull(decompressorRegistry, "decompressorRegistry");
     }
 
     @VisibleForTesting
     public final void setListener(ClientStreamListener listener) {
-      Preconditions.checkState(this.listener == null, "Already called setListener");
+      checkState(this.listener == null, "Already called setListener");
       this.listener = checkNotNull(listener, "listener");
     }
 
     @Override
-    public void deframerClosed(boolean hasPartialMessageIgnored) {
+    public void deframerClosed(boolean hasPartialMessage) {
       deframerClosed = true;
+
+      if (trailerStatus != null) {
+        if (trailerStatus.isOk() && hasPartialMessage) {
+          trailerStatus = Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame");
+          trailers = new Metadata();
+        }
+        transportReportStatus(trailerStatus, false, trailers);
+      } else {
+        checkState(statusReported, "status should have been reported on deframer closed");
+      }
+
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
         deframerClosedTask = null;
@@ -280,7 +294,7 @@ public abstract class AbstractClientStream extends AbstractStream
      * @param headers the parsed headers
      */
     protected void inboundHeadersReceived(Metadata headers) {
-      Preconditions.checkState(!statusReported, "Received headers on closed stream");
+      checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
 
       boolean compressedStream = false;
@@ -361,7 +375,9 @@ public abstract class AbstractClientStream extends AbstractStream
             new Object[]{status, trailers});
         return;
       }
-      transportReportStatus(status, false, trailers);
+      this.trailers = trailers;
+      trailerStatus = status;
+      closeDeframer(false);
     }
 
     /**
@@ -454,7 +470,7 @@ public abstract class AbstractClientStream extends AbstractStream
 
     @Override
     public void writePayload(InputStream message) {
-      Preconditions.checkState(payload == null, "writePayload should not be called multiple times");
+      checkState(payload == null, "writePayload should not be called multiple times");
       try {
         payload = IoUtils.toByteArray(message);
       } catch (java.io.IOException ex) {
@@ -487,7 +503,7 @@ public abstract class AbstractClientStream extends AbstractStream
     @Override
     public void close() {
       closed = true;
-      Preconditions.checkState(payload != null,
+      checkState(payload != null,
           "Lack of request message. GET request is only supported for unary requests");
       abstractClientStreamSink().writeHeaders(headers, payload);
       payload = null;
