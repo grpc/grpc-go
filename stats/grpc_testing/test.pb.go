@@ -243,8 +243,7 @@ func (x *testServiceServerStreamCallClient) Recv() (*SimpleResponse, error) {
 	return m, nil
 }
 
-// Server API for TestService service
-
+// TestServiceServer is the server API for TestService service.
 type TestServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client id as-is.

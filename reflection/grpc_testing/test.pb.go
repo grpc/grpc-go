@@ -223,8 +223,7 @@ func (x *searchServiceStreamingSearchClient) Recv() (*SearchResponse, error) {
 	return m, nil
 }
 
-// Server API for SearchService service
-
+// SearchServiceServer is the server API for SearchService service.
 type SearchServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	StreamingSearch(SearchService_StreamingSearchServer) error

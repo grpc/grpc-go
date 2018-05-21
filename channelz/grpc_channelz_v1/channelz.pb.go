@@ -2928,8 +2928,7 @@ func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, op
 	return out, nil
 }
 
-// Server API for Channelz service
-
+// ChannelzServer is the server API for Channelz service.
 type ChannelzServer interface {
 	// Gets all root channels (i.e. channels the application has directly
 	// created). This does not include subchannels nor non-top level channels.

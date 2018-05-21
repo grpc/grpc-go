@@ -79,8 +79,7 @@ func (x *loadBalancerBalanceLoadClient) Recv() (*messages.LoadBalanceResponse, e
 	return m, nil
 }
 
-// Server API for LoadBalancer service
-
+// LoadBalancerServer is the server API for LoadBalancer service.
 type LoadBalancerServer interface {
 	// Bidirectional rpc to get a list of servers.
 	BalanceLoad(LoadBalancer_BalanceLoadServer) error

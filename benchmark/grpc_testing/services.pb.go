@@ -91,8 +91,7 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 	return m, nil
 }
 
-// Server API for BenchmarkService service
-
+// BenchmarkServiceServer is the server API for BenchmarkService service.
 type BenchmarkServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
@@ -282,8 +281,7 @@ func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...
 	return out, nil
 }
 
-// Server API for WorkerService service
-
+// WorkerServiceServer is the server API for WorkerService service.
 type WorkerServiceServer interface {
 	// Start server with specified workload.
 	// First request sent specifies the ServerConfig followed by ServerStatus
