@@ -37,7 +37,15 @@ public class ProtoUtils {
   public static <T extends Message> Metadata.Key<T> keyForProto(T instance) {
     return Metadata.Key.of(
         instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
-        ProtoLiteUtils.metadataMarshaller(instance));
+        metadataMarshaller(instance));
+  }
+
+  /**
+   * Produce a metadata marshaller for a protobuf type.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4477")
+  public static <T extends Message> Metadata.BinaryMarshaller<T> metadataMarshaller(T instance) {
+    return ProtoLiteUtils.metadataMarshaller(instance);
   }
 
   private ProtoUtils() {
