@@ -21,7 +21,6 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.AbstractTransportTest;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -36,13 +35,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class NettyTransportTest extends AbstractTransportTest {
   private final FakeClock fakeClock = new FakeClock();
-  private final TransportTracer.Factory fakeClockTransportTracer = new TransportTracer.Factory(
-      new TransportTracer.TimeProvider() {
-        @Override
-        public long currentTimeMillis() {
-          return fakeClock.currentTimeMillis();
-        }
-      });
   // Avoid LocalChannel for testing because LocalChannel can fail with
   // io.netty.channel.ChannelException instead of java.net.ConnectException which breaks
   // serverNotListening test.
@@ -95,8 +87,8 @@ public class NettyTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected long currentTimeMillis() {
-    return fakeClock.currentTimeMillis();
+  protected long fakeCurrentTimeNanos() {
+    return fakeClock.getTicker().read();
   }
 
   @Override

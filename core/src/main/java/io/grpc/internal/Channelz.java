@@ -279,7 +279,7 @@ public final class Channelz {
     public final long callsStarted;
     public final long callsSucceeded;
     public final long callsFailed;
-    public final long lastCallStartedMillis;
+    public final long lastCallStartedNanos;
     public final List<Instrumented<SocketStats>> listenSockets;
 
     /**
@@ -289,12 +289,12 @@ public final class Channelz {
         long callsStarted,
         long callsSucceeded,
         long callsFailed,
-        long lastCallStartedMillis,
+        long lastCallStartedNanos,
         List<Instrumented<SocketStats>> listenSockets) {
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
-      this.lastCallStartedMillis = lastCallStartedMillis;
+      this.lastCallStartedNanos = lastCallStartedNanos;
       this.listenSockets = checkNotNull(listenSockets);
     }
 
@@ -302,7 +302,7 @@ public final class Channelz {
       private long callsStarted;
       private long callsSucceeded;
       private long callsFailed;
-      private long lastCallStartedMillis;
+      private long lastCallStartedNanos;
       public List<Instrumented<SocketStats>> listenSockets = Collections.emptyList();
 
       public Builder setCallsStarted(long callsStarted) {
@@ -320,8 +320,8 @@ public final class Channelz {
         return this;
       }
 
-      public Builder setLastCallStartedMillis(long lastCallStartedMillis) {
-        this.lastCallStartedMillis = lastCallStartedMillis;
+      public Builder setLastCallStartedNanos(long lastCallStartedNanos) {
+        this.lastCallStartedNanos = lastCallStartedNanos;
         return this;
       }
 
@@ -341,7 +341,7 @@ public final class Channelz {
             callsStarted,
             callsSucceeded,
             callsFailed,
-            lastCallStartedMillis,
+            lastCallStartedNanos,
             listenSockets);
       }
     }
@@ -358,7 +358,7 @@ public final class Channelz {
     public final long callsStarted;
     public final long callsSucceeded;
     public final long callsFailed;
-    public final long lastCallStartedMillis;
+    public final long lastCallStartedNanos;
     public final List<WithLogId> subchannels;
     public final List<WithLogId> sockets;
 
@@ -372,7 +372,7 @@ public final class Channelz {
         long callsStarted,
         long callsSucceeded,
         long callsFailed,
-        long lastCallStartedMillis,
+        long lastCallStartedNanos,
         List<WithLogId> subchannels,
         List<WithLogId> sockets) {
       Preconditions.checkState(
@@ -385,7 +385,7 @@ public final class Channelz {
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
-      this.lastCallStartedMillis = lastCallStartedMillis;
+      this.lastCallStartedNanos = lastCallStartedNanos;
       this.subchannels = checkNotNull(subchannels);
       this.sockets = checkNotNull(sockets);
     }
@@ -397,7 +397,7 @@ public final class Channelz {
       private long callsStarted;
       private long callsSucceeded;
       private long callsFailed;
-      private long lastCallStartedMillis;
+      private long lastCallStartedNanos;
       private List<WithLogId> subchannels = Collections.emptyList();
       private List<WithLogId> sockets = Collections.emptyList();
 
@@ -431,8 +431,8 @@ public final class Channelz {
         return this;
       }
 
-      public Builder setLastCallStartedMillis(long lastCallStartedMillis) {
-        this.lastCallStartedMillis = lastCallStartedMillis;
+      public Builder setLastCallStartedNanos(long lastCallStartedNanos) {
+        this.lastCallStartedNanos = lastCallStartedNanos;
         return this;
       }
 
@@ -461,7 +461,7 @@ public final class Channelz {
             callsStarted,
             callsSucceeded,
             callsFailed,
-            lastCallStartedMillis,
+            lastCallStartedNanos,
             subchannels,
             sockets);
       }

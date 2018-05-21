@@ -74,6 +74,7 @@ import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.SerializingExecutor;
+import io.grpc.internal.TimeProvider;
 import io.grpc.stub.StreamObserver;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -137,8 +138,8 @@ public class GrpclbLoadBalancerTest {
   private final ArrayList<String> failingLbAuthorities = new ArrayList<String>();
   private final TimeProvider timeProvider = new TimeProvider() {
       @Override
-      public long currentTimeMillis() {
-        return fakeClock.currentTimeMillis();
+      public long currentTimeNanos() {
+        return fakeClock.getTicker().read();
       }
     };
   private io.grpc.Server fakeLbServer;
@@ -685,7 +686,7 @@ public class GrpclbLoadBalancerTest {
         eq(LoadBalanceRequest.newBuilder()
             .setClientStats(
                 ClientStats.newBuilder(expectedReport)
-                .setTimestamp(Timestamps.fromMillis(fakeClock.currentTimeMillis()))
+                .setTimestamp(Timestamps.fromNanos(fakeClock.getTicker().read()))
                 .build())
             .build()));
   }

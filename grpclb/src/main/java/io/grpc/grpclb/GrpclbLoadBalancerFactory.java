@@ -21,6 +21,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.PickFirstBalancerFactory;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourcePool;
+import io.grpc.internal.TimeProvider;
 import io.grpc.util.RoundRobinLoadBalancerFactory;
 
 /**
@@ -33,12 +34,6 @@ import io.grpc.util.RoundRobinLoadBalancerFactory;
 public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
   private static final GrpclbLoadBalancerFactory INSTANCE = new GrpclbLoadBalancerFactory();
-  private static final TimeProvider TIME_PROVIDER = new TimeProvider() {
-      @Override
-      public long currentTimeMillis() {
-        return System.currentTimeMillis();
-      }
-    };
 
   private GrpclbLoadBalancerFactory() {
   }
@@ -57,6 +52,6 @@ public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
         // load should not be on the shared scheduled executor, we should use a combination of the
         // scheduled executor and the default app executor.
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-        TIME_PROVIDER);
+        TimeProvider.SYSTEM_TIME_PROVIDER);
   }
 }

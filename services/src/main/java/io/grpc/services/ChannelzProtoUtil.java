@@ -138,7 +138,7 @@ final class ChannelzProtoUtil {
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
-        .setLastCallStartedTimestamp(Timestamps.fromMillis(stats.lastCallStartedMillis))
+        .setLastCallStartedTimestamp(Timestamps.fromNanos(stats.lastCallStartedNanos))
         .build();
   }
 
@@ -359,7 +359,7 @@ final class ChannelzProtoUtil {
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
-        .setLastCallStartedTimestamp(Timestamps.fromMillis(stats.lastCallStartedMillis));
+        .setLastCallStartedTimestamp(Timestamps.fromNanos(stats.lastCallStartedNanos));
     if (stats.channelTrace != null) {
       builder.setTrace(toChannelTrace(stats.channelTrace));
     }

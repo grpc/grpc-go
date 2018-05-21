@@ -149,10 +149,10 @@ public class ManagedChannelImplTest {
   private final CallTracer.Factory channelStatsFactory = new CallTracer.Factory() {
     @Override
     public CallTracer create() {
-      return new CallTracer(new CallTracer.TimeProvider() {
+      return new CallTracer(new TimeProvider() {
         @Override
-        public long currentTimeMillis() {
-          return executor.currentTimeMillis();
+        public long currentTimeNanos() {
+          return executor.getTicker().read();
         }
       });
     }
@@ -2104,7 +2104,7 @@ public class ManagedChannelImplTest {
     assertEquals(0, getStats(channel).callsStarted);
     call.start(mockCallListener, new Metadata());
     assertEquals(1, getStats(channel).callsStarted);
-    assertEquals(executor.currentTimeMillis(), getStats(channel).lastCallStartedMillis);
+    assertEquals(executor.getTicker().read(), getStats(channel).lastCallStartedNanos);
   }
 
   @Test

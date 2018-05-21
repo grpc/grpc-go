@@ -22,7 +22,6 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.AbstractTransportTest;
 import io.grpc.netty.NettyServerBuilder;
 import java.net.InetSocketAddress;
@@ -38,13 +37,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class OkHttpTransportTest extends AbstractTransportTest {
   private final FakeClock fakeClock = new FakeClock();
-  private final TransportTracer.Factory fakeClockTransportTracer = new TransportTracer.Factory(
-      new TransportTracer.TimeProvider() {
-        @Override
-        public long currentTimeMillis() {
-          return fakeClock.currentTimeMillis();
-        }
-      });
   private ClientTransportFactory clientFactory = OkHttpChannelBuilder
       // Although specified here, address is ignored because we never call build.
       .forAddress("localhost", 0)
@@ -100,8 +92,8 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected long currentTimeMillis() {
-    return fakeClock.currentTimeMillis();
+  protected long fakeCurrentTimeNanos() {
+    return fakeClock.getTicker().read();
   }
 
   // TODO(ejona): Flaky/Broken

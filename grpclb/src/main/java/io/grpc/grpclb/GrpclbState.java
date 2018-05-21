@@ -43,6 +43,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.LoadBalanceResponse.LoadBalanceResponseTypeCase;
 import io.grpc.internal.LogId;
+import io.grpc.internal.TimeProvider;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

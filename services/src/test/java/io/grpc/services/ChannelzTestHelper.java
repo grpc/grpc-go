@@ -122,7 +122,7 @@ final class ChannelzTestHelper {
         /*callsStarted=*/ 1,
         /*callsSucceeded=*/ 2,
         /*callsFailed=*/ 3,
-        /*lastCallStartedMillis=*/ 4,
+        /*lastCallStartedNanos=*/ 4,
         Collections.<Instrumented<SocketStats>>emptyList());
 
     @Override
@@ -154,7 +154,7 @@ final class ChannelzTestHelper {
         .setCallsStarted(1)
         .setCallsSucceeded(2)
         .setCallsFailed(3)
-        .setLastCallStartedMillis(4)
+        .setLastCallStartedNanos(4)
         .setSubchannels(Collections.<WithLogId>emptyList())
         .setSockets(Collections.<WithLogId>emptyList())
         .build();

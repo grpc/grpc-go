@@ -16,7 +16,8 @@
 
 package io.grpc.internal;
 
-import com.google.common.annotations.VisibleForTesting;
+import static io.grpc.internal.TimeProvider.SYSTEM_TIME_PROVIDER;
+
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.ServerStats;
 
@@ -28,7 +29,7 @@ final class CallTracer {
   private final LongCounter callsStarted = LongCounterFactory.create();
   private final LongCounter callsSucceeded = LongCounterFactory.create();
   private final LongCounter callsFailed = LongCounterFactory.create();
-  private volatile long lastCallStartedMillis;
+  private volatile long lastCallStartedNanos;
 
   CallTracer(TimeProvider timeProvider) {
     this.timeProvider = timeProvider;
@@ -36,7 +37,7 @@ final class CallTracer {
 
   public void reportCallStarted() {
     callsStarted.add(1);
-    lastCallStartedMillis = timeProvider.currentTimeMillis();
+    lastCallStartedNanos = timeProvider.currentTimeNanos();
   }
 
   public void reportCallEnded(boolean success) {
@@ -52,7 +53,7 @@ final class CallTracer {
         .setCallsStarted(callsStarted.value())
         .setCallsSucceeded(callsSucceeded.value())
         .setCallsFailed(callsFailed.value())
-        .setLastCallStartedMillis(lastCallStartedMillis);
+        .setLastCallStartedNanos(lastCallStartedNanos);
   }
 
   void updateBuilder(ServerStats.Builder builder) {
@@ -60,25 +61,12 @@ final class CallTracer {
         .setCallsStarted(callsStarted.value())
         .setCallsSucceeded(callsSucceeded.value())
         .setCallsFailed(callsFailed.value())
-        .setLastCallStartedMillis(lastCallStartedMillis);
-  }
-
-  @VisibleForTesting
-  interface TimeProvider {
-    /** Returns the current milli time. */
-    long currentTimeMillis();
+        .setLastCallStartedNanos(lastCallStartedNanos);
   }
 
   public interface Factory {
     CallTracer create();
   }
-
-  static final TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
-    @Override
-    public long currentTimeMillis() {
-      return System.currentTimeMillis();
-    }
-  };
 
   static final Factory DEFAULT_FACTORY = new Factory() {
     @Override

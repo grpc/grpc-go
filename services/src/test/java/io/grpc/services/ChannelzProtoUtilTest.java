@@ -106,7 +106,7 @@ public final class ChannelzProtoUtilTest {
       .setCallsStarted(1)
       .setCallsSucceeded(2)
       .setCallsFailed(3)
-      .setLastCallStartedTimestamp(Timestamps.fromMillis(4))
+      .setLastCallStartedTimestamp(Timestamps.fromNanos(4))
       .build();
   private final Channel channelProto = Channel
       .newBuilder()
@@ -127,7 +127,7 @@ public final class ChannelzProtoUtilTest {
       .setCallsStarted(1)
       .setCallsSucceeded(2)
       .setCallsFailed(3)
-      .setLastCallStartedTimestamp(Timestamps.fromMillis(4))
+      .setLastCallStartedTimestamp(Timestamps.fromNanos(4))
       .build();
   private final Subchannel subchannelProto = Subchannel
         .newBuilder()
@@ -146,7 +146,7 @@ public final class ChannelzProtoUtilTest {
       .setCallsStarted(1)
       .setCallsSucceeded(2)
       .setCallsFailed(3)
-      .setLastCallStartedTimestamp(Timestamps.fromMillis(4))
+      .setLastCallStartedTimestamp(Timestamps.fromNanos(4))
       .build();
   private final Server serverProto = Server
       .newBuilder()
@@ -912,7 +912,7 @@ public final class ChannelzProtoUtilTest {
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
-        .setLastCallStartedMillis(stats.lastCallStartedMillis);
+        .setLastCallStartedNanos(stats.lastCallStartedNanos);
     if (!stats.subchannels.isEmpty()) {
       builder.setSubchannels(stats.subchannels);
     }
@@ -938,7 +938,7 @@ public final class ChannelzProtoUtilTest {
         .setCallsStarted(stats.callsStarted)
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
-        .setLastCallStartedMillis(stats.lastCallStartedMillis)
+        .setLastCallStartedNanos(stats.lastCallStartedNanos)
         .setListenSockets(stats.listenSockets);
   }
 }

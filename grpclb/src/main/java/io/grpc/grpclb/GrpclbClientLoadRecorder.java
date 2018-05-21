@@ -23,6 +23,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.TimeProvider;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -99,7 +100,7 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
   ClientStats generateLoadReport() {
     ClientStats.Builder statsBuilder =
         ClientStats.newBuilder()
-        .setTimestamp(Timestamps.fromMillis(time.currentTimeMillis()))
+        .setTimestamp(Timestamps.fromNanos(time.currentTimeNanos()))
         .setNumCallsStarted(callsStartedUpdater.getAndSet(this, 0))
         .setNumCallsFinished(callsFinishedUpdater.getAndSet(this, 0))
         .setNumCallsFinishedWithClientFailedToSend(callsFailedToSendUpdater.getAndSet(this, 0))

@@ -110,7 +110,7 @@ public class ServerCallImplTest {
     tracer.updateBuilder(beforeBuilder);
     ServerStats before = beforeBuilder.build();
     assertEquals(0, before.callsStarted);
-    assertEquals(0, before.lastCallStartedMillis);
+    assertEquals(0, before.lastCallStartedNanos);
 
     call = new ServerCallImpl<Long, Long>(stream, UNARY_METHOD, requestHeaders, context,
         DecompressorRegistry.getDefaultInstance(), CompressorRegistry.getDefaultInstance(),

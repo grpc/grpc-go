@@ -28,6 +28,7 @@ import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ObjectPool;
+import io.grpc.internal.TimeProvider;
 import io.grpc.internal.WithLogId;
 import java.util.ArrayList;
 import java.util.Collections;

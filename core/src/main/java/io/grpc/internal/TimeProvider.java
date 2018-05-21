@@ -14,11 +14,25 @@
  * limitations under the License.
  */
 
-package io.grpc.grpclb;
+package io.grpc.internal;
+
+import java.util.concurrent.TimeUnit;
 
 /**
- * Allow time manipulation in tests.
+ * Time source representing the current system time in nanos. Used to inject a fake clock
+ * into unit tests.
  */
-interface TimeProvider {
-  long currentTimeMillis();
+public interface TimeProvider {
+  /** Returns the current nano time. */
+  long currentTimeNanos();
+
+  TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
+    final long offsetNanos =
+        TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis()) - System.nanoTime();
+
+    @Override
+    public long currentTimeNanos() {
+      return System.nanoTime() + offsetNanos;
+    }
+  };
 }

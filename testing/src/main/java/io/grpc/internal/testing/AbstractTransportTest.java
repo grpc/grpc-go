@@ -65,6 +65,8 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.TimeProvider;
+import io.grpc.internal.TransportTracer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -96,6 +98,14 @@ public abstract class AbstractTransportTest {
 
   private static final Attributes.Key<String> ADDITIONAL_TRANSPORT_ATTR_KEY =
       Attributes.Key.create("additional-attr");
+
+  protected final TransportTracer.Factory fakeClockTransportTracer = new TransportTracer.Factory(
+      new TimeProvider() {
+        @Override
+        public long currentTimeNanos() {
+          return fakeCurrentTimeNanos();
+        }
+      });
 
   /**
    * Returns a new server that when started will be able to be connected to from the client. Each
@@ -204,7 +214,7 @@ public abstract class AbstractTransportTest {
   /**
    * Returns the current time, for tests that rely on the clock.
    */
-  protected long currentTimeMillis() {
+  protected long fakeCurrentTimeNanos() {
     throw new UnsupportedOperationException();
   }
 
@@ -1435,16 +1445,12 @@ public abstract class AbstractTransportTest {
       TransportStats serverAfter = getTransportStats(serverTransportListener.transport);
       assertEquals(1, serverAfter.streamsStarted);
       serverFirstTimestampNanos = serverAfter.lastRemoteStreamCreatedTimeNanos;
-      assertEquals(
-          currentTimeMillis(),
-          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastRemoteStreamCreatedTimeNanos));
+      assertEquals(fakeCurrentTimeNanos(), serverAfter.lastRemoteStreamCreatedTimeNanos);
 
       TransportStats clientAfter = getTransportStats(client);
       assertEquals(1, clientAfter.streamsStarted);
       clientFirstTimestampNanos = clientAfter.lastLocalStreamCreatedTimeNanos;
-      assertEquals(
-          currentTimeMillis(),
-          TimeUnit.NANOSECONDS.toMillis(clientFirstTimestampNanos));
+      assertEquals(fakeCurrentTimeNanos(), clientFirstTimestampNanos);
 
       ServerStream serverStream = serverStreamCreation.stream;
       serverStream.close(Status.OK, new Metadata());
@@ -1471,18 +1477,14 @@ public abstract class AbstractTransportTest {
       assertEquals(
           TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
           serverAfter.lastRemoteStreamCreatedTimeNanos - serverFirstTimestampNanos);
-      long serverSecondTimestamp =
-          TimeUnit.NANOSECONDS.toMillis(serverAfter.lastRemoteStreamCreatedTimeNanos);
-      assertEquals(currentTimeMillis(), serverSecondTimestamp);
+      assertEquals(fakeCurrentTimeNanos(), serverAfter.lastRemoteStreamCreatedTimeNanos);
 
       TransportStats clientAfter = getTransportStats(client);
       assertEquals(2, clientAfter.streamsStarted);
       assertEquals(
           TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
           clientAfter.lastLocalStreamCreatedTimeNanos - clientFirstTimestampNanos);
-      long clientSecondTimestamp =
-          TimeUnit.NANOSECONDS.toMillis(clientAfter.lastLocalStreamCreatedTimeNanos);
-      assertEquals(currentTimeMillis(), clientSecondTimestamp);
+      assertEquals(fakeCurrentTimeNanos(), clientAfter.lastLocalStreamCreatedTimeNanos);
 
       ServerStream serverStream = serverStreamCreation.stream;
       serverStream.close(Status.OK, new Metadata());
@@ -1636,14 +1638,10 @@ public abstract class AbstractTransportTest {
 
     TransportStats serverAfter = getTransportStats(serverTransportListener.transport);
     assertEquals(1, serverAfter.messagesReceived);
-    long serverTimestamp =
-        TimeUnit.NANOSECONDS.toMillis(serverAfter.lastMessageReceivedTimeNanos);
-    assertEquals(currentTimeMillis(), serverTimestamp);
+    assertEquals(fakeCurrentTimeNanos(), serverAfter.lastMessageReceivedTimeNanos);
     TransportStats clientAfter = getTransportStats(client);
     assertEquals(1, clientAfter.messagesSent);
-    long clientTimestamp =
-        TimeUnit.NANOSECONDS.toMillis(clientAfter.lastMessageSentTimeNanos);
-    assertEquals(currentTimeMillis(), clientTimestamp);
+    assertEquals(fakeCurrentTimeNanos(), clientAfter.lastMessageSentTimeNanos);
 
     serverStream.close(Status.OK, new Metadata());
   }
@@ -1680,14 +1678,10 @@ public abstract class AbstractTransportTest {
 
     TransportStats serverAfter = getTransportStats(serverTransportListener.transport);
     assertEquals(1, serverAfter.messagesSent);
-    long serverTimestmap = TimeUnit.NANOSECONDS.toMillis(serverAfter.lastMessageSentTimeNanos);
-    assertEquals(currentTimeMillis(), serverTimestmap);
+    assertEquals(fakeCurrentTimeNanos(), serverAfter.lastMessageSentTimeNanos);
     TransportStats clientAfter = getTransportStats(client);
     assertEquals(1, clientAfter.messagesReceived);
-    long clientTimestmap =
-        TimeUnit.NANOSECONDS.toMillis(clientAfter.lastMessageReceivedTimeNanos);
-    assertEquals(currentTimeMillis(), clientTimestmap);
-
+    assertEquals(fakeCurrentTimeNanos(), clientAfter.lastMessageReceivedTimeNanos);
 
     serverStream.close(Status.OK, new Metadata());
   }

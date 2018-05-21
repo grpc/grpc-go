@@ -16,22 +16,17 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.TimeProvider.SYSTEM_TIME_PROVIDER;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.internal.Channelz.TransportStats;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A class for gathering statistics about a transport. This is an experimental feature.
  * Can only be called from the transport thread unless otherwise noted.
  */
 public final class TransportTracer {
-  private static final TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
-    @Override
-    public long currentTimeMillis() {
-      return System.currentTimeMillis();
-    }
-  };
   private static final Factory DEFAULT_FACTORY = new Factory(SYSTEM_TIME_PROVIDER);
 
   private final TimeProvider timeProvider;
@@ -85,7 +80,7 @@ public final class TransportTracer {
    */
   public void reportLocalStreamStarted() {
     streamsStarted++;
-    lastLocalStreamCreatedTimeNanos = currentTimeNanos();
+    lastLocalStreamCreatedTimeNanos = timeProvider.currentTimeNanos();
   }
 
   /**
@@ -93,7 +88,7 @@ public final class TransportTracer {
    */
   public void reportRemoteStreamStarted() {
     streamsStarted++;
-    lastRemoteStreamCreatedTimeNanos = currentTimeNanos();
+    lastRemoteStreamCreatedTimeNanos = timeProvider.currentTimeNanos();
   }
 
   /**
@@ -115,7 +110,7 @@ public final class TransportTracer {
       return;
     }
     messagesSent += numMessages;
-    lastMessageSentTimeNanos = currentTimeNanos();
+    lastMessageSentTimeNanos = timeProvider.currentTimeNanos();
   }
 
   /**
@@ -123,7 +118,7 @@ public final class TransportTracer {
    */
   public void reportMessageReceived() {
     messagesReceived.add(1);
-    lastMessageReceivedTimeNanos = currentTimeNanos();
+    lastMessageReceivedTimeNanos = timeProvider.currentTimeNanos();
   }
 
   /**
@@ -159,20 +154,6 @@ public final class TransportTracer {
    */
   public interface FlowControlReader {
     FlowControlWindows read();
-  }
-
-  private long currentTimeNanos() {
-    return TimeUnit.MILLISECONDS.toNanos(timeProvider.currentTimeMillis());
-  }
-
-  /**
-   * Time source representing the current system time in millis. Used to inject a fake clock
-   * into unit tests.
-   */
-  @VisibleForTesting
-  public interface TimeProvider {
-    /** Returns the current milli time. */
-    long currentTimeMillis();
   }
 
   public static final class Factory {
