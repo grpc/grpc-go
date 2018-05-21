@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 import com.google.auth.Credentials;
 import com.google.auth.RequestMetadataCallback;
 import com.google.auth.oauth2.AccessToken;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.common.collect.Iterables;
@@ -254,10 +255,14 @@ public class GoogleAuthLibraryCallCredentialsTest {
         return token;
       }
     };
+    // Security level should not impact non-GoogleCredentials
+    Attributes securityNone = attrs.toBuilder()
+        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
+        .build();
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(method, securityNone, executor, applier);
     assertEquals(1, runPendingRunnables());
 
     verify(applier).apply(headersCaptor.capture());
@@ -265,6 +270,45 @@ public class GoogleAuthLibraryCallCredentialsTest {
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);
     assertArrayEquals(new String[]{"Bearer allyourbase"},
         Iterables.toArray(authorization, String.class));
+  }
+
+  @Test
+  public void googleCredential_privacyAndIntegrityAllowed() {
+    final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
+    final Credentials credentials = GoogleCredentials.create(token);
+    Attributes privacy = attrs.toBuilder()
+        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+        .build();
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, privacy, executor, applier);
+    runPendingRunnables();
+
+    verify(applier).apply(headersCaptor.capture());
+    Metadata headers = headersCaptor.getValue();
+    Iterable<String> authorization = headers.getAll(AUTHORIZATION);
+    assertArrayEquals(new String[]{"Bearer allyourbase"},
+        Iterables.toArray(authorization, String.class));
+  }
+
+  @Test
+  public void googleCredential_integrityDenied() {
+    final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
+    final Credentials credentials = GoogleCredentials.create(token);
+    // Anything less than PRIVACY_AND_INTEGRITY should fail
+    Attributes integrity = attrs.toBuilder()
+        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.INTEGRITY)
+        .build();
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, integrity, executor, applier);
+    runPendingRunnables();
+
+    verify(applier).fail(statusCaptor.capture());
+    Status status = statusCaptor.getValue();
+    assertEquals(Status.Code.UNAUTHENTICATED, status.getCode());
   }
 
   @Test
