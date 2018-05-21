@@ -59,15 +59,15 @@ func printServerConfig(config *testpb.ServerConfig) {
 	//     will always start sync server
 	// - async server threads
 	// - core list
-	grpclog.Printf(" * server type: %v (ignored, always starts sync server)", config.ServerType)
-	grpclog.Printf(" * async server threads: %v (ignored)", config.AsyncServerThreads)
+	grpclog.Infof(" * server type: %v (ignored, always starts sync server)", config.ServerType)
+	grpclog.Infof(" * async server threads: %v (ignored)", config.AsyncServerThreads)
 	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
-	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
+	grpclog.Infof(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Printf(" - security params: %v", config.SecurityParams)
-	grpclog.Printf(" - core limit: %v", config.CoreLimit)
-	grpclog.Printf(" - port: %v", config.Port)
-	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
+	grpclog.Infof(" - security params: %v", config.SecurityParams)
+	grpclog.Infof(" - core limit: %v", config.CoreLimit)
+	grpclog.Infof(" - port: %v", config.Port)
+	grpclog.Infof(" - payload config: %v", config.PayloadConfig)
 }
 
 func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
@@ -112,7 +112,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	if port == 0 {
 		port = serverPort
 	}
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
@@ -147,7 +147,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}, opts...)
 	}
 
-	grpclog.Printf("benchmark server listening at %v", addr)
+	grpclog.Infof("benchmark server listening at %v", addr)
 	addrSplitted := strings.Split(addr, ":")
 	p, err := strconv.Atoi(addrSplitted[len(addrSplitted)-1])
 	if err != nil {

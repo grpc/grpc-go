@@ -23,47 +23,47 @@ package service
 import (
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/channelz"
-	pb "google.golang.org/grpc/channelz/service_proto"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
-func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
-	var opts []*pb.SocketOption
+func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
+	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionLinger{
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionLinger{
 			Active:   skopts.Linger.Onoff != 0,
 			Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
 		})
 		if err == nil {
-			opts = append(opts, &pb.SocketOption{
+			opts = append(opts, &channelzpb.SocketOption{
 				Name:       "SO_LINGER",
 				Additional: additional,
 			})
 		}
 	}
 	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
 			Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
 		})
 		if err == nil {
-			opts = append(opts, &pb.SocketOption{
+			opts = append(opts, &channelzpb.SocketOption{
 				Name:       "SO_RCVTIMEO",
 				Additional: additional,
 			})
 		}
 	}
 	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTimeout{
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
 			Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
 		})
 		if err == nil {
-			opts = append(opts, &pb.SocketOption{
+			opts = append(opts, &channelzpb.SocketOption{
 				Name:       "SO_SNDTIMEO",
 				Additional: additional,
 			})
 		}
 	}
 	if skopts.TCPInfo != nil {
-		additional, err := ptypes.MarshalAny(&pb.SocketOptionTcpInfo{
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTcpInfo{
 			TcpiState:       uint32(skopts.TCPInfo.State),
 			TcpiCaState:     uint32(skopts.TCPInfo.Ca_state),
 			TcpiRetransmits: uint32(skopts.TCPInfo.Retransmits),
@@ -95,7 +95,7 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*pb.SocketOption {
 			TcpiReordering:   skopts.TCPInfo.Reordering,
 		})
 		if err == nil {
-			opts = append(opts, &pb.SocketOption{
+			opts = append(opts, &channelzpb.SocketOption{
 				Name:       "TCP_INFO",
 				Additional: additional,
 			})

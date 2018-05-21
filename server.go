@@ -226,7 +226,9 @@ func RPCDecompressor(dc Decompressor) ServerOption {
 }
 
 // MaxMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
-// If this is not set, gRPC uses the default limit. Deprecated: use MaxRecvMsgSize instead.
+// If this is not set, gRPC uses the default limit.
+//
+// Deprecated: use MaxRecvMsgSize instead.
 func MaxMsgSize(m int) ServerOption {
 	return MaxRecvMsgSize(m)
 }
@@ -826,25 +828,24 @@ func (s *Server) incrCallsFailed() {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	var (
-		outPayload *stats.OutPayload
-	)
-	if s.opts.statsHandler != nil {
-		outPayload = &stats.OutPayload{}
-	}
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, outPayload, comp)
+	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
 	}
-	if len(data) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), s.opts.maxSendMessageSize)
+	compData, err := compress(data, cp, comp)
+	if err != nil {
+		grpclog.Errorln("grpc: server failed to compress response: ", err)
+		return err
 	}
-	opts.IsCompressed = cp != nil || comp != nil
-	err = t.Write(stream, data, opts)
-	if err == nil && outPayload != nil {
-		outPayload.SentTime = time.Now()
-		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload)
+	hdr, payload := msgHeader(data, compData)
+	// TODO(dfawley): should we be checking len(data) instead?
+	if len(payload) > s.opts.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
+	}
+	err = t.Write(stream, hdr, payload, opts)
+	if err == nil && s.opts.statsHandler != nil {
+		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
 	}
 	return err
 }
@@ -926,7 +927,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 	}
 
-	isCompressed, req, err := recvMsg(stream, s.opts.maxReceiveMessageSize)
+	p := &parser{r: stream}
+	pf, req, err := p.recvMsg(s.opts.maxReceiveMessageSize)
 	if err == io.EOF {
 		// The entire stream is done (for unary RPC only).
 		return err
@@ -956,6 +958,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if channelz.IsOn() {
 		t.IncrMsgRecv()
 	}
+	if st := checkRecvPayload(pf, stream.RecvCompress(), dc != nil || decomp != nil); st != nil {
+		if e := t.WriteStatus(stream, st); e != nil {
+			grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
+		}
+		return st.Err()
+	}
 	var inPayload *stats.InPayload
 	if sh != nil {
 		inPayload = &stats.InPayload{
@@ -966,10 +974,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if inPayload != nil {
 			inPayload.WireLength = len(req)
 		}
-		if isCompressed {
-			if st := checkRecvPayload(stream.RecvCompress(), dc != nil || decomp != nil); st != nil {
-				return st.Err()
-			}
+		if pf == compressionMade {
 			var err error
 			if dc != nil {
 				req, err = dc.Do(bytes.NewReader(req))
@@ -983,11 +988,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					return status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 				}
 			}
-			if len(req) > s.opts.maxReceiveMessageSize {
-				// TODO: Revisit the error code. Currently keep it consistent with
-				// java implementation.
-				return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
-			}
+		}
+		if len(req) > s.opts.maxReceiveMessageSize {
+			// TODO: Revisit the error code. Currently keep it consistent with
+			// java implementation.
+			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 		}
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
@@ -1098,6 +1103,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ctx:   ctx,
 		t:     t,
 		s:     stream,
+		p:     &parser{r: stream},
 		codec: s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,

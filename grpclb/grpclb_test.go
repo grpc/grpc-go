@@ -16,8 +16,8 @@
  *
  */
 
-//go:generate protoc --go_out=plugins=:$GOPATH grpc_lb_v1/messages/messages.proto
-//go:generate protoc --go_out=plugins=grpc:$GOPATH grpc_lb_v1/service/service.proto
+//go:generate protoc --go_out=plugins=:$GOPATH/src grpc_lb_v1/messages/messages.proto
+//go:generate protoc --go_out=plugins=grpc:$GOPATH/src grpc_lb_v1/service/service.proto
 
 // Package grpclb_test is currently used only for grpclb testing.
 package grpclb_test
@@ -49,8 +49,6 @@ import (
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/test/leakcheck"
-
-	_ "google.golang.org/grpc/grpclog/glogger"
 )
 
 var (
@@ -847,7 +845,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		for i := 0; i < countRPC-1; i++ {
-			grpc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil, cc)
+			cc.Invoke(context.Background(), failtosendURI, &testpb.Empty{}, nil)
 		}
 	})
 
@@ -968,7 +966,7 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 			}
 		}
 		for i := 0; i < countRPC-1; i++ {
-			grpc.NewClientStream(context.Background(), &grpc.StreamDesc{}, cc, failtosendURI)
+			cc.NewStream(context.Background(), &grpc.StreamDesc{}, failtosendURI)
 		}
 	})
 

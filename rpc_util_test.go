@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"math"
 	"reflect"
 	"testing"
 
@@ -44,26 +45,85 @@ func (f fullReader) Read(p []byte) (int, error) {
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
 
+func TestSimpleParsing(t *testing.T) {
+	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
+	for _, test := range []struct {
+		// input
+		p []byte
+		// outputs
+		err error
+		b   []byte
+		pt  payloadFormat
+	}{
+		{nil, io.EOF, nil, compressionNone},
+		{[]byte{0, 0, 0, 0, 0}, nil, nil, compressionNone},
+		{[]byte{0, 0, 0, 0, 1, 'a'}, nil, []byte{'a'}, compressionNone},
+		{[]byte{1, 0}, io.ErrUnexpectedEOF, nil, compressionNone},
+		{[]byte{0, 0, 0, 0, 10, 'a'}, io.ErrUnexpectedEOF, nil, compressionNone},
+		// Check that messages with length >= 2^24 are parsed.
+		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
+	} {
+		buf := fullReader{bytes.NewReader(test.p)}
+		parser := &parser{r: buf}
+		pt, b, err := parser.recvMsg(math.MaxInt32)
+		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
+			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
+		}
+	}
+}
+
+func TestMultipleParsing(t *testing.T) {
+	// Set a byte stream consists of 3 messages with their headers.
+	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
+	b := fullReader{bytes.NewReader(p)}
+	parser := &parser{r: b}
+
+	wantRecvs := []struct {
+		pt   payloadFormat
+		data []byte
+	}{
+		{compressionNone, []byte("a")},
+		{compressionNone, []byte("bc")},
+		{compressionNone, []byte("d")},
+	}
+	for i, want := range wantRecvs {
+		pt, data, err := parser.recvMsg(math.MaxInt32)
+		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
+			t.Fatalf("after %d calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, <nil>",
+				i, p, pt, data, err, want.pt, want.data)
+		}
+	}
+
+	pt, data, err := parser.recvMsg(math.MaxInt32)
+	if err != io.EOF {
+		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant _, _, %v",
+			len(wantRecvs), p, pt, data, err, io.EOF)
+	}
+}
+
 func TestEncode(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		msg proto.Message
-		cp  Compressor
 		// outputs
+		hdr  []byte
 		data []byte
 		err  error
 	}{
-		{nil, nil, []byte{}, nil},
+		{nil, []byte{0, 0, 0, 0, 0}, []byte{}, nil},
 	} {
-		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg, nil, nil, nil)
+		data, err := encode(encoding.GetCodec(protoenc.Name), test.msg)
 		if err != test.err || !bytes.Equal(data, test.data) {
-			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, data, err, test.data, test.err)
+			t.Errorf("encode(_, %v) = %v, %v; want %v, %v", test.msg, data, err, test.data, test.err)
+			continue
+		}
+		if hdr, _ := msgHeader(data, nil); !bytes.Equal(hdr, test.hdr) {
+			t.Errorf("msgHeader(%v, false) = %v; want %v", data, hdr, test.hdr)
 		}
 	}
 }
 
 func TestCompress(t *testing.T) {
-
 	bestCompressor, err := NewGZIPCompressorWithLevel(gzip.BestCompression)
 	if err != nil {
 		t.Fatalf("Could not initialize gzip compressor with best compression.")
@@ -156,15 +216,12 @@ func TestParseDialTarget(t *testing.T) {
 func bmEncode(b *testing.B, mSize int) {
 	cdc := encoding.GetCodec(protoenc.Name)
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encodeData, _ := encode(cdc, msg, nil, nil, nil)
-	// 5 bytes of gRPC-specific message header
-	// is added to the message before it is written
-	// to the wire.
-	encodedSz := int64(5 + len(encodeData))
+	encodeData, _ := encode(cdc, msg)
+	encodedSz := int64(len(encodeData))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(cdc, msg, nil, nil, nil)
+		encode(cdc, msg)
 	}
 	b.SetBytes(encodedSz)
 }

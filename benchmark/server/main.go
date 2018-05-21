@@ -39,18 +39,18 @@ func main() {
 		if err != nil {
 			grpclog.Fatalf("Failed to listen: %v", err)
 		}
-		grpclog.Println("Server profiling address: ", lis.Addr().String())
+		grpclog.Infoln("Server profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
 			grpclog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	addr := lis.Addr().String()
 	stopper := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis}) // listen on all interfaces
-	grpclog.Println("Server Address: ", addr)
+	grpclog.Infoln("Server Address: ", addr)
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()
 }

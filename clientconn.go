@@ -108,9 +108,10 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder  resolver.Builder
-	waitForHandshake bool
-	channelzParentID int64
+	resolverBuilder      resolver.Builder
+	waitForHandshake     bool
+	channelzParentID     int64
+	disableServiceConfig bool
 }
 
 const (
@@ -168,7 +169,9 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	}
 }
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
+//
+// Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
 func WithMaxMsgSize(s int) DialOption {
 	return WithDefaultCallOptions(MaxCallRecvMsgSize(s))
 }
@@ -251,7 +254,8 @@ func withResolverBuilder(b resolver.Builder) DialOption {
 }
 
 // WithServiceConfig returns a DialOption which has a channel to read the service configuration.
-// DEPRECATED: service config should be received through name resolver, as specified here.
+//
+// Deprecated: service config should be received through name resolver, as specified here.
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
 func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	return func(o *dialOptions) {
@@ -322,6 +326,7 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 
 // WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn
 // initially. This is valid if and only if WithBlock() is present.
+//
 // Deprecated: use DialContext and context.WithTimeout instead.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {
@@ -409,6 +414,15 @@ func WithAuthority(a string) DialOption {
 func WithChannelzParentID(id int64) DialOption {
 	return func(o *dialOptions) {
 		o.channelzParentID = id
+	}
+}
+
+// WithDisableServiceConfig returns a DialOption that causes grpc to ignore any
+// service config provided by the resolver and provides a hint to the resolver
+// to not fetch service configs.
+func WithDisableServiceConfig() DialOption {
+	return func(o *dialOptions) {
+		o.disableServiceConfig = true
 	}
 }
 
@@ -998,6 +1012,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
+	if cc.dopts.disableServiceConfig {
+		return nil
+	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
 		return err

@@ -28,6 +28,10 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
+var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
+	e.SetMaxDynamicTableSizeLimit(v)
+}
+
 type itemNode struct {
 	it   interface{}
 	next *itemNode
@@ -361,44 +365,37 @@ func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimato
 const minBatchSize = 1000
 
 // run should be run in a separate goroutine.
-func (l *loopyWriter) run() {
-	var (
-		it      interface{}
-		err     error
-		isEmpty bool
-	)
-	defer func() {
-		errorf("transport: loopyWriter.run returning. Err: %v", err)
-	}()
+func (l *loopyWriter) run() error {
 	for {
-		it, err = l.cbuf.get(true)
+		it, err := l.cbuf.get(true)
 		if err != nil {
-			return
+			return err
 		}
 		if err = l.handle(it); err != nil {
-			return
+			return err
 		}
 		if _, err = l.processData(); err != nil {
-			return
+			return err
 		}
 		gosched := true
 	hasdata:
 		for {
-			it, err = l.cbuf.get(false)
+			it, err := l.cbuf.get(false)
 			if err != nil {
-				return
+				return err
 			}
 			if it != nil {
 				if err = l.handle(it); err != nil {
-					return
+					return err
 				}
 				if _, err = l.processData(); err != nil {
-					return
+					return err
 				}
 				continue hasdata
 			}
-			if isEmpty, err = l.processData(); err != nil {
-				return
+			isEmpty, err := l.processData()
+			if err != nil {
+				return err
 			}
 			if !isEmpty {
 				continue hasdata
@@ -664,6 +661,8 @@ func (l *loopyWriter) applySettings(ss []http2.Setting) error {
 					}
 				}
 			}
+		case http2.SettingHeaderTableSize:
+			updateHeaderTblSize(l.hEnc, s.Val)
 		}
 	}
 	return nil

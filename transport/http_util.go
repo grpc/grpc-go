@@ -131,6 +131,7 @@ func isReservedHeader(hdr string) bool {
 	}
 	switch hdr {
 	case "content-type",
+		"user-agent",
 		"grpc-message-type",
 		"grpc-encoding",
 		"grpc-message",
@@ -144,11 +145,11 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-// isWhitelistedPseudoHeader checks whether hdr belongs to HTTP2 pseudoheaders
-// that should be propagated into metadata visible to users.
-func isWhitelistedPseudoHeader(hdr string) bool {
+// isWhitelistedHeader checks whether hdr should be propagated
+// into metadata visible to users.
+func isWhitelistedHeader(hdr string) bool {
 	switch hdr {
-	case ":authority":
+	case ":authority", "user-agent":
 		return true
 	default:
 		return false
@@ -339,7 +340,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		d.statsTrace = v
 		d.addMetadata(f.Name, string(v))
 	default:
-		if isReservedHeader(f.Name) && !isWhitelistedPseudoHeader(f.Name) {
+		if isReservedHeader(f.Name) && !isWhitelistedHeader(f.Name) {
 			break
 		}
 		v, err := decodeMetadataHeader(f.Name, f.Value)

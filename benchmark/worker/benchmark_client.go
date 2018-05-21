@@ -81,20 +81,20 @@ func printClientConfig(config *testpb.ClientConfig) {
 	//     will always create sync client
 	// - async client threads.
 	// - core list
-	grpclog.Printf(" * client type: %v (ignored, always creates sync client)", config.ClientType)
-	grpclog.Printf(" * async client threads: %v (ignored)", config.AsyncClientThreads)
+	grpclog.Infof(" * client type: %v (ignored, always creates sync client)", config.ClientType)
+	grpclog.Infof(" * async client threads: %v (ignored)", config.AsyncClientThreads)
 	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
-	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
+	grpclog.Infof(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Printf(" - security params: %v", config.SecurityParams)
-	grpclog.Printf(" - core limit: %v", config.CoreLimit)
-	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
-	grpclog.Printf(" - rpcs per chann: %v", config.OutstandingRpcsPerChannel)
-	grpclog.Printf(" - channel number: %v", config.ClientChannels)
-	grpclog.Printf(" - load params: %v", config.LoadParams)
-	grpclog.Printf(" - rpc type: %v", config.RpcType)
-	grpclog.Printf(" - histogram params: %v", config.HistogramParams)
-	grpclog.Printf(" - server targets: %v", config.ServerTargets)
+	grpclog.Infof(" - security params: %v", config.SecurityParams)
+	grpclog.Infof(" - core limit: %v", config.CoreLimit)
+	grpclog.Infof(" - payload config: %v", config.PayloadConfig)
+	grpclog.Infof(" - rpcs per chann: %v", config.OutstandingRpcsPerChannel)
+	grpclog.Infof(" - channel number: %v", config.ClientChannels)
+	grpclog.Infof(" - load params: %v", config.LoadParams)
+	grpclog.Infof(" - rpc type: %v", config.RpcType)
+	grpclog.Infof(" - histogram params: %v", config.HistogramParams)
+	grpclog.Infof(" - server targets: %v", config.ServerTargets)
 }
 
 func setupClientEnv(config *testpb.ClientConfig) {

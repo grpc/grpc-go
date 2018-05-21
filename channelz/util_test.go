@@ -31,24 +31,6 @@ import (
 	"google.golang.org/grpc/channelz"
 )
 
-func startServer(ln net.Listener) chan struct{} {
-	c := make(chan struct{})
-	go func() {
-		for {
-			_, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			select {
-			case <-c:
-				return
-			default:
-			}
-		}
-	}()
-	return c
-}
-
 func TestGetSocketOpt(t *testing.T) {
 	network, addr := "tcp", ":0"
 	ln, err := net.Listen(network, addr)
@@ -56,8 +38,9 @@ func TestGetSocketOpt(t *testing.T) {
 		t.Fatalf("net.Listen(%s,%s) failed with err: %v", network, addr, err)
 	}
 	defer ln.Close()
-	done := startServer(ln)
-	defer close(done)
+	go func() {
+		ln.Accept()
+	}()
 	conn, _ := net.Dial(network, ln.Addr().String())
 	defer conn.Close()
 	tcpc := conn.(*net.TCPConn)

@@ -90,6 +90,8 @@ type Address struct {
 // BuildOption includes additional information for the builder to create
 // the resolver.
 type BuildOption struct {
+	// DisableServiceConfig indicates whether resolver should fetch service config data.
+	DisableServiceConfig bool
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates

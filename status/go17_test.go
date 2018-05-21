@@ -1,4 +1,4 @@
-// +build !darwin,!dragonfly,!freebsd,!linux,!netbsd,!openbsd,!solaris
+// +build go1.7
 
 /*
  *
@@ -18,13 +18,27 @@
  *
  */
 
-package service
+package status
 
 import (
-	"google.golang.org/grpc/channelz"
-	channelzpb "google.golang.org/grpc/channelz/service_proto"
+	"context"
+	"testing"
+
+	"google.golang.org/grpc/codes"
 )
 
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
-	return nil
+func TestFromStdContextError(t *testing.T) {
+	testCases := []struct {
+		in   error
+		want *Status
+	}{
+		{in: context.DeadlineExceeded, want: New(codes.DeadlineExceeded, context.DeadlineExceeded.Error())},
+		{in: context.Canceled, want: New(codes.Canceled, context.Canceled.Error())},
+	}
+	for _, tc := range testCases {
+		got := FromContextError(tc.in)
+		if got.Code() != tc.want.Code() || got.Message() != tc.want.Message() {
+			t.Errorf("FromContextError(%v) = %v; want %v", tc.in, got, tc.want)
+		}
+	}
 }

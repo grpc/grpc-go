@@ -1,5 +1,3 @@
-// +build !darwin,!dragonfly,!freebsd,!linux,!netbsd,!openbsd,!solaris
-
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -18,13 +16,7 @@
  *
  */
 
-package service
+package grpc
 
-import (
-	"google.golang.org/grpc/channelz"
-	channelzpb "google.golang.org/grpc/channelz/service_proto"
-)
-
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
-	return nil
-}
+// Version is the current grpc version.
+const Version = "1.13.0-dev"

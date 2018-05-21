@@ -66,16 +66,17 @@ type testStreamHandler struct {
 }
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
+	p := &parser{r: s}
 	for {
-		isCompressed, req, err := recvMsg(s, math.MaxInt32)
+		pf, req, err := p.recvMsg(math.MaxInt32)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return
 		}
-		if isCompressed {
-			t.Errorf("Received compressed message want non-compressed message")
+		if pf != compressionNone {
+			t.Errorf("Received the mistaken message format %d, want %d", pf, compressionNone)
 			return
 		}
 		var v string
@@ -104,12 +105,13 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	data, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
+	data, err := encode(testCodec{}, &expectedResponse)
 	if err != nil {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
 	}
-	h.t.Write(s, data, &transport.Options{})
+	hdr, payload := msgHeader(data, nil)
+	h.t.Write(s, hdr, payload, &transport.Options{})
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 

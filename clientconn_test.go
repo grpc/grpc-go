@@ -333,7 +333,7 @@ func TestConnectivityStates(t *testing.T) {
 
 }
 
-func TestDialTimeout(t *testing.T) {
+func TestWithTimeout(t *testing.T) {
 	defer leakcheck.Check(t)
 	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
 	if err == nil {
@@ -344,13 +344,15 @@ func TestDialTimeout(t *testing.T) {
 	}
 }
 
-func TestTLSDialTimeout(t *testing.T) {
+func TestWithTransportCredentialsTLS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
 	defer leakcheck.Check(t)
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock())
+	conn, err := DialContext(ctx, "passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithBlock())
 	if err == nil {
 		conn.Close()
 	}
@@ -642,5 +644,34 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	v := cc.mkp.Time
 	if v < 100*time.Millisecond {
 		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	}
+}
+
+func TestDisableServiceConfigOption(t *testing.T) {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	addr := r.Scheme() + ":///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig())
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`)
+	time.Sleep(1 * time.Second)
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady != nil {
+		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %v", m)
 	}
 }
