@@ -24,29 +24,39 @@ import io.grpc.BinaryLogProvider.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
-import io.grpc.services.CensusBinaryLogProvider;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /**
  * Tests for {@link CensusBinaryLogProvider}.
  */
 @RunWith(JUnit4.class)
 public class CensusBinaryLogProviderTest {
+  @Mock
+  private BinaryLogSink sink;
+
+  public CensusBinaryLogProviderTest() {
+    MockitoAnnotations.initMocks(this);
+  }
+
   @Test
-  public void serverCallIdFromCensus() {
+  public void serverCallIdFromCensus() throws Exception {
     final MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
     Context context = Context.current().withValue(CONTEXT_SPAN_KEY, mockableSpan);
-    context.run(new Runnable() {
+    context.call(new Callable<Void>() {
       @Override
-      public void run() {
-        CallId callId = new CensusBinaryLogProvider().getServerCallId();
+      public Void call() throws Exception {
+        CallId callId = new CensusBinaryLogProvider(sink, "*").getServerCallId();
         assertThat(callId.hi).isEqualTo(0);
         assertThat(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong())
             .isEqualTo(callId.lo);
+        return null;
       }
     });
   }
@@ -54,7 +64,7 @@ public class CensusBinaryLogProviderTest {
   @Test
   public void clientCallId() throws Exception {
     CallId expected = new CallId(1234, 5677);
-    CallId actual = new CensusBinaryLogProvider()
+    CallId actual = new CensusBinaryLogProvider(sink, "*")
         .getClientCallId(
             CallOptions.DEFAULT.withOption(
                 BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY,

@@ -16,12 +16,13 @@
 
 package io.grpc.services;
 
+import com.google.common.base.Preconditions;
 import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.ClientInterceptor;
 import io.grpc.ServerInterceptor;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -31,22 +32,29 @@ import javax.annotation.Nullable;
 class BinaryLogProviderImpl extends BinaryLogProvider {
   private static final Logger logger = Logger.getLogger(BinaryLogProviderImpl.class.getName());
   private final BinlogHelper.Factory factory;
+  private final BinaryLogSink sink;
   private final AtomicLong counter = new AtomicLong();
 
-  public BinaryLogProviderImpl() {
-    this(BinaryLogSinkProvider.provider(), System.getenv("GRPC_BINARY_LOG_CONFIG"));
+  public BinaryLogProviderImpl() throws IOException {
+    this(new TempFileSink(), System.getenv("GRPC_BINARY_LOG_CONFIG"));
   }
 
-  BinaryLogProviderImpl(BinaryLogSink sink, String configStr) {
-    BinlogHelper.Factory factory = null;
+  /**
+   * Creates an instance.
+   * @param sink ownership is transferred to this class.
+   * @param configStr config string to parse to determine logged methods and msg size limits.
+   * @throws IOException if initialization failed.
+   */
+  BinaryLogProviderImpl(BinaryLogSink sink, String configStr) throws IOException {
+    this.sink = Preconditions.checkNotNull(sink);
     try {
       factory = new BinlogHelper.FactoryImpl(sink, configStr);
     } catch (RuntimeException e) {
-      logger.log(Level.SEVERE, "Caught exception, binary log will be disabled", e);
-    } catch (Error err) {
-      logger.log(Level.SEVERE, "Caught exception, binary log will be disabled", err);
+      sink.close();
+      // parsing the conf string may throw if it is blank or contains errors
+      throw new IOException(
+          "Can not initialize. The env variable GRPC_BINARY_LOG_CONFIG must be valid.", e);
     }
-    this.factory = factory;
   }
 
   @Nullable
@@ -68,6 +76,11 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
       return null;
     }
     return helperForMethod.getClientInterceptor(getClientCallId(callOptions));
+  }
+
+  @Override
+  public void close() throws IOException {
+    sink.close();
   }
 
   protected CallId getServerCallId() {

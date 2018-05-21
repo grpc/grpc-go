@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, gRPC Authors All rights reserved.
+ * Copyright 2018 The gRPC Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package io.grpc.services;
 
 import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import io.grpc.CallOptions;
 import org.junit.Test;
@@ -41,5 +43,14 @@ public class BinaryLogProviderImplTest {
     BinaryLogProviderImpl binlog = new BinaryLogProviderImpl(sink, "");
     assertNull(binlog.getServerInterceptor("package.service/method"));
     assertNull(binlog.getClientInterceptor("package.service/method", CallOptions.DEFAULT));
+  }
+
+  @Test
+  public void closeTest() throws Exception {
+    BinaryLogSink sink = mock(BinaryLogSink.class);
+    BinaryLogProviderImpl log = new BinaryLogProviderImpl(sink, "*");
+    verify(sink, never()).close();
+    log.close();
+    verify(sink).close();
   }
 }

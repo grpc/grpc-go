@@ -20,9 +20,19 @@ import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.Tracing;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 final class CensusBinaryLogProvider extends BinaryLogProviderImpl {
+
+  public CensusBinaryLogProvider() throws IOException {
+    super();
+  }
+
+  CensusBinaryLogProvider(BinaryLogSink sink, String configStr) throws IOException {
+    super(sink, configStr);
+  }
+
   @Override
   protected CallId getServerCallId() {
     Span currentSpan = Tracing.getTracer().getCurrentSpan();

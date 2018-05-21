@@ -19,14 +19,15 @@ package io.grpc.services;
 import io.grpc.BinaryLog;
 import io.grpc.ExperimentalApi;
 import io.grpc.InternalBinaryLogs;
+import java.io.IOException;
 
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
 public final class BinaryLogs {
-  public static BinaryLog createBinaryLog() {
+  public static BinaryLog createBinaryLog() throws IOException {
     return InternalBinaryLogs.createBinaryLog(new BinaryLogProviderImpl());
   }
 
-  public static BinaryLog createCensusBinaryLog() {
+  public static BinaryLog createCensusBinaryLog() throws IOException {
     return InternalBinaryLogs.createBinaryLog(new CensusBinaryLogProvider());
   }
 

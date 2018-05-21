@@ -19,23 +19,9 @@ package io.grpc.services;
 import com.google.protobuf.MessageLite;
 import java.io.Closeable;
 
-abstract class BinaryLogSink implements Closeable {
+interface BinaryLogSink extends Closeable {
   /**
    * Writes the {@code message} to the destination.
    */
-  public abstract void write(MessageLite message);
-
-  /**
-   * Whether this provider is available for use, taking the current environment into consideration.
-   * If {@code false}, no other methods are safe to be called.
-   */
-  protected abstract boolean isAvailable();
-
-  /**
-   * A priority, from 0 to 10 that this provider should be used, taking the current environment into
-   * consideration. 5 should be considered the default, and then tweaked based on environment
-   * detection. A priority of 0 does not imply that the provider wouldn't work; just that it should
-   * be last in line.
-   */
-  protected abstract int priority();
+  void write(MessageLite message);
 }
