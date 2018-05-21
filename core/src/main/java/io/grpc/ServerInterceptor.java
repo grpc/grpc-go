@@ -42,6 +42,8 @@ public interface ServerInterceptor {
    * call} on another thread.
    *
    * @param call object to receive response messages
+   * @param headers which can contain extra call metadata from {@link ClientCall#start},
+   *                e.g. authentication credentials.
    * @param next next processor in the interceptor chain
    * @return listener for processing incoming messages for {@code call}, never {@code null}.
    */
