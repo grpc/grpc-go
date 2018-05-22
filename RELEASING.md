@@ -400,6 +400,9 @@ Finally, document and publicize the release.
 2. Post a release announcement to [grpc-io](https://groups.google.com/forum/#!forum/grpc-io)
    (`grpc-io@googlegroups.com`). The title should be something that clearly identifies
    the release (e.g.`GRPC-Java <tag> Released`).
+    1. Check if JCenter has picked up the new release (https://jcenter.bintray.com/io/grpc/)
+       and include its availability in the release announcement email. JCenter should mirror
+       everything on Maven Central, but users have reported delays.
 
 Update Hosted Javadoc
 ---------------------
