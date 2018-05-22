@@ -1,5 +1,3 @@
-// +build darwin dragonfly freebsd linux netbsd openbsd solaris
-
 /*
  *
  * Copyright 2018 gRPC authors.

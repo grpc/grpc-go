@@ -1,5 +1,4 @@
-// +build darwin dragonfly freebsd linux netbsd openbsd solaris
-// +build go1.9
+// +build !linux
 
 /*
  *
@@ -19,22 +18,13 @@
  *
  */
 
-package channelz
+package service
 
 import (
-	"syscall"
+	"google.golang.org/grpc/channelz"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
-// GetSocketOption gets the socket option info of the conn.
-func GetSocketOption(socket interface{}) *SocketOptionData {
-	c, ok := socket.(syscall.Conn)
-	if !ok {
-		return nil
-	}
-	data := &SocketOptionData{}
-	if rawConn, err := c.SyscallConn(); err == nil {
-		rawConn.Control(data.Getsockopt)
-		return data
-	}
+func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
 	return nil
 }

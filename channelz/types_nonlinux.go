@@ -1,4 +1,4 @@
-// +build !darwin,!dragonfly,!freebsd,!linux,!netbsd,!openbsd,!solaris !go1.9
+// +build !linux
 
 /*
  *
@@ -20,7 +20,13 @@
 
 package channelz
 
-// GetSocketOption gets the socket option info of the conn.
-func GetSocketOption(c interface{}) *SocketOptionData {
-	return nil
+// SocketOptionData defines the struct to hold socket option data, and related
+// getter function to obtain info from fd.
+// Windows OS doesn't support Socket Option
+type SocketOptionData struct {
 }
+
+// Getsockopt defines the function to get socket options requested by channelz.
+// It is to be passed to syscall.RawConn.Control().
+// Windows OS doesn't support Socket Option
+func (s *SocketOptionData) Getsockopt(fd uintptr) {}

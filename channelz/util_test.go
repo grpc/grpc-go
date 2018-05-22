@@ -1,4 +1,4 @@
-// +build darwin dragonfly freebsd linux netbsd openbsd solaris
+// +build linux
 // +build go1.10
 
 /*
