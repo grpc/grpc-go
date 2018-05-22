@@ -22,6 +22,7 @@ dependencies {
             project(':grpc-stub'),
             libraries.lang,
             libraries.protobuf
+    runtime project(':grpc-grpclb')
     testCompile libraries.guava,
                 libraries.guava_testlib,
                 libraries.junit,

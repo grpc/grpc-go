@@ -29,6 +29,7 @@ java_library(
         "src/main/java/io/grpc/alts/*.java",
     ]),
     visibility = ["//visibility:public"],
+    runtime_deps = ["//grpclb"],
     deps = [
         ":alts_internal",
         ":handshaker_java_grpc",
