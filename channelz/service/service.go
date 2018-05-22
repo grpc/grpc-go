@@ -135,15 +135,15 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 	return sc
 }
 
-func securityToProto(se credentials.SecurityValue) *channelzpb.Security {
+func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security {
 	switch v := se.(type) {
-	case *credentials.TLSSecurityValue:
+	case *credentials.TLSChannelzSecurityValue:
 		return &channelzpb.Security{Model: &channelzpb.Security_Tls_{Tls: &channelzpb.Security_Tls{
 			CipherSuite:       &channelzpb.Security_Tls_StandardName{StandardName: v.StandardName},
 			LocalCertificate:  v.LocalCertificate,
 			RemoteCertificate: v.RemoteCertificate,
 		}}}
-	case *credentials.OtherSecurityValue:
+	case *credentials.OtherChannelzSecurityValue:
 		otherSecurity := &channelzpb.Security_OtherSecurity{
 			Name: v.Name,
 		}

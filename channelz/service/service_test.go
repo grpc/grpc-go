@@ -101,7 +101,7 @@ type dummySocket struct {
 	SocketOptions                    *channelz.SocketOptionData
 	localAddr                        net.Addr
 	remoteAddr                       net.Addr
-	Security                         credentials.SecurityValue
+	Security                         credentials.ChannelzSecurityValue
 	remoteName                       string
 }
 
@@ -196,12 +196,12 @@ func protoToTime(protoTime *channelzpb.SocketOptionTimeout) *unix.Timeval {
 	return timeout
 }
 
-func protoToSecurity(protoSecurity *channelzpb.Security) credentials.SecurityValue {
+func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
 	switch v := protoSecurity.Model.(type) {
 	case *channelzpb.Security_Tls_:
-		return &credentials.TLSSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
+		return &credentials.TLSChannelzSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
 	case *channelzpb.Security_Other:
-		sv := &credentials.OtherSecurityValue{Name: v.Other.GetName()}
+		sv := &credentials.OtherChannelzSecurityValue{Name: v.Other.GetName()}
 		var x ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(v.Other.GetValue(), &x); err == nil {
 			sv.Value = x.Message
@@ -356,7 +356,7 @@ func (*OtherSecurityValue) ProtoMessage()    {}
 
 func init() {
 	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherSecurityValue")
+	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
 func TestGetTopChannels(t *testing.T) {
@@ -596,18 +596,18 @@ func TestGetSocket(t *testing.T) {
 			},
 		},
 		{
-			Security: &credentials.TLSSecurityValue{
+			Security: &credentials.TLSChannelzSecurityValue{
 				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
 			},
 		},
 		{
-			Security: &credentials.OtherSecurityValue{
+			Security: &credentials.OtherChannelzSecurityValue{
 				Name: "XXXX",
 			},
 		},
 		{
-			Security: &credentials.OtherSecurityValue{
+			Security: &credentials.OtherChannelzSecurityValue{
 				Name:  "YYYY",
 				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
 			},

@@ -119,9 +119,9 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
-// GetSecurityValue returns security info requested by channelz.
-func (t TLSInfo) GetSecurityValue() SecurityValue {
-	v := &TLSSecurityValue{
+// GetChannelzSecurityValue returns security info requested by channelz.
+func (t TLSInfo) GetChannelzSecurityValue() ChannelzSecurityValue {
+	v := &TLSChannelzSecurityValue{
 		StandardName: cipherSuiteLookup[t.State.CipherSuite],
 	}
 	// Currently there's no way to get LocalCertificate info from tls package.
@@ -232,34 +232,36 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportCredentials, error
 	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
 }
 
-// ExtraSecurityInfo defines the interface that security protocols should implement in order
-// to provide security info to channelz.
-type ExtraSecurityInfo interface {
-	GetSecurityValue() SecurityValue
+// ChannelzSecurityInfo defines the interface that security protocols should implement
+// in order to provide security info to channelz.
+type ChannelzSecurityInfo interface {
+	GetSecurityValue() ChannelzSecurityValue
 }
 
-// SecurityValue defines the interface that GetSecurityValue() return value should
-// satisfy. This interface should only be satisfied by *TLSSecurityValue and
-// *OtherSecurityValue.
-type SecurityValue interface {
-	isSecurityValue()
+// ChannelzSecurityValue defines the interface that GetSecurityValue() return value
+// should satisfy. This interface should only be satisfied by *TLSChannelzSecurityValue
+// and *OtherChannelzSecurityValue.
+type ChannelzSecurityValue interface {
+	isChannelzSecurityValue()
 }
 
-// TLSSecurityValue defines the struct that TLS protocol should return from GetSecurityValue(),
-// containing security info like cipher and certificate used.
-type TLSSecurityValue struct {
+// TLSChannelzSecurityValue defines the struct that TLS protocol should return
+// from GetSecurityValue(), containing security info like cipher and certificate used.
+type TLSChannelzSecurityValue struct {
 	StandardName      string
 	LocalCertificate  []byte
 	RemoteCertificate []byte
 }
 
-func (*TLSSecurityValue) isSecurityValue() {}
+func (*TLSChannelzSecurityValue) isChannelzSecurityValue() {}
 
-// OtherSecurityValue defines the struct that non-TLS protocol should return from
-// GetSecurityValue(), which contains protocol specific security info.
-type OtherSecurityValue struct {
+// OtherChannelzSecurityValue defines the struct that non-TLS protocol should return
+// from GetSecurityValue(), which contains protocol specific security info. Note
+// the Value field will be sent to users of channelz requesting channel info, and
+// thus sensitive info should better be avoided.
+type OtherChannelzSecurityValue struct {
 	Name  string
 	Value proto.Message
 }
 
-func (*OtherSecurityValue) isSecurityValue() {}
+func (*OtherChannelzSecurityValue) isChannelzSecurityValue() {}
