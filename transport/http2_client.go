@@ -1254,7 +1254,7 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 		RemoteAddr:                      t.remoteAddr,
 		// RemoteName :
 	}
-	if au, ok := t.authInfo.(credentials.ExtraSecurityInfo); ok {
+	if au, ok := t.authInfo.(credentials.ChannelzSecurityInfo); ok {
 		s.Security = au.GetSecurityValue()
 	}
 	t.czmu.RUnlock()

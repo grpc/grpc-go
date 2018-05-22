@@ -284,7 +284,7 @@ type SocketInternalMetric struct {
 	// the original target name.
 	RemoteName    string
 	SocketOptions *SocketOptionData
-	Security      credentials.SecurityValue
+	Security      credentials.ChannelzSecurityValue
 }
 
 // Socket is the interface that should be satisfied in order to be tracked by
