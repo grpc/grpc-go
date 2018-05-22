@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -125,18 +125,81 @@ func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
+// rpcStats is same as lbmpb.ClientStats, except that numCallsDropped is a map
+// instead of a slice of pointers.
+//
+// TODO: this struct was already defined in grpclb_picker.go. Try to merge these
+// two after moving grpclb to its own package (this package).
+type rpcStats struct {
+	numCallsStarted                        int64
+	numCallsFinished                       int64
+	numCallsFinishedWithClientFailedToSend int64
+	numCallsFinishedKnownReceived          int64
+
+	// map load_balance_token -> num_calls_dropped
+	numCallsDropped map[string]int64
+}
+
+func newRPCStats() *rpcStats {
+	return &rpcStats{
+		numCallsDropped: make(map[string]int64),
+	}
+}
+
+func (stats *rpcStats) merge(new *lbmpb.ClientStats) {
+	stats.numCallsStarted += new.NumCallsStarted
+	stats.numCallsFinished += new.NumCallsFinished
+	stats.numCallsFinishedWithClientFailedToSend += new.NumCallsFinishedWithClientFailedToSend
+	stats.numCallsFinishedKnownReceived += new.NumCallsFinishedKnownReceived
+	for _, perToken := range new.CallsFinishedWithDrop {
+		stats.numCallsDropped[perToken.LoadBalanceToken] += perToken.NumCalls
+	}
+}
+
+func mapsEqual(a, b map[string]int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v1 := range a {
+		if v2, ok := b[k]; !ok || v1 != v2 {
+			return false
+		}
+	}
+	return true
+}
+
+func (stats *rpcStats) equal(new *rpcStats) bool {
+	if stats.numCallsStarted != new.numCallsStarted {
+		return false
+	}
+	if stats.numCallsFinished != new.numCallsFinished {
+		return false
+	}
+	if stats.numCallsFinishedWithClientFailedToSend != new.numCallsFinishedWithClientFailedToSend {
+		return false
+	}
+	if stats.numCallsFinishedKnownReceived != new.numCallsFinishedKnownReceived {
+		return false
+	}
+	if !mapsEqual(stats.numCallsDropped, new.numCallsDropped) {
+		return false
+	}
+	return true
+}
+
 type remoteBalancer struct {
 	sls       chan *lbmpb.ServerList
 	statsDura time.Duration
 	done      chan struct{}
 	mu        sync.Mutex
-	stats     lbmpb.ClientStats
+	stats     *rpcStats
 }
 
 func newRemoteBalancer(intervals []time.Duration) *remoteBalancer {
 	return &remoteBalancer{
-		sls:  make(chan *lbmpb.ServerList, 1),
-		done: make(chan struct{}),
+		sls:   make(chan *lbmpb.ServerList, 1),
+		done:  make(chan struct{}),
+		stats: newRPCStats(),
 	}
 }
 
@@ -157,7 +220,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 	resp := &lbmpb.LoadBalanceResponse{
 		LoadBalanceResponseType: &lbmpb.LoadBalanceResponse_InitialResponse{
 			InitialResponse: &lbmpb.InitialLoadBalanceResponse{
-				ClientStatsReportInterval: &lbmpb.Duration{
+				ClientStatsReportInterval: &durationpb.Duration{
 					Seconds: int64(b.statsDura.Seconds()),
 					Nanos:   int32(b.statsDura.Nanoseconds() - int64(b.statsDura.Seconds())*1e9),
 				},
@@ -177,12 +240,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 				return
 			}
 			b.mu.Lock()
-			b.stats.NumCallsStarted += req.GetClientStats().NumCallsStarted
-			b.stats.NumCallsFinished += req.GetClientStats().NumCallsFinished
-			b.stats.NumCallsFinishedWithDropForRateLimiting += req.GetClientStats().NumCallsFinishedWithDropForRateLimiting
-			b.stats.NumCallsFinishedWithDropForLoadBalancing += req.GetClientStats().NumCallsFinishedWithDropForLoadBalancing
-			b.stats.NumCallsFinishedWithClientFailedToSend += req.GetClientStats().NumCallsFinishedWithClientFailedToSend
-			b.stats.NumCallsFinishedKnownReceived += req.GetClientStats().NumCallsFinishedKnownReceived
+			b.stats.merge(req.GetClientStats())
 			b.mu.Unlock()
 		}
 	}()
@@ -444,12 +502,12 @@ func TestDropRequest(t *testing.T) {
 	defer cleanup()
 	tss.ls.sls <- &lbmpb.ServerList{
 		Servers: []*lbmpb.Server{{
-			IpAddress:            tss.beIPs[0],
-			Port:                 int32(tss.bePorts[0]),
-			LoadBalanceToken:     lbToken,
-			DropForLoadBalancing: false,
+			IpAddress:        tss.beIPs[0],
+			Port:             int32(tss.bePorts[0]),
+			LoadBalanceToken: lbToken,
+			Drop:             false,
 		}, {
-			DropForLoadBalancing: true,
+			Drop: true,
 		}},
 	}
 	creds := serverNameCheckCreds{
@@ -697,14 +755,14 @@ func (failPreRPCCred) RequireTransportSecurity() bool {
 	return false
 }
 
-func checkStats(stats *lbmpb.ClientStats, expected *lbmpb.ClientStats) error {
-	if !proto.Equal(stats, expected) {
+func checkStats(stats, expected *rpcStats) error {
+	if !stats.equal(expected) {
 		return fmt.Errorf("stats not equal: got %+v, want %+v", stats, expected)
 	}
 	return nil
 }
 
-func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool, runRPCs func(*grpc.ClientConn)) lbmpb.ClientStats {
+func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rpcStats {
 	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
@@ -717,11 +775,10 @@ func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool
 	defer cleanup()
 	tss.ls.sls <- &lbmpb.ServerList{
 		Servers: []*lbmpb.Server{{
-			IpAddress:            tss.beIPs[0],
-			Port:                 int32(tss.bePorts[0]),
-			LoadBalanceToken:     lbToken,
-			DropForLoadBalancing: dropForLoadBalancing,
-			DropForRateLimiting:  dropForRateLimiting,
+			IpAddress:        tss.beIPs[0],
+			Port:             int32(tss.bePorts[0]),
+			LoadBalanceToken: lbToken,
+			Drop:             drop,
 		}},
 	}
 	tss.ls.statsDura = 100 * time.Millisecond
@@ -760,7 +817,7 @@ const (
 
 func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
@@ -771,22 +828,25 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:               int64(countRPC),
-		NumCallsFinished:              int64(countRPC),
-		NumCallsFinishedKnownReceived: int64(countRPC),
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:               int64(countRPC),
+		numCallsFinished:              int64(countRPC),
+		numCallsFinishedKnownReceived: int64(countRPC),
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
+func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 	defer leakcheck.Check(t)
 	c := 0
-	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, true, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		for {
 			c++
+			if c%100 == 0 {
+				fmt.Println(c)
+			}
 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 				if strings.Contains(err.Error(), dropErrDesc) {
 					break
@@ -798,39 +858,11 @@ func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                          int64(countRPC + c),
-		NumCallsFinished:                         int64(countRPC + c),
-		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
-		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
-	defer leakcheck.Check(t)
-	c := 0
-	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
-		for {
-			c++
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-				if strings.Contains(err.Error(), dropErrDesc) {
-					break
-				}
-			}
-		}
-		for i := 0; i < countRPC; i++ {
-			testC.EmptyCall(context.Background(), &testpb.Empty{})
-		}
-	})
-
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                         int64(countRPC + c),
-		NumCallsFinished:                        int64(countRPC + c),
-		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
-		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:                        int64(countRPC + c),
+		numCallsFinished:                       int64(countRPC + c),
+		numCallsFinishedWithClientFailedToSend: int64(c - 1),
+		numCallsDropped:                        map[string]int64{lbToken: int64(countRPC + 1)},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -838,7 +870,7 @@ func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
 
 func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
@@ -849,11 +881,11 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                        int64(countRPC),
-		NumCallsFinished:                       int64(countRPC),
-		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
-		NumCallsFinishedKnownReceived:          1,
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:                        int64(countRPC),
+		numCallsFinished:                       int64(countRPC),
+		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
+		numCallsFinishedKnownReceived:          1,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -861,7 +893,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 
 func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		stream, err := testC.FullDuplexCall(context.Background(), grpc.FailFast(false))
@@ -886,19 +918,19 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:               int64(countRPC),
-		NumCallsFinished:              int64(countRPC),
-		NumCallsFinishedKnownReceived: int64(countRPC),
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:               int64(countRPC),
+		numCallsFinished:              int64(countRPC),
+		numCallsFinishedKnownReceived: int64(countRPC),
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
+func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	defer leakcheck.Check(t)
 	c := 0
-	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, true, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		for {
 			c++
@@ -913,39 +945,11 @@ func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                          int64(countRPC + c),
-		NumCallsFinished:                         int64(countRPC + c),
-		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
-		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
-	defer leakcheck.Check(t)
-	c := 0
-	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
-		testC := testpb.NewTestServiceClient(cc)
-		for {
-			c++
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-				if strings.Contains(err.Error(), dropErrDesc) {
-					break
-				}
-			}
-		}
-		for i := 0; i < countRPC; i++ {
-			testC.FullDuplexCall(context.Background())
-		}
-	})
-
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                         int64(countRPC + c),
-		NumCallsFinished:                        int64(countRPC + c),
-		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
-		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:                        int64(countRPC + c),
+		numCallsFinished:                       int64(countRPC + c),
+		numCallsFinishedWithClientFailedToSend: int64(c - 1),
+		numCallsDropped:                        map[string]int64{lbToken: int64(countRPC + 1)},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -953,7 +957,7 @@ func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
 
 func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 	defer leakcheck.Check(t)
-	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
+	stats := runAndGetStats(t, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		stream, err := testC.FullDuplexCall(context.Background(), grpc.FailFast(false))
@@ -970,11 +974,11 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(&stats, &lbmpb.ClientStats{
-		NumCallsStarted:                        int64(countRPC),
-		NumCallsFinished:                       int64(countRPC),
-		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
-		NumCallsFinishedKnownReceived:          1,
+	if err := checkStats(stats, &rpcStats{
+		numCallsStarted:                        int64(countRPC),
+		numCallsFinished:                       int64(countRPC),
+		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
+		numCallsFinishedKnownReceived:          1,
 	}); err != nil {
 		t.Fatal(err)
 	}

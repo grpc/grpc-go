@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/channelz"
 
+	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
@@ -55,7 +56,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 
 	var backendAddrs []resolver.Address
 	for _, s := range l.Servers {
-		if s.DropForLoadBalancing || s.DropForRateLimiting {
+		if s.Drop {
 			continue
 		}
 
@@ -162,7 +163,7 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 		}
 		stats := lb.clientStats.toClientStats()
 		t := time.Now()
-		stats.Timestamp = &lbpb.Timestamp{
+		stats.Timestamp = &timestamppb.Timestamp{
 			Seconds: t.Unix(),
 			Nanos:   int32(t.Nanosecond()),
 		}
