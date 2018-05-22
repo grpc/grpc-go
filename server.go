@@ -481,8 +481,7 @@ type listenSocket struct {
 
 func (l *listenSocket) ChannelzMetric() *channelz.SocketInternalMetric {
 	return &channelz.SocketInternalMetric{
-		SocketOptions: channelz.GetSocketOption(l.Listener),
-		LocalAddr:     l.Listener.Addr(),
+		LocalAddr: l.Listener.Addr(),
 	}
 }
 
