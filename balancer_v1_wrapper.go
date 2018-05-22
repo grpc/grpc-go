@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	ibalancer "google.golang.org/grpc/internal/balancer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
@@ -55,7 +56,7 @@ func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConn, opts balancer.B
 		startCh:    make(chan struct{}),
 		conns:      make(map[resolver.Address]balancer.SubConn),
 		connSt:     make(map[balancer.SubConn]*scState),
-		csEvltr:    &connectivityStateEvaluator{},
+		csEvltr:    &ibalancer.ConnectivityStateEvaluator{},
 		state:      connectivity.Idle,
 	}
 	cc.UpdateBalancerState(connectivity.Idle, bw)
@@ -81,7 +82,7 @@ type balancerWrapper struct {
 	targetAddr string // Target without the scheme.
 
 	// To aggregate the connectivity state.
-	csEvltr *connectivityStateEvaluator
+	csEvltr *ibalancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
 	mu     sync.Mutex
@@ -248,7 +249,7 @@ func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s conne
 			scSt.down(errConnClosing)
 		}
 	}
-	sa := bw.csEvltr.recordTransition(oldS, s)
+	sa := bw.csEvltr.RecordTransition(oldS, s)
 	if bw.state != sa {
 		bw.state = sa
 	}
@@ -325,48 +326,4 @@ func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) 
 	}
 
 	return sc, done, nil
-}
-
-// connectivityStateEvaluator gets updated by addrConns when their
-// states transition, based on which it evaluates the state of
-// ClientConn.
-type connectivityStateEvaluator struct {
-	mu                  sync.Mutex
-	numReady            uint64 // Number of addrConns in ready state.
-	numConnecting       uint64 // Number of addrConns in connecting state.
-	numTransientFailure uint64 // Number of addrConns in transientFailure.
-}
-
-// recordTransition records state change happening in every subConn and based on
-// that it evaluates what aggregated state should be.
-// It can only transition between Ready, Connecting and TransientFailure. Other states,
-// Idle and Shutdown are transitioned into by ClientConn; in the beginning of the connection
-// before any subConn is created ClientConn is in idle state. In the end when ClientConn
-// closes it is in Shutdown state.
-// TODO Note that in later releases, a ClientConn with no activity will be put into an Idle state.
-func (cse *connectivityStateEvaluator) recordTransition(oldState, newState connectivity.State) connectivity.State {
-	cse.mu.Lock()
-	defer cse.mu.Unlock()
-
-	// Update counters.
-	for idx, state := range []connectivity.State{oldState, newState} {
-		updateVal := 2*uint64(idx) - 1 // -1 for oldState and +1 for new.
-		switch state {
-		case connectivity.Ready:
-			cse.numReady += updateVal
-		case connectivity.Connecting:
-			cse.numConnecting += updateVal
-		case connectivity.TransientFailure:
-			cse.numTransientFailure += updateVal
-		}
-	}
-
-	// Evaluate.
-	if cse.numReady > 0 {
-		return connectivity.Ready
-	}
-	if cse.numConnecting > 0 {
-		return connectivity.Connecting
-	}
-	return connectivity.TransientFailure
 }
