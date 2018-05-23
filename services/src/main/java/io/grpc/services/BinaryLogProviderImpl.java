@@ -23,14 +23,12 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ServerInterceptor;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
  * The default implementation of a {@link BinaryLogProvider}.
  */
 class BinaryLogProviderImpl extends BinaryLogProvider {
-  private static final Logger logger = Logger.getLogger(BinaryLogProviderImpl.class.getName());
   private final BinlogHelper.Factory factory;
   private final BinaryLogSink sink;
   private final AtomicLong counter = new AtomicLong();

@@ -73,6 +73,7 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
    * useful if the channel will soon be deregistered from the executor and used in a non-Netty
    * context.
    */
+  @SuppressWarnings("FutureReturnValueIgnored")
   public void notifyUnused() {
     channelUnused.setSuccess(null);
   }

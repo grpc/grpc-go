@@ -42,14 +42,14 @@ public class CallOptionsTest {
       = CallOptions.Key.createWithDefault("option1", "default");
   private static final CallOptions.Key<String> OPTION_2
       = CallOptions.Key.createWithDefault("option2", "default");
-  private String sampleAuthority = "authority";
-  private String sampleCompressor = "compressor";
-  private Deadline.Ticker ticker = new FakeTicker();
-  private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
-  private CallCredentials sampleCreds = mock(CallCredentials.class);
-  private ClientStreamTracer.Factory tracerFactory1 = new FakeTracerFactory("tracerFactory1");
-  private ClientStreamTracer.Factory tracerFactory2 = new FakeTracerFactory("tracerFactory2");
-  private CallOptions allSet = CallOptions.DEFAULT
+  private final String sampleAuthority = "authority";
+  private final String sampleCompressor = "compressor";
+  private final Deadline.Ticker ticker = new FakeTicker();
+  private final Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
+  private final CallCredentials sampleCreds = mock(CallCredentials.class);
+  private final ClientStreamTracer.Factory tracerFactory1 = new FakeTracerFactory("tracerFactory1");
+  private final ClientStreamTracer.Factory tracerFactory2 = new FakeTracerFactory("tracerFactory2");
+  private final CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
       .withCallCredentials(sampleCreds)
