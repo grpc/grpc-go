@@ -36,7 +36,6 @@ import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
-import io.grpc.InternalBinaryLogs;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -538,7 +537,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
       }
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       ServerMethodDefinition<?, ?> wMethodDef = binlog == null
-          ? interceptedDef : InternalBinaryLogs.wrapMethodDefinition(binlog, interceptedDef);
+          ? interceptedDef : binlog.wrapMethodDefinition(interceptedDef);
       return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context);
     }
 

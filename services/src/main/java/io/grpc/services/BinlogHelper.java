@@ -24,7 +24,7 @@ import com.google.common.base.Splitter;
 import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
-import io.grpc.BinaryLogProvider.CallId;
+import io.grpc.BinaryLog.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;

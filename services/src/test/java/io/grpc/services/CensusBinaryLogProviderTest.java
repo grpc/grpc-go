@@ -19,8 +19,8 @@ package io.grpc.services;
 import static com.google.common.truth.Truth.assertThat;
 import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 
+import io.grpc.BinaryLog.CallId;
 import io.grpc.BinaryLogProvider;
-import io.grpc.BinaryLogProvider.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.internal.testing.StatsTestUtils.MockableSpan;

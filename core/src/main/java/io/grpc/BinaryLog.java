@@ -16,25 +16,37 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
 import java.io.Closeable;
-import java.io.IOException;
 
 /**
  * A binary log that can be installed on a channel or server. {@link #close} must be called after
  * all the servers and channels associated with the binary log are terminated.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
-public class BinaryLog implements Closeable {
-  final BinaryLogProvider surrogate;
+public abstract class BinaryLog implements Closeable {
 
-  BinaryLog(BinaryLogProvider surrogate) {
-    Preconditions.checkNotNull(surrogate);
-    this.surrogate = surrogate;
-  }
+  public abstract <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
+      ServerMethodDefinition<ReqT, RespT> oMethodDef);
 
-  @Override
-  public void close() throws IOException {
-    surrogate.close();
+  public abstract Channel wrapChannel(Channel channel);
+
+  public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
+      = CallOptions.Key.create("binarylog-calloptions-key");
+
+  /**
+   * A CallId is two byte[] arrays both of size 8 that uniquely identifies the RPC. Users are
+   * free to use the byte arrays however they see fit.
+   */
+  public static final class CallId {
+    public final long hi;
+    public final long lo;
+
+    /**
+     * Creates an instance.
+     */
+    public CallId(long hi, long lo) {
+      this.hi = hi;
+      this.lo = lo;
+    }
   }
 }

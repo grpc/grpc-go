@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import io.grpc.MethodDescriptor.Marshaller;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,9 +28,7 @@ import javax.annotation.Nullable;
 
 // TODO(zpencer): rename class to AbstractBinaryLog
 @Internal
-public abstract class BinaryLogProvider implements Closeable {
-  public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
-      = CallOptions.Key.create("binarylog-calloptions-key");
+public abstract class BinaryLogProvider extends BinaryLog {
   @VisibleForTesting
   public static final Marshaller<byte[]> BYTEARRAY_MARSHALLER = new ByteArrayMarshaller();
 
@@ -40,6 +37,7 @@ public abstract class BinaryLogProvider implements Closeable {
   /**
    * Wraps a channel to provide binary logging on {@link ClientCall}s as needed.
    */
+  @Override
   public final Channel wrapChannel(Channel channel) {
     return ClientInterceptors.intercept(channel, binaryLogShim);
   }
@@ -52,6 +50,7 @@ public abstract class BinaryLogProvider implements Closeable {
   /**
    * Wraps a {@link ServerMethodDefinition} such that it performs binary logging if needed.
    */
+  @Override
   public final <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
       ServerMethodDefinition<ReqT, RespT> oMethodDef) {
     ServerInterceptor binlogInterceptor =
@@ -145,23 +144,6 @@ public abstract class BinaryLogProvider implements Closeable {
                 BYTEARRAY_MARSHALLER)
             .interceptCall(method, callOptions, next);
       }
-    }
-  }
-
-  /**
-   * A CallId is two byte[] arrays both of size 8 that uniquely identifies the RPC. Users are
-   * free to use the byte arrays however they see fit.
-   */
-  public static final class CallId {
-    public final long hi;
-    public final long lo;
-
-    /**
-     * Creates an instance.
-     */
-    public CallId(long hi, long lo) {
-      this.hi = hi;
-      this.lo = lo;
     }
   }
 
