@@ -22,6 +22,7 @@ private static final long serialVersionUID = 0L;
   private GrpcLogEntry() {
     type_ = 0;
     logger_ = 0;
+    truncated_ = false;
   }
 
   @java.lang.Override
@@ -121,6 +122,11 @@ private static final long serialVersionUID = 0L;
 
             break;
           }
+          case 56: {
+
+            truncated_ = input.readBool();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -155,10 +161,6 @@ private static final long serialVersionUID = 0L;
   public enum Type
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_TYPE = 0;</code>
      */
     UNKNOWN_TYPE(0),
@@ -190,10 +192,6 @@ private static final long serialVersionUID = 0L;
     ;
 
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_TYPE = 0;</code>
      */
     public static final int UNKNOWN_TYPE_VALUE = 0;
@@ -310,10 +308,6 @@ private static final long serialVersionUID = 0L;
   public enum Logger
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_LOGGER = 0;</code>
      */
     UNKNOWN_LOGGER(0),
@@ -329,10 +323,6 @@ private static final long serialVersionUID = 0L;
     ;
 
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_LOGGER = 0;</code>
      */
     public static final int UNKNOWN_LOGGER_VALUE = 0;
@@ -653,6 +643,19 @@ private static final long serialVersionUID = 0L;
     return getPeer();
   }
 
+  public static final int TRUNCATED_FIELD_NUMBER = 7;
+  private boolean truncated_;
+  /**
+   * <pre>
+   * true if payload does not represent the full message or metadata.
+   * </pre>
+   *
+   * <code>bool truncated = 7;</code>
+   */
+  public boolean getTruncated() {
+    return truncated_;
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -682,6 +685,9 @@ private static final long serialVersionUID = 0L;
     }
     if (peer_ != null) {
       output.writeMessage(6, getPeer());
+    }
+    if (truncated_ != false) {
+      output.writeBool(7, truncated_);
     }
     unknownFields.writeTo(output);
   }
@@ -715,6 +721,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(6, getPeer());
     }
+    if (truncated_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(7, truncated_);
+    }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
@@ -743,6 +753,8 @@ private static final long serialVersionUID = 0L;
       result = result && getPeer()
           .equals(other.getPeer());
     }
+    result = result && (getTruncated()
+        == other.getTruncated());
     result = result && getPayloadCase().equals(
         other.getPayloadCase());
     if (!result) return false;
@@ -781,6 +793,9 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + PEER_FIELD_NUMBER;
       hash = (53 * hash) + getPeer().hashCode();
     }
+    hash = (37 * hash) + TRUNCATED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getTruncated());
     switch (payloadCase_) {
       case 4:
         hash = (37 * hash) + METADATA_FIELD_NUMBER;
@@ -942,6 +957,8 @@ private static final long serialVersionUID = 0L;
         peer_ = null;
         peerBuilder_ = null;
       }
+      truncated_ = false;
+
       payloadCase_ = 0;
       payload_ = null;
       return this;
@@ -992,6 +1009,7 @@ private static final long serialVersionUID = 0L;
       } else {
         result.peer_ = peerBuilder_.build();
       }
+      result.truncated_ = truncated_;
       result.payloadCase_ = payloadCase_;
       onBuilt();
       return result;
@@ -1045,6 +1063,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.hasPeer()) {
         mergePeer(other.getPeer());
+      }
+      if (other.getTruncated() != false) {
+        setTruncated(other.getTruncated());
       }
       switch (other.getPayloadCase()) {
         case METADATA: {
@@ -1895,6 +1916,44 @@ private static final long serialVersionUID = 0L;
         peer_ = null;
       }
       return peerBuilder_;
+    }
+
+    private boolean truncated_ ;
+    /**
+     * <pre>
+     * true if payload does not represent the full message or metadata.
+     * </pre>
+     *
+     * <code>bool truncated = 7;</code>
+     */
+    public boolean getTruncated() {
+      return truncated_;
+    }
+    /**
+     * <pre>
+     * true if payload does not represent the full message or metadata.
+     * </pre>
+     *
+     * <code>bool truncated = 7;</code>
+     */
+    public Builder setTruncated(boolean value) {
+      
+      truncated_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * true if payload does not represent the full message or metadata.
+     * </pre>
+     *
+     * <code>bool truncated = 7;</code>
+     */
+    public Builder clearTruncated() {
+      
+      truncated_ = false;
+      onChanged();
+      return this;
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {

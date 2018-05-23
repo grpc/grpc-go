@@ -1,4 +1,4 @@
-// Copyright 2016 The gRPC Authors
+// Copyright 2018 The gRPC Authors
 // All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ option java_outer_classname = "BinaryLogProto";
 message GrpcLogEntry {
   // Enumerates the type of logs
   enum Type {
-    UNKNOWN_TYPE = 0; // TODO(zpencer): upstream this
+    UNKNOWN_TYPE = 0;
     SEND_INITIAL_METADATA = 1;
     SEND_TRAILING_METADATA = 2;
     SEND_MESSAGE = 3;
@@ -37,7 +37,7 @@ message GrpcLogEntry {
 
   // Enumerates the entity that generates the log entry
   enum Logger {
-    UNKNOWN_LOGGER = 0; // TODO(zpencer): upstream this
+    UNKNOWN_LOGGER = 0;
     CLIENT = 1;
     SERVER = 2;
   }
@@ -61,6 +61,9 @@ message GrpcLogEntry {
   // Peer address information, will only be recorded in SEND_INITIAL_METADATA
   // and RECV_INITIAL_METADATA entries.
   Peer peer = 6;
+
+  // true if payload does not represent the full message or metadata.
+  bool truncated = 7;
 };
 
 // Message payload, used by REQUEST and RESPONSE
@@ -74,8 +77,7 @@ message Message {
   // Length of the message. It may not be the same as the length of the
   // data field, as the logging payload can be truncated or omitted.
   uint32 length = 2;
-  // Binary payload, post compression (depends on the flags field), may be
-  // truncated or omitted.
+  // May be truncated or omitted.
   bytes data = 3;
 }
 
@@ -89,20 +91,27 @@ message Metadata {
 
 // A metadata key value pair
 message MetadataEntry {
-  bytes key = 1; // TODO(zpencer): upstream this
+  bytes key = 1;
   bytes value = 2;
 }
 
 // Peer information
 message Peer {
   enum PeerType {
-    UNKNOWN_PEERTYPE = 0; // TODO(zpencer): upstream this
-    PEER_IPV4 = 1;  // peer is struct sockaddr_in
-    PEER_IPV6 = 2;  // peer is struct sockaddr_in6
-    PEER_UNIX = 3;  // peer is struct sockaddr_un
+    UNKNOWN_PEERTYPE = 0;
+    // address is the address in 1.2.3.4 form
+    PEER_IPV4 = 1;
+    // address the address in canonical form (RFC5952 section 4)
+    // The scope is NOT included in the peer string.
+    PEER_IPV6 = 2;
+    // address is UDS string
+    PEER_UNIX = 3;
   };
   PeerType peer_type = 1;
-  bytes peer = 2;  // value depends on peer_type
+  bytes peer = 2; // will be removed: do not use
+  string address = 3;
+  // only for PEER_IPV4 and PEER_IPV6
+  uint32 ip_port = 4;
 }
 
 // Used to record call_id.

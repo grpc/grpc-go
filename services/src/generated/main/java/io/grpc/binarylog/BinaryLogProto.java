@@ -54,7 +54,7 @@ public final class BinaryLogProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\027io/grpc/binarylog.proto\022\026grpc.binarylo" +
-      "g.v1alpha\"\272\004\n\014GrpcLogEntry\0227\n\004type\030\001 \001(\016" +
+      "g.v1alpha\"\315\004\n\014GrpcLogEntry\0227\n\004type\030\001 \001(\016" +
       "2).grpc.binarylog.v1alpha.GrpcLogEntry.T" +
       "ype\022;\n\006logger\030\002 \001(\0162+.grpc.binarylog.v1a" +
       "lpha.GrpcLogEntry.Logger\0220\n\007call_id\030\003 \001(" +
@@ -62,23 +62,25 @@ public final class BinaryLogProto {
       "tadata\030\004 \001(\0132 .grpc.binarylog.v1alpha.Me" +
       "tadataH\000\0222\n\007message\030\005 \001(\0132\037.grpc.binaryl" +
       "og.v1alpha.MessageH\000\022*\n\004peer\030\006 \001(\0132\034.grp" +
-      "c.binarylog.v1alpha.Peer\"\252\001\n\004Type\022\020\n\014UNK" +
-      "NOWN_TYPE\020\000\022\031\n\025SEND_INITIAL_METADATA\020\001\022\032" +
-      "\n\026SEND_TRAILING_METADATA\020\002\022\020\n\014SEND_MESSA" +
-      "GE\020\003\022\031\n\025RECV_INITIAL_METADATA\020\004\022\032\n\026RECV_" +
-      "TRAILING_METADATA\020\005\022\020\n\014RECV_MESSAGE\020\006\"4\n" +
-      "\006Logger\022\022\n\016UNKNOWN_LOGGER\020\000\022\n\n\006CLIENT\020\001\022" +
-      "\n\n\006SERVER\020\002B\t\n\007payload\"6\n\007Message\022\r\n\005fla" +
-      "gs\030\001 \001(\r\022\016\n\006length\030\002 \001(\r\022\014\n\004data\030\003 \001(\014\"@" +
-      "\n\010Metadata\0224\n\005entry\030\001 \003(\0132%.grpc.binaryl" +
-      "og.v1alpha.MetadataEntry\"+\n\rMetadataEntr" +
-      "y\022\013\n\003key\030\001 \001(\014\022\r\n\005value\030\002 \001(\014\"\235\001\n\004Peer\0228" +
-      "\n\tpeer_type\030\001 \001(\0162%.grpc.binarylog.v1alp" +
-      "ha.Peer.PeerType\022\014\n\004peer\030\002 \001(\014\"M\n\010PeerTy" +
-      "pe\022\024\n\020UNKNOWN_PEERTYPE\020\000\022\r\n\tPEER_IPV4\020\001\022" +
-      "\r\n\tPEER_IPV6\020\002\022\r\n\tPEER_UNIX\020\003\"$\n\007Uint128" +
-      "\022\014\n\004high\030\001 \001(\006\022\013\n\003low\030\002 \001(\006B%\n\021io.grpc.b" +
-      "inarylogB\016BinaryLogProtoP\001b\006proto3"
+      "c.binarylog.v1alpha.Peer\022\021\n\ttruncated\030\007 " +
+      "\001(\010\"\252\001\n\004Type\022\020\n\014UNKNOWN_TYPE\020\000\022\031\n\025SEND_I" +
+      "NITIAL_METADATA\020\001\022\032\n\026SEND_TRAILING_METAD" +
+      "ATA\020\002\022\020\n\014SEND_MESSAGE\020\003\022\031\n\025RECV_INITIAL_" +
+      "METADATA\020\004\022\032\n\026RECV_TRAILING_METADATA\020\005\022\020" +
+      "\n\014RECV_MESSAGE\020\006\"4\n\006Logger\022\022\n\016UNKNOWN_LO" +
+      "GGER\020\000\022\n\n\006CLIENT\020\001\022\n\n\006SERVER\020\002B\t\n\007payloa" +
+      "d\"6\n\007Message\022\r\n\005flags\030\001 \001(\r\022\016\n\006length\030\002 " +
+      "\001(\r\022\014\n\004data\030\003 \001(\014\"@\n\010Metadata\0224\n\005entry\030\001" +
+      " \003(\0132%.grpc.binarylog.v1alpha.MetadataEn" +
+      "try\"+\n\rMetadataEntry\022\013\n\003key\030\001 \001(\014\022\r\n\005val" +
+      "ue\030\002 \001(\014\"\277\001\n\004Peer\0228\n\tpeer_type\030\001 \001(\0162%.g" +
+      "rpc.binarylog.v1alpha.Peer.PeerType\022\014\n\004p" +
+      "eer\030\002 \001(\014\022\017\n\007address\030\003 \001(\t\022\017\n\007ip_port\030\004 " +
+      "\001(\r\"M\n\010PeerType\022\024\n\020UNKNOWN_PEERTYPE\020\000\022\r\n" +
+      "\tPEER_IPV4\020\001\022\r\n\tPEER_IPV6\020\002\022\r\n\tPEER_UNIX" +
+      "\020\003\"$\n\007Uint128\022\014\n\004high\030\001 \001(\006\022\013\n\003low\030\002 \001(\006" +
+      "B%\n\021io.grpc.binarylogB\016BinaryLogProtoP\001b" +
+      "\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -97,7 +99,7 @@ public final class BinaryLogProto {
     internal_static_grpc_binarylog_v1alpha_GrpcLogEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_binarylog_v1alpha_GrpcLogEntry_descriptor,
-        new java.lang.String[] { "Type", "Logger", "CallId", "Metadata", "Message", "Peer", "Payload", });
+        new java.lang.String[] { "Type", "Logger", "CallId", "Metadata", "Message", "Peer", "Truncated", "Payload", });
     internal_static_grpc_binarylog_v1alpha_Message_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_binarylog_v1alpha_Message_fieldAccessorTable = new
@@ -121,7 +123,7 @@ public final class BinaryLogProto {
     internal_static_grpc_binarylog_v1alpha_Peer_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_binarylog_v1alpha_Peer_descriptor,
-        new java.lang.String[] { "PeerType", "Peer", });
+        new java.lang.String[] { "PeerType", "Peer", "Address", "IpPort", });
     internal_static_grpc_binarylog_v1alpha_Uint128_descriptor =
       getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_binarylog_v1alpha_Uint128_fieldAccessorTable = new

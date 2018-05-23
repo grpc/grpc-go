@@ -92,10 +92,6 @@ private static final long serialVersionUID = 0L;
   public static final int KEY_FIELD_NUMBER = 1;
   private com.google.protobuf.ByteString key_;
   /**
-   * <pre>
-   * TODO(zpencer): upstream this
-   * </pre>
-   *
    * <code>bytes key = 1;</code>
    */
   public com.google.protobuf.ByteString getKey() {
@@ -417,20 +413,12 @@ private static final long serialVersionUID = 0L;
 
     private com.google.protobuf.ByteString key_ = com.google.protobuf.ByteString.EMPTY;
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>bytes key = 1;</code>
      */
     public com.google.protobuf.ByteString getKey() {
       return key_;
     }
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>bytes key = 1;</code>
      */
     public Builder setKey(com.google.protobuf.ByteString value) {
@@ -443,10 +431,6 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>bytes key = 1;</code>
      */
     public Builder clearKey() {

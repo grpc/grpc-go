@@ -130,8 +130,7 @@ private static final long serialVersionUID = 0L;
   private com.google.protobuf.ByteString data_;
   /**
    * <pre>
-   * Binary payload, post compression (depends on the flags field), may be
-   * truncated or omitted.
+   * May be truncated or omitted.
    * </pre>
    *
    * <code>bytes data = 3;</code>
@@ -555,8 +554,7 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
     /**
      * <pre>
-     * Binary payload, post compression (depends on the flags field), may be
-     * truncated or omitted.
+     * May be truncated or omitted.
      * </pre>
      *
      * <code>bytes data = 3;</code>
@@ -566,8 +564,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Binary payload, post compression (depends on the flags field), may be
-     * truncated or omitted.
+     * May be truncated or omitted.
      * </pre>
      *
      * <code>bytes data = 3;</code>
@@ -583,8 +580,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Binary payload, post compression (depends on the flags field), may be
-     * truncated or omitted.
+     * May be truncated or omitted.
      * </pre>
      *
      * <code>bytes data = 3;</code>

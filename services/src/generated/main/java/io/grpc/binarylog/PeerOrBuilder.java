@@ -18,10 +18,29 @@ public interface PeerOrBuilder extends
 
   /**
    * <pre>
-   * value depends on peer_type
+   * will be removed: do not use
    * </pre>
    *
    * <code>bytes peer = 2;</code>
    */
   com.google.protobuf.ByteString getPeer();
+
+  /**
+   * <code>string address = 3;</code>
+   */
+  java.lang.String getAddress();
+  /**
+   * <code>string address = 3;</code>
+   */
+  com.google.protobuf.ByteString
+      getAddressBytes();
+
+  /**
+   * <pre>
+   * only for PEER_IPV4 and PEER_IPV6
+   * </pre>
+   *
+   * <code>uint32 ip_port = 4;</code>
+   */
+  int getIpPort();
 }

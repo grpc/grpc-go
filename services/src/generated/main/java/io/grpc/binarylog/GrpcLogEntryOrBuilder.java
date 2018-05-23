@@ -147,5 +147,14 @@ public interface GrpcLogEntryOrBuilder extends
    */
   io.grpc.binarylog.PeerOrBuilder getPeerOrBuilder();
 
+  /**
+   * <pre>
+   * true if payload does not represent the full message or metadata.
+   * </pre>
+   *
+   * <code>bool truncated = 7;</code>
+   */
+  boolean getTruncated();
+
   public io.grpc.binarylog.GrpcLogEntry.PayloadCase getPayloadCase();
 }

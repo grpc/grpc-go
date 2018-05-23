@@ -32,8 +32,7 @@ public interface MessageOrBuilder extends
 
   /**
    * <pre>
-   * Binary payload, post compression (depends on the flags field), may be
-   * truncated or omitted.
+   * May be truncated or omitted.
    * </pre>
    *
    * <code>bytes data = 3;</code>

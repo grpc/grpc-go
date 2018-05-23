@@ -22,6 +22,8 @@ private static final long serialVersionUID = 0L;
   private Peer() {
     peerType_ = 0;
     peer_ = com.google.protobuf.ByteString.EMPTY;
+    address_ = "";
+    ipPort_ = 0;
   }
 
   @java.lang.Override
@@ -66,6 +68,17 @@ private static final long serialVersionUID = 0L;
             peer_ = input.readBytes();
             break;
           }
+          case 26: {
+            java.lang.String s = input.readStringRequireUtf8();
+
+            address_ = s;
+            break;
+          }
+          case 32: {
+
+            ipPort_ = input.readUInt32();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -96,16 +109,12 @@ private static final long serialVersionUID = 0L;
   public enum PeerType
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_PEERTYPE = 0;</code>
      */
     UNKNOWN_PEERTYPE(0),
     /**
      * <pre>
-     * peer is struct sockaddr_in
+     * address is the address in 1.2.3.4 form
      * </pre>
      *
      * <code>PEER_IPV4 = 1;</code>
@@ -113,7 +122,8 @@ private static final long serialVersionUID = 0L;
     PEER_IPV4(1),
     /**
      * <pre>
-     * peer is struct sockaddr_in6
+     * address the address in canonical form (RFC5952 section 4)
+     * The scope is NOT included in the peer string.
      * </pre>
      *
      * <code>PEER_IPV6 = 2;</code>
@@ -121,7 +131,7 @@ private static final long serialVersionUID = 0L;
     PEER_IPV6(2),
     /**
      * <pre>
-     * peer is struct sockaddr_un
+     * address is UDS string
      * </pre>
      *
      * <code>PEER_UNIX = 3;</code>
@@ -131,16 +141,12 @@ private static final long serialVersionUID = 0L;
     ;
 
     /**
-     * <pre>
-     * TODO(zpencer): upstream this
-     * </pre>
-     *
      * <code>UNKNOWN_PEERTYPE = 0;</code>
      */
     public static final int UNKNOWN_PEERTYPE_VALUE = 0;
     /**
      * <pre>
-     * peer is struct sockaddr_in
+     * address is the address in 1.2.3.4 form
      * </pre>
      *
      * <code>PEER_IPV4 = 1;</code>
@@ -148,7 +154,8 @@ private static final long serialVersionUID = 0L;
     public static final int PEER_IPV4_VALUE = 1;
     /**
      * <pre>
-     * peer is struct sockaddr_in6
+     * address the address in canonical form (RFC5952 section 4)
+     * The scope is NOT included in the peer string.
      * </pre>
      *
      * <code>PEER_IPV6 = 2;</code>
@@ -156,7 +163,7 @@ private static final long serialVersionUID = 0L;
     public static final int PEER_IPV6_VALUE = 2;
     /**
      * <pre>
-     * peer is struct sockaddr_un
+     * address is UDS string
      * </pre>
      *
      * <code>PEER_UNIX = 3;</code>
@@ -258,13 +265,60 @@ private static final long serialVersionUID = 0L;
   private com.google.protobuf.ByteString peer_;
   /**
    * <pre>
-   * value depends on peer_type
+   * will be removed: do not use
    * </pre>
    *
    * <code>bytes peer = 2;</code>
    */
   public com.google.protobuf.ByteString getPeer() {
     return peer_;
+  }
+
+  public static final int ADDRESS_FIELD_NUMBER = 3;
+  private volatile java.lang.Object address_;
+  /**
+   * <code>string address = 3;</code>
+   */
+  public java.lang.String getAddress() {
+    java.lang.Object ref = address_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      address_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string address = 3;</code>
+   */
+  public com.google.protobuf.ByteString
+      getAddressBytes() {
+    java.lang.Object ref = address_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      address_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int IP_PORT_FIELD_NUMBER = 4;
+  private int ipPort_;
+  /**
+   * <pre>
+   * only for PEER_IPV4 and PEER_IPV6
+   * </pre>
+   *
+   * <code>uint32 ip_port = 4;</code>
+   */
+  public int getIpPort() {
+    return ipPort_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -285,6 +339,12 @@ private static final long serialVersionUID = 0L;
     if (!peer_.isEmpty()) {
       output.writeBytes(2, peer_);
     }
+    if (!getAddressBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 3, address_);
+    }
+    if (ipPort_ != 0) {
+      output.writeUInt32(4, ipPort_);
+    }
     unknownFields.writeTo(output);
   }
 
@@ -300,6 +360,13 @@ private static final long serialVersionUID = 0L;
     if (!peer_.isEmpty()) {
       size += com.google.protobuf.CodedOutputStream
         .computeBytesSize(2, peer_);
+    }
+    if (!getAddressBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, address_);
+    }
+    if (ipPort_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(4, ipPort_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -320,6 +387,10 @@ private static final long serialVersionUID = 0L;
     result = result && peerType_ == other.peerType_;
     result = result && getPeer()
         .equals(other.getPeer());
+    result = result && getAddress()
+        .equals(other.getAddress());
+    result = result && (getIpPort()
+        == other.getIpPort());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -335,6 +406,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + peerType_;
     hash = (37 * hash) + PEER_FIELD_NUMBER;
     hash = (53 * hash) + getPeer().hashCode();
+    hash = (37 * hash) + ADDRESS_FIELD_NUMBER;
+    hash = (53 * hash) + getAddress().hashCode();
+    hash = (37 * hash) + IP_PORT_FIELD_NUMBER;
+    hash = (53 * hash) + getIpPort();
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -472,6 +547,10 @@ private static final long serialVersionUID = 0L;
 
       peer_ = com.google.protobuf.ByteString.EMPTY;
 
+      address_ = "";
+
+      ipPort_ = 0;
+
       return this;
     }
 
@@ -496,6 +575,8 @@ private static final long serialVersionUID = 0L;
       io.grpc.binarylog.Peer result = new io.grpc.binarylog.Peer(this);
       result.peerType_ = peerType_;
       result.peer_ = peer_;
+      result.address_ = address_;
+      result.ipPort_ = ipPort_;
       onBuilt();
       return result;
     }
@@ -542,6 +623,13 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getPeer() != com.google.protobuf.ByteString.EMPTY) {
         setPeer(other.getPeer());
+      }
+      if (!other.getAddress().isEmpty()) {
+        address_ = other.address_;
+        onChanged();
+      }
+      if (other.getIpPort() != 0) {
+        setIpPort(other.getIpPort());
       }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
@@ -617,7 +705,7 @@ private static final long serialVersionUID = 0L;
     private com.google.protobuf.ByteString peer_ = com.google.protobuf.ByteString.EMPTY;
     /**
      * <pre>
-     * value depends on peer_type
+     * will be removed: do not use
      * </pre>
      *
      * <code>bytes peer = 2;</code>
@@ -627,7 +715,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * value depends on peer_type
+     * will be removed: do not use
      * </pre>
      *
      * <code>bytes peer = 2;</code>
@@ -643,7 +731,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * value depends on peer_type
+     * will be removed: do not use
      * </pre>
      *
      * <code>bytes peer = 2;</code>
@@ -651,6 +739,113 @@ private static final long serialVersionUID = 0L;
     public Builder clearPeer() {
       
       peer_ = getDefaultInstance().getPeer();
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object address_ = "";
+    /**
+     * <code>string address = 3;</code>
+     */
+    public java.lang.String getAddress() {
+      java.lang.Object ref = address_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        address_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string address = 3;</code>
+     */
+    public com.google.protobuf.ByteString
+        getAddressBytes() {
+      java.lang.Object ref = address_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        address_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string address = 3;</code>
+     */
+    public Builder setAddress(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      address_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string address = 3;</code>
+     */
+    public Builder clearAddress() {
+      
+      address_ = getDefaultInstance().getAddress();
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string address = 3;</code>
+     */
+    public Builder setAddressBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      
+      address_ = value;
+      onChanged();
+      return this;
+    }
+
+    private int ipPort_ ;
+    /**
+     * <pre>
+     * only for PEER_IPV4 and PEER_IPV6
+     * </pre>
+     *
+     * <code>uint32 ip_port = 4;</code>
+     */
+    public int getIpPort() {
+      return ipPort_;
+    }
+    /**
+     * <pre>
+     * only for PEER_IPV4 and PEER_IPV6
+     * </pre>
+     *
+     * <code>uint32 ip_port = 4;</code>
+     */
+    public Builder setIpPort(int value) {
+      
+      ipPort_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * only for PEER_IPV4 and PEER_IPV6
+     * </pre>
+     *
+     * <code>uint32 ip_port = 4;</code>
+     */
+    public Builder clearIpPort() {
+      
+      ipPort_ = 0;
       onChanged();
       return this;
     }
