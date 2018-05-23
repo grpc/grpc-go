@@ -112,7 +112,7 @@ type ClientStream interface {
 //			- For client-streaming RPCs, clients should call CloseAndRecv. Note that
 // 			  CloseSend may not release all goroutines; CloseAndRecv guarantees release of
 //			  resources.
-//			- Bidirectional and server-streaming RPCs, clients should call Close and then repeatedly
+//			- For bidirectional or server-streaming RPCs, clients should call Close and then repeatedly
 // 			  call Recv until a non-nil error is returned.
 //		4. Receive a non-nil, non-io.EOF error from Header or SendMsg.
 //
