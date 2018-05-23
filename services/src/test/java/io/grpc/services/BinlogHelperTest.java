@@ -28,7 +28,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
 import io.grpc.BinaryLog.CallId;
@@ -58,9 +57,7 @@ import io.netty.channel.unix.DomainSocketAddress;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
@@ -316,14 +313,12 @@ public final class BinlogHelperTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    byte[] addressBytes = address.getAddress();
-    byte[] portBytes = ByteBuffer.allocate(4).putInt(port).array();
-    byte[] portUnsignedBytes = Arrays.copyOfRange(portBytes, 2, 4);
     assertEquals(
         Peer
             .newBuilder()
             .setPeerType(Peer.PeerType.PEER_IPV4)
-            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
+            .setAddress("127.0.0.1")
+            .setIpPort(12345)
             .build(),
         BinlogHelper.socketToProto(socketAddress));
   }
@@ -331,17 +326,15 @@ public final class BinlogHelperTest {
   @Test
   public void socketToProto_ipv6() throws Exception {
     // this is a ipv6 link local address
-    InetAddress address = InetAddress.getByName("fe:80:12:34:56:78:90:ab");
+    InetAddress address = InetAddress.getByName("2001:db8:0:0:0:0:2:1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    byte[] addressBytes = address.getAddress();
-    byte[] portBytes = ByteBuffer.allocate(4).putInt(port).array();
-    byte[] portUnsignedBytes = Arrays.copyOfRange(portBytes, 2, 4);
     assertEquals(
         Peer
             .newBuilder()
             .setPeerType(Peer.PeerType.PEER_IPV6)
-            .setPeer(ByteString.copyFrom(Bytes.concat(addressBytes, portUnsignedBytes)))
+            .setAddress("2001:db8::2:1") // RFC 5952 section 4: ipv6 canonical form required
+            .setIpPort(12345)
             .build(),
         BinlogHelper.socketToProto(socketAddress));
   }
@@ -354,7 +347,7 @@ public final class BinlogHelperTest {
         Peer
             .newBuilder()
             .setPeerType(Peer.PeerType.PEER_UNIX)
-            .setPeer(ByteString.copyFrom(path.getBytes(US_ASCII)))
+            .setAddress("/some/path")
             .build(),
         BinlogHelper.socketToProto(socketAddress)
     );
@@ -362,11 +355,16 @@ public final class BinlogHelperTest {
 
   @Test
   public void socketToProto_unknown() throws Exception {
-    SocketAddress unknownSocket = new SocketAddress() { };
+    SocketAddress unknownSocket = new SocketAddress() {
+      @Override
+      public String toString() {
+        return "some-socket-address";
+      }
+    };
     assertEquals(
         Peer.newBuilder()
             .setPeerType(PeerType.UNKNOWN_PEERTYPE)
-            .setPeer(ByteString.copyFrom(unknownSocket.toString(), US_ASCII))
+            .setAddress("some-socket-address")
             .build(),
         BinlogHelper.socketToProto(unknownSocket));
   }

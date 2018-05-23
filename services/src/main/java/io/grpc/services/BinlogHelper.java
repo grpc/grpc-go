@@ -21,7 +21,6 @@ import static io.grpc.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
-import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
 import io.grpc.BinaryLog.CallId;
@@ -56,7 +55,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,9 +71,6 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 final class BinlogHelper {
   private static final Logger logger = Logger.getLogger(BinlogHelper.class.getName());
-  private static final int IP_PORT_BYTES = 2;
-  private static final int IP_PORT_UPPER_MASK = 0xff00;
-  private static final int IP_PORT_LOWER_MASK = 0xff;
   private static final boolean SERVER = true;
   private static final boolean CLIENT = false;
 
@@ -525,37 +520,31 @@ final class BinlogHelper {
   }
 
   @VisibleForTesting
-  // TODO(zpencer): the binlog design does not specify how to actually express the peer bytes
   static Peer socketToProto(SocketAddress address) {
     Preconditions.checkNotNull(address);
-    PeerType peerType = PeerType.UNKNOWN_PEERTYPE;
-    byte[] peerAddress = null;
 
+    Peer.Builder builder = Peer.newBuilder();
     if (address instanceof InetSocketAddress) {
       InetAddress inetAddress = ((InetSocketAddress) address).getAddress();
       if (inetAddress instanceof Inet4Address) {
-        peerType = PeerType.PEER_IPV4;
+        builder.setPeerType(PeerType.PEER_IPV4)
+            .setAddress(InetAddressUtil.toAddrString(inetAddress));
       } else if (inetAddress instanceof Inet6Address) {
-        peerType = PeerType.PEER_IPV6;
+        builder.setPeerType(PeerType.PEER_IPV6)
+            .setAddress(InetAddressUtil.toAddrString(inetAddress));
       } else {
         logger.log(Level.SEVERE, "unknown type of InetSocketAddress: {}", address);
+        builder.setAddress(address.toString());
       }
-      int port = ((InetSocketAddress) address).getPort();
-      byte[] portBytes = new byte[IP_PORT_BYTES];
-      portBytes[0] = (byte) ((port & IP_PORT_UPPER_MASK) >> 8);
-      portBytes[1] = (byte) (port & IP_PORT_LOWER_MASK);
-      peerAddress = Bytes.concat(inetAddress.getAddress(), portBytes);
+      builder.setIpPort(((InetSocketAddress) address).getPort());
     } else if (address.getClass().getName().equals("io.netty.channel.unix.DomainSocketAddress")) {
       // To avoid a compile time dependency on grpc-netty, we check against the runtime class name.
-      peerType = PeerType.PEER_UNIX;
+      builder.setPeerType(PeerType.PEER_UNIX)
+          .setAddress(address.toString());
+    } else {
+      builder.setPeerType(PeerType.UNKNOWN_PEERTYPE).setAddress(address.toString());
     }
-    if (peerAddress == null) {
-      peerAddress = address.toString().getBytes(Charset.defaultCharset());
-    }
-    return Peer.newBuilder()
-        .setPeerType(peerType)
-        .setPeer(ByteString.copyFrom(peerAddress))
-        .build();
+    return builder.build();
   }
 
   @VisibleForTesting
