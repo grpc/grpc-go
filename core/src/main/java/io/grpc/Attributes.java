@@ -189,7 +189,11 @@ public final class Attributes {
    */
   @Override
   public int hashCode() {
-    return data.hashCode();
+    int hashCode = 0;
+    for (Entry<Key<?>, Object> e : data.entrySet()) {
+      hashCode += Objects.hashCode(e.getKey(), e.getValue());
+    }
+    return hashCode;
   }
 
   /**

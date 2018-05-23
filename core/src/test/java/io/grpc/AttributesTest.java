@@ -89,5 +89,6 @@ public class AttributesTest {
     Attributes attr2 = Attributes.newBuilder().set(key, v2).build();
 
     assertEquals(attr1, attr2);
+    assertEquals(attr1.hashCode(), attr2.hashCode());
   }
 }
