@@ -1,4 +1,4 @@
-// +build amd64,linux
+// +build linux
 
 /*
  *
@@ -188,12 +188,6 @@ func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
 	lv, _ := convertToDuration(protoLinger.GetDuration())
 	linger.Linger = int32(lv)
 	return linger
-}
-
-func protoToTime(protoTime *channelzpb.SocketOptionTimeout) *unix.Timeval {
-	timeout := &unix.Timeval{}
-	timeout.Sec, timeout.Usec = convertToDuration(protoTime.GetDuration())
-	return timeout
 }
 
 func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
