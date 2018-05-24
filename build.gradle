@@ -99,7 +99,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
-        nettyVersion = '4.1.24.Final'
+        nettyVersion = '4.1.25.Final'
         guavaVersion = '20.0'
         protobufVersion = '3.5.1'
         protocVersion = '3.5.1-1'
