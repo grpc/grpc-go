@@ -23,10 +23,10 @@ import io.grpc.MethodDescriptor.Marshaller;
  */
 @Internal
 public final class InternalClientInterceptors {
-  public static <WReqT, WRespT> ClientInterceptor wrapClientInterceptor(
+  public static <ReqT, RespT> ClientInterceptor wrapClientInterceptor(
       final ClientInterceptor interceptor,
-      final Marshaller<WReqT> reqMarshaller,
-      final Marshaller<WRespT> respMarshaller) {
+      final Marshaller<ReqT> reqMarshaller,
+      final Marshaller<RespT> respMarshaller) {
     return ClientInterceptors.wrapClientInterceptor(interceptor, reqMarshaller, respMarshaller);
   }
 }

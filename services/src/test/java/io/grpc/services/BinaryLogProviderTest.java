@@ -406,7 +406,7 @@ public class BinaryLogProviderTest {
 
 
   private static class StringMarshaller implements MethodDescriptor.Marshaller<String> {
-    public static StringMarshaller INSTANCE = new StringMarshaller();
+    public static final StringMarshaller INSTANCE = new StringMarshaller();
 
     @Override
     public InputStream stream(String value) {
