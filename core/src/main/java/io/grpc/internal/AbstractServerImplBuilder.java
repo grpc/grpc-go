@@ -199,6 +199,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return thisT();
   }
 
+  @Override
+  public final T setBinaryLog(BinaryLog binaryLog) {
+    this.binlog = binaryLog;
+    return thisT();
+  }
+
   /**
    * Override the default stats implementation.
    */

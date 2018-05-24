@@ -331,6 +331,12 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Override
+  public final T setBinaryLog(BinaryLog binlog) {
+    this.binlog = binlog;
+    return thisT();
+  }
+
   /**
    * Override the default stats implementation.
    */

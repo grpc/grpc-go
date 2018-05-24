@@ -451,6 +451,19 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the BinaryLog object that this channel should log to. The channel does not take
+   * ownership of the object, and users are responsible for calling {@link BinaryLog#close()}.
+   *
+   * @param binaryLog the object to provide logging.
+   * @return this
+   * @since 1.13.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
+  public T setBinaryLog(BinaryLog binaryLog) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    *
    * @since 1.0.0

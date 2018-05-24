@@ -226,6 +226,19 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   }
 
   /**
+   * Sets the BinaryLog object that this server should log to. The channel does not take
+   * ownership of the object, and users are responsible for calling {@link BinaryLog#close()}.
+   *
+   * @param binaryLog the object to provide logging.
+   * @return this
+   * @since 1.13.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
+  public T setBinaryLog(BinaryLog binaryLog) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a server using the given parameters.
    *
    * <p>The returned service will not been started or be bound a port. You will need to start it
