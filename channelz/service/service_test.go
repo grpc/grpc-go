@@ -1,4 +1,4 @@
-// +build linux
+// +build amd64,linux
 
 /*
  *
