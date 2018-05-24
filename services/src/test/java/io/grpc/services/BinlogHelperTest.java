@@ -16,7 +16,7 @@
 
 package io.grpc.services;
 
-import static io.grpc.BinaryLogProvider.BYTEARRAY_MARSHALLER;
+import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 import static io.grpc.services.BinlogHelper.DUMMY_SOCKET;
 import static io.grpc.services.BinlogHelper.getPeerSocket;
 import static org.junit.Assert.assertEquals;
@@ -31,7 +31,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
 import io.grpc.BinaryLog.CallId;
-import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;

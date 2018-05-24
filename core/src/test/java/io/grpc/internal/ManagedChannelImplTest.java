@@ -52,13 +52,14 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.BinaryLogProvider;
+import io.grpc.BinaryLog;
 import io.grpc.CallCredentials;
 import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
 import io.grpc.ClientStreamTracer;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -77,11 +78,12 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.SecurityLevel;
-import io.grpc.ServerInterceptor;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
@@ -94,7 +96,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -2282,26 +2283,31 @@ public class ManagedChannelImplTest {
   @Test
   public void binaryLogInstalled() throws Exception {
     final SettableFuture<Boolean> intercepted = SettableFuture.create();
-    channelBuilder.binlog = new BinaryLogProvider() {
-      @Nullable
+    channelBuilder.binlog = new BinaryLog() {
       @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return null;
+      public void close() throws IOException {
+        // noop
       }
 
       @Override
-      public ClientInterceptor getClientInterceptor(
-          String fullMethodName, CallOptions callOptions) {
-        return new ClientInterceptor() {
-          @Override
-          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-              MethodDescriptor<ReqT, RespT> method,
-              CallOptions callOptions,
-              Channel next) {
-            intercepted.set(true);
-            return next.newCall(method, callOptions);
-          }
-        };
+      public <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
+          ServerMethodDefinition<ReqT, RespT> oMethodDef) {
+        return oMethodDef;
+      }
+
+      @Override
+      public Channel wrapChannel(Channel channel) {
+        return ClientInterceptors.intercept(channel,
+            new ClientInterceptor() {
+              @Override
+              public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                  MethodDescriptor<ReqT, RespT> method,
+                  CallOptions callOptions,
+                  Channel next) {
+                intercepted.set(true);
+                return next.newCall(method, callOptions);
+              }
+            });
       }
     };
 

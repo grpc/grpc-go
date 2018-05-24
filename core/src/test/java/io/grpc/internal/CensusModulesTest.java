@@ -44,8 +44,8 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.BinaryLog;
 import io.grpc.BinaryLog.CallId;
-import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -1000,7 +1000,7 @@ public class CensusModulesTest {
     new CensusTracingModule(tracer, mock(BinaryFormat.class))
         .getClientInterceptor()
         .interceptCall(TestMethodDescriptors.voidMethod(), CallOptions.DEFAULT, c);
-    CallId callId = options.get().getOption(BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY);
+    CallId callId = options.get().getOption(BinaryLog.CLIENT_CALL_ID_CALLOPTION_KEY);
     assertThat(callId.hi).isEqualTo(0);
     assertThat(callId.lo)
         .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());

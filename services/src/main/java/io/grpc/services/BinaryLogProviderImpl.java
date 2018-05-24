@@ -17,7 +17,6 @@
 package io.grpc.services;
 
 import com.google.common.base.Preconditions;
-import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.ClientInterceptor;
 import io.grpc.ServerInterceptor;

@@ -14,11 +14,25 @@
  * limitations under the License.
  */
 
-package io.grpc;
+package io.grpc.services;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.BinaryLog;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
+import io.grpc.Internal;
+import io.grpc.InternalClientInterceptors;
+import io.grpc.InternalServerInterceptors;
+import io.grpc.ManagedChannel;
+import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.ServerMethodDefinition;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -61,9 +75,9 @@ public abstract class BinaryLogProvider extends BinaryLog {
     MethodDescriptor<byte[], byte[]> binMethod =
         BinaryLogProvider.toByteBufferMethod(oMethodDef.getMethodDescriptor());
     ServerMethodDefinition<byte[], byte[]> binDef =
-        ServerInterceptors.wrapMethod(oMethodDef, binMethod);
+        InternalServerInterceptors.wrapMethod(oMethodDef, binMethod);
     ServerCallHandler<byte[], byte[]> binlogHandler =
-        ServerInterceptors.InterceptCallHandler.create(
+        InternalServerInterceptors.interceptCallHandlerCreate(
             binlogInterceptor, binDef.getServerCallHandler());
     return ServerMethodDefinition.create(binMethod, binlogHandler);
   }
@@ -137,7 +151,7 @@ public abstract class BinaryLogProvider extends BinaryLog {
       if (binlogInterceptor == null) {
         return next.newCall(method, callOptions);
       } else {
-        return ClientInterceptors
+        return InternalClientInterceptors
             .wrapClientInterceptor(
                 binlogInterceptor,
                 BYTEARRAY_MARSHALLER,

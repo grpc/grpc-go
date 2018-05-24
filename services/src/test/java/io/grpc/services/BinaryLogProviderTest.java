@@ -14,19 +14,32 @@
  * limitations under the License.
  */
 
-package io.grpc;
+package io.grpc.services;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.io.ByteStreams;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.ServerCall;
+import io.grpc.ServerCall.Listener;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.internal.IoUtils;
 import io.grpc.internal.NoopClientCall;
 import io.grpc.internal.NoopServerCall;
@@ -199,7 +212,7 @@ public class BinaryLogProviderTest {
             method,
             new ServerCallHandler<String, Integer>() {
               @Override
-              public ServerCall.Listener<String> startCall(
+              public Listener<String> startCall(
                   ServerCall<String, Integer> call, Metadata headers) {
                 throw new UnsupportedOperationException();
               }
@@ -388,6 +401,39 @@ public class BinaryLogProviderTest {
     public T parse(InputStream stream) {
       parseInvocations++;
       return delegate().parse(stream);
+    }
+  }
+
+
+  private static class StringMarshaller implements MethodDescriptor.Marshaller<String> {
+    public static StringMarshaller INSTANCE = new StringMarshaller();
+
+    @Override
+    public InputStream stream(String value) {
+      return new ByteArrayInputStream(value.getBytes(UTF_8));
+    }
+
+    @Override
+    public String parse(InputStream stream) {
+      try {
+        return new String(ByteStreams.toByteArray(stream), UTF_8);
+      } catch (IOException ex) {
+        throw new RuntimeException(ex);
+      }
+    }
+  }
+
+  private static class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {
+    public static final IntegerMarshaller INSTANCE = new IntegerMarshaller();
+
+    @Override
+    public InputStream stream(Integer value) {
+      return StringMarshaller.INSTANCE.stream(value.toString());
+    }
+
+    @Override
+    public Integer parse(InputStream stream) {
+      return Integer.valueOf(StringMarshaller.INSTANCE.parse(stream));
     }
   }
 }

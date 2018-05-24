@@ -20,8 +20,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.BinaryLog;
 import io.grpc.BinaryLog.CallId;
-import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -386,7 +386,7 @@ final class CensusTracingModule {
               method,
               callOptions.withStreamTracerFactory(tracerFactory)
                   .withOption(
-                      BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY,
+                      BinaryLog.CLIENT_CALL_ID_CALLOPTION_KEY,
                       new CallId(
                           0,
                           ByteBuffer.wrap(

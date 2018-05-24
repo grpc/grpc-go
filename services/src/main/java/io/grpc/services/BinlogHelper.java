@@ -16,7 +16,7 @@
 
 package io.grpc.services;
 
-import static io.grpc.BinaryLogProvider.BYTEARRAY_MARSHALLER;
+import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;

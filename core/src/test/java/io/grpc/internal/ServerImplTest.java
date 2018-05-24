@@ -48,14 +48,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.BinaryLogProvider;
-import io.grpc.CallOptions;
-import io.grpc.ClientInterceptor;
+import io.grpc.BinaryLog;
+import io.grpc.Channel;
 import io.grpc.Compressor;
 import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -1237,26 +1237,35 @@ public class ServerImplTest {
   @Test
   public void binaryLogInstalled() throws Exception {
     final SettableFuture<Boolean> intercepted = SettableFuture.create();
-    builder.binlog = new BinaryLogProvider() {
-      @Nullable
+    final ServerInterceptor interceptor = new ServerInterceptor() {
       @Override
-      public ServerInterceptor getServerInterceptor(String fullMethodName) {
-        return new ServerInterceptor() {
-          @Override
-          public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
-              Metadata headers,
-              ServerCallHandler<ReqT, RespT> next) {
-            intercepted.set(true);
-            return next.startCall(call, headers);
-          }
-        };
+      public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        intercepted.set(true);
+        return next.startCall(call, headers);
+      }
+    };
+
+    builder.binlog = new BinaryLog() {
+      @Override
+      public void close() throws IOException {
+        // noop
       }
 
-      @Nullable
       @Override
-      public ClientInterceptor getClientInterceptor(
-          String fullMethodName, CallOptions callOptions) {
-        return null;
+      public <ReqT, RespT> ServerMethodDefinition<?, ?> wrapMethodDefinition(
+          ServerMethodDefinition<ReqT, RespT> oMethodDef) {
+        return ServerMethodDefinition.create(
+            oMethodDef.getMethodDescriptor(),
+            InternalServerInterceptors.interceptCallHandlerCreate(
+                interceptor,
+                oMethodDef.getServerCallHandler()));
+      }
+
+      @Override
+      public Channel wrapChannel(Channel channel) {
+        return channel;
       }
     };
     createAndStartServer();

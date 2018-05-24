@@ -31,7 +31,6 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.BinaryLogProvider;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -140,7 +139,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
   /**
    * We delegate to this channel, so that we can have interceptors as necessary. If there aren't
-   * any interceptors and the {@link BinaryLogProvider} is {@code null} then this will just be a
+   * any interceptors and the {@link io.grpc.BinaryLog} is {@code null} then this will just be a
    * {@link RealChannel}.
    */
   private final Channel interceptorChannel;
