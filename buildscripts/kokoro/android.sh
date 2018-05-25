@@ -44,7 +44,7 @@ cd ../routeguide
 cd ../helloworld
 ./gradlew build
 
-cd $BASE_DIR/github/grpc-java/examples/example-kotlin/android/helloworld/
+cd "$BASE_DIR/github/grpc-java/examples/example-kotlin/android/helloworld/"
 ./gradlew build
 
 # Skip APK size and dex count comparisons for non-PR builds
@@ -53,7 +53,6 @@ if [[ -z "${KOKORO_GITHUB_PULL_REQUEST_COMMIT:-}" ]]; then
     echo "Skipping APK size and dex count"
     exit 0
 fi
-
 
 # Save a copy of set_github_status.py (it may differ from the base commit)
 
@@ -64,7 +63,8 @@ cp "$BASE_DIR/github/grpc-java/buildscripts/set_github_status.py" "$SET_GITHUB_S
 # Collect APK size and dex count stats for the helloworld example
 
 read -r ignored new_dex_count < \
-  <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references app/build/outputs/apk/release/app-release-unsigned.apk)
+  <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references \
+  "$BASE_DIR/github/grpc-java/examples/android/helloworld/app/build/outputs/apk/release/app-release-unsigned.apk")
 
 set +x
 all_new_methods=`"${ANDROID_HOME}/tools/bin/apkanalyzer" dex packages --proguard-mapping app/build/outputs/mapping/release/mapping.txt app/build/outputs/apk/release/app-release-unsigned.apk | grep ^M | cut -f4 | sort`
