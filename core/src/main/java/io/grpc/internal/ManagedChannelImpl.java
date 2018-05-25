@@ -867,8 +867,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
    * A registry that prevents channel shutdown from killing existing retry attempts that are in
    * backoff.
    */
-  // TODO(zdapeng): add test coverage for shutdown during retry backoff once retry backoff is
-  //                implemented.
   private final class UncommittedRetriableStreamsRegistry {
     // TODO(zdapeng): This means we would acquire a lock for each new retry-able stream,
     // it's worthwhile to look for a lock-free approach.

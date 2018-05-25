@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.BinaryLog;
@@ -89,13 +90,17 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -118,6 +123,7 @@ import org.mockito.stubbing.Answer;
 public class ManagedChannelImplTest {
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
+
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
           .setType(MethodType.UNKNOWN)
@@ -2317,6 +2323,112 @@ public class ManagedChannelImplTest {
     assertTrue(intercepted.get());
   }
 
+  @Test
+  public void retryBackoffThenChannelShutdown_retryShouldStillHappen_newCallShouldFail() {
+    Map<String, Object> retryPolicy = new HashMap<String, Object>();
+    retryPolicy.put("maxAttempts", 3D);
+    retryPolicy.put("initialBackoff", "10s");
+    retryPolicy.put("maxBackoff", "30s");
+    retryPolicy.put("backoffMultiplier", 2D);
+    retryPolicy.put("retryableStatusCodes", Arrays.<Object>asList("UNAVAILABLE"));
+    Map<String, Object> methodConfig = new HashMap<String, Object>();
+    Map<String, Object> name = new HashMap<String, Object>();
+    name.put("service", "service");
+    methodConfig.put("name", Arrays.<Object>asList(name));
+    methodConfig.put("retryPolicy", retryPolicy);
+    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    serviceConfig.put("methodConfig", Arrays.<Object>asList(methodConfig));
+    Attributes attributesWithRetryPolicy = Attributes
+        .newBuilder().set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
+
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri)
+            .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(attributesWithRetryPolicy);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    channelBuilder.executor(MoreExecutors.directExecutor());
+    channelBuilder.enableRetry();
+    RetriableStream.setRandom(
+        // not random
+        new Random() {
+          @Override
+          public double nextDouble() {
+            return 1D; // fake random
+          }
+        });
+
+    requestConnection = false;
+    createChannel();
+
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(Helper.class);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    helper = helperCaptor.getValue();
+    verify(mockLoadBalancer)
+        .handleResolvedAddressGroups(nameResolverFactory.servers, attributesWithRetryPolicy);
+
+    // simulating request connection and then transport ready after resolved address
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withSubchannel(subchannel));
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ClientStream mockStream = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream).thenReturn(mockStream2);
+    transportInfo.listener.transportReady();
+    helper.updateBalancingState(READY, mockPicker);
+
+    ArgumentCaptor<ClientStreamListener> streamListenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(streamListenerCaptor.capture());
+    assertThat(timer.getPendingTasks()).isEmpty();
+
+    // trigger retry
+    streamListenerCaptor.getValue().closed(Status.UNAVAILABLE, new Metadata());
+
+    // in backoff
+    timer.forwardTime(5, TimeUnit.SECONDS);
+    assertThat(timer.getPendingTasks()).hasSize(1);
+    verify(mockStream2, never()).start(any(ClientStreamListener.class));
+
+    // shutdown during backoff period
+    channel.shutdown();
+
+    assertThat(timer.getPendingTasks()).hasSize(1);
+    verify(mockCallListener, never()).onClose(any(Status.class), any(Metadata.class));
+
+    ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
+    call2.start(mockCallListener2, new Metadata());
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener2).onClose(statusCaptor.capture(), any(Metadata.class));
+    assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+    assertEquals("Channel shutdown invoked", statusCaptor.getValue().getDescription());
+
+    // backoff ends
+    timer.forwardTime(5, TimeUnit.SECONDS);
+    assertThat(timer.getPendingTasks()).isEmpty();
+    verify(mockStream2).start(streamListenerCaptor.capture());
+    verify(mockLoadBalancer, never()).shutdown();
+    assertFalse(
+        "channel.isTerminated() is expected to be false but was true",
+        channel.isTerminated());
+
+    streamListenerCaptor.getValue().closed(Status.INTERNAL, new Metadata());
+    verify(mockLoadBalancer).shutdown();
+    // simulating the shutdown of load balancer triggers the shutdown of subchannel
+    subchannel.shutdown();
+    transportInfo.listener.transportTerminated(); // simulating transport terminated
+    assertTrue(
+        "channel.isTerminated() is expected to be true but was false",
+        channel.isTerminated());
+  }
+
   private static final class ChannelBuilder
       extends AbstractManagedChannelImplBuilder<ChannelBuilder> {
 
@@ -2353,6 +2465,9 @@ public class ManagedChannelImplTest {
     final boolean resolvedAtStart;
     final Status error;
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
+    // The Attributes argument of the next invocation of listener.onAddresses(servers, attrs)
+    final AtomicReference<Attributes> nextResolvedAttributes =
+        new AtomicReference<Attributes>(Attributes.EMPTY);
 
     FakeNameResolverFactory(
         URI expectedUri,
@@ -2419,7 +2534,7 @@ public class ManagedChannelImplTest {
           listener.onError(error);
           return;
         }
-        listener.onAddresses(servers, Attributes.EMPTY);
+        listener.onAddresses(servers, nextResolvedAttributes.get());
       }
 
       @Override public void shutdown() {
