@@ -342,6 +342,10 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 	}
 }
 
+func init() {
+  _ = withContextDialer
+}
+
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
 // If FailOnNonTempDialError() is set to true, and an error is returned by f, gRPC checks the error's
 // Temporary() method to decide if it should try to reconnect to the network address.

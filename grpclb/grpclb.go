@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package grpclb
 
 import (
 	"strconv"
@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
@@ -49,11 +50,11 @@ func convertDuration(d *lbpb.Duration) time.Duration {
 // Mostly copied from generated pb.go file.
 // To avoid circular dependency.
 type loadBalancerClient struct {
-	cc *ClientConn
+	cc *grpc.ClientConn
 }
 
-func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption) (*balanceLoadClientStream, error) {
-	desc := &StreamDesc{
+func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (*balanceLoadClientStream, error) {
+	desc := &grpc.StreamDesc{
 		StreamName:    "BalanceLoad",
 		ServerStreams: true,
 		ClientStreams: true,
@@ -67,7 +68,7 @@ func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption
 }
 
 type balanceLoadClientStream struct {
-	ClientStream
+	grpc.ClientStream
 }
 
 func (x *balanceLoadClientStream) Send(m *lbpb.LoadBalanceRequest) error {
@@ -134,7 +135,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		doneCh:          make(chan struct{}),
 
 		manualResolver: r,
-		csEvltr:        &connectivityStateEvaluator{},
+		csEvltr:        &balancer.ConnectivityStateEvaluator{},
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
@@ -156,7 +157,7 @@ type lbBalancer struct {
 	// send to remote LB ClientConn through this resolver.
 	manualResolver *lbManualResolver
 	// The ClientConn to talk to the remote balancer.
-	ccRemoteLB *ClientConn
+	ccRemoteLB *grpc.ClientConn
 
 	// Support client side load reporting. Each picker gets a reference to this,
 	// and will update its content.
@@ -173,7 +174,7 @@ type lbBalancer struct {
 	// but with only READY SCs will be gerenated.
 	backendAddrs []resolver.Address
 	// Roundrobin functionalities.
-	csEvltr  *connectivityStateEvaluator
+	csEvltr  *balancer.ConnectivityStateEvaluator
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
@@ -243,7 +244,7 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	}
 
 	oldAggrState := lb.state
-	lb.state = lb.csEvltr.recordTransition(oldS, s)
+	lb.state = lb.csEvltr.RecordTransition(oldS, s)
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready

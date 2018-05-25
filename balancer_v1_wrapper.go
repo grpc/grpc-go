@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	ibalancer "google.golang.org/grpc/internal/balancer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
@@ -56,7 +55,7 @@ func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConn, opts balancer.B
 		startCh:    make(chan struct{}),
 		conns:      make(map[resolver.Address]balancer.SubConn),
 		connSt:     make(map[balancer.SubConn]*scState),
-		csEvltr:    &ibalancer.ConnectivityStateEvaluator{},
+		csEvltr:    &balancer.ConnectivityStateEvaluator{},
 		state:      connectivity.Idle,
 	}
 	cc.UpdateBalancerState(connectivity.Idle, bw)
@@ -82,7 +81,7 @@ type balancerWrapper struct {
 	targetAddr string // Target without the scheme.
 
 	// To aggregate the connectivity state.
-	csEvltr *ibalancer.ConnectivityStateEvaluator
+	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
 	mu     sync.Mutex
