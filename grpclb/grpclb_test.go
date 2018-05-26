@@ -19,8 +19,7 @@
 //go:generate protoc --go_out=plugins=:$GOPATH/src grpc_lb_v1/messages/messages.proto
 //go:generate protoc --go_out=plugins=grpc:$GOPATH/src grpc_lb_v1/service/service.proto
 
-// Package grpclb_test is currently used only for grpclb testing.
-package grpclb_test
+package grpclb
 
 import (
 	"errors"
@@ -593,7 +592,7 @@ const grpclbCustomFallbackName = "grpclb_with_custom_fallback_timeout"
 
 func init() {
 	balancer.Register(&customGRPCLBBuilder{
-		Builder: grpc.NewLBBuilderWithFallbackTimeout(100 * time.Millisecond),
+		Builder: NewLBBuilderWithFallbackTimeout(100 * time.Millisecond),
 		name:    grpclbCustomFallbackName,
 	})
 }

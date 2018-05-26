@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
+	_ "google.golang.org/grpc/grpclb"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"

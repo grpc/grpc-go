@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
@@ -343,7 +344,8 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 }
 
 func init() {
-  _ = withContextDialer
+  internal.WithContextDialer = withContextDialer
+  internal.WithResolverBuilder = withResolverBuilder
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
