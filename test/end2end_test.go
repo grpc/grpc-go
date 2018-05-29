@@ -6143,6 +6143,65 @@ func TestServeExitsWhenListenerClosed(t *testing.T) {
 	}
 }
 
+// Service handler returns status with invalid utf8 message.
+func TestStatusInvalidUTF8Message(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	var (
+		origMsg = string([]byte{0xff, 0xfe, 0xfd})
+		wantMsg = "���"
+	)
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return nil, status.Errorf(codes.Internal, origMsg)
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMsg {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, status.Convert(err).Message(), wantMsg)
+	}
+}
+
+// Service handler returns status with invalid utf8 details.
+func TestStatusInvalidUTF8Details(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	var (
+		origMsg = string([]byte{0xff, 0xfe, 0xfd})
+		wantMsg = "���"
+	)
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			st := status.New(codes.Internal, origMsg)
+			st, err := st.WithDetails(&testpb.Empty{})
+			if err != nil {
+				return nil, err
+			}
+			return nil, st.Err()
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMsg {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v (msg %q); want _, err with msg %q", err, status.Convert(err).Message(), wantMsg)
+	}
+}
+
 func TestClientDoesntDeadlockWhileWritingErrornousLargeMessages(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
