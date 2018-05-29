@@ -1,4 +1,4 @@
-// +build !linux
+// +build 386,linux
 
 /*
  *
@@ -18,21 +18,16 @@
  *
  */
 
-package channelz
+package service
 
-import "google.golang.org/grpc/grpclog"
+import (
+	"golang.org/x/sys/unix"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+)
 
-func init() {
-	grpclog.Infof("Channelz: socket options are not supported on non-linux os.")
+func protoToTime(protoTime *channelzpb.SocketOptionTimeout) *unix.Timeval {
+	timeout := &unix.Timeval{}
+	sec, usec := convertToDuration(protoTime.GetDuration())
+	timeout.Sec, timeout.Usec = int32(sec), int32(usec)
+	return timeout
 }
-
-// SocketOptionData defines the struct to hold socket option data, and related
-// getter function to obtain info from fd.
-// Windows OS doesn't support Socket Option
-type SocketOptionData struct {
-}
-
-// Getsockopt defines the function to get socket options requested by channelz.
-// It is to be passed to syscall.RawConn.Control().
-// Windows OS doesn't support Socket Option
-func (s *SocketOptionData) Getsockopt(fd uintptr) {}
