@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
@@ -442,11 +443,12 @@ const (
 )
 
 // encodeGrpcMessage is used to encode status code in header field
-// "grpc-message".
-// It checks to see if each individual byte in msg is an
-// allowable byte, and then either percent encoding or passing it through.
-// When percent encoding, the byte is converted into hexadecimal notation
-// with a '%' prepended.
+// "grpc-message". It does percent encoding and also replaces invalid utf-8
+// characters with Unicode replacement character.
+//
+// It checks to see if each individual byte in msg is an allowable byte, and
+// then either percent encoding or passing it through. When percent encoding,
+// the byte is converted into hexadecimal notation with a '%' prepended.
 func encodeGrpcMessage(msg string) string {
 	if msg == "" {
 		return ""
@@ -463,14 +465,16 @@ func encodeGrpcMessage(msg string) string {
 
 func encodeGrpcMessageUnchecked(msg string) string {
 	var buf bytes.Buffer
-	lenMsg := len(msg)
-	for i := 0; i < lenMsg; i++ {
-		c := msg[i]
-		if c >= spaceByte && c < tildaByte && c != percentByte {
-			buf.WriteByte(c)
-		} else {
-			buf.WriteString(fmt.Sprintf("%%%02X", c))
+	for len(msg) > 0 {
+		r, size := utf8.DecodeRuneInString(msg)
+		for _, b := range []byte(string(r)) {
+			if r >= spaceByte && r < tildaByte && r != percentByte {
+				buf.WriteByte(b)
+			} else {
+				buf.WriteString(fmt.Sprintf("%%%02X", b))
+			}
 		}
+		msg = msg[size:]
 	}
 	return buf.String()
 }
