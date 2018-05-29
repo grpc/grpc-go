@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -52,7 +52,6 @@ const (
 
 var (
 	errMissingAddr = errors.New("missing address")
-	randomGen      = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
@@ -346,7 +345,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	return randomGen.Intn(100)+1 <= *a
+	return grpcrand.Intn(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {
