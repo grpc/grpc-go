@@ -106,10 +106,13 @@ type ClientStream interface {
 // To ensure resources are not leaked due to the stream returned, one of the following
 // actions must be performed:
 //
-// 1. call Close on the ClientConn,
-// 2. cancel the context provided,
-// 3. call RecvMsg until a non-nil error is returned, or
-// 4. receive a non-nil, non-io.EOF error from Header or SendMsg.
+//      1. Call Close on the ClientConn.
+//      2. Cancel the context provided.
+//      3. Call RecvMsg until a non-nil error is returned. A protobuf-generated
+//         client-streaming RPC, for instance, might use the helper function
+//         CloseAndRecv (note that CloseSend does not Recv, therefore is not
+//         guaranteed to release all resources).
+//      4. Receive a non-nil, non-io.EOF error from Header or SendMsg.
 //
 // If none of the above happen, a goroutine and a context will be leaked, and grpc
 // will not call the optionally-configured stats handler with a stats.End message.
