@@ -844,9 +844,6 @@ func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 		testC := testpb.NewTestServiceClient(cc)
 		for {
 			c++
-			if c%100 == 0 {
-				fmt.Println(c)
-			}
 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 				if strings.Contains(err.Error(), dropErrDesc) {
 					break
