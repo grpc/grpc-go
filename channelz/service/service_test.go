@@ -1,5 +1,3 @@
-// +build linux
-
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -29,9 +27,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	pdur "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
@@ -170,26 +166,6 @@ func serverProtoToStruct(s *channelzpb.Server) *dummyServer {
 	return ds
 }
 
-func convertToDuration(d *pdur.Duration) (sec int64, usec int64) {
-	if d != nil {
-		if dur, err := ptypes.Duration(d); err == nil {
-			sec = int64(int64(dur) / 1e9)
-			usec = (int64(dur) - sec*1e9) / 1e3
-		}
-	}
-	return
-}
-
-func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
-	linger := &unix.Linger{}
-	if protoLinger.GetActive() {
-		linger.Onoff = 1
-	}
-	lv, _ := convertToDuration(protoLinger.GetDuration())
-	linger.Linger = int32(lv)
-	return linger
-}
-
 func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
 	switch v := protoSecurity.Model.(type) {
 	case *channelzpb.Security_Tls_:
@@ -205,66 +181,6 @@ func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSec
 	return nil
 }
 
-func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOptionData {
-	skdata := &channelz.SocketOptionData{}
-	for _, opt := range skopts {
-		switch opt.GetName() {
-		case "SO_LINGER":
-			protoLinger := &channelzpb.SocketOptionLinger{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoLinger)
-			if err == nil {
-				skdata.Linger = protoToLinger(protoLinger)
-			}
-		case "SO_RCVTIMEO":
-			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
-			if err == nil {
-				skdata.RecvTimeout = protoToTime(protoTimeout)
-			}
-		case "SO_SNDTIMEO":
-			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
-			if err == nil {
-				skdata.SendTimeout = protoToTime(protoTimeout)
-			}
-		case "TCP_INFO":
-			tcpi := &channelzpb.SocketOptionTcpInfo{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), tcpi)
-			if err == nil {
-				skdata.TCPInfo = &unix.TCPInfo{
-					State:          uint8(tcpi.TcpiState),
-					Ca_state:       uint8(tcpi.TcpiCaState),
-					Retransmits:    uint8(tcpi.TcpiRetransmits),
-					Probes:         uint8(tcpi.TcpiProbes),
-					Backoff:        uint8(tcpi.TcpiBackoff),
-					Options:        uint8(tcpi.TcpiOptions),
-					Rto:            tcpi.TcpiRto,
-					Ato:            tcpi.TcpiAto,
-					Snd_mss:        tcpi.TcpiSndMss,
-					Rcv_mss:        tcpi.TcpiRcvMss,
-					Unacked:        tcpi.TcpiUnacked,
-					Sacked:         tcpi.TcpiSacked,
-					Lost:           tcpi.TcpiLost,
-					Retrans:        tcpi.TcpiRetrans,
-					Fackets:        tcpi.TcpiFackets,
-					Last_data_sent: tcpi.TcpiLastDataSent,
-					Last_ack_sent:  tcpi.TcpiLastAckSent,
-					Last_data_recv: tcpi.TcpiLastDataRecv,
-					Last_ack_recv:  tcpi.TcpiLastAckRecv,
-					Pmtu:           tcpi.TcpiPmtu,
-					Rcv_ssthresh:   tcpi.TcpiRcvSsthresh,
-					Rtt:            tcpi.TcpiRtt,
-					Rttvar:         tcpi.TcpiRttvar,
-					Snd_ssthresh:   tcpi.TcpiSndSsthresh,
-					Snd_cwnd:       tcpi.TcpiSndCwnd,
-					Advmss:         tcpi.TcpiAdvmss,
-					Reordering:     tcpi.TcpiReordering}
-			}
-		}
-	}
-	return skdata
-}
-
 func protoToAddr(a *channelzpb.Address) net.Addr {
 	switch v := a.Address.(type) {
 	case *channelzpb.Address_TcpipAddress:
@@ -278,57 +194,6 @@ func protoToAddr(a *channelzpb.Address) net.Addr {
 		// TODO:
 	}
 	return nil
-}
-
-func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
-	ds := &dummySocket{}
-	pdata := s.GetData()
-	ds.streamsStarted = pdata.GetStreamsStarted()
-	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
-	ds.streamsFailed = pdata.GetStreamsFailed()
-	ds.messagesSent = pdata.GetMessagesSent()
-	ds.messagesReceived = pdata.GetMessagesReceived()
-	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastLocalStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastRemoteStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageSentTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageReceivedTimestamp = t
-		}
-	}
-	if v := pdata.GetLocalFlowControlWindow(); v != nil {
-		ds.localFlowControlWindow = v.Value
-	}
-	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
-		ds.remoteFlowControlWindow = v.Value
-	}
-	if v := pdata.GetOption(); v != nil {
-		ds.SocketOptions = protoToSocketOption(v)
-	}
-	if v := s.GetSecurity(); v != nil {
-		ds.Security = protoToSecurity(v)
-	}
-	if local := s.GetLocal(); local != nil {
-		ds.localAddr = protoToAddr(local)
-	}
-	if remote := s.GetRemote(); remote != nil {
-		ds.remoteAddr = protoToAddr(remote)
-	}
-	ds.remoteName = s.GetRemoteName()
-	return ds
 }
 
 func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]string {
@@ -580,14 +445,6 @@ func TestGetSocket(t *testing.T) {
 		},
 		{
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
-		},
-		{
-			SocketOptions: &channelz.SocketOptionData{
-				Linger:      &unix.Linger{Onoff: 1, Linger: 2},
-				RecvTimeout: &unix.Timeval{Sec: 10, Usec: 1},
-				SendTimeout: &unix.Timeval{},
-				TCPInfo:     &unix.TCPInfo{State: 1},
-			},
 		},
 		{
 			Security: &credentials.TLSChannelzSecurityValue{
