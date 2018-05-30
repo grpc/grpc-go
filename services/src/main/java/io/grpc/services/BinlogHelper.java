@@ -22,6 +22,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.protobuf.ByteString;
+import com.google.re2j.Matcher;
+import com.google.re2j.Pattern;
 import io.grpc.Attributes;
 import io.grpc.BinaryLog.CallId;
 import io.grpc.CallOptions;
@@ -60,8 +62,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 

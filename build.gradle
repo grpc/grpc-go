@@ -218,6 +218,7 @@ subprojects {
                 netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.8.Final',
 
                 conscrypt: 'org.conscrypt:conscrypt-openjdk-uber:1.0.1',
+                re2j: 'com.google.re2j:re2j:1.2',
 
                 // Test dependencies.
                 junit: 'junit:junit:4.12',
