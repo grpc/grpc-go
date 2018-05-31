@@ -26,7 +26,6 @@ import io.grpc.Attributes;
 import io.grpc.CallCredentials;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import java.io.IOException;
@@ -52,10 +51,7 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
       = Logger.getLogger(GoogleAuthLibraryCallCredentials.class.getName());
   private static final JwtHelper jwtHelper
       = createJwtHelperOrNull(GoogleAuthLibraryCallCredentials.class.getClassLoader());
-  private static final Class<? extends Credentials> googleCredentialsClass
-      = loadGoogleCredentialsClass();
 
-  private final boolean requirePrivacy;
   @VisibleForTesting
   final Credentials creds;
 
@@ -69,18 +65,9 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   @VisibleForTesting
   GoogleAuthLibraryCallCredentials(Credentials creds, JwtHelper jwtHelper) {
     checkNotNull(creds, "creds");
-    boolean requirePrivacy = false;
-    if (googleCredentialsClass != null) {
-      // All GoogleCredentials instances are bearer tokens and should only be used on private
-      // channels. This catches all return values from GoogleCredentials.getApplicationDefault().
-      // This should be checked before upgrading the Service Account to JWT, as JWT is also a bearer
-      // token.
-      requirePrivacy = googleCredentialsClass.isInstance(creds);
-    }
     if (jwtHelper != null) {
       creds = jwtHelper.tryServiceAccountToJwt(creds);
     }
-    this.requirePrivacy = requirePrivacy;
     this.creds = creds;
   }
 
@@ -90,14 +77,6 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   @Override
   public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs,
       Executor appExecutor, final MetadataApplier applier) {
-    SecurityLevel security = checkNotNull(attrs.get(ATTR_SECURITY_LEVEL), "securityLevel");
-    if (requirePrivacy && security != SecurityLevel.PRIVACY_AND_INTEGRITY) {
-      applier.fail(Status.UNAUTHENTICATED
-          .withDescription("Credentials require channel with PRIVACY_AND_INTEGRITY security level. "
-            + "Observed security level: " + security));
-      return;
-    }
-
     String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");
     final URI uri;
     try {
@@ -233,19 +212,6 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
       log.log(Level.WARNING, "Failed to create JWT helper. This is unexpected", caughtException);
     }
     return null;
-  }
-
-  @Nullable
-  private static Class<? extends Credentials> loadGoogleCredentialsClass() {
-    Class<?> rawGoogleCredentialsClass;
-    try {
-      // Can't use a loader as it disables ProGuard's reference detection and would fail to rename
-      // this reference. Unfortunately this will initialize the class.
-      rawGoogleCredentialsClass = Class.forName("com.google.auth.oauth2.GoogleCredentials");
-    } catch (ClassNotFoundException ex) {
-      return null;
-    }
-    return rawGoogleCredentialsClass.asSubclass(Credentials.class);
   }
 
   @VisibleForTesting
