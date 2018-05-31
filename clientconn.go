@@ -456,13 +456,34 @@ func WithDisableServiceConfig() DialOption {
 
 // WithDisableRetry returns a DialOption that disables retries, even if the
 // service config enables them.  This does not impact transparent retries,
-// which will happen automatically if no data is written to the wire.
+// which will happen automatically if no data is written to the wire or if the
+// RPC is unprocessed by the remote server.
+//
+// Retry support is currently disabled by default, but will be enabled by
+// default in the future.
 //
 // This API is EXPERIMENTAL.
 func WithDisableRetry() DialOption {
 	return func(o *dialOptions) {
 		o.disableRetry = true
 	}
+}
+
+// WithEnableRetry returns a DialOption that enables retries if the service
+// config also enables them.
+//
+// Retry support is currently disabled by default, but will be enabled by
+// default in the future.
+//
+// This API is EXPERIMENTAL and will be removed in the future.
+func WithEnableRetry() DialOption {
+	return func(o *dialOptions) {
+		o.disableRetry = false
+	}
+}
+
+func defaultDialOptions() dialOptions {
+	return dialOptions{disableRetry: true}
 }
 
 // Dial creates a client connection to the given target.
@@ -496,6 +517,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
+	cc.dopts = defaultDialOptions()
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}

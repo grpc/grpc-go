@@ -49,7 +49,7 @@ func TestRetryUnary(t *testing.T) {
 			return nil, status.New(codes.AlreadyExists, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry()); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -101,6 +101,64 @@ func TestRetryUnary(t *testing.T) {
 	}
 }
 
+func TestRetryDisabledByDefault(t *testing.T) {
+	i := -1
+	ss := &stubServer{
+		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			i++
+			switch i {
+			case 0:
+				return nil, status.New(codes.AlreadyExists, "retryable error").Err()
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+	ss.r.NewServiceConfig(`{
+    "methodConfig": [{
+      "name": [{"service": "grpc.testing.TestService"}],
+      "retryPolicy": {
+        "MaxAttempts": 4,
+        "InitialBackoff": ".01s",
+        "MaxBackoff": ".01s",
+        "BackoffMultiplier": 1.0,
+        "RetryableStatusCodes": [ "ALREADY_EXISTS" ]
+      }
+    }]}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timed out waiting for service config update")
+		}
+		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").RetryPolicy != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+
+	testCases := []struct {
+		code  codes.Code
+		count int
+	}{
+		{codes.AlreadyExists, 0},
+	}
+	for _, tc := range testCases {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		cancel()
+		if status.Code(err) != tc.code {
+			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		}
+		if i != tc.count {
+			t.Fatalf("i = %v; want %v", i, tc.count)
+		}
+	}
+}
+
 func TestRetryThrottling(t *testing.T) {
 	i := -1
 	ss := &stubServer{
@@ -113,7 +171,7 @@ func TestRetryThrottling(t *testing.T) {
 			return nil, status.New(codes.Unavailable, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry()); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -422,7 +480,7 @@ func TestRetryStreaming(t *testing.T) {
 			return nil
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200))); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry(), grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
