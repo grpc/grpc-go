@@ -75,22 +75,10 @@ class WriteQueue {
    */
   @CanIgnoreReturnValue
   ChannelFuture enqueue(QueuedCommand command, boolean flush) {
-    return enqueue(command, channel.newPromise(), flush);
-  }
-
-  /**
-   * Enqueue a write command with a completion listener.
-   *
-   * @param command a write to be executed on the channel.
-   * @param promise to be marked on the completion of the write.
-   * @param flush true if a flush of the write should be schedule, false if a later call to
-   *              enqueue will schedule the flush.
-   */
-  @CanIgnoreReturnValue
-  ChannelFuture enqueue(QueuedCommand command, ChannelPromise promise, boolean flush) {
     // Detect erroneous code that tries to reuse command objects.
     Preconditions.checkArgument(command.promise() == null, "promise must not be set on command");
 
+    ChannelPromise promise = channel.newPromise();
     command.promise(promise);
     queue.add(command);
     if (flush) {

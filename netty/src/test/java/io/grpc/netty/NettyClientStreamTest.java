@@ -30,7 +30,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
@@ -58,6 +57,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
@@ -180,7 +180,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.flush();
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false)),
-        any(ChannelPromise.class),
         eq(true));
   }
 
@@ -196,12 +195,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     verify(writeQueue).enqueue(
             eq(new SendGrpcFrameCommand(
                 stream.transportState(), messageFrame(MESSAGE).slice(0, 5), false)),
-            any(ChannelPromise.class),
             eq(false));
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(
             stream.transportState(), messageFrame(MESSAGE).slice(5, 11), false)),
-        any(ChannelPromise.class),
         eq(true));
   }
 
@@ -436,7 +433,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     metadata.put(GrpcUtil.USER_AGENT_KEY, "bad agent");
     listener = mock(ClientStreamListener.class);
     Mockito.reset(writeQueue);
-    when(writeQueue.enqueue(any(QueuedCommand.class), any(boolean.class))).thenReturn(future);
+    ChannelPromise completedPromise = new DefaultChannelPromise(channel)
+        .setSuccess();
+    when(writeQueue.enqueue(any(QueuedCommand.class), any(boolean.class)))
+        .thenReturn(completedPromise);
 
     stream = new NettyClientStream(
         new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
@@ -485,8 +485,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     stream.halfClose();
-    verify(writeQueue, never()).enqueue(any(SendGrpcFrameCommand.class), any(ChannelPromise.class),
-        any(Boolean.class));
     ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
     verify(writeQueue).enqueue(cmdCap.capture(), eq(true));
     ImmutableListMultimap<CharSequence, CharSequence> headers =
@@ -501,16 +499,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   @Override
   protected NettyClientStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    doAnswer(new Answer<Object>() {
-      @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
-        if (future.isDone()) {
-          ((ChannelPromise) invocation.getArguments()[1]).trySuccess();
-        }
-        return null;
-      }
-    }).when(writeQueue).enqueue(any(QueuedCommand.class), any(ChannelPromise.class), anyBoolean());
-    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     NettyClientStream stream = new NettyClientStream(
         new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
         methodDescriptor,

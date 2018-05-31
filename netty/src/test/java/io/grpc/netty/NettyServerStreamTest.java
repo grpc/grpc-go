@@ -21,9 +21,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -43,10 +41,8 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener;
 import io.grpc.internal.TransportTracer;
-import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.util.AsciiString;
 import java.io.ByteArrayInputStream;
@@ -125,7 +121,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false)),
-        isA(ChannelPromise.class),
         eq(true));
   }
 
@@ -288,16 +283,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   @Override
   protected NettyServerStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    doAnswer(new Answer<Object>() {
-      @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
-        if (future.isDone()) {
-          ((ChannelPromise) invocation.getArguments()[1]).setSuccess();
-        }
-        return null;
-      }
-    }).when(writeQueue).enqueue(any(QueuedCommand.class), any(ChannelPromise.class), anyBoolean());
-    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
     TransportTracer transportTracer = new TransportTracer();
     NettyServerStream.TransportState state = new NettyServerStream.TransportState(

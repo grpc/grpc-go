@@ -123,9 +123,8 @@ class NettyServerStream extends AbstractServerStream {
       final int numBytes = bytebuf.readableBytes();
       // Add the bytes to outbound flow control.
       onSendingBytes(numBytes);
-      writeQueue.enqueue(
-          new SendGrpcFrameCommand(transportState(), bytebuf, false),
-          channel.newPromise().addListener(new ChannelFutureListener() {
+      writeQueue.enqueue(new SendGrpcFrameCommand(transportState(), bytebuf, false), flush)
+          .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
               // Remove the bytes from outbound flow control, optionally notifying
@@ -135,7 +134,7 @@ class NettyServerStream extends AbstractServerStream {
                 transportTracer.reportMessageSent(numMessages);
               }
             }
-          }), flush);
+          });
     }
 
     @Override

@@ -326,7 +326,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @CanIgnoreReturnValue
   protected final ChannelFuture enqueue(WriteQueue.QueuedCommand command) {
-    ChannelFuture future = writeQueue.enqueue(command, newPromise(), true);
+    ChannelFuture future = writeQueue.enqueue(command, true);
     channel.runPendingTasks();
     return future;
   }

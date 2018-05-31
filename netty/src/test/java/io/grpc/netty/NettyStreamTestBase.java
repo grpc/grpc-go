@@ -23,18 +23,17 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.internal.Stream;
 import io.grpc.internal.StreamListener;
+import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
@@ -45,7 +44,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Queue;
-import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -69,11 +67,6 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   @Mock
   private ChannelPipeline pipeline;
 
-  // ChannelFuture has too many methods to implement; we stubbed all necessary methods of Future.
-  @SuppressWarnings("DoNotMock")
-  @Mock
-  protected ChannelFuture future;
-
   @Mock
   protected EventLoop eventLoop;
 
@@ -95,14 +88,16 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    mockFuture(true);
-    when(channel.write(any())).thenReturn(future);
-    when(channel.writeAndFlush(any())).thenReturn(future);
     when(channel.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
     when(channel.pipeline()).thenReturn(pipeline);
     when(channel.eventLoop()).thenReturn(eventLoop);
     when(channel.newPromise()).thenReturn(new DefaultChannelPromise(channel));
     when(channel.voidPromise()).thenReturn(new DefaultChannelPromise(channel));
+    ChannelPromise completedPromise = new DefaultChannelPromise(channel)
+        .setSuccess();
+    when(channel.write(any())).thenReturn(completedPromise);
+    when(channel.writeAndFlush(any())).thenReturn(completedPromise);
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(completedPromise);
     when(pipeline.firstContext()).thenReturn(ctx);
     when(eventLoop.inEventLoop()).thenReturn(true);
     when(http2Stream.id()).thenReturn(STREAM_ID);
@@ -155,7 +150,8 @@ public abstract class NettyStreamTestBase<T extends Stream> {
     sendHeadersIfServer();
     assertTrue(stream.isReady());
     byte[] msg = largeMessage();
-    // The future is set up to automatically complete, indicating that the write is done.
+    // The channel.write future is set up to automatically complete, indicating that the write is
+    // done.
     stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     assertTrue(stream.isReady());
@@ -166,7 +162,8 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   public void shouldBeReadyForDataAfterWritingSmallMessage() throws IOException {
     sendHeadersIfServer();
     // Make sure the writes don't complete so we "back up"
-    reset(future);
+    ChannelPromise uncompletedPromise = new DefaultChannelPromise(channel);
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(uncompletedPromise);
 
     assertTrue(stream.isReady());
     byte[] msg = smallMessage();
@@ -180,7 +177,8 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   public void shouldNotBeReadyForDataAfterWritingLargeMessage() throws IOException {
     sendHeadersIfServer();
     // Make sure the writes don't complete so we "back up"
-    reset(future);
+    ChannelPromise uncompletedPromise = new DefaultChannelPromise(channel);
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(uncompletedPromise);
 
     assertTrue(stream.isReady());
     byte[] msg = largeMessage();
@@ -213,14 +211,4 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   protected abstract Queue<InputStream> listenerMessageQueue();
 
   protected abstract void closeStream();
-
-  private void mockFuture(boolean succeeded) {
-    when(future.isDone()).thenReturn(true);
-    when(future.isCancelled()).thenReturn(false);
-    when(future.isSuccess()).thenReturn(succeeded);
-    when(future.awaitUninterruptibly(anyLong(), any(TimeUnit.class))).thenReturn(true);
-    if (!succeeded) {
-      when(future.cause()).thenReturn(new Exception("fake"));
-    }
-  }
 }
