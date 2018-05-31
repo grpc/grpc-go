@@ -237,7 +237,7 @@ func decodeMetadataHeader(k, v string) (string, error) {
 	return v, nil
 }
 
-func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error {
+func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {

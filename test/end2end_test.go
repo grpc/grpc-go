@@ -6466,7 +6466,7 @@ func TestDisabledIOBuffers(t *testing.T) {
 func TestServerMaxHeaderListSizeClientUserViolation(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		if e.httpHandler == true {
+		if e.httpHandler {
 			continue
 		}
 		testServerMaxHeaderListSizeClientUserViolation(t, e)

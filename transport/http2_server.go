@@ -48,12 +48,13 @@ import (
 	"google.golang.org/grpc/tap"
 )
 
-// ErrIllegalHeaderWrite indicates that setting header is illegal because of
-// the stream's state.
-var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
-
-const (
-	defaultServerMaxHeaderListSize = uint32(16 << 20)
+var (
+	// ErrIllegalHeaderWrite indicates that setting header is illegal because of
+	// the stream's state.
+	ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
+	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
+	// than the limit set by peer.
+	ErrHeaderListSizeLimitViolation = errors.New("transport: trying to send header list size larger than the limit set by peer")
 )
 
 // http2Server implements the ServerTransport interface with HTTP2.
@@ -297,7 +298,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (close bool) {
 	streamID := frame.Header().StreamID
 	state := decodeState{serverSide: true}
-	if err := state.decodeResponseHeader(frame); err != nil {
+	if err := state.decodeHeader(frame); err != nil {
 		if se, ok := err.(StreamError); ok {
 			t.controlBuf.put(&cleanupStream{
 				streamID: streamID,
@@ -783,7 +784,7 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 			return err
 		}
 		t.closeStream(s, true, http2.ErrCodeInternal, nil, false)
-		return errors.New("sending header list size violates limit set by peer")
+		return ErrHeaderListSizeLimitViolation
 	}
 	if t.stats != nil {
 		// Note: WireLength is not set in outHeader.
@@ -841,6 +842,14 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		},
 	}
 	s.hdrMu.Unlock()
+	success, err := t.controlBuf.execute(t.checkForHeaderListSize, trailingHeader)
+	if !success {
+		if err != nil {
+			return err
+		}
+		t.closeStream(s, true, http2.ErrCodeInternal, nil, false)
+		return ErrHeaderListSizeLimitViolation
+	}
 	t.closeStream(s, false, 0, trailingHeader, true)
 	if t.stats != nil {
 		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})

@@ -42,10 +42,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	defaultClientMaxHeaderListSize = uint32(16 << 20)
-)
-
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
 	ctx        context.Context
@@ -1112,7 +1108,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	var state decodeState
-	if err := state.decodeResponseHeader(frame); err != nil {
+	if err := state.decodeHeader(frame); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.New(codes.Internal, err.Error()), nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return

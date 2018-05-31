@@ -348,8 +348,7 @@ func ConnectionTimeout(d time.Duration) ServerOption {
 // of header list that the server is prepared to accept.
 func MaxHeaderListSize(s uint32) ServerOption {
 	return func(o *options) {
-		o.maxHeaderListSize = new(uint32)
-		*o.maxHeaderListSize = s
+		o.maxHeaderListSize = &s
 	}
 }
 

@@ -477,8 +477,7 @@ func defaultDialOptions() dialOptions {
 // header list that the client is prepared to accept.
 func WithMaxHeaderListSize(s uint32) DialOption {
 	return func(o *dialOptions) {
-		o.copts.MaxHeaderListSize = new(uint32)
-		*o.copts.MaxHeaderListSize = s
+		o.copts.MaxHeaderListSize = &s
 	}
 }
 
