@@ -54,7 +54,12 @@ var errMissingAddr = errors.New("missing address")
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
 func NewBuilder() resolver.Builder {
-	return &dnsBuilder{freq: defaultFreq}
+	return NewBuilderWithFreq(defaultFreq)
+}
+
+// NewBuilderWithFreq creates a dnsBuilder with passed in freq
+func NewBuilderWithFreq(freq time.Duration) resolver.Builder {
+	return &dnsBuilder{freq: freq}
 }
 
 type dnsBuilder struct {
