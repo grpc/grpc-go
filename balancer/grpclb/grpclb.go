@@ -16,7 +16,7 @@
  *
  */
 
-package grpclb
+package grpclb // import "google.golang.org/grpc/balancer/grpclb"
 
 import (
 	"strconv"
