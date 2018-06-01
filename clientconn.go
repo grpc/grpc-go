@@ -344,8 +344,8 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 }
 
 func init() {
-  internal.WithContextDialer = withContextDialer
-  internal.WithResolverBuilder = withResolverBuilder
+	internal.WithContextDialer = withContextDialer
+	internal.WithResolverBuilder = withResolverBuilder
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.

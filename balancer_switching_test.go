@@ -25,12 +25,38 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/test/leakcheck"
 )
+
+var _ balancer.Builder = &magicalLB{}
+var _ balancer.Balancer = &magicalLB{}
+
+// magicalLB is a ringer for grpclb.  It is used to avoid circular dependencies on the grpclb package
+type magicalLB struct{}
+
+func (b *magicalLB) Name() string {
+	return "grpclb"
+}
+
+func (b *magicalLB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return b
+}
+
+func (b *magicalLB) HandleSubConnStateChange(balancer.SubConn, connectivity.State) {}
+
+func (b *magicalLB) HandleResolvedAddrs([]resolver.Address, error) {}
+
+func (b *magicalLB) Close() {}
+
+func init() {
+	balancer.Register(&magicalLB{})
+}
 
 func checkPickFirst(cc *ClientConn, servers []*server) error {
 	var (
@@ -361,6 +387,10 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 	if !isRoundRobin {
 		t.Fatalf("after 5 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
 	}
+}
+
+func installFakeGRPCLB() {
+
 }
 
 // Test that if resolved address list contains grpclb, the balancer option in
