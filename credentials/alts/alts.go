@@ -131,7 +131,6 @@ func DefaultServerOptions() *ServerOptions {
 // It implements credentials.TransportCredentials interface.
 type altsTC struct {
 	info      *credentials.ProtocolInfo
-	hsAddr    string
 	side      core.Side
 	accounts  []string
 	hsAddress string
@@ -270,7 +269,8 @@ func (g *altsTC) Info() credentials.ProtocolInfo {
 func (g *altsTC) Clone() credentials.TransportCredentials {
 	info := *g.info
 	return &altsTC{
-		info: &info,
+		info:      &info,
+		hsAddress: g.hsAddress,
 	}
 }
 

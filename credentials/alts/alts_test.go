@@ -62,6 +62,13 @@ func TestClone(t *testing.T) {
 	if got, want := cc.Info().ServerName, ""; got != want {
 		t.Fatalf("cc.Info().ServerName = %v, want %v", got, want)
 	}
+
+	ct := c.(*altsTC)
+	cct := cc.(*altsTC)
+
+	if ct.hsAddress != cct.hsAddress {
+		t.Fatalf("cc.hsAddress = %q, want %q", cct.hsAddress, ct.hsAddress)
+	}
 }
 
 func TestInfo(t *testing.T) {
