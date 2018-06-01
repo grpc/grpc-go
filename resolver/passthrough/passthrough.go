@@ -20,7 +20,11 @@
 // name without scheme back to gRPC as resolved address.
 package passthrough
 
-import "google.golang.org/grpc/resolver"
+import (
+	"strings"
+
+	"google.golang.org/grpc/resolver"
+)
 
 const scheme = "passthrough"
 
@@ -45,7 +49,12 @@ type passthroughResolver struct {
 }
 
 func (r *passthroughResolver) start() {
-	r.cc.NewAddress([]resolver.Address{{Addr: r.target.Endpoint}})
+	addrs := strings.Split(r.target.Endpoint, ",")
+	resolverAddrs := make([]resolver.Address, len(addrs))
+	for i := range addrs {
+		resolverAddrs[i] = resolver.Address{Addr: addrs[i]}
+	}
+	r.cc.NewAddress(resolverAddrs)
 }
 
 func (*passthroughResolver) ResolveNow(o resolver.ResolveNowOption) {}
