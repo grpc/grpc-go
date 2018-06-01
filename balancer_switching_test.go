@@ -389,10 +389,6 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 	}
 }
 
-func installFakeGRPCLB() {
-
-}
-
 // Test that if resolved address list contains grpclb, the balancer option in
 // service config won't take effect. But when there's no grpclb address in a new
 // resolved address list, balancer will be switched to the new one.

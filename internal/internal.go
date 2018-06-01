@@ -20,15 +20,16 @@
 // symbols to avoid circular dependencies.
 package internal
 
-// TestingUseHandlerImpl enables the http.Handler-based server implementation.
-// It must be called before Serve and requires TLS credentials.
-//
-// The provided grpcServer must be of type *grpc.Server. It is untyped
-// for circular dependency reasons.
-var TestingUseHandlerImpl func(grpcServer interface{})
-
-// set by clientconn.go
 var (
+
+	// TestingUseHandlerImpl enables the http.Handler-based server implementation.
+	// It must be called before Serve and requires TLS credentials.
+	//
+	// The provided grpcServer must be of type *grpc.Server. It is untyped
+	// for circular dependency reasons.
+	TestingUseHandlerImpl func(grpcServer interface{})
+
+	// set by clientconn.go
 	WithContextDialer   interface{} // func(context.Context, string) (net.Conn, error) grpc.DialOption
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 )

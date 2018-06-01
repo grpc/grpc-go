@@ -80,10 +80,6 @@ type balancerWrapper struct {
 	cc         balancer.ClientConn
 	targetAddr string // Target without the scheme.
 
-	// To aggregate the connectivity state.
-	csEvltr *balancer.ConnectivityStateEvaluator
-	state   connectivity.State
-
 	mu     sync.Mutex
 	conns  map[resolver.Address]balancer.SubConn
 	connSt map[balancer.SubConn]*scState
@@ -92,6 +88,10 @@ type balancerWrapper struct {
 	// - NewSubConn is created, cc wants to notify balancer of state changes;
 	// - Build hasn't return, cc doesn't have access to balancer.
 	startCh chan struct{}
+
+	// To aggregate the connectivity state.
+	csEvltr *balancer.ConnectivityStateEvaluator
+	state   connectivity.State
 }
 
 // lbWatcher watches the Notify channel of the balancer and manages
