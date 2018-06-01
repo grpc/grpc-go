@@ -16,7 +16,7 @@
  */
 
 // Package internal contains gRPC-internal code, to avoid polluting
-// the godoc of the top-level grpc package.  It must not import any grpc 
+// the godoc of the top-level grpc package.  It must not import any grpc
 // symbols to avoid circular dependencies.
 package internal
 
@@ -29,6 +29,6 @@ var TestingUseHandlerImpl func(grpcServer interface{})
 
 // set by clientconn.go
 var (
-  WithContextDialer interface{} // func(context.Context, string) (net.Conn, error) grpc.DialOption
-  WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
+	WithContextDialer   interface{} // func(context.Context, string) (net.Conn, error) grpc.DialOption
+	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 )

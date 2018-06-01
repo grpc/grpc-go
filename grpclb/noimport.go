@@ -16,6 +16,10 @@
  *
  */
 
+//go:generate protoc --go_out=plugins=:$GOPATH/src grpc_lb_v1/messages/messages.proto
+//go:generate protoc --go_out=plugins=grpc:$GOPATH/src grpc_lb_v1/service/service.proto
+
+// grpclb is a dummy package for generating code.  Look at balancer/grpclb instead.
 package grpclb
 
 func init() {

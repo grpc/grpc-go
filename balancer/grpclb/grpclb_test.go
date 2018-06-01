@@ -470,13 +470,18 @@ func TestDropRequest(t *testing.T) {
 	// to true.
 	var i int
 	for i = 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	if i >= 1000 {
 		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatal("timed out", ctx.Err())
+	default:
 	}
 	for _, failfast := range []bool{true, false} {
 		for i := 0; i < 3; i++ {
