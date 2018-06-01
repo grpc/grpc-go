@@ -448,7 +448,9 @@ func TestDropRequest(t *testing.T) {
 			DropForLoadBalancing: true,
 		}},
 	}
-	creds := serverNameCheckCreds{}
+	creds := serverNameCheckCreds{
+		expected: beServerName,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
