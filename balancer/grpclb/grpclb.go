@@ -89,16 +89,16 @@ func init() {
 
 // newLBBuilder creates a builder for grpclb.
 func newLBBuilder() balancer.Builder {
-	return NewLBBuilderWithFallbackTimeout(defaultFallbackTimeout)
+	return newLBBuilderWithFallbackTimeout(defaultFallbackTimeout)
 }
 
-// NewLBBuilderWithFallbackTimeout creates a grpclb builder with the given
+// newLBBuilderWithFallbackTimeout creates a grpclb builder with the given
 // fallbackTimeout. If no response is received from the remote balancer within
 // fallbackTimeout, the backend addresses from the resolved address list will be
 // used.
 //
 // Only call this function when a non-default fallback timeout is needed.
-func NewLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Builder {
+func newLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Builder {
 	return &lbBuilder{
 		fallbackTimeout: fallbackTimeout,
 	}

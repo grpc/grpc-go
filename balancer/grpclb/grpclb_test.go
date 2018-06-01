@@ -16,9 +16,6 @@
  *
  */
 
-//go:generate protoc --go_out=plugins=:$GOPATH/src grpc_lb_v1/messages/messages.proto
-//go:generate protoc --go_out=plugins=grpc:$GOPATH/src grpc_lb_v1/service/service.proto
-
 package grpclb
 
 import (
@@ -451,9 +448,7 @@ func TestDropRequest(t *testing.T) {
 			DropForLoadBalancing: true,
 		}},
 	}
-	creds := serverNameCheckCreds{
-		expected: beServerName,
-	}
+	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
@@ -592,7 +587,7 @@ const grpclbCustomFallbackName = "grpclb_with_custom_fallback_timeout"
 
 func init() {
 	balancer.Register(&customGRPCLBBuilder{
-		Builder: NewLBBuilderWithFallbackTimeout(100 * time.Millisecond),
+		Builder: newLBBuilderWithFallbackTimeout(100 * time.Millisecond),
 		name:    grpclbCustomFallbackName,
 	})
 }
