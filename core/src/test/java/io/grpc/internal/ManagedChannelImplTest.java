@@ -83,6 +83,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.Channelz.ChannelStats;
+import io.grpc.internal.Channelz.ChannelTrace;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -152,17 +153,7 @@ public class ManagedChannelImplTest {
           return command instanceof ManagedChannelImpl.NameResolverRefresh;
         }
       };
-  private final CallTracer.Factory channelStatsFactory = new CallTracer.Factory() {
-    @Override
-    public CallTracer create() {
-      return new CallTracer(new TimeProvider() {
-        @Override
-        public long currentTimeNanos() {
-          return executor.getTicker().read();
-        }
-      });
-    }
-  };
+
   private final Channelz channelz = new Channelz();
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
@@ -209,10 +200,17 @@ public class ManagedChannelImplTest {
 
   private void createChannel(ClientInterceptor... interceptors) {
     checkState(channel == null);
+    TimeProvider fakeClockTimeProvider = new TimeProvider() {
+      @Override
+      public long currentTimeNanos() {
+        return timer.getTicker().read();
+      }
+    };
+
     channel = new ManagedChannelImpl(
         channelBuilder, mockTransportFactory, new FakeBackoffPolicyProvider(),
         oobExecutorPool, timer.getStopwatchSupplier(), Arrays.asList(interceptors),
-        channelStatsFactory);
+        fakeClockTimeProvider);
 
     if (requestConnection) {
       int numExpectedTasks = 0;
@@ -2067,6 +2065,93 @@ public class ManagedChannelImplTest {
 
     Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
     assertEquals(addressGroup.toString(), getStats((AbstractSubchannel) subchannel).target);
+  }
+
+  @Test
+  public void channelTracing_channelCreationEvent() throws Exception {
+    timer.forwardNanos(1234);
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Channel created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_subchannelCreationEvents() throws Exception {
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    timer.forwardNanos(1234);
+    AbstractSubchannel subchannel =
+        (AbstractSubchannel) helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Child channel created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .setSubchannelRef(subchannel.getInternalSubchannel())
+        .build());
+    assertThat(getStats(subchannel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Subchannel created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_nameResolvingErrorEvent() throws Exception {
+    timer.forwardNanos(1234);
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Failed to resolve name")
+        .setSeverity(ChannelTrace.Event.Severity.CT_WARNING)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_nameResolvedEvent() throws Exception {
+    timer.forwardNanos(1234);
+    channelBuilder.maxTraceEvents(10);
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri)
+            .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+            .build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Address resolved: "
+            + Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_oobChannelCreationEvents() throws Exception {
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    timer.forwardNanos(1234);
+    OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "authority");
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Child channel created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .setChannelRef(oobChannel)
+        .build());
+    assertThat(getStats(oobChannel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("OobChannel created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+    assertThat(getStats(oobChannel.getInternalSubchannel()).channelTrace.events).contains(
+        new ChannelTrace.Event.Builder()
+            .setDescription("Subchannel created")
+            .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+            .setTimestampNanos(timer.getTicker().read())
+            .build());
   }
 
   @Test

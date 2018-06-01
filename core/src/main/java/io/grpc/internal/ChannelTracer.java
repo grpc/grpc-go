@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.ChannelTrace;
@@ -39,8 +40,14 @@ final class ChannelTracer {
   @GuardedBy("lock")
   private int eventsLogged;
 
-  ChannelTracer(final int maxEvents, long channelCreationTimeNanos) {
+  /**
+   * Creates a channel tracer and log the creation event of the underlying channel.
+   *
+   * @param channelType Chennel, Subchannel, or OobChannel
+   */
+  ChannelTracer(final int maxEvents, long channelCreationTimeNanos, String channelType) {
     checkArgument(maxEvents > 0, "maxEvents must be greater than zero");
+    checkNotNull(channelType, "channelType");
     events = new ArrayDeque<Event>() {
       @GuardedBy("lock")
       @Override
@@ -53,6 +60,12 @@ final class ChannelTracer {
       }
     };
     this.channelCreationTimeNanos = channelCreationTimeNanos;
+
+    reportEvent(new ChannelTrace.Event.Builder()
+        .setDescription(channelType + " created")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(channelCreationTimeNanos)
+        .build());
   }
 
   void reportEvent(Event event) {

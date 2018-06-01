@@ -217,6 +217,12 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  @Override
+  public T maxTraceEvents(int maxTraceEvents) {
+    delegate().maxTraceEvents(maxTraceEvents);
+    return thisT();
+  }
+
   /**
    * Returns the {@link ManagedChannel} built by the delegate by default. Overriding method can
    * return different value.

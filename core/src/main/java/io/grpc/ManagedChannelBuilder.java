@@ -464,6 +464,18 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the maximum number of channel trace events to keep in the tracer for each channel or
+   * subchannel. If set to 0, channel tracing is effectively disabled.
+   *
+   * @return this
+   * @since 1.13.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4471")
+  public T maxTraceEvents(int maxTraceEvents) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    *
    * @since 1.0.0

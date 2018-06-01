@@ -47,6 +47,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -67,6 +68,8 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   private final ScheduledExecutorService scheduledExecutor;
   private final Channelz channelz;
   private final CallTracer callsTracer;
+  @CheckForNull
+  private final ChannelTracer channelTracer;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
   private final Object lock = new Object();
@@ -158,7 +161,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      Channelz channelz, CallTracer callsTracer) {
+      Channelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -170,6 +173,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     this.callback = callback;
     this.channelz = channelz;
     this.callsTracer = callsTracer;
+    this.channelTracer = channelTracer;
   }
 
   /**
@@ -470,11 +474,20 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   public ListenableFuture<ChannelStats> getStats() {
     SettableFuture<ChannelStats> ret = SettableFuture.create();
     ChannelStats.Builder builder = new ChannelStats.Builder();
+
+    EquivalentAddressGroup addressGroupSnapshot;
+    List<WithLogId> transportsSnapshot;
     synchronized (lock) {
-      builder.setTarget(addressGroup.toString()).setState(getState());
-      builder.setSockets(new ArrayList<WithLogId>(transports));
+      addressGroupSnapshot = addressGroup;
+      transportsSnapshot = new ArrayList<WithLogId>(transports);
     }
+
+    builder.setTarget(addressGroupSnapshot.toString()).setState(getState());
+    builder.setSockets(transportsSnapshot);
     callsTracer.updateBuilder(builder);
+    if (channelTracer != null) {
+      channelTracer.updateBuilder(builder);
+    }
     ret.set(builder.build());
     return ret;
   }

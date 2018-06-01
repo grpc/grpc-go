@@ -40,45 +40,56 @@ public class ChannelTracerTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("maxEvents must be greater than zero");
 
-    new ChannelTracer(/* maxEvents= */ 0, /* channelCreationTimeNanos= */ 3L);
+    new ChannelTracer(/* maxEvents= */ 0, /* channelCreationTimeNanos= */ 3L, "fooType");
   }
 
   @Test
   public void reportEvents() {
     ChannelTracer channelTracer =
-        new ChannelTracer(/* maxEvents= */ 2, /* channelCreationTimeNanos= */ 3L);
+        new ChannelTracer(/* maxEvents= */ 2, /* channelCreationTimeNanos= */ 3L, "fooType");
     ChannelStats.Builder builder = new ChannelStats.Builder();
-    Event e1 = new Event.Builder().setDescription("e1").setSeverity(Severity.CT_ERROR).build();
-    Event e2 = new Event.Builder().setDescription("e2").setSeverity(Severity.CT_INFO).build();
-    Event e3 = new Event.Builder().setDescription("e3").setSeverity(Severity.CT_WARNING).build();
-    Event e4 = new Event.Builder().setDescription("e4").setSeverity(Severity.CT_UNKNOWN).build();
+    Event e1 = new Event.Builder()
+        .setDescription("e1").setSeverity(Severity.CT_ERROR).setTimestampNanos(1001).build();
+    Event e2 = new Event.Builder()
+        .setDescription("e2").setSeverity(Severity.CT_INFO).setTimestampNanos(1002).build();
+    Event e3 = new Event.Builder()
+        .setDescription("e3").setSeverity(Severity.CT_WARNING).setTimestampNanos(1003).build();
+    Event e4 = new Event.Builder()
+        .setDescription("e4").setSeverity(Severity.CT_UNKNOWN).setTimestampNanos(1004).build();
+
+    channelTracer.updateBuilder(builder);
+    ChannelStats stats = builder.build();
+    assertThat(stats.channelTrace.events).hasSize(1);
+    Event creationEvent = stats.channelTrace.events.get(0);
+    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(1);
+
 
     channelTracer.reportEvent(e1);
     channelTracer.updateBuilder(builder);
-    ChannelStats stats = builder.build();
+    stats = builder.build();
 
-    assertThat(stats.channelTrace.events).containsExactly(e1);
-    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(1);
+    assertThat(stats.channelTrace.events).containsExactly(creationEvent, e1);
+    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(2);
 
     channelTracer.reportEvent(e2);
     channelTracer.updateBuilder(builder);
     stats = builder.build();
 
     assertThat(stats.channelTrace.events).containsExactly(e1, e2);
-    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(2);
+    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(3);
 
     channelTracer.reportEvent(e3);
     channelTracer.updateBuilder(builder);
     stats = builder.build();
 
     assertThat(stats.channelTrace.events).containsExactly(e2, e3);
-    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(3);
+    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(4);
 
     channelTracer.reportEvent(e4);
     channelTracer.updateBuilder(builder);
     stats = builder.build();
 
     assertThat(stats.channelTrace.events).containsExactly(e3, e4);
-    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(4);
+    assertThat(stats.channelTrace.numEventsLogged).isEqualTo(5);
   }
 }

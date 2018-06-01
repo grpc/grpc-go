@@ -16,11 +16,12 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
 import java.security.cert.Certificate;
@@ -375,7 +376,7 @@ public final class Channelz {
         long lastCallStartedNanos,
         List<WithLogId> subchannels,
         List<WithLogId> sockets) {
-      Preconditions.checkState(
+      checkState(
           subchannels.isEmpty() || sockets.isEmpty(),
           "channels can have subchannels only, subchannels can have either sockets OR subchannels, "
               + "neither can have both");
@@ -438,14 +439,14 @@ public final class Channelz {
 
       /** Sets the subchannels. */
       public Builder setSubchannels(List<WithLogId> subchannels) {
-        Preconditions.checkState(sockets.isEmpty());
+        checkState(sockets.isEmpty());
         this.subchannels = Collections.unmodifiableList(checkNotNull(subchannels));
         return this;
       }
 
       /** Sets the sockets. */
       public Builder setSockets(List<WithLogId> sockets) {
-        Preconditions.checkState(subchannels.isEmpty());
+        checkState(subchannels.isEmpty());
         this.sockets = Collections.unmodifiableList(checkNotNull(sockets));
         return this;
       }
@@ -481,8 +482,8 @@ public final class Channelz {
     }
 
     public static final class Builder {
-      private long numEventsLogged;
-      private long creationTimeNanos;
+      private Long numEventsLogged;
+      private Long creationTimeNanos;
       private List<Event> events = Collections.emptyList();
 
       public Builder setNumEventsLogged(long numEventsLogged) {
@@ -500,7 +501,10 @@ public final class Channelz {
         return this;
       }
 
+      /** Builds a new ChannelTrace instance. */
       public ChannelTrace build() {
+        checkNotNull(numEventsLogged, "numEventsLogged");
+        checkNotNull(creationTimeNanos, "creationTimeNanos");
         return new ChannelTrace(numEventsLogged, creationTimeNanos, events);
       }
     }
@@ -522,20 +526,46 @@ public final class Channelz {
       private Event(
           String description, Severity severity, long timestampNanos,
           @Nullable WithLogId channelRef, @Nullable WithLogId subchannelRef) {
-        checkArgument(
-            channelRef == null || subchannelRef == null,
-            "at least one of channelRef and subchannelRef must be null");
-        this.description = checkNotNull(description, "description");
+        this.description = description;
         this.severity = checkNotNull(severity, "severity");
         this.timestampNanos = timestampNanos;
         this.channelRef = channelRef;
         this.subchannelRef = subchannelRef;
       }
 
+      @Override
+      public int hashCode() {
+        return Objects.hashCode(description, severity, timestampNanos, channelRef, subchannelRef);
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        if (o instanceof Event) {
+          Event that = (Event) o;
+          return Objects.equal(description, that.description)
+              && Objects.equal(severity, that.severity)
+              && Objects.equal(timestampNanos, that.timestampNanos)
+              && Objects.equal(channelRef, that.channelRef)
+              && Objects.equal(subchannelRef, that.subchannelRef);
+        }
+        return false;
+      }
+
+      @Override
+      public String toString() {
+        return MoreObjects.toStringHelper(this)
+            .add("description", description)
+            .add("severity", severity)
+            .add("timestampNanos", timestampNanos)
+            .add("channelRef", channelRef)
+            .add("subchannelRef", subchannelRef)
+            .toString();
+      }
+
       public static final class Builder {
         private String description;
         private Severity severity;
-        private long timestampNanos;
+        private Long timestampNanos;
         private WithLogId channelRef;
         private WithLogId subchannelRef;
 
@@ -544,7 +574,7 @@ public final class Channelz {
           return this;
         }
 
-        public Builder setTimestampNaonos(long timestampNanos) {
+        public Builder setTimestampNanos(long timestampNanos) {
           this.timestampNanos = timestampNanos;
           return this;
         }
@@ -564,7 +594,14 @@ public final class Channelz {
           return this;
         }
 
+        /** Builds a new Event instance. */
         public Event build() {
+          checkNotNull(description, "description");
+          checkNotNull(severity, "severity");
+          checkNotNull(timestampNanos, "timestampNanos");
+          checkState(
+              channelRef == null || subchannelRef == null,
+              "at least one of channelRef and subchannelRef must be null");
           return new Event(description, severity, timestampNanos, channelRef, subchannelRef);
         }
       }
@@ -600,7 +637,7 @@ public final class Channelz {
      */
     public OtherSecurity(String name, @Nullable Object any) {
       this.name = checkNotNull(name);
-      Preconditions.checkState(
+      checkState(
           any == null || any.getClass().getName().endsWith("com.google.protobuf.Any"),
           "the 'any' object must be of type com.google.protobuf.Any");
       this.any = any;

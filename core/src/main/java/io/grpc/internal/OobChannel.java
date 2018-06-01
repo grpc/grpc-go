@@ -47,6 +47,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -71,6 +73,8 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
   private final CallTracer channelCallsTracer;
+  @CheckForNull
+  private final ChannelTracer channelTracer;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -91,7 +95,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
       ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
-      CallTracer callsTracer, Channelz channelz) {
+      CallTracer callsTracer, @Nullable  ChannelTracer channelTracer, Channelz channelz) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -121,6 +125,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
         }
       });
     this.channelCallsTracer = callsTracer;
+    this.channelTracer = channelTracer;
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -262,6 +267,9 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
     final SettableFuture<ChannelStats> ret = SettableFuture.create();
     final ChannelStats.Builder builder = new ChannelStats.Builder();
     channelCallsTracer.updateBuilder(builder);
+    if (channelTracer != null) {
+      channelTracer.updateBuilder(builder);
+    }
     builder
         .setTarget(authority)
         .setState(subchannel.getState())

@@ -861,12 +861,12 @@ public final class ChannelzProtoUtilTest {
     Event event1 = new Event.Builder()
         .setDescription("event1")
         .setSeverity(Severity.CT_ERROR)
-        .setTimestampNaonos(12)
+        .setTimestampNanos(12)
         .setSubchannelRef(subchannel)
         .build();
     Event event2 = new Event.Builder()
         .setDescription("event2")
-        .setTimestampNaonos(34)
+        .setTimestampNanos(34)
         .setSeverity(Severity.CT_INFO)
         .setChannelRef(channel)
         .build();

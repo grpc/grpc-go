@@ -135,6 +135,7 @@ public abstract class AbstractManagedChannelImplBuilder
   boolean temporarilyDisableRetry;
 
   Channelz channelz = Channelz.instance();
+  int maxTraceEvents;
 
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
@@ -337,6 +338,13 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Override
+  public T maxTraceEvents(int maxTraceEvents) {
+    checkArgument(maxTraceEvents >= 0, "maxTraceEvents must be non-negative");
+    this.maxTraceEvents = maxTraceEvents;
+    return thisT();
+  }
+
   /**
    * Override the default stats implementation.
    */
@@ -400,7 +408,7 @@ public abstract class AbstractManagedChannelImplBuilder
         SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
         GrpcUtil.STOPWATCH_SUPPLIER,
         getEffectiveInterceptors(),
-        CallTracer.getDefaultFactory()));
+        TimeProvider.SYSTEM_TIME_PROVIDER));
   }
 
   // Temporarily disable retry when stats or tracing is enabled to avoid breakage, until we know

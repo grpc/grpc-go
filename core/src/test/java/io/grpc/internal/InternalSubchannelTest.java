@@ -951,7 +951,7 @@ public class InternalSubchannelTest {
     internalSubchannel = new InternalSubchannel(addressGroup, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), channelExecutor, mockInternalSubchannelCallback,
-        channelz, CallTracer.getDefaultFactory().create());
+        channelz, CallTracer.getDefaultFactory().create(), null);
   }
 
   private void assertNoCallbackInvoke() {
