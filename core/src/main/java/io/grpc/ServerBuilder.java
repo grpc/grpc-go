@@ -226,7 +226,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   }
 
   /**
-   * Sets the BinaryLog object that this server should log to. The channel does not take
+   * Sets the BinaryLog object that this server should log to. The server does not take
    * ownership of the object, and users are responsible for calling {@link BinaryLog#close()}.
    *
    * @param binaryLog the object to provide logging.
