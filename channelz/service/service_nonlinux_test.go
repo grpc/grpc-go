@@ -18,6 +18,9 @@
  *
  */
 
+// Non-linux system does not support socket option. Therefore, the function
+// socketProtoToStruct defined in this file skips the parsing of socket option field.
+
 package service
 
 import (

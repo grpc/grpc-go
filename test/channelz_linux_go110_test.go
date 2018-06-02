@@ -18,6 +18,10 @@
  *
  */
 
+// The test in this file should be run in an environment that has go1.10 or later,
+// as the function SyscallConn() (required to get socket option) was
+// introduced to net.TCPListener in go1.10.
+
 package test
 
 import (
@@ -28,10 +32,6 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/test/leakcheck"
 )
-
-func init() {
-	channelz.TurnOn()
-}
 
 func TestCZSocketMetricsSocketOption(t *testing.T) {
 	envs := []env{tcpClearRREnv, tcpTLSRREnv}

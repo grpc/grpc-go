@@ -18,6 +18,10 @@
  *
  */
 
+// SocketOptions is only supported on linux system. The functions defined in
+// this file are to parse the socket option field and the test is specifically
+// to verify the behavior of socket option parsing.
+
 package service
 
 import (
