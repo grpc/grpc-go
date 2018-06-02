@@ -29,7 +29,8 @@ var (
 	// for circular dependency reasons.
 	TestingUseHandlerImpl func(grpcServer interface{})
 
-	// set by clientconn.go
+	// WithContextDialer is exported by clientconn.go
 	WithContextDialer   interface{} // func(context.Context, string) (net.Conn, error) grpc.DialOption
+	// WithResolverBuilder is exported by clientconn.go
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 )
