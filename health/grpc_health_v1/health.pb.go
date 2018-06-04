@@ -163,8 +163,7 @@ func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts .
 	return out, nil
 }
 
-// Server API for Health service
-
+// HealthServer is the server API for Health service.
 type HealthServer interface {
 	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 }

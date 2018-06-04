@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"time"
 
+	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -56,7 +57,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 
 	var backendAddrs []resolver.Address
 	for _, s := range l.Servers {
-		if s.DropForLoadBalancing || s.DropForRateLimiting {
+		if s.Drop {
 			continue
 		}
 
@@ -163,7 +164,7 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 		}
 		stats := lb.clientStats.toClientStats()
 		t := time.Now()
-		stats.Timestamp = &lbpb.Timestamp{
+		stats.Timestamp = &timestamppb.Timestamp{
 			Seconds: t.Unix(),
 			Nanos:   int32(t.Nanosecond()),
 		}

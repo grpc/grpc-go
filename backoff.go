@@ -19,8 +19,9 @@
 package grpc
 
 import (
-	"math/rand"
 	"time"
+
+	"google.golang.org/grpc/internal/grpcrand"
 )
 
 // DefaultBackoffConfig uses values specified for backoff in
@@ -88,7 +89,7 @@ func (bc BackoffConfig) backoff(retries int) time.Duration {
 	}
 	// Randomize backoff delays so that if a cluster of requests start at
 	// the same time, they won't operate in lockstep.
-	backoff *= 1 + bc.jitter*(rand.Float64()*2-1)
+	backoff *= 1 + bc.jitter*(grpcrand.Float64()*2-1)
 	if backoff < 0 {
 		return 0
 	}

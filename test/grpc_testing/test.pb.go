@@ -702,8 +702,7 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 	return m, nil
 }
 
-// Server API for TestService service
-
+// TestServiceServer is the server API for TestService service.
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)

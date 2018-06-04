@@ -769,8 +769,7 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 	return m, nil
 }
 
-// Server API for TestService service
-
+// TestServiceServer is the server API for TestService service.
 type TestServiceServer interface {
 	// One empty request followed by one empty response.
 	EmptyCall(context.Context, *Empty) (*Empty, error)
@@ -998,8 +997,7 @@ func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *
 	return out, nil
 }
 
-// Server API for UnimplementedService service
-
+// UnimplementedServiceServer is the server API for UnimplementedService service.
 type UnimplementedServiceServer interface {
 	// A call that no server should implement
 	UnimplementedCall(context.Context, *Empty) (*Empty, error)

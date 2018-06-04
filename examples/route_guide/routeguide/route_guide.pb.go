@@ -454,8 +454,7 @@ func (x *routeGuideRouteChatClient) Recv() (*RouteNote, error) {
 	return m, nil
 }
 
-// Server API for RouteGuide service
-
+// RouteGuideServer is the server API for RouteGuide service.
 type RouteGuideServer interface {
 	// A simple RPC.
 	//
