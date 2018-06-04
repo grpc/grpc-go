@@ -365,7 +365,17 @@ func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimato
 const minBatchSize = 1000
 
 // run should be run in a separate goroutine.
-func (l *loopyWriter) run() error {
+func (l *loopyWriter) run() (err error) {
+	defer func() {
+		if err == ErrConnClosing {
+			// Don't log ErrConnClosing as error since it happens
+			// 1. When the connection is closed by some other known issue.
+			// 2. User closed the connection.
+			// 3. A graceful close of connection.
+			infof("transport: loopyWriter.run returning. %v", err)
+			err = nil
+		}
+	}()
 	for {
 		it, err := l.cbuf.get(true)
 		if err != nil {
