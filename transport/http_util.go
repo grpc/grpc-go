@@ -468,9 +468,13 @@ func encodeGrpcMessageUnchecked(msg string) string {
 	for len(msg) > 0 {
 		r, size := utf8.DecodeRuneInString(msg)
 		for _, b := range []byte(string(r)) {
-			if r >= spaceByte && r < tildaByte && r != percentByte {
+			if size == 1 && b >= spaceByte && b < tildaByte && b != percentByte {
 				buf.WriteByte(b)
 			} else {
+				// If size > 1, r could be utf8.RuneError, and it is 2-bytes
+				// long. We need the for loop, otherwise
+				// fmt.Sprintf("%%%02X", utf8.RuneError) gives "%FFFD" instead
+				// of "%FF%FD".
 				buf.WriteString(fmt.Sprintf("%%%02X", b))
 			}
 		}
