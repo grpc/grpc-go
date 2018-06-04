@@ -35,7 +35,8 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.StreamTracer;
 import io.opencensus.trace.EndSpanOptions;
-import io.opencensus.trace.NetworkEvent;
+import io.opencensus.trace.MessageEvent;
+import io.opencensus.trace.MessageEvent.Type;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
@@ -210,17 +211,17 @@ final class CensusTracingModule {
         .build();
   }
 
-  private static void recordNetworkEvent(
-      Span span, NetworkEvent.Type type,
+  private static void recordMessageEvent(
+      Span span, MessageEvent.Type type,
       int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-    NetworkEvent.Builder eventBuilder = NetworkEvent.builder(type, seqNo);
+    MessageEvent.Builder eventBuilder = MessageEvent.builder(type, seqNo);
     if (optionalUncompressedSize != -1) {
       eventBuilder.setUncompressedMessageSize(optionalUncompressedSize);
     }
     if (optionalWireSize != -1) {
       eventBuilder.setCompressedMessageSize(optionalWireSize);
     }
-    span.addNetworkEvent(eventBuilder.build());
+    span.addMessageEvent(eventBuilder.build());
   }
 
   @VisibleForTesting
@@ -280,15 +281,15 @@ final class CensusTracingModule {
     @Override
     public void outboundMessageSent(
         int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      recordNetworkEvent(
-          span, NetworkEvent.Type.SENT, seqNo, optionalWireSize, optionalUncompressedSize);
+      recordMessageEvent(
+          span, Type.SENT, seqNo, optionalWireSize, optionalUncompressedSize);
     }
 
     @Override
     public void inboundMessageRead(
         int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      recordNetworkEvent(
-          span, NetworkEvent.Type.RECV, seqNo, optionalWireSize, optionalUncompressedSize);
+      recordMessageEvent(
+          span, Type.RECEIVED, seqNo, optionalWireSize, optionalUncompressedSize);
     }
   }
 
@@ -346,15 +347,15 @@ final class CensusTracingModule {
     @Override
     public void outboundMessageSent(
         int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      recordNetworkEvent(
-          span, NetworkEvent.Type.SENT, seqNo, optionalWireSize, optionalUncompressedSize);
+      recordMessageEvent(
+          span, Type.SENT, seqNo, optionalWireSize, optionalUncompressedSize);
     }
 
     @Override
     public void inboundMessageRead(
         int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      recordNetworkEvent(
-          span, NetworkEvent.Type.RECV, seqNo, optionalWireSize, optionalUncompressedSize);
+      recordMessageEvent(
+          span, Type.RECEIVED, seqNo, optionalWireSize, optionalUncompressedSize);
     }
   }
 

@@ -40,7 +40,7 @@ import io.opencensus.trace.Annotation;
 import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.Link;
-import io.opencensus.trace.NetworkEvent;
+import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanBuilder;
@@ -347,7 +347,7 @@ public class StatsTestUtils {
     public void addAnnotation(Annotation annotation) {}
 
     @Override
-    public void addNetworkEvent(NetworkEvent networkEvent) {}
+    public void addMessageEvent(MessageEvent messageEvent) {}
 
     @Override
     public void addLink(Link link) {}

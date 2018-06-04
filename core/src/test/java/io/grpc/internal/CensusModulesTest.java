@@ -72,8 +72,8 @@ import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagValue;
 import io.opencensus.tags.Tags;
 import io.opencensus.trace.EndSpanOptions;
-import io.opencensus.trace.NetworkEvent;
-import io.opencensus.trace.NetworkEvent.Type;
+import io.opencensus.trace.MessageEvent;
+import io.opencensus.trace.MessageEvent.Type;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanBuilder;
 import io.opencensus.trace.SpanContext;
@@ -174,7 +174,7 @@ public class CensusModulesTest {
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
   @Captor
-  private ArgumentCaptor<NetworkEvent> networkEventCaptor;
+  private ArgumentCaptor<MessageEvent> messageEventCaptor;
 
   private CensusStatsModule censusStats;
   private CensusTracingModule censusTracing;
@@ -448,14 +448,14 @@ public class CensusModulesTest {
     callTracer.callEnded(Status.OK);
 
     InOrder inOrder = inOrder(spyClientSpan);
-    inOrder.verify(spyClientSpan, times(3)).addNetworkEvent(networkEventCaptor.capture());
-    List<NetworkEvent> events = networkEventCaptor.getAllValues();
+    inOrder.verify(spyClientSpan, times(3)).addMessageEvent(messageEventCaptor.capture());
+    List<MessageEvent> events = messageEventCaptor.getAllValues();
     assertEquals(
-        NetworkEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
+        MessageEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
     assertEquals(
-        NetworkEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
+        MessageEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
     assertEquals(
-        NetworkEvent.builder(Type.RECV, 0)
+        MessageEvent.builder(Type.RECEIVED, 0)
             .setCompressedMessageSize(255)
             .setUncompressedMessageSize(90)
             .build(),
@@ -870,14 +870,14 @@ public class CensusModulesTest {
     serverStreamTracer.streamClosed(Status.CANCELLED);
 
     InOrder inOrder = inOrder(spyServerSpan);
-    inOrder.verify(spyServerSpan, times(3)).addNetworkEvent(networkEventCaptor.capture());
-    List<NetworkEvent> events = networkEventCaptor.getAllValues();
+    inOrder.verify(spyServerSpan, times(3)).addMessageEvent(messageEventCaptor.capture());
+    List<MessageEvent> events = messageEventCaptor.getAllValues();
     assertEquals(
-        NetworkEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
+        MessageEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
     assertEquals(
-        NetworkEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
+        MessageEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
     assertEquals(
-        NetworkEvent.builder(Type.RECV, 0)
+        MessageEvent.builder(Type.RECEIVED, 0)
             .setCompressedMessageSize(255)
             .setUncompressedMessageSize(90)
             .build(),

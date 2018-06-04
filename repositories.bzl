@@ -279,15 +279,15 @@ def io_netty_tcnative_boringssl_static():
 def io_opencensus_api():
   native.maven_jar(
       name = "io_opencensus_opencensus_api",
-      artifact = "io.opencensus:opencensus-api:0.11.0",
-      sha1 = "c1ff1f0d737a689d900a3e2113ddc29847188c64",
+      artifact = "io.opencensus:opencensus-api:0.12.3",
+      sha1 = "743f074095f29aa985517299545e72cc99c87de0",
   )
 
 def io_opencensus_grpc_metrics():
   native.maven_jar(
       name = "io_opencensus_opencensus_contrib_grpc_metrics",
-      artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.11.0",
-      sha1 = "d57b877f1a28a613452d45e35c7faae5af585258",
+      artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.12.3",
+      sha1 = "a4c7ff238a91b901c8b459889b6d0d7a9d889b4d",
   )
 
 def javax_annotation():
