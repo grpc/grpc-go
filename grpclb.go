@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -38,7 +39,7 @@ const (
 	grpclbName             = "grpclb"
 )
 
-func convertDuration(d *lbpb.Duration) time.Duration {
+func convertDuration(d *durationpb.Duration) time.Duration {
 	if d == nil {
 		return 0
 	}
@@ -138,7 +139,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
-		clientStats:    &rpcStats{},
+		clientStats:    newRPCStats(),
 	}
 
 	return lb

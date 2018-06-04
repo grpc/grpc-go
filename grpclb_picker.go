@@ -30,49 +30,61 @@ import (
 )
 
 type rpcStats struct {
-	NumCallsStarted                          int64
-	NumCallsFinished                         int64
-	NumCallsFinishedWithDropForRateLimiting  int64
-	NumCallsFinishedWithDropForLoadBalancing int64
-	NumCallsFinishedWithClientFailedToSend   int64
-	NumCallsFinishedKnownReceived            int64
+	numCallsStarted                        int64
+	numCallsFinished                       int64
+	numCallsFinishedWithClientFailedToSend int64
+	numCallsFinishedKnownReceived          int64
+
+	mu sync.Mutex
+	// map load_balance_token -> num_calls_dropped
+	numCallsDropped map[string]int64
+}
+
+func newRPCStats() *rpcStats {
+	return &rpcStats{
+		numCallsDropped: make(map[string]int64),
+	}
 }
 
 // toClientStats converts rpcStats to lbpb.ClientStats, and clears rpcStats.
 func (s *rpcStats) toClientStats() *lbpb.ClientStats {
 	stats := &lbpb.ClientStats{
-		NumCallsStarted:                          atomic.SwapInt64(&s.NumCallsStarted, 0),
-		NumCallsFinished:                         atomic.SwapInt64(&s.NumCallsFinished, 0),
-		NumCallsFinishedWithDropForRateLimiting:  atomic.SwapInt64(&s.NumCallsFinishedWithDropForRateLimiting, 0),
-		NumCallsFinishedWithDropForLoadBalancing: atomic.SwapInt64(&s.NumCallsFinishedWithDropForLoadBalancing, 0),
-		NumCallsFinishedWithClientFailedToSend:   atomic.SwapInt64(&s.NumCallsFinishedWithClientFailedToSend, 0),
-		NumCallsFinishedKnownReceived:            atomic.SwapInt64(&s.NumCallsFinishedKnownReceived, 0),
+		NumCallsStarted:                        atomic.SwapInt64(&s.numCallsStarted, 0),
+		NumCallsFinished:                       atomic.SwapInt64(&s.numCallsFinished, 0),
+		NumCallsFinishedWithClientFailedToSend: atomic.SwapInt64(&s.numCallsFinishedWithClientFailedToSend, 0),
+		NumCallsFinishedKnownReceived:          atomic.SwapInt64(&s.numCallsFinishedKnownReceived, 0),
+	}
+	s.mu.Lock()
+	dropped := s.numCallsDropped
+	s.numCallsDropped = make(map[string]int64)
+	s.mu.Unlock()
+	for token, count := range dropped {
+		stats.CallsFinishedWithDrop = append(stats.CallsFinishedWithDrop, &lbpb.ClientStatsPerToken{
+			LoadBalanceToken: token,
+			NumCalls:         count,
+		})
 	}
 	return stats
 }
 
-func (s *rpcStats) dropForRateLimiting() {
-	atomic.AddInt64(&s.NumCallsStarted, 1)
-	atomic.AddInt64(&s.NumCallsFinishedWithDropForRateLimiting, 1)
-	atomic.AddInt64(&s.NumCallsFinished, 1)
-}
-
-func (s *rpcStats) dropForLoadBalancing() {
-	atomic.AddInt64(&s.NumCallsStarted, 1)
-	atomic.AddInt64(&s.NumCallsFinishedWithDropForLoadBalancing, 1)
-	atomic.AddInt64(&s.NumCallsFinished, 1)
+func (s *rpcStats) drop(token string) {
+	atomic.AddInt64(&s.numCallsStarted, 1)
+	s.mu.Lock()
+	s.numCallsDropped[token]++
+	s.mu.Unlock()
+	atomic.AddInt64(&s.numCallsFinished, 1)
 }
 
 func (s *rpcStats) failedToSend() {
-	atomic.AddInt64(&s.NumCallsStarted, 1)
-	atomic.AddInt64(&s.NumCallsFinishedWithClientFailedToSend, 1)
-	atomic.AddInt64(&s.NumCallsFinished, 1)
+	atomic.AddInt64(&s.numCallsStarted, 1)
+	atomic.AddInt64(&s.numCallsFinishedWithClientFailedToSend, 1)
+	atomic.AddInt64(&s.numCallsFinished, 1)
 }
 
 func (s *rpcStats) knownReceived() {
-	atomic.AddInt64(&s.NumCallsStarted, 1)
-	atomic.AddInt64(&s.NumCallsFinishedKnownReceived, 1)
-	atomic.AddInt64(&s.NumCallsFinished, 1)
+	atomic.AddInt64(&s.numCallsStarted, 1)
+	atomic.AddInt64(&s.numCallsFinishedKnownReceived, 1)
+	atomic.AddInt64(&s.numCallsFinished, 1)
 }
 
 type errPicker struct {
@@ -131,12 +143,8 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balance
 	p.serverListNext = (p.serverListNext + 1) % len(p.serverList)
 
 	// If it's a drop, return an error and fail the RPC.
-	if s.DropForRateLimiting {
-		p.stats.dropForRateLimiting()
-		return nil, nil, status.Errorf(codes.Unavailable, "request dropped by grpclb")
-	}
-	if s.DropForLoadBalancing {
-		p.stats.dropForLoadBalancing()
+	if s.Drop {
+		p.stats.drop(s.LoadBalanceToken)
 		return nil, nil, status.Errorf(codes.Unavailable, "request dropped by grpclb")
 	}
 
