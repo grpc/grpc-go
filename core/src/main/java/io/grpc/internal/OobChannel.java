@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
@@ -39,6 +40,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.Channelz.ChannelStats;
+import io.grpc.internal.Channelz.ChannelTrace;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
@@ -75,6 +77,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   private final CallTracer channelCallsTracer;
   @CheckForNull
   private final ChannelTracer channelTracer;
+  private final TimeProvider timeProvider;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -95,7 +98,8 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
       ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
-      CallTracer callsTracer, @Nullable  ChannelTracer channelTracer, Channelz channelz) {
+      CallTracer callsTracer, @Nullable  ChannelTracer channelTracer, Channelz channelz,
+      TimeProvider timeProvider) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
@@ -126,6 +130,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
       });
     this.channelCallsTracer = callsTracer;
     this.channelTracer = channelTracer;
+    this.timeProvider = timeProvider;
   }
 
   // Must be called only once, right after the OobChannel is created.
@@ -204,6 +209,14 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   }
 
   @Override
+  public ConnectivityState getState(boolean requestConnectionIgnored) {
+    if (subchannel == null) {
+      return ConnectivityState.IDLE;
+    }
+    return subchannel.getState();
+  }
+
+  @Override
   public ManagedChannel shutdown() {
     shutdown = true;
     delayedTransport.shutdown(Status.UNAVAILABLE.withDescription("OobChannel.shutdown() called"));
@@ -224,6 +237,14 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   }
 
   void handleSubchannelStateChange(final ConnectivityStateInfo newState) {
+    if (channelTracer != null) {
+      channelTracer.reportEvent(
+          new ChannelTrace.Event.Builder()
+              .setDescription("Entering " + newState.getState() + " state")
+              .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+              .setTimestampNanos(timeProvider.currentTimeNanos())
+              .build());
+    }
     switch (newState.getState()) {
       case READY:
       case IDLE:

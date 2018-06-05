@@ -2130,6 +2130,49 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void channelTracing_stateChangeEvent() throws Exception {
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    timer.forwardNanos(1234);
+    helper.updateBalancingState(CONNECTING, mockPicker);
+    assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Entering CONNECTING state")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_subchannelStateChangeEvent() throws Exception {
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    AbstractSubchannel subchannel =
+        (AbstractSubchannel) helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    timer.forwardNanos(1234);
+    subchannel.obtainActiveTransport();
+    assertThat(getStats(subchannel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Entering CONNECTING state")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
+  public void channelTracing_oobChannelStateChangeEvent() throws Exception {
+    channelBuilder.maxTraceEvents(10);
+    createChannel();
+    OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "authority");
+    timer.forwardNanos(1234);
+    oobChannel.handleSubchannelStateChange(
+        ConnectivityStateInfo.forNonError(ConnectivityState.CONNECTING));
+    assertThat(getStats(oobChannel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
+        .setDescription("Entering CONNECTING state")
+        .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        .setTimestampNanos(timer.getTicker().read())
+        .build());
+  }
+
+  @Test
   public void channelTracing_oobChannelCreationEvents() throws Exception {
     channelBuilder.maxTraceEvents(10);
     createChannel();

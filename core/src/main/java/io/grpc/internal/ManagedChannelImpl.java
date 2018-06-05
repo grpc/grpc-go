@@ -385,6 +385,14 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     shutdownNameResolverAndLoadBalancer(true);
     delayedTransport.reprocess(null);
     nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
+    if (channelTracer != null) {
+      channelTracer.reportEvent(
+          new ChannelTrace.Event.Builder()
+              .setDescription("Entering IDLE state")
+              .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+              .setTimestampNanos(timeProvider.currentTimeNanos())
+              .build());
+    }
     channelStateManager.gotoState(IDLE);
   }
 
@@ -666,6 +674,13 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
+        if (channelTracer != null) {
+          channelTracer.reportEvent(new ChannelTrace.Event.Builder()
+              .setDescription("Entering SHUTDOWN state")
+              .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+              .setTimestampNanos(timeProvider.currentTimeNanos())
+              .build());
+        }
         channelStateManager.gotoState(SHUTDOWN);
       }
     });
@@ -724,6 +739,14 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       }
     };
     updateSubchannelPicker(newPicker);
+    if (channelTracer != null) {
+      channelTracer.reportEvent(
+          new ChannelTrace.Event.Builder()
+              .setDescription("Entering TRANSIENT_FAILURE state")
+              .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+              .setTimestampNanos(timeProvider.currentTimeNanos())
+              .build());
+    }
     channelStateManager.gotoState(TRANSIENT_FAILURE);
   }
 
@@ -1034,7 +1057,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           },
           channelz,
           callTracerFactory.create(),
-          subchannelTracer);
+          subchannelTracer,
+          timeProvider);
       if (channelTracer != null) {
         channelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Child channel created")
@@ -1085,6 +1109,14 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               // It's not appropriate to report SHUTDOWN state from lb.
               // Ignore the case of newState == SHUTDOWN for now.
               if (newState != SHUTDOWN) {
+                if (channelTracer != null) {
+                  channelTracer.reportEvent(
+                      new ChannelTrace.Event.Builder()
+                          .setDescription("Entering " + newState + " state")
+                          .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+                          .setTimestampNanos(timeProvider.currentTimeNanos())
+                          .build());
+                }
                 channelStateManager.gotoState(newState);
               }
             }
@@ -1111,7 +1143,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       }
       final OobChannel oobChannel = new OobChannel(
           authority, oobExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, callTracerFactory.create(), oobChannelTracer, channelz);
+          channelExecutor, callTracerFactory.create(), oobChannelTracer, channelz, timeProvider);
       if (channelTracer != null) {
         channelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Child channel created")
@@ -1142,7 +1174,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           },
           channelz,
           callTracerFactory.create(),
-          subchannelTracer);
+          subchannelTracer,
+          timeProvider);
       if (oobChannelTracer != null) {
         oobChannelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Child channel created")

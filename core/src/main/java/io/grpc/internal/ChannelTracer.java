@@ -64,6 +64,9 @@ final class ChannelTracer {
     reportEvent(new ChannelTrace.Event.Builder()
         .setDescription(channelType + " created")
         .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+        // passing the timestamp in as a parameter instead of computing it right here because when
+        // parent channel and subchannel both report the same event of the subchannel (e.g. creation
+        // event of the subchannel) we want the timestamps to be exactly the same.
         .setTimestampNanos(channelCreationTimeNanos)
         .build());
   }

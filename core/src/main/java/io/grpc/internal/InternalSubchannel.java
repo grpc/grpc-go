@@ -38,6 +38,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.Channelz.ChannelStats;
+import io.grpc.internal.Channelz.ChannelTrace;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,6 +71,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   private final CallTracer callsTracer;
   @CheckForNull
   private final ChannelTracer channelTracer;
+  private final TimeProvider timeProvider;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
   private final Object lock = new Object();
@@ -161,7 +163,8 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      Channelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer) {
+      Channelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer,
+      TimeProvider timeProvider) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -174,6 +177,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     this.channelz = channelz;
     this.callsTracer = callsTracer;
     this.channelTracer = channelTracer;
+    this.timeProvider = timeProvider;
   }
 
   /**
@@ -314,6 +318,14 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       Preconditions.checkState(state.getState() != SHUTDOWN,
           "Cannot transition out of SHUTDOWN to " + newState);
       state = newState;
+      if (channelTracer != null) {
+        channelTracer.reportEvent(
+            new ChannelTrace.Event.Builder()
+                .setDescription("Entering " + state + " state")
+                .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+                .setTimestampNanos(timeProvider.currentTimeNanos())
+                .build());
+      }
       channelExecutor.executeLater(new Runnable() {
           @Override
           public void run() {
