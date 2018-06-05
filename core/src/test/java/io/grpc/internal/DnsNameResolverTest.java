@@ -281,14 +281,20 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void unquoteRemovesJndiFormatting() {
-    assertEquals("blah", DnsNameResolver.unquote("blah"));
-    assertEquals("", DnsNameResolver.unquote("\"\""));
-    assertEquals("blahblah", DnsNameResolver.unquote("blah blah"));
-    assertEquals("blahfoo blah", DnsNameResolver.unquote("blah \"foo blah\""));
-    assertEquals("blah blah", DnsNameResolver.unquote("\"blah blah\""));
-    assertEquals("blah\"blah", DnsNameResolver.unquote("\"blah\\\"blah\""));
-    assertEquals("blah\\blah", DnsNameResolver.unquote("\"blah\\\\blah\""));
+  public void normalizeDataRemovesJndiFormattingForTxtRecords() {
+    assertEquals("blah", DnsNameResolver.normalizeData("TXT", "blah"));
+    assertEquals("", DnsNameResolver.normalizeData("TXT", "\"\""));
+    assertEquals("blahblah", DnsNameResolver.normalizeData("TXT", "blah blah"));
+    assertEquals("blahfoo blah", DnsNameResolver.normalizeData("TXT", "blah \"foo blah\""));
+    assertEquals("blah blah", DnsNameResolver.normalizeData("TXT", "\"blah blah\""));
+    assertEquals("blah\"blah", DnsNameResolver.normalizeData("TXT", "\"blah\\\"blah\""));
+    assertEquals("blah\\blah", DnsNameResolver.normalizeData("TXT", "\"blah\\\\blah\""));
+  }
+
+  @Test
+  public void normalizeDataLeavesSrvRecordsUnModified() {
+    assertEquals("0 0 1234 foo.bar.com", DnsNameResolver.normalizeData(
+        "SRV", "0 0 1234 foo.bar.com"));
   }
 
   @Test
