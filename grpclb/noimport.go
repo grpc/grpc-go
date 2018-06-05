@@ -23,5 +23,5 @@
 package grpclb
 
 func init() {
-	panic("don't import me")
+	panic("Don't import this package. For grpclb, see package google.golang.org/grpc/balancer/grpclb")
 }
