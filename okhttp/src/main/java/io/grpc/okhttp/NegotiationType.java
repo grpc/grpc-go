@@ -18,7 +18,12 @@ package io.grpc.okhttp;
 
 /**
  * Identifies the negotiation used for starting up HTTP/2.
+ *
+ * @deprecated use {@link OkHttpChannelBuilder#usePlaintext()} or {@link
+ *     OkHttpChannelBuilder#useTransportSecurity()} directly rather than {@link
+ *     OkHttpChannelBuilder#negotiationType(NegotiationType)}.
  */
+@Deprecated
 public enum NegotiationType {
   /**
    * Uses TLS ALPN/NPN negotiation, assumes an SSL connection.

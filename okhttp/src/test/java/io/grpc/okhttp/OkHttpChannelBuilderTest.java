@@ -77,9 +77,7 @@ public class OkHttpChannelBuilderTest {
       }
     };
 
-    builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
+    builder.overrideAuthority("[invalidauthority").usePlaintext().buildTransportFactory();
   }
 
   @Test

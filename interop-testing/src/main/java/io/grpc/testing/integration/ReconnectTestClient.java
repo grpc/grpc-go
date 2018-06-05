@@ -70,8 +70,10 @@ public class ReconnectTestClient {
           .negotiationType(NegotiationType.PLAINTEXT).build();
       controlStub = ReconnectServiceGrpc.newBlockingStub(controlChannel);
       if (useOkhttp) {
-        retryChannel = OkHttpChannelBuilder.forAddress("127.0.0.1", serverRetryPort)
-            .negotiationType(io.grpc.okhttp.NegotiationType.TLS).build();
+        retryChannel =
+            OkHttpChannelBuilder.forAddress("127.0.0.1", serverRetryPort)
+                .useTransportSecurity()
+                .build();
       } else {
         retryChannel = NettyChannelBuilder.forAddress("127.0.0.1", serverRetryPort)
             .negotiationType(NegotiationType.TLS).build();

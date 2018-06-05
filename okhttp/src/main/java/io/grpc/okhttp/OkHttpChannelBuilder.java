@@ -62,6 +62,18 @@ import javax.net.ssl.TrustManagerFactory;
 public class OkHttpChannelBuilder extends
         AbstractManagedChannelImplBuilder<OkHttpChannelBuilder> {
 
+  /** Identifies the negotiation used for starting up HTTP/2. */
+  private enum NegotiationType {
+    /** Uses TLS ALPN/NPN negotiation, assumes an SSL connection. */
+    TLS,
+
+    /**
+     * Just assume the connection is plaintext (non-SSL) and the remote endpoint supports HTTP/2
+     * directly without an upgrade.
+     */
+    PLAINTEXT
+  }
+
   /**
    * ConnectionSpec closely matching the default configuration that could be used as a basis for
    * modification.
@@ -183,9 +195,22 @@ public class OkHttpChannelBuilder extends
    * {@link #sslSocketFactory} to override the socket factory used.
    *
    * <p>Default: <code>TLS</code>
+   *
+   * @deprecated use {@link #usePlaintext()} or {@link #useTransportSecurity()} instead.
    */
-  public final OkHttpChannelBuilder negotiationType(NegotiationType type) {
-    negotiationType = Preconditions.checkNotNull(type, "type");
+  @Deprecated
+  public final OkHttpChannelBuilder negotiationType(io.grpc.okhttp.NegotiationType type) {
+    Preconditions.checkNotNull(type, "type");
+    switch (type) {
+      case TLS:
+        negotiationType = NegotiationType.TLS;
+        break;
+      case PLAINTEXT:
+        negotiationType = NegotiationType.PLAINTEXT;
+        break;
+      default:
+        throw new AssertionError("Unknown negotiation type: " + type);
+    }
     return this;
   }
 
@@ -262,16 +287,11 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
-   * Override the default {@link SSLSocketFactory} and enable {@link NegotiationType#TLS}
-   * negotiation.
-   *
-   * <p>By default, when TLS is enabled, <code>SSLSocketFactory.getDefault()</code> will be used.
-   *
-   * <p>{@link NegotiationType#TLS} will be applied by calling this method.
+   * Override the default {@link SSLSocketFactory} and enable TLS negotiation.
    */
   public final OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
     this.sslSocketFactory = factory;
-    negotiationType(NegotiationType.TLS);
+    negotiationType = NegotiationType.TLS;
     return this;
   }
 
@@ -320,7 +340,7 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
-   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
+   * Equivalent to using {@link #negotiationType} with {@code PLAINTEXT}.
    *
    * @deprecated use {@link #usePlaintext()} instead.
    */
@@ -328,28 +348,31 @@ public class OkHttpChannelBuilder extends
   @Deprecated
   public final OkHttpChannelBuilder usePlaintext(boolean skipNegotiation) {
     if (skipNegotiation) {
-      negotiationType(NegotiationType.PLAINTEXT);
+      negotiationType(io.grpc.okhttp.NegotiationType.PLAINTEXT);
     } else {
       throw new IllegalArgumentException("Plaintext negotiation not currently supported");
     }
     return this;
   }
 
-  /**
-   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
-   */
+  /** Sets the negotiation type for the HTTP/2 connection to plaintext. */
   @Override
   public final OkHttpChannelBuilder usePlaintext() {
-    negotiationType(NegotiationType.PLAINTEXT);
+    negotiationType = NegotiationType.PLAINTEXT;
     return this;
   }
 
   /**
-   * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code TLS}.
+   * Sets the negotiation type for the HTTP/2 connection to TLS (this is the default).
+   *
+   * <p>With TLS enabled, a default {@link SSLSocketFactory} is created using the best {@link
+   * java.security.Provider} available and is NOT based on {@link SSLSocketFactory#getDefault}. To
+   * more precisely control the TLS configuration call {@link #sslSocketFactory} to override the
+   * socket factory used.
    */
   @Override
   public final OkHttpChannelBuilder useTransportSecurity() {
-    negotiationType(NegotiationType.TLS);
+    negotiationType = NegotiationType.TLS;
     return this;
   }
 

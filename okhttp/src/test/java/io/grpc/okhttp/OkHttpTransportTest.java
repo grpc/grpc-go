@@ -37,12 +37,13 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class OkHttpTransportTest extends AbstractTransportTest {
   private final FakeClock fakeClock = new FakeClock();
-  private ClientTransportFactory clientFactory = OkHttpChannelBuilder
-      // Although specified here, address is ignored because we never call build.
-      .forAddress("localhost", 0)
-      .negotiationType(NegotiationType.PLAINTEXT)
-      .setTransportTracerFactory(fakeClockTransportTracer)
-      .buildTransportFactory();
+  private ClientTransportFactory clientFactory =
+      OkHttpChannelBuilder
+          // Although specified here, address is ignored because we never call build.
+          .forAddress("localhost", 0)
+          .usePlaintext()
+          .setTransportTracerFactory(fakeClockTransportTracer)
+          .buildTransportFactory();
 
   @After
   public void releaseClientFactory() {
