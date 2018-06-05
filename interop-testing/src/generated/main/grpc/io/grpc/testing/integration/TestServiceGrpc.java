@@ -31,22 +31,11 @@ public final class TestServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.TestService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getEmptyCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> METHOD_EMPTY_CALL = getEmptyCallMethodHelper();
-
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getEmptyCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getEmptyCallMethod() {
-    return getEmptyCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> getEmptyCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty, io.grpc.testing.integration.EmptyProtos.Empty> getEmptyCallMethod;
     if ((getEmptyCallMethod = TestServiceGrpc.getEmptyCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -68,22 +57,12 @@ public final class TestServiceGrpc {
      }
      return getEmptyCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getUnaryCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
-      io.grpc.testing.integration.Messages.SimpleResponse> METHOD_UNARY_CALL = getUnaryCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getUnaryCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getUnaryCallMethod() {
-    return getUnaryCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
-      io.grpc.testing.integration.Messages.SimpleResponse> getUnaryCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest, io.grpc.testing.integration.Messages.SimpleResponse> getUnaryCallMethod;
     if ((getUnaryCallMethod = TestServiceGrpc.getUnaryCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -105,22 +84,12 @@ public final class TestServiceGrpc {
      }
      return getUnaryCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getCacheableUnaryCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
-      io.grpc.testing.integration.Messages.SimpleResponse> METHOD_CACHEABLE_UNARY_CALL = getCacheableUnaryCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getCacheableUnaryCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getCacheableUnaryCallMethod() {
-    return getCacheableUnaryCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
-      io.grpc.testing.integration.Messages.SimpleResponse> getCacheableUnaryCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest, io.grpc.testing.integration.Messages.SimpleResponse> getCacheableUnaryCallMethod;
     if ((getCacheableUnaryCallMethod = TestServiceGrpc.getCacheableUnaryCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -142,22 +111,12 @@ public final class TestServiceGrpc {
      }
      return getCacheableUnaryCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getStreamingOutputCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL = getStreamingOutputCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getStreamingOutputCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getStreamingOutputCallMethod() {
-    return getStreamingOutputCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getStreamingOutputCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest, io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getStreamingOutputCallMethod;
     if ((getStreamingOutputCallMethod = TestServiceGrpc.getStreamingOutputCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -179,22 +138,12 @@ public final class TestServiceGrpc {
      }
      return getStreamingOutputCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getStreamingInputCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL = getStreamingInputCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
       io.grpc.testing.integration.Messages.StreamingInputCallResponse> getStreamingInputCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
       io.grpc.testing.integration.Messages.StreamingInputCallResponse> getStreamingInputCallMethod() {
-    return getStreamingInputCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingInputCallResponse> getStreamingInputCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest, io.grpc.testing.integration.Messages.StreamingInputCallResponse> getStreamingInputCallMethod;
     if ((getStreamingInputCallMethod = TestServiceGrpc.getStreamingInputCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -216,22 +165,12 @@ public final class TestServiceGrpc {
      }
      return getStreamingInputCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getFullDuplexCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_FULL_DUPLEX_CALL = getFullDuplexCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getFullDuplexCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getFullDuplexCallMethod() {
-    return getFullDuplexCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getFullDuplexCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest, io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getFullDuplexCallMethod;
     if ((getFullDuplexCallMethod = TestServiceGrpc.getFullDuplexCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -253,22 +192,12 @@ public final class TestServiceGrpc {
      }
      return getFullDuplexCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getHalfDuplexCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_HALF_DUPLEX_CALL = getHalfDuplexCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getHalfDuplexCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getHalfDuplexCallMethod() {
-    return getHalfDuplexCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getHalfDuplexCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest, io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getHalfDuplexCallMethod;
     if ((getHalfDuplexCallMethod = TestServiceGrpc.getHalfDuplexCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -290,22 +219,12 @@ public final class TestServiceGrpc {
      }
      return getHalfDuplexCallMethod;
   }
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getUnimplementedCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethodHelper();
 
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod() {
-    return getUnimplementedCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty, io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
     if ((getUnimplementedCallMethod = TestServiceGrpc.getUnimplementedCallMethod) == null) {
       synchronized (TestServiceGrpc.class) {
@@ -366,7 +285,7 @@ public final class TestServiceGrpc {
      */
     public void emptyCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(getEmptyCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getEmptyCallMethod(), responseObserver);
     }
 
     /**
@@ -376,7 +295,7 @@ public final class TestServiceGrpc {
      */
     public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnaryCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnaryCallMethod(), responseObserver);
     }
 
     /**
@@ -388,7 +307,7 @@ public final class TestServiceGrpc {
      */
     public void cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getCacheableUnaryCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getCacheableUnaryCallMethod(), responseObserver);
     }
 
     /**
@@ -399,7 +318,7 @@ public final class TestServiceGrpc {
      */
     public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(getStreamingOutputCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getStreamingOutputCallMethod(), responseObserver);
     }
 
     /**
@@ -410,7 +329,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getStreamingInputCallMethodHelper(), responseObserver);
+      return asyncUnimplementedStreamingCall(getStreamingInputCallMethod(), responseObserver);
     }
 
     /**
@@ -422,7 +341,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getFullDuplexCallMethodHelper(), responseObserver);
+      return asyncUnimplementedStreamingCall(getFullDuplexCallMethod(), responseObserver);
     }
 
     /**
@@ -435,7 +354,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(getHalfDuplexCallMethodHelper(), responseObserver);
+      return asyncUnimplementedStreamingCall(getHalfDuplexCallMethod(), responseObserver);
     }
 
     /**
@@ -446,62 +365,62 @@ public final class TestServiceGrpc {
      */
     public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnimplementedCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnimplementedCallMethod(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getEmptyCallMethodHelper(),
+            getEmptyCallMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.EmptyProtos.Empty,
                 io.grpc.testing.integration.EmptyProtos.Empty>(
                   this, METHODID_EMPTY_CALL)))
           .addMethod(
-            getUnaryCallMethodHelper(),
+            getUnaryCallMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.SimpleRequest,
                 io.grpc.testing.integration.Messages.SimpleResponse>(
                   this, METHODID_UNARY_CALL)))
           .addMethod(
-            getCacheableUnaryCallMethodHelper(),
+            getCacheableUnaryCallMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.SimpleRequest,
                 io.grpc.testing.integration.Messages.SimpleResponse>(
                   this, METHODID_CACHEABLE_UNARY_CALL)))
           .addMethod(
-            getStreamingOutputCallMethodHelper(),
+            getStreamingOutputCallMethod(),
             asyncServerStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
                   this, METHODID_STREAMING_OUTPUT_CALL)))
           .addMethod(
-            getStreamingInputCallMethodHelper(),
+            getStreamingInputCallMethod(),
             asyncClientStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.StreamingInputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingInputCallResponse>(
                   this, METHODID_STREAMING_INPUT_CALL)))
           .addMethod(
-            getFullDuplexCallMethodHelper(),
+            getFullDuplexCallMethod(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
                   this, METHODID_FULL_DUPLEX_CALL)))
           .addMethod(
-            getHalfDuplexCallMethodHelper(),
+            getHalfDuplexCallMethod(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
                   this, METHODID_HALF_DUPLEX_CALL)))
           .addMethod(
-            getUnimplementedCallMethodHelper(),
+            getUnimplementedCallMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.EmptyProtos.Empty,
@@ -541,7 +460,7 @@ public final class TestServiceGrpc {
     public void emptyCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getEmptyCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getEmptyCallMethod(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -552,7 +471,7 @@ public final class TestServiceGrpc {
     public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -565,7 +484,7 @@ public final class TestServiceGrpc {
     public void cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getCacheableUnaryCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getCacheableUnaryCallMethod(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -577,7 +496,7 @@ public final class TestServiceGrpc {
     public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       asyncServerStreamingCall(
-          getChannel().newCall(getStreamingOutputCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getStreamingOutputCallMethod(), getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -589,7 +508,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
       return asyncClientStreamingCall(
-          getChannel().newCall(getStreamingInputCallMethodHelper(), getCallOptions()), responseObserver);
+          getChannel().newCall(getStreamingInputCallMethod(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -602,7 +521,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getFullDuplexCallMethodHelper(), getCallOptions()), responseObserver);
+          getChannel().newCall(getFullDuplexCallMethod(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -616,7 +535,7 @@ public final class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          getChannel().newCall(getHalfDuplexCallMethodHelper(), getCallOptions()), responseObserver);
+          getChannel().newCall(getHalfDuplexCallMethod(), getCallOptions()), responseObserver);
     }
 
     /**
@@ -628,7 +547,7 @@ public final class TestServiceGrpc {
     public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -661,7 +580,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.testing.integration.EmptyProtos.Empty emptyCall(io.grpc.testing.integration.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getEmptyCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getEmptyCallMethod(), getCallOptions(), request);
     }
 
     /**
@@ -671,7 +590,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.testing.integration.Messages.SimpleResponse unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel(), getUnaryCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getUnaryCallMethod(), getCallOptions(), request);
     }
 
     /**
@@ -683,7 +602,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.testing.integration.Messages.SimpleResponse cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel(), getCacheableUnaryCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getCacheableUnaryCallMethod(), getCallOptions(), request);
     }
 
     /**
@@ -695,7 +614,7 @@ public final class TestServiceGrpc {
     public java.util.Iterator<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> streamingOutputCall(
         io.grpc.testing.integration.Messages.StreamingOutputCallRequest request) {
       return blockingServerStreamingCall(
-          getChannel(), getStreamingOutputCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getStreamingOutputCallMethod(), getCallOptions(), request);
     }
 
     /**
@@ -706,7 +625,7 @@ public final class TestServiceGrpc {
      */
     public io.grpc.testing.integration.EmptyProtos.Empty unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getUnimplementedCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getUnimplementedCallMethod(), getCallOptions(), request);
     }
   }
 
@@ -740,7 +659,7 @@ public final class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.EmptyProtos.Empty> emptyCall(
         io.grpc.testing.integration.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getEmptyCallMethodHelper(), getCallOptions()), request);
+          getChannel().newCall(getEmptyCallMethod(), getCallOptions()), request);
     }
 
     /**
@@ -751,7 +670,7 @@ public final class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> unaryCall(
         io.grpc.testing.integration.Messages.SimpleRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnaryCallMethodHelper(), getCallOptions()), request);
+          getChannel().newCall(getUnaryCallMethod(), getCallOptions()), request);
     }
 
     /**
@@ -764,7 +683,7 @@ public final class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> cacheableUnaryCall(
         io.grpc.testing.integration.Messages.SimpleRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(getCacheableUnaryCallMethodHelper(), getCallOptions()), request);
+          getChannel().newCall(getCacheableUnaryCallMethod(), getCallOptions()), request);
     }
 
     /**
@@ -776,7 +695,7 @@ public final class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.EmptyProtos.Empty> unimplementedCall(
         io.grpc.testing.integration.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request);
+          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request);
     }
   }
 
@@ -896,14 +815,14 @@ public final class TestServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new TestServiceFileDescriptorSupplier())
-              .addMethod(getEmptyCallMethodHelper())
-              .addMethod(getUnaryCallMethodHelper())
-              .addMethod(getCacheableUnaryCallMethodHelper())
-              .addMethod(getStreamingOutputCallMethodHelper())
-              .addMethod(getStreamingInputCallMethodHelper())
-              .addMethod(getFullDuplexCallMethodHelper())
-              .addMethod(getHalfDuplexCallMethodHelper())
-              .addMethod(getUnimplementedCallMethodHelper())
+              .addMethod(getEmptyCallMethod())
+              .addMethod(getUnaryCallMethod())
+              .addMethod(getCacheableUnaryCallMethod())
+              .addMethod(getStreamingOutputCallMethod())
+              .addMethod(getStreamingInputCallMethod())
+              .addMethod(getFullDuplexCallMethod())
+              .addMethod(getHalfDuplexCallMethod())
+              .addMethod(getUnimplementedCallMethod())
               .build();
         }
       }

@@ -31,22 +31,11 @@ public final class UnimplementedServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.UnimplementedService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link #getUnimplementedCallMethod()} instead. 
-  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL = getUnimplementedCallMethodHelper();
-
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
 
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod() {
-    return getUnimplementedCallMethodHelper();
-  }
-
-  private static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
-      io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethodHelper() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty, io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
     if ((getUnimplementedCallMethod = UnimplementedServiceGrpc.getUnimplementedCallMethod) == null) {
       synchronized (UnimplementedServiceGrpc.class) {
@@ -107,13 +96,13 @@ public final class UnimplementedServiceGrpc {
      */
     public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(getUnimplementedCallMethodHelper(), responseObserver);
+      asyncUnimplementedUnaryCall(getUnimplementedCallMethod(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            getUnimplementedCallMethodHelper(),
+            getUnimplementedCallMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.EmptyProtos.Empty,
@@ -153,7 +142,7 @@ public final class UnimplementedServiceGrpc {
     public void unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request, responseObserver);
+          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -186,7 +175,7 @@ public final class UnimplementedServiceGrpc {
      */
     public io.grpc.testing.integration.EmptyProtos.Empty unimplementedCall(io.grpc.testing.integration.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel(), getUnimplementedCallMethodHelper(), getCallOptions(), request);
+          getChannel(), getUnimplementedCallMethod(), getCallOptions(), request);
     }
   }
 
@@ -220,7 +209,7 @@ public final class UnimplementedServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.EmptyProtos.Empty> unimplementedCall(
         io.grpc.testing.integration.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          getChannel().newCall(getUnimplementedCallMethodHelper(), getCallOptions()), request);
+          getChannel().newCall(getUnimplementedCallMethod(), getCallOptions()), request);
     }
   }
 
@@ -308,7 +297,7 @@ public final class UnimplementedServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new UnimplementedServiceFileDescriptorSupplier())
-              .addMethod(getUnimplementedCallMethodHelper())
+              .addMethod(getUnimplementedCallMethod())
               .build();
         }
       }
