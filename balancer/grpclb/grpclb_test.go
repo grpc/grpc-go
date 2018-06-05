@@ -340,10 +340,6 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		sn: lbServerName,
 	}
 	lb = grpc.NewServer(grpc.Creds(lbCreds))
-	if err != nil {
-		err = fmt.Errorf("Failed to generate the port number %v", err)
-		return
-	}
 	ls = newRemoteBalancer(nil)
 	lbspb.RegisterLoadBalancerServer(lb, ls)
 	go func() {
