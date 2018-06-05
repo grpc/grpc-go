@@ -25,7 +25,6 @@ buildscripts/make_dependencies.sh
 # Build grpc-cronet
 
 pushd cronet
-./cronet_deps.sh
 ../gradlew build
 popd
 
