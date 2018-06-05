@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package grpclb
 
 import (
 	"fmt"
@@ -24,14 +24,15 @@ import (
 	"reflect"
 	"time"
 
+	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/channelz"
-
-	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/grpc/connectivity"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
@@ -181,7 +182,7 @@ func (lb *lbBalancer) callRemoteBalancer() error {
 	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stream, err := lbClient.BalanceLoad(ctx, FailFast(false))
+	stream, err := lbClient.BalanceLoad(ctx, grpc.FailFast(false))
 	if err != nil {
 		return fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 	}
@@ -233,32 +234,34 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 }
 
 func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
-	var dopts []DialOption
+	var dopts []grpc.DialOption
 	if creds := lb.opt.DialCreds; creds != nil {
 		if err := creds.OverrideServerName(remoteLBName); err == nil {
-			dopts = append(dopts, WithTransportCredentials(creds))
+			dopts = append(dopts, grpc.WithTransportCredentials(creds))
 		} else {
 			grpclog.Warningf("grpclb: failed to override the server name in the credentials: %v, using Insecure", err)
-			dopts = append(dopts, WithInsecure())
+			dopts = append(dopts, grpc.WithInsecure())
 		}
 	} else {
-		dopts = append(dopts, WithInsecure())
+		dopts = append(dopts, grpc.WithInsecure())
 	}
 	if lb.opt.Dialer != nil {
 		// WithDialer takes a different type of function, so we instead use a
 		// special DialOption here.
-		dopts = append(dopts, withContextDialer(lb.opt.Dialer))
+		wcd := internal.WithContextDialer.(func(func(context.Context, string) (net.Conn, error)) grpc.DialOption)
+		dopts = append(dopts, wcd(lb.opt.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
-	dopts = append(dopts, WithBalancerName(PickFirstBalancerName))
-	dopts = append(dopts, withResolverBuilder(lb.manualResolver))
+	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
+	wrb := internal.WithResolverBuilder.(func(resolver.Builder) grpc.DialOption)
+	dopts = append(dopts, wrb(lb.manualResolver))
 	if channelz.IsOn() {
-		dopts = append(dopts, WithChannelzParentID(lb.opt.ChannelzParentID))
+		dopts = append(dopts, grpc.WithChannelzParentID(lb.opt.ChannelzParentID))
 	}
 
 	// DialContext using manualResolver.Scheme, which is a random scheme generated
 	// when init grpclb. The target name is not important.
-	cc, err := DialContext(context.Background(), "grpclb:///grpclb.server", dopts...)
+	cc, err := grpc.DialContext(context.Background(), "grpclb:///grpclb.server", dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}

@@ -16,11 +16,7 @@
  *
  */
 
-//go:generate protoc --go_out=plugins=:$GOPATH/src grpc_lb_v1/messages/messages.proto
-//go:generate protoc --go_out=plugins=grpc:$GOPATH/src grpc_lb_v1/service/service.proto
-
-// Package grpclb_test is currently used only for grpclb testing.
-package grpclb_test
+package grpclb
 
 import (
 	"errors"
@@ -125,12 +121,12 @@ func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
-// rpcStats is same as lbmpb.ClientStats, except that numCallsDropped is a map
+// rpcStatsForTest is same as lbmpb.ClientStats, except that numCallsDropped is a map
 // instead of a slice of pointers.
 //
 // TODO: this struct was already defined in grpclb_picker.go. Try to merge these
 // two after moving grpclb to its own package (this package).
-type rpcStats struct {
+type rpcStatsForTest struct {
 	numCallsStarted                        int64
 	numCallsFinished                       int64
 	numCallsFinishedWithClientFailedToSend int64
@@ -140,13 +136,13 @@ type rpcStats struct {
 	numCallsDropped map[string]int64
 }
 
-func newRPCStats() *rpcStats {
-	return &rpcStats{
+func newRPCStatsForTest() *rpcStatsForTest {
+	return &rpcStatsForTest{
 		numCallsDropped: make(map[string]int64),
 	}
 }
 
-func (stats *rpcStats) merge(new *lbmpb.ClientStats) {
+func (stats *rpcStatsForTest) merge(new *lbmpb.ClientStats) {
 	stats.numCallsStarted += new.NumCallsStarted
 	stats.numCallsFinished += new.NumCallsFinished
 	stats.numCallsFinishedWithClientFailedToSend += new.NumCallsFinishedWithClientFailedToSend
@@ -168,7 +164,7 @@ func mapsEqual(a, b map[string]int64) bool {
 	return true
 }
 
-func (stats *rpcStats) equal(new *rpcStats) bool {
+func (stats *rpcStatsForTest) equal(new *rpcStatsForTest) bool {
 	if stats.numCallsStarted != new.numCallsStarted {
 		return false
 	}
@@ -192,14 +188,14 @@ type remoteBalancer struct {
 	statsDura time.Duration
 	done      chan struct{}
 	mu        sync.Mutex
-	stats     *rpcStats
+	stats     *rpcStatsForTest
 }
 
 func newRemoteBalancer(intervals []time.Duration) *remoteBalancer {
 	return &remoteBalancer{
 		sls:   make(chan *lbmpb.ServerList, 1),
 		done:  make(chan struct{}),
-		stats: newRPCStats(),
+		stats: newRPCStatsForTest(),
 	}
 }
 
@@ -534,13 +530,18 @@ func TestDropRequest(t *testing.T) {
 	// to true.
 	var i int
 	for i = 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	if i >= 1000 {
 		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatal("timed out", ctx.Err())
+	default:
 	}
 	for _, failfast := range []bool{true, false} {
 		for i := 0; i < 3; i++ {
@@ -651,7 +652,7 @@ const grpclbCustomFallbackName = "grpclb_with_custom_fallback_timeout"
 
 func init() {
 	balancer.Register(&customGRPCLBBuilder{
-		Builder: grpc.NewLBBuilderWithFallbackTimeout(100 * time.Millisecond),
+		Builder: newLBBuilderWithFallbackTimeout(100 * time.Millisecond),
 		name:    grpclbCustomFallbackName,
 	})
 }
@@ -755,14 +756,14 @@ func (failPreRPCCred) RequireTransportSecurity() bool {
 	return false
 }
 
-func checkStats(stats, expected *rpcStats) error {
+func checkStats(stats, expected *rpcStatsForTest) error {
 	if !stats.equal(expected) {
 		return fmt.Errorf("stats not equal: got %+v, want %+v", stats, expected)
 	}
 	return nil
 }
 
-func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rpcStats {
+func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rpcStatsForTest {
 	defer leakcheck.Check(t)
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
@@ -828,7 +829,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC),
@@ -855,7 +856,7 @@ func TestGRPCLBStatsUnaryDrop(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:                        int64(countRPC + c),
 		numCallsFinished:                       int64(countRPC + c),
 		numCallsFinishedWithClientFailedToSend: int64(c - 1),
@@ -878,7 +879,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:                        int64(countRPC),
 		numCallsFinished:                       int64(countRPC),
 		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
@@ -915,7 +916,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:               int64(countRPC),
 		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC),
@@ -942,7 +943,7 @@ func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:                        int64(countRPC + c),
 		numCallsFinished:                       int64(countRPC + c),
 		numCallsFinishedWithClientFailedToSend: int64(c - 1),
@@ -971,7 +972,7 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &rpcStats{
+	if err := checkStats(stats, &rpcStatsForTest{
 		numCallsStarted:                        int64(countRPC),
 		numCallsFinished:                       int64(countRPC),
 		numCallsFinishedWithClientFailedToSend: int64(countRPC - 1),

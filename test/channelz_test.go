@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/grpclb"
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
