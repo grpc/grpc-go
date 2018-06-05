@@ -23,16 +23,23 @@ package service
 
 import (
 	"net"
+	"time"
 
 	"github.com/golang/protobuf/ptypes"
+	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 )
+
+func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
+	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
+}
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
@@ -130,6 +137,26 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 	return sc
 }
 
+func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security {
+	switch v := se.(type) {
+	case *credentials.TLSChannelzSecurityValue:
+		return &channelzpb.Security{Model: &channelzpb.Security_Tls_{Tls: &channelzpb.Security_Tls{
+			CipherSuite:       &channelzpb.Security_Tls_StandardName{StandardName: v.StandardName},
+			LocalCertificate:  v.LocalCertificate,
+			RemoteCertificate: v.RemoteCertificate,
+		}}}
+	case *credentials.OtherChannelzSecurityValue:
+		otherSecurity := &channelzpb.Security_OtherSecurity{
+			Name: v.Name,
+		}
+		if anyval, err := ptypes.MarshalAny(v.Value); err == nil {
+			otherSecurity.Value = anyval
+		}
+		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
+	}
+	return nil
+}
+
 func addrToProto(a net.Addr) *channelzpb.Address {
 	switch a.Network() {
 	case "udp":
@@ -176,6 +203,13 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 	}
 	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
 	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
+
+	if sm.SocketData.SocketOptions != nil {
+		s.Data.Option = sockoptToProto(sm.SocketData.SocketOptions)
+	}
+	if sm.SocketData.Security != nil {
+		s.Security = securityToProto(sm.SocketData.Security)
+	}
 
 	if sm.SocketData.LocalAddr != nil {
 		s.Local = addrToProto(sm.SocketData.LocalAddr)

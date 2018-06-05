@@ -31,6 +31,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
@@ -118,6 +119,18 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
+// GetChannelzSecurityValue returns security info requested by channelz.
+func (t TLSInfo) GetChannelzSecurityValue() ChannelzSecurityValue {
+	v := &TLSChannelzSecurityValue{
+		StandardName: cipherSuiteLookup[t.State.CipherSuite],
+	}
+	// Currently there's no way to get LocalCertificate info from tls package.
+	if len(t.State.PeerCertificates) > 0 {
+		v.RemoteCertificate = t.State.PeerCertificates[0].Raw
+	}
+	return v
+}
+
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
 	// TLS configuration
@@ -155,7 +168,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return conn, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -163,7 +176,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if err := conn.Handshake(); err != nil {
 		return nil, nil, err
 	}
-	return conn, TLSInfo{conn.ConnectionState()}, nil
+	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {
@@ -218,3 +231,37 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportCredentials, error
 	}
 	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
 }
+
+// ChannelzSecurityInfo defines the interface that security protocols should implement
+// in order to provide security info to channelz.
+type ChannelzSecurityInfo interface {
+	GetSecurityValue() ChannelzSecurityValue
+}
+
+// ChannelzSecurityValue defines the interface that GetSecurityValue() return value
+// should satisfy. This interface should only be satisfied by *TLSChannelzSecurityValue
+// and *OtherChannelzSecurityValue.
+type ChannelzSecurityValue interface {
+	isChannelzSecurityValue()
+}
+
+// TLSChannelzSecurityValue defines the struct that TLS protocol should return
+// from GetSecurityValue(), containing security info like cipher and certificate used.
+type TLSChannelzSecurityValue struct {
+	StandardName      string
+	LocalCertificate  []byte
+	RemoteCertificate []byte
+}
+
+func (*TLSChannelzSecurityValue) isChannelzSecurityValue() {}
+
+// OtherChannelzSecurityValue defines the struct that non-TLS protocol should return
+// from GetSecurityValue(), which contains protocol specific security info. Note
+// the Value field will be sent to users of channelz requesting channel info, and
+// thus sensitive info should better be avoided.
+type OtherChannelzSecurityValue struct {
+	Name  string
+	Value proto.Message
+}
+
+func (*OtherChannelzSecurityValue) isChannelzSecurityValue() {}

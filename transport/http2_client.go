@@ -1257,11 +1257,13 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageSentTimestamp:        t.lastMsgSent,
 		LastMessageReceivedTimestamp:    t.lastMsgRecv,
 		LocalFlowControlWindow:          int64(t.fc.getSize()),
-		//socket options
-		LocalAddr:  t.localAddr,
-		RemoteAddr: t.remoteAddr,
-		// Security
+		SocketOptions:                   channelz.GetSocketOption(t.conn),
+		LocalAddr:                       t.localAddr,
+		RemoteAddr:                      t.remoteAddr,
 		// RemoteName :
+	}
+	if au, ok := t.authInfo.(credentials.ChannelzSecurityInfo); ok {
+		s.Security = au.GetSecurityValue()
 	}
 	t.czmu.RUnlock()
 	s.RemoteFlowControlWindow = t.getOutFlowWindow()
