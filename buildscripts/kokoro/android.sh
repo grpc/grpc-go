@@ -61,15 +61,19 @@ cp "$BASE_DIR/github/grpc-java/buildscripts/set_github_status.py" "$SET_GITHUB_S
 
 # Collect APK size and dex count stats for the helloworld example
 
+HELLO_WORLD_OUTPUT_DIR="$BASE_DIR/github/grpc-java/examples/android/helloworld/app/build/outputs"
+
 read -r ignored new_dex_count < \
   <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references \
-  "$BASE_DIR/github/grpc-java/examples/android/helloworld/app/build/outputs/apk/release/app-release-unsigned.apk")
+  "$HELLO_WORLD_OUTPUT_DIR/apk/release/app-release-unsigned.apk")
 
 set +x
-all_new_methods=`"${ANDROID_HOME}/tools/bin/apkanalyzer" dex packages --proguard-mapping app/build/outputs/mapping/release/mapping.txt app/build/outputs/apk/release/app-release-unsigned.apk | grep ^M | cut -f4 | sort`
+all_new_methods=`"${ANDROID_HOME}/tools/bin/apkanalyzer" dex packages \
+  --proguard-mapping "$HELLO_WORLD_OUTPUT_DIR/mapping/release/mapping.txt" \
+  "$HELLO_WORLD_OUTPUT_DIR/apk/release/app-release-unsigned.apk" | grep ^M | cut -f4 | sort`
 set -x
 
-new_apk_size="$(stat --printf=%s app/build/outputs/apk/release/app-release-unsigned.apk)"
+new_apk_size="$(stat --printf=%s $HELLO_WORLD_OUTPUT_DIR/apk/release/app-release-unsigned.apk)"
 
 
 # Get the APK size and dex count stats using the pull request base commit
