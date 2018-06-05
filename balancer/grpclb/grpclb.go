@@ -16,7 +16,11 @@
  *
  */
 
-package grpclb // import "google.golang.org/grpc/balancer/grpclb"
+// Package grpclb defines a grpclb balancer.
+//
+// To install grpclb balancer, import this package as:
+//    import _ "google.golang.org/grpc/balancer/grpclb"
+package grpclb
 
 import (
 	"strconv"
