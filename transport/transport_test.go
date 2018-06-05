@@ -238,6 +238,7 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 		timer.Stop()
 	case <-timer.C:
 		t.Errorf("Server timed-out.")
+		return
 	}
 	_, err := s.Read(p)
 	if err != nil {
@@ -1039,7 +1040,7 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 				return
 			default:
 			}
-			if v := getTotal(); v == defaultWindowSize {
+			if getTotal() == defaultWindowSize {
 				// unblock server to be able to read and
 				// thereby send stream level window update.
 				close(serviceHandler.getNotified)
@@ -1048,7 +1049,7 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 			runtime.Gosched()
 		}
 	}()
-	// This write will cause server to run out of stream level,
+	// This write will cause client to run out of stream level,
 	// flow control and the other side won't send a window update
 	// until that happens.
 	if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{}); err != nil {
