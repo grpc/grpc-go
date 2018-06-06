@@ -722,6 +722,6 @@ const (
 )
 
 // Version is the current grpc version.
-const Version = "1.12.1-dev"
+const Version = "1.12.1"
 
 const grpcUA = "grpc-go/" + Version
