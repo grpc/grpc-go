@@ -1,4 +1,5 @@
 // +build linux
+// +build go1.9
 
 /*
  *
@@ -22,7 +23,7 @@
 // this file are to parse the socket option field and the test is specifically
 // to verify the behavior of socket option parsing.
 
-package service
+package socketopt
 
 import (
 	"reflect"
@@ -30,14 +31,15 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-	pdur "github.com/golang/protobuf/ptypes/duration"
+	durpb "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/grpc/channelz/service"
 )
 
-func convertToDuration(d *pdur.Duration) (sec int64, usec int64) {
+func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
 	if d != nil {
 		if dur, err := ptypes.Duration(d); err == nil {
 			sec = int64(int64(dur) / 1e9)
@@ -57,8 +59,8 @@ func protoToLinger(protoLinger *channelzpb.SocketOptionLinger) *unix.Linger {
 	return linger
 }
 
-func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOptionData {
-	skdata := &channelz.SocketOptionData{}
+func protoToSocketOption(skopts []*channelzpb.SocketOption) *socketOptionData {
+	skdata := &socketOptionData{}
 	for _, opt := range skopts {
 		switch opt.GetName() {
 		case "SO_LINGER":
@@ -120,59 +122,33 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 	ds := &dummySocket{}
 	pdata := s.GetData()
-	ds.streamsStarted = pdata.GetStreamsStarted()
-	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
-	ds.streamsFailed = pdata.GetStreamsFailed()
-	ds.messagesSent = pdata.GetMessagesSent()
-	ds.messagesReceived = pdata.GetMessagesReceived()
-	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastLocalStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastRemoteStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageSentTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageReceivedTimestamp = t
-		}
-	}
-	if v := pdata.GetLocalFlowControlWindow(); v != nil {
-		ds.localFlowControlWindow = v.Value
-	}
-	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
-		ds.remoteFlowControlWindow = v.Value
-	}
 	if v := pdata.GetOption(); v != nil {
-		ds.SocketOptions = protoToSocketOption(v)
+		ds.socketOptions = protoToSocketOption(v)
 	}
-	if v := s.GetSecurity(); v != nil {
-		ds.Security = protoToSecurity(v)
-	}
-	if local := s.GetLocal(); local != nil {
-		ds.localAddr = protoToAddr(local)
-	}
-	if remote := s.GetRemote(); remote != nil {
-		ds.remoteAddr = protoToAddr(remote)
-	}
-	ds.remoteName = s.GetRemoteName()
 	return ds
+}
+
+type dummyServer struct{}
+
+func (d *dummyServer) ChannelzMetric() *channelz.ServerInternalMetric {
+	return nil
+}
+
+type dummySocket struct {
+	socketOptions *socketOptionData
+}
+
+func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
+	return &channelz.SocketInternalMetric{
+		SocketOptions: d.socketOptions,
+	}
 }
 
 func TestGetSocketOptions(t *testing.T) {
 	channelz.NewChannelzStorage()
 	ss := []*dummySocket{
 		{
-			SocketOptions: &channelz.SocketOptionData{
+			socketOptions: &socketOptionData{
 				Linger:      &unix.Linger{Onoff: 1, Linger: 2},
 				RecvTimeout: &unix.Timeval{Sec: 10, Usec: 1},
 				SendTimeout: &unix.Timeval{},
@@ -180,7 +156,7 @@ func TestGetSocketOptions(t *testing.T) {
 			},
 		},
 	}
-	svr := newCZServer()
+	svr := service.NewCZServer()
 	ids := make([]int64, len(ss))
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	for i, s := range ss {

@@ -21,10 +21,8 @@ package service
 
 import (
 	"net"
-	"time"
 
 	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,8 +33,19 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
-	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
+type socketOptConvert func(channelz.SocketOptionData) []*channelzpb.SocketOption
+
+var (
+	// SockoptToProto is the conversion function that translates socket option in
+	// channelz defined go struct to proto defined go struct.
+	// GRPC INTERNAL USAGE ONLY.
+	SockoptToProto socketOptConvert
+)
+
+func init() {
+	SockoptToProto = func(channelz.SocketOptionData) []*channelzpb.SocketOption {
+		return nil
+	}
 }
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
@@ -44,7 +53,9 @@ func RegisterChannelzServiceToServer(s *grpc.Server) {
 	channelzgrpc.RegisterChannelzServer(s, &serverImpl{})
 }
 
-func newCZServer() channelzgrpc.ChannelzServer {
+// NewCZServer creates an instance of channelz server implementation.
+// FOR GRPC INTERNAL TESTING PURPOSE ONLY.
+func NewCZServer() channelzgrpc.ChannelzServer {
 	return &serverImpl{}
 }
 
@@ -203,7 +214,7 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
 
 	if sm.SocketData.SocketOptions != nil {
-		s.Data.Option = sockoptToProto(sm.SocketData.SocketOptions)
+		s.Data.Option = SockoptToProto(sm.SocketData.SocketOptions)
 	}
 	if sm.SocketData.Security != nil {
 		s.Security = securityToProto(sm.SocketData.Security)

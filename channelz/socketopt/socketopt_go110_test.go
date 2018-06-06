@@ -23,7 +23,7 @@
 // as the function SyscallConn() (required to get socket option) was introduced
 // to net.TCPListener in go1.10.
 
-package channelz_test
+package socketopt
 
 import (
 	"net"
@@ -71,7 +71,13 @@ func TestGetSocketOpt(t *testing.T) {
 			t.Fatalf("failed to SetsockoptTimeval(%v,%v,%v,%v) due to %v", int(fd), syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, sendTimeout, err)
 		}
 	})
-	sktopt := channelz.GetSocketOption(conn)
+	so := channelz.GetSocketOption(conn)
+	var sktopt *socketOptionData
+	var ok bool
+	if sktopt, ok = so.(*socketOptionData); !ok {
+		t.Fatalf("Failed to get socket option data.")
+	}
+
 	if !reflect.DeepEqual(sktopt.Linger, l) {
 		t.Fatalf("get socket option linger, want: %v, got %v", l, sktopt.Linger)
 	}
@@ -85,7 +91,10 @@ func TestGetSocketOpt(t *testing.T) {
 		t.Fatalf("TCPInfo.State want 1 (TCP_ESTABLISHED), got %v", sktopt)
 	}
 
-	sktopt = channelz.GetSocketOption(ln)
+	so = channelz.GetSocketOption(ln)
+	if sktopt, ok = so.(*socketOptionData); !ok {
+		t.Fatalf("Failed to get socket option data.")
+	}
 	if sktopt == nil || sktopt.TCPInfo == nil || sktopt.TCPInfo.State != 10 {
 		t.Fatalf("TCPInfo.State want 10 (TCP_LISTEN), got %v", sktopt)
 	}

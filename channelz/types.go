@@ -283,7 +283,7 @@ type SocketInternalMetric struct {
 	// Optional, represents the name of the remote endpoint, if different than
 	// the original target name.
 	RemoteName    string
-	SocketOptions *SocketOptionData
+	SocketOptions SocketOptionData
 	Security      credentials.ChannelzSecurityValue
 }
 

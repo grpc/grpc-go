@@ -1,3 +1,6 @@
+// +build linux
+// +build go1.9
+
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -16,15 +19,79 @@
  *
  */
 
-package service
+// Package socketopt defines the functionalities to get the socket options from
+// a socket. Users must import this package to enable getting socket options in
+// channelz service. Since AppEngine doesn't allow unsafe package usage (imported
+// by package unix), this package should not be used in an AppEngine environment.
+// And as build tags suggest, socket options in channelz service is only supported
+// in linux environment with go version 1.9 or later.
+package socketopt
 
 import (
+	"syscall"
+	"time"
+
 	"github.com/golang/protobuf/ptypes"
+	durpb "github.com/golang/protobuf/ptypes/duration"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/grpc/channelz/service"
 )
 
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
+func init() {
+	channelz.GetSocketOption = func(socket interface{}) channelz.SocketOptionData {
+		c, ok := socket.(syscall.Conn)
+		if !ok {
+			return nil
+		}
+		data := &socketOptionData{}
+		if rawConn, err := c.SyscallConn(); err == nil {
+			rawConn.Control(data.Getsockopt)
+			return data
+		}
+		return nil
+	}
+	service.SockoptToProto = sockoptToProto
+}
+
+// SocketOptionData defines the struct to hold socket option data, and related
+// getter function to obtain info from fd.
+type socketOptionData struct {
+	Linger      *unix.Linger
+	RecvTimeout *unix.Timeval
+	SendTimeout *unix.Timeval
+	TCPInfo     *unix.TCPInfo
+}
+
+// Getsockopt defines the function to get socket options requested by channelz.
+// It is to be passed to syscall.RawConn.Control().
+func (s *socketOptionData) Getsockopt(fd uintptr) {
+	if v, err := unix.GetsockoptLinger(int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER); err == nil {
+		s.Linger = v
+	}
+	if v, err := unix.GetsockoptTimeval(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVTIMEO); err == nil {
+		s.RecvTimeout = v
+	}
+	if v, err := unix.GetsockoptTimeval(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDTIMEO); err == nil {
+		s.SendTimeout = v
+	}
+	if v, err := unix.GetsockoptTCPInfo(int(fd), syscall.SOL_TCP, syscall.TCP_INFO); err == nil {
+		s.TCPInfo = v
+	}
+	return
+}
+
+func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
+	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
+}
+
+func sockoptToProto(s channelz.SocketOptionData) []*channelzpb.SocketOption {
+	var skopts *socketOptionData
+	var ok bool
+	if skopts, ok = s.(*socketOptionData); !ok {
+		return nil
+	}
 	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
 		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionLinger{

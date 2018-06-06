@@ -1,4 +1,5 @@
-// +build amd64,linux
+// +build 386,linux
+// +build go1.9
 
 /*
  *
@@ -18,7 +19,7 @@
  *
  */
 
-package service
+package socketopt
 
 import (
 	"golang.org/x/sys/unix"
@@ -27,6 +28,7 @@ import (
 
 func protoToTime(protoTime *channelzpb.SocketOptionTimeout) *unix.Timeval {
 	timeout := &unix.Timeval{}
-	timeout.Sec, timeout.Usec = convertToDuration(protoTime.GetDuration())
+	sec, usec := convertToDuration(protoTime.GetDuration())
+	timeout.Sec, timeout.Usec = int32(sec), int32(usec)
 	return timeout
 }

@@ -94,10 +94,10 @@ type dummySocket struct {
 	lastMessageReceivedTimestamp     time.Time
 	localFlowControlWindow           int64
 	remoteFlowControlWindow          int64
-	SocketOptions                    *channelz.SocketOptionData
+	socketOptions                    *channelz.SocketOptionData
 	localAddr                        net.Addr
 	remoteAddr                       net.Addr
-	Security                         credentials.ChannelzSecurityValue
+	security                         credentials.ChannelzSecurityValue
 	remoteName                       string
 }
 
@@ -115,10 +115,10 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageReceivedTimestamp:     d.lastMessageReceivedTimestamp,
 		LocalFlowControlWindow:           d.localFlowControlWindow,
 		RemoteFlowControlWindow:          d.remoteFlowControlWindow,
-		SocketOptions:                    d.SocketOptions,
+		SocketOptions:                    d.socketOptions,
 		LocalAddr:                        d.localAddr,
 		RemoteAddr:                       d.remoteAddr,
-		Security:                         d.Security,
+		Security:                         d.security,
 		RemoteName:                       d.remoteName,
 	}
 }
@@ -196,6 +196,54 @@ func protoToAddr(a *channelzpb.Address) net.Addr {
 	return nil
 }
 
+func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
+	ds := &dummySocket{}
+	pdata := s.GetData()
+	ds.streamsStarted = pdata.GetStreamsStarted()
+	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
+	ds.streamsFailed = pdata.GetStreamsFailed()
+	ds.messagesSent = pdata.GetMessagesSent()
+	ds.messagesReceived = pdata.GetMessagesReceived()
+	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
+	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastLocalStreamCreatedTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastRemoteStreamCreatedTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastMessageSentTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastMessageReceivedTimestamp = t
+		}
+	}
+	if v := pdata.GetLocalFlowControlWindow(); v != nil {
+		ds.localFlowControlWindow = v.Value
+	}
+	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
+		ds.remoteFlowControlWindow = v.Value
+	}
+	if v := s.GetSecurity(); v != nil {
+		ds.security = protoToSecurity(v)
+	}
+	if local := s.GetLocal(); local != nil {
+		ds.localAddr = protoToAddr(local)
+	}
+	if remote := s.GetRemote(); remote != nil {
+		ds.remoteAddr = protoToAddr(remote)
+	}
+	ds.remoteName = s.GetRemoteName()
+	return ds
+}
+
 func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]string {
 	m := make(map[int64]string)
 	for _, sr := range sktRefs {
@@ -249,7 +297,7 @@ func TestGetTopChannels(t *testing.T) {
 	for _, c := range tcs {
 		channelz.RegisterChannel(c, 0, "")
 	}
-	s := newCZServer()
+	s := NewCZServer()
 	resp, _ := s.GetTopChannels(context.Background(), &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -293,7 +341,7 @@ func TestGetServers(t *testing.T) {
 	for _, s := range ss {
 		channelz.RegisterServer(s, "")
 	}
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetServers(context.Background(), &channelzpb.GetServersRequest{StartServerId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -320,7 +368,7 @@ func TestGetServerSockets(t *testing.T) {
 	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
 	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
@@ -351,7 +399,7 @@ func TestGetChannel(t *testing.T) {
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[0]})
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
@@ -379,7 +427,7 @@ func TestGetSubChannel(t *testing.T) {
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetSubchannel(context.Background(), &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
 	metrics := resp.GetSubchannel()
 	want := map[int64]string{
@@ -447,24 +495,24 @@ func TestGetSocket(t *testing.T) {
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
 		},
 		{
-			Security: &credentials.TLSChannelzSecurityValue{
+			security: &credentials.TLSChannelzSecurityValue{
 				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
 			},
 		},
 		{
-			Security: &credentials.OtherChannelzSecurityValue{
+			security: &credentials.OtherChannelzSecurityValue{
 				Name: "XXXX",
 			},
 		},
 		{
-			Security: &credentials.OtherChannelzSecurityValue{
+			security: &credentials.OtherChannelzSecurityValue{
 				Name:  "YYYY",
 				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
 			},
 		},
 	}
-	svr := newCZServer()
+	svr := NewCZServer()
 	ids := make([]int64, len(ss))
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	for i, s := range ss {
