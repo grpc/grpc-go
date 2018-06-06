@@ -39,6 +39,10 @@ import (
 	"google.golang.org/grpc/test/leakcheck"
 )
 
+func init() {
+	channelz.TurnOn()
+}
+
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	for i := 0; i < num; i++ {
 		te.startServer(ts)
