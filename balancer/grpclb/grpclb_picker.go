@@ -29,7 +29,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// rpcStats is same as lbmpb.ClientStats, except that numCallsDropped is a map
+// instead of a slice.
 type rpcStats struct {
+	// Only access the following fields atomically.
 	numCallsStarted                        int64
 	numCallsFinished                       int64
 	numCallsFinishedWithClientFailedToSend int64
