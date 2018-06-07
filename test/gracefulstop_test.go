@@ -28,7 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/leakcheck"
+	"google.golang.org/grpc/internal/leakcheck"
 
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )

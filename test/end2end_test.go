@@ -66,7 +66,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/testdata"
 )
 

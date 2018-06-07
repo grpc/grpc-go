@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/test/leakcheck"
+	"google.golang.org/grpc/internal/leakcheck"
 )
 
 func TestStickyKeyFromContext(t *testing.T) {

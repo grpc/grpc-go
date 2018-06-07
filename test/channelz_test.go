@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
+	"google.golang.org/grpc/internal/leakcheck"
 )
 
 func init() {
