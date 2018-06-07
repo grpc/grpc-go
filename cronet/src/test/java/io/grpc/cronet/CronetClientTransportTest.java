@@ -16,6 +16,7 @@
 
 package io.grpc.cronet;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
@@ -23,9 +24,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.ClientStreamListener;
@@ -46,6 +50,8 @@ import org.robolectric.RobolectricTestRunner;
 @RunWith(RobolectricTestRunner.class)
 public final class CronetClientTransportTest {
 
+  private static final String AUTHORITY = "test.example.com";
+
   private CronetClientTransport transport;
   @Mock private StreamBuilderFactory streamFactory;
   @Mock private Executor executor;
@@ -61,7 +67,7 @@ public final class CronetClientTransportTest {
         new CronetClientTransport(
             streamFactory,
             new InetSocketAddress("localhost", 443),
-            "",
+            AUTHORITY,
             null,
             executor,
             5000,
@@ -71,6 +77,14 @@ public final class CronetClientTransportTest {
     assertTrue(callback != null);
     callback.run();
     verify(clientTransportListener).transportReady();
+  }
+
+  @Test
+  public void transportAttributes() {
+    Attributes attrs = transport.getAttributes();
+    assertEquals(AUTHORITY, attrs.get(CallCredentials.ATTR_AUTHORITY));
+    assertEquals(
+        SecurityLevel.PRIVACY_AND_INTEGRITY, attrs.get(CallCredentials.ATTR_SECURITY_LEVEL));
   }
 
   @Test

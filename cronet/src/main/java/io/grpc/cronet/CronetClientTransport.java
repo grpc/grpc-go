@@ -20,9 +20,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
@@ -57,6 +59,7 @@ class CronetClientTransport implements ConnectionClientTransport {
   private final int maxMessageSize;
   private final boolean alwaysUsePut;
   private final TransportTracer transportTracer;
+  private final Attributes attrs;
   // Indicates the transport is in go-away state: no new streams will be processed,
   // but existing streams may continue.
   @GuardedBy("lock")
@@ -91,6 +94,10 @@ class CronetClientTransport implements ConnectionClientTransport {
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.streamFactory = Preconditions.checkNotNull(streamFactory, "streamFactory");
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
+    this.attrs = Attributes.newBuilder()
+        .set(CallCredentials.ATTR_AUTHORITY, authority)
+        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+        .build();
   }
 
   @Override
@@ -192,8 +199,7 @@ class CronetClientTransport implements ConnectionClientTransport {
 
   @Override
   public Attributes getAttributes() {
-    // TODO(zhangkun83): fill channel security attributes
-    return Attributes.EMPTY;
+    return attrs;
   }
 
   private void startGoAway(Status status) {
