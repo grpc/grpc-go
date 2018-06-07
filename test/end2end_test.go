@@ -56,6 +56,7 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -66,7 +67,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/testdata"
 )
 

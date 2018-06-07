@@ -27,10 +27,10 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestStickyKeyFromContext(t *testing.T) {

@@ -31,8 +31,8 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/transport"
 )
 

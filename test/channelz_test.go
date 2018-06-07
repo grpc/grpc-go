@@ -31,12 +31,12 @@ import (
 	_ "google.golang.org/grpc/balancer/grpclb"
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func init() {
