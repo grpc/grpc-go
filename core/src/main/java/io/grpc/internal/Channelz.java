@@ -544,7 +544,7 @@ public final class Channelz {
           Event that = (Event) o;
           return Objects.equal(description, that.description)
               && Objects.equal(severity, that.severity)
-              && Objects.equal(timestampNanos, that.timestampNanos)
+              && timestampNanos == that.timestampNanos
               && Objects.equal(channelRef, that.channelRef)
               && Objects.equal(subchannelRef, that.subchannelRef);
         }
