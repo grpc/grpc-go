@@ -535,9 +535,10 @@ public final class BinlogHelperTest {
 
   @Test
   public void logSendInitialMetadata_server() throws Exception {
-    sinkWriterImpl.logSendInitialMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID);
+    sinkWriterImpl.logSendInitialMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_SERVER, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -546,9 +547,10 @@ public final class BinlogHelperTest {
 
   @Test
   public void logSendInitialMetadata_client() throws Exception {
-    sinkWriterImpl.logSendInitialMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID);
+    sinkWriterImpl.logSendInitialMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_CLIENT, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -560,9 +562,11 @@ public final class BinlogHelperTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    sinkWriterImpl.logRecvInitialMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID, socketAddress);
+    sinkWriterImpl.logRecvInitialMetadata(
+        /*seq=*/ 1, nonEmptyMetadata, IS_SERVER, CALL_ID, socketAddress);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -575,9 +579,11 @@ public final class BinlogHelperTest {
     InetAddress address = InetAddress.getByName("127.0.0.1");
     int port = 12345;
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-    sinkWriterImpl.logRecvInitialMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID, socketAddress);
+    sinkWriterImpl.logRecvInitialMetadata(
+        /*seq=*/ 1, nonEmptyMetadata, IS_CLIENT, CALL_ID, socketAddress);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -587,9 +593,10 @@ public final class BinlogHelperTest {
 
   @Test
   public void logTrailingMetadata_server() throws Exception {
-    sinkWriterImpl.logTrailingMetadata(nonEmptyMetadata, IS_SERVER, CALL_ID);
+    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_SERVER, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -598,9 +605,10 @@ public final class BinlogHelperTest {
 
   @Test
   public void logTrailingMetadata_client() throws Exception {
-    sinkWriterImpl.logTrailingMetadata(nonEmptyMetadata, IS_CLIENT, CALL_ID);
+    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_CLIENT, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_TRAILING_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -610,18 +618,20 @@ public final class BinlogHelperTest {
   @Test
   public void logOutboundMessage_server() throws Exception {
     sinkWriterImpl.logOutboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_SERVER, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_SERVER, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_COMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
 
     sinkWriterImpl.logOutboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_SERVER, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_SERVER, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_UNCOMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -632,18 +642,20 @@ public final class BinlogHelperTest {
   @Test
   public void logOutboundMessage_client() throws Exception {
     sinkWriterImpl.logOutboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_CLIENT, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_CLIENT, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_COMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
 
     sinkWriterImpl.logOutboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_CLIENT, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_CLIENT, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_UNCOMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.SEND_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -654,18 +666,20 @@ public final class BinlogHelperTest {
   @Test
   public void logInboundMessage_server() throws Exception {
     sinkWriterImpl.logInboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_SERVER, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_SERVER, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_COMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
 
     sinkWriterImpl.logInboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_SERVER, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_SERVER, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_UNCOMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -676,18 +690,20 @@ public final class BinlogHelperTest {
   @Test
   public void logInboundMessage_client() throws Exception {
     sinkWriterImpl.logInboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_CLIENT, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_COMPRESSED, IS_CLIENT, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_COMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
 
     sinkWriterImpl.logInboundMessage(
-        BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_CLIENT, CALL_ID);
+        /*seq=*/ 1, BYTEARRAY_MARSHALLER, message, IS_UNCOMPRESSED, IS_CLIENT, CALL_ID);
     verify(sink).write(
         messageToProtoTestHelper(message, IS_UNCOMPRESSED, MESSAGE_LIMIT).toBuilder()
+            .setSequenceIdWithinCall(1)
             .setType(GrpcLogEntry.Type.RECV_MESSAGE)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -764,6 +780,7 @@ public final class BinlogHelperTest {
       Metadata clientInitial = new Metadata();
       interceptedCall.start(mockListener, clientInitial);
       verify(mockSinkWriter).logSendInitialMetadata(
+          /*seq=*/ eq(1),
           same(clientInitial),
           eq(IS_CLIENT),
           same(CALL_ID));
@@ -775,7 +792,9 @@ public final class BinlogHelperTest {
     {
       Metadata serverInitial = new Metadata();
       interceptedListener.get().onHeaders(serverInitial);
-      verify(mockSinkWriter).logRecvInitialMetadata(same(serverInitial),
+      verify(mockSinkWriter).logRecvInitialMetadata(
+          /*seq=*/ eq(2),
+          same(serverInitial),
           eq(IS_CLIENT),
           same(CALL_ID),
           same(peer));
@@ -788,6 +807,7 @@ public final class BinlogHelperTest {
       byte[] request = "this is a request".getBytes(US_ASCII);
       interceptedCall.sendMessage(request);
       verify(mockSinkWriter).logOutboundMessage(
+          /*seq=*/ eq(3),
           same(BYTEARRAY_MARSHALLER),
           same(request),
           eq(BinlogHelper.DUMMY_IS_COMPRESSED),
@@ -802,6 +822,7 @@ public final class BinlogHelperTest {
       byte[] response = "this is a response".getBytes(US_ASCII);
       interceptedListener.get().onMessage(response);
       verify(mockSinkWriter).logInboundMessage(
+          /*seq=*/ eq(4),
           same(BYTEARRAY_MARSHALLER),
           eq(response),
           eq(BinlogHelper.DUMMY_IS_COMPRESSED),
@@ -818,6 +839,7 @@ public final class BinlogHelperTest {
 
       interceptedListener.get().onClose(status, trailers);
       verify(mockSinkWriter).logTrailingMetadata(
+          /*seq=*/ eq(5),
           same(trailers),
           eq(IS_CLIENT),
           same(CALL_ID));
@@ -894,6 +916,7 @@ public final class BinlogHelperTest {
                     }
                   });
       verify(mockSinkWriter).logRecvInitialMetadata(
+          /*seq=*/ eq(1),
           same(clientInitial),
           eq(IS_SERVER),
           same(CALL_ID),
@@ -906,6 +929,7 @@ public final class BinlogHelperTest {
       Metadata serverInital = new Metadata();
       interceptedCall.get().sendHeaders(serverInital);
       verify(mockSinkWriter).logSendInitialMetadata(
+          /*seq=*/ eq(2),
           same(serverInital),
           eq(IS_SERVER),
           same(CALL_ID));
@@ -918,6 +942,7 @@ public final class BinlogHelperTest {
       byte[] request = "this is a request".getBytes(US_ASCII);
       capturedListener.onMessage(request);
       verify(mockSinkWriter).logInboundMessage(
+          /*seq=*/ eq(3),
           same(BYTEARRAY_MARSHALLER),
           same(request),
           eq(BinlogHelper.DUMMY_IS_COMPRESSED),
@@ -932,6 +957,7 @@ public final class BinlogHelperTest {
       byte[] response = "this is a response".getBytes(US_ASCII);
       interceptedCall.get().sendMessage(response);
       verify(mockSinkWriter).logOutboundMessage(
+          /*seq=*/ eq(4),
           same(BYTEARRAY_MARSHALLER),
           same(response),
           eq(BinlogHelper.DUMMY_IS_COMPRESSED),
@@ -947,6 +973,7 @@ public final class BinlogHelperTest {
       Metadata trailers = new Metadata();
       interceptedCall.get().close(status, trailers);
       verify(mockSinkWriter).logTrailingMetadata(
+          /*seq=*/ eq(5),
           same(trailers),
           eq(IS_SERVER),
           same(CALL_ID));

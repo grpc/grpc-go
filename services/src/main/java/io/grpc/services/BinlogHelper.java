@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -76,8 +77,6 @@ final class BinlogHelper {
   private static final boolean SERVER = true;
   private static final boolean CLIENT = false;
 
-  @VisibleForTesting
-  static final CallId emptyCallId = new CallId(0, 0);
   @VisibleForTesting
   static final SocketAddress DUMMY_SOCKET = new DummySocketAddress();
   @VisibleForTesting
@@ -104,8 +103,9 @@ final class BinlogHelper {
     }
 
     @Override
-    void logSendInitialMetadata(Metadata metadata, boolean isServer, CallId callId) {
+    void logSendInitialMetadata(int seq, Metadata metadata, boolean isServer, CallId callId) {
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+          .setSequenceIdWithinCall(seq)
           .setType(Type.SEND_INITIAL_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId));
@@ -115,8 +115,9 @@ final class BinlogHelper {
 
     @Override
     void logRecvInitialMetadata(
-        Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket) {
+        int seq, Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket) {
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+          .setSequenceIdWithinCall(seq)
           .setType(Type.RECV_INITIAL_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId))
@@ -126,8 +127,9 @@ final class BinlogHelper {
     }
 
     @Override
-    void logTrailingMetadata(Metadata metadata, boolean isServer, CallId callId) {
+    void logTrailingMetadata(int seq, Metadata metadata, boolean isServer, CallId callId) {
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+          .setSequenceIdWithinCall(seq)
           .setType(isServer ? Type.SEND_TRAILING_METADATA : Type.RECV_TRAILING_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId));
@@ -137,6 +139,7 @@ final class BinlogHelper {
 
     @Override
     <T> void logOutboundMessage(
+        int seq,
         Marshaller<T> marshaller,
         T message,
         boolean compressed,
@@ -146,6 +149,7 @@ final class BinlogHelper {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+          .setSequenceIdWithinCall(seq)
           .setType(Type.SEND_MESSAGE)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId));
@@ -155,6 +159,7 @@ final class BinlogHelper {
 
     @Override
     <T> void logInboundMessage(
+        int seq,
         Marshaller<T> marshaller,
         T message,
         boolean compressed,
@@ -164,6 +169,7 @@ final class BinlogHelper {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+          .setSequenceIdWithinCall(seq)
           .setType(Type.RECV_MESSAGE)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId));
@@ -188,20 +194,21 @@ final class BinlogHelper {
      * Logs the sending of initial metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logSendInitialMetadata(Metadata metadata, boolean isServer, CallId callId);
+    abstract void logSendInitialMetadata(
+        int seq, Metadata metadata, boolean isServer, CallId callId);
 
     /**
      * Logs the receiving of initial metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
     abstract void logRecvInitialMetadata(
-        Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket);
+        int seq, Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket);
 
     /**
      * Logs the trailing metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logTrailingMetadata(Metadata metadata, boolean isServer, CallId callId);
+    abstract void logTrailingMetadata(int seq, Metadata metadata, boolean isServer, CallId callId);
 
     /**
      * Logs the outbound message. This method logs the appropriate number of bytes from
@@ -210,7 +217,8 @@ final class BinlogHelper {
      * This method takes ownership of {@code message}.
      */
     abstract <T> void logOutboundMessage(
-        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, CallId callId);
+        int seq, Marshaller<T> marshaller, T message, boolean compressed, boolean isServer,
+        CallId callId);
 
     /**
      * Logs the inbound message. This method logs the appropriate number of bytes from
@@ -219,7 +227,8 @@ final class BinlogHelper {
      * This method takes ownership of {@code message}.
      */
     abstract <T> void logInboundMessage(
-        Marshaller<T> marshaller, T message, boolean compressed, boolean isServer, CallId callId);
+        int seq, Marshaller<T> marshaller, T message, boolean compressed, boolean isServer,
+        CallId callId);
 
     /**
      * Returns the number bytes of the header this writer will log, according to configuration.
@@ -245,15 +254,17 @@ final class BinlogHelper {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+        final AtomicInteger seq = new AtomicInteger(1);
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata headers) {
-            writer.logSendInitialMetadata(headers, CLIENT, callId);
+            writer.logSendInitialMetadata(seq.getAndIncrement(), headers, CLIENT, callId);
             ClientCall.Listener<RespT> wListener =
                 new SimpleForwardingClientCallListener<RespT>(responseListener) {
                   @Override
                   public void onMessage(RespT message) {
                     writer.logInboundMessage(
+                        seq.getAndIncrement(),
                         method.getResponseMarshaller(),
                         message,
                         DUMMY_IS_COMPRESSED,
@@ -265,13 +276,14 @@ final class BinlogHelper {
                   @Override
                   public void onHeaders(Metadata headers) {
                     SocketAddress peer = getPeerSocket(getAttributes());
-                    writer.logRecvInitialMetadata(headers, CLIENT, callId, peer);
+                    writer.logRecvInitialMetadata(
+                        seq.getAndIncrement(), headers, CLIENT, callId, peer);
                     super.onHeaders(headers);
                   }
 
                   @Override
                   public void onClose(Status status, Metadata trailers) {
-                    writer.logTrailingMetadata(trailers, CLIENT, callId);
+                    writer.logTrailingMetadata(seq.getAndIncrement(), trailers, CLIENT, callId);
                     super.onClose(status, trailers);
                   }
                 };
@@ -281,6 +293,7 @@ final class BinlogHelper {
           @Override
           public void sendMessage(ReqT message) {
             writer.logOutboundMessage(
+                seq.getAndIncrement(),
                 method.getRequestMarshaller(),
                 message,
                 DUMMY_IS_COMPRESSED,
@@ -300,12 +313,14 @@ final class BinlogHelper {
           final ServerCall<ReqT, RespT> call,
           Metadata headers,
           ServerCallHandler<ReqT, RespT> next) {
+        final AtomicInteger seq = new AtomicInteger(1);
         SocketAddress peer = getPeerSocket(call.getAttributes());
-        writer.logRecvInitialMetadata(headers, SERVER, callId, peer);
+        writer.logRecvInitialMetadata(seq.getAndIncrement(), headers, SERVER, callId, peer);
         ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
           @Override
           public void sendMessage(RespT message) {
             writer.logOutboundMessage(
+                seq.getAndIncrement(),
                 call.getMethodDescriptor().getResponseMarshaller(),
                 message,
                 DUMMY_IS_COMPRESSED,
@@ -316,13 +331,13 @@ final class BinlogHelper {
 
           @Override
           public void sendHeaders(Metadata headers) {
-            writer.logSendInitialMetadata(headers, SERVER, callId);
+            writer.logSendInitialMetadata(seq.getAndIncrement(), headers, SERVER, callId);
             super.sendHeaders(headers);
           }
 
           @Override
           public void close(Status status, Metadata trailers) {
-            writer.logTrailingMetadata(trailers, SERVER, callId);
+            writer.logTrailingMetadata(seq.getAndIncrement(), trailers, SERVER, callId);
             super.close(status, trailers);
           }
         };
@@ -331,6 +346,7 @@ final class BinlogHelper {
           @Override
           public void onMessage(ReqT message) {
             writer.logInboundMessage(
+                seq.getAndIncrement(),
                 call.getMethodDescriptor().getRequestMarshaller(),
                 message,
                 DUMMY_IS_COMPRESSED,
