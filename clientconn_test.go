@@ -21,6 +21,7 @@ package grpc
 import (
 	"math"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -35,6 +37,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	_ "google.golang.org/grpc/resolver/passthrough"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/testdata"
 )
@@ -309,6 +312,9 @@ func TestConnectivityStates(t *testing.T) {
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
+	if err := cc.GetStatus(); err != nil {
+		t.Fatalf("cc.GetStatus() = %v; want <nil>", err)
+	}
 	// Send an update to delete the server connection (tearDown addrConn).
 	update := []*naming.Update{
 		{
@@ -321,6 +327,9 @@ func TestConnectivityStates(t *testing.T) {
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
+	if err := cc.GetStatus(); status.Code(err) != codes.Unavailable || !strings.Contains(status.Convert(err).Message(), "no backends returned by resolver") {
+		t.Fatalf("cc.GetStatus() = %v; want <code=%v, msg contains %q>", err, codes.Unavailable, "no backends returned by resolver")
+	}
 	update[0] = &naming.Update{
 		Op:   naming.Add,
 		Addr: "localhost:" + servers[1].port,
@@ -330,7 +339,9 @@ func TestConnectivityStates(t *testing.T) {
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
-
+	if err := cc.GetStatus(); err != nil {
+		t.Fatalf("cc.GetStatus() = %v; want <nil>", err)
+	}
 }
 
 func TestWithTimeout(t *testing.T) {
