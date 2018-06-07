@@ -38,13 +38,13 @@ import (
 	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	lbspb "google.golang.org/grpc/grpclb/grpc_lb_v1/service"
 	_ "google.golang.org/grpc/grpclog/glogger"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/internal/leakcheck"
 )
 
 var (
