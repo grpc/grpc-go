@@ -36,13 +36,19 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.GrpcUtil;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Builds a {@link ManagedChannel} that, when provided with a {@link Context}, will automatically
  * monitor the Android device's network state to smoothly handle intermittent network failures.
+ *
+ * <p>Currently only compatible with gRPC's OkHttp transport, which must be available at runtime.
  *
  * <p>Requires the Android ACCESS_NETWORK_STATE permission.
  *
@@ -94,6 +100,56 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
   public AndroidChannelBuilder context(Context context) {
     this.context = context;
     return this;
+  }
+
+  /** Set the delegate channel builder's transportExecutor. */
+  public AndroidChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
+    try {
+      OKHTTP_CHANNEL_BUILDER_CLASS
+          .getMethod("transportExecutor", Executor.class)
+          .invoke(delegateBuilder, transportExecutor);
+      return this;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke transportExecutor on delegate builder", e);
+    }
+  }
+
+  /** Set the delegate channel builder's hostnameVerifier. */
+  public AndroidChannelBuilder hostnameVerifier(@Nullable HostnameVerifier hostnameVerifier) {
+    try {
+      OKHTTP_CHANNEL_BUILDER_CLASS
+          .getMethod("hostnameVerifier", HostnameVerifier.class)
+          .invoke(delegateBuilder, hostnameVerifier);
+      return this;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke hostnameVerifier on delegate builder", e);
+    }
+  }
+
+  /** Set the delegate channel builder's sslSocketFactory. */
+  public AndroidChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
+    try {
+      OKHTTP_CHANNEL_BUILDER_CLASS
+          .getMethod("sslSocketFactory", SSLSocketFactory.class)
+          .invoke(delegateBuilder, factory);
+      return this;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to invoke sslSocketFactory on delegate builder", e);
+    }
+  }
+
+  /** Set the delegate channel builder's scheduledExecutorService. */
+  public AndroidChannelBuilder scheduledExecutorService(
+      ScheduledExecutorService scheduledExecutorService) {
+    try {
+      OKHTTP_CHANNEL_BUILDER_CLASS
+          .getMethod("scheduledExecutorService", ScheduledExecutorService.class)
+          .invoke(delegateBuilder, scheduledExecutorService);
+      return this;
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to invoke scheduledExecutorService on delegate builder", e);
+    }
   }
 
   @Override
