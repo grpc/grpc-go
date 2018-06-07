@@ -18,6 +18,8 @@ syntax = "proto3";
 
 package grpc.binarylog.v1alpha;
 
+import "google/protobuf/duration.proto";
+
 option java_multiple_files = true;
 option java_package = "io.grpc.binarylog";
 option java_outer_classname = "BinaryLogProto";
@@ -52,9 +54,11 @@ message GrpcLogEntry {
   // The logger uses one of the following fields to record the payload,
   // according to the type of the log entry.
   oneof payload {
-    // Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+    // Used by {SEND,RECV}_INITIAL_METADATA and
+    // {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+    // from the application.
     Metadata metadata = 4;
-    // Used by REQUEST and RESPONSE
+    // Used by {SEND,RECV}_MESSAGE
     Message message = 5;
   }
 
@@ -64,6 +68,33 @@ message GrpcLogEntry {
 
   // true if payload does not represent the full message or metadata.
   bool truncated = 7;
+
+  // The method name. Logged for the first entry:
+  // RECV_INITIAL_METADATA for server side or
+  // SEND_INITIAL_METADATA for client side.
+  string method_name = 8;
+
+  // status_code and status_message:
+  // Only present for SEND_TRAILING_METADATA on server side or
+  // RECV_TRAILING_METADATA on client side.
+  uint32 status_code = 9;
+
+  // An original status message before any transport specific
+  // encoding.
+  string status_message = 10;
+
+  // The value of the 'grpc-status-details-bin' metadata key. If
+  // present, this is always an encoded 'google.rpc.Status' message.
+  bytes status_details = 11;
+
+  // the RPC timeout
+  google.protobuf.Duration timeout = 12;
+
+  // The entry sequence id for this call. The first GrpcLogEntry has a
+  // value of 1, to disambiguate from an unset value. The purpose of
+  // this field is to detect missing entries in environments where
+  // durability or ordering is not guaranteed.
+  uint32 sequence_id_within_call = 13;
 };
 
 // Message payload, used by REQUEST and RESPONSE
@@ -84,7 +115,15 @@ message Message {
 // A list of metadata pairs, used in the payload of CLIENT_INIT_METADATA,
 // SERVER_INIT_METADATA and TRAILING_METADATA
 // Implementations may omit some entries to honor the header limits
-// of GRPC_BINARY_LOG_CONFIG. Implementations can choose which entries are logged.
+// of GRPC_BINARY_LOG_CONFIG.
+//
+// Implementations will not log the following entries, and this is
+// not to be treated as a truncation:
+// - entries handled by grpc that are not user visible, such as those
+//   that begin with 'grpc-' or keys like 'lb-token'
+// - transport specific entries, including but not limited to:
+//   ':path', ':authority', 'content-encoding', 'user-agent', 'te', etc
+// - entries added for call credentials
 message Metadata {
   repeated MetadataEntry entry = 1;
 }

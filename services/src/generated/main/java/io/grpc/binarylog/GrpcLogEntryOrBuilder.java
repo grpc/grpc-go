@@ -71,7 +71,9 @@ public interface GrpcLogEntryOrBuilder extends
 
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -79,7 +81,9 @@ public interface GrpcLogEntryOrBuilder extends
   boolean hasMetadata();
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -87,7 +91,9 @@ public interface GrpcLogEntryOrBuilder extends
   io.grpc.binarylog.Metadata getMetadata();
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -96,7 +102,7 @@ public interface GrpcLogEntryOrBuilder extends
 
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -104,7 +110,7 @@ public interface GrpcLogEntryOrBuilder extends
   boolean hasMessage();
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -112,7 +118,7 @@ public interface GrpcLogEntryOrBuilder extends
   io.grpc.binarylog.Message getMessage();
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -155,6 +161,106 @@ public interface GrpcLogEntryOrBuilder extends
    * <code>bool truncated = 7;</code>
    */
   boolean getTruncated();
+
+  /**
+   * <pre>
+   * The method name. Logged for the first entry:
+   * RECV_INITIAL_METADATA for server side or
+   * SEND_INITIAL_METADATA for client side.
+   * </pre>
+   *
+   * <code>string method_name = 8;</code>
+   */
+  java.lang.String getMethodName();
+  /**
+   * <pre>
+   * The method name. Logged for the first entry:
+   * RECV_INITIAL_METADATA for server side or
+   * SEND_INITIAL_METADATA for client side.
+   * </pre>
+   *
+   * <code>string method_name = 8;</code>
+   */
+  com.google.protobuf.ByteString
+      getMethodNameBytes();
+
+  /**
+   * <pre>
+   * status_code and status_message:
+   * Only present for SEND_TRAILING_METADATA on server side or
+   * RECV_TRAILING_METADATA on client side.
+   * </pre>
+   *
+   * <code>uint32 status_code = 9;</code>
+   */
+  int getStatusCode();
+
+  /**
+   * <pre>
+   * An original status message before any transport specific
+   * encoding.
+   * </pre>
+   *
+   * <code>string status_message = 10;</code>
+   */
+  java.lang.String getStatusMessage();
+  /**
+   * <pre>
+   * An original status message before any transport specific
+   * encoding.
+   * </pre>
+   *
+   * <code>string status_message = 10;</code>
+   */
+  com.google.protobuf.ByteString
+      getStatusMessageBytes();
+
+  /**
+   * <pre>
+   * The value of the 'grpc-status-details-bin' metadata key. If
+   * present, this is always an encoded 'google.rpc.Status' message.
+   * </pre>
+   *
+   * <code>bytes status_details = 11;</code>
+   */
+  com.google.protobuf.ByteString getStatusDetails();
+
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  boolean hasTimeout();
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  com.google.protobuf.Duration getTimeout();
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  com.google.protobuf.DurationOrBuilder getTimeoutOrBuilder();
+
+  /**
+   * <pre>
+   * The entry sequence id for this call. The first GrpcLogEntry has a
+   * value of 1, to disambiguate from an unset value. The purpose of
+   * this field is to detect missing entries in environments where
+   * durability or ordering is not guaranteed.
+   * </pre>
+   *
+   * <code>uint32 sequence_id_within_call = 13;</code>
+   */
+  int getSequenceIdWithinCall();
 
   public io.grpc.binarylog.GrpcLogEntry.PayloadCase getPayloadCase();
 }

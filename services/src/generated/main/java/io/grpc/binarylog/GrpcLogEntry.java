@@ -23,6 +23,11 @@ private static final long serialVersionUID = 0L;
     type_ = 0;
     logger_ = 0;
     truncated_ = false;
+    methodName_ = "";
+    statusCode_ = 0;
+    statusMessage_ = "";
+    statusDetails_ = com.google.protobuf.ByteString.EMPTY;
+    sequenceIdWithinCall_ = 0;
   }
 
   @java.lang.Override
@@ -125,6 +130,46 @@ private static final long serialVersionUID = 0L;
           case 56: {
 
             truncated_ = input.readBool();
+            break;
+          }
+          case 66: {
+            java.lang.String s = input.readStringRequireUtf8();
+
+            methodName_ = s;
+            break;
+          }
+          case 72: {
+
+            statusCode_ = input.readUInt32();
+            break;
+          }
+          case 82: {
+            java.lang.String s = input.readStringRequireUtf8();
+
+            statusMessage_ = s;
+            break;
+          }
+          case 90: {
+
+            statusDetails_ = input.readBytes();
+            break;
+          }
+          case 98: {
+            com.google.protobuf.Duration.Builder subBuilder = null;
+            if (timeout_ != null) {
+              subBuilder = timeout_.toBuilder();
+            }
+            timeout_ = input.readMessage(com.google.protobuf.Duration.parser(), extensionRegistry);
+            if (subBuilder != null) {
+              subBuilder.mergeFrom(timeout_);
+              timeout_ = subBuilder.buildPartial();
+            }
+
+            break;
+          }
+          case 104: {
+
+            sequenceIdWithinCall_ = input.readUInt32();
             break;
           }
         }
@@ -534,7 +579,9 @@ private static final long serialVersionUID = 0L;
   public static final int METADATA_FIELD_NUMBER = 4;
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -544,7 +591,9 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -557,7 +606,9 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+   * Used by {SEND,RECV}_INITIAL_METADATA and
+   * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+   * from the application.
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -572,7 +623,7 @@ private static final long serialVersionUID = 0L;
   public static final int MESSAGE_FIELD_NUMBER = 5;
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -582,7 +633,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -595,7 +646,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Used by REQUEST and RESPONSE
+   * Used by {SEND,RECV}_MESSAGE
    * </pre>
    *
    * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -656,6 +707,174 @@ private static final long serialVersionUID = 0L;
     return truncated_;
   }
 
+  public static final int METHOD_NAME_FIELD_NUMBER = 8;
+  private volatile java.lang.Object methodName_;
+  /**
+   * <pre>
+   * The method name. Logged for the first entry:
+   * RECV_INITIAL_METADATA for server side or
+   * SEND_INITIAL_METADATA for client side.
+   * </pre>
+   *
+   * <code>string method_name = 8;</code>
+   */
+  public java.lang.String getMethodName() {
+    java.lang.Object ref = methodName_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      methodName_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * The method name. Logged for the first entry:
+   * RECV_INITIAL_METADATA for server side or
+   * SEND_INITIAL_METADATA for client side.
+   * </pre>
+   *
+   * <code>string method_name = 8;</code>
+   */
+  public com.google.protobuf.ByteString
+      getMethodNameBytes() {
+    java.lang.Object ref = methodName_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      methodName_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int STATUS_CODE_FIELD_NUMBER = 9;
+  private int statusCode_;
+  /**
+   * <pre>
+   * status_code and status_message:
+   * Only present for SEND_TRAILING_METADATA on server side or
+   * RECV_TRAILING_METADATA on client side.
+   * </pre>
+   *
+   * <code>uint32 status_code = 9;</code>
+   */
+  public int getStatusCode() {
+    return statusCode_;
+  }
+
+  public static final int STATUS_MESSAGE_FIELD_NUMBER = 10;
+  private volatile java.lang.Object statusMessage_;
+  /**
+   * <pre>
+   * An original status message before any transport specific
+   * encoding.
+   * </pre>
+   *
+   * <code>string status_message = 10;</code>
+   */
+  public java.lang.String getStatusMessage() {
+    java.lang.Object ref = statusMessage_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      statusMessage_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * An original status message before any transport specific
+   * encoding.
+   * </pre>
+   *
+   * <code>string status_message = 10;</code>
+   */
+  public com.google.protobuf.ByteString
+      getStatusMessageBytes() {
+    java.lang.Object ref = statusMessage_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      statusMessage_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int STATUS_DETAILS_FIELD_NUMBER = 11;
+  private com.google.protobuf.ByteString statusDetails_;
+  /**
+   * <pre>
+   * The value of the 'grpc-status-details-bin' metadata key. If
+   * present, this is always an encoded 'google.rpc.Status' message.
+   * </pre>
+   *
+   * <code>bytes status_details = 11;</code>
+   */
+  public com.google.protobuf.ByteString getStatusDetails() {
+    return statusDetails_;
+  }
+
+  public static final int TIMEOUT_FIELD_NUMBER = 12;
+  private com.google.protobuf.Duration timeout_;
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  public boolean hasTimeout() {
+    return timeout_ != null;
+  }
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  public com.google.protobuf.Duration getTimeout() {
+    return timeout_ == null ? com.google.protobuf.Duration.getDefaultInstance() : timeout_;
+  }
+  /**
+   * <pre>
+   * the RPC timeout
+   * </pre>
+   *
+   * <code>.google.protobuf.Duration timeout = 12;</code>
+   */
+  public com.google.protobuf.DurationOrBuilder getTimeoutOrBuilder() {
+    return getTimeout();
+  }
+
+  public static final int SEQUENCE_ID_WITHIN_CALL_FIELD_NUMBER = 13;
+  private int sequenceIdWithinCall_;
+  /**
+   * <pre>
+   * The entry sequence id for this call. The first GrpcLogEntry has a
+   * value of 1, to disambiguate from an unset value. The purpose of
+   * this field is to detect missing entries in environments where
+   * durability or ordering is not guaranteed.
+   * </pre>
+   *
+   * <code>uint32 sequence_id_within_call = 13;</code>
+   */
+  public int getSequenceIdWithinCall() {
+    return sequenceIdWithinCall_;
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -688,6 +907,24 @@ private static final long serialVersionUID = 0L;
     }
     if (truncated_ != false) {
       output.writeBool(7, truncated_);
+    }
+    if (!getMethodNameBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 8, methodName_);
+    }
+    if (statusCode_ != 0) {
+      output.writeUInt32(9, statusCode_);
+    }
+    if (!getStatusMessageBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 10, statusMessage_);
+    }
+    if (!statusDetails_.isEmpty()) {
+      output.writeBytes(11, statusDetails_);
+    }
+    if (timeout_ != null) {
+      output.writeMessage(12, getTimeout());
+    }
+    if (sequenceIdWithinCall_ != 0) {
+      output.writeUInt32(13, sequenceIdWithinCall_);
     }
     unknownFields.writeTo(output);
   }
@@ -725,6 +962,28 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(7, truncated_);
     }
+    if (!getMethodNameBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(8, methodName_);
+    }
+    if (statusCode_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, statusCode_);
+    }
+    if (!getStatusMessageBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(10, statusMessage_);
+    }
+    if (!statusDetails_.isEmpty()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBytesSize(11, statusDetails_);
+    }
+    if (timeout_ != null) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(12, getTimeout());
+    }
+    if (sequenceIdWithinCall_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(13, sequenceIdWithinCall_);
+    }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
@@ -755,6 +1014,21 @@ private static final long serialVersionUID = 0L;
     }
     result = result && (getTruncated()
         == other.getTruncated());
+    result = result && getMethodName()
+        .equals(other.getMethodName());
+    result = result && (getStatusCode()
+        == other.getStatusCode());
+    result = result && getStatusMessage()
+        .equals(other.getStatusMessage());
+    result = result && getStatusDetails()
+        .equals(other.getStatusDetails());
+    result = result && (hasTimeout() == other.hasTimeout());
+    if (hasTimeout()) {
+      result = result && getTimeout()
+          .equals(other.getTimeout());
+    }
+    result = result && (getSequenceIdWithinCall()
+        == other.getSequenceIdWithinCall());
     result = result && getPayloadCase().equals(
         other.getPayloadCase());
     if (!result) return false;
@@ -796,6 +1070,20 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + TRUNCATED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getTruncated());
+    hash = (37 * hash) + METHOD_NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getMethodName().hashCode();
+    hash = (37 * hash) + STATUS_CODE_FIELD_NUMBER;
+    hash = (53 * hash) + getStatusCode();
+    hash = (37 * hash) + STATUS_MESSAGE_FIELD_NUMBER;
+    hash = (53 * hash) + getStatusMessage().hashCode();
+    hash = (37 * hash) + STATUS_DETAILS_FIELD_NUMBER;
+    hash = (53 * hash) + getStatusDetails().hashCode();
+    if (hasTimeout()) {
+      hash = (37 * hash) + TIMEOUT_FIELD_NUMBER;
+      hash = (53 * hash) + getTimeout().hashCode();
+    }
+    hash = (37 * hash) + SEQUENCE_ID_WITHIN_CALL_FIELD_NUMBER;
+    hash = (53 * hash) + getSequenceIdWithinCall();
     switch (payloadCase_) {
       case 4:
         hash = (37 * hash) + METADATA_FIELD_NUMBER;
@@ -959,6 +1247,22 @@ private static final long serialVersionUID = 0L;
       }
       truncated_ = false;
 
+      methodName_ = "";
+
+      statusCode_ = 0;
+
+      statusMessage_ = "";
+
+      statusDetails_ = com.google.protobuf.ByteString.EMPTY;
+
+      if (timeoutBuilder_ == null) {
+        timeout_ = null;
+      } else {
+        timeout_ = null;
+        timeoutBuilder_ = null;
+      }
+      sequenceIdWithinCall_ = 0;
+
       payloadCase_ = 0;
       payload_ = null;
       return this;
@@ -1010,6 +1314,16 @@ private static final long serialVersionUID = 0L;
         result.peer_ = peerBuilder_.build();
       }
       result.truncated_ = truncated_;
+      result.methodName_ = methodName_;
+      result.statusCode_ = statusCode_;
+      result.statusMessage_ = statusMessage_;
+      result.statusDetails_ = statusDetails_;
+      if (timeoutBuilder_ == null) {
+        result.timeout_ = timeout_;
+      } else {
+        result.timeout_ = timeoutBuilder_.build();
+      }
+      result.sequenceIdWithinCall_ = sequenceIdWithinCall_;
       result.payloadCase_ = payloadCase_;
       onBuilt();
       return result;
@@ -1066,6 +1380,26 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getTruncated() != false) {
         setTruncated(other.getTruncated());
+      }
+      if (!other.getMethodName().isEmpty()) {
+        methodName_ = other.methodName_;
+        onChanged();
+      }
+      if (other.getStatusCode() != 0) {
+        setStatusCode(other.getStatusCode());
+      }
+      if (!other.getStatusMessage().isEmpty()) {
+        statusMessage_ = other.statusMessage_;
+        onChanged();
+      }
+      if (other.getStatusDetails() != com.google.protobuf.ByteString.EMPTY) {
+        setStatusDetails(other.getStatusDetails());
+      }
+      if (other.hasTimeout()) {
+        mergeTimeout(other.getTimeout());
+      }
+      if (other.getSequenceIdWithinCall() != 0) {
+        setSequenceIdWithinCall(other.getSequenceIdWithinCall());
       }
       switch (other.getPayloadCase()) {
         case METADATA: {
@@ -1416,7 +1750,9 @@ private static final long serialVersionUID = 0L;
         io.grpc.binarylog.Metadata, io.grpc.binarylog.Metadata.Builder, io.grpc.binarylog.MetadataOrBuilder> metadataBuilder_;
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1426,7 +1762,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1446,7 +1784,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1466,7 +1806,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1484,7 +1826,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1510,7 +1854,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1533,7 +1879,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1543,7 +1891,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1560,7 +1910,9 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by CLIENT_INIT_METADATA, SERVER_INIT_METADATA and TRAILING_METADATA
+     * Used by {SEND,RECV}_INITIAL_METADATA and
+     * {SEND,RECV}_TRAILING_METADATA. This contains only the metadata
+     * from the application.
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Metadata metadata = 4;</code>
@@ -1588,7 +1940,7 @@ private static final long serialVersionUID = 0L;
         io.grpc.binarylog.Message, io.grpc.binarylog.Message.Builder, io.grpc.binarylog.MessageOrBuilder> messageBuilder_;
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1598,7 +1950,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1618,7 +1970,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1638,7 +1990,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1656,7 +2008,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1682,7 +2034,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1705,7 +2057,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1715,7 +2067,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1732,7 +2084,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Used by REQUEST and RESPONSE
+     * Used by {SEND,RECV}_MESSAGE
      * </pre>
      *
      * <code>.grpc.binarylog.v1alpha.Message message = 5;</code>
@@ -1952,6 +2304,487 @@ private static final long serialVersionUID = 0L;
     public Builder clearTruncated() {
       
       truncated_ = false;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object methodName_ = "";
+    /**
+     * <pre>
+     * The method name. Logged for the first entry:
+     * RECV_INITIAL_METADATA for server side or
+     * SEND_INITIAL_METADATA for client side.
+     * </pre>
+     *
+     * <code>string method_name = 8;</code>
+     */
+    public java.lang.String getMethodName() {
+      java.lang.Object ref = methodName_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        methodName_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * The method name. Logged for the first entry:
+     * RECV_INITIAL_METADATA for server side or
+     * SEND_INITIAL_METADATA for client side.
+     * </pre>
+     *
+     * <code>string method_name = 8;</code>
+     */
+    public com.google.protobuf.ByteString
+        getMethodNameBytes() {
+      java.lang.Object ref = methodName_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        methodName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * The method name. Logged for the first entry:
+     * RECV_INITIAL_METADATA for server side or
+     * SEND_INITIAL_METADATA for client side.
+     * </pre>
+     *
+     * <code>string method_name = 8;</code>
+     */
+    public Builder setMethodName(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      methodName_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The method name. Logged for the first entry:
+     * RECV_INITIAL_METADATA for server side or
+     * SEND_INITIAL_METADATA for client side.
+     * </pre>
+     *
+     * <code>string method_name = 8;</code>
+     */
+    public Builder clearMethodName() {
+      
+      methodName_ = getDefaultInstance().getMethodName();
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The method name. Logged for the first entry:
+     * RECV_INITIAL_METADATA for server side or
+     * SEND_INITIAL_METADATA for client side.
+     * </pre>
+     *
+     * <code>string method_name = 8;</code>
+     */
+    public Builder setMethodNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      
+      methodName_ = value;
+      onChanged();
+      return this;
+    }
+
+    private int statusCode_ ;
+    /**
+     * <pre>
+     * status_code and status_message:
+     * Only present for SEND_TRAILING_METADATA on server side or
+     * RECV_TRAILING_METADATA on client side.
+     * </pre>
+     *
+     * <code>uint32 status_code = 9;</code>
+     */
+    public int getStatusCode() {
+      return statusCode_;
+    }
+    /**
+     * <pre>
+     * status_code and status_message:
+     * Only present for SEND_TRAILING_METADATA on server side or
+     * RECV_TRAILING_METADATA on client side.
+     * </pre>
+     *
+     * <code>uint32 status_code = 9;</code>
+     */
+    public Builder setStatusCode(int value) {
+      
+      statusCode_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * status_code and status_message:
+     * Only present for SEND_TRAILING_METADATA on server side or
+     * RECV_TRAILING_METADATA on client side.
+     * </pre>
+     *
+     * <code>uint32 status_code = 9;</code>
+     */
+    public Builder clearStatusCode() {
+      
+      statusCode_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object statusMessage_ = "";
+    /**
+     * <pre>
+     * An original status message before any transport specific
+     * encoding.
+     * </pre>
+     *
+     * <code>string status_message = 10;</code>
+     */
+    public java.lang.String getStatusMessage() {
+      java.lang.Object ref = statusMessage_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        statusMessage_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * An original status message before any transport specific
+     * encoding.
+     * </pre>
+     *
+     * <code>string status_message = 10;</code>
+     */
+    public com.google.protobuf.ByteString
+        getStatusMessageBytes() {
+      java.lang.Object ref = statusMessage_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        statusMessage_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * An original status message before any transport specific
+     * encoding.
+     * </pre>
+     *
+     * <code>string status_message = 10;</code>
+     */
+    public Builder setStatusMessage(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      statusMessage_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An original status message before any transport specific
+     * encoding.
+     * </pre>
+     *
+     * <code>string status_message = 10;</code>
+     */
+    public Builder clearStatusMessage() {
+      
+      statusMessage_ = getDefaultInstance().getStatusMessage();
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An original status message before any transport specific
+     * encoding.
+     * </pre>
+     *
+     * <code>string status_message = 10;</code>
+     */
+    public Builder setStatusMessageBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      
+      statusMessage_ = value;
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.ByteString statusDetails_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * The value of the 'grpc-status-details-bin' metadata key. If
+     * present, this is always an encoded 'google.rpc.Status' message.
+     * </pre>
+     *
+     * <code>bytes status_details = 11;</code>
+     */
+    public com.google.protobuf.ByteString getStatusDetails() {
+      return statusDetails_;
+    }
+    /**
+     * <pre>
+     * The value of the 'grpc-status-details-bin' metadata key. If
+     * present, this is always an encoded 'google.rpc.Status' message.
+     * </pre>
+     *
+     * <code>bytes status_details = 11;</code>
+     */
+    public Builder setStatusDetails(com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      statusDetails_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The value of the 'grpc-status-details-bin' metadata key. If
+     * present, this is always an encoded 'google.rpc.Status' message.
+     * </pre>
+     *
+     * <code>bytes status_details = 11;</code>
+     */
+    public Builder clearStatusDetails() {
+      
+      statusDetails_ = getDefaultInstance().getStatusDetails();
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.Duration timeout_ = null;
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> timeoutBuilder_;
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public boolean hasTimeout() {
+      return timeoutBuilder_ != null || timeout_ != null;
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public com.google.protobuf.Duration getTimeout() {
+      if (timeoutBuilder_ == null) {
+        return timeout_ == null ? com.google.protobuf.Duration.getDefaultInstance() : timeout_;
+      } else {
+        return timeoutBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public Builder setTimeout(com.google.protobuf.Duration value) {
+      if (timeoutBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        timeout_ = value;
+        onChanged();
+      } else {
+        timeoutBuilder_.setMessage(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public Builder setTimeout(
+        com.google.protobuf.Duration.Builder builderForValue) {
+      if (timeoutBuilder_ == null) {
+        timeout_ = builderForValue.build();
+        onChanged();
+      } else {
+        timeoutBuilder_.setMessage(builderForValue.build());
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public Builder mergeTimeout(com.google.protobuf.Duration value) {
+      if (timeoutBuilder_ == null) {
+        if (timeout_ != null) {
+          timeout_ =
+            com.google.protobuf.Duration.newBuilder(timeout_).mergeFrom(value).buildPartial();
+        } else {
+          timeout_ = value;
+        }
+        onChanged();
+      } else {
+        timeoutBuilder_.mergeFrom(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public Builder clearTimeout() {
+      if (timeoutBuilder_ == null) {
+        timeout_ = null;
+        onChanged();
+      } else {
+        timeout_ = null;
+        timeoutBuilder_ = null;
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public com.google.protobuf.Duration.Builder getTimeoutBuilder() {
+      
+      onChanged();
+      return getTimeoutFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    public com.google.protobuf.DurationOrBuilder getTimeoutOrBuilder() {
+      if (timeoutBuilder_ != null) {
+        return timeoutBuilder_.getMessageOrBuilder();
+      } else {
+        return timeout_ == null ?
+            com.google.protobuf.Duration.getDefaultInstance() : timeout_;
+      }
+    }
+    /**
+     * <pre>
+     * the RPC timeout
+     * </pre>
+     *
+     * <code>.google.protobuf.Duration timeout = 12;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 
+        getTimeoutFieldBuilder() {
+      if (timeoutBuilder_ == null) {
+        timeoutBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+            com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder>(
+                getTimeout(),
+                getParentForChildren(),
+                isClean());
+        timeout_ = null;
+      }
+      return timeoutBuilder_;
+    }
+
+    private int sequenceIdWithinCall_ ;
+    /**
+     * <pre>
+     * The entry sequence id for this call. The first GrpcLogEntry has a
+     * value of 1, to disambiguate from an unset value. The purpose of
+     * this field is to detect missing entries in environments where
+     * durability or ordering is not guaranteed.
+     * </pre>
+     *
+     * <code>uint32 sequence_id_within_call = 13;</code>
+     */
+    public int getSequenceIdWithinCall() {
+      return sequenceIdWithinCall_;
+    }
+    /**
+     * <pre>
+     * The entry sequence id for this call. The first GrpcLogEntry has a
+     * value of 1, to disambiguate from an unset value. The purpose of
+     * this field is to detect missing entries in environments where
+     * durability or ordering is not guaranteed.
+     * </pre>
+     *
+     * <code>uint32 sequence_id_within_call = 13;</code>
+     */
+    public Builder setSequenceIdWithinCall(int value) {
+      
+      sequenceIdWithinCall_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The entry sequence id for this call. The first GrpcLogEntry has a
+     * value of 1, to disambiguate from an unset value. The purpose of
+     * this field is to detect missing entries in environments where
+     * durability or ordering is not guaranteed.
+     * </pre>
+     *
+     * <code>uint32 sequence_id_within_call = 13;</code>
+     */
+    public Builder clearSequenceIdWithinCall() {
+      
+      sequenceIdWithinCall_ = 0;
       onChanged();
       return this;
     }

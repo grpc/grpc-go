@@ -8,7 +8,14 @@ package io.grpc.binarylog;
  * A list of metadata pairs, used in the payload of CLIENT_INIT_METADATA,
  * SERVER_INIT_METADATA and TRAILING_METADATA
  * Implementations may omit some entries to honor the header limits
- * of GRPC_BINARY_LOG_CONFIG. Implementations can choose which entries are logged.
+ * of GRPC_BINARY_LOG_CONFIG.
+ * Implementations will not log the following entries, and this is
+ * not to be treated as a truncation:
+ * - entries handled by grpc that are not user visible, such as those
+ *   that begin with 'grpc-' or keys like 'lb-token'
+ * - transport specific entries, including but not limited to:
+ *   ':path', ':authority', 'content-encoding', 'user-agent', 'te', etc
+ * - entries added for call credentials
  * </pre>
  *
  * Protobuf type {@code grpc.binarylog.v1alpha.Metadata}
@@ -286,7 +293,14 @@ private static final long serialVersionUID = 0L;
    * A list of metadata pairs, used in the payload of CLIENT_INIT_METADATA,
    * SERVER_INIT_METADATA and TRAILING_METADATA
    * Implementations may omit some entries to honor the header limits
-   * of GRPC_BINARY_LOG_CONFIG. Implementations can choose which entries are logged.
+   * of GRPC_BINARY_LOG_CONFIG.
+   * Implementations will not log the following entries, and this is
+   * not to be treated as a truncation:
+   * - entries handled by grpc that are not user visible, such as those
+   *   that begin with 'grpc-' or keys like 'lb-token'
+   * - transport specific entries, including but not limited to:
+   *   ':path', ':authority', 'content-encoding', 'user-agent', 'te', etc
+   * - entries added for call credentials
    * </pre>
    *
    * Protobuf type {@code grpc.binarylog.v1alpha.Metadata}
