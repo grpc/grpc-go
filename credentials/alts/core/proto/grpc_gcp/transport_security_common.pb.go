@@ -49,9 +49,9 @@ func (SecurityLevel) EnumDescriptor() ([]byte, []int) {
 // Max and min supported RPC protocol versions.
 type RpcProtocolVersions struct {
 	// Maximum supported RPC version.
-	MaxRpcVersion *RpcProtocolVersions_Version `protobuf:"bytes,1,opt,name=max_rpc_version,json=maxRpcVersion" json:"max_rpc_version,omitempty"`
+	MaxRpcVersion *RpcProtocolVersions_Version `protobuf:"bytes,1,opt,name=max_rpc_version,json=maxRpcVersion,proto3" json:"max_rpc_version,omitempty"`
 	// Minimum supported RPC version.
-	MinRpcVersion        *RpcProtocolVersions_Version `protobuf:"bytes,2,opt,name=min_rpc_version,json=minRpcVersion" json:"min_rpc_version,omitempty"`
+	MinRpcVersion        *RpcProtocolVersions_Version `protobuf:"bytes,2,opt,name=min_rpc_version,json=minRpcVersion,proto3" json:"min_rpc_version,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
 	XXX_unrecognized     []byte                       `json:"-"`
 	XXX_sizecache        int32                        `json:"-"`
@@ -97,8 +97,8 @@ func (m *RpcProtocolVersions) GetMinRpcVersion() *RpcProtocolVersions_Version {
 
 // RPC version contains a major version and a minor version.
 type RpcProtocolVersions_Version struct {
-	Major                uint32   `protobuf:"varint,1,opt,name=major" json:"major,omitempty"`
-	Minor                uint32   `protobuf:"varint,2,opt,name=minor" json:"minor,omitempty"`
+	Major                uint32   `protobuf:"varint,1,opt,name=major,proto3" json:"major,omitempty"`
+	Minor                uint32   `protobuf:"varint,2,opt,name=minor,proto3" json:"minor,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

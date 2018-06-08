@@ -25,7 +25,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // Response message containing the gauge name and value
 type GaugeResponse struct {
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Types that are valid to be assigned to Value:
 	//	*GaugeResponse_LongValue
 	//	*GaugeResponse_DoubleValue
@@ -65,13 +65,13 @@ type isGaugeResponse_Value interface {
 }
 
 type GaugeResponse_LongValue struct {
-	LongValue int64 `protobuf:"varint,2,opt,name=long_value,json=longValue,oneof"`
+	LongValue int64 `protobuf:"varint,2,opt,name=long_value,json=longValue,proto3,oneof"`
 }
 type GaugeResponse_DoubleValue struct {
-	DoubleValue float64 `protobuf:"fixed64,3,opt,name=double_value,json=doubleValue,oneof"`
+	DoubleValue float64 `protobuf:"fixed64,3,opt,name=double_value,json=doubleValue,proto3,oneof"`
 }
 type GaugeResponse_StringValue struct {
-	StringValue string `protobuf:"bytes,4,opt,name=string_value,json=stringValue,oneof"`
+	StringValue string `protobuf:"bytes,4,opt,name=string_value,json=stringValue,proto3,oneof"`
 }
 
 func (*GaugeResponse_LongValue) isGaugeResponse_Value()   {}
@@ -194,7 +194,7 @@ func _GaugeResponse_OneofSizer(msg proto.Message) (n int) {
 
 // Request message containing the gauge name
 type GaugeRequest struct {
-	Name                 string   `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

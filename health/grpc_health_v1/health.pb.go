@@ -50,7 +50,7 @@ func (HealthCheckResponse_ServingStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 type HealthCheckRequest struct {
-	Service              string   `protobuf:"bytes,1,opt,name=service" json:"service,omitempty"`
+	Service              string   `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -88,7 +88,7 @@ func (m *HealthCheckRequest) GetService() string {
 }
 
 type HealthCheckResponse struct {
-	Status               HealthCheckResponse_ServingStatus `protobuf:"varint,1,opt,name=status,enum=grpc.health.v1.HealthCheckResponse_ServingStatus" json:"status,omitempty"`
+	Status               HealthCheckResponse_ServingStatus `protobuf:"varint,1,opt,name=status,proto3,enum=grpc.health.v1.HealthCheckResponse_ServingStatus" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                          `json:"-"`
 	XXX_unrecognized     []byte                            `json:"-"`
 	XXX_sizecache        int32                             `json:"-"`

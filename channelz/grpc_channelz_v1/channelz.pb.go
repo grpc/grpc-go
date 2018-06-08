@@ -95,20 +95,20 @@ func (ChannelTraceEvent_Severity) EnumDescriptor() ([]byte, []int) {
 // Channel is a logical grouping of channels, subchannels, and sockets.
 type Channel struct {
 	// The identifier for this channel. This should bet set.
-	Ref *ChannelRef `protobuf:"bytes,1,opt,name=ref" json:"ref,omitempty"`
+	Ref *ChannelRef `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	// Data specific to this channel.
-	Data *ChannelData `protobuf:"bytes,2,opt,name=data" json:"data,omitempty"`
+	Data *ChannelData `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	// There are no ordering guarantees on the order of channel refs.
 	// There may not be cycles in the ref graph.
 	// A channel ref may be present in more than one channel or subchannel.
-	ChannelRef []*ChannelRef `protobuf:"bytes,3,rep,name=channel_ref,json=channelRef" json:"channel_ref,omitempty"`
+	ChannelRef []*ChannelRef `protobuf:"bytes,3,rep,name=channel_ref,json=channelRef,proto3" json:"channel_ref,omitempty"`
 	// At most one of 'channel_ref+subchannel_ref' and 'socket' is set.
 	// There are no ordering guarantees on the order of subchannel refs.
 	// There may not be cycles in the ref graph.
 	// A sub channel ref may be present in more than one channel or subchannel.
-	SubchannelRef []*SubchannelRef `protobuf:"bytes,4,rep,name=subchannel_ref,json=subchannelRef" json:"subchannel_ref,omitempty"`
+	SubchannelRef []*SubchannelRef `protobuf:"bytes,4,rep,name=subchannel_ref,json=subchannelRef,proto3" json:"subchannel_ref,omitempty"`
 	// There are no ordering guarantees on the order of sockets.
-	SocketRef            []*SocketRef `protobuf:"bytes,5,rep,name=socket_ref,json=socketRef" json:"socket_ref,omitempty"`
+	SocketRef            []*SocketRef `protobuf:"bytes,5,rep,name=socket_ref,json=socketRef,proto3" json:"socket_ref,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -177,20 +177,20 @@ func (m *Channel) GetSocketRef() []*SocketRef {
 // A subchannel is load balanced over by it's ancestor
 type Subchannel struct {
 	// The identifier for this channel.
-	Ref *SubchannelRef `protobuf:"bytes,1,opt,name=ref" json:"ref,omitempty"`
+	Ref *SubchannelRef `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	// Data specific to this channel.
-	Data *ChannelData `protobuf:"bytes,2,opt,name=data" json:"data,omitempty"`
+	Data *ChannelData `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	// There are no ordering guarantees on the order of channel refs.
 	// There may not be cycles in the ref graph.
 	// A channel ref may be present in more than one channel or subchannel.
-	ChannelRef []*ChannelRef `protobuf:"bytes,3,rep,name=channel_ref,json=channelRef" json:"channel_ref,omitempty"`
+	ChannelRef []*ChannelRef `protobuf:"bytes,3,rep,name=channel_ref,json=channelRef,proto3" json:"channel_ref,omitempty"`
 	// At most one of 'channel_ref+subchannel_ref' and 'socket' is set.
 	// There are no ordering guarantees on the order of subchannel refs.
 	// There may not be cycles in the ref graph.
 	// A sub channel ref may be present in more than one channel or subchannel.
-	SubchannelRef []*SubchannelRef `protobuf:"bytes,4,rep,name=subchannel_ref,json=subchannelRef" json:"subchannel_ref,omitempty"`
+	SubchannelRef []*SubchannelRef `protobuf:"bytes,4,rep,name=subchannel_ref,json=subchannelRef,proto3" json:"subchannel_ref,omitempty"`
 	// There are no ordering guarantees on the order of sockets.
-	SocketRef            []*SocketRef `protobuf:"bytes,5,rep,name=socket_ref,json=socketRef" json:"socket_ref,omitempty"`
+	SocketRef            []*SocketRef `protobuf:"bytes,5,rep,name=socket_ref,json=socketRef,proto3" json:"socket_ref,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -258,7 +258,7 @@ func (m *Subchannel) GetSocketRef() []*SocketRef {
 // These come from the specified states in this document:
 // https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md
 type ChannelConnectivityState struct {
-	State                ChannelConnectivityState_State `protobuf:"varint,1,opt,name=state,enum=grpc.channelz.v1.ChannelConnectivityState_State" json:"state,omitempty"`
+	State                ChannelConnectivityState_State `protobuf:"varint,1,opt,name=state,proto3,enum=grpc.channelz.v1.ChannelConnectivityState_State" json:"state,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                       `json:"-"`
 	XXX_unrecognized     []byte                         `json:"-"`
 	XXX_sizecache        int32                          `json:"-"`
@@ -299,19 +299,19 @@ func (m *ChannelConnectivityState) GetState() ChannelConnectivityState_State {
 type ChannelData struct {
 	// The connectivity state of the channel or subchannel.  Implementations
 	// should always set this.
-	State *ChannelConnectivityState `protobuf:"bytes,1,opt,name=state" json:"state,omitempty"`
+	State *ChannelConnectivityState `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
 	// The target this channel originally tried to connect to.  May be absent
-	Target string `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	// A trace of recent events on the channel.  May be absent.
-	Trace *ChannelTrace `protobuf:"bytes,3,opt,name=trace" json:"trace,omitempty"`
+	Trace *ChannelTrace `protobuf:"bytes,3,opt,name=trace,proto3" json:"trace,omitempty"`
 	// The number of calls started on the channel
-	CallsStarted int64 `protobuf:"varint,4,opt,name=calls_started,json=callsStarted" json:"calls_started,omitempty"`
+	CallsStarted int64 `protobuf:"varint,4,opt,name=calls_started,json=callsStarted,proto3" json:"calls_started,omitempty"`
 	// The number of calls that have completed with an OK status
-	CallsSucceeded int64 `protobuf:"varint,5,opt,name=calls_succeeded,json=callsSucceeded" json:"calls_succeeded,omitempty"`
+	CallsSucceeded int64 `protobuf:"varint,5,opt,name=calls_succeeded,json=callsSucceeded,proto3" json:"calls_succeeded,omitempty"`
 	// The number of calls that have completed with a non-OK status
-	CallsFailed int64 `protobuf:"varint,6,opt,name=calls_failed,json=callsFailed" json:"calls_failed,omitempty"`
+	CallsFailed int64 `protobuf:"varint,6,opt,name=calls_failed,json=callsFailed,proto3" json:"calls_failed,omitempty"`
 	// The last time a call was started on the channel.
-	LastCallStartedTimestamp *timestamp.Timestamp `protobuf:"bytes,7,opt,name=last_call_started_timestamp,json=lastCallStartedTimestamp" json:"last_call_started_timestamp,omitempty"`
+	LastCallStartedTimestamp *timestamp.Timestamp `protobuf:"bytes,7,opt,name=last_call_started_timestamp,json=lastCallStartedTimestamp,proto3" json:"last_call_started_timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{}             `json:"-"`
 	XXX_unrecognized         []byte               `json:"-"`
 	XXX_sizecache            int32                `json:"-"`
@@ -394,11 +394,11 @@ func (m *ChannelData) GetLastCallStartedTimestamp() *timestamp.Timestamp {
 // subchannel, such as creation, address resolution, subchannel creation, etc.
 type ChannelTraceEvent struct {
 	// High level description of the event.
-	Description string `protobuf:"bytes,1,opt,name=description" json:"description,omitempty"`
+	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
 	// the severity of the trace event
-	Severity ChannelTraceEvent_Severity `protobuf:"varint,2,opt,name=severity,enum=grpc.channelz.v1.ChannelTraceEvent_Severity" json:"severity,omitempty"`
+	Severity ChannelTraceEvent_Severity `protobuf:"varint,2,opt,name=severity,proto3,enum=grpc.channelz.v1.ChannelTraceEvent_Severity" json:"severity,omitempty"`
 	// When this event occurred.
-	Timestamp *timestamp.Timestamp `protobuf:"bytes,3,opt,name=timestamp" json:"timestamp,omitempty"`
+	Timestamp *timestamp.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// ref of referenced channel or subchannel.
 	// Optional, only present if this event refers to a child object. For example,
 	// this field would be filled if this trace event was for a subchannel being
@@ -442,10 +442,10 @@ type isChannelTraceEvent_ChildRef interface {
 }
 
 type ChannelTraceEvent_ChannelRef struct {
-	ChannelRef *ChannelRef `protobuf:"bytes,4,opt,name=channel_ref,json=channelRef,oneof"`
+	ChannelRef *ChannelRef `protobuf:"bytes,4,opt,name=channel_ref,json=channelRef,proto3,oneof"`
 }
 type ChannelTraceEvent_SubchannelRef struct {
-	SubchannelRef *SubchannelRef `protobuf:"bytes,5,opt,name=subchannel_ref,json=subchannelRef,oneof"`
+	SubchannelRef *SubchannelRef `protobuf:"bytes,5,opt,name=subchannel_ref,json=subchannelRef,proto3,oneof"`
 }
 
 func (*ChannelTraceEvent_ChannelRef) isChannelTraceEvent_ChildRef()    {}
@@ -572,11 +572,11 @@ type ChannelTrace struct {
 	// Number of events ever logged in this tracing object. This can differ from
 	// events.size() because events can be overwritten or garbage collected by
 	// implementations.
-	NumEventsLogged int64 `protobuf:"varint,1,opt,name=num_events_logged,json=numEventsLogged" json:"num_events_logged,omitempty"`
+	NumEventsLogged int64 `protobuf:"varint,1,opt,name=num_events_logged,json=numEventsLogged,proto3" json:"num_events_logged,omitempty"`
 	// Time that this channel was created.
-	CreationTimestamp *timestamp.Timestamp `protobuf:"bytes,2,opt,name=creation_timestamp,json=creationTimestamp" json:"creation_timestamp,omitempty"`
+	CreationTimestamp *timestamp.Timestamp `protobuf:"bytes,2,opt,name=creation_timestamp,json=creationTimestamp,proto3" json:"creation_timestamp,omitempty"`
 	// List of events that have occurred on this channel.
-	Events               []*ChannelTraceEvent `protobuf:"bytes,3,rep,name=events" json:"events,omitempty"`
+	Events               []*ChannelTraceEvent `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -630,9 +630,9 @@ func (m *ChannelTrace) GetEvents() []*ChannelTraceEvent {
 // ChannelRef is a reference to a Channel.
 type ChannelRef struct {
 	// The globally unique id for this channel.  Must be a positive number.
-	ChannelId int64 `protobuf:"varint,1,opt,name=channel_id,json=channelId" json:"channel_id,omitempty"`
+	ChannelId int64 `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
 	// An optional name associated with the channel.
-	Name                 string   `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -679,9 +679,9 @@ func (m *ChannelRef) GetName() string {
 // ChannelRef is a reference to a Subchannel.
 type SubchannelRef struct {
 	// The globally unique id for this subchannel.  Must be a positive number.
-	SubchannelId int64 `protobuf:"varint,7,opt,name=subchannel_id,json=subchannelId" json:"subchannel_id,omitempty"`
+	SubchannelId int64 `protobuf:"varint,7,opt,name=subchannel_id,json=subchannelId,proto3" json:"subchannel_id,omitempty"`
 	// An optional name associated with the subchannel.
-	Name                 string   `protobuf:"bytes,8,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,8,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -727,9 +727,9 @@ func (m *SubchannelRef) GetName() string {
 
 // SocketRef is a reference to a Socket.
 type SocketRef struct {
-	SocketId int64 `protobuf:"varint,3,opt,name=socket_id,json=socketId" json:"socket_id,omitempty"`
+	SocketId int64 `protobuf:"varint,3,opt,name=socket_id,json=socketId,proto3" json:"socket_id,omitempty"`
 	// An optional name associated with the socket.
-	Name                 string   `protobuf:"bytes,4,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -776,9 +776,9 @@ func (m *SocketRef) GetName() string {
 // ServerRef is a reference to a Server.
 type ServerRef struct {
 	// A globally unique identifier for this server.  Must be a positive number.
-	ServerId int64 `protobuf:"varint,5,opt,name=server_id,json=serverId" json:"server_id,omitempty"`
+	ServerId int64 `protobuf:"varint,5,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
 	// An optional name associated with the server.
-	Name                 string   `protobuf:"bytes,6,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -826,12 +826,12 @@ func (m *ServerRef) GetName() string {
 // program.
 type Server struct {
 	// The identifier for a Server.  This should be set.
-	Ref *ServerRef `protobuf:"bytes,1,opt,name=ref" json:"ref,omitempty"`
+	Ref *ServerRef `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	// The associated data of the Server.
-	Data *ServerData `protobuf:"bytes,2,opt,name=data" json:"data,omitempty"`
+	Data *ServerData `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	// The sockets that the server is listening on.  There are no ordering
 	// guarantees.  This may be absent.
-	ListenSocket         []*SocketRef `protobuf:"bytes,3,rep,name=listen_socket,json=listenSocket" json:"listen_socket,omitempty"`
+	ListenSocket         []*SocketRef `protobuf:"bytes,3,rep,name=listen_socket,json=listenSocket,proto3" json:"listen_socket,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -885,15 +885,15 @@ func (m *Server) GetListenSocket() []*SocketRef {
 // ServerData is data for a specific Server.
 type ServerData struct {
 	// A trace of recent events on the server.  May be absent.
-	Trace *ChannelTrace `protobuf:"bytes,1,opt,name=trace" json:"trace,omitempty"`
+	Trace *ChannelTrace `protobuf:"bytes,1,opt,name=trace,proto3" json:"trace,omitempty"`
 	// The number of incoming calls started on the server
-	CallsStarted int64 `protobuf:"varint,2,opt,name=calls_started,json=callsStarted" json:"calls_started,omitempty"`
+	CallsStarted int64 `protobuf:"varint,2,opt,name=calls_started,json=callsStarted,proto3" json:"calls_started,omitempty"`
 	// The number of incoming calls that have completed with an OK status
-	CallsSucceeded int64 `protobuf:"varint,3,opt,name=calls_succeeded,json=callsSucceeded" json:"calls_succeeded,omitempty"`
+	CallsSucceeded int64 `protobuf:"varint,3,opt,name=calls_succeeded,json=callsSucceeded,proto3" json:"calls_succeeded,omitempty"`
 	// The number of incoming calls that have a completed with a non-OK status
-	CallsFailed int64 `protobuf:"varint,4,opt,name=calls_failed,json=callsFailed" json:"calls_failed,omitempty"`
+	CallsFailed int64 `protobuf:"varint,4,opt,name=calls_failed,json=callsFailed,proto3" json:"calls_failed,omitempty"`
 	// The last time a call was started on the server.
-	LastCallStartedTimestamp *timestamp.Timestamp `protobuf:"bytes,5,opt,name=last_call_started_timestamp,json=lastCallStartedTimestamp" json:"last_call_started_timestamp,omitempty"`
+	LastCallStartedTimestamp *timestamp.Timestamp `protobuf:"bytes,5,opt,name=last_call_started_timestamp,json=lastCallStartedTimestamp,proto3" json:"last_call_started_timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{}             `json:"-"`
 	XXX_unrecognized         []byte               `json:"-"`
 	XXX_sizecache            int32                `json:"-"`
@@ -961,19 +961,19 @@ func (m *ServerData) GetLastCallStartedTimestamp() *timestamp.Timestamp {
 // Information about an actual connection.  Pronounced "sock-ay".
 type Socket struct {
 	// The identifier for the Socket.
-	Ref *SocketRef `protobuf:"bytes,1,opt,name=ref" json:"ref,omitempty"`
+	Ref *SocketRef `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	// Data specific to this Socket.
-	Data *SocketData `protobuf:"bytes,2,opt,name=data" json:"data,omitempty"`
+	Data *SocketData `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	// The locally bound address.
-	Local *Address `protobuf:"bytes,3,opt,name=local" json:"local,omitempty"`
+	Local *Address `protobuf:"bytes,3,opt,name=local,proto3" json:"local,omitempty"`
 	// The remote bound address.  May be absent.
-	Remote *Address `protobuf:"bytes,4,opt,name=remote" json:"remote,omitempty"`
+	Remote *Address `protobuf:"bytes,4,opt,name=remote,proto3" json:"remote,omitempty"`
 	// Security details for this socket.  May be absent if not available, or
 	// there is no security on the socket.
-	Security *Security `protobuf:"bytes,5,opt,name=security" json:"security,omitempty"`
+	Security *Security `protobuf:"bytes,5,opt,name=security,proto3" json:"security,omitempty"`
 	// Optional, represents the name of the remote endpoint, if different than
 	// the original target name.
-	RemoteName           string   `protobuf:"bytes,6,opt,name=remote_name,json=remoteName" json:"remote_name,omitempty"`
+	RemoteName           string   `protobuf:"bytes,6,opt,name=remote_name,json=remoteName,proto3" json:"remote_name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1050,42 +1050,42 @@ func (m *Socket) GetRemoteName() string {
 // the semantics.  (e.g. flow control windows)
 type SocketData struct {
 	// The number of streams that have been started.
-	StreamsStarted int64 `protobuf:"varint,1,opt,name=streams_started,json=streamsStarted" json:"streams_started,omitempty"`
+	StreamsStarted int64 `protobuf:"varint,1,opt,name=streams_started,json=streamsStarted,proto3" json:"streams_started,omitempty"`
 	// The number of streams that have ended successfully:
 	// On client side, received frame with eos bit set;
 	// On server side, sent frame with eos bit set.
-	StreamsSucceeded int64 `protobuf:"varint,2,opt,name=streams_succeeded,json=streamsSucceeded" json:"streams_succeeded,omitempty"`
+	StreamsSucceeded int64 `protobuf:"varint,2,opt,name=streams_succeeded,json=streamsSucceeded,proto3" json:"streams_succeeded,omitempty"`
 	// The number of streams that have ended unsuccessfully:
 	// On client side, ended without receiving frame with eos bit set;
 	// On server side, ended without sending frame with eos bit set.
-	StreamsFailed int64 `protobuf:"varint,3,opt,name=streams_failed,json=streamsFailed" json:"streams_failed,omitempty"`
+	StreamsFailed int64 `protobuf:"varint,3,opt,name=streams_failed,json=streamsFailed,proto3" json:"streams_failed,omitempty"`
 	// The number of grpc messages successfully sent on this socket.
-	MessagesSent int64 `protobuf:"varint,4,opt,name=messages_sent,json=messagesSent" json:"messages_sent,omitempty"`
+	MessagesSent int64 `protobuf:"varint,4,opt,name=messages_sent,json=messagesSent,proto3" json:"messages_sent,omitempty"`
 	// The number of grpc messages received on this socket.
-	MessagesReceived int64 `protobuf:"varint,5,opt,name=messages_received,json=messagesReceived" json:"messages_received,omitempty"`
+	MessagesReceived int64 `protobuf:"varint,5,opt,name=messages_received,json=messagesReceived,proto3" json:"messages_received,omitempty"`
 	// The number of keep alives sent.  This is typically implemented with HTTP/2
 	// ping messages.
-	KeepAlivesSent int64 `protobuf:"varint,6,opt,name=keep_alives_sent,json=keepAlivesSent" json:"keep_alives_sent,omitempty"`
+	KeepAlivesSent int64 `protobuf:"varint,6,opt,name=keep_alives_sent,json=keepAlivesSent,proto3" json:"keep_alives_sent,omitempty"`
 	// The last time a stream was created by this endpoint.  Usually unset for
 	// servers.
-	LastLocalStreamCreatedTimestamp *timestamp.Timestamp `protobuf:"bytes,7,opt,name=last_local_stream_created_timestamp,json=lastLocalStreamCreatedTimestamp" json:"last_local_stream_created_timestamp,omitempty"`
+	LastLocalStreamCreatedTimestamp *timestamp.Timestamp `protobuf:"bytes,7,opt,name=last_local_stream_created_timestamp,json=lastLocalStreamCreatedTimestamp,proto3" json:"last_local_stream_created_timestamp,omitempty"`
 	// The last time a stream was created by the remote endpoint.  Usually unset
 	// for clients.
-	LastRemoteStreamCreatedTimestamp *timestamp.Timestamp `protobuf:"bytes,8,opt,name=last_remote_stream_created_timestamp,json=lastRemoteStreamCreatedTimestamp" json:"last_remote_stream_created_timestamp,omitempty"`
+	LastRemoteStreamCreatedTimestamp *timestamp.Timestamp `protobuf:"bytes,8,opt,name=last_remote_stream_created_timestamp,json=lastRemoteStreamCreatedTimestamp,proto3" json:"last_remote_stream_created_timestamp,omitempty"`
 	// The last time a message was sent by this endpoint.
-	LastMessageSentTimestamp *timestamp.Timestamp `protobuf:"bytes,9,opt,name=last_message_sent_timestamp,json=lastMessageSentTimestamp" json:"last_message_sent_timestamp,omitempty"`
+	LastMessageSentTimestamp *timestamp.Timestamp `protobuf:"bytes,9,opt,name=last_message_sent_timestamp,json=lastMessageSentTimestamp,proto3" json:"last_message_sent_timestamp,omitempty"`
 	// The last time a message was received by this endpoint.
-	LastMessageReceivedTimestamp *timestamp.Timestamp `protobuf:"bytes,10,opt,name=last_message_received_timestamp,json=lastMessageReceivedTimestamp" json:"last_message_received_timestamp,omitempty"`
+	LastMessageReceivedTimestamp *timestamp.Timestamp `protobuf:"bytes,10,opt,name=last_message_received_timestamp,json=lastMessageReceivedTimestamp,proto3" json:"last_message_received_timestamp,omitempty"`
 	// The amount of window, granted to the local endpoint by the remote endpoint.
 	// This may be slightly out of date due to network latency.  This does NOT
 	// include stream level or TCP level flow control info.
-	LocalFlowControlWindow *wrappers.Int64Value `protobuf:"bytes,11,opt,name=local_flow_control_window,json=localFlowControlWindow" json:"local_flow_control_window,omitempty"`
+	LocalFlowControlWindow *wrappers.Int64Value `protobuf:"bytes,11,opt,name=local_flow_control_window,json=localFlowControlWindow,proto3" json:"local_flow_control_window,omitempty"`
 	// The amount of window, granted to the remote endpoint by the local endpoint.
 	// This may be slightly out of date due to network latency.  This does NOT
 	// include stream level or TCP level flow control info.
-	RemoteFlowControlWindow *wrappers.Int64Value `protobuf:"bytes,12,opt,name=remote_flow_control_window,json=remoteFlowControlWindow" json:"remote_flow_control_window,omitempty"`
+	RemoteFlowControlWindow *wrappers.Int64Value `protobuf:"bytes,12,opt,name=remote_flow_control_window,json=remoteFlowControlWindow,proto3" json:"remote_flow_control_window,omitempty"`
 	// Socket options set on this socket.  May be absent.
-	Option               []*SocketOption `protobuf:"bytes,13,rep,name=option" json:"option,omitempty"`
+	Option               []*SocketOption `protobuf:"bytes,13,rep,name=option,proto3" json:"option,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1247,13 +1247,13 @@ type isAddress_Address interface {
 }
 
 type Address_TcpipAddress struct {
-	TcpipAddress *Address_TcpIpAddress `protobuf:"bytes,1,opt,name=tcpip_address,json=tcpipAddress,oneof"`
+	TcpipAddress *Address_TcpIpAddress `protobuf:"bytes,1,opt,name=tcpip_address,json=tcpipAddress,proto3,oneof"`
 }
 type Address_UdsAddress_ struct {
-	UdsAddress *Address_UdsAddress `protobuf:"bytes,2,opt,name=uds_address,json=udsAddress,oneof"`
+	UdsAddress *Address_UdsAddress `protobuf:"bytes,2,opt,name=uds_address,json=udsAddress,proto3,oneof"`
 }
 type Address_OtherAddress_ struct {
-	OtherAddress *Address_OtherAddress `protobuf:"bytes,3,opt,name=other_address,json=otherAddress,oneof"`
+	OtherAddress *Address_OtherAddress `protobuf:"bytes,3,opt,name=other_address,json=otherAddress,proto3,oneof"`
 }
 
 func (*Address_TcpipAddress) isAddress_Address()  {}
@@ -1386,7 +1386,7 @@ type Address_TcpIpAddress struct {
 	// bytes in length.
 	IpAddress []byte `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	// 0-64k, or -1 if not appropriate.
-	Port                 int32    `protobuf:"varint,2,opt,name=port" json:"port,omitempty"`
+	Port                 int32    `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1432,7 +1432,7 @@ func (m *Address_TcpIpAddress) GetPort() int32 {
 
 // A Unix Domain Socket address.
 type Address_UdsAddress struct {
-	Filename             string   `protobuf:"bytes,1,opt,name=filename" json:"filename,omitempty"`
+	Filename             string   `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1472,9 +1472,9 @@ func (m *Address_UdsAddress) GetFilename() string {
 // An address type not included above.
 type Address_OtherAddress struct {
 	// The human readable version of the value.  This value should be set.
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The actual address message.
-	Value                *any.Any `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Value                *any.Any `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1558,10 +1558,10 @@ type isSecurity_Model interface {
 }
 
 type Security_Tls_ struct {
-	Tls *Security_Tls `protobuf:"bytes,1,opt,name=tls,oneof"`
+	Tls *Security_Tls `protobuf:"bytes,1,opt,name=tls,proto3,oneof"`
 }
 type Security_Other struct {
-	Other *Security_OtherSecurity `protobuf:"bytes,2,opt,name=other,oneof"`
+	Other *Security_OtherSecurity `protobuf:"bytes,2,opt,name=other,proto3,oneof"`
 }
 
 func (*Security_Tls_) isSecurity_Model()  {}
@@ -1705,10 +1705,10 @@ type isSecurity_Tls_CipherSuite interface {
 }
 
 type Security_Tls_StandardName struct {
-	StandardName string `protobuf:"bytes,1,opt,name=standard_name,json=standardName,oneof"`
+	StandardName string `protobuf:"bytes,1,opt,name=standard_name,json=standardName,proto3,oneof"`
 }
 type Security_Tls_OtherName struct {
-	OtherName string `protobuf:"bytes,2,opt,name=other_name,json=otherName,oneof"`
+	OtherName string `protobuf:"bytes,2,opt,name=other_name,json=otherName,proto3,oneof"`
 }
 
 func (*Security_Tls_StandardName) isSecurity_Tls_CipherSuite() {}
@@ -1817,9 +1817,9 @@ func _Security_Tls_OneofSizer(msg proto.Message) (n int) {
 
 type Security_OtherSecurity struct {
 	// The human readable version of the value.
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The actual security details message.
-	Value                *any.Any `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Value                *any.Any `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1868,13 +1868,13 @@ func (m *Security_OtherSecurity) GetValue() *any.Any {
 type SocketOption struct {
 	// The full name of the socket option.  Typically this will be the upper case
 	// name, such as "SO_REUSEPORT".
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The human readable value of this socket option.  At least one of value or
 	// additional will be set.
-	Value string `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// Additional data associated with the socket option.  At least one of value
 	// or additional will be set.
-	Additional           *any.Any `protobuf:"bytes,3,opt,name=additional" json:"additional,omitempty"`
+	Additional           *any.Any `protobuf:"bytes,3,opt,name=additional,proto3" json:"additional,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1928,7 +1928,7 @@ func (m *SocketOption) GetAdditional() *any.Any {
 // For use with SocketOption's additional field.  This is primarily used for
 // SO_RCVTIMEO and SO_SNDTIMEO
 type SocketOptionTimeout struct {
-	Duration             *duration.Duration `protobuf:"bytes,1,opt,name=duration" json:"duration,omitempty"`
+	Duration             *duration.Duration `protobuf:"bytes,1,opt,name=duration,proto3" json:"duration,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1969,9 +1969,9 @@ func (m *SocketOptionTimeout) GetDuration() *duration.Duration {
 // SO_LINGER.
 type SocketOptionLinger struct {
 	// active maps to `struct linger.l_onoff`
-	Active bool `protobuf:"varint,1,opt,name=active" json:"active,omitempty"`
+	Active bool `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`
 	// duration maps to `struct linger.l_linger`
-	Duration             *duration.Duration `protobuf:"bytes,2,opt,name=duration" json:"duration,omitempty"`
+	Duration             *duration.Duration `protobuf:"bytes,2,opt,name=duration,proto3" json:"duration,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -2018,35 +2018,35 @@ func (m *SocketOptionLinger) GetDuration() *duration.Duration {
 // For use with SocketOption's additional field.  Tcp info for
 // SOL_TCP and TCP_INFO.
 type SocketOptionTcpInfo struct {
-	TcpiState            uint32   `protobuf:"varint,1,opt,name=tcpi_state,json=tcpiState" json:"tcpi_state,omitempty"`
-	TcpiCaState          uint32   `protobuf:"varint,2,opt,name=tcpi_ca_state,json=tcpiCaState" json:"tcpi_ca_state,omitempty"`
-	TcpiRetransmits      uint32   `protobuf:"varint,3,opt,name=tcpi_retransmits,json=tcpiRetransmits" json:"tcpi_retransmits,omitempty"`
-	TcpiProbes           uint32   `protobuf:"varint,4,opt,name=tcpi_probes,json=tcpiProbes" json:"tcpi_probes,omitempty"`
-	TcpiBackoff          uint32   `protobuf:"varint,5,opt,name=tcpi_backoff,json=tcpiBackoff" json:"tcpi_backoff,omitempty"`
-	TcpiOptions          uint32   `protobuf:"varint,6,opt,name=tcpi_options,json=tcpiOptions" json:"tcpi_options,omitempty"`
-	TcpiSndWscale        uint32   `protobuf:"varint,7,opt,name=tcpi_snd_wscale,json=tcpiSndWscale" json:"tcpi_snd_wscale,omitempty"`
-	TcpiRcvWscale        uint32   `protobuf:"varint,8,opt,name=tcpi_rcv_wscale,json=tcpiRcvWscale" json:"tcpi_rcv_wscale,omitempty"`
-	TcpiRto              uint32   `protobuf:"varint,9,opt,name=tcpi_rto,json=tcpiRto" json:"tcpi_rto,omitempty"`
-	TcpiAto              uint32   `protobuf:"varint,10,opt,name=tcpi_ato,json=tcpiAto" json:"tcpi_ato,omitempty"`
-	TcpiSndMss           uint32   `protobuf:"varint,11,opt,name=tcpi_snd_mss,json=tcpiSndMss" json:"tcpi_snd_mss,omitempty"`
-	TcpiRcvMss           uint32   `protobuf:"varint,12,opt,name=tcpi_rcv_mss,json=tcpiRcvMss" json:"tcpi_rcv_mss,omitempty"`
-	TcpiUnacked          uint32   `protobuf:"varint,13,opt,name=tcpi_unacked,json=tcpiUnacked" json:"tcpi_unacked,omitempty"`
-	TcpiSacked           uint32   `protobuf:"varint,14,opt,name=tcpi_sacked,json=tcpiSacked" json:"tcpi_sacked,omitempty"`
-	TcpiLost             uint32   `protobuf:"varint,15,opt,name=tcpi_lost,json=tcpiLost" json:"tcpi_lost,omitempty"`
-	TcpiRetrans          uint32   `protobuf:"varint,16,opt,name=tcpi_retrans,json=tcpiRetrans" json:"tcpi_retrans,omitempty"`
-	TcpiFackets          uint32   `protobuf:"varint,17,opt,name=tcpi_fackets,json=tcpiFackets" json:"tcpi_fackets,omitempty"`
-	TcpiLastDataSent     uint32   `protobuf:"varint,18,opt,name=tcpi_last_data_sent,json=tcpiLastDataSent" json:"tcpi_last_data_sent,omitempty"`
-	TcpiLastAckSent      uint32   `protobuf:"varint,19,opt,name=tcpi_last_ack_sent,json=tcpiLastAckSent" json:"tcpi_last_ack_sent,omitempty"`
-	TcpiLastDataRecv     uint32   `protobuf:"varint,20,opt,name=tcpi_last_data_recv,json=tcpiLastDataRecv" json:"tcpi_last_data_recv,omitempty"`
-	TcpiLastAckRecv      uint32   `protobuf:"varint,21,opt,name=tcpi_last_ack_recv,json=tcpiLastAckRecv" json:"tcpi_last_ack_recv,omitempty"`
-	TcpiPmtu             uint32   `protobuf:"varint,22,opt,name=tcpi_pmtu,json=tcpiPmtu" json:"tcpi_pmtu,omitempty"`
-	TcpiRcvSsthresh      uint32   `protobuf:"varint,23,opt,name=tcpi_rcv_ssthresh,json=tcpiRcvSsthresh" json:"tcpi_rcv_ssthresh,omitempty"`
-	TcpiRtt              uint32   `protobuf:"varint,24,opt,name=tcpi_rtt,json=tcpiRtt" json:"tcpi_rtt,omitempty"`
-	TcpiRttvar           uint32   `protobuf:"varint,25,opt,name=tcpi_rttvar,json=tcpiRttvar" json:"tcpi_rttvar,omitempty"`
-	TcpiSndSsthresh      uint32   `protobuf:"varint,26,opt,name=tcpi_snd_ssthresh,json=tcpiSndSsthresh" json:"tcpi_snd_ssthresh,omitempty"`
-	TcpiSndCwnd          uint32   `protobuf:"varint,27,opt,name=tcpi_snd_cwnd,json=tcpiSndCwnd" json:"tcpi_snd_cwnd,omitempty"`
-	TcpiAdvmss           uint32   `protobuf:"varint,28,opt,name=tcpi_advmss,json=tcpiAdvmss" json:"tcpi_advmss,omitempty"`
-	TcpiReordering       uint32   `protobuf:"varint,29,opt,name=tcpi_reordering,json=tcpiReordering" json:"tcpi_reordering,omitempty"`
+	TcpiState            uint32   `protobuf:"varint,1,opt,name=tcpi_state,json=tcpiState,proto3" json:"tcpi_state,omitempty"`
+	TcpiCaState          uint32   `protobuf:"varint,2,opt,name=tcpi_ca_state,json=tcpiCaState,proto3" json:"tcpi_ca_state,omitempty"`
+	TcpiRetransmits      uint32   `protobuf:"varint,3,opt,name=tcpi_retransmits,json=tcpiRetransmits,proto3" json:"tcpi_retransmits,omitempty"`
+	TcpiProbes           uint32   `protobuf:"varint,4,opt,name=tcpi_probes,json=tcpiProbes,proto3" json:"tcpi_probes,omitempty"`
+	TcpiBackoff          uint32   `protobuf:"varint,5,opt,name=tcpi_backoff,json=tcpiBackoff,proto3" json:"tcpi_backoff,omitempty"`
+	TcpiOptions          uint32   `protobuf:"varint,6,opt,name=tcpi_options,json=tcpiOptions,proto3" json:"tcpi_options,omitempty"`
+	TcpiSndWscale        uint32   `protobuf:"varint,7,opt,name=tcpi_snd_wscale,json=tcpiSndWscale,proto3" json:"tcpi_snd_wscale,omitempty"`
+	TcpiRcvWscale        uint32   `protobuf:"varint,8,opt,name=tcpi_rcv_wscale,json=tcpiRcvWscale,proto3" json:"tcpi_rcv_wscale,omitempty"`
+	TcpiRto              uint32   `protobuf:"varint,9,opt,name=tcpi_rto,json=tcpiRto,proto3" json:"tcpi_rto,omitempty"`
+	TcpiAto              uint32   `protobuf:"varint,10,opt,name=tcpi_ato,json=tcpiAto,proto3" json:"tcpi_ato,omitempty"`
+	TcpiSndMss           uint32   `protobuf:"varint,11,opt,name=tcpi_snd_mss,json=tcpiSndMss,proto3" json:"tcpi_snd_mss,omitempty"`
+	TcpiRcvMss           uint32   `protobuf:"varint,12,opt,name=tcpi_rcv_mss,json=tcpiRcvMss,proto3" json:"tcpi_rcv_mss,omitempty"`
+	TcpiUnacked          uint32   `protobuf:"varint,13,opt,name=tcpi_unacked,json=tcpiUnacked,proto3" json:"tcpi_unacked,omitempty"`
+	TcpiSacked           uint32   `protobuf:"varint,14,opt,name=tcpi_sacked,json=tcpiSacked,proto3" json:"tcpi_sacked,omitempty"`
+	TcpiLost             uint32   `protobuf:"varint,15,opt,name=tcpi_lost,json=tcpiLost,proto3" json:"tcpi_lost,omitempty"`
+	TcpiRetrans          uint32   `protobuf:"varint,16,opt,name=tcpi_retrans,json=tcpiRetrans,proto3" json:"tcpi_retrans,omitempty"`
+	TcpiFackets          uint32   `protobuf:"varint,17,opt,name=tcpi_fackets,json=tcpiFackets,proto3" json:"tcpi_fackets,omitempty"`
+	TcpiLastDataSent     uint32   `protobuf:"varint,18,opt,name=tcpi_last_data_sent,json=tcpiLastDataSent,proto3" json:"tcpi_last_data_sent,omitempty"`
+	TcpiLastAckSent      uint32   `protobuf:"varint,19,opt,name=tcpi_last_ack_sent,json=tcpiLastAckSent,proto3" json:"tcpi_last_ack_sent,omitempty"`
+	TcpiLastDataRecv     uint32   `protobuf:"varint,20,opt,name=tcpi_last_data_recv,json=tcpiLastDataRecv,proto3" json:"tcpi_last_data_recv,omitempty"`
+	TcpiLastAckRecv      uint32   `protobuf:"varint,21,opt,name=tcpi_last_ack_recv,json=tcpiLastAckRecv,proto3" json:"tcpi_last_ack_recv,omitempty"`
+	TcpiPmtu             uint32   `protobuf:"varint,22,opt,name=tcpi_pmtu,json=tcpiPmtu,proto3" json:"tcpi_pmtu,omitempty"`
+	TcpiRcvSsthresh      uint32   `protobuf:"varint,23,opt,name=tcpi_rcv_ssthresh,json=tcpiRcvSsthresh,proto3" json:"tcpi_rcv_ssthresh,omitempty"`
+	TcpiRtt              uint32   `protobuf:"varint,24,opt,name=tcpi_rtt,json=tcpiRtt,proto3" json:"tcpi_rtt,omitempty"`
+	TcpiRttvar           uint32   `protobuf:"varint,25,opt,name=tcpi_rttvar,json=tcpiRttvar,proto3" json:"tcpi_rttvar,omitempty"`
+	TcpiSndSsthresh      uint32   `protobuf:"varint,26,opt,name=tcpi_snd_ssthresh,json=tcpiSndSsthresh,proto3" json:"tcpi_snd_ssthresh,omitempty"`
+	TcpiSndCwnd          uint32   `protobuf:"varint,27,opt,name=tcpi_snd_cwnd,json=tcpiSndCwnd,proto3" json:"tcpi_snd_cwnd,omitempty"`
+	TcpiAdvmss           uint32   `protobuf:"varint,28,opt,name=tcpi_advmss,json=tcpiAdvmss,proto3" json:"tcpi_advmss,omitempty"`
+	TcpiReordering       uint32   `protobuf:"varint,29,opt,name=tcpi_reordering,json=tcpiReordering,proto3" json:"tcpi_reordering,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2282,7 +2282,7 @@ func (m *SocketOptionTcpInfo) GetTcpiReordering() uint32 {
 type GetTopChannelsRequest struct {
 	// start_channel_id indicates that only channels at or above this id should be
 	// included in the results.
-	StartChannelId       int64    `protobuf:"varint,1,opt,name=start_channel_id,json=startChannelId" json:"start_channel_id,omitempty"`
+	StartChannelId       int64    `protobuf:"varint,1,opt,name=start_channel_id,json=startChannelId,proto3" json:"start_channel_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2322,11 +2322,11 @@ func (m *GetTopChannelsRequest) GetStartChannelId() int64 {
 type GetTopChannelsResponse struct {
 	// list of channels that the connection detail service knows about.  Sorted in
 	// ascending channel_id order.
-	Channel []*Channel `protobuf:"bytes,1,rep,name=channel" json:"channel,omitempty"`
+	Channel []*Channel `protobuf:"bytes,1,rep,name=channel,proto3" json:"channel,omitempty"`
 	// If set, indicates that the list of channels is the final list.  Requesting
 	// more channels can only return more if they are created after this RPC
 	// completes.
-	End                  bool     `protobuf:"varint,2,opt,name=end" json:"end,omitempty"`
+	End                  bool     `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2373,7 +2373,7 @@ func (m *GetTopChannelsResponse) GetEnd() bool {
 type GetServersRequest struct {
 	// start_server_id indicates that only servers at or above this id should be
 	// included in the results.
-	StartServerId        int64    `protobuf:"varint,1,opt,name=start_server_id,json=startServerId" json:"start_server_id,omitempty"`
+	StartServerId        int64    `protobuf:"varint,1,opt,name=start_server_id,json=startServerId,proto3" json:"start_server_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2413,11 +2413,11 @@ func (m *GetServersRequest) GetStartServerId() int64 {
 type GetServersResponse struct {
 	// list of servers that the connection detail service knows about.  Sorted in
 	// ascending server_id order.
-	Server []*Server `protobuf:"bytes,1,rep,name=server" json:"server,omitempty"`
+	Server []*Server `protobuf:"bytes,1,rep,name=server,proto3" json:"server,omitempty"`
 	// If set, indicates that the list of servers is the final list.  Requesting
 	// more servers will only return more if they are created after this RPC
 	// completes.
-	End                  bool     `protobuf:"varint,2,opt,name=end" json:"end,omitempty"`
+	End                  bool     `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2462,10 +2462,10 @@ func (m *GetServersResponse) GetEnd() bool {
 }
 
 type GetServerSocketsRequest struct {
-	ServerId int64 `protobuf:"varint,1,opt,name=server_id,json=serverId" json:"server_id,omitempty"`
+	ServerId int64 `protobuf:"varint,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
 	// start_socket_id indicates that only sockets at or above this id should be
 	// included in the results.
-	StartSocketId        int64    `protobuf:"varint,2,opt,name=start_socket_id,json=startSocketId" json:"start_socket_id,omitempty"`
+	StartSocketId        int64    `protobuf:"varint,2,opt,name=start_socket_id,json=startSocketId,proto3" json:"start_socket_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2512,11 +2512,11 @@ func (m *GetServerSocketsRequest) GetStartSocketId() int64 {
 type GetServerSocketsResponse struct {
 	// list of socket refs that the connection detail service knows about.  Sorted in
 	// ascending socket_id order.
-	SocketRef []*SocketRef `protobuf:"bytes,1,rep,name=socket_ref,json=socketRef" json:"socket_ref,omitempty"`
+	SocketRef []*SocketRef `protobuf:"bytes,1,rep,name=socket_ref,json=socketRef,proto3" json:"socket_ref,omitempty"`
 	// If set, indicates that the list of sockets is the final list.  Requesting
 	// more sockets will only return more if they are created after this RPC
 	// completes.
-	End                  bool     `protobuf:"varint,2,opt,name=end" json:"end,omitempty"`
+	End                  bool     `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2562,7 +2562,7 @@ func (m *GetServerSocketsResponse) GetEnd() bool {
 
 type GetChannelRequest struct {
 	// channel_id is the identifier of the specific channel to get.
-	ChannelId            int64    `protobuf:"varint,1,opt,name=channel_id,json=channelId" json:"channel_id,omitempty"`
+	ChannelId            int64    `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2602,7 +2602,7 @@ func (m *GetChannelRequest) GetChannelId() int64 {
 type GetChannelResponse struct {
 	// The Channel that corresponds to the requested channel_id.  This field
 	// should be set.
-	Channel              *Channel `protobuf:"bytes,1,opt,name=channel" json:"channel,omitempty"`
+	Channel              *Channel `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2641,7 +2641,7 @@ func (m *GetChannelResponse) GetChannel() *Channel {
 
 type GetSubchannelRequest struct {
 	// subchannel_id is the identifier of the specific subchannel to get.
-	SubchannelId         int64    `protobuf:"varint,1,opt,name=subchannel_id,json=subchannelId" json:"subchannel_id,omitempty"`
+	SubchannelId         int64    `protobuf:"varint,1,opt,name=subchannel_id,json=subchannelId,proto3" json:"subchannel_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2681,7 +2681,7 @@ func (m *GetSubchannelRequest) GetSubchannelId() int64 {
 type GetSubchannelResponse struct {
 	// The Subchannel that corresponds to the requested subchannel_id.  This
 	// field should be set.
-	Subchannel           *Subchannel `protobuf:"bytes,1,opt,name=subchannel" json:"subchannel,omitempty"`
+	Subchannel           *Subchannel `protobuf:"bytes,1,opt,name=subchannel,proto3" json:"subchannel,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
 	XXX_unrecognized     []byte      `json:"-"`
 	XXX_sizecache        int32       `json:"-"`
@@ -2720,7 +2720,7 @@ func (m *GetSubchannelResponse) GetSubchannel() *Subchannel {
 
 type GetSocketRequest struct {
 	// socket_id is the identifier of the specific socket to get.
-	SocketId             int64    `protobuf:"varint,1,opt,name=socket_id,json=socketId" json:"socket_id,omitempty"`
+	SocketId             int64    `protobuf:"varint,1,opt,name=socket_id,json=socketId,proto3" json:"socket_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2760,7 +2760,7 @@ func (m *GetSocketRequest) GetSocketId() int64 {
 type GetSocketResponse struct {
 	// The Socket that corresponds to the requested socket_id.  This field
 	// should be set.
-	Socket               *Socket  `protobuf:"bytes,1,opt,name=socket" json:"socket,omitempty"`
+	Socket               *Socket  `protobuf:"bytes,1,opt,name=socket,proto3" json:"socket,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
