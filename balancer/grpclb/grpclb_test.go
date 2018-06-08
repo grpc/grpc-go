@@ -33,10 +33,10 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
-	lbspb "google.golang.org/grpc/grpclb/grpc_lb_v1/service"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/metadata"
@@ -121,7 +121,7 @@ func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
-// rpcStatsForTest is same as lbmpb.ClientStats, except that numCallsDropped is a map
+// rpcStatsForTest is same as lbpb.ClientStats, except that numCallsDropped is a map
 // instead of a slice of pointers.
 //
 // TODO: this struct was already defined in grpclb_picker.go. Try to merge these
@@ -142,7 +142,7 @@ func newRPCStatsForTest() *rpcStatsForTest {
 	}
 }
 
-func (stats *rpcStatsForTest) merge(new *lbmpb.ClientStats) {
+func (stats *rpcStatsForTest) merge(new *lbpb.ClientStats) {
 	stats.numCallsStarted += new.NumCallsStarted
 	stats.numCallsFinished += new.NumCallsFinished
 	stats.numCallsFinishedWithClientFailedToSend += new.NumCallsFinishedWithClientFailedToSend
@@ -184,7 +184,7 @@ func (stats *rpcStatsForTest) equal(new *rpcStatsForTest) bool {
 }
 
 type remoteBalancer struct {
-	sls       chan *lbmpb.ServerList
+	sls       chan *lbpb.ServerList
 	statsDura time.Duration
 	done      chan struct{}
 	mu        sync.Mutex
@@ -193,7 +193,7 @@ type remoteBalancer struct {
 
 func newRemoteBalancer(intervals []time.Duration) *remoteBalancer {
 	return &remoteBalancer{
-		sls:   make(chan *lbmpb.ServerList, 1),
+		sls:   make(chan *lbpb.ServerList, 1),
 		done:  make(chan struct{}),
 		stats: newRPCStatsForTest(),
 	}
@@ -204,7 +204,7 @@ func (b *remoteBalancer) stop() {
 	close(b.done)
 }
 
-func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer) error {
+func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -213,9 +213,9 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 	if initReq.Name != beServerName {
 		return status.Errorf(codes.InvalidArgument, "invalid service name: %v", initReq.Name)
 	}
-	resp := &lbmpb.LoadBalanceResponse{
-		LoadBalanceResponseType: &lbmpb.LoadBalanceResponse_InitialResponse{
-			InitialResponse: &lbmpb.InitialLoadBalanceResponse{
+	resp := &lbpb.LoadBalanceResponse{
+		LoadBalanceResponseType: &lbpb.LoadBalanceResponse_InitialResponse{
+			InitialResponse: &lbpb.InitialLoadBalanceResponse{
 				ClientStatsReportInterval: &durationpb.Duration{
 					Seconds: int64(b.statsDura.Seconds()),
 					Nanos:   int32(b.statsDura.Nanoseconds() - int64(b.statsDura.Seconds())*1e9),
@@ -229,7 +229,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 	go func() {
 		for {
 			var (
-				req *lbmpb.LoadBalanceRequest
+				req *lbpb.LoadBalanceRequest
 				err error
 			)
 			if req, err = stream.Recv(); err != nil {
@@ -241,8 +241,8 @@ func (b *remoteBalancer) BalanceLoad(stream lbspb.LoadBalancer_BalanceLoadServer
 		}
 	}()
 	for v := range b.sls {
-		resp = &lbmpb.LoadBalanceResponse{
-			LoadBalanceResponseType: &lbmpb.LoadBalanceResponse_ServerList{
+		resp = &lbpb.LoadBalanceResponse{
+			LoadBalanceResponseType: &lbpb.LoadBalanceResponse_ServerList{
 				ServerList: v,
 			},
 		}
@@ -341,7 +341,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 	}
 	lb = grpc.NewServer(grpc.Creds(lbCreds))
 	ls = newRemoteBalancer(nil)
-	lbspb.RegisterLoadBalancerServer(lb, ls)
+	lbgrpc.RegisterLoadBalancerServer(lb, ls)
 	go func() {
 		lb.Serve(lbLis)
 	}()
@@ -375,14 +375,14 @@ func TestGRPCLB(t *testing.T) {
 	}
 	defer cleanup()
 
-	be := &lbmpb.Server{
+	be := &lbpb.Server{
 		IpAddress:        tss.beIPs[0],
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}
-	var bes []*lbmpb.Server
+	var bes []*lbpb.Server
 	bes = append(bes, be)
-	sl := &lbmpb.ServerList{
+	sl := &lbpb.ServerList{
 		Servers: bes,
 	}
 	tss.ls.sls <- sl
@@ -423,7 +423,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 	}
 	defer cleanup()
 
-	beServers := []*lbmpb.Server{{
+	beServers := []*lbpb.Server{{
 		IpAddress:        tss.beIPs[0],
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
@@ -459,14 +459,14 @@ func TestGRPCLBWeighted(t *testing.T) {
 	sequences := []string{"00101", "00011"}
 	for _, seq := range sequences {
 		var (
-			bes    []*lbmpb.Server
+			bes    []*lbpb.Server
 			p      peer.Peer
 			result string
 		)
 		for _, s := range seq {
 			bes = append(bes, beServers[s-'0'])
 		}
-		tss.ls.sls <- &lbmpb.ServerList{Servers: bes}
+		tss.ls.sls <- &lbpb.ServerList{Servers: bes}
 
 		for i := 0; i < 1000; i++ {
 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
@@ -492,8 +492,8 @@ func TestDropRequest(t *testing.T) {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
 	defer cleanup()
-	tss.ls.sls <- &lbmpb.ServerList{
-		Servers: []*lbmpb.Server{{
+	tss.ls.sls <- &lbpb.ServerList{
+		Servers: []*lbpb.Server{{
 			IpAddress:        tss.beIPs[0],
 			Port:             int32(tss.bePorts[0]),
 			LoadBalanceToken: lbToken,
@@ -573,14 +573,14 @@ func TestBalancerDisconnects(t *testing.T) {
 		}
 		defer cleanup()
 
-		be := &lbmpb.Server{
+		be := &lbpb.Server{
 			IpAddress:        tss.beIPs[0],
 			Port:             int32(tss.bePorts[0]),
 			LoadBalanceToken: lbToken,
 		}
-		var bes []*lbmpb.Server
+		var bes []*lbpb.Server
 		bes = append(bes, be)
-		sl := &lbmpb.ServerList{
+		sl := &lbpb.ServerList{
 			Servers: bes,
 		}
 		tss.ls.sls <- sl
@@ -674,14 +674,14 @@ func TestFallback(t *testing.T) {
 	standaloneBEs := startBackends(beServerName, true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	be := &lbmpb.Server{
+	be := &lbpb.Server{
 		IpAddress:        tss.beIPs[0],
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}
-	var bes []*lbmpb.Server
+	var bes []*lbpb.Server
 	bes = append(bes, be)
-	sl := &lbmpb.ServerList{
+	sl := &lbpb.ServerList{
 		Servers: bes,
 	}
 	tss.ls.sls <- sl
@@ -770,8 +770,8 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
 	defer cleanup()
-	tss.ls.sls <- &lbmpb.ServerList{
-		Servers: []*lbmpb.Server{{
+	tss.ls.sls <- &lbpb.ServerList{
+		Servers: []*lbpb.Server{{
 			IpAddress:        tss.beIPs[0],
 			Port:             int32(tss.bePorts[0]),
 			LoadBalanceToken: lbToken,
