@@ -56,7 +56,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	lb.fullServerList = l.Servers
 
 	var backendAddrs []resolver.Address
-	for _, s := range l.Servers {
+	for i, s := range l.Servers {
 		if s.Drop {
 			continue
 		}
@@ -73,7 +73,8 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 			Addr:     fmt.Sprintf("%s:%d", ipStr, s.Port),
 			Metadata: &md,
 		}
-
+		grpclog.Infof("lbBalancer: server list entry[%d]: ipStr:|%s|, port:|%d|, load balancer token:|%v|",
+			i, ipStr, s.Port, s.LoadBalanceToken)
 		backendAddrs = append(backendAddrs, addr)
 	}
 
