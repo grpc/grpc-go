@@ -21,8 +21,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Duration;
+import com.google.protobuf.util.Durations;
 import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
 import io.grpc.Attributes;
@@ -31,6 +34,8 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.Context;
+import io.grpc.Deadline;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
@@ -52,6 +57,7 @@ import io.grpc.binarylog.Metadata.Builder;
 import io.grpc.binarylog.Peer;
 import io.grpc.binarylog.Peer.PeerType;
 import io.grpc.binarylog.Uint128;
+import io.grpc.internal.GrpcUtil;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -62,6 +68,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -103,19 +110,41 @@ final class BinlogHelper {
     }
 
     @Override
-    void logSendInitialMetadata(int seq, Metadata metadata, boolean isServer, CallId callId) {
+    void logSendInitialMetadata(
+        int seq,
+        @Nullable String methodName, // null on server
+        @Nullable Duration timeout, // null on server
+        Metadata metadata,
+        boolean isServer,
+        CallId callId) {
+      Preconditions.checkArgument(methodName == null || !isServer);
+      Preconditions.checkArgument(timeout == null || !isServer);
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
           .setSequenceIdWithinCall(seq)
           .setType(Type.SEND_INITIAL_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
           .setCallId(callIdToProto(callId));
       addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
+      if (methodName != null) {
+        entryBuilder.setMethodName(methodName);
+      }
+      if (timeout != null) {
+        entryBuilder.setTimeout(timeout);
+      }
       sink.write(entryBuilder.build());
     }
 
     @Override
     void logRecvInitialMetadata(
-        int seq, Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket) {
+        int seq,
+        @Nullable String methodName, // null on client
+        @Nullable Duration timeout,  // null on client
+        Metadata metadata,
+        boolean isServer,
+        CallId callId,
+        SocketAddress peerSocket) {
+      Preconditions.checkArgument(methodName == null || isServer);
+      Preconditions.checkArgument(timeout == null || isServer);
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
           .setSequenceIdWithinCall(seq)
           .setType(Type.RECV_INITIAL_METADATA)
@@ -123,6 +152,12 @@ final class BinlogHelper {
           .setCallId(callIdToProto(callId))
           .setPeer(socketToProto(peerSocket));
       addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
+      if (methodName != null) {
+        entryBuilder.setMethodName(methodName);
+      }
+      if (timeout != null) {
+        entryBuilder.setTimeout(timeout);
+      }
       sink.write(entryBuilder.build());
     }
 
@@ -195,14 +230,25 @@ final class BinlogHelper {
      * as determined by the binary logging configuration.
      */
     abstract void logSendInitialMetadata(
-        int seq, Metadata metadata, boolean isServer, CallId callId);
+        int seq,
+        String methodName,
+        Duration timeout,
+        Metadata metadata,
+        boolean isServer,
+        CallId callId);
 
     /**
      * Logs the receiving of initial metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
     abstract void logRecvInitialMetadata(
-        int seq, Metadata metadata, boolean isServer, CallId callId, SocketAddress peerSocket);
+        int seq,
+        String methodName,
+        Duration timeout,
+        Metadata metadata,
+        boolean isServer,
+        CallId callId,
+        SocketAddress peerSocket);
 
     /**
      * Logs the trailing metadata. This method logs the appropriate number of bytes
@@ -249,16 +295,34 @@ final class BinlogHelper {
     return peer;
   }
 
+  private static Deadline min(@Nullable Deadline deadline0, @Nullable Deadline deadline1) {
+    if (deadline0 == null) {
+      return deadline1;
+    }
+    if (deadline1 == null) {
+      return deadline0;
+    }
+    return deadline0.minimum(deadline1);
+  }
+
   public ClientInterceptor getClientInterceptor(final CallId callId) {
     return new ClientInterceptor() {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
         final AtomicInteger seq = new AtomicInteger(1);
+        final String methodName = method.getFullMethodName();
+        // The timeout should reflect the time remaining when the call is started, so do not
+        // compute remaining time here.
+        final Deadline deadline = min(callOptions.getDeadline(), Context.current().getDeadline());
+
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata headers) {
-            writer.logSendInitialMetadata(seq.getAndIncrement(), headers, CLIENT, callId);
+            final Duration timeout = deadline == null ? null
+                : Durations.fromNanos(deadline.timeRemaining(TimeUnit.NANOSECONDS));
+            writer.logSendInitialMetadata(
+                seq.getAndIncrement(), methodName, timeout, headers, CLIENT, callId);
             ClientCall.Listener<RespT> wListener =
                 new SimpleForwardingClientCallListener<RespT>(responseListener) {
                   @Override
@@ -277,7 +341,13 @@ final class BinlogHelper {
                   public void onHeaders(Metadata headers) {
                     SocketAddress peer = getPeerSocket(getAttributes());
                     writer.logRecvInitialMetadata(
-                        seq.getAndIncrement(), headers, CLIENT, callId, peer);
+                        seq.getAndIncrement(),
+                        /*methodName=*/ null,
+                        /*timeout=*/ null,
+                        headers,
+                        CLIENT,
+                        callId,
+                        peer);
                     super.onHeaders(headers);
                   }
 
@@ -315,7 +385,13 @@ final class BinlogHelper {
           ServerCallHandler<ReqT, RespT> next) {
         final AtomicInteger seq = new AtomicInteger(1);
         SocketAddress peer = getPeerSocket(call.getAttributes());
-        writer.logRecvInitialMetadata(seq.getAndIncrement(), headers, SERVER, callId, peer);
+        String methodName = call.getMethodDescriptor().getFullMethodName();
+        Long timeoutNanos = headers.get(GrpcUtil.TIMEOUT_KEY);
+        final Duration timeout =
+            timeoutNanos == null ? null : Durations.fromNanos(timeoutNanos);
+
+        writer.logRecvInitialMetadata(
+            seq.getAndIncrement(), methodName, timeout, headers, SERVER, callId, peer);
         ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
           @Override
           public void sendMessage(RespT message) {
@@ -331,7 +407,13 @@ final class BinlogHelper {
 
           @Override
           public void sendHeaders(Metadata headers) {
-            writer.logSendInitialMetadata(seq.getAndIncrement(), headers, SERVER, callId);
+            writer.logSendInitialMetadata(
+                seq.getAndIncrement(),
+                /*methodName=*/ null,
+                /*timeout=*/ null,
+                headers,
+                SERVER,
+                callId);
             super.sendHeaders(headers);
           }
 
