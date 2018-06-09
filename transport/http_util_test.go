@@ -112,6 +112,23 @@ func TestEncodeGrpcMessage(t *testing.T) {
 			t.Errorf("encodeGrpcMessage(%q) = %q, want %q", tt.input, actual, tt.expected)
 		}
 	}
+
+	// make sure that all the visible ASCII chars except '%' are not percent encoded.
+	for i := ' '; i <= '~' && i != '%'; i++ {
+		output := encodeGrpcMessage(string(i))
+		if output != string(i) {
+			t.Errorf("encodeGrpcMessage(%v) = %v, want %v", string(i), output, string(i))
+		}
+	}
+
+	// make sure that all the invisible ASCII chars and '%' are percent encoded.
+	for i := rune(0); i == '%' || (i >= rune(0) && i < ' ') || (i > '~' && i <= rune(127)); i++ {
+		output := encodeGrpcMessage(string(i))
+		expected := fmt.Sprintf("%%%02X", i)
+		if output != expected {
+			t.Errorf("encodeGrpcMessage(%v) = %v, want %v", string(i), output, expected)
+		}
+	}
 }
 
 func TestDecodeGrpcMessage(t *testing.T) {
@@ -129,7 +146,23 @@ func TestDecodeGrpcMessage(t *testing.T) {
 	} {
 		actual := decodeGrpcMessage(tt.input)
 		if tt.expected != actual {
-			t.Errorf("dncodeGrpcMessage(%q) = %q, want %q", tt.input, actual, tt.expected)
+			t.Errorf("decodeGrpcMessage(%q) = %q, want %q", tt.input, actual, tt.expected)
+		}
+	}
+
+	// make sure that all the visible ASCII chars except '%' are not percent decoded.
+	for i := ' '; i <= '~' && i != '%'; i++ {
+		output := decodeGrpcMessage(string(i))
+		if output != string(i) {
+			t.Errorf("decodeGrpcMessage(%v) = %v, want %v", string(i), output, string(i))
+		}
+	}
+
+	// make sure that all the invisible ASCII chars and '%' are percent decoded.
+	for i := rune(0); i == '%' || (i >= rune(0) && i < ' ') || (i > '~' && i <= rune(127)); i++ {
+		output := decodeGrpcMessage(fmt.Sprintf("%%%02X", i))
+		if output != string(i) {
+			t.Errorf("decodeGrpcMessage(%v) = %v, want %v", fmt.Sprintf("%%%02X", i), output, string(i))
 		}
 	}
 }
