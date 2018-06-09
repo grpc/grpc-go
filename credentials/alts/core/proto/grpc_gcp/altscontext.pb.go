@@ -20,17 +20,17 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type AltsContext struct {
 	// The application protocol negotiated for this connection.
-	ApplicationProtocol string `protobuf:"bytes,1,opt,name=application_protocol,json=applicationProtocol" json:"application_protocol,omitempty"`
+	ApplicationProtocol string `protobuf:"bytes,1,opt,name=application_protocol,json=applicationProtocol,proto3" json:"application_protocol,omitempty"`
 	// The record protocol negotiated for this connection.
-	RecordProtocol string `protobuf:"bytes,2,opt,name=record_protocol,json=recordProtocol" json:"record_protocol,omitempty"`
+	RecordProtocol string `protobuf:"bytes,2,opt,name=record_protocol,json=recordProtocol,proto3" json:"record_protocol,omitempty"`
 	// The security level of the created secure channel.
-	SecurityLevel SecurityLevel `protobuf:"varint,3,opt,name=security_level,json=securityLevel,enum=grpc.gcp.SecurityLevel" json:"security_level,omitempty"`
+	SecurityLevel SecurityLevel `protobuf:"varint,3,opt,name=security_level,json=securityLevel,proto3,enum=grpc.gcp.SecurityLevel" json:"security_level,omitempty"`
 	// The peer service account.
-	PeerServiceAccount string `protobuf:"bytes,4,opt,name=peer_service_account,json=peerServiceAccount" json:"peer_service_account,omitempty"`
+	PeerServiceAccount string `protobuf:"bytes,4,opt,name=peer_service_account,json=peerServiceAccount,proto3" json:"peer_service_account,omitempty"`
 	// The local service account.
-	LocalServiceAccount string `protobuf:"bytes,5,opt,name=local_service_account,json=localServiceAccount" json:"local_service_account,omitempty"`
+	LocalServiceAccount string `protobuf:"bytes,5,opt,name=local_service_account,json=localServiceAccount,proto3" json:"local_service_account,omitempty"`
 	// The RPC protocol versions supported by the peer.
-	PeerRpcVersions      *RpcProtocolVersions `protobuf:"bytes,6,opt,name=peer_rpc_versions,json=peerRpcVersions" json:"peer_rpc_versions,omitempty"`
+	PeerRpcVersions      *RpcProtocolVersions `protobuf:"bytes,6,opt,name=peer_rpc_versions,json=peerRpcVersions,proto3" json:"peer_rpc_versions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`

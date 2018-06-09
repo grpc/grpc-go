@@ -24,7 +24,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type SimpleRequest struct {
-	Id                   int32    `protobuf:"varint,2,opt,name=id" json:"id,omitempty"`
+	Id                   int32    `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -62,7 +62,7 @@ func (m *SimpleRequest) GetId() int32 {
 }
 
 type SimpleResponse struct {
-	Id                   int32    `protobuf:"varint,3,opt,name=id" json:"id,omitempty"`
+	Id                   int32    `protobuf:"varint,3,opt,name=id,proto3" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

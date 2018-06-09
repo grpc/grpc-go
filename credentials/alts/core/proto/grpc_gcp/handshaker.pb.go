@@ -81,11 +81,11 @@ func (NetworkProtocol) EnumDescriptor() ([]byte, []int) {
 type Endpoint struct {
 	// IP address. It should contain an IPv4 or IPv6 string literal, e.g.
 	// "192.168.0.1" or "2001:db8::1".
-	IpAddress string `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress" json:"ip_address,omitempty"`
+	IpAddress string `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	// Port number.
-	Port int32 `protobuf:"varint,2,opt,name=port" json:"port,omitempty"`
+	Port int32 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
 	// Network protocol (e.g., TCP, UDP) associated with this endpoint.
-	Protocol             NetworkProtocol `protobuf:"varint,3,opt,name=protocol,enum=grpc.gcp.NetworkProtocol" json:"protocol,omitempty"`
+	Protocol             NetworkProtocol `protobuf:"varint,3,opt,name=protocol,proto3,enum=grpc.gcp.NetworkProtocol" json:"protocol,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -175,10 +175,10 @@ type isIdentity_IdentityOneof interface {
 }
 
 type Identity_ServiceAccount struct {
-	ServiceAccount string `protobuf:"bytes,1,opt,name=service_account,json=serviceAccount,oneof"`
+	ServiceAccount string `protobuf:"bytes,1,opt,name=service_account,json=serviceAccount,proto3,oneof"`
 }
 type Identity_Hostname struct {
-	Hostname string `protobuf:"bytes,2,opt,name=hostname,oneof"`
+	Hostname string `protobuf:"bytes,2,opt,name=hostname,proto3,oneof"`
 }
 
 func (*Identity_ServiceAccount) isIdentity_IdentityOneof() {}
@@ -273,32 +273,32 @@ func _Identity_OneofSizer(msg proto.Message) (n int) {
 
 type StartClientHandshakeReq struct {
 	// Handshake security protocol requested by the client.
-	HandshakeSecurityProtocol HandshakeProtocol `protobuf:"varint,1,opt,name=handshake_security_protocol,json=handshakeSecurityProtocol,enum=grpc.gcp.HandshakeProtocol" json:"handshake_security_protocol,omitempty"`
+	HandshakeSecurityProtocol HandshakeProtocol `protobuf:"varint,1,opt,name=handshake_security_protocol,json=handshakeSecurityProtocol,proto3,enum=grpc.gcp.HandshakeProtocol" json:"handshake_security_protocol,omitempty"`
 	// The application protocols supported by the client, e.g., "h2" (for http2),
 	// "grpc".
-	ApplicationProtocols []string `protobuf:"bytes,2,rep,name=application_protocols,json=applicationProtocols" json:"application_protocols,omitempty"`
+	ApplicationProtocols []string `protobuf:"bytes,2,rep,name=application_protocols,json=applicationProtocols,proto3" json:"application_protocols,omitempty"`
 	// The record protocols supported by the client, e.g.,
 	// "ALTSRP_GCM_AES128".
-	RecordProtocols []string `protobuf:"bytes,3,rep,name=record_protocols,json=recordProtocols" json:"record_protocols,omitempty"`
+	RecordProtocols []string `protobuf:"bytes,3,rep,name=record_protocols,json=recordProtocols,proto3" json:"record_protocols,omitempty"`
 	// (Optional) Describes which server identities are acceptable by the client.
 	// If target identities are provided and none of them matches the peer
 	// identity of the server, handshake will fail.
-	TargetIdentities []*Identity `protobuf:"bytes,4,rep,name=target_identities,json=targetIdentities" json:"target_identities,omitempty"`
+	TargetIdentities []*Identity `protobuf:"bytes,4,rep,name=target_identities,json=targetIdentities,proto3" json:"target_identities,omitempty"`
 	// (Optional) Application may specify a local identity. Otherwise, the
 	// handshaker chooses a default local identity.
-	LocalIdentity *Identity `protobuf:"bytes,5,opt,name=local_identity,json=localIdentity" json:"local_identity,omitempty"`
+	LocalIdentity *Identity `protobuf:"bytes,5,opt,name=local_identity,json=localIdentity,proto3" json:"local_identity,omitempty"`
 	// (Optional) Local endpoint information of the connection to the server,
 	// such as local IP address, port number, and network protocol.
-	LocalEndpoint *Endpoint `protobuf:"bytes,6,opt,name=local_endpoint,json=localEndpoint" json:"local_endpoint,omitempty"`
+	LocalEndpoint *Endpoint `protobuf:"bytes,6,opt,name=local_endpoint,json=localEndpoint,proto3" json:"local_endpoint,omitempty"`
 	// (Optional) Endpoint information of the remote server, such as IP address,
 	// port number, and network protocol.
-	RemoteEndpoint *Endpoint `protobuf:"bytes,7,opt,name=remote_endpoint,json=remoteEndpoint" json:"remote_endpoint,omitempty"`
+	RemoteEndpoint *Endpoint `protobuf:"bytes,7,opt,name=remote_endpoint,json=remoteEndpoint,proto3" json:"remote_endpoint,omitempty"`
 	// (Optional) If target name is provided, a secure naming check is performed
 	// to verify that the peer authenticated identity is indeed authorized to run
 	// the target name.
-	TargetName string `protobuf:"bytes,8,opt,name=target_name,json=targetName" json:"target_name,omitempty"`
+	TargetName string `protobuf:"bytes,8,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
 	// (Optional) RPC protocol versions supported by the client.
-	RpcVersions          *RpcProtocolVersions `protobuf:"bytes,9,opt,name=rpc_versions,json=rpcVersions" json:"rpc_versions,omitempty"`
+	RpcVersions          *RpcProtocolVersions `protobuf:"bytes,9,opt,name=rpc_versions,json=rpcVersions,proto3" json:"rpc_versions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -394,10 +394,10 @@ func (m *StartClientHandshakeReq) GetRpcVersions() *RpcProtocolVersions {
 type ServerHandshakeParameters struct {
 	// The record protocols supported by the server, e.g.,
 	// "ALTSRP_GCM_AES128".
-	RecordProtocols []string `protobuf:"bytes,1,rep,name=record_protocols,json=recordProtocols" json:"record_protocols,omitempty"`
+	RecordProtocols []string `protobuf:"bytes,1,rep,name=record_protocols,json=recordProtocols,proto3" json:"record_protocols,omitempty"`
 	// (Optional) A list of local identities supported by the server, if
 	// specified. Otherwise, the handshaker chooses a default local identity.
-	LocalIdentities      []*Identity `protobuf:"bytes,2,rep,name=local_identities,json=localIdentities" json:"local_identities,omitempty"`
+	LocalIdentities      []*Identity `protobuf:"bytes,2,rep,name=local_identities,json=localIdentities,proto3" json:"local_identities,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
 	XXX_unrecognized     []byte      `json:"-"`
 	XXX_sizecache        int32       `json:"-"`
@@ -444,24 +444,24 @@ func (m *ServerHandshakeParameters) GetLocalIdentities() []*Identity {
 type StartServerHandshakeReq struct {
 	// The application protocols supported by the server, e.g., "h2" (for http2),
 	// "grpc".
-	ApplicationProtocols []string `protobuf:"bytes,1,rep,name=application_protocols,json=applicationProtocols" json:"application_protocols,omitempty"`
+	ApplicationProtocols []string `protobuf:"bytes,1,rep,name=application_protocols,json=applicationProtocols,proto3" json:"application_protocols,omitempty"`
 	// Handshake parameters (record protocols and local identities supported by
 	// the server) mapped by the handshake protocol. Each handshake security
 	// protocol (e.g., TLS or ALTS) has its own set of record protocols and local
 	// identities. Since protobuf does not support enum as key to the map, the key
 	// to handshake_parameters is the integer value of HandshakeProtocol enum.
-	HandshakeParameters map[int32]*ServerHandshakeParameters `protobuf:"bytes,2,rep,name=handshake_parameters,json=handshakeParameters" json:"handshake_parameters,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	HandshakeParameters map[int32]*ServerHandshakeParameters `protobuf:"bytes,2,rep,name=handshake_parameters,json=handshakeParameters,proto3" json:"handshake_parameters,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Bytes in out_frames returned from the peer's HandshakerResp. It is possible
 	// that the peer's out_frames are split into multiple HandshakReq messages.
 	InBytes []byte `protobuf:"bytes,3,opt,name=in_bytes,json=inBytes,proto3" json:"in_bytes,omitempty"`
 	// (Optional) Local endpoint information of the connection to the client,
 	// such as local IP address, port number, and network protocol.
-	LocalEndpoint *Endpoint `protobuf:"bytes,4,opt,name=local_endpoint,json=localEndpoint" json:"local_endpoint,omitempty"`
+	LocalEndpoint *Endpoint `protobuf:"bytes,4,opt,name=local_endpoint,json=localEndpoint,proto3" json:"local_endpoint,omitempty"`
 	// (Optional) Endpoint information of the remote client, such as IP address,
 	// port number, and network protocol.
-	RemoteEndpoint *Endpoint `protobuf:"bytes,5,opt,name=remote_endpoint,json=remoteEndpoint" json:"remote_endpoint,omitempty"`
+	RemoteEndpoint *Endpoint `protobuf:"bytes,5,opt,name=remote_endpoint,json=remoteEndpoint,proto3" json:"remote_endpoint,omitempty"`
 	// (Optional) RPC protocol versions supported by the server.
-	RpcVersions          *RpcProtocolVersions `protobuf:"bytes,6,opt,name=rpc_versions,json=rpcVersions" json:"rpc_versions,omitempty"`
+	RpcVersions          *RpcProtocolVersions `protobuf:"bytes,6,opt,name=rpc_versions,json=rpcVersions,proto3" json:"rpc_versions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -614,13 +614,13 @@ type isHandshakerReq_ReqOneof interface {
 }
 
 type HandshakerReq_ClientStart struct {
-	ClientStart *StartClientHandshakeReq `protobuf:"bytes,1,opt,name=client_start,json=clientStart,oneof"`
+	ClientStart *StartClientHandshakeReq `protobuf:"bytes,1,opt,name=client_start,json=clientStart,proto3,oneof"`
 }
 type HandshakerReq_ServerStart struct {
-	ServerStart *StartServerHandshakeReq `protobuf:"bytes,2,opt,name=server_start,json=serverStart,oneof"`
+	ServerStart *StartServerHandshakeReq `protobuf:"bytes,2,opt,name=server_start,json=serverStart,proto3,oneof"`
 }
 type HandshakerReq_Next struct {
-	Next *NextHandshakeMessageReq `protobuf:"bytes,3,opt,name=next,oneof"`
+	Next *NextHandshakeMessageReq `protobuf:"bytes,3,opt,name=next,proto3,oneof"`
 }
 
 func (*HandshakerReq_ClientStart) isHandshakerReq_ReqOneof() {}
@@ -750,23 +750,23 @@ func _HandshakerReq_OneofSizer(msg proto.Message) (n int) {
 
 type HandshakerResult struct {
 	// The application protocol negotiated for this connection.
-	ApplicationProtocol string `protobuf:"bytes,1,opt,name=application_protocol,json=applicationProtocol" json:"application_protocol,omitempty"`
+	ApplicationProtocol string `protobuf:"bytes,1,opt,name=application_protocol,json=applicationProtocol,proto3" json:"application_protocol,omitempty"`
 	// The record protocol negotiated for this connection.
-	RecordProtocol string `protobuf:"bytes,2,opt,name=record_protocol,json=recordProtocol" json:"record_protocol,omitempty"`
+	RecordProtocol string `protobuf:"bytes,2,opt,name=record_protocol,json=recordProtocol,proto3" json:"record_protocol,omitempty"`
 	// Cryptographic key data. The key data may be more than the key length
 	// required for the record protocol, thus the client of the handshaker
 	// service needs to truncate the key data into the right key length.
 	KeyData []byte `protobuf:"bytes,3,opt,name=key_data,json=keyData,proto3" json:"key_data,omitempty"`
 	// The authenticated identity of the peer.
-	PeerIdentity *Identity `protobuf:"bytes,4,opt,name=peer_identity,json=peerIdentity" json:"peer_identity,omitempty"`
+	PeerIdentity *Identity `protobuf:"bytes,4,opt,name=peer_identity,json=peerIdentity,proto3" json:"peer_identity,omitempty"`
 	// The local identity used in the handshake.
-	LocalIdentity *Identity `protobuf:"bytes,5,opt,name=local_identity,json=localIdentity" json:"local_identity,omitempty"`
+	LocalIdentity *Identity `protobuf:"bytes,5,opt,name=local_identity,json=localIdentity,proto3" json:"local_identity,omitempty"`
 	// Indicate whether the handshaker service client should keep the channel
 	// between the handshaker service open, e.g., in order to handle
 	// post-handshake messages in the future.
-	KeepChannelOpen bool `protobuf:"varint,6,opt,name=keep_channel_open,json=keepChannelOpen" json:"keep_channel_open,omitempty"`
+	KeepChannelOpen bool `protobuf:"varint,6,opt,name=keep_channel_open,json=keepChannelOpen,proto3" json:"keep_channel_open,omitempty"`
 	// The RPC protocol versions supported by the peer.
-	PeerRpcVersions      *RpcProtocolVersions `protobuf:"bytes,7,opt,name=peer_rpc_versions,json=peerRpcVersions" json:"peer_rpc_versions,omitempty"`
+	PeerRpcVersions      *RpcProtocolVersions `protobuf:"bytes,7,opt,name=peer_rpc_versions,json=peerRpcVersions,proto3" json:"peer_rpc_versions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -847,9 +847,9 @@ func (m *HandshakerResult) GetPeerRpcVersions() *RpcProtocolVersions {
 
 type HandshakerStatus struct {
 	// The status code. This could be the gRPC status code.
-	Code uint32 `protobuf:"varint,1,opt,name=code" json:"code,omitempty"`
+	Code uint32 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	// The status details.
-	Details              string   `protobuf:"bytes,2,opt,name=details" json:"details,omitempty"`
+	Details              string   `protobuf:"bytes,2,opt,name=details,proto3" json:"details,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -903,12 +903,12 @@ type HandshakerResp struct {
 	// Number of bytes in the in_bytes consumed by the handshaker. It is possible
 	// that part of in_bytes in HandshakerReq was unrelated to the handshake
 	// process.
-	BytesConsumed uint32 `protobuf:"varint,2,opt,name=bytes_consumed,json=bytesConsumed" json:"bytes_consumed,omitempty"`
+	BytesConsumed uint32 `protobuf:"varint,2,opt,name=bytes_consumed,json=bytesConsumed,proto3" json:"bytes_consumed,omitempty"`
 	// This is set iff the handshake was successful. out_frames may still be set
 	// to frames that needs to be forwarded to the peer.
-	Result *HandshakerResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *HandshakerResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	// Status of the handshaker.
-	Status               *HandshakerStatus `protobuf:"bytes,4,opt,name=status" json:"status,omitempty"`
+	Status               *HandshakerStatus `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
