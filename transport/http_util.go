@@ -454,7 +454,7 @@ func encodeGrpcMessage(msg string) string {
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
-		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
+		if !(c >= spaceByte && c <= tildaByte && c != percentByte) {
 			return encodeGrpcMessageUnchecked(msg)
 		}
 	}
@@ -466,7 +466,7 @@ func encodeGrpcMessageUnchecked(msg string) string {
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
-		if c >= spaceByte && c < tildaByte && c != percentByte {
+		if c >= spaceByte && c <= tildaByte && c != percentByte {
 			buf.WriteByte(c)
 		} else {
 			buf.WriteString(fmt.Sprintf("%%%02X", c))
