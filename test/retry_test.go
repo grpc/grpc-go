@@ -30,12 +30,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
+func enableRetry() func() {
+	old := envconfig.Retry
+	envconfig.Retry = true
+	return func() { envconfig.Retry = old }
+}
+
 func TestRetryUnary(t *testing.T) {
+	defer enableRetry()()
 	i := -1
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -49,7 +57,7 @@ func TestRetryUnary(t *testing.T) {
 			return nil, status.New(codes.AlreadyExists, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry()); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -160,6 +168,7 @@ func TestRetryDisabledByDefault(t *testing.T) {
 }
 
 func TestRetryThrottling(t *testing.T) {
+	defer enableRetry()()
 	i := -1
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -171,7 +180,7 @@ func TestRetryThrottling(t *testing.T) {
 			return nil, status.New(codes.Unavailable, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry()); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -234,6 +243,7 @@ func TestRetryThrottling(t *testing.T) {
 }
 
 func TestRetryStreaming(t *testing.T) {
+	defer enableRetry()()
 	req := func(b byte) *testpb.StreamingOutputCallRequest {
 		return &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte{b}}}
 	}
@@ -480,7 +490,7 @@ func TestRetryStreaming(t *testing.T) {
 			return nil
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithEnableRetry(), grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200))); err != nil {
+	if err := ss.Start([]grpc.ServerOption{}, grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()

@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
@@ -441,7 +442,8 @@ func WithDisableServiceConfig() DialOption {
 // RPC is unprocessed by the remote server.
 //
 // Retry support is currently disabled by default, but will be enabled by
-// default in the future.
+// default in the future.  Until then, it may be enabled by setting the
+// environment variable "GRPC_GO_RETRY" to "on".
 //
 // This API is EXPERIMENTAL.
 func WithDisableRetry() DialOption {
@@ -450,21 +452,8 @@ func WithDisableRetry() DialOption {
 	}
 }
 
-// WithEnableRetry returns a DialOption that enables retries if the service
-// config also enables them.
-//
-// Retry support is currently disabled by default, but will be enabled by
-// default in the future.
-//
-// This API is EXPERIMENTAL and will be removed in the future.
-func WithEnableRetry() DialOption {
-	return func(o *dialOptions) {
-		o.disableRetry = false
-	}
-}
-
 func defaultDialOptions() dialOptions {
-	return dialOptions{disableRetry: true}
+	return dialOptions{disableRetry: !envconfig.Retry}
 }
 
 // Dial creates a client connection to the given target.
