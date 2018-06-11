@@ -24,8 +24,7 @@ trap finish EXIT
 
 pushd "$TMP"
 mkdir -p grpc/lb/v1
-# TODO(carl-mastrangel): point this to https://github.com/grpc/grpc-proto/blob/master/grpc/lb/v1/load_balancer.proto
-curl https://raw.githubusercontent.com/carl-mastrangelo/grpc-proto/a1ee9608267a05b4730777645abbc7d478a68adc/grpc/lb/v1/load_balancer.proto > grpc/lb/v1/load_balancer.proto
+curl https://raw.githubusercontent.com/grpc/grpc-proto/master/grpc/lb/v1/load_balancer.proto > grpc/lb/v1/load_balancer.proto
 
 protoc --go_out=plugins=grpc,paths=source_relative:. -I. grpc/lb/v1/*.proto
 popd
