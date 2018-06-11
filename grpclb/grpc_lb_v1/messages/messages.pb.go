@@ -59,10 +59,10 @@ type isLoadBalanceRequest_LoadBalanceRequestType interface {
 }
 
 type LoadBalanceRequest_InitialRequest struct {
-	InitialRequest *InitialLoadBalanceRequest `protobuf:"bytes,1,opt,name=initial_request,json=initialRequest,oneof"`
+	InitialRequest *InitialLoadBalanceRequest `protobuf:"bytes,1,opt,name=initial_request,json=initialRequest,proto3,oneof"`
 }
 type LoadBalanceRequest_ClientStats struct {
-	ClientStats *ClientStats `protobuf:"bytes,2,opt,name=client_stats,json=clientStats,oneof"`
+	ClientStats *ClientStats `protobuf:"bytes,2,opt,name=client_stats,json=clientStats,proto3,oneof"`
 }
 
 func (*LoadBalanceRequest_InitialRequest) isLoadBalanceRequest_LoadBalanceRequestType() {}
@@ -166,7 +166,7 @@ func _LoadBalanceRequest_OneofSizer(msg proto.Message) (n int) {
 type InitialLoadBalanceRequest struct {
 	// Name of load balanced service (IE, balancer.service.com). Its
 	// length should be less than 256 bytes.
-	Name                 string   `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -206,9 +206,9 @@ func (m *InitialLoadBalanceRequest) GetName() string {
 // Contains the number of calls finished for a particular load balance token.
 type ClientStatsPerToken struct {
 	// See Server.load_balance_token.
-	LoadBalanceToken string `protobuf:"bytes,1,opt,name=load_balance_token,json=loadBalanceToken" json:"load_balance_token,omitempty"`
+	LoadBalanceToken string `protobuf:"bytes,1,opt,name=load_balance_token,json=loadBalanceToken,proto3" json:"load_balance_token,omitempty"`
 	// The total number of RPCs that finished associated with the token.
-	NumCalls             int64    `protobuf:"varint,2,opt,name=num_calls,json=numCalls" json:"num_calls,omitempty"`
+	NumCalls             int64    `protobuf:"varint,2,opt,name=num_calls,json=numCalls,proto3" json:"num_calls,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -256,18 +256,18 @@ func (m *ClientStatsPerToken) GetNumCalls() int64 {
 // count except the timestamp should be reset to zero after reporting the stats.
 type ClientStats struct {
 	// The timestamp of generating the report.
-	Timestamp *timestamp.Timestamp `protobuf:"bytes,1,opt,name=timestamp" json:"timestamp,omitempty"`
+	Timestamp *timestamp.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// The total number of RPCs that started.
-	NumCallsStarted int64 `protobuf:"varint,2,opt,name=num_calls_started,json=numCallsStarted" json:"num_calls_started,omitempty"`
+	NumCallsStarted int64 `protobuf:"varint,2,opt,name=num_calls_started,json=numCallsStarted,proto3" json:"num_calls_started,omitempty"`
 	// The total number of RPCs that finished.
-	NumCallsFinished int64 `protobuf:"varint,3,opt,name=num_calls_finished,json=numCallsFinished" json:"num_calls_finished,omitempty"`
+	NumCallsFinished int64 `protobuf:"varint,3,opt,name=num_calls_finished,json=numCallsFinished,proto3" json:"num_calls_finished,omitempty"`
 	// The total number of RPCs that failed to reach a server except dropped RPCs.
-	NumCallsFinishedWithClientFailedToSend int64 `protobuf:"varint,6,opt,name=num_calls_finished_with_client_failed_to_send,json=numCallsFinishedWithClientFailedToSend" json:"num_calls_finished_with_client_failed_to_send,omitempty"`
+	NumCallsFinishedWithClientFailedToSend int64 `protobuf:"varint,6,opt,name=num_calls_finished_with_client_failed_to_send,json=numCallsFinishedWithClientFailedToSend,proto3" json:"num_calls_finished_with_client_failed_to_send,omitempty"`
 	// The total number of RPCs that finished and are known to have been received
 	// by a server.
-	NumCallsFinishedKnownReceived int64 `protobuf:"varint,7,opt,name=num_calls_finished_known_received,json=numCallsFinishedKnownReceived" json:"num_calls_finished_known_received,omitempty"`
+	NumCallsFinishedKnownReceived int64 `protobuf:"varint,7,opt,name=num_calls_finished_known_received,json=numCallsFinishedKnownReceived,proto3" json:"num_calls_finished_known_received,omitempty"`
 	// The list of dropped calls.
-	CallsFinishedWithDrop []*ClientStatsPerToken `protobuf:"bytes,8,rep,name=calls_finished_with_drop,json=callsFinishedWithDrop" json:"calls_finished_with_drop,omitempty"`
+	CallsFinishedWithDrop []*ClientStatsPerToken `protobuf:"bytes,8,rep,name=calls_finished_with_drop,json=callsFinishedWithDrop,proto3" json:"calls_finished_with_drop,omitempty"`
 	XXX_NoUnkeyedLiteral  struct{}               `json:"-"`
 	XXX_unrecognized      []byte                 `json:"-"`
 	XXX_sizecache         int32                  `json:"-"`
@@ -378,10 +378,10 @@ type isLoadBalanceResponse_LoadBalanceResponseType interface {
 }
 
 type LoadBalanceResponse_InitialResponse struct {
-	InitialResponse *InitialLoadBalanceResponse `protobuf:"bytes,1,opt,name=initial_response,json=initialResponse,oneof"`
+	InitialResponse *InitialLoadBalanceResponse `protobuf:"bytes,1,opt,name=initial_response,json=initialResponse,proto3,oneof"`
 }
 type LoadBalanceResponse_ServerList struct {
-	ServerList *ServerList `protobuf:"bytes,2,opt,name=server_list,json=serverList,oneof"`
+	ServerList *ServerList `protobuf:"bytes,2,opt,name=server_list,json=serverList,proto3,oneof"`
 }
 
 func (*LoadBalanceResponse_InitialResponse) isLoadBalanceResponse_LoadBalanceResponseType() {}
@@ -488,11 +488,11 @@ type InitialLoadBalanceResponse struct {
 	// the response, the client should open a separate connection to the
 	// load_balancer_delegate and call the BalanceLoad method. Its length should
 	// be less than 64 bytes.
-	LoadBalancerDelegate string `protobuf:"bytes,1,opt,name=load_balancer_delegate,json=loadBalancerDelegate" json:"load_balancer_delegate,omitempty"`
+	LoadBalancerDelegate string `protobuf:"bytes,1,opt,name=load_balancer_delegate,json=loadBalancerDelegate,proto3" json:"load_balancer_delegate,omitempty"`
 	// This interval defines how often the client should send the client stats
 	// to the load balancer. Stats should only be reported when the duration is
 	// positive.
-	ClientStatsReportInterval *duration.Duration `protobuf:"bytes,2,opt,name=client_stats_report_interval,json=clientStatsReportInterval" json:"client_stats_report_interval,omitempty"`
+	ClientStatsReportInterval *duration.Duration `protobuf:"bytes,2,opt,name=client_stats_report_interval,json=clientStatsReportInterval,proto3" json:"client_stats_report_interval,omitempty"`
 	XXX_NoUnkeyedLiteral      struct{}           `json:"-"`
 	XXX_unrecognized          []byte             `json:"-"`
 	XXX_sizecache             int32              `json:"-"`
@@ -541,7 +541,7 @@ type ServerList struct {
 	// be updated when server resolutions change or as needed to balance load
 	// across more servers. The client should consume the server list in order
 	// unless instructed otherwise via the client_config.
-	Servers              []*Server `protobuf:"bytes,1,rep,name=servers" json:"servers,omitempty"`
+	Servers              []*Server `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
 	XXX_unrecognized     []byte    `json:"-"`
 	XXX_sizecache        int32     `json:"-"`
@@ -585,17 +585,17 @@ type Server struct {
 	// either be an IPv4 or IPv6 address.
 	IpAddress []byte `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	// A resolved port number for the server.
-	Port int32 `protobuf:"varint,2,opt,name=port" json:"port,omitempty"`
+	Port int32 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
 	// An opaque but printable token given to the frontend for each pick. All
 	// frontend requests for that pick must include the token in its initial
 	// metadata. The token is used by the backend to verify the request and to
 	// allow the backend to report load to the gRPC LB system. The token is also
 	// used in client stats for reporting dropped calls.
-	LoadBalanceToken string `protobuf:"bytes,3,opt,name=load_balance_token,json=loadBalanceToken" json:"load_balance_token,omitempty"`
+	LoadBalanceToken string `protobuf:"bytes,3,opt,name=load_balance_token,json=loadBalanceToken,proto3" json:"load_balance_token,omitempty"`
 	// Indicates whether this particular request should be dropped by the client.
 	// If the request is dropped, there will be a corresponding entry in
 	// ClientStats.calls_finished_with_drop.
-	Drop                 bool     `protobuf:"varint,4,opt,name=drop" json:"drop,omitempty"`
+	Drop                 bool     `protobuf:"varint,4,opt,name=drop,proto3" json:"drop,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
