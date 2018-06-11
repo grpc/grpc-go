@@ -1868,7 +1868,7 @@ public abstract class AbstractInteropTest {
       assertNotNull(serverEndRecord);
       checkStartTags(serverStartRecord, method);
       checkEndTags(serverEndRecord, method, code);
-      if (server != null && requests != null && responses != null) {
+      if (requests != null && responses != null) {
         checkCensus(serverEndRecord, true, requests, responses);
       }
     }

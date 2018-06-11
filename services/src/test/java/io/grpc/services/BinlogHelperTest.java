@@ -549,7 +549,7 @@ public final class BinlogHelperTest {
   public void logSendInitialMetadata_server() throws Exception {
     sinkWriterImpl.logSendInitialMetadata(
         /*seq=*/ 1,
-        /*methodNmae=*/ null,
+        /*methodName=*/ null,
         /*timeout=*/ null,
         nonEmptyMetadata,
         IS_SERVER,
@@ -649,7 +649,7 @@ public final class BinlogHelperTest {
     InetSocketAddress socketAddress = new InetSocketAddress(address, port);
     sinkWriterImpl.logRecvInitialMetadata(
         /*seq=*/ 1,
-        /*methodNmae=*/ null,
+        /*methodName=*/ null,
         /*timeout=*/ null,
         nonEmptyMetadata,
         IS_CLIENT,
