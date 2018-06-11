@@ -51,7 +51,12 @@ func (d *delayListener) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("listener is closed")
 	default:
 		close(d.acceptCalled)
-		return d.Listener.Accept()
+		conn, err := d.Listener.Accept()
+		// Allow closing of listener only after accept.
+		// Note: Dial can return successfully, yet Accept
+		// might now have finished.
+		d.allowClose()
+		return conn, err
 	}
 }
 
@@ -169,20 +174,19 @@ func TestGracefulStop(t *testing.T) {
 
 	// Now dial.  The listener's Accept method will return a valid connection,
 	// even though GracefulStop has closed the listener.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dialCancel()
 	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithDialer(d))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
-	cancel()
 	client := testpb.NewTestServiceClient(cc)
 	defer cc.Close()
-	dlis.allowClose()
 
 	// 4. Send an RPC on the new connection.
 	// The server would send a GOAWAY first, but we are delaying the server's
 	// writes for now until the client writes more than the preface.
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <nil>", err)
