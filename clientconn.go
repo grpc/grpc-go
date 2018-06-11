@@ -556,7 +556,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.setSC(&sc)
+				cc.sc = sc
 				scSet = true
 			}
 		default:
@@ -600,7 +600,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.setSC(&sc)
+				cc.sc = sc
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -763,7 +763,7 @@ func (cc *ClientConn) scWatcher() {
 			cc.mu.Lock()
 			// TODO: load balance policy runtime change is ignored.
 			// We may revist this decision in the future.
-			cc.setSC(&sc)
+			cc.sc = sc
 			cc.scRaw = ""
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
@@ -1043,16 +1043,6 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 	return t, done, nil
 }
 
-func (cc *ClientConn) setSC(sc *ServiceConfig) {
-	postProcessSC(sc)
-	cc.sc = *sc
-	if sc.RetryThrottling != nil {
-		cc.retryMu.Lock()
-		cc.retryTokens = sc.RetryThrottling.MaxTokens
-		cc.retryMu.Unlock()
-	}
-}
-
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
@@ -1065,7 +1055,7 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 	cc.mu.Lock()
 	cc.scRaw = js
-	cc.setSC(&sc)
+	cc.sc = sc
 	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
 		if cc.curBalancerName == grpclbName {
 			// If current balancer is grpclb, there's at least one grpclb
@@ -1078,6 +1068,12 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.switchBalancer(*sc.LB)
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
+	}
+
+	if sc.retryThrottling != nil {
+		cc.retryMu.Lock()
+		cc.retryTokens = sc.retryThrottling.MaxTokens
+		cc.retryMu.Unlock()
 	}
 
 	if envConfigStickinessOn {
@@ -1631,7 +1627,7 @@ func (ac *addrConn) incrCallsFailed() {
 // retry should be throttled (disallowed) based upon the retry throttling policy
 // in the service config.
 func (cc *ClientConn) throttleRetry() bool {
-	rtp := cc.sc.RetryThrottling
+	rtp := cc.sc.retryThrottling
 	if cc.dopts.disableRetry {
 		return true
 	}
@@ -1651,7 +1647,7 @@ func (cc *ClientConn) throttleRetry() bool {
 }
 
 func (cc *ClientConn) successfulRPC() {
-	rtp := cc.sc.RetryThrottling
+	rtp := cc.sc.retryThrottling
 	if cc.dopts.disableRetry || rtp == nil {
 		return
 	}

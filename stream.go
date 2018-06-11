@@ -445,7 +445,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
-	rp := cs.methodConfig.RetryPolicy
+	rp := cs.methodConfig.retryPolicy
 	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
 		return err
 	}
@@ -454,7 +454,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 	if cs.cc.throttleRetry() {
 		return err
 	}
-	if cs.numRetries+1 >= rp.MaxAttempts {
+	if cs.numRetries+1 >= rp.maxAttempts {
 		return err
 	}
 
@@ -463,10 +463,10 @@ func (cs *clientStream) shouldRetry(err error) error {
 		dur = time.Millisecond * time.Duration(pushback)
 		cs.numRetriesSincePushback = 0
 	} else {
-		max := float64(rp.MaxBackoff)
-		cur := float64(rp.InitialBackoff)
+		max := float64(rp.maxBackoff)
+		cur := float64(rp.initialBackoff)
 		for i := 0; i < cs.numRetriesSincePushback; i++ {
-			cur *= rp.BackoffMultiplier
+			cur *= rp.backoffMultiplier
 			if cur >= max {
 				cur = max
 				break
