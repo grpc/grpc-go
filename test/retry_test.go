@@ -64,6 +64,7 @@ func TestRetryUnary(t *testing.T) {
 	ss.r.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
+      "waitForReady": true,
       "retryPolicy": {
         "MaxAttempts": 4,
         "InitialBackoff": ".01s",
@@ -77,7 +78,7 @@ func TestRetryUnary(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").RetryPolicy != nil {
+		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -128,6 +129,7 @@ func TestRetryDisabledByDefault(t *testing.T) {
 	ss.r.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
+      "waitForReady": true,
       "retryPolicy": {
         "MaxAttempts": 4,
         "InitialBackoff": ".01s",
@@ -141,7 +143,7 @@ func TestRetryDisabledByDefault(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").RetryPolicy != nil {
+		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -187,6 +189,7 @@ func TestRetryThrottling(t *testing.T) {
 	ss.r.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
+      "waitForReady": true,
       "retryPolicy": {
         "MaxAttempts": 4,
         "InitialBackoff": ".01s",
@@ -205,7 +208,7 @@ func TestRetryThrottling(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").RetryPolicy != nil {
+		if ss.cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -497,6 +500,7 @@ func TestRetryStreaming(t *testing.T) {
 	ss.r.NewServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
+      "waitForReady": true,
       "retryPolicy": {
           "MaxAttempts": 4,
           "InitialBackoff": ".01s",
@@ -510,7 +514,7 @@ func TestRetryStreaming(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Timed out waiting for service config update")
 		}
-		if ss.cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").RetryPolicy != nil {
+		if ss.cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
