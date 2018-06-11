@@ -16,7 +16,8 @@
  *
  */
 
-package grpc
+// Package envconfig contains grpc settings configured by environment variables.
+package envconfig
 
 import (
 	"os"
@@ -24,10 +25,11 @@ import (
 )
 
 const (
-	envConfigPrefix        = "GRPC_GO_"
-	envConfigStickinessStr = envConfigPrefix + "STICKINESS"
+	prefix   = "GRPC_GO_"
+	retryStr = prefix + "RETRY"
 )
 
 var (
-	envConfigStickinessOn = strings.EqualFold(os.Getenv(envConfigStickinessStr), "on")
+	// Retry is set if retry is explicitly enabled via "GRPC_GO_RETRY=on".
+	Retry = strings.EqualFold(os.Getenv(retryStr), "on")
 )
