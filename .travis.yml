@@ -13,7 +13,8 @@ matrix:
     env: RUN386=1
   - go: 1.9.x
     env: GAE=1
-
+  - go: 1.10.x
+    env: GRPC_GO_RETRY=on
 
 go_import_path: google.golang.org/grpc
 
