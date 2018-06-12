@@ -238,7 +238,7 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 			continue
 		}
 
-		timer := time.NewTimer(lb.backoff.backoff(retryCount))
+		timer := time.NewTimer(lb.backoff.Backoff(retryCount))
 		select {
 		case <-timer.C:
 		case <-lb.doneCh:
