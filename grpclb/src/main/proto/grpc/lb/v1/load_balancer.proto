@@ -12,22 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The GRPCLB LoadBalancing protocol
+// This file defines an the GRPCLB LoadBalancing protocol.
+//
+// The canonical version of this proto can be found at
+// https://github.com/grpc/grpc-proto/blob/master/grpc/lb/v1/load_balancer.proto
 syntax = "proto3";
+
+package grpc.lb.v1;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-package grpc.lb.v1;
-
+option go_package = "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1";
 option java_multiple_files = true;
-option java_package = "io.grpc.grpclb";
 option java_outer_classname = "LoadBalancerProto";
+option java_package = "io.grpc.grpclb";
 
 service LoadBalancer {
   // Bidirectional rpc to get a list of servers.
-  rpc BalanceLoad(stream LoadBalanceRequest)
-      returns (stream LoadBalanceResponse);
+  rpc BalanceLoad(stream LoadBalanceRequest) returns (stream LoadBalanceResponse);
 }
 
 message LoadBalanceRequest {
@@ -42,7 +45,7 @@ message LoadBalanceRequest {
 }
 
 message InitialLoadBalanceRequest {
-  // Name of load balanced service (IE, service.blade.gslb.googleprod.com). Its
+  // Name of load balanced service (IE, service.googleapis.com). Its
   // length should be less than 256 bytes.
   string name = 1;
 }

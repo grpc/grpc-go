@@ -9,7 +9,7 @@ public interface InitialLoadBalanceRequestOrBuilder extends
 
   /**
    * <pre>
-   * Name of load balanced service (IE, service.blade.gslb.googleprod.com). Its
+   * Name of load balanced service (IE, service.googleapis.com). Its
    * length should be less than 256 bytes.
    * </pre>
    *
@@ -18,7 +18,7 @@ public interface InitialLoadBalanceRequestOrBuilder extends
   java.lang.String getName();
   /**
    * <pre>
-   * Name of load balanced service (IE, service.blade.gslb.googleprod.com). Its
+   * Name of load balanced service (IE, service.googleapis.com). Its
    * length should be less than 256 bytes.
    * </pre>
    *

@@ -93,8 +93,10 @@ public final class LoadBalancerProto {
       "\005\022\032\n\022load_balance_token\030\003 \001(\t\022\014\n\004drop\030\004 " +
       "\001(\010J\004\010\005\020\0062b\n\014LoadBalancer\022R\n\013BalanceLoad" +
       "\022\036.grpc.lb.v1.LoadBalanceRequest\032\037.grpc." +
-      "lb.v1.LoadBalanceResponse(\0010\001B%\n\016io.grpc" +
-      ".grpclbB\021LoadBalancerProtoP\001b\006proto3"
+      "lb.v1.LoadBalanceResponse(\0010\001BX\n\016io.grpc" +
+      ".grpclbB\021LoadBalancerProtoP\001Z1google.gol" +
+      "ang.org/grpc/balancer/grpclb/grpc_lb_v1b" +
+      "\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
