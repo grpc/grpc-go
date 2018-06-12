@@ -272,6 +272,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		beginTime:    beginTime,
 		firstAttempt: true,
 	}
+	if !cc.dopts.disableRetry {
+		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
+	}
+
 	cs.callInfo.stream = cs
 	if err := cs.newAttemptLocked(); err != nil {
 		return nil, err
@@ -364,6 +368,8 @@ type clientStream struct {
 
 	ctx context.Context // the application's context, wrapped by stats/tracing
 
+	retryThrottler *retryThrottler // The throttler active when the RPC began.
+
 	mu                      sync.Mutex
 	firstAttempt            bool       // if true, transparent retry is valid
 	numRetries              int        // exclusive of transparent retry attempt(s)
@@ -451,7 +457,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 	}
 	// Note: the ordering here is important; we count this as a failure
 	// only if the code matched a retryable code.
-	if cs.cc.throttleRetry() {
+	if cs.retryThrottler.throttle() {
 		return err
 	}
 	if cs.numRetries+1 >= rp.maxAttempts {
@@ -662,7 +668,7 @@ func (cs *clientStream) finish(err error) {
 	cs.committed = true
 	cs.mu.Unlock()
 	if err == nil {
-		cs.cc.successfulRPC()
+		cs.retryThrottler.successfulRPC()
 	}
 	if channelz.IsOn() {
 		if err != nil {
