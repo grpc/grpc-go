@@ -681,15 +681,6 @@ func (cs *clientStream) finish(err error) {
 	cs.cancel()
 }
 
-func newOutPayload(m interface{}, data, uncomp []byte) *stats.OutPayload {
-	return &stats.OutPayload{
-		Payload:    m,
-		Data:       uncomp, // TODO truncate large payload.
-		Length:     len(uncomp),
-		WireLength: 5 + len(data),
-	}
-}
-
 func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 	cs := a.cs
 	if EnableTracing {
