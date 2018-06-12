@@ -1,4 +1,5 @@
 // +build linux
+// +build !appengine
 // +build go1.9
 
 /*
