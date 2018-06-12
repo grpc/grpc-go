@@ -428,8 +428,8 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
-	// TODO(retry): Move down if the spec changes to not check code before
-	// considering this a failure.
+	// TODO(retry): Move down if the spec changes to not check server pushback
+	// before considering this a failure for throttling.
 	pushback := 0
 	sps := cs.attempt.s.Trailer()["grpc-retry-pushback-ms"]
 	var hasPushback bool
