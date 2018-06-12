@@ -21,6 +21,7 @@ package grpc
 import (
 	"errors"
 	"io"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -469,14 +470,10 @@ func (cs *clientStream) shouldRetry(err error) error {
 		dur = time.Millisecond * time.Duration(pushback)
 		cs.numRetriesSincePushback = 0
 	} else {
-		max := float64(rp.maxBackoff)
-		cur := float64(rp.initialBackoff)
-		for i := 0; i < cs.numRetriesSincePushback; i++ {
-			cur *= rp.backoffMultiplier
-			if cur >= max {
-				cur = max
-				break
-			}
+		fact := math.Pow(rp.backoffMultiplier, float64(cs.numRetriesSincePushback))
+		cur := float64(rp.initialBackoff) * fact
+		if max := float64(rp.maxBackoff); cur > max {
+			cur = max
 		}
 		dur = time.Duration(grpcrand.Int63n(int64(cur)))
 		cs.numRetriesSincePushback++
