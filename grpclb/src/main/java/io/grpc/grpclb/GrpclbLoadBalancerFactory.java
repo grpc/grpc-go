@@ -19,6 +19,7 @@ package io.grpc.grpclb;
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.PickFirstBalancerFactory;
+import io.grpc.internal.ExponentialBackoffPolicy;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourcePool;
 import io.grpc.internal.TimeProvider;
@@ -52,6 +53,7 @@ public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
         // load should not be on the shared scheduled executor, we should use a combination of the
         // scheduled executor and the default app executor.
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-        TimeProvider.SYSTEM_TIME_PROVIDER);
+        TimeProvider.SYSTEM_TIME_PROVIDER,
+        new ExponentialBackoffPolicy.Provider());
   }
 }

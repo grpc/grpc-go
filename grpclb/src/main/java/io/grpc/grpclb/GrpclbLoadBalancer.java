@@ -25,6 +25,7 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
+import io.grpc.internal.BackoffPolicy;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ObjectPool;
@@ -55,6 +56,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private final Factory roundRobinBalancerFactory;
   private final ObjectPool<ScheduledExecutorService> timerServicePool;
   private final TimeProvider time;
+  private final BackoffPolicy.Provider backoffPolicyProvider;
 
   // All mutable states in this class are mutated ONLY from Channel Executor
 
@@ -71,7 +73,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
   GrpclbLoadBalancer(Helper helper, SubchannelPool subchannelPool, Factory pickFirstBalancerFactory,
       Factory roundRobinBalancerFactory, ObjectPool<ScheduledExecutorService> timerServicePool,
-      TimeProvider time) {
+      TimeProvider time, BackoffPolicy.Provider backoffPolicyProvider) {
     this.helper = checkNotNull(helper, "helper");
     this.pickFirstBalancerFactory =
         checkNotNull(pickFirstBalancerFactory, "pickFirstBalancerFactory");
@@ -80,6 +82,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     this.timerServicePool = checkNotNull(timerServicePool, "timerServicePool");
     this.timerService = checkNotNull(timerServicePool.getObject(), "timerService");
     this.time = checkNotNull(time, "time provider");
+    this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.subchannelPool.init(helper, timerService);
     setLbPolicy(LbPolicy.GRPCLB);
@@ -163,8 +166,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
               "roundRobinBalancerFactory.newLoadBalancer()");
           break;
         case GRPCLB:
-          grpclbState =
-              new GrpclbState(helper, subchannelPool, time, timerService, logId);
+          grpclbState = new GrpclbState(
+              helper, subchannelPool, time, timerService, backoffPolicyProvider, logId);
           break;
         default:
           // Do nohting

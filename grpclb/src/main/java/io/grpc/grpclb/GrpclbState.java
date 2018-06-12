@@ -42,6 +42,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.LoadBalanceResponse.LoadBalanceResponseTypeCase;
+import io.grpc.internal.BackoffPolicy;
 import io.grpc.internal.LogId;
 import io.grpc.internal.TimeProvider;
 import io.grpc.stub.StreamObserver;
@@ -102,6 +103,7 @@ final class GrpclbState {
 
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.create("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
+  private final BackoffPolicy.Provider backoffPolicyProvider;
 
   // Scheduled only once.  Never reset.
   @Nullable
@@ -111,6 +113,11 @@ final class GrpclbState {
   // True if the current balancer has returned a serverlist.  Will be reset to false when lost
   // connection to a balancer.
   private boolean balancerWorking;
+  @Nullable
+  private BackoffPolicy lbRpcRetryPolicy;
+  @Nullable
+  private LbRpcRetryTask lbRpcRetryTimer;
+  private long prevLbRpcStartNanos;
 
   @Nullable
   private ManagedChannel lbCommChannel;
@@ -133,11 +140,13 @@ final class GrpclbState {
       SubchannelPool subchannelPool,
       TimeProvider time,
       ScheduledExecutorService timerService,
+      BackoffPolicy.Provider backoffPolicyProvider,
       LogId logId) {
     this.helper = checkNotNull(helper, "helper");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.time = checkNotNull(time, "time provider");
     this.timerService = checkNotNull(timerService, "timerService");
+    this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
     this.logId = checkNotNull(logId, "logId");
   }
@@ -262,6 +271,7 @@ final class GrpclbState {
     LoadBalancerGrpc.LoadBalancerStub stub = LoadBalancerGrpc.newStub(lbCommChannel);
     lbStream = new LbStream(stub);
     lbStream.start();
+    prevLbRpcStartNanos = time.currentTimeNanos();
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
@@ -280,6 +290,12 @@ final class GrpclbState {
     }
   }
 
+  private void cancelLbRpcRetryTimer() {
+    if (lbRpcRetryTimer != null) {
+      lbRpcRetryTimer.cancel();
+    }
+  }
+
   void shutdown() {
     shutdownLbComm();
     // We close the subchannels through subchannelPool instead of helper just for convenience of
@@ -290,6 +306,7 @@ final class GrpclbState {
     subchannels = Collections.emptyMap();
     subchannelPool.clear();
     cancelFallbackTimer();
+    cancelLbRpcRetryTimer();
   }
 
   void propagateError(Status status) {
@@ -385,6 +402,32 @@ final class GrpclbState {
     void schedule() {
       checkState(scheduledFuture == null, "FallbackModeTask already scheduled");
       scheduledFuture = timerService.schedule(this, FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+  }
+
+  @VisibleForTesting
+  class LbRpcRetryTask implements Runnable {
+    private ScheduledFuture<?> scheduledFuture;
+
+    @Override
+    public void run() {
+      helper.runSerialized(new Runnable() {
+          @Override
+          public void run() {
+            checkState(
+                lbRpcRetryTimer == LbRpcRetryTask.this, "LbRpc retry timer mismatch");
+            startLbRpc();
+          }
+        });
+    }
+
+    void cancel() {
+      scheduledFuture.cancel(false);
+    }
+
+    void schedule(long delayNanos) {
+      checkState(scheduledFuture == null, "LbRpcRetryTask already scheduled");
+      scheduledFuture = timerService.schedule(this, delayNanos, TimeUnit.NANOSECONDS);
     }
   }
 
@@ -558,7 +601,27 @@ final class GrpclbState {
       balancerWorking = false;
       maybeUseFallbackBackends();
       maybeUpdatePicker();
-      startLbRpc();
+
+      long delayNanos = 0;
+      if (initialResponseReceived || lbRpcRetryPolicy == null) {
+        // Reset the backoff sequence if balancer has sent the initial response, or backoff sequence
+        // has never been initialized.
+        lbRpcRetryPolicy = backoffPolicyProvider.get();
+      }
+      // Backoff only when balancer wasn't working previously.
+      if (!initialResponseReceived) {
+        // The back-off policy determines the interval between consecutive RPC upstarts, thus the
+        // actual delay may be smaller than the value from the back-off policy, or even negative,
+        // depending how much time was spent in the previous RPC.
+        delayNanos =
+            prevLbRpcStartNanos + lbRpcRetryPolicy.nextBackoffNanos() - time.currentTimeNanos();
+      }
+      if (delayNanos <= 0) {
+        startLbRpc();
+      } else {
+        lbRpcRetryTimer = new LbRpcRetryTask();
+        lbRpcRetryTimer.schedule(delayNanos);
+      }
     }
 
     void close(@Nullable Exception error) {

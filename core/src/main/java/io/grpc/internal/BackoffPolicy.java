@@ -19,8 +19,8 @@ package io.grpc.internal;
 /**
  * Determines how long to wait before doing some action (typically a retry, or a reconnect).
  */
-interface BackoffPolicy {
-  interface Provider {
+public interface BackoffPolicy {
+  public interface Provider {
     BackoffPolicy get();
   }
 
