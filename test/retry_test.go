@@ -113,7 +113,7 @@ func TestRetryUnary(t *testing.T) {
 }
 
 func TestRetryDisabledByDefault(t *testing.T) {
-	if strings.EqualFold(os.Getenv(envConfigStickinessStr), "on") {
+	if strings.EqualFold(os.Getenv("GRPC_GO_RETRY"), "on") {
 		return
 	}
 	i := -1
