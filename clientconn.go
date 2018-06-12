@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -486,6 +487,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 		blockingpicker: newPickerWrapper(),
 	}
+	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	cc.dopts = defaultDialOptions()
@@ -722,6 +724,7 @@ type ClientConn struct {
 	preBalancerName string // previous balancer name.
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
+	retryThrottler  atomic.Value
 
 	channelzID          int64 // channelz unique identification number
 	czmu                sync.RWMutex
@@ -729,9 +732,6 @@ type ClientConn struct {
 	callsSucceeded      int64
 	callsFailed         int64
 	lastCallStartedTime time.Time
-
-	retryMu     sync.Mutex
-	retryTokens float64 // TODO(dfawley): replace with atomic and remove lock.
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -1059,6 +1059,19 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	cc.mu.Lock()
 	cc.scRaw = js
 	cc.sc = sc
+
+	if sc.retryThrottling != nil {
+		newThrottler := &retryThrottler{
+			tokens: sc.retryThrottling.MaxTokens,
+			max:    sc.retryThrottling.MaxTokens,
+			thresh: sc.retryThrottling.MaxTokens / 2,
+			ratio:  sc.retryThrottling.TokenRatio,
+		}
+		cc.retryThrottler.Store(newThrottler)
+	} else {
+		cc.retryThrottler.Store((*retryThrottler)(nil))
+	}
+
 	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
 		if cc.curBalancerName == grpclbName {
 			// If current balancer is grpclb, there's at least one grpclb
@@ -1071,12 +1084,6 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.switchBalancer(*sc.LB)
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
-	}
-
-	if sc.retryThrottling != nil {
-		cc.retryMu.Lock()
-		cc.retryTokens = sc.retryThrottling.MaxTokens
-		cc.retryMu.Unlock()
 	}
 
 	if envConfigStickinessOn {
@@ -1626,40 +1633,41 @@ func (ac *addrConn) incrCallsFailed() {
 	ac.czmu.Unlock()
 }
 
-// throttleRetry subtracts a retry token from the pool and returns whether a
-// retry should be throttled (disallowed) based upon the retry throttling policy
-// in the service config.
-func (cc *ClientConn) throttleRetry() bool {
-	rtp := cc.sc.retryThrottling
-	if cc.dopts.disableRetry {
-		return true
-	}
-	if rtp == nil {
-		return false
-	}
-	cc.retryMu.Lock()
-	defer cc.retryMu.Unlock()
-	cc.retryTokens--
-	if cc.retryTokens < 0 {
-		cc.retryTokens = 0
-	}
-	if cc.retryTokens <= rtp.MaxTokens/2 {
-		return true
-	}
-	return false
+type retryThrottler struct {
+	max    float64
+	thresh float64
+	ratio  float64
+
+	mu     sync.Mutex
+	tokens float64 // TODO(dfawley): replace with atomic and remove lock.
 }
 
-func (cc *ClientConn) successfulRPC() {
-	rtp := cc.sc.retryThrottling
-	if cc.dopts.disableRetry || rtp == nil {
+// throttle subtracts a retry token from the pool and returns whether a retry
+// should be throttled (disallowed) based upon the retry throttling policy in
+// the service config.
+func (rt *retryThrottler) throttle() bool {
+	if rt == nil {
+		return false
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.tokens--
+	if rt.tokens < 0 {
+		rt.tokens = 0
+	}
+	return rt.tokens <= rt.thresh
+}
+
+func (rt *retryThrottler) successfulRPC() {
+	if rt == nil {
 		return
 	}
-	cc.retryMu.Lock()
-	cc.retryTokens += rtp.TokenRatio
-	if cc.retryTokens > rtp.MaxTokens {
-		cc.retryTokens = rtp.MaxTokens
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.tokens += rt.ratio
+	if rt.tokens > rt.max {
+		rt.tokens = rt.max
 	}
-	cc.retryMu.Unlock()
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
