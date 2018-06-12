@@ -3,6 +3,6 @@ dependencies {
     compile project(':grpc-core'),
             libraries.google_auth_credentials
     testCompile project(':grpc-testing'),
-                libraries.oauth_client
+            libraries.oauth_client
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }

@@ -28,7 +28,7 @@ dependencies {
     }
 
     testCompile project(':grpc-context').sourceSets.test.output,
-                project(':grpc-testing')
+            project(':grpc-testing')
 
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
@@ -41,5 +41,8 @@ javadoc {
 
 animalsniffer {
     // Don't check sourceSets.jmh
-    sourceSets = [sourceSets.main, sourceSets.test]
+    sourceSets = [
+        sourceSets.main,
+        sourceSets.test
+    ]
 }

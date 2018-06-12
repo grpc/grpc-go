@@ -42,8 +42,8 @@ project(':grpc-benchmarks').projectDir = "$rootDir/benchmarks" as File
 project(':grpc-services').projectDir = "$rootDir/services" as File
 
 if (settings.hasProperty('skipCodegen') && skipCodegen.toBoolean()) {
-  println '*** Skipping the build of codegen and compilation of proto files because skipCodegen=true'
+    println '*** Skipping the build of codegen and compilation of proto files because skipCodegen=true'
 } else {
-  include ":grpc-compiler"
-  project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
+    include ":grpc-compiler"
+    project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
 }

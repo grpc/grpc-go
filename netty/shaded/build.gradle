@@ -1,36 +1,28 @@
 buildscript {
-    repositories {
-        jcenter()
-    }
-    dependencies {
-        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
-    }
+    repositories { jcenter() }
+    dependencies { classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2' }
 }
 
 apply plugin: 'com.github.johnrengelman.shadow'
 
 description = "gRPC: Netty Shaded"
 
-sourceSets {
-    testShadow {}
-}
+sourceSets { testShadow {} }
 
 dependencies {
     compile project(':grpc-netty')
     runtime libraries.netty_tcnative
     testShadowCompile files(shadowJar),
-                      configurations.shadow,
-                      project(':grpc-testing-proto'),
-                      project(':grpc-testing'),
-                      libraries.truth
+            configurations.shadow,
+            project(':grpc-testing-proto'),
+            project(':grpc-testing'),
+            libraries.truth
     shadow project(':grpc-core')
 }
 
-artifacts {
-    // We want uploadArchives to handle the shadowJar; we don't care about
+artifacts { // We want uploadArchives to handle the shadowJar; we don't care about
     // uploadShadow
-    archives shadowJar
-}
+    archives shadowJar }
 
 shadowJar {
     classifier = null

@@ -1,13 +1,9 @@
 buildscript {
     repositories {
-        maven {
-            // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-        }
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     }
-    dependencies {
-        classpath libraries.protobuf_plugin
-    }
+    dependencies { classpath libraries.protobuf_plugin }
 }
 
 apply plugin: 'application'
@@ -41,23 +37,25 @@ dependencies {
 }
 
 compileJava {
-  // The Control.Void protobuf clashes
-  options.compilerArgs += ["-Xep:JavaLangClash:OFF"]
+    // The Control.Void protobuf clashes
+    options.compilerArgs += ["-Xep:JavaLangClash:OFF"]
 }
 
 configureProtoCompilation()
 
 def vmArgs = [
-        "-server",
-        "-Xms2g",
-        "-Xmx2g",
-        "-XX:+PrintGCDetails"
+    "-server",
+    "-Xms2g",
+    "-Xmx2g",
+    "-XX:+PrintGCDetails"
 ]
 
 task qps_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.AsyncClient"
     applicationName = "qps_client"
-    defaultJvmOpts = ["-javaagent:" + configurations.alpnagent.asPath] + vmArgs
+    defaultJvmOpts = [
+        "-javaagent:" + configurations.alpnagent.asPath
+    ].plus(vmArgs)
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -65,7 +63,9 @@ task qps_client(type: CreateStartScripts) {
 task openloop_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.OpenLoopClient"
     applicationName = "openloop_client"
-    defaultJvmOpts = ["-javaagent:" + configurations.alpnagent.asPath] + vmArgs
+    defaultJvmOpts = [
+        "-javaagent:" + configurations.alpnagent.asPath
+    ].plus(vmArgs)
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -80,7 +80,9 @@ task qps_server(type: CreateStartScripts) {
 task benchmark_worker(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.driver.LoadWorker"
     applicationName = "benchmark_worker"
-    defaultJvmOpts = ["-javaagent:" + configurations.alpnagent.asPath] + vmArgs
+    defaultJvmOpts = [
+        "-javaagent:" + configurations.alpnagent.asPath
+    ].plus(vmArgs)
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }

@@ -1,14 +1,10 @@
 buildscript {
     repositories {
-        maven {
-            // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-        }
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
         mavenLocal()
     }
-    dependencies {
-        classpath libraries.protobuf_plugin
-    }
+    dependencies { classpath libraries.protobuf_plugin }
 }
 
 apply plugin: 'com.google.protobuf'
@@ -26,36 +22,36 @@ dependencies {
 }
 
 compileTestJava {
-  // Protobuf-generated Lite produces quite a few warnings.
-  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked", "-Xlint:-fallthrough",
-        "-XepExcludedPaths:.*/build/generated/source/proto/.*"]
+    // Protobuf-generated Lite produces quite a few warnings.
+    options.compilerArgs += [
+        "-Xlint:-rawtypes",
+        "-Xlint:-unchecked",
+        "-Xlint:-fallthrough",
+        "-XepExcludedPaths:.*/build/generated/source/proto/.*"
+    ]
 }
 
 protobuf {
-  protoc {
-    if (project.hasProperty('protoc')) {
-      path = project.protoc
-    } else {
-      artifact = "com.google.protobuf:protoc:${protocVersion}"
+    protoc {
+        if (project.hasProperty('protoc')) {
+            path = project.protoc
+        } else {
+            artifact = "com.google.protobuf:protoc:${protocVersion}"
+        }
     }
-  }
-  plugins {
-    javalite {
-      if (project.hasProperty('protoc-gen-javalite')) {
-        path = project['protoc-gen-javalite']
-      } else {
-        artifact = libraries.protoc_lite
-      }
+    plugins {
+        javalite {
+            if (project.hasProperty('protoc-gen-javalite')) {
+                path = project['protoc-gen-javalite']
+            } else {
+                artifact = libraries.protoc_lite
+            }
+        }
     }
-  }
-  generateProtoTasks {
-    ofSourceSet('test')*.each { task ->
-      task.builtins {
-        remove java
-      }
-      task.plugins {
-        javalite {}
-      }
+    generateProtoTasks {
+        ofSourceSet('test')*.each { task ->
+            task.builtins { remove java }
+            task.plugins { javalite {} }
+        }
     }
-  }
 }

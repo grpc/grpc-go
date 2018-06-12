@@ -2,14 +2,10 @@ description = 'gRPC: Protobuf'
 
 buildscript {
     repositories {
-        maven {
-            // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-        }
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     }
-    dependencies {
-        classpath libraries.protobuf_plugin
-    }
+    dependencies { classpath libraries.protobuf_plugin }
 }
 
 dependencies {

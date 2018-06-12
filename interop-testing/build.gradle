@@ -5,15 +5,11 @@ startScripts.enabled = false
 
 // Add dependency on the protobuf plugin
 buildscript {
-  repositories {
-      maven {
-          // The google mirror is less flaky than mavenCentral()
-          url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-      }
-  }
-  dependencies {
-    classpath libraries.protobuf_plugin
-  }
+    repositories {
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
+    }
+    dependencies { classpath libraries.protobuf_plugin }
 }
 
 dependencies {
@@ -53,12 +49,12 @@ test {
 task test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceClient"
     applicationName = "test-client"
-    defaultJvmOpts = ["-javaagent:JAVAAGENT_APP_HOME" + configurations.alpnagent.singleFile.name]
+    defaultJvmOpts = [
+        "-javaagent:JAVAAGENT_APP_HOME" + configurations.alpnagent.singleFile.name
+    ]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + configurations.runtime
-    dependencies {
-        runtime configurations.alpnagent
-    }
+    dependencies { runtime configurations.alpnagent }
     doLast {
         unixScript.text = unixScript.text.replace('JAVAAGENT_APP_HOME', '\$APP_HOME/lib/')
         windowsScript.text = windowsScript.text.replace('JAVAAGENT_APP_HOME', '%APP_HOME%\\lib\\')
@@ -84,7 +80,10 @@ task stresstest_client(type: CreateStartScripts) {
     applicationName = "stresstest-client"
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + configurations.runtime
-    defaultJvmOpts = ["-verbose:gc", "-XX:+PrintFlagsFinal"]
+    defaultJvmOpts = [
+        "-verbose:gc",
+        "-XX:+PrintFlagsFinal"
+    ]
 }
 
 task http2_client(type: CreateStartScripts) {

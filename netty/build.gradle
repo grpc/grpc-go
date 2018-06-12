@@ -6,16 +6,18 @@ dependencies {
 
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output,
-                project(':grpc-testing'),
-                project(':grpc-testing-proto')
+            project(':grpc-testing'),
+            project(':grpc-testing-proto')
     testRuntime libraries.netty_tcnative,
-                libraries.conscrypt
+            libraries.conscrypt
     signature "org.codehaus.mojo.signature:java17:1.0@signature"
 }
 
 [compileJava, compileTestJava].each() {
-  // Netty retuns a lot of futures that we mostly don't care about.
-  it.options.compilerArgs += ["-Xep:FutureReturnValueIgnored:OFF"]
+    // Netty retuns a lot of futures that we mostly don't care about.
+    it.options.compilerArgs += [
+        "-Xep:FutureReturnValueIgnored:OFF"
+    ]
 }
 
 javadoc {
@@ -24,11 +26,7 @@ javadoc {
 }
 
 project.sourceSets {
-    main {
-        java {
-            srcDir "${projectDir}/third_party/netty/java"
-        }
-    }
+    main { java { srcDir "${projectDir}/third_party/netty/java" } }
 }
 
 test {

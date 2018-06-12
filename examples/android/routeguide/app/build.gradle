@@ -5,16 +5,14 @@ android {
     compileSdkVersion 27
 
     defaultConfig {
-    applicationId "io.grpc.routeguideexample"
+        applicationId "io.grpc.routeguideexample"
         minSdkVersion 14
         targetSdkVersion 27
         versionCode 1
         versionName "1.0"
     }
     buildTypes {
-        debug {
-            minifyEnabled false
-        }
+        debug { minifyEnabled false }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -28,25 +26,18 @@ android {
 }
 
 protobuf {
-    protoc {
-        artifact = 'com.google.protobuf:protoc:3.5.1-1'
-    }
+    protoc { artifact = 'com.google.protobuf:protoc:3.5.1-1' }
     plugins {
-        javalite {
-            artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0"
-        }
-        grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+        javalite { artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0" }
+        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
         all().each { task ->
             task.plugins {
                 javalite {}
-                grpc {
-                    // Options added to --grpc_out
-                    option 'lite'
-                }
+                grpc { // Options added to --grpc_out
+                    option 'lite' }
             }
         }
     }

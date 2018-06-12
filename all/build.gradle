@@ -4,27 +4,23 @@ description = "gRPC: All"
 
 buildscript {
     repositories {
-        maven {
-            // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-        }
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     }
-    dependencies {
-        classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.0.1'
-    }
+    dependencies { classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.0.1' }
 }
 
 def subprojects = [
-  project(':grpc-auth'),
-  project(':grpc-core'),
-  project(':grpc-context'),
-  project(':grpc-netty'),
-  project(':grpc-okhttp'),
-  project(':grpc-protobuf'),
-  project(':grpc-protobuf-lite'),
-  project(':grpc-protobuf-nano'),
-  project(':grpc-stub'),
-  project(':grpc-testing'),
+    project(':grpc-auth'),
+    project(':grpc-core'),
+    project(':grpc-context'),
+    project(':grpc-netty'),
+    project(':grpc-okhttp'),
+    project(':grpc-protobuf'),
+    project(':grpc-protobuf-lite'),
+    project(':grpc-protobuf-nano'),
+    project(':grpc-stub'),
+    project(':grpc-testing'),
 ]
 
 for (subproject in rootProject.subprojects) {
@@ -56,8 +52,8 @@ task jacocoMerge(type: JacocoMerge) {
     mustRunAfter(subprojects.jacocoTestReport.mustRunAfter)
     destinationFile = file("${buildDir}/jacoco/test.exec")
     executionData = files(subprojects.jacocoTestReport.executionData)
-        .plus(project(':grpc-interop-testing').jacocoTestReport.executionData)
-        .filter { f -> f.exists() }
+            .plus(project(':grpc-interop-testing').jacocoTestReport.executionData)
+            .filter { f -> f.exists() }
 }
 
 jacocoTestReport {
@@ -72,7 +68,9 @@ jacocoTestReport {
     classDirectories = files(subprojects.sourceSets.main.output)
     classDirectories = files(classDirectories.files.collect {
         fileTree(dir: it,
-                exclude: ['**/io/grpc/okhttp/internal/**'])
+        exclude: [
+            '**/io/grpc/okhttp/internal/**'
+        ])
     })
 }
 
@@ -80,6 +78,4 @@ coveralls {
     sourceDirs = subprojects.sourceSets.main.allSource.srcDirs.flatten()
 }
 
-tasks.coveralls {
-    dependsOn(jacocoTestReport)
-}
+tasks.coveralls { dependsOn(jacocoTestReport) }

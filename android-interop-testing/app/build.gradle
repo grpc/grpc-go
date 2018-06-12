@@ -14,26 +14,19 @@ android {
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
-        debug {
-            minifyEnabled false
-        }
+        debug { minifyEnabled false }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    lintOptions {
-        disable 'InvalidPackage', 'HardcodedText'
-    }
+    lintOptions { disable 'InvalidPackage', 'HardcodedText' }
 }
 
 protobuf {
-    protoc {
-        artifact = 'com.google.protobuf:protoc:3.5.1-1'
-    }
+    protoc { artifact = 'com.google.protobuf:protoc:3.5.1-1' }
     plugins {
-        grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
@@ -47,10 +40,8 @@ protobuf {
             }
 
             task.plugins {
-                grpc {
-                    // Options added to --grpc_out
-                    option 'nano'
-                }
+                grpc { // Options added to --grpc_out
+                    option 'nano' }
             }
         }
     }
@@ -73,7 +64,5 @@ dependencies {
 }
 
 gradle.projectsEvaluated {
-    tasks.withType(JavaCompile) {
-        options.compilerArgs << "-Xlint:deprecation"
-    }
+    tasks.withType(JavaCompile) { options.compilerArgs << "-Xlint:deprecation" }
 }

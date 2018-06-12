@@ -17,9 +17,7 @@ dependencies {
     compileOnly libraries.truth
 
     testCompile project(':grpc-testing-proto'),
-                project(':grpc-core').sourceSets.test.output
+            project(':grpc-core').sourceSets.test.output
 }
 
-javadoc {
-  exclude 'io/grpc/internal/**'
-}
+javadoc { exclude 'io/grpc/internal/**' }

@@ -7,9 +7,7 @@ buildscript {
         google()
         jcenter()
     }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:3.0.1'
-    }
+    dependencies { classpath 'com.android.tools.build:gradle:3.0.1' }
 }
 
 allprojects {
@@ -30,22 +28,14 @@ android {
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
-        debug {
-            minifyEnabled false
-        }
+        debug { minifyEnabled false }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
-        }
-    }
-    lintOptions {
-        disable 'InvalidPackage'
-    }
+    testOptions { unitTests { includeAndroidResources = true } }
+    lintOptions { disable 'InvalidPackage' }
 }
 
 dependencies {

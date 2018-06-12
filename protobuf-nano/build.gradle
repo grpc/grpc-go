@@ -1,14 +1,10 @@
 // Add dependency on the protobuf plugin
 buildscript {
     repositories {
-        maven {
-            // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-        }
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     }
-    dependencies {
-        classpath libraries.protobuf_plugin
-    }
+    dependencies { classpath libraries.protobuf_plugin }
 }
 
 description = 'gRPC: Protobuf Nano'
@@ -23,16 +19,14 @@ dependencies {
 configureProtoCompilation()
 
 if (project.hasProperty('protobuf')) {
-  protobuf {
-    generateProtoTasks {
-      all().each { task ->
-        task.builtins {
-          remove java
-          javanano {
-            option 'ignore_services=true'
-          }
+    protobuf {
+        generateProtoTasks {
+            all().each { task ->
+                task.builtins {
+                    remove java
+                    javanano { option 'ignore_services=true' }
+                }
+            }
         }
-      }
     }
-  }
 }
