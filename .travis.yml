@@ -11,6 +11,8 @@ matrix:
   include:
   - go: 1.10.x
     env: RUN386=1
+  - go: 1.10.x
+    env: GRPC_GO_RETRY=on
 
 go_import_path: google.golang.org/grpc
 
