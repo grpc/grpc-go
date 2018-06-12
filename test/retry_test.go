@@ -21,8 +21,10 @@ package test
 import (
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,6 +113,9 @@ func TestRetryUnary(t *testing.T) {
 }
 
 func TestRetryDisabledByDefault(t *testing.T) {
+	if strings.EqualFold(os.Getenv(envConfigStickinessStr), "on") {
+		return
+	}
 	i := -1
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
