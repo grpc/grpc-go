@@ -1060,9 +1060,9 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
-	cc.mu.Lock()
+	cc.mu.RLock()
 	r := cc.resolverWrapper
-	cc.mu.Unlock()
+	cc.mu.RUnlock()
 	if r == nil {
 		return
 	}
