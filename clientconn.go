@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
@@ -100,7 +101,7 @@ type dialOptions struct {
 	streamInt   StreamClientInterceptor
 	cp          Compressor
 	dc          Decompressor
-	bs          backoffStrategy
+	bs          backoff.Strategy
 	block       bool
 	insecure    bool
 	timeout     time.Duration
@@ -278,17 +279,17 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // Use WithBackoffMaxDelay until more parameters on BackoffConfig are opened up
 // for use.
 func WithBackoffConfig(b BackoffConfig) DialOption {
-	// Set defaults to ensure that provided BackoffConfig is valid and
-	// unexported fields get default values.
-	setDefaults(&b)
-	return withBackoff(b)
+
+	return withBackoff(backoff.Exponential{
+		MaxDelay: b.MaxDelay,
+	})
 }
 
 // withBackoff sets the backoff strategy used for connectRetryNum after a
 // failed connection attempt.
 //
 // This can be exported if arbitrary backoff strategies are allowed by gRPC.
-func withBackoff(bs backoffStrategy) DialOption {
+func withBackoff(bs backoff.Strategy) DialOption {
 	return func(o *dialOptions) {
 		o.bs = bs
 	}
@@ -540,7 +541,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 	if cc.dopts.bs == nil {
-		cc.dopts.bs = DefaultBackoffConfig
+		cc.dopts.bs = backoff.Exponential{
+			MaxDelay: DefaultBackoffConfig.MaxDelay,
+		}
 	}
 	if cc.dopts.resolverBuilder == nil {
 		// Only try to parse target when resolver builder is not already set.
@@ -1211,7 +1214,7 @@ func (ac *addrConn) resetTransport() error {
 			// This means either a successful HTTP2 connection was established
 			// or this is the first time this addrConn is trying to establish a
 			// connection.
-			backoffFor := ac.dopts.bs.backoff(connectRetryNum) // time.Duration.
+			backoffFor := ac.dopts.bs.Backoff(connectRetryNum) // time.Duration.
 			// This will be the duration that dial gets to finish.
 			dialDuration := getMinConnectTimeout()
 			if backoffFor > dialDuration {
