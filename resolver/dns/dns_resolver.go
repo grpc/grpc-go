@@ -51,7 +51,8 @@ const (
 )
 
 var (
-	errMissingAddr = errors.New("missing address")
+	errMissingAddr   = errors.New("dns resolver: missing address")
+	errEndsWithColon = errors.New("dns resolver: address ends with colon")
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
@@ -297,7 +298,6 @@ func formatIP(addr string) (addrIP string, ok bool) {
 // target: "ipv4-host:80" returns host: "ipv4-host", port: "80"
 // target: "[ipv6-host]" returns host: "ipv6-host", port: "443"
 // target: ":80" returns host: "localhost", port: "80"
-// target: ":" returns host: "localhost", port: "443"
 func parseTarget(target string) (host, port string, err error) {
 	if target == "" {
 		return "", "", errMissingAddr
@@ -307,14 +307,14 @@ func parseTarget(target string) (host, port string, err error) {
 		return target, defaultPort, nil
 	}
 	if host, port, err = net.SplitHostPort(target); err == nil {
+		if port == "" {
+			// If the port field is empty (target ends with colon), e.g. "[::1]:", this is an error.
+			return "", "", errEndsWithColon
+		}
 		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
 		if host == "" {
 			// Keep consistent with net.Dial(): If the host is empty, as in ":80", the local system is assumed.
 			host = "localhost"
-		}
-		if port == "" {
-			// If the port field is empty(target ends with colon), e.g. "[::1]:", defaultPort is used.
-			port = defaultPort
 		}
 		return host, port, nil
 	}
