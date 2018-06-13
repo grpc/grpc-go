@@ -28,6 +28,7 @@ import io.grpc.Status;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.ResponseParameters;
 import io.grpc.testing.integration.Messages.SimpleRequest;
@@ -109,9 +110,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
       int offset = random.nextInt(
           compressable ? compressableBuffer.size() : uncompressableBuffer.size());
       ByteString payload = generatePayload(dataBuffer, offset, req.getResponseSize());
-      responseBuilder.getPayloadBuilder()
-          .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
-          .setBody(payload);
+      responseBuilder.setPayload(
+          Payload.newBuilder()
+              .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
+              .setBody(payload));
     }
 
     if (req.hasResponseStatus()) {
@@ -421,9 +423,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
           StreamingOutputCallResponse.newBuilder();
       ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;
       ByteString payload = generatePayload(dataBuffer, offset, length);
-      responseBuilder.getPayloadBuilder()
-          .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
-          .setBody(payload);
+      responseBuilder.setPayload(
+          Payload.newBuilder()
+              .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
+              .setBody(payload));
       return responseBuilder.build();
     }
   }

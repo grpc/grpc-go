@@ -2,6 +2,20 @@ apply plugin: 'com.android.application'
 apply plugin: 'com.google.protobuf'
 
 android {
+    sourceSets {
+        main {
+            java {
+                srcDirs += "${projectDir}/../../interop-testing/src/main/java/"
+                setIncludes(["io/grpc/android/integrationtest/**",
+                             "io/grpc/testing/integration/AbstractInteropTest.java",
+                             "io/grpc/testing/integration/TestServiceImpl.java",
+                             "io/grpc/testing/integration/Util.java"])
+            }
+            proto {
+                srcDirs += "${projectDir}/../../interop-testing/src/main/proto/"
+            }
+        }
+    }
     compileSdkVersion 26
 
     defaultConfig {
@@ -12,6 +26,7 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
     }
     buildTypes {
         debug { minifyEnabled false }
@@ -26,41 +41,47 @@ android {
 protobuf {
     protoc { artifact = 'com.google.protobuf:protoc:3.5.1-1' }
     plugins {
+        javalite { artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0" }
         grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
         all().each { task ->
-            task.builtins {
-                javanano {
-                    // Options added to --javanano_out
-                    option 'ignore_services=true'
-                    option 'enum_style=java'
-                }
-            }
-
             task.plugins {
-                grpc { // Options added to --grpc_out
-                    option 'nano' }
+                javalite {}
+                grpc {
+                    // Options added to --grpc_out
+                    option 'lite'
+                }
             }
         }
     }
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:26.1.0'
-    compile 'com.android.support:support-annotations:27.1.1'
-    compile 'com.google.android.gms:play-services-base:12.0.1'
-    // You need to build grpc-java to obtain the grpc libraries below.
-    compile 'io.grpc:grpc-protobuf-nano:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-okhttp:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-stub:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-testing:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'javax.annotation:javax.annotation-api:1.2'
-    compile 'junit:junit:4.12'
+    implementation 'com.android.support:appcompat-v7:26.1.0'
+    implementation 'com.android.support:multidex:1.0.3'
+    implementation 'com.android.support:support-annotations:27.1.1'
+    implementation 'com.google.android.gms:play-services-base:15.0.1'
+    implementation ('com.google.auth:google-auth-library-oauth2-http:0.9.0') {
+        exclude group: 'org.apache.httpcomponents', module: 'httpclient'
+    }
+    implementation 'com.google.truth:truth:0.36'
+    implementation 'javax.annotation:javax.annotation-api:1.2'
+    implementation 'junit:junit:4.12'
 
-    androidTestCompile 'com.android.support.test:rules:1.0.1'
-    androidTestCompile 'com.android.support.test:runner:1.0.1'
+    // You need to build grpc-java to obtain the grpc libraries below.
+    implementation 'io.grpc:grpc-auth:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-okhttp:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-protobuf-lite:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-stub:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-testing:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+
+    // workaround for https://github.com/google/protobuf/issues/1889
+    protobuf 'com.google.protobuf:protobuf-java:3.0.2'
+
+    androidTestImplementation 'com.android.support.test:rules:1.0.1'
+    androidTestImplementation 'com.android.support.test:runner:1.0.1'
 }
 
 gradle.projectsEvaluated {

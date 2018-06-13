@@ -20,18 +20,14 @@ import android.annotation.TargetApi;
 import android.net.SSLCertificateSocketFactory;
 import android.os.Build;
 import android.support.annotation.Nullable;
-
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.okhttp.NegotiationType;
 import io.grpc.okhttp.OkHttpChannelBuilder;
-
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
@@ -42,8 +38,12 @@ import javax.security.auth.x500.X500Principal;
  * A helper class to create a OkHttp based channel.
  */
 class TesterOkHttpChannelBuilder {
-  public static ManagedChannel build(String host, int port, @Nullable String serverHostOverride,
-      boolean useTls, @Nullable InputStream testCa, @Nullable String androidSocketFactoryTls) {
+  public static ManagedChannel build(
+      String host,
+      int port,
+      @Nullable String serverHostOverride,
+      boolean useTls,
+      @Nullable InputStream testCa) {
     ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
         .maxInboundMessageSize(16 * 1024 * 1024);
     if (serverHostOverride != null) {
@@ -52,14 +52,8 @@ class TesterOkHttpChannelBuilder {
     }
     if (useTls) {
       try {
-        SSLSocketFactory factory;
-        if (androidSocketFactoryTls != null) {
-          factory = getSslCertificateSocketFactory(testCa, androidSocketFactoryTls);
-        } else {
-          factory = getSslSocketFactory(testCa);
-        }
-        ((OkHttpChannelBuilder) channelBuilder).negotiationType(NegotiationType.TLS);
-        ((OkHttpChannelBuilder) channelBuilder).sslSocketFactory(factory);
+        ((OkHttpChannelBuilder) channelBuilder).useTransportSecurity();
+        ((OkHttpChannelBuilder) channelBuilder).sslSocketFactory(getSslSocketFactory(testCa));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

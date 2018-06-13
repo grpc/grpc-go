@@ -25,9 +25,4 @@
         </activity>
     </application>
 
-    <instrumentation android:functionalTest="true"
-    android:label="@string/app_name"
-    android:name=".TesterInstrumentation"
-    android:targetPackage="io.grpc.android.integrationtest" />
-
 </manifest>

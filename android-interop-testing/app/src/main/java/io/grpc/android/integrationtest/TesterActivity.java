@@ -29,16 +29,29 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import com.google.android.gms.security.ProviderInstaller;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors.CheckedForwardingClientCall;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
 public class TesterActivity extends AppCompatActivity
-    implements ProviderInstaller.ProviderInstallListener {
+    implements ProviderInstaller.ProviderInstallListener, InteropTask.Listener {
+  private static final String LOG_TAG = "GrpcTesterActivity";
+
   private List<Button> buttons;
   private EditText hostEdit;
   private EditText portEdit;
   private TextView resultText;
   private CheckBox getCheckBox;
+  private CheckBox testCertCheckBox;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +68,7 @@ public class TesterActivity extends AppCompatActivity
     portEdit = (EditText) findViewById(R.id.port_edit_text);
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
+    testCertCheckBox = (CheckBox) findViewById(R.id.test_cert_checkbox);
 
     ProviderInstaller.installIfNeededAsync(this, this);
     // Disable buttons until the security provider installing finishes.
@@ -87,28 +101,39 @@ public class TesterActivity extends AppCompatActivity
     }
   }
 
+  @Override
+  public void onComplete(String result) {
+    resultText.setText(result);
+    enableButtons(true);
+  }
+
   private void startTest(String testCase) {
     ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(
         hostEdit.getWindowToken(), 0);
     enableButtons(false);
+    resultText.setText("Testing...");
+
     String host = hostEdit.getText().toString();
     String portStr = portEdit.getText().toString();
     int port = TextUtils.isEmpty(portStr) ? 8080 : Integer.valueOf(portStr);
 
-    // TODO (madongfly) support server_host_override, useTls and useTestCa in the App UI.
-    new InteropTester(testCase,
-        TesterOkHttpChannelBuilder.build(host, port, "foo.test.google.fr", true,
-            getResources().openRawResource(R.raw.ca), null),
-        new InteropTester.TestListener() {
-          @Override public void onPreTest() {
-            resultText.setText("Testing...");
-          }
+    String serverHostOverride;
+    InputStream testCert;
+    if (testCertCheckBox.isChecked()) {
+      serverHostOverride = "foo.test.google.fr";
+      testCert = getResources().openRawResource(R.raw.ca);
+    } else {
+      serverHostOverride = null;
+      testCert = null;
+    }
+    ManagedChannel channel =
+        TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, true, testCert);
 
-          @Override public void onPostTest(String result) {
-            resultText.setText(result);
-            enableButtons(true);
-          }
-        }, getCheckBox.isChecked()).execute();
+    List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
+    if (getCheckBox.isChecked()) {
+      interceptors.add(new SafeMethodChannelInterceptor());
+    }
+    new InteropTask(this, channel, interceptors, testCase).execute();
   }
 
   @Override
@@ -121,7 +146,21 @@ public class TesterActivity extends AppCompatActivity
   public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
     // The provider is helpful, but it is possible to succeed without it.
     // Hope that the system-provided libraries are new enough.
-    Log.w(InteropTester.LOG_TAG, "Failed installing security provider, error code: " + errorCode);
+    Log.w(LOG_TAG, "Failed installing security provider, error code: " + errorCode);
     enableButtons(true);
+  }
+
+  private static final class SafeMethodChannelInterceptor implements ClientInterceptor {
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      return new CheckedForwardingClientCall<ReqT, RespT>(
+          next.newCall(method.toBuilder().setSafe(true).build(), callOptions)) {
+        @Override
+        public void checkedStart(Listener<RespT> responseListener, Metadata headers) {
+          delegate().start(responseListener, headers);
+        }
+      };
+    }
   }
 }

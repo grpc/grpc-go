@@ -35,21 +35,19 @@ $ ../gradlew installDebug
 Then manually test it with the UI.
 
 
-Commandline test
+Instrumentation tests
 ----------------
 
-Run the test with arguments:
+Instrumentation tests must be run on a connected device or emulator. Run with the
+following gradle command:
+
 ```
-$ adb shell am instrument -w -e server_host <hostname or ip address> -e server_port <port> -e server_host_override foo.test.google.fr -e use_tls true -e use_test_ca true -e test_case all io.grpc.android.integrationtest/.TesterInstrumentation
+$ ../gradlew connectedAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.server_host=10.0.2.2 \
+    -Pandroid.testInstrumentationRunnerArguments.server_port=8080 \
+    -Pandroid.testInstrumentationRunnerArguments.use_tls=true \
+    -Pandroid.testInstrumentationRunnerArguments.server_host_override=foo.test.google.fr \
+    -Pandroid.testInstrumentationRunnerArguments.use_test_ca=true \
+    -Pandroid.testInstrumentationRunnerArguments.test_case=all
 ```
 
-If the test passed successfully, it will output:
-```
-INSTRUMENTATION_RESULT: grpc test result=Success!
-INSTRUMENTATION_CODE: -1
-```
-otherwise, output something like:
-```
-INSTRUMENTATION_RESULT: grpc test result=Failed... : <exception stacktrace if applicable>
-INSTRUMENTATION_CODE: 0
-```
