@@ -33,13 +33,34 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// socketOptionGetter defines the function type that a getter function for socket
+// options must implement. It takes an empty interface and returns a SocketOptionData
+// interface.
+type socketOptionGetter func(interface{}) SocketOptionData
+
+// SocketOptionData defines the interface that a socketOptionGetter should return.
+// GRPC INTERNAL USAGE ONLY.
+type SocketOptionData interface{}
+
 var (
-	db    dbWrapper
-	idGen idGenerator
+	db       dbWrapper
+	idGen    idGenerator
+	curState int32
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
 	EntryPerPage = 50
-	curState     int32
+	// GetSocketOption is the socket option getter function to be used when
+	// obtaining the socket channelz metric.
+	// If user doesn't import "google.golang.org/grpc/channelz/socketopt", the default
+	// getter function will always return nil.
+	// GRPC INTERNAL USAGE ONLY.
+	GetSocketOption socketOptionGetter
 )
+
+func init() {
+	GetSocketOption = func(interface{}) SocketOptionData {
+		return nil
+	}
+}
 
 // TurnOn turns on channelz data collection.
 func TurnOn() {

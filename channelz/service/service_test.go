@@ -25,11 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 )
 
 func init() {
@@ -92,11 +94,11 @@ type dummySocket struct {
 	lastMessageReceivedTimestamp     time.Time
 	localFlowControlWindow           int64
 	remoteFlowControlWindow          int64
-	//socket options
-	localAddr  net.Addr
-	remoteAddr net.Addr
-	// Security
-	remoteName string
+	socketOptions                    *channelz.SocketOptionData
+	localAddr                        net.Addr
+	remoteAddr                       net.Addr
+	security                         credentials.ChannelzSecurityValue
+	remoteName                       string
 }
 
 func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
@@ -113,11 +115,11 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageReceivedTimestamp:     d.lastMessageReceivedTimestamp,
 		LocalFlowControlWindow:           d.localFlowControlWindow,
 		RemoteFlowControlWindow:          d.remoteFlowControlWindow,
-		//socket options
-		LocalAddr:  d.localAddr,
-		RemoteAddr: d.remoteAddr,
-		// Security
-		RemoteName: d.remoteName,
+		SocketOptions:                    d.socketOptions,
+		LocalAddr:                        d.localAddr,
+		RemoteAddr:                       d.remoteAddr,
+		Security:                         d.security,
+		RemoteName:                       d.remoteName,
 	}
 }
 
@@ -162,6 +164,21 @@ func serverProtoToStruct(s *channelzpb.Server) *dummyServer {
 		}
 	}
 	return ds
+}
+
+func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
+	switch v := protoSecurity.Model.(type) {
+	case *channelzpb.Security_Tls_:
+		return &credentials.TLSChannelzSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
+	case *channelzpb.Security_Other:
+		sv := &credentials.OtherChannelzSecurityValue{Name: v.Other.GetName()}
+		var x ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(v.Other.GetValue(), &x); err == nil {
+			sv.Value = x.Message
+		}
+		return sv
+	}
+	return nil
 }
 
 func protoToAddr(a *channelzpb.Address) net.Addr {
@@ -214,6 +231,9 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
 		ds.remoteFlowControlWindow = v.Value
 	}
+	if v := s.GetSecurity(); v != nil {
+		ds.security = protoToSecurity(v)
+	}
 	if local := s.GetLocal(); local != nil {
 		ds.localAddr = protoToAddr(local)
 	}
@@ -230,6 +250,20 @@ func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]strin
 		m[sr.SocketId] = sr.Name
 	}
 	return m
+}
+
+type OtherSecurityValue struct {
+	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
+	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
+}
+
+func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
+func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
+func (*OtherSecurityValue) ProtoMessage()    {}
+
+func init() {
+	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
+	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
 func TestGetTopChannels(t *testing.T) {
@@ -263,7 +297,7 @@ func TestGetTopChannels(t *testing.T) {
 	for _, c := range tcs {
 		channelz.RegisterChannel(c, 0, "")
 	}
-	s := newCZServer()
+	s := NewCZServer()
 	resp, _ := s.GetTopChannels(context.Background(), &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -307,7 +341,7 @@ func TestGetServers(t *testing.T) {
 	for _, s := range ss {
 		channelz.RegisterServer(s, "")
 	}
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetServers(context.Background(), &channelzpb.GetServersRequest{StartServerId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
@@ -334,7 +368,7 @@ func TestGetServerSockets(t *testing.T) {
 	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
 	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
@@ -365,7 +399,7 @@ func TestGetChannel(t *testing.T) {
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[0]})
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
@@ -393,7 +427,7 @@ func TestGetSubChannel(t *testing.T) {
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
-	svr := newCZServer()
+	svr := NewCZServer()
 	resp, _ := svr.GetSubchannel(context.Background(), &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
 	metrics := resp.GetSubchannel()
 	want := map[int64]string{
@@ -460,8 +494,25 @@ func TestGetSocket(t *testing.T) {
 		{
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
 		},
+		{
+			security: &credentials.TLSChannelzSecurityValue{
+				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
+			},
+		},
+		{
+			security: &credentials.OtherChannelzSecurityValue{
+				Name: "XXXX",
+			},
+		},
+		{
+			security: &credentials.OtherChannelzSecurityValue{
+				Name:  "YYYY",
+				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
+			},
+		},
 	}
-	svr := newCZServer()
+	svr := NewCZServer()
 	ids := make([]int64, len(ss))
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	for i, s := range ss {

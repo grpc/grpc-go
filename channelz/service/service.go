@@ -30,14 +30,32 @@ import (
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 )
+
+type socketOptConvert func(channelz.SocketOptionData) []*channelzpb.SocketOption
+
+var (
+	// SockoptToProto is the conversion function that translates socket option in
+	// channelz defined go struct to proto defined go struct.
+	// GRPC INTERNAL USAGE ONLY.
+	SockoptToProto socketOptConvert
+)
+
+func init() {
+	SockoptToProto = func(channelz.SocketOptionData) []*channelzpb.SocketOption {
+		return nil
+	}
+}
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
 	channelzgrpc.RegisterChannelzServer(s, &serverImpl{})
 }
 
-func newCZServer() channelzgrpc.ChannelzServer {
+// NewCZServer creates an instance of channelz server implementation.
+// FOR GRPC INTERNAL TESTING PURPOSE ONLY.
+func NewCZServer() channelzgrpc.ChannelzServer {
 	return &serverImpl{}
 }
 
@@ -128,6 +146,26 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 	return sc
 }
 
+func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security {
+	switch v := se.(type) {
+	case *credentials.TLSChannelzSecurityValue:
+		return &channelzpb.Security{Model: &channelzpb.Security_Tls_{Tls: &channelzpb.Security_Tls{
+			CipherSuite:       &channelzpb.Security_Tls_StandardName{StandardName: v.StandardName},
+			LocalCertificate:  v.LocalCertificate,
+			RemoteCertificate: v.RemoteCertificate,
+		}}}
+	case *credentials.OtherChannelzSecurityValue:
+		otherSecurity := &channelzpb.Security_OtherSecurity{
+			Name: v.Name,
+		}
+		if anyval, err := ptypes.MarshalAny(v.Value); err == nil {
+			otherSecurity.Value = anyval
+		}
+		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
+	}
+	return nil
+}
+
 func addrToProto(a net.Addr) *channelzpb.Address {
 	switch a.Network() {
 	case "udp":
@@ -174,6 +212,13 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 	}
 	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
 	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
+
+	if sm.SocketData.SocketOptions != nil {
+		s.Data.Option = SockoptToProto(sm.SocketData.SocketOptions)
+	}
+	if sm.SocketData.Security != nil {
+		s.Security = securityToProto(sm.SocketData.Security)
+	}
 
 	if sm.SocketData.LocalAddr != nil {
 		s.Local = addrToProto(sm.SocketData.LocalAddr)
