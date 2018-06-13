@@ -415,6 +415,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			t.updateWindow(s, uint32(n))
 		},
 	}
+	// Register the stream with loopy.
+	t.controlBuf.put(&registerStream{
+		streamID: s.id,
+		wq:       s.wq,
+	})
 	handle(s)
 	return
 }
@@ -732,7 +737,6 @@ func (t *http2Server) writeHeaderLocked(s *Stream) {
 		onWrite: func() {
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 		},
-		wq: s.wq,
 	})
 	if t.stats != nil {
 		// Note: WireLength is not set in outHeader.
