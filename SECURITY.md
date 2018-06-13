@@ -289,8 +289,8 @@ NettyChannelBuilder or OkHttpChannelBuilder, respectively.
 ```java
 Server server = NettyServerBuilder.forPort(8443)
     .sslContext(GrpcSslContexts.forServer(certChainFile, privateKeyFile)
-        .trustManager(clientCertChainFile)
-        .clientAuth(ClientAuth.OPTIONAL)
+        .trustManager(clientCAsFile)
+        .clientAuth(ClientAuth.REQUIRE)
         .build());
 ```
 

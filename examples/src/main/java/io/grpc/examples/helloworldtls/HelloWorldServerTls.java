@@ -44,26 +44,26 @@ public class HelloWorldServerTls {
     private final int port;
     private final String certChainFilePath;
     private final String privateKeyFilePath;
-    private final String clientCertChainFilePath;
+    private final String trustCertCollectionFilePath;
 
     public HelloWorldServerTls(String host,
                                int port,
                                String certChainFilePath,
                                String privateKeyFilePath,
-                               String clientCertChainFilePath) {
+                               String trustCertCollectionFilePath) {
         this.host = host;
         this.port = port;
         this.certChainFilePath = certChainFilePath;
         this.privateKeyFilePath = privateKeyFilePath;
-        this.clientCertChainFilePath = clientCertChainFilePath;
+        this.trustCertCollectionFilePath = trustCertCollectionFilePath;
     }
 
     private SslContextBuilder getSslContextBuilder() {
         SslContextBuilder sslClientContextBuilder = SslContextBuilder.forServer(new File(certChainFilePath),
                 new File(privateKeyFilePath));
-        if (clientCertChainFilePath != null) {
-            sslClientContextBuilder.trustManager(new File(clientCertChainFilePath));
-            sslClientContextBuilder.clientAuth(ClientAuth.OPTIONAL);
+        if (trustCertCollectionFilePath != null) {
+            sslClientContextBuilder.trustManager(new File(trustCertCollectionFilePath));
+            sslClientContextBuilder.clientAuth(ClientAuth.REQUIRE);
         }
         return GrpcSslContexts.configure(sslClientContextBuilder,
                 SslProvider.OPENSSL);
@@ -110,7 +110,7 @@ public class HelloWorldServerTls {
         if (args.length < 4 || args.length > 5) {
             System.out.println(
                     "USAGE: HelloWorldServerTls host port certChainFilePath privateKeyFilePath " +
-                    "[clientCertChainFilePath]\n  Note: You only need to supply clientCertChainFilePath if you want " +
+                    "[trustCertCollectionFilePath]\n  Note: You only need to supply trustCertCollectionFilePath if you want " +
                     "to enable Mutual TLS.");
             System.exit(0);
         }

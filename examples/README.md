@@ -40,8 +40,8 @@ Running the hello world with TLS is the same as the normal hello world, but take
 **hello-world-tls-server**:
 
 ```text
-USAGE: HelloWorldServerTls host port certChainFilePath privateKeyFilePath [clientCertChainFilePath]
-  Note: You only need to supply clientCertChainFilePath if you want to enable Mutual TLS.
+USAGE: HelloWorldServerTls host port certChainFilePath privateKeyFilePath [trustCertCollectionFilePath]
+  Note: You only need to supply trustCertCollectionFilePath if you want to enable Mutual TLS.
 ```
 
 **hello-world-tls-client**:
@@ -103,7 +103,7 @@ openssl pkcs8 -topk8 -nocrypt -in server.key -out server.pem
 
 ```bash
 # Server
-./build/install/examples/bin/hello-world-server-tls mate 54440 ~/Downloads/sslcert/server.crt ~/Downloads/sslcert/server.pem ~/Downloads/sslcert/client.crt
+./build/install/examples/bin/hello-world-server-tls mate 54440 ~/Downloads/sslcert/server.crt ~/Downloads/sslcert/server.pem ~/Downloads/sslcert/ca.crt
 # Client
 ./build/install/examples/bin/hello-world-client-tls mate 54440 ~/Downloads/sslcert/ca.crt ~/Downloads/sslcert/client.crt ~/Downloads/sslcert/client.pem
 ```
