@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
+	"time"
 )
 
 // recvMsg represents the received msg from the transport. All transport
@@ -487,8 +488,8 @@ type TargetInfo struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, onSuccess, onGoAway, onClose func()) (ClientTransport, error) {
-	return newHTTP2Client(connectCtx, ctx, target, opts, onSuccess, onGoAway, onClose)
+func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline, onGoAway, onClose func()) (ClientTransport, error) {
+	return newHTTP2Client(connectCtx, ctx, target, opts, deadline, onSuccess, onDeadline, onGoAway, onClose)
 }
 
 // Options provides additional hints and information for message

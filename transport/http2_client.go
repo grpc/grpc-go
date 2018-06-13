@@ -121,8 +121,10 @@ type http2Client struct {
 	lastMsgSent       time.Time
 	lastMsgRecv       time.Time
 
-	onGoAway func()
-	onClose  func()
+	deadline             time.Time
+	didNotReceivePreface func() // TODO(deklerk): find a better name
+	onGoAway             func()
+	onClose              func()
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -151,7 +153,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess, onGoAway, onClose func()) (_ ClientTransport, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline, onGoAway, onClose func()) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -235,6 +237,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		maxConcurrentStreams:  defaultMaxStreamsClient,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
+		deadline:              deadline,
+		didNotReceivePreface:  onDeadline,
 		onGoAway:              onGoAway,
 		onClose:               onClose,
 	}
@@ -265,6 +269,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
+	conn.SetReadDeadline(t.deadline)
 	if t.kp.Time != infinity {
 		t.keepaliveEnabled = true
 		go t.keepalive()
@@ -1126,15 +1131,17 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		t.Close()
+		t.didNotReceivePreface()
+		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}
+	t.conn.SetReadDeadline(time.Time{}) // reset deadline once we get the settings frame (we didn't time out, yay!)
 	if t.keepaliveEnabled {
 		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.Close()
+		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}
 	t.onSuccess()

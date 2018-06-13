@@ -1,11 +1,3 @@
-/**
-TODO(deklerk): so, let's not do recursion. let's have one master for loop
-- onDeadline: cause loop to step
-- onClose: cause loop to step
-- onGoAway: cause loop to step
-- onPrefaceReceipt: return?? but then future onClose/etc would not work
-*/
-
 /*
  *
  * Copyright 2014 gRPC authors.
@@ -870,11 +862,11 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // Caller needs to make sure len(addrs) > 0.
 func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	ac := &addrConn{
-		cc:         cc,
-		addrs:      addrs,
-		dopts:      cc.dopts,
-		transports: map[int32]transport.ClientTransport{},
-		donezo:     make(chan struct{}, 1),
+		cc:                  cc,
+		addrs:               addrs,
+		dopts:               cc.dopts,
+		transports:          map[int32]transport.ClientTransport{},
+		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -960,16 +952,7 @@ func (ac *addrConn) connect() error {
 	ac.mu.Unlock()
 
 	// Start a goroutine connecting to the server asynchronously.
-	go func() {
-		if err := ac.continuallyRejuvenateTransport(); err != nil {
-			grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
-			if err != errConnClosing {
-				// Keep this ac in cc.conns, to get the reason it's torn down.
-				ac.tearDown(err)
-			}
-			return
-		}
-	}()
+	go ac.resetTransport(true)
 	return nil
 }
 
@@ -1147,7 +1130,7 @@ type addrConn struct {
 	tearDownErr error // The reason this addrConn is torn down.
 
 	backoffIdx int
-	// backoffDeadline is the time until which continuallyRejuvenateTransport needs to
+	// backoffDeadline is the time until which resetTransport needs to
 	// wait before increasing backoffIdx count.
 	backoffDeadline time.Time
 	// connectDeadline is the time by which all connection
@@ -1161,7 +1144,7 @@ type addrConn struct {
 	callsFailed         int64
 	lastCallStartedTime time.Time
 
-	donezo chan struct{}
+	successfulHandshake bool
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1194,62 +1177,46 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 	}
 }
 
-// continuallyRejuvenateTransport makes sure that a healthy ac.transport exists.
-// This method will close the transport when it encounters an error, or on
-// goaway, or on deadline waiting for server preface, or when the clientconn is
-// closed. In the event of any of these conditions, this method will close
-// the existing transport and replace it with a healthy transport. Each iteration
-// creating a new transport will try a different address that the resolver
-// resolved to, until it has tried all addresses. Once it has tried all addresses,
-// it will re-resolve to get a new address list.
+// resetTransport makes sure that a healthy ac.transport exists.
 //
-// This method has backoff built in. The backoff amount starts at 0 and increases
-// each time resolution occurs (addresses are exhausted). The backoff amount is
-// reset to 0 each time a server preface is encountered.
+// The transport will close when it encounters an error, or on GOAWAY,
+// or on deadline waiting for server preface, or when the clientconn is
+// closed. Each iteration creating a new transport will try a different
+// address that the resolver resolved to, until it has tried all
+// addresses. Once it has tried all addresses, it will re-resolve to get
+// a new address list. Once a successful server preface has been
+// received, the list is re-resolved and the next reset attempt will
+// try from the beginning.
+//
+// This method has backoff built in. The backoff amount starts at 0 and
+// increases each time resolution occurs (addresses are exhausted). The
+// backoff amount is reset to 0 each time a server preface is received.
 //
 // If the DialOption WithWaitForHandshake was set, resetTrasport returns
-// successfully only after server settings are received.
-//
-// TODO(bar) make sure all state transitions are valid.
-func (ac *addrConn) continuallyRejuvenateTransport() error {
-	c := make(chan struct{}, 1)
-	c <- struct{}{}
-	first := true
-
+// successfully only after server preface is received.
+func (ac *addrConn) resetTransport(resolveNow bool) {
 	for {
-		select {
-		case <-c:
-		case <-ac.donezo:
-			return nil
+		if resolveNow {
+			ac.mu.Lock()
+			ac.cc.resolveNow(resolver.ResolveNowOption{})
+			ac.mu.Unlock()
 		}
 
-		if first {
-			first = false
-		} else {
-			err := ac.nextAddr()
-			if err != nil {
-				grpclog.Error(err)
-			}
+		err := ac.nextAddr()
+		if err != nil {
+			grpclog.Error(err)
 		}
 
 		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
+		if ac.state == connectivity.Shutdown || ac.cc.GetState() == connectivity.Shutdown { // TODO(deklerk) we probably should not have to do ac.cc.GetState, but without it TestSwitchBalancer fails
 			ac.mu.Unlock()
-			select {
-			case c <- struct{}{}:
-			default:
-			}
-			continue
+			return
 		}
 		if ac.ready != nil {
 			close(ac.ready)
 			ac.ready = nil
 		}
 		ac.transport = nil
-		ac.mu.Unlock()
-		ac.cc.mu.RLock()
-		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
-		ac.cc.mu.RUnlock()
 
 	ac.mu.Lock()
 	backoffIdx := ac.backoffIdx
@@ -1262,62 +1229,37 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 			dialDuration = backoffFor
 		}
 		start := time.Now()
-		ac.backoffDeadline = start.Add(backoffFor)
+		deadline := start.Add(backoffFor) // TODO(deklerk): why isn't it ac.connectDeadline??
+		ac.backoffDeadline = deadline
 		ac.connectDeadline = start.Add(dialDuration)
 
 		ac.mu.Unlock()
 
-		onDeadline := func() {
-			ac.mu.Lock()
-			if ac.backoffDeadline.IsZero() {
-				ac.mu.Unlock()
-				return
-			}
+		ac.cc.mu.RLock()
+		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
+		ac.cc.mu.RUnlock()
 
-			// No server preface received until deadline. Kill the connection.
-			grpclog.Warningf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
-			t := ac.transport
-			ac.mu.Unlock()
-			if t == nil {
-				return
-			}
-			t.Close()
-		}
-
-		ac.mu.Lock()
-		timer := time.AfterFunc(ac.connectDeadline.Sub(time.Now()), onDeadline)
-		ac.mu.Unlock()
 		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
 
 		onGoAway := func() {
-			timer.Stop()
-
 			ac.mu.Lock()
 			ac.adjustParams(ac.transport.GetGoAwayReason())
 			ac.mu.Unlock()
 		}
 
-		// onClose causes another reconnect loop.
 		onClose := func() {
-			timer.Stop()
-
 			ac.mu.Lock()
 			delete(ac.transports, newTrID)
 			ac.transport = nil
 			ac.mu.Unlock()
-
-			select {
-			case c <- struct{}{}:
-			default:
-			}
+			ac.resetTransport(false)
 		}
 
 		ac.mu.Lock()
 
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
-			c <- struct{}{}
-			continue
+			return
 		}
 
 		ac.printf("connecting")
@@ -1326,32 +1268,54 @@ func (ac *addrConn) continuallyRejuvenateTransport() error {
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
 
-		// copy ac.addrs in case of race
 		addr := ac.addrs[ac.addrIdx]
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, onGoAway, onClose); err != nil {
-			select {
-			case c <- struct{}{}:
-			default:
+		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, deadline, onGoAway, onClose); err != nil {
+			// errReadTimeOut indicates that the server preface was not received before
+			// the deadline.
+			if err == errReadTimedOut {
+				return
 			}
+
+			timer := time.NewTimer(deadline.Sub(time.Now()))
+			select {
+			case <-timer.C:
+			case <-ac.ctx.Done():
+				timer.Stop()
+				return
+			}
+
+			continue
 		}
+
+		return
 	}
 }
 
+// TODO better name
+var errReadTimedOut = errors.New("read timed out")
+
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, onGoAway, onClose func()) error {
+func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, deadline time.Time, onGoAway, onClose func()) error {
+	timedOutWaitingForPreface := make(chan struct{})
+	onDeadline := func() {
+		close(timedOutWaitingForPreface)
+	}
+
 	target := transport.TargetInfo{
 		Addr:      addr.Addr,
 		Metadata:  addr.Metadata,
 		Authority: ac.cc.authority,
 	}
-	done := make(chan struct{})
+	prefaceReceived := make(chan struct{})
 
 	onPrefaceReceipt := func() {
+		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
-		close(done)
+		ac.successfulHandshake = true
+		close(prefaceReceived)
 		ac.backoffDeadline = time.Time{}
 		ac.connectDeadline = time.Time{}
 		ac.addrIdx = 0
@@ -1370,7 +1334,7 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 		copts.ChannelzParentID = ac.channelzID
 	}
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, deadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
 	if err != nil {
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
@@ -1388,7 +1352,10 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 
 	if ac.dopts.waitForHandshake {
 		select {
-		case <-done:
+		// TODO(deklerk): this should stop waiting and bail hard if t.Close was called in reader goroutine
+		case <-timedOutWaitingForPreface:
+			return errReadTimedOut
+		case <-prefaceReceived:
 		case <-ac.ctx.Done():
 		}
 	}
@@ -1419,9 +1386,18 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 
 // nextAddr increments the addrIdx if there are more addresses to try. If
 // there are no more addrs to try it will re-resolve, set addrIdx to 0, and
-// increment the backoffIdx
+// increment the backoffIdx.
 func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
+
+	// If a handshake has been observed, we expect the counters to have manually
+	// been adjusted and so we'll just re-resolve and return.
+	if ac.successfulHandshake {
+		ac.successfulHandshake = false
+		ac.cc.resolveNow(resolver.ResolveNowOption{})
+		ac.mu.Unlock()
+		return nil
+	}
 
 	if ac.addrIdx < len(ac.addrs)-1 {
 		ac.addrIdx++
@@ -1567,8 +1543,6 @@ func (ac *addrConn) tearDown(err error) {
 			grpclog.Error(err)
 		}
 	}
-
-	ac.donezo <- struct{}{}
 }
 
 func (ac *addrConn) getState() connectivity.State {
