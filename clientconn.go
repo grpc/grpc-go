@@ -279,14 +279,9 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // Use WithBackoffMaxDelay until more parameters on BackoffConfig are opened up
 // for use.
 func WithBackoffConfig(b BackoffConfig) DialOption {
-	// Set defaults to ensure that provided BackoffConfig is valid and
-	// unexported fields get default values.
-	updateDefaultsBackoffConfig(&b)
+
 	return withBackoff(backoff.Config{
-		MaxDelay:  b.MaxDelay,
-		BaseDelay: b.baseDelay,
-		Factor:    b.factor,
-		Jitter:    b.jitter,
+		MaxDelay: b.MaxDelay,
 	})
 }
 
@@ -547,10 +542,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = backoff.Config{
-			MaxDelay:  DefaultBackoffConfig.MaxDelay,
-			BaseDelay: DefaultBackoffConfig.baseDelay,
-			Factor:    DefaultBackoffConfig.factor,
-			Jitter:    DefaultBackoffConfig.jitter,
+			MaxDelay: DefaultBackoffConfig.MaxDelay,
 		}
 	}
 	if cc.dopts.resolverBuilder == nil {

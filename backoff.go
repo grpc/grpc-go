@@ -28,33 +28,11 @@ import (
 // DefaultBackoffConfig uses values specified for backoff in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 var DefaultBackoffConfig = BackoffConfig{
-	MaxDelay:  120 * time.Second,
-	baseDelay: 1.0 * time.Second,
-	factor:    1.6,
-	jitter:    0.2,
+	MaxDelay: 120 * time.Second,
 }
 
 // BackoffConfig defines the parameters for the default gRPC backoff strategy.
 type BackoffConfig struct {
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
-
-	// baseDelay is the amount of time to wait before retrying after the first
-	// failure.
-	baseDelay time.Duration
-
-	// factor is applied to the backoff after each retry.
-	factor float64
-
-	// jitter provides a range to randomize backoff delays.
-	jitter float64
-}
-
-func updateDefaultsBackoffConfig(bc *BackoffConfig) {
-	md := bc.MaxDelay
-	*bc = DefaultBackoffConfig
-
-	if md > 0 {
-		bc.MaxDelay = md
-	}
 }

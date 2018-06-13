@@ -504,7 +504,6 @@ func TestWithBackoffConfig(t *testing.T) {
 	defer leakcheck.Check(t)
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	expected := b
-	updateDefaultsBackoffConfig(&expected) // defaults should be set
 	testBackoffConfigSet(t, &expected, WithBackoffConfig(b))
 }
 
@@ -512,7 +511,6 @@ func TestWithBackoffMaxDelay(t *testing.T) {
 	defer leakcheck.Check(t)
 	md := DefaultBackoffConfig.MaxDelay / 2
 	expected := BackoffConfig{MaxDelay: md}
-	updateDefaultsBackoffConfig(&expected)
 	testBackoffConfigSet(t, &expected, WithBackoffMaxDelay(md))
 }
 
@@ -534,10 +532,7 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 	}
 
 	expectedValue := backoff.Config{
-		MaxDelay:  expected.MaxDelay,
-		BaseDelay: expected.baseDelay,
-		Factor:    expected.factor,
-		Jitter:    expected.jitter,
+		MaxDelay: expected.MaxDelay,
 	}
 	if actual != expectedValue {
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
