@@ -30,14 +30,14 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-	pdur "github.com/golang/protobuf/ptypes/duration"
+	durpb "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
-func convertToDuration(d *pdur.Duration) (sec int64, usec int64) {
+func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
 	if d != nil {
 		if dur, err := ptypes.Duration(d); err == nil {
 			sec = int64(int64(dur) / 1e9)
@@ -153,10 +153,10 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 		ds.remoteFlowControlWindow = v.Value
 	}
 	if v := pdata.GetOption(); v != nil {
-		ds.SocketOptions = protoToSocketOption(v)
+		ds.socketOptions = protoToSocketOption(v)
 	}
 	if v := s.GetSecurity(); v != nil {
-		ds.Security = protoToSecurity(v)
+		ds.security = protoToSecurity(v)
 	}
 	if local := s.GetLocal(); local != nil {
 		ds.localAddr = protoToAddr(local)
@@ -172,7 +172,7 @@ func TestGetSocketOptions(t *testing.T) {
 	channelz.NewChannelzStorage()
 	ss := []*dummySocket{
 		{
-			SocketOptions: &channelz.SocketOptionData{
+			socketOptions: &channelz.SocketOptionData{
 				Linger:      &unix.Linger{Onoff: 1, Linger: 2},
 				RecvTimeout: &unix.Timeval{Sec: 10, Usec: 1},
 				SendTimeout: &unix.Timeval{},

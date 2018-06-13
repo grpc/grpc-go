@@ -94,10 +94,10 @@ type dummySocket struct {
 	lastMessageReceivedTimestamp     time.Time
 	localFlowControlWindow           int64
 	remoteFlowControlWindow          int64
-	SocketOptions                    *channelz.SocketOptionData
+	socketOptions                    *channelz.SocketOptionData
 	localAddr                        net.Addr
 	remoteAddr                       net.Addr
-	Security                         credentials.ChannelzSecurityValue
+	security                         credentials.ChannelzSecurityValue
 	remoteName                       string
 }
 
@@ -115,10 +115,10 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageReceivedTimestamp:     d.lastMessageReceivedTimestamp,
 		LocalFlowControlWindow:           d.localFlowControlWindow,
 		RemoteFlowControlWindow:          d.remoteFlowControlWindow,
-		SocketOptions:                    d.SocketOptions,
+		SocketOptions:                    d.socketOptions,
 		LocalAddr:                        d.localAddr,
 		RemoteAddr:                       d.remoteAddr,
-		Security:                         d.Security,
+		Security:                         d.security,
 		RemoteName:                       d.remoteName,
 	}
 }
@@ -447,18 +447,18 @@ func TestGetSocket(t *testing.T) {
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
 		},
 		{
-			Security: &credentials.TLSChannelzSecurityValue{
+			security: &credentials.TLSChannelzSecurityValue{
 				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
 			},
 		},
 		{
-			Security: &credentials.OtherChannelzSecurityValue{
+			security: &credentials.OtherChannelzSecurityValue{
 				Name: "XXXX",
 			},
 		},
 		{
-			Security: &credentials.OtherChannelzSecurityValue{
+			security: &credentials.OtherChannelzSecurityValue{
 				Name:  "YYYY",
 				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
 			},
