@@ -28,6 +28,15 @@ import (
 	"google.golang.org/grpc/internal/grpcrand"
 )
 
+// Strategy defines the methodology for backing off after a grpc connection
+// failure.
+//
+type Strategy interface {
+	// Backoff returns the amount of time to wait before the next retry given
+	// the number of consecutive failures.
+	Backoff(retries int) time.Duration
+}
+
 const (
 	// baseDelay is the amount of time to wait before retrying after the first
 	// failure.
@@ -38,24 +47,16 @@ const (
 	jitter = 0.2
 )
 
-// Strategy defines the methodology for backing off after a grpc connection
-// failure.
-//
-type Strategy interface {
-	// Backoff returns the amount of time to wait before the next retry given
-	// the number of consecutive failures.
-	Backoff(retries int) time.Duration
-}
-
-// Config defines the parameters for the default gRPC backoff strategy.
-type Config struct {
+// Exponential implements exponential backoff algorithm as defined in
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+type Exponential struct {
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
 }
 
 // Backoff returns the amount of time to wait before the next retry given the
 // number of retries.
-func (bc Config) Backoff(retries int) time.Duration {
+func (bc Exponential) Backoff(retries int) time.Duration {
 	if retries == 0 {
 		return baseDelay
 	}

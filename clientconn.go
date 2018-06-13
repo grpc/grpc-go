@@ -280,7 +280,7 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // for use.
 func WithBackoffConfig(b BackoffConfig) DialOption {
 
-	return withBackoff(backoff.Config{
+	return withBackoff(backoff.Exponential{
 		MaxDelay: b.MaxDelay,
 	})
 }
@@ -541,7 +541,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 	if cc.dopts.bs == nil {
-		cc.dopts.bs = backoff.Config{
+		cc.dopts.bs = backoff.Exponential{
 			MaxDelay: DefaultBackoffConfig.MaxDelay,
 		}
 	}

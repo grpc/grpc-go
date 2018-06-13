@@ -526,12 +526,12 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 		t.Fatalf("backoff config not set")
 	}
 
-	actual, ok := conn.dopts.bs.(backoff.Config)
+	actual, ok := conn.dopts.bs.(backoff.Exponential)
 	if !ok {
 		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
 	}
 
-	expectedValue := backoff.Config{
+	expectedValue := backoff.Exponential{
 		MaxDelay: expected.MaxDelay,
 	}
 	if actual != expectedValue {
