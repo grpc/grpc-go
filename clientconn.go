@@ -150,6 +150,8 @@ func WithWriteBufferSize(s int) DialOption {
 
 // WithReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for each read syscall.
+// A negative value will disable read buffer for a connection so data framer can access the underlying
+// conn directly.
 func WithReadBufferSize(s int) DialOption {
 	return func(o *dialOptions) {
 		o.copts.ReadBufferSize = s

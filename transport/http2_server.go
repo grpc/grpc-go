@@ -134,7 +134,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		writeBufSize = config.WriteBufferSize
 	}
 	readBufSize := defaultReadBufSize
-	if config.ReadBufferSize > 0 {
+	if config.ReadBufferSize != 0 {
 		readBufSize = config.ReadBufferSize
 	}
 	framer := newFramer(conn, writeBufSize, readBufSize)

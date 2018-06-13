@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -564,7 +565,10 @@ type framer struct {
 }
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
-	r := bufio.NewReaderSize(conn, readBufferSize)
+	var r io.Reader = conn
+	if readBufferSize > 0 {
+		r = bufio.NewReaderSize(r, readBufferSize)
+	}
 	w := newBufWriter(conn, writeBufferSize)
 	f := &framer{
 		writer: w,

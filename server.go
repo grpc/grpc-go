@@ -156,6 +156,8 @@ func WriteBufferSize(s int) ServerOption {
 
 // ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for one read syscall.
+// A negative value will disable read buffer for a connection so data framer can access the underlying
+// conn directly.
 func ReadBufferSize(s int) ServerOption {
 	return func(o *options) {
 		o.readBufferSize = s
