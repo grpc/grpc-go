@@ -16,6 +16,10 @@
  *
  */
 
+// Package backoff implement the backoff strategy for gRPC.
+//
+// This is kept in internal until the gRPC project decides whether or not to
+// allow alternative backoff strategies.
 package backoff
 
 import (
@@ -27,8 +31,6 @@ import (
 // Strategy defines the methodology for backing off after a grpc connection
 // failure.
 //
-// This is kept in internal until the gRPC project decides whether or not to
-// allow alternative backoff strategies.
 type Strategy interface {
 	// Backoff returns the amount of time to wait before the next retry given
 	// the number of consecutive failures.
@@ -39,11 +41,6 @@ type Strategy interface {
 type Config struct {
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
-
-	// TODO(stevvooe): The following fields are not exported, as allowing
-	// changes would violate the current gRPC specification for backoff. If
-	// gRPC decides to allow more interesting backoff strategies, these fields
-	// may be opened up in the future.
 
 	// BaseDelay is the amount of time to wait before retrying after the first
 	// failure.
