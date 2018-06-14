@@ -435,11 +435,6 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
-	rp := cs.methodConfig.retryPolicy
-	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
-		return err
-	}
-
 	// TODO(retry): Move down if the spec changes to not check server pushback
 	// before considering this a failure for throttling.
 	pushback := 0
@@ -449,11 +444,18 @@ func (cs *clientStream) shouldRetry(err error) error {
 		var e error
 		if pushback, e = strconv.Atoi(sps[0]); e != nil || pushback < 0 {
 			grpclog.Infof("Server retry pushback specified to abort (%q).", sps[0])
+			cs.retryThrottler.throttle() // This counts as a failure for throttling.
 			return err
 		}
 		hasPushback = true
 	} else if len(sps) > 1 {
 		grpclog.Warningf("Server retry pushback specified multiple values (%q); not retrying.", sps)
+		cs.retryThrottler.throttle() // This counts as a failure for throttling.
+		return err
+	}
+
+	rp := cs.methodConfig.retryPolicy
+	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
 		return err
 	}
 
