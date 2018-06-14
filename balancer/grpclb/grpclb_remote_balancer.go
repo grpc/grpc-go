@@ -179,13 +179,13 @@ func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.D
 	}
 }
 
-func (lb *lbBalancer) callRemoteBalancer() error {
+func (lb *lbBalancer) callRemoteBalancer() (backoff bool, _ error) {
 	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream, err := lbClient.BalanceLoad(ctx, grpc.FailFast(false))
 	if err != nil {
-		return fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
+		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 	}
 
 	// grpclb handshake on the stream.
@@ -197,18 +197,18 @@ func (lb *lbBalancer) callRemoteBalancer() error {
 		},
 	}
 	if err := stream.Send(initReq); err != nil {
-		return fmt.Errorf("grpclb: failed to send init request: %v", err)
+		return true, fmt.Errorf("grpclb: failed to send init request: %v", err)
 	}
 	reply, err := stream.Recv()
 	if err != nil {
-		return fmt.Errorf("grpclb: failed to recv init response: %v", err)
+		return true, fmt.Errorf("grpclb: failed to recv init response: %v", err)
 	}
 	initResp := reply.GetInitialResponse()
 	if initResp == nil {
-		return fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
+		return true, fmt.Errorf("grpclb: reply from remote balancer did not include initial response")
 	}
 	if initResp.LoadBalancerDelegate != "" {
-		return fmt.Errorf("grpclb: Delegation is not supported")
+		return true, fmt.Errorf("grpclb: Delegation is not supported")
 	}
 
 	go func() {
@@ -216,12 +216,14 @@ func (lb *lbBalancer) callRemoteBalancer() error {
 			lb.sendLoadReport(stream, d)
 		}
 	}()
-	return lb.readServerList(stream)
+	// No backoff if init req/resp handshake was successful.
+	return false, lb.readServerList(stream)
 }
 
 func (lb *lbBalancer) watchRemoteBalancer() {
+	var retryCount int
 	for {
-		err := lb.callRemoteBalancer()
+		doBackoff, err := lb.callRemoteBalancer()
 		select {
 		case <-lb.doneCh:
 			return
@@ -231,6 +233,19 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 			}
 		}
 
+		if !doBackoff {
+			retryCount = 0
+			continue
+		}
+
+		timer := time.NewTimer(lb.backoff.Backoff(retryCount))
+		select {
+		case <-timer.C:
+		case <-lb.doneCh:
+			timer.Stop()
+			return
+		}
+		retryCount++
 	}
 }
 
