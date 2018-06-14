@@ -1,4 +1,4 @@
-// +build amd64,linux
+// +build amd64,linux,!appengine
 
 /*
  *

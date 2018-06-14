@@ -1,4 +1,4 @@
-// +build go1.10,linux
+// +build go1.10,linux,!appengine
 
 /*
  *
@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/channelz"
+	"google.golang.org/grpc/internal/leakcheck"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestCZSocketMetricsSocketOption(t *testing.T) {

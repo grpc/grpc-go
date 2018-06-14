@@ -1,4 +1,4 @@
-// +build !linux
+// +build !linux appengine
 
 /*
  *
@@ -64,7 +64,7 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 		ds.remoteFlowControlWindow = v.Value
 	}
 	if v := s.GetSecurity(); v != nil {
-		ds.Security = protoToSecurity(v)
+		ds.security = protoToSecurity(v)
 	}
 	if local := s.GetLocal(); local != nil {
 		ds.localAddr = protoToAddr(local)
