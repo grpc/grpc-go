@@ -438,7 +438,7 @@ func decodeTimeout(s string) (time.Duration, error) {
 
 const (
 	spaceByte   = ' '
-	tildaByte   = '~'
+	tildeByte   = '~'
 	percentByte = '%'
 )
 
@@ -456,7 +456,7 @@ func encodeGrpcMessage(msg string) string {
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
-		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
+		if !(c >= spaceByte && c <= tildeByte && c != percentByte) {
 			return encodeGrpcMessageUnchecked(msg)
 		}
 	}
@@ -478,7 +478,7 @@ func encodeGrpcMessageUnchecked(msg string) string {
 			// utf8.RuneError.
 			//
 			// fmt.Sprintf("%%%02X", utf8.RuneError) gives "%FFFD".
-			if b >= spaceByte && b < tildaByte && b != percentByte {
+			if b >= spaceByte && b <= tildeByte && b != percentByte {
 				buf.WriteByte(b)
 			} else {
 				buf.WriteString(fmt.Sprintf("%%%02X", b))
