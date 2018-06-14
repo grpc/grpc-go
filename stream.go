@@ -435,6 +435,11 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
+	rp := cs.methodConfig.retryPolicy
+	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
+		return err
+	}
+
 	// TODO(retry): Move down if the spec changes to not check server pushback
 	// before considering this a failure for throttling.
 	pushback := 0
@@ -452,10 +457,6 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
-	rp := cs.methodConfig.retryPolicy
-	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
-		return err
-	}
 	// Note: the ordering here is important; we count this as a failure
 	// only if the code matched a retryable code.
 	if cs.retryThrottler.throttle() {
