@@ -76,8 +76,9 @@ type http2Client struct {
 
 	// Boolean to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
-	activity uint32 // Accessed atomically.
-	kp       keepalive.ClientParameters
+	activity         uint32 // Accessed atomically.
+	kp               keepalive.ClientParameters
+	keepaliveEnabled bool
 
 	statsHandler stats.Handler
 
@@ -259,6 +260,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
+	if t.kp.Time != infinity {
+		t.keepaliveEnabled = true
+		go t.keepalive()
+	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
 	// dispatches the frame to the corresponding stream entity.
@@ -306,9 +311,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		}
 		close(t.writerDone)
 	}()
-	if t.kp.Time != infinity {
-		go t.keepalive()
-	}
 	return t, nil
 }
 
@@ -544,7 +546,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			var sendPing bool
 			// If the number of active streams change from 0 to 1, then check if keepalive
 			// has gone dormant. If so, wake it up.
-			if len(t.activeStreams) == 1 {
+			if len(t.activeStreams) == 1 && t.keepaliveEnabled {
 				select {
 				case t.awakenKeepalive <- struct{}{}:
 					sendPing = true
@@ -1116,7 +1118,9 @@ func (t *http2Client) reader() {
 		t.Close()
 		return
 	}
-	atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+	if t.keepaliveEnabled {
+		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		t.Close()
@@ -1128,7 +1132,9 @@ func (t *http2Client) reader() {
 	// loop to keep reading incoming messages on this transport.
 	for {
 		frame, err := t.framer.fr.ReadFrame()
-		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+		if t.keepaliveEnabled {
+			atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+		}
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
 			// http2.StreamError. This can happen only if the server's response
