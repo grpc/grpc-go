@@ -482,10 +482,8 @@ func (cs *clientStream) shouldRetry(err error) error {
 		cs.numRetriesSincePushback++
 	}
 
-	if deadline, ok := cs.ctx.Deadline(); ok && time.Now().Add(dur).After(deadline) {
-		return status.New(codes.DeadlineExceeded, "context deadline exceeded").Err()
-	}
-
+	// TODO(dfawley): we could eagerly fail here if dur puts us past the
+	// deadline, but unsure if it is worth doing.
 	t := time.NewTimer(dur)
 	select {
 	case <-t.C:
