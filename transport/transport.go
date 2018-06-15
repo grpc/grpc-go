@@ -29,6 +29,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"time"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -37,7 +39,6 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
-	"time"
 )
 
 // recvMsg represents the received msg from the transport. All transport
