@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -61,7 +61,9 @@ type StreamDesc struct {
 //
 // All errors returned from Stream are compatible with the status package.
 type Stream interface {
-	// Context returns the context for this stream.
+	// Context returns the context for this stream.  If called from the client,
+	// Should be done after Header or RecvMsg.  Otherwise, retries may not be
+	// possible to perform.
 	Context() context.Context
 	// SendMsg blocks until it sends m, the stream is done or the stream
 	// breaks.
@@ -278,9 +280,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	cs.callInfo.stream = cs
-	if err := cs.newAttemptLocked(); err != nil {
+	cs.newAttemptLocked()
+
+	op := func(a *csAttempt) error { return a.init() }
+	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
 		return nil, err
 	}
+
 	// Only this initial attempt has stats/tracing.
 	// TODO(dfawley): remove when per-attempt stats are implemented.
 	cs.attempt.statsHandler = sh
@@ -304,13 +310,18 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cs, nil
 }
 
-func (cs *clientStream) newAttemptLocked() error {
-	ctx := cs.ctx
+func (cs *clientStream) newAttemptLocked() {
+	cs.attempt = &csAttempt{cs: cs, dc: cs.cc.dopts.dc}
+}
+
+type fatalErr struct {
+	error
+}
+
+func (a *csAttempt) init() error {
+	cs := a.cs
 	cc := cs.cc
-	attempt := &csAttempt{
-		cs: cs,
-		dc: cs.cc.dopts.dc,
-	}
+	ctx := cs.ctx
 	for {
 		// Check if the context has expired.  This will prevent us from looping
 		// forever if an error occurs for wait-for-ready RPCs where no data is sent
@@ -321,7 +332,7 @@ func (cs *clientStream) newAttemptLocked() error {
 
 		t, done, err := cc.getTransport(ctx, cs.callInfo.failFast)
 		if err != nil {
-			return err
+			return &fatalErr{err}
 		}
 
 		cs.callHdr.PreviousAttempts = cs.numRetries
@@ -339,11 +350,10 @@ func (cs *clientStream) newAttemptLocked() error {
 			}
 			return toRPCErr(err)
 		}
-		attempt.t = t
-		attempt.s = s
-		attempt.p = &parser{r: s}
-		attempt.done = done
-		cs.attempt = attempt
+		cs.attempt.t = t
+		cs.attempt.s = s
+		cs.attempt.p = &parser{r: s}
+		cs.attempt.done = done
 		return nil
 	}
 }
@@ -420,12 +430,15 @@ func (cs *clientStream) commitAttempt() {
 // retried; otherwise it returns the error that should be returned by the
 // operation.
 func (cs *clientStream) shouldRetry(err error) error {
+	// Never retry fatal errors (e.g. grpclb drop request errors).
+	if fe, ok := err.(*fatalErr); ok {
+		return fe.error
+	}
 	// Wait for the current attempt to complete so trailers have arrived.
-	<-cs.attempt.s.Done()
 	if cs.finished || cs.committed {
 		return err
 	}
-	if cs.firstAttempt && !cs.callInfo.failFast && cs.attempt.s.Unprocessed() {
+	if cs.firstAttempt && !cs.callInfo.failFast && (cs.attempt.s == nil || cs.attempt.s.Unprocessed()) {
 		// First attempt, wait-for-ready, stream unprocessed: transparently retry.
 		cs.firstAttempt = false
 		return nil
@@ -435,27 +448,43 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 
-	// TODO(retry): Move down if the spec changes to not check server pushback
-	// before considering this a failure for throttling.
 	pushback := 0
-	sps := cs.attempt.s.Trailer()["grpc-retry-pushback-ms"]
-	var hasPushback bool
-	if len(sps) == 1 {
-		var e error
-		if pushback, e = strconv.Atoi(sps[0]); e != nil || pushback < 0 {
-			grpclog.Infof("Server retry pushback specified to abort (%q).", sps[0])
+	hasPushback := false
+	if cs.attempt.s != nil {
+		if to, toErr := cs.attempt.s.TrailersOnly(); toErr != nil {
+			// Context error; stop now.
+			return toErr
+		} else if !to {
+			return err
+		}
+
+		// TODO(retry): Move down if the spec changes to not check server pushback
+		// before considering this a failure for throttling.
+		sps := cs.attempt.s.Trailer()["grpc-retry-pushback-ms"]
+		if len(sps) == 1 {
+			var e error
+			if pushback, e = strconv.Atoi(sps[0]); e != nil || pushback < 0 {
+				grpclog.Infof("Server retry pushback specified to abort (%q).", sps[0])
+				cs.retryThrottler.throttle() // This counts as a failure for throttling.
+				return err
+			}
+			hasPushback = true
+		} else if len(sps) > 1 {
+			grpclog.Warningf("Server retry pushback specified multiple values (%q); not retrying.", sps)
 			cs.retryThrottler.throttle() // This counts as a failure for throttling.
 			return err
 		}
-		hasPushback = true
-	} else if len(sps) > 1 {
-		grpclog.Warningf("Server retry pushback specified multiple values (%q); not retrying.", sps)
-		cs.retryThrottler.throttle() // This counts as a failure for throttling.
-		return err
+	}
+
+	var code codes.Code
+	if cs.attempt.s != nil {
+		code = cs.attempt.s.Status().Code()
+	} else {
+		code = status.Convert(err).Code()
 	}
 
 	rp := cs.methodConfig.retryPolicy
-	if rp == nil || !rp.retryableStatusCodes[cs.attempt.s.Status().Code()] {
+	if rp == nil || !rp.retryableStatusCodes[code] {
 		return err
 	}
 
@@ -502,9 +531,7 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 			cs.commitAttemptLocked()
 			return err
 		}
-		if lastErr = cs.newAttemptLocked(); lastErr != nil {
-			continue
-		}
+		cs.newAttemptLocked()
 		if lastErr = cs.replayBufferLocked(); lastErr == nil {
 			return nil
 		}
@@ -533,12 +560,11 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 			// We started another attempt already.
 			continue
 		}
-		if err == nil {
+		if err == nil || err == io.EOF {
 			onSuccess()
 			cs.mu.Unlock()
-			return nil
+			return err
 		}
-
 		if err := cs.retryLocked(err); err != nil {
 			cs.mu.Unlock()
 			return err
@@ -663,7 +689,7 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
-	cs.committed = true
+	cs.commitAttemptLocked()
 	cs.mu.Unlock()
 	if err == nil {
 		cs.retryThrottler.successfulRPC()
@@ -675,7 +701,9 @@ func (cs *clientStream) finish(err error) {
 			cs.cc.incrCallsSucceeded()
 		}
 	}
-	cs.attempt.finish(err)
+	if cs.attempt.s != nil {
+		cs.attempt.finish(err)
+	}
 	for _, o := range cs.opts {
 		o.after(cs.callInfo)
 	}
