@@ -637,7 +637,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		rst = true
 		rstCode = http2.ErrCodeCancel
 	}
-	t.closeStream(s, err, rst, rstCode, nil, nil, false)
+	t.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
 }
 
 func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
@@ -661,6 +661,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	close(s.done)
 	// If headerChan isn't closed, then close it.
 	if atomic.SwapUint32(&s.headerDone, 1) == 0 {
+		s.noHeaders = true
 		close(s.headerChan)
 	}
 	cleanup := &cleanupStream{
@@ -719,7 +720,7 @@ func (t *http2Client) Close() error {
 	}
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, ErrConnClosing, false, http2.ErrCodeNo, nil, nil, false)
+		t.closeStream(s, ErrConnClosing, false, http2.ErrCodeNo, status.New(codes.Unavailable, ErrConnClosing.Desc), nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
@@ -1064,7 +1065,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	var state decodeState
 	if err := state.decodeResponseHeader(frame); err != nil {
-		t.closeStream(s, err, true, http2.ErrCodeProtocol, nil, nil, false)
+		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.New(codes.Internal, err.Error()), nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
@@ -1100,6 +1101,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			if len(state.mdata) > 0 {
 				s.header = state.mdata
 			}
+		} else {
+			s.noHeaders = true
 		}
 		close(s.headerChan)
 	}
@@ -1150,7 +1153,9 @@ func (t *http2Client) reader() {
 				t.mu.Unlock()
 				if s != nil {
 					// use error detail to provide better err message
-					t.closeStream(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()), true, http2.ErrCodeProtocol, nil, nil, false)
+					code := http2ErrConvTab[se.Code]
+					msg := t.framer.fr.ErrorDetail().Error()
+					t.closeStream(s, streamError(code, msg), true, http2.ErrCodeProtocol, status.New(code, msg), nil, false)
 				}
 				continue
 			} else {
