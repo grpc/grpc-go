@@ -1888,9 +1888,7 @@ func TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	te.resolverScheme = r.Scheme()
 	te.nonBlockingDial = true
-	fmt.Println("1")
 	cc := te.clientConn()
-	fmt.Println("10")
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})

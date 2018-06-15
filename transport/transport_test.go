@@ -1166,8 +1166,8 @@ func TestLargeMessageSuspension(t *testing.T) {
 	if err != errStreamDone {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
-	expectedErr := streamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
-	if _, err := s.Read(make([]byte, 8)); err != expectedErr {
+	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
+	if _, err := s.Read(make([]byte, 8)); err.Error() != expectedErr.Error() {
 		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
 	}
 	ct.Close()
@@ -1195,7 +1195,7 @@ func TestMaxStreams(t *testing.T) {
 	pctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	timer := time.NewTimer(time.Second * 10)
-	expectedErr := streamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
+	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
 	for {
 		select {
 		case <-timer.C:
@@ -1209,7 +1209,7 @@ func TestMaxStreams(t *testing.T) {
 		if str, err := ct.NewStream(ctx, callHdr); err == nil {
 			slist = append(slist, str)
 			continue
-		} else if err != expectedErr {
+		} else if err.Error() != expectedErr.Error() {
 			t.Fatalf("ct.NewStream(_,_) = _, %v, want _, %v", err, expectedErr)
 		}
 		timer.Stop()
@@ -1730,13 +1730,13 @@ func TestContextErr(t *testing.T) {
 		// input
 		errIn error
 		// outputs
-		errOut StreamError
+		errOut error
 	}{
-		{context.DeadlineExceeded, StreamError{codes.DeadlineExceeded, context.DeadlineExceeded.Error()}},
-		{context.Canceled, StreamError{codes.Canceled, context.Canceled.Error()}},
+		{context.DeadlineExceeded, status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())},
+		{context.Canceled, status.Error(codes.Canceled, context.Canceled.Error())},
 	} {
 		err := ContextErr(test.errIn)
-		if err != test.errOut {
+		if err.Error() != test.errOut.Error() {
 			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
 		}
 	}
