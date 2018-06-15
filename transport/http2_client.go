@@ -123,7 +123,7 @@ type http2Client struct {
 
 	deadline             time.Time
 	didNotReceivePreface func() // TODO(deklerk): find a better name
-	onGoAway             func()
+	onGoAway             func(GoAwayReason)
 	onClose              func()
 }
 
@@ -153,7 +153,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline, onGoAway, onClose func()) (_ ClientTransport, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess func(), onDeadline func(), onGoAway func(GoAwayReason), onClose func()) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -1016,6 +1016,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		close(t.goAway)
 		t.state = draining
 		t.controlBuf.put(&incomingGoAway{})
+
+		// This has to be a new goroutine because we're still using the current goroutine to read in the transport.
+		t.onGoAway(t.goAwayReason)
 	}
 	// All streams with IDs greater than the GoAwayId
 	// and smaller than the previous GoAway ID should be killed.
@@ -1034,7 +1037,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
-		t.onGoAway()
 		t.Close()
 	}
 }
@@ -1141,6 +1143,7 @@ func (t *http2Client) reader() {
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
+		t.didNotReceivePreface()
 		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}

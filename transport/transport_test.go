@@ -989,7 +989,7 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 	}
-	server, ct := setUpWithOptions(t, 0, sc, delayRead, co, func() {})
+	server, ct := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer server.stop()
 	defer ct.Close()
 	server.mu.Lock()

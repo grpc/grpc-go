@@ -1196,6 +1196,14 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // successfully only after server preface is received.
 func (ac *addrConn) resetTransport(resolveNow bool) {
 	for {
+		// TODO(deklerk): consolidate usage of the phrases "server preface"
+		// and "handshake" into one or the other
+
+		// TODO(deklerk): Reword this - we want to resolve immediately if
+		// this is the first in a line of resets, but not on subsequent
+		// resets unless we:
+		//   - Run out of addresses
+		//   - Successfully receive handshake (server preface)
 		if resolveNow {
 			ac.mu.Lock()
 			ac.cc.resolveNow(resolver.ResolveNowOption{})
@@ -1208,6 +1216,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		}
 
 		ac.mu.Lock()
+		//if ac.state == connectivity.Shutdown || ac.cc.GetState() == connectivity.Shutdown { // TODO(deklerk) we probably should not have to do ac.cc.GetState, but without it TestSwitchBalancer fails
 		if ac.state == connectivity.Shutdown || ac.cc.GetState() == connectivity.Shutdown { // TODO(deklerk) we probably should not have to do ac.cc.GetState, but without it TestSwitchBalancer fails
 			ac.mu.Unlock()
 			return
@@ -1218,9 +1227,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		}
 		ac.transport = nil
 
-	ac.mu.Lock()
-	backoffIdx := ac.backoffIdx
-	backoffFor := ac.dopts.bs.Backoff(backoffIdx)
+		backoffIdx := ac.backoffIdx
+		backoffFor := ac.dopts.bs.Backoff(backoffIdx)
 
 		// This will be the duration that dial gets to finish.
 		dialDuration := getMinConnectTimeout()
@@ -1241,18 +1249,32 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
 
-		onGoAway := func() {
+		// TODO(deklerk): overly verbose?
+		// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
+		// onGoAway will reset the transport instead, which means when the original
+		// transport finally gets around to closing (onClose) it should not reset
+		// (since we already did it in onGoAway)
+		resetOnClose := true
+
+		onGoAway := func(r transport.GoAwayReason) {
 			ac.mu.Lock()
-			ac.adjustParams(ac.transport.GetGoAwayReason())
+			resetOnClose = false
+			ac.adjustParams(r)
 			ac.mu.Unlock()
+			go ac.resetTransport(false)
 		}
 
 		onClose := func() {
 			ac.mu.Lock()
 			delete(ac.transports, newTrID)
-			ac.transport = nil
+			r := resetOnClose
+			if r {
+				ac.transport = nil
+			}
 			ac.mu.Unlock()
-			ac.resetTransport(false)
+			if r {
+				ac.resetTransport(false)
+			}
 		}
 
 		ac.mu.Lock()
@@ -1274,7 +1296,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, deadline, onGoAway, onClose); err != nil {
 			// errReadTimeOut indicates that the server preface was not received before
-			// the deadline.
+			// the deadline. We exit here because the transport's reader goroutine will
+			// use onClose to reset the transport.
 			if err == errReadTimedOut {
 				return
 			}
@@ -1298,7 +1321,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, deadline time.Time, onGoAway, onClose func()) error {
+func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, deadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	timedOutWaitingForPreface := make(chan struct{})
 	onDeadline := func() {
 		close(timedOutWaitingForPreface)
@@ -1357,6 +1380,7 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 			return errReadTimedOut
 		case <-prefaceReceived:
 		case <-ac.ctx.Done():
+			return errConnClosing
 		}
 	}
 

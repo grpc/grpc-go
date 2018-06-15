@@ -488,7 +488,7 @@ type TargetInfo struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline, onGoAway, onClose func()) (ClientTransport, error) {
+func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline func(), onGoAway func(GoAwayReason), onClose func()) (ClientTransport, error) {
 	return newHTTP2Client(connectCtx, ctx, target, opts, deadline, onSuccess, onDeadline, onGoAway, onClose)
 }
 
