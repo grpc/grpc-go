@@ -410,7 +410,7 @@ func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hTy
 		Addr: addr,
 	}
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr = NewClientTransport(connectCtx, context.Background(), target, copts, time.Time{}, func() {}, func() {}, func() {}, func() {})
+	ct, connErr = NewClientTransport(connectCtx, context.Background(), target, copts, time.Time{}, func() {}, func() {}, func(GoAwayReason) {}, func() {})
 	if connErr != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
@@ -435,7 +435,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		done <- conn
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, time.Time{}, func() {}, func() {}, func() {}, func() {})
+	tr, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, time.Time{}, func() {}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		// Server clean-up.
@@ -1618,7 +1618,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	ct, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Time{}, func() {}, func() {}, func() {}, func() {})
+	ct, err := NewClientTransport(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Time{}, func() {}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2019,7 +2019,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 	}
 	server.start(t, lis)
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Time{}, func() {}, func() {}, func() {}, func() {})
+	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Time{}, func() {}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("Error creating client. Err: %v", err)
