@@ -16,6 +16,8 @@
  *
  */
 
+//go:generate ./regenerate.sh
+
 // Package service provides an implementation for channelz service server.
 package service
 
@@ -26,10 +28,10 @@ import (
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/channelz"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/channelz"
 )
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
