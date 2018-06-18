@@ -744,6 +744,7 @@ func (t *http2Client) GracefulClose() error {
 	if active == 0 {
 		return t.Close()
 	}
+	t.controlBuf.put(&incomingGoAway{})
 	return nil
 }
 

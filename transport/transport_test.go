@@ -40,6 +40,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
@@ -1077,8 +1078,16 @@ func TestLargeMessageWithDelayRead(t *testing.T) {
 
 func TestGracefulClose(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, pingpong)
-	defer server.stop()
-	defer ct.Close()
+	defer func() {
+		// Stop the server's listener to make the server's goroutines terminate
+		// (after the last active stream is done).
+		server.lis.Close()
+		// Check for goroutine leaks (i.e. GracefulClose with an active stream
+		// doesn't eventually close the connection when that stream completes).
+		leakcheck.Check(t)
+		// Correctly clean up the server
+		server.stop()
+	}()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
 	defer cancel()
 	s, err := ct.NewStream(ctx, &CallHdr{})
@@ -1106,17 +1115,20 @@ func TestGracefulClose(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	// Expect the failure for all the follow-up streams because ct has been closed gracefully.
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 200; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			str, err := ct.NewStream(context.Background(), &CallHdr{})
-			if err == errStreamDrain {
+			if err == ErrConnClosing {
+				return
+			} else if err != nil {
+				t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
 				return
 			}
 			ct.Write(str, nil, nil, &Options{Last: true})
-			if _, err := str.Read(make([]byte, 8)); err != errStreamDrain {
-				t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, errStreamDrain)
+			if _, err := str.Read(make([]byte, 8)); err != errStreamDrain && err != ErrConnClosing {
+				t.Errorf("_.Read(_) = _, %v, want _, %v or %v", err, errStreamDrain, ErrConnClosing)
 			}
 		}()
 	}
