@@ -25,15 +25,21 @@ import io.grpc.protobuf.lite.ProtoLiteUtils;
 /**
  * Utility methods for using protobuf with grpc.
  */
-public class ProtoUtils {
+public final class ProtoUtils {
 
-  /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
+  /**
+   * Create a {@link Marshaller} for protos of the same type as {@code defaultInstance}.
+   *
+   * @since 1.0.0
+   */
   public static <T extends Message> Marshaller<T> marshaller(final T defaultInstance) {
     return ProtoLiteUtils.marshaller(defaultInstance);
   }
 
   /**
    * Produce a metadata key for a generated protobuf type.
+   *
+   * @since 1.0.0
    */
   public static <T extends Message> Metadata.Key<T> keyForProto(T instance) {
     return Metadata.Key.of(

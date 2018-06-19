@@ -30,60 +30,71 @@ import java.io.OutputStream;
 /**
  * Utility methods for using nano proto with grpc.
  */
-public class NanoUtils {
-
-  private static final int BUF_SIZE = 8192;
+public final class NanoUtils {
 
   private NanoUtils() {}
 
-  /** Adapt {@code parser} to a {@code Marshaller}. */
-  public static <T extends MessageNano> Marshaller<T> marshaller(
-      final MessageNanoFactory<T> factory) {
-    return new Marshaller<T>() {
-      @Override
-      public InputStream stream(T value) {
-        return new NanoProtoInputStream(value);
-      }
-
-      @Override
-      public T parse(InputStream stream) {
-        try {
-          // TODO(simonma): Investigate whether we can do 0-copy here. 
-          CodedInputByteBufferNano input =
-              CodedInputByteBufferNano.newInstance(toByteArray(stream));
-          input.setSizeLimit(Integer.MAX_VALUE);
-          T message = factory.newInstance();
-          message.mergeFrom(input);
-          return message;
-        } catch (IOException ipbe) {
-          throw Status.INTERNAL.withDescription("Failed parsing nano proto message").withCause(ipbe)
-              .asRuntimeException();
-        }
-      }
-    };
+  /**
+   * Adapt {@code parser} to a {@link Marshaller}.
+   *
+   * @since 1.0.0
+   */
+  public static <T extends MessageNano> Marshaller<T> marshaller(MessageNanoFactory<T> factory) {
+    return new MessageMarshaller<T>(factory);
   }
 
-  // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
-  private static byte[] toByteArray(InputStream in) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    copy(in, out);
-    return out.toByteArray();
-  }
+  private static final class MessageMarshaller<T extends MessageNano> implements Marshaller<T> {
+    private static final int BUF_SIZE = 8192;
 
-  // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
-  private static long copy(InputStream from, OutputStream to) throws IOException {
-    checkNotNull(from);
-    checkNotNull(to);
-    byte[] buf = new byte[BUF_SIZE];
-    long total = 0;
-    while (true) {
-      int r = from.read(buf);
-      if (r == -1) {
-        break;
-      }
-      to.write(buf, 0, r);
-      total += r;
+    private final MessageNanoFactory<T> factory;
+
+    MessageMarshaller(MessageNanoFactory<T> factory) {
+      this.factory = factory;
     }
-    return total;
+
+    @Override
+    public InputStream stream(T value) {
+      return new NanoProtoInputStream(value);
+    }
+
+    @Override
+    public T parse(InputStream stream) {
+      try {
+        // TODO(simonma): Investigate whether we can do 0-copy here.
+        CodedInputByteBufferNano input =
+            CodedInputByteBufferNano.newInstance(toByteArray(stream));
+        input.setSizeLimit(Integer.MAX_VALUE);
+        T message = factory.newInstance();
+        message.mergeFrom(input);
+        return message;
+      } catch (IOException ipbe) {
+        throw Status.INTERNAL.withDescription("Failed parsing nano proto message").withCause(ipbe)
+            .asRuntimeException();
+      }
+    }
+
+    // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
+    private static byte[] toByteArray(InputStream in) throws IOException {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      copy(in, out);
+      return out.toByteArray();
+    }
+
+    // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
+    private static long copy(InputStream from, OutputStream to) throws IOException {
+      checkNotNull(from);
+      checkNotNull(to);
+      byte[] buf = new byte[BUF_SIZE];
+      long total = 0;
+      while (true) {
+        int r = from.read(buf);
+        if (r == -1) {
+          break;
+        }
+        to.write(buf, 0, r);
+        total += r;
+      }
+      return total;
+    }
   }
 }

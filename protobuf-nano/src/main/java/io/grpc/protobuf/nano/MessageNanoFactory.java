@@ -22,6 +22,8 @@ import com.google.protobuf.nano.MessageNano;
  * Produce new message instances. Used by a marshaller to deserialize incoming messages.
  *
  * <p>Should be implemented by generated code.
+ *
+ * @since 1.0.0
  */
 public interface MessageNanoFactory<T extends MessageNano> {
   T newInstance();
