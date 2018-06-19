@@ -27,9 +27,9 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/channelz"
 )
 
 func init() {

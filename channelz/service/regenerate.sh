@@ -28,6 +28,6 @@ curl https://raw.githubusercontent.com/grpc/grpc-proto/master/grpc/channelz/v1/c
 
 protoc --go_out=plugins=grpc,paths=source_relative:. -I. grpc/channelz/v1/*.proto
 popd
-rm -f grpc_channelz_v1/*.pb.go
-cp "$TMP"/grpc/channelz/v1/*.pb.go grpc_channelz_v1/
+rm -f ../grpc_channelz_v1/*.pb.go
+cp "$TMP"/grpc/channelz/v1/*.pb.go ../grpc_channelz_v1/
 
