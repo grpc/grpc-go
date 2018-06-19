@@ -20,6 +20,7 @@ package grpclb
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"reflect"
 	"time"
@@ -146,6 +147,9 @@ func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) error {
 	for {
 		reply, err := s.Recv()
 		if err != nil {
+			if err == io.EOF {
+				return errServerTerminatedConnection
+			}
 			return fmt.Errorf("grpclb: failed to recv server list: %v", err)
 		}
 		if serverList := reply.GetServerList(); serverList != nil {
@@ -229,7 +233,11 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 			return
 		default:
 			if err != nil {
-				grpclog.Error(err)
+				if err == errServerTerminatedConnection {
+					grpclog.Info(err)
+				} else {
+					grpclog.Error(err)
+				}
 			}
 		}
 
