@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.grpc.android.integrationtest.test" >
+
+    <!-- API level 14+ is required for TLS since Google Play Services v10.2 -->
+    <uses-sdk
+        android:minSdkVersion="14"
+        android:targetSdkVersion="22"/>
+
+    <instrumentation
+        android:name="android.support.test.runner.AndroidJUnitRunner"
+        android:targetPackage="io.grpc.android.integrationtest" />
+
+    <application android:debuggable="true" >
+        <uses-library android:name="android.test.runner" />
+    </application>
+
+</manifest>

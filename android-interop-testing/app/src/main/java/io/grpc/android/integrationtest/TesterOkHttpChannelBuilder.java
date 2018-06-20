@@ -16,15 +16,11 @@
 
 package io.grpc.android.integrationtest;
 
-import android.annotation.TargetApi;
-import android.net.SSLCertificateSocketFactory;
-import android.os.Build;
 import android.support.annotation.Nullable;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -72,37 +68,6 @@ class TesterOkHttpChannelBuilder {
     SSLContext context = SSLContext.getInstance("TLS");
     context.init(null, getTrustManagers(testCa) , null);
     return context.getSocketFactory();
-  }
-
-  @TargetApi(14)
-  private static SSLCertificateSocketFactory getSslCertificateSocketFactory(
-      @Nullable InputStream testCa, String androidSocketFatoryTls) throws Exception {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH /* API level 14 */) {
-      throw new RuntimeException(
-          "android_socket_factory_tls doesn't work with API level less than 14.");
-    }
-    SSLCertificateSocketFactory factory = (SSLCertificateSocketFactory)
-        SSLCertificateSocketFactory.getDefault(5000 /* Timeout in ms*/);
-    // Use HTTP/2.0
-    byte[] h2 = "h2".getBytes();
-    byte[][] protocols = new byte[][]{h2};
-    if (androidSocketFatoryTls.equals("alpn")) {
-      Method setAlpnProtocols =
-          factory.getClass().getDeclaredMethod("setAlpnProtocols", byte[][].class);
-      setAlpnProtocols.invoke(factory, new Object[] { protocols });
-    } else if (androidSocketFatoryTls.equals("npn")) {
-      Method setNpnProtocols =
-          factory.getClass().getDeclaredMethod("setNpnProtocols", byte[][].class);
-      setNpnProtocols.invoke(factory, new Object[]{protocols});
-    } else {
-      throw new RuntimeException("Unknown protocol: " + androidSocketFatoryTls);
-    }
-
-    if (testCa != null) {
-      factory.setTrustManagers(getTrustManagers(testCa));
-    }
-
-    return factory;
   }
 
   private static TrustManager[] getTrustManagers(InputStream testCa) throws Exception {

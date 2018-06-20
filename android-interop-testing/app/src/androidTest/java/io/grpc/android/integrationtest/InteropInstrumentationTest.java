@@ -19,6 +19,7 @@ package io.grpc.android.integrationtest;
 import static junit.framework.Assert.assertEquals;
 
 import android.support.test.InstrumentationRegistry;
+import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
 import android.util.Log;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
@@ -31,13 +32,14 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class InteropInstrumentationTest {
   private static final int TIMEOUT_SECONDS = 10;
-  private static String LOG_TAG = "GrpcInteropInstrumentationTest";
+  private static final String LOG_TAG = "GrpcInteropInstrumentationTest";
 
   private String host;
   private int port;
@@ -45,6 +47,12 @@ public class InteropInstrumentationTest {
   private String serverHostOverride;
   private boolean useTestCa;
   private String testCase;
+
+  // Ensures Looper is initialized for tests running on API level 15. Otherwise instantiating an
+  // AsyncTask throws an exception.
+  @Rule
+  public ActivityTestRule<TesterActivity> activityRule =
+      new ActivityTestRule<TesterActivity>(TesterActivity.class);
 
   @Before
   public void setUp() throws Exception {
@@ -107,7 +115,6 @@ public class InteropInstrumentationTest {
         new Listener() {
           @Override
           public void onComplete(String result) {
-
             resultFuture.set(result);
           }
         };

@@ -67,7 +67,7 @@ final class InteropTask extends AsyncTask<Void, Void, String> {
       // Then print to the error message.
       StringWriter sw = new StringWriter();
       t.printStackTrace(new PrintWriter(sw));
-      return "Failed... : " + t.getMessage() + "\n" + sw.toString();
+      return "Failed... : " + t.getMessage() + "\n" + sw;
     } finally {
       try {
         tester.tearDown();
@@ -147,7 +147,7 @@ final class InteropTask extends AsyncTask<Void, Void, String> {
     }
   }
 
-  private class Tester extends AbstractInteropTest {
+  private static class Tester extends AbstractInteropTest {
     private final ManagedChannel channel;
     private final List<ClientInterceptor> interceptors;
 
