@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -70,6 +71,7 @@ var (
 
 func main() {
 	flag.Parse()
+	resolver.SetDefaultScheme("dns")
 	if *useTLS && *useALTS {
 		grpclog.Fatalf("use_tls and use_alts cannot be both set to true")
 	}
