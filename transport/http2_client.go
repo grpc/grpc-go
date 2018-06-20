@@ -196,11 +196,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		dynamicWindow = false
 	}
 	writeBufSize := defaultWriteBufSize
-	if opts.WriteBufferSize > 0 {
+	if opts.WriteBufferSize >= 0 {
 		writeBufSize = opts.WriteBufferSize
 	}
 	readBufSize := defaultReadBufSize
-	if opts.ReadBufferSize != 0 {
+	if opts.ReadBufferSize >= 0 {
 		readBufSize = opts.ReadBufferSize
 	}
 	t := &http2Client{

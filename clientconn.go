@@ -117,6 +117,15 @@ type dialOptions struct {
 	disableServiceConfig bool
 }
 
+func defaultDialOptions() dialOptions {
+	return dialOptions{
+		copts: transport.ConnectOptions{
+			WriteBufferSize: -1,
+			ReadBufferSize:  -1,
+		},
+	}
+}
+
 const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultClientMaxSendMessageSize    = math.MaxInt32
@@ -142,6 +151,8 @@ func WithWaitForHandshake() DialOption {
 
 // WithWriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
 // before doing a write on the wire.
+// Zero will disable the write buffer such that each write will be on underlying connection.
+// Note: A Send call may not directly translate to a write.
 func WithWriteBufferSize(s int) DialOption {
 	return func(o *dialOptions) {
 		o.copts.WriteBufferSize = s
@@ -150,7 +161,7 @@ func WithWriteBufferSize(s int) DialOption {
 
 // WithReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for each read syscall.
-// A negative value will disable read buffer for a connection so data framer can access the underlying
+// Zero will disable read buffer for a connection so data framer can access the underlying
 // conn directly.
 func WithReadBufferSize(s int) DialOption {
 	return func(o *dialOptions) {
@@ -459,10 +470,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target: target,
-		csMgr:  &connectivityStateManager{},
-		conns:  make(map[*addrConn]struct{}),
-
+		target:         target,
+		csMgr:          &connectivityStateManager{},
+		conns:          make(map[*addrConn]struct{}),
+		dopts:          defaultDialOptions(),
 		blockingpicker: newPickerWrapper(),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())

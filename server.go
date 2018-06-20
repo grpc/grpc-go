@@ -141,6 +141,8 @@ var defaultServerOptions = options{
 	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
 	maxSendMessageSize:    defaultServerMaxSendMessageSize,
 	connectionTimeout:     120 * time.Second,
+	writeBufferSize:       -1,
+	readBufferSize:        -1,
 }
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
@@ -148,6 +150,8 @@ type ServerOption func(*options)
 
 // WriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
 // before doing a write on the wire.
+// Zero will disable the write buffer such that each write call will lead to a syscall.
+// Note: A Send call may not directly result into a write call.
 func WriteBufferSize(s int) ServerOption {
 	return func(o *options) {
 		o.writeBufferSize = s
@@ -156,7 +160,7 @@ func WriteBufferSize(s int) ServerOption {
 
 // ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for one read syscall.
-// A negative value will disable read buffer for a connection so data framer can access the underlying
+// Zero will disable read buffer for a connection so data framer can access the underlying
 // conn directly.
 func ReadBufferSize(s int) ServerOption {
 	return func(o *options) {

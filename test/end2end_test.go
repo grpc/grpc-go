@@ -6273,3 +6273,87 @@ func testRPCTimeout(t *testing.T, e env) {
 		cancel()
 	}
 }
+
+func TestDisabledIOBuffers(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(60000))
+	if err != nil {
+		t.Fatalf("Failed to create payload: %v", err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		Payload: payload,
+	}
+	resp := &testpb.StreamingOutputCallResponse{
+		Payload: payload,
+	}
+
+	ss := &stubServer{
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					t.Errorf("stream.Recv() = _, %v, want _, <nil>", err)
+					return err
+				}
+				if !reflect.DeepEqual(in.Payload.Body, payload.Body) {
+					t.Errorf("Received message(len: %v) on server not what was expected(len: %v).", len(in.Payload.Body), len(payload.Body))
+					return err
+				}
+				if err := stream.Send(resp); err != nil {
+					t.Errorf("stream.Send(_)= %v, want <nil>", err)
+					return err
+				}
+
+			}
+		},
+	}
+
+	s := grpc.NewServer(grpc.WriteBufferSize(0), grpc.ReadBufferSize(0))
+	testpb.RegisterTestServiceServer(s, ss)
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.Serve(lis)
+		close(done)
+	}()
+	defer s.Stop()
+	dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dcancel()
+	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock(), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
+	if err != nil {
+		t.Fatalf("Failed to dial server")
+	}
+	defer cc.Close()
+	c := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := c.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("Failed to send test RPC to server")
+	}
+	for i := 0; i < 10; i++ {
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("stream.Send(_) = %v, want <nil>", err)
+		}
+		in, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("stream.Recv() = _, %v, want _, <nil>", err)
+		}
+		if !reflect.DeepEqual(in.Payload.Body, payload.Body) {
+			t.Fatalf("Received message(len: %v) on client not what was expected(len: %v).", len(in.Payload.Body), len(payload.Body))
+		}
+	}
+	stream.CloseSend()
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() = _, %v, want _, io.EOF", err)
+	}
+}
