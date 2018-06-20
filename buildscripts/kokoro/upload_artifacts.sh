@@ -45,16 +45,18 @@ gpg --version
 # This is the version found on kokoro.
 if gpg --version | grep 'gpg (GnuPG) 1.'; then
   # This command was tested on 1.4.16
-  find "$LOCAL_MVN_ARTIFACTS" -type f -exec \
-  bash -c 'cat ~/java_signing/passphrase | gpg --batch --passphrase-fd 0 --detach-sign -o {}.asc {}' \;
+  find "$LOCAL_MVN_ARTIFACTS" -type f \
+    -not -name "maven-metadata.xml*" -not -name "*.sha1" -not -name "*.md5" -exec \
+    bash -c 'cat ~/java_signing/passphrase | gpg --batch --passphrase-fd 0 --detach-sign -a {}' \;
 fi
 
 # This is the version found on corp workstations. Maybe kokoro will be updated to gpg2 some day.
 if gpg --version | grep 'gpg (GnuPG) 2.'; then
   # This command was tested on 2.2.2
-  find "$LOCAL_MVN_ARTIFACTS" -type f -exec \
+  find "$LOCAL_MVN_ARTIFACTS" -type f \
+    -not -name "maven-metadata.xml*" -not -name "*.sha1" -not -name "*.md5" -exec \
     gpg --batch --passphrase-file ~/java_signing/passphrase --pinentry-mode loopback \
-    --detach-sign -o {}.asc {} \;
+    --detach-sign -a {} \;
 fi
 
 STAGING_REPO=a93898609ef848
