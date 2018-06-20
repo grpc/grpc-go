@@ -1,4 +1,4 @@
-// +build !linux appengine
+// +build linux,go1.9,!appengine
 
 /*
  *
@@ -18,13 +18,22 @@
  *
  */
 
-package service
+package channelz
 
 import (
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
-	"google.golang.org/grpc/internal/channelz"
+	"syscall"
 )
 
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
+// GetSocketOption gets the socket option info of the conn.
+func GetSocketOption(socket interface{}) *SocketOptionData {
+	c, ok := socket.(syscall.Conn)
+	if !ok {
+		return nil
+	}
+	data := &SocketOptionData{}
+	if rawConn, err := c.SyscallConn(); err == nil {
+		rawConn.Control(data.Getsockopt)
+		return data
+	}
 	return nil
 }

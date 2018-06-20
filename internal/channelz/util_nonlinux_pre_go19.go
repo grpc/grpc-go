@@ -1,4 +1,4 @@
-// +build !linux appengine
+// +build !linux !go1.9 appengine
 
 /*
  *
@@ -18,13 +18,9 @@
  *
  */
 
-package service
+package channelz
 
-import (
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
-	"google.golang.org/grpc/internal/channelz"
-)
-
-func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
+// GetSocketOption gets the socket option info of the conn.
+func GetSocketOption(c interface{}) *SocketOptionData {
 	return nil
 }

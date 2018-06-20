@@ -33,8 +33,8 @@ import (
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
-	"google.golang.org/grpc/channelz"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/grpc/internal/channelz"
 )
 
 func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {

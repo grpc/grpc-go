@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/channelz"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
