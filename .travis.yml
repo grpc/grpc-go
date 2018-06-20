@@ -24,6 +24,6 @@ before_install:
 
 script:
   - if [[ "$TRAVIS_GO_VERSION" = 1.10* && "$GOARCH" != "386" ]]; then ./vet.sh || exit 1; fi
-  - if [[ "$GAE" = 1 ]]; then make testappengine || exit 1; fi
+  - if [[ "$GAE" = 1 ]]; then make testappengine || exit 1; exit 0; fi
   - make test || exit 1
   - if [[ "$GOARCH" != "386" ]]; then make testrace; fi
