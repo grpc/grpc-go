@@ -280,9 +280,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	cs.callInfo.stream = cs
-	cs.newAttemptLocked()
+	if err := cs.newAttemptLocked(); err != nil {
+		return nil, err
+	}
 
-	op := func(a *csAttempt) error { return a.init() }
+	op := func(a *csAttempt) error { return a.newStream() }
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
 		return nil, err
 	}
@@ -310,52 +312,38 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cs, nil
 }
 
-func (cs *clientStream) newAttemptLocked() {
+func (cs *clientStream) newAttemptLocked() error {
+	if err := cs.ctx.Err(); err != nil {
+		return toRPCErr(err)
+	}
 	cs.attempt = &csAttempt{cs: cs, dc: cs.cc.dopts.dc}
+	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast)
+	if err != nil {
+		return err
+	}
+	cs.attempt.t = t
+	cs.attempt.done = done
+	return nil
 }
 
 type fatalErr struct {
 	error
 }
 
-func (a *csAttempt) init() error {
+func (a *csAttempt) newStream() error {
 	cs := a.cs
-	cc := cs.cc
-	ctx := cs.ctx
-	for {
-		// Check if the context has expired.  This will prevent us from looping
-		// forever if an error occurs for wait-for-ready RPCs where no data is sent
-		// on the wire.
-		if err := ctx.Err(); err != nil {
-			return toRPCErr(ctx.Err())
+	cs.callHdr.PreviousAttempts = cs.numRetries
+	s, err := a.t.NewStream(cs.ctx, cs.callHdr)
+	if err != nil {
+		if a.done != nil {
+			a.done(balancer.DoneInfo{Err: err})
+			a.done = nil
 		}
-
-		t, done, err := cc.getTransport(ctx, cs.callInfo.failFast)
-		if err != nil {
-			return &fatalErr{err}
-		}
-
-		cs.callHdr.PreviousAttempts = cs.numRetries
-		s, err := t.NewStream(ctx, cs.callHdr)
-		if err != nil {
-			if done != nil {
-				done(balancer.DoneInfo{Err: err})
-				done = nil
-			}
-			// In the event of any error from NewStream, we never attempted to write
-			// anything to the wire, so we can retry indefinitely for non-fail-fast
-			// RPCs.
-			if !cs.callInfo.failFast {
-				continue
-			}
-			return toRPCErr(err)
-		}
-		cs.attempt.t = t
-		cs.attempt.s = s
-		cs.attempt.p = &parser{r: s}
-		cs.attempt.done = done
-		return nil
+		return toRPCErr(err)
 	}
+	cs.attempt.s = s
+	cs.attempt.p = &parser{r: s}
+	return nil
 }
 
 // clientStream implements a client side Stream.
@@ -426,14 +414,16 @@ func (cs *clientStream) commitAttempt() {
 	cs.mu.Unlock()
 }
 
-// shouldRetry returns nil if the status code indicates the RPC should be
-// retried; otherwise it returns the error that should be returned by the
-// operation.
+// shouldRetry returns nil if the RPC should be retried; otherwise it returns
+// the error that should be returned by the operation.
 func (cs *clientStream) shouldRetry(err error) error {
-	// Never retry fatal errors (e.g. grpclb drop request errors).
-	if fe, ok := err.(*fatalErr); ok {
-		return fe.error
+	// In the event of any error from NewStream, we never attempted to write
+	// anything to the wire, so we can retry indefinitely for non-fail-fast
+	// RPCs.
+	if cs.attempt.s == nil && !cs.callInfo.failFast {
+		return nil
 	}
+
 	// Wait for the current attempt to complete so trailers have arrived.
 	if cs.finished || cs.committed {
 		return err
@@ -531,7 +521,9 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 			cs.commitAttemptLocked()
 			return err
 		}
-		cs.newAttemptLocked()
+		if err := cs.newAttemptLocked(); err != nil {
+			return err
+		}
 		if lastErr = cs.replayBufferLocked(); lastErr == nil {
 			return nil
 		}
