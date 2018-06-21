@@ -11,14 +11,19 @@ matrix:
   include:
   - go: 1.10.x
     env: RUN386=1
+  - go: 1.9.x
+    env: GAE=1
+
 
 go_import_path: google.golang.org/grpc
 
 before_install:
   - if [[ -n "$RUN386" ]]; then export GOARCH=386; fi
   - if [[ "$TRAVIS_GO_VERSION" = 1.10* && "$GOARCH" != "386" ]]; then ./vet.sh -install || exit 1; fi
+  - if [[ "$GAE" = 1 ]]; then source ./install_gae.sh || exit 1; fi
 
 script:
   - if [[ "$TRAVIS_GO_VERSION" = 1.10* && "$GOARCH" != "386" ]]; then ./vet.sh || exit 1; fi
+  - if [[ "$GAE" = 1 ]]; then make testappengine || exit 1; exit 0; fi
   - make test || exit 1
   - if [[ "$GOARCH" != "386" ]]; then make testrace; fi
