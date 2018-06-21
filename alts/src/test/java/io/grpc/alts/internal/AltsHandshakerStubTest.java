@@ -26,9 +26,6 @@ import io.grpc.alts.internal.Handshaker.HandshakerResp;
 import io.grpc.alts.internal.Handshaker.NextHandshakeMessageReq;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,19 +43,12 @@ public class AltsHandshakerStubTest {
 
   private AltsHandshakerStub stub;
   private MockWriter writer;
-  private ExecutorService executor;
 
   @Before
   public void setUp() {
-    executor = Executors.newSingleThreadExecutor();
     writer = new MockWriter();
     stub = new AltsHandshakerStub(writer);
     writer.setReader(stub.getReaderForTest());
-  }
-
-  @After
-  public void tearDown() {
-    executor.shutdown();
   }
 
   /** Send a message as in_bytes and expect same message as out_frames echo back. */
@@ -139,7 +129,7 @@ public class AltsHandshakerStubTest {
     sendAndExpectComplete();
   }
 
-  private class MockWriter implements StreamObserver<HandshakerReq> {
+  private static class MockWriter implements StreamObserver<HandshakerReq> {
     private StreamObserver<HandshakerResp> reader;
     private Status status = Status.OK;
 
@@ -159,26 +149,20 @@ public class AltsHandshakerStubTest {
     /** Mock writer onNext. Will respond based on the server status. */
     @Override
     public void onNext(final HandshakerReq req) {
-      executor.execute(
-          new Runnable() {
-            @Override
-            public void run() {
-              switch (status) {
-                case OK:
-                  HandshakerResp.Builder resp = HandshakerResp.newBuilder();
-                  reader.onNext(resp.setOutFrames(req.getNext().getInBytes()).build());
-                  break;
-                case ERROR:
-                  reader.onError(new RuntimeException());
-                  break;
-                case COMPLETE:
-                  reader.onCompleted();
-                  break;
-                default:
-                  return;
-              }
-            }
-          });
+      switch (status) {
+        case OK:
+          HandshakerResp.Builder resp = HandshakerResp.newBuilder();
+          reader.onNext(resp.setOutFrames(req.getNext().getInBytes()).build());
+          break;
+        case ERROR:
+          reader.onError(new RuntimeException());
+          break;
+        case COMPLETE:
+          reader.onCompleted();
+          break;
+        default:
+          return;
+      }
     }
 
     @Override
@@ -187,13 +171,7 @@ public class AltsHandshakerStubTest {
     /** Mock writer onComplete. */
     @Override
     public void onCompleted() {
-      executor.execute(
-          new Runnable() {
-            @Override
-            public void run() {
-              reader.onCompleted();
-            }
-          });
+      reader.onCompleted();
     }
   }
 }
