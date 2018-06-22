@@ -495,8 +495,8 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	return callAuthData, nil
 }
 
-// NewStream creates a stream and asynchronously registers it into the
-// transport as "active" streams.
+// NewStream creates a stream and registers it into the transport as "active"
+// streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
