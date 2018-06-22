@@ -39,7 +39,7 @@ func (m *LoadBalanceRequest) Reset()         { *m = LoadBalanceRequest{} }
 func (m *LoadBalanceRequest) String() string { return proto.CompactTextString(m) }
 func (*LoadBalanceRequest) ProtoMessage()    {}
 func (*LoadBalanceRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{0}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{0}
 }
 func (m *LoadBalanceRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LoadBalanceRequest.Unmarshal(m, b)
@@ -169,8 +169,10 @@ func _LoadBalanceRequest_OneofSizer(msg proto.Message) (n int) {
 }
 
 type InitialLoadBalanceRequest struct {
-	// Name of load balanced service (IE, service.googleapis.com). Its
+	// The name of the load balanced service (e.g., service.googleapis.com). Its
 	// length should be less than 256 bytes.
+	// The name might include a port number. How to handle the port number is up
+	// to the balancer.
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -181,7 +183,7 @@ func (m *InitialLoadBalanceRequest) Reset()         { *m = InitialLoadBalanceReq
 func (m *InitialLoadBalanceRequest) String() string { return proto.CompactTextString(m) }
 func (*InitialLoadBalanceRequest) ProtoMessage()    {}
 func (*InitialLoadBalanceRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{1}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{1}
 }
 func (m *InitialLoadBalanceRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitialLoadBalanceRequest.Unmarshal(m, b)
@@ -223,7 +225,7 @@ func (m *ClientStatsPerToken) Reset()         { *m = ClientStatsPerToken{} }
 func (m *ClientStatsPerToken) String() string { return proto.CompactTextString(m) }
 func (*ClientStatsPerToken) ProtoMessage()    {}
 func (*ClientStatsPerToken) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{2}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{2}
 }
 func (m *ClientStatsPerToken) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClientStatsPerToken.Unmarshal(m, b)
@@ -282,7 +284,7 @@ func (m *ClientStats) Reset()         { *m = ClientStats{} }
 func (m *ClientStats) String() string { return proto.CompactTextString(m) }
 func (*ClientStats) ProtoMessage()    {}
 func (*ClientStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{3}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{3}
 }
 func (m *ClientStats) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClientStats.Unmarshal(m, b)
@@ -358,7 +360,7 @@ func (m *LoadBalanceResponse) Reset()         { *m = LoadBalanceResponse{} }
 func (m *LoadBalanceResponse) String() string { return proto.CompactTextString(m) }
 func (*LoadBalanceResponse) ProtoMessage()    {}
 func (*LoadBalanceResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{4}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{4}
 }
 func (m *LoadBalanceResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LoadBalanceResponse.Unmarshal(m, b)
@@ -507,7 +509,7 @@ func (m *InitialLoadBalanceResponse) Reset()         { *m = InitialLoadBalanceRe
 func (m *InitialLoadBalanceResponse) String() string { return proto.CompactTextString(m) }
 func (*InitialLoadBalanceResponse) ProtoMessage()    {}
 func (*InitialLoadBalanceResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{5}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{5}
 }
 func (m *InitialLoadBalanceResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitialLoadBalanceResponse.Unmarshal(m, b)
@@ -556,7 +558,7 @@ func (m *ServerList) Reset()         { *m = ServerList{} }
 func (m *ServerList) String() string { return proto.CompactTextString(m) }
 func (*ServerList) ProtoMessage()    {}
 func (*ServerList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{6}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{6}
 }
 func (m *ServerList) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ServerList.Unmarshal(m, b)
@@ -591,11 +593,13 @@ type Server struct {
 	IpAddress []byte `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	// A resolved port number for the server.
 	Port int32 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	// An opaque but printable token given to the frontend for each pick. All
-	// frontend requests for that pick must include the token in its initial
-	// metadata. The token is used by the backend to verify the request and to
-	// allow the backend to report load to the gRPC LB system. The token is also
-	// used in client stats for reporting dropped calls.
+	// An opaque but printable token for load reporting. The client must include
+	// the token of the picked server into the initial metadata when it starts a
+	// call to that server. The token is used by the server to verify the request
+	// and to allow the server to report load to the gRPC LB system. The token is
+	// also used in client stats for reporting dropped calls.
+	//
+	// Its length can be variable but must be less than 50 bytes.
 	LoadBalanceToken string `protobuf:"bytes,3,opt,name=load_balance_token,json=loadBalanceToken,proto3" json:"load_balance_token,omitempty"`
 	// Indicates whether this particular request should be dropped by the client.
 	// If the request is dropped, there will be a corresponding entry in
@@ -610,7 +614,7 @@ func (m *Server) Reset()         { *m = Server{} }
 func (m *Server) String() string { return proto.CompactTextString(m) }
 func (*Server) ProtoMessage()    {}
 func (*Server) Descriptor() ([]byte, []int) {
-	return fileDescriptor_load_balancer_077502ef49b0d1b1, []int{7}
+	return fileDescriptor_load_balancer_eea3e5156960c20a, []int{7}
 }
 func (m *Server) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Server.Unmarshal(m, b)
@@ -776,10 +780,10 @@ var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("grpc/lb/v1/load_balancer.proto", fileDescriptor_load_balancer_077502ef49b0d1b1)
+	proto.RegisterFile("grpc/lb/v1/load_balancer.proto", fileDescriptor_load_balancer_eea3e5156960c20a)
 }
 
-var fileDescriptor_load_balancer_077502ef49b0d1b1 = []byte{
+var fileDescriptor_load_balancer_eea3e5156960c20a = []byte{
 	// 756 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x55, 0xdd, 0x6e, 0x23, 0x35,
 	0x14, 0xee, 0x90, 0x69, 0x36, 0x39, 0xa9, 0xb6, 0x59, 0x2f, 0x2c, 0x93, 0xec, 0x6e, 0x5b, 0x22,
