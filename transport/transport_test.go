@@ -566,6 +566,11 @@ func TestMaxConnectionAge(t *testing.T) {
 	}
 }
 
+const (
+	defaultWriteBufSize = 32 * 1024
+	defaultReadBufSize  = 32 * 1024
+)
+
 // TestKeepaliveServer tests that a server closes connection with a client that doesn't respond to keepalive pings.
 func TestKeepaliveServer(t *testing.T) {
 	serverConfig := &ServerConfig{
