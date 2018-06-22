@@ -51,8 +51,13 @@ const (
 )
 
 var (
-	errMissingAddr   = errors.New("dns resolver: missing address")
-	errEndsWithColon = errors.New("dns resolver: address ends with colon")
+	errMissingAddr = errors.New("dns resolver: missing address")
+
+	// Addresses ending with a colon that is supposed to be the separator
+	// between host and port is not allowed.  E.g. "::" is a valid address as
+	// it is an IPv6 address (host only) and "[::]:" is invalid as it ends with
+	// a colon as the host and port separator
+	errEndsWithColon = errors.New("dns resolver: missing port after port-separator colon")
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
