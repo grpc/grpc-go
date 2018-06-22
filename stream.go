@@ -60,7 +60,15 @@ type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context
 	// SendMsg blocks until it sends m, the stream is done or the stream
-	// breaks.
+	// breaks. SendMsg does not wait for an ack - there is no guarantee
+	// of delivery unless an EOF is received from the server.
+	//
+	// Warning: since this method does not wait for an ack, any buffering
+	// along the way - including the client-side buffer that comes with gRPC
+	// by default - can cause messages to be lost. To ensure delivery,
+	// users must call RecvMsg until receiving an EOF before closing the
+	// stream.
+	//
 	// On error, it aborts the stream and returns an RPC status on client
 	// side. On server side, it simply returns the error to the caller.
 	// SendMsg is called by generated code. Also Users can call SendMsg
