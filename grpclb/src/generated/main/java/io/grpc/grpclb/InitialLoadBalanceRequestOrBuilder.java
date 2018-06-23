@@ -9,8 +9,10 @@ public interface InitialLoadBalanceRequestOrBuilder extends
 
   /**
    * <pre>
-   * Name of load balanced service (IE, service.googleapis.com). Its
+   * The name of the load balanced service (e.g., service.googleapis.com). Its
    * length should be less than 256 bytes.
+   * The name might include a port number. How to handle the port number is up
+   * to the balancer.
    * </pre>
    *
    * <code>string name = 1;</code>
@@ -18,8 +20,10 @@ public interface InitialLoadBalanceRequestOrBuilder extends
   java.lang.String getName();
   /**
    * <pre>
-   * Name of load balanced service (IE, service.googleapis.com). Its
+   * The name of the load balanced service (e.g., service.googleapis.com). Its
    * length should be less than 256 bytes.
+   * The name might include a port number. How to handle the port number is up
+   * to the balancer.
    * </pre>
    *
    * <code>string name = 1;</code>

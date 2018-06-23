@@ -28,11 +28,12 @@ public interface ServerOrBuilder extends
 
   /**
    * <pre>
-   * An opaque but printable token given to the frontend for each pick. All
-   * frontend requests for that pick must include the token in its initial
-   * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system. The token is also
-   * used in client stats for reporting dropped calls.
+   * An opaque but printable token for load reporting. The client must include
+   * the token of the picked server into the initial metadata when it starts a
+   * call to that server. The token is used by the server to verify the request
+   * and to allow the server to report load to the gRPC LB system. The token is
+   * also used in client stats for reporting dropped calls.
+   * Its length can be variable but must be less than 50 bytes.
    * </pre>
    *
    * <code>string load_balance_token = 3;</code>
@@ -40,11 +41,12 @@ public interface ServerOrBuilder extends
   java.lang.String getLoadBalanceToken();
   /**
    * <pre>
-   * An opaque but printable token given to the frontend for each pick. All
-   * frontend requests for that pick must include the token in its initial
-   * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system. The token is also
-   * used in client stats for reporting dropped calls.
+   * An opaque but printable token for load reporting. The client must include
+   * the token of the picked server into the initial metadata when it starts a
+   * call to that server. The token is used by the server to verify the request
+   * and to allow the server to report load to the gRPC LB system. The token is
+   * also used in client stats for reporting dropped calls.
+   * Its length can be variable but must be less than 50 bytes.
    * </pre>
    *
    * <code>string load_balance_token = 3;</code>
