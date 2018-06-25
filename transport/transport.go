@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 	"sync/atomic"
 
@@ -206,6 +207,13 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	// only used by WASM clients
+	req         *http.Request
+	requestSent uint32 // indicates that the request has been sent
+	body        io.ReadCloser
+	writeErr    error
+	respChan    chan struct{} // closed to indicate the body or writeErr has been set.
 }
 
 // isHeaderSent is only valid on the server-side.
@@ -366,16 +374,6 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 
 func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
-}
-
-// Read reads all p bytes from the wire for this stream.
-func (s *Stream) Read(p []byte) (n int, err error) {
-	// Don't request a read if there was an error earlier
-	if er := s.trReader.(*transportReader).er; er != nil {
-		return 0, er
-	}
-	s.requestRead(len(p))
-	return io.ReadFull(s.trReader, p)
 }
 
 // tranportReader reads all the data available for this Stream from the transport and

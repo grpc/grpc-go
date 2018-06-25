@@ -46,12 +46,6 @@ const (
 	// http2IOBufSize specifies the buffer size for sending frames.
 	defaultWriteBufSize = 32 * 1024
 	defaultReadBufSize  = 32 * 1024
-	// baseContentType is the base content-type for gRPC.  This is a valid
-	// content-type on it's own, but can also include a content-subtype such as
-	// "proto" as a suffix after "+" or ";".  See
-	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
-	// for more details.
-	baseContentType = "application/grpc"
 )
 
 var (
@@ -157,38 +151,6 @@ func isWhitelistedHeader(hdr string) bool {
 	}
 }
 
-// contentSubtype returns the content-subtype for the given content-type.  The
-// given content-type must be a valid content-type that starts with
-// "application/grpc". A content-subtype will follow "application/grpc" after a
-// "+" or ";". See
-// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
-// more details.
-//
-// If contentType is not a valid content-type for gRPC, the boolean
-// will be false, otherwise true. If content-type == "application/grpc",
-// "application/grpc+", or "application/grpc;", the boolean will be true,
-// but no content-subtype will be returned.
-//
-// contentType is assumed to be lowercase already.
-func contentSubtype(contentType string) (string, bool) {
-	if contentType == baseContentType {
-		return "", true
-	}
-	if !strings.HasPrefix(contentType, baseContentType) {
-		return "", false
-	}
-	// guaranteed since != baseContentType and has baseContentType prefix
-	switch contentType[len(baseContentType)] {
-	case '+', ';':
-		// this will return true for "application/grpc+" or "application/grpc;"
-		// which the previous validContentType function tested to be valid, so we
-		// just say that no content-subtype is specified in this case
-		return contentType[len(baseContentType)+1:], true
-	default:
-		return "", false
-	}
-}
-
 // contentSubtype is assumed to be lowercase
 func contentType(contentSubtype string) string {
 	if contentSubtype == "" {
@@ -234,13 +196,7 @@ func decodeMetadataHeader(k, v string) (string, error) {
 	return v, nil
 }
 
-func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error {
-	for _, hf := range frame.Fields {
-		if err := d.processHeaderField(hf); err != nil {
-			return err
-		}
-	}
-
+func (d *decodeState) validate() error {
 	// If grpc status exists, no need to check further.
 	if d.rawStatusCode != nil || d.statusGen != nil {
 		return nil

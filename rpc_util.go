@@ -421,6 +421,10 @@ type payloadFormat uint8
 const (
 	compressionNone payloadFormat = 0 // no compression
 	compressionMade payloadFormat = 1 // compressed
+	// Defined for gRPC-Web
+	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md#protocol-differences-vs-grpc-over-http2
+	trailer           payloadFormat = 1 << 7
+	compressedTrailer payloadFormat = (1 << 7) | 1
 )
 
 // parser reads complete gRPC messages from the underlying reader.
@@ -557,8 +561,8 @@ func outPayload(client bool, msg interface{}, data, payload []byte, t time.Time)
 
 func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool) *status.Status {
 	switch pf {
-	case compressionNone:
-	case compressionMade:
+	case compressionNone, trailer:
+	case compressionMade, compressedTrailer:
 		if recvCompress == "" || recvCompress == encoding.Identity {
 			return status.New(codes.Internal, "grpc: compressed flag set with identity or empty encoding")
 		}
@@ -587,7 +591,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		return st.Err()
 	}
 
-	if pf == compressionMade {
+	if pf == compressionMade || pf == compressedTrailer {
 		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,
 		// use this decompressor as the default.
 		if dc != nil {
@@ -610,6 +614,10 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
 		return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(d), maxReceiveMessageSize)
+	}
+	d, err = parseMsg(p, s, maxReceiveMessageSize, pf, d)
+	if err != nil {
+		return err // already a status error (or io.EOF)
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
