@@ -478,19 +478,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 
-	if !cc.dopts.insecure {
-		if cc.dopts.copts.TransportCredentials == nil {
-			return nil, errNoTransportSecurity
-		}
-	} else {
-		if cc.dopts.copts.TransportCredentials != nil {
-			return nil, errCredentialsConflict
-		}
-		for _, cd := range cc.dopts.copts.PerRPCCredentials {
-			if cd.RequireTransportSecurity() {
-				return nil, errTransportCredentialsMissing
-			}
-		}
+	err = cc.validateClientOptions()
+	if err != nil {
+		return nil, err
 	}
 
 	cc.mkp = cc.dopts.copts.KeepaliveParams
