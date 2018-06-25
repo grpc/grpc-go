@@ -25,10 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 )
 
@@ -92,11 +94,11 @@ type dummySocket struct {
 	lastMessageReceivedTimestamp     time.Time
 	localFlowControlWindow           int64
 	remoteFlowControlWindow          int64
-	//socket options
-	localAddr  net.Addr
-	remoteAddr net.Addr
-	// Security
-	remoteName string
+	socketOptions                    *channelz.SocketOptionData
+	localAddr                        net.Addr
+	remoteAddr                       net.Addr
+	security                         credentials.ChannelzSecurityValue
+	remoteName                       string
 }
 
 func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
@@ -113,11 +115,11 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 		LastMessageReceivedTimestamp:     d.lastMessageReceivedTimestamp,
 		LocalFlowControlWindow:           d.localFlowControlWindow,
 		RemoteFlowControlWindow:          d.remoteFlowControlWindow,
-		//socket options
-		LocalAddr:  d.localAddr,
-		RemoteAddr: d.remoteAddr,
-		// Security
-		RemoteName: d.remoteName,
+		SocketOptions:                    d.socketOptions,
+		LocalAddr:                        d.localAddr,
+		RemoteAddr:                       d.remoteAddr,
+		Security:                         d.security,
+		RemoteName:                       d.remoteName,
 	}
 }
 
@@ -164,6 +166,21 @@ func serverProtoToStruct(s *channelzpb.Server) *dummyServer {
 	return ds
 }
 
+func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
+	switch v := protoSecurity.Model.(type) {
+	case *channelzpb.Security_Tls_:
+		return &credentials.TLSChannelzSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
+	case *channelzpb.Security_Other:
+		sv := &credentials.OtherChannelzSecurityValue{Name: v.Other.GetName()}
+		var x ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(v.Other.GetValue(), &x); err == nil {
+			sv.Value = x.Message
+		}
+		return sv
+	}
+	return nil
+}
+
 func protoToAddr(a *channelzpb.Address) net.Addr {
 	switch v := a.Address.(type) {
 	case *channelzpb.Address_TcpipAddress:
@@ -179,57 +196,26 @@ func protoToAddr(a *channelzpb.Address) net.Addr {
 	return nil
 }
 
-func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
-	ds := &dummySocket{}
-	pdata := s.GetData()
-	ds.streamsStarted = pdata.GetStreamsStarted()
-	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
-	ds.streamsFailed = pdata.GetStreamsFailed()
-	ds.messagesSent = pdata.GetMessagesSent()
-	ds.messagesReceived = pdata.GetMessagesReceived()
-	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastLocalStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastRemoteStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageSentTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageReceivedTimestamp = t
-		}
-	}
-	if v := pdata.GetLocalFlowControlWindow(); v != nil {
-		ds.localFlowControlWindow = v.Value
-	}
-	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
-		ds.remoteFlowControlWindow = v.Value
-	}
-	if local := s.GetLocal(); local != nil {
-		ds.localAddr = protoToAddr(local)
-	}
-	if remote := s.GetRemote(); remote != nil {
-		ds.remoteAddr = protoToAddr(remote)
-	}
-	ds.remoteName = s.GetRemoteName()
-	return ds
-}
-
 func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]string {
 	m := make(map[int64]string)
 	for _, sr := range sktRefs {
 		m[sr.SocketId] = sr.Name
 	}
 	return m
+}
+
+type OtherSecurityValue struct {
+	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
+	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
+}
+
+func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
+func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
+func (*OtherSecurityValue) ProtoMessage()    {}
+
+func init() {
+	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
+	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
 func TestGetTopChannels(t *testing.T) {
@@ -459,6 +445,23 @@ func TestGetSocket(t *testing.T) {
 		},
 		{
 			localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		{
+			security: &credentials.TLSChannelzSecurityValue{
+				StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				RemoteCertificate: []byte{48, 130, 2, 156, 48, 130, 2, 5, 160},
+			},
+		},
+		{
+			security: &credentials.OtherChannelzSecurityValue{
+				Name: "XXXX",
+			},
+		},
+		{
+			security: &credentials.OtherChannelzSecurityValue{
+				Name:  "YYYY",
+				Value: &OtherSecurityValue{LocalCertificate: []byte{1, 2, 3}, RemoteCertificate: []byte{4, 5, 6}},
+			},
 		},
 	}
 	svr := newCZServer()
