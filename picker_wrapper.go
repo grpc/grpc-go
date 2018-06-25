@@ -233,8 +233,6 @@ func (bp *pickerWrapper) close() {
 	close(bp.blockingCh)
 }
 
-const stickinessKeyCountLimit = 1000
-
 type stickyStoreEntry struct {
 	acw  *acBalancerWrapper
 	addr resolver.Address
@@ -245,12 +243,12 @@ type stickyStore struct {
 	// curMDKey is check before every get/put to avoid races. The operation will
 	// abort immediately when the given mdKey is different from the curMDKey.
 	curMDKey string
-	store    *linkedMap
+	store    map[string]*stickyStoreEntry
 }
 
 func newStickyStore() *stickyStore {
 	return &stickyStore{
-		store: newLinkedMap(),
+		store: make(map[string]*stickyStoreEntry),
 	}
 }
 
@@ -258,7 +256,7 @@ func newStickyStore() *stickyStore {
 func (ss *stickyStore) reset(newMDKey string) {
 	ss.mu.Lock()
 	ss.curMDKey = newMDKey
-	ss.store.clear()
+	ss.store = make(map[string]*stickyStoreEntry)
 	ss.mu.Unlock()
 }
 
@@ -271,12 +269,9 @@ func (ss *stickyStore) put(mdKey, stickyKey string, acw *acBalancerWrapper) {
 		return
 	}
 	// TODO(stickiness): limit the total number of entries.
-	ss.store.put(stickyKey, &stickyStoreEntry{
+	ss.store[stickyKey] = &stickyStoreEntry{
 		acw:  acw,
 		addr: acw.getAddrConn().getCurAddr(),
-	})
-	if ss.store.len() > stickinessKeyCountLimit {
-		ss.store.removeOldest()
 	}
 }
 
@@ -288,18 +283,18 @@ func (ss *stickyStore) get(mdKey, stickyKey string) (transport.ClientTransport, 
 	if mdKey != ss.curMDKey {
 		return nil, false
 	}
-	entry, ok := ss.store.get(stickyKey)
+	entry, ok := ss.store[stickyKey]
 	if !ok {
 		return nil, false
 	}
 	ac := entry.acw.getAddrConn()
 	if ac.getCurAddr() != entry.addr {
-		ss.store.remove(stickyKey)
+		delete(ss.store, stickyKey)
 		return nil, false
 	}
 	t, ok := ac.getReadyTransport()
 	if !ok {
-		ss.store.remove(stickyKey)
+		delete(ss.store, stickyKey)
 		return nil, false
 	}
 	return t, true
