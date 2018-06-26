@@ -27,9 +27,9 @@ import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -42,15 +42,11 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
-import javax.naming.NamingEnumeration;
-import javax.naming.NamingException;
-import javax.naming.directory.Attribute;
-import javax.naming.directory.InitialDirContext;
 
 /**
  * A DNS-based {@link NameResolver}.
@@ -63,8 +59,6 @@ import javax.naming.directory.InitialDirContext;
 final class DnsNameResolver extends NameResolver {
 
   private static final Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
-
-  private static final boolean JNDI_AVAILABLE = jndiAvailable();
 
   private static final String SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY = "clientLanguage";
   private static final String SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY = "percentage";
@@ -93,6 +87,8 @@ final class DnsNameResolver extends NameResolver {
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
 
+  private static final ResourceResolverFactory resourceResolverFactory =
+      getResourceResolverFactory(DnsNameResolver.class.getClassLoader());
 
   @VisibleForTesting
   final ProxyDetector proxyDetector;
@@ -102,7 +98,9 @@ final class DnsNameResolver extends NameResolver {
 
   private final Random random = new Random();
 
-  private DelegateResolver delegateResolver = pickDelegateResolver();
+  private volatile AddressResolver addressResolver = JdkAddressResolver.INSTANCE;
+  private final AtomicReference<ResourceResolver> resourceResolver =
+      new AtomicReference<ResourceResolver>();
 
   private final String authority;
   private final String host;
@@ -195,9 +193,14 @@ final class DnsNameResolver extends NameResolver {
             savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
             return;
           }
-          ResolutionResults resolvedInetAddrs;
+
+          ResolutionResults resolutionResults;
           try {
-            resolvedInetAddrs = delegateResolver.resolve(host);
+            ResourceResolver resourceResolver = null;
+            if (enableJndi) {
+              resourceResolver = getResourceResolver();
+            }
+            resolutionResults = resolveAll(addressResolver, resourceResolver, host);
           } catch (Exception e) {
             savedListener.onError(
                 Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
@@ -205,17 +208,17 @@ final class DnsNameResolver extends NameResolver {
           }
           // Each address forms an EAG
           List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
-          for (InetAddress inetAddr : resolvedInetAddrs.addresses) {
+          for (InetAddress inetAddr : resolutionResults.addresses) {
             servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
           }
-          servers.addAll(resolvedInetAddrs.balancerAddresses);
+          servers.addAll(resolutionResults.balancerAddresses);
 
           Attributes.Builder attrs = Attributes.newBuilder();
-          if (!resolvedInetAddrs.txtRecords.isEmpty()) {
+          if (!resolutionResults.txtRecords.isEmpty()) {
             Map<String, Object> serviceConfig = null;
             try {
               for (Map<String, Object> possibleConfig :
-                  parseTxtResults(resolvedInetAddrs.txtRecords)) {
+                  parseTxtResults(resolutionResults.txtRecords)) {
                 try {
                   serviceConfig =
                       maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
@@ -267,20 +270,52 @@ final class DnsNameResolver extends NameResolver {
     return port;
   }
 
-  private DelegateResolver pickDelegateResolver() {
-    JdkResolver jdkResolver = new JdkResolver();
-    if (JNDI_AVAILABLE && enableJndi) {
-      return new CompositeResolver(jdkResolver, new JndiResolver());
-    }
-    return jdkResolver;
-  }
-
-  /**
-   * Forces the resolver.  This should only be used by testing code.
-   */
   @VisibleForTesting
-  void setDelegateResolver(DelegateResolver delegateResolver) {
-    this.delegateResolver = delegateResolver;
+  static ResolutionResults resolveAll(
+      AddressResolver addressResolver, @Nullable ResourceResolver resourceResolver, String name) {
+    List<? extends InetAddress> addresses = Collections.emptyList();
+    Exception addressesException = null;
+    List<EquivalentAddressGroup> balancerAddresses = Collections.emptyList();
+    Exception balancerAddressesException = null;
+    List<String> txtRecords = Collections.emptyList();
+    Exception txtRecordsException = null;
+
+    try {
+      addresses = addressResolver.resolveAddress(name);
+    } catch (Exception e) {
+      addressesException = e;
+    }
+    if (resourceResolver != null) {
+      try {
+        balancerAddresses = resourceResolver.resolveSrv(addressResolver, GRPCLB_NAME_PREFIX + name);
+      } catch (Exception e) {
+        balancerAddressesException = e;
+      }
+      // Only do the TXT record lookup if one of the above address resolutions succeeded.
+      if (!(balancerAddressesException != null && addressesException != null)) {
+        try {
+          txtRecords = resourceResolver.resolveTxt(SERVICE_CONFIG_NAME_PREFIX + name);
+        } catch (Exception e) {
+          txtRecordsException = e;
+        }
+      }
+    }
+    try {
+      if (addressesException != null && balancerAddressesException != null) {
+        throw new RuntimeException(addressesException);
+      }
+    } finally {
+      if (addressesException != null) {
+        logger.log(Level.FINE, "Address resolution failure", addressesException);
+      }
+      if (balancerAddressesException != null) {
+        logger.log(Level.FINE, "Balancer resolution failure", balancerAddressesException);
+      }
+      if (txtRecordsException != null) {
+        logger.log(Level.FINE, "ServiceConfig resolution failure", txtRecordsException);
+      }
+    }
+    return new ResolutionResults(addresses, txtRecords, balancerAddresses);
   }
 
   @SuppressWarnings("unchecked")
@@ -398,47 +433,16 @@ final class DnsNameResolver extends NameResolver {
   }
 
   /**
-   * Returns whether the JNDI DNS resolver is available.  This is accomplished by looking up a
-   * particular class.  It is believed to be the default (only?) DNS resolver that will actually be
-   * used.  It is provided by the OpenJDK, but unlikely Android.  Actual resolution will be done by
-   * using a service provider when a hostname query is present, so the {@code DnsContextFactory}
-   * may not actually be used to perform the query.  This is believed to be "okay."
-   */
-  @VisibleForTesting
-  @SuppressWarnings("LiteralClassName")
-  static boolean jndiAvailable() {
-    if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
-      return false;
-    }
-    try {
-      Class.forName("javax.naming.directory.InitialDirContext");
-      Class.forName("com.sun.jndi.dns.DnsContextFactory");
-    } catch (ClassNotFoundException e) {
-      logger.log(Level.FINE, "Unable to find JNDI DNS resolver, skipping", e);
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Common interface between the delegate resolvers used by DnsNameResolver.
-   */
-  @VisibleForTesting
-  abstract static class DelegateResolver {
-    abstract ResolutionResults resolve(String host) throws Exception;
-  }
-
-  /**
    * Describes the results from a DNS query.
    */
   @VisibleForTesting
   static final class ResolutionResults {
-    final List<InetAddress> addresses;
+    final List<? extends InetAddress> addresses;
     final List<String> txtRecords;
     final List<EquivalentAddressGroup> balancerAddresses;
 
     ResolutionResults(
-        List<InetAddress> addresses,
+        List<? extends InetAddress> addresses,
         List<String> txtRecords,
         List<EquivalentAddressGroup> balancerAddresses) {
       this.addresses = Collections.unmodifiableList(checkNotNull(addresses, "addresses"));
@@ -448,196 +452,103 @@ final class DnsNameResolver extends NameResolver {
     }
   }
 
-  /**
-   * A composite DNS resolver that uses both the JDK and JNDI resolvers as delegate.  It is
-   * expected that two DNS queries will be executed, with the second one being from JNDI.
-   */
   @VisibleForTesting
-  static final class CompositeResolver extends DelegateResolver {
+  void setAddressResolver(AddressResolver addressResolver) {
+    this.addressResolver = addressResolver;
+  }
 
-    private final DelegateResolver jdkResovler;
-    private final DelegateResolver jndiResovler;
+  /**
+   * {@link ResourceResolverFactory} is a factory for making resource resolvers.  It supports
+   * optionally checking if the factory is available.
+   */
+  interface ResourceResolverFactory {
 
-    CompositeResolver(DelegateResolver jdkResovler, DelegateResolver jndiResovler) {
-      this.jdkResovler = jdkResovler;
-      this.jndiResovler = jndiResovler;
-    }
+    /**
+     * Creates a new resource resolver.  The return value is {@code null} iff
+     * {@link #unavailabilityCause()} is not null;
+     */
+    @Nullable ResourceResolver newResourceResolver();
+
+    /**
+     * Returns the reason why the resource resolver cannot be created.  The return value is
+     * {@code null} if {@link #newResourceResolver()} is suitable for use.
+     */
+    @Nullable Throwable unavailabilityCause();
+  }
+
+  /**
+   * AddressResolver resolves a hostname into a list of addresses.
+   */
+  interface AddressResolver {
+    List<InetAddress> resolveAddress(String host) throws Exception;
+  }
+
+  private enum JdkAddressResolver implements AddressResolver {
+    INSTANCE;
 
     @Override
-    ResolutionResults resolve(String host) throws Exception {
-      ResolutionResults jdkResults = jdkResovler.resolve(host);
-      List<InetAddress> addresses = jdkResults.addresses;
-      List<String> txtRecords = Collections.emptyList();
-      List<EquivalentAddressGroup> balancerAddresses = Collections.emptyList();
-      try {
-        ResolutionResults jdniResults = jndiResovler.resolve(host);
-        txtRecords = jdniResults.txtRecords;
-        balancerAddresses = jdniResults.balancerAddresses;
-      } catch (Throwable e) {
-        // JndiResolver.resolve may throw Error that could cause rpc to hang.
-        // Catch and log Throwable and keep using jdkResolver's result to prevent it.
-        logger.log(Level.SEVERE, "Failed to resolve TXT results", e);
-      }
-
-      return new ResolutionResults(addresses, txtRecords, balancerAddresses);
+    public List<InetAddress> resolveAddress(String host) throws UnknownHostException {
+      return Collections.unmodifiableList(Arrays.asList(InetAddress.getAllByName(host)));
     }
   }
 
   /**
-   * The default name resolver provided with the JDK.  This is unable to lookup TXT records, but
-   * provides address ordering sorted according to RFC 3484.  This is true on OpenJDK, because it
-   * in turn calls into libc which sorts addresses in order of reachability.
+   * {@link ResourceResolver} is a Dns ResourceRecord resolver.
    */
+  interface ResourceResolver {
+    List<String> resolveTxt(String host) throws Exception;
+
+    List<EquivalentAddressGroup> resolveSrv(
+        AddressResolver addressResolver, String host) throws Exception;
+  }
+
+  @Nullable
+  private ResourceResolver getResourceResolver() {
+    ResourceResolver rr;
+    if ((rr = resourceResolver.get()) == null) {
+      if (resourceResolverFactory != null) {
+        assert resourceResolverFactory.unavailabilityCause() == null;
+        rr = resourceResolverFactory.newResourceResolver();
+      }
+    }
+    return rr;
+  }
+
+  @Nullable
+  @SuppressWarnings("unchecked")
   @VisibleForTesting
-  static final class JdkResolver extends DelegateResolver {
-
-    @Override
-    ResolutionResults resolve(String host) throws Exception {
-      return new ResolutionResults(
-          Arrays.asList(InetAddress.getAllByName(host)),
-          Collections.<String>emptyList(),
-          Collections.<EquivalentAddressGroup>emptyList());
+  static ResourceResolverFactory getResourceResolverFactory(ClassLoader loader) {
+    Class<? extends ResourceResolverFactory> jndiClazz;
+    try {
+      jndiClazz =
+          (Class<? extends ResourceResolverFactory>)
+              Class.forName("io.grpc.internal.JndiResourceResolverFactory", true, loader);
+      assert ResourceResolverFactory.class.isAssignableFrom(jndiClazz);
+    } catch (ClassNotFoundException e) {
+      logger.log(Level.FINE, "Unable to find JndiResourceResolverFactory, skipping.", e);
+      return null;
     }
-  }
-
-  /**
-   * A resolver that uses JNDI.  This class is capable of looking up both addresses
-   * and text records, but does not provide ordering guarantees.  It is currently not used for
-   * address resolution.
-   */
-  @VisibleForTesting
-  static final class JndiResolver extends DelegateResolver {
-
-    private static final Pattern whitespace = Pattern.compile("\\s+");
-
-    @SuppressWarnings("BetaApi") // Verify is stable in Guava 23.5
-    @Override
-    ResolutionResults resolve(String host) throws NamingException {
-      List<String> serviceConfigTxtRecords = Collections.emptyList();
-      String serviceConfigHostname = SERVICE_CONFIG_NAME_PREFIX + host;
-      if (logger.isLoggable(Level.FINER)) {
-        logger.log(
-            Level.FINER, "About to query TXT records for {0}", new Object[]{serviceConfigHostname});
-      }
-      try {
-        serviceConfigTxtRecords = getAllRecords("TXT", "dns:///" + serviceConfigHostname);
-      } catch (NamingException e) {
-
-        if (logger.isLoggable(Level.FINE)) {
-          logger.log(Level.FINE, "Unable to look up " + serviceConfigHostname, e);
-        }
-      }
-
-      String grpclbHostname = GRPCLB_NAME_PREFIX + host;
-      if (logger.isLoggable(Level.FINER)) {
-        logger.log(
-            Level.FINER, "About to query SRV records for {0}", new Object[]{grpclbHostname});
-      }
-      List<EquivalentAddressGroup> balancerAddresses = Collections.emptyList();
-      try {
-        List<String> grpclbSrvRecords = getAllRecords("SRV", "dns:///" + grpclbHostname);
-        balancerAddresses = new ArrayList<EquivalentAddressGroup>(grpclbSrvRecords.size());
-        for (String srvRecord : grpclbSrvRecords) {
-          try {
-            String[] parts = whitespace.split(srvRecord);
-            Verify.verify(parts.length == 4, "Bad SRV Record: %s, ", srvRecord);
-            String srvHostname = parts[3];
-            int port = Integer.parseInt(parts[2]);
-
-            InetAddress[] addrs = InetAddress.getAllByName(srvHostname);
-            List<SocketAddress> sockaddrs = new ArrayList<SocketAddress>(addrs.length);
-            for (InetAddress addr : addrs) {
-              sockaddrs.add(new InetSocketAddress(addr, port));
-            }
-            Attributes attrs = Attributes.newBuilder()
-                .set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, srvHostname)
-                .build();
-            balancerAddresses.add(
-                new EquivalentAddressGroup(Collections.unmodifiableList(sockaddrs), attrs));
-          } catch (UnknownHostException e) {
-            logger.log(Level.WARNING, "Can't find address for SRV record" + srvRecord, e);
-          } catch (RuntimeException e) {
-            logger.log(Level.WARNING, "Failed to construct SRV record" + srvRecord, e);
-          }
-        }
-      } catch (NamingException e) {
-        if (logger.isLoggable(Level.FINE)) {
-          logger.log(Level.FINE, "Unable to look up " + serviceConfigHostname, e);
-        }
-      }
-
-      return new ResolutionResults(
-          /*addresses=*/ Collections.<InetAddress>emptyList(),
-          serviceConfigTxtRecords,
-          Collections.unmodifiableList(balancerAddresses));
+    Constructor<? extends ResourceResolverFactory> jndiCtor;
+    try {
+      jndiCtor = jndiClazz.getConstructor();
+    } catch (Exception e) {
+      logger.log(Level.FINE, "Can't find JndiResourceResolverFactory ctor, skipping.", e);
+      return null;
     }
-
-    private List<String> getAllRecords(String recordType, String name) throws NamingException {
-      InitialDirContext dirContext = new InitialDirContext();
-      String[] rrType = new String[]{recordType};
-      javax.naming.directory.Attributes attrs = dirContext.getAttributes(name, rrType);
-      List<String> records = new ArrayList<String>();
-
-      NamingEnumeration<? extends Attribute> rrGroups = attrs.getAll();
-      try {
-        while (rrGroups.hasMore()) {
-          Attribute rrEntry = rrGroups.next();
-          assert Arrays.asList(rrType).contains(rrEntry.getID());
-          NamingEnumeration<?> rrValues = rrEntry.getAll();
-          try {
-            while (rrValues.hasMore()) {
-              records.add(normalizeData(recordType, String.valueOf(rrValues.next())));
-            }
-          } finally {
-            rrValues.close();
-          }
-        }
-      } finally {
-        rrGroups.close();
-      }
-      return records;
+    ResourceResolverFactory rrf;
+    try {
+      rrf = jndiCtor.newInstance();
+    } catch (Exception e) {
+      logger.log(Level.FINE, "Can't construct JndiResourceResolverFactory, skipping.", e);
+      return null;
     }
-  }
-
-  /**
-   * Convert returned RR data to a form that's consumable by the grpc library.
-   */
-  @VisibleForTesting
-  static String normalizeData(String recordType, String rrData) {
-    String normalized = rrData;
-    if (recordType.equals("TXT")) {
-      normalized = unquote(normalized);
+    if (rrf.unavailabilityCause() != null) {
+      logger.log(
+          Level.FINE,
+          "JndiResourceResolverFactory not available, skipping.",
+          rrf.unavailabilityCause());
     }
-    return normalized;
-  }
-
-  /**
-   * Undo the quoting done in {@link com.sun.jndi.dns.ResourceRecord#decodeTxt}.
-   */
-  static String unquote(String txtRecord) {
-    StringBuilder sb = new StringBuilder(txtRecord.length());
-    boolean inquote = false;
-    for (int i = 0; i < txtRecord.length(); i++) {
-      char c = txtRecord.charAt(i);
-      if (!inquote) {
-        if (c == ' ') {
-          continue;
-        } else if (c == '"') {
-          inquote = true;
-          continue;
-        }
-      } else {
-        if (c == '"') {
-          inquote = false;
-          continue;
-        } else if (c == '\\') {
-          c = txtRecord.charAt(++i);
-          assert c == '"' || c == '\\';
-        }
-      }
-      sb.append(c);
-    }
-    return sb.toString();
+    return rrf;
   }
 
   private static String getLocalHostname() {
