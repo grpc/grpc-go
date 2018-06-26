@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -67,8 +66,8 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
 
     AutoConfiguredLoadBalancer(Helper helper) {
       this.helper = helper;
-      setDelegateFactory(PickFirstBalancerFactory.getInstance());
-      setDelegate(getDelegateFactory().newLoadBalancer(helper));
+      delegateFactory = PickFirstBalancerFactory.getInstance();
+      delegate = delegateFactory.newLoadBalancer(helper);
     }
 
     //  Must be run inside ChannelExecutor.
@@ -76,14 +75,12 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     public void handleResolvedAddressGroups(
         List<EquivalentAddressGroup> servers, Attributes attributes) {
       Map<String, Object> configMap = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
-      if (configMap != null) {
-        Factory newlbf = decideLoadBalancerFactory(servers, configMap);
-        if (newlbf != null && newlbf != delegateFactory) {
-          helper.updateBalancingState(ConnectivityState.CONNECTING, new EmptySubchannelPicker());
-          getDelegate().shutdown();
-          setDelegateFactory(newlbf);
-          setDelegate(getDelegateFactory().newLoadBalancer(helper));
-        }
+      Factory newlbf = decideLoadBalancerFactory(servers, configMap);
+      if (newlbf != null && newlbf != delegateFactory) {
+        helper.updateBalancingState(ConnectivityState.CONNECTING, new EmptySubchannelPicker());
+        delegate.shutdown();
+        delegateFactory = newlbf;
+        delegate = delegateFactory.newLoadBalancer(helper);
       }
       getDelegate().handleResolvedAddressGroups(servers, attributes);
     }
@@ -100,8 +97,8 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public void shutdown() {
-      getDelegate().shutdown();
-      setDelegate(null);
+      delegate.shutdown();
+      delegate = null;
     }
 
     @VisibleForTesting
@@ -110,18 +107,13 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @VisibleForTesting
-    void setDelegate(LoadBalancer delegate) {
-      this.delegate = delegate;
+    void setDelegate(LoadBalancer lb) {
+      delegate = lb;
     }
 
     @VisibleForTesting
     LoadBalancer.Factory getDelegateFactory() {
       return delegateFactory;
-    }
-
-    @VisibleForTesting
-    void setDelegateFactory(LoadBalancer.Factory delegateFactory) {
-      this.delegateFactory = delegateFactory;
     }
 
     /**
@@ -141,8 +133,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     @Nullable
     @VisibleForTesting
     static LoadBalancer.Factory decideLoadBalancerFactory(
-        List<EquivalentAddressGroup> servers, Map<String, Object> config) {
-      Preconditions.checkNotNull(config);
+        List<EquivalentAddressGroup> servers, @Nullable Map<String, Object> config) {
       // Check for balancer addresses
       boolean haveBalancerAddress = false;
       for (EquivalentAddressGroup s : servers) {
@@ -164,8 +155,11 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
         }
       }
 
-      String serviceConfigChoiceBalancingPolicy =
-          ServiceConfigUtil.getLoadBalancingPolicyFromServiceConfig(config);
+      String serviceConfigChoiceBalancingPolicy = null;
+      if (config != null) {
+        serviceConfigChoiceBalancingPolicy =
+            ServiceConfigUtil.getLoadBalancingPolicyFromServiceConfig(config);
+      }
 
       // Check for an explicitly present lb choice
       if (serviceConfigChoiceBalancingPolicy != null) {
