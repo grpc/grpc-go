@@ -28,7 +28,8 @@ import java.util.Iterator;
 public final class StreamObservers {
   /**
    * Copy the values of an {@link Iterator} to the target {@link CallStreamObserver} while properly
-   * accounting for outbound flow-control.
+   * accounting for outbound flow-control.  After calling this method, {@code target} should no
+   * longer be used.
    *
    * <p>For clients this method is safe to call inside {@link ClientResponseObserver#beforeStart},
    * on servers it is safe to call inside the service method implementation.
@@ -59,7 +60,8 @@ public final class StreamObservers {
 
   /**
    * Copy the values of an {@link Iterable} to the target {@link CallStreamObserver} while properly
-   * accounting for outbound flow-control.
+   * accounting for outbound flow-control.  After calling this method, {@code target} should no
+   * longer be used.
    *
    * <p>For clients this method is safe to call inside {@link ClientResponseObserver#beforeStart},
    * on servers it is safe to call inside the service method implementation.
