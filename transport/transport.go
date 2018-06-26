@@ -29,6 +29,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"time"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -487,8 +489,8 @@ type TargetInfo struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, onSuccess func()) (ClientTransport, error) {
-	return newHTTP2Client(connectCtx, ctx, target, opts, onSuccess)
+func NewClientTransport(connectCtx, ctx context.Context, target TargetInfo, opts ConnectOptions, deadline time.Time, onSuccess, onDeadline func(), onGoAway func(GoAwayReason), onClose func()) (ClientTransport, error) {
+	return newHTTP2Client(connectCtx, ctx, target, opts, deadline, onSuccess, onDeadline, onGoAway, onClose)
 }
 
 // Options provides additional hints and information for message
