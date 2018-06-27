@@ -224,15 +224,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		ctx = trace.NewContext(ctx, trInfo.tr)
-		defer func() {
-			if err != nil {
-				// Need to call tr.finish() if error is returned.
-				// Because tr will not be returned to caller.
-				trInfo.tr.LazyPrintf("RPC: [%v]", err)
-				trInfo.tr.SetError()
-				trInfo.tr.Finish()
-			}
-		}()
 	}
 	ctx = newContextWithRPCInfo(ctx, c.failFast)
 	sh := cc.dopts.copts.StatsHandler
@@ -246,18 +237,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			FailFast:  c.failFast,
 		}
 		sh.HandleRPC(ctx, begin)
-		defer func() {
-			if err != nil {
-				// Only handle end stats if err != nil.
-				end := &stats.End{
-					Client:    true,
-					Error:     err,
-					BeginTime: beginTime,
-					EndTime:   time.Now(),
-				}
-				sh.HandleRPC(ctx, end)
-			}
-		}()
 	}
 
 	cs := &clientStream{
@@ -280,19 +259,23 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	cs.callInfo.stream = cs
-	if err := cs.newAttemptLocked(); err != nil {
+	err = cs.newAttemptLocked()
+	// Only this initial attempt has stats/tracing.  Assign unconditionally so
+	// finish() will affect stats and tracing.
+	// TODO(dfawley): move to newAttempt when per-attempt stats are implemented.
+	cs.attempt.statsHandler = sh
+	cs.attempt.trInfo = trInfo
+
+	if err != nil {
+		cs.finish(err)
 		return nil, err
 	}
 
 	op := func(a *csAttempt) error { return a.newStream() }
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
+		cs.finish(err)
 		return nil, err
 	}
-
-	// Only this initial attempt has stats/tracing.
-	// TODO(dfawley): remove when per-attempt stats are implemented.
-	cs.attempt.statsHandler = sh
-	cs.attempt.trInfo = trInfo
 
 	if desc != unaryStreamDesc {
 		// Listen on cc and stream contexts to cleanup when the user closes the
@@ -313,10 +296,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func (cs *clientStream) newAttemptLocked() error {
+	cs.attempt = &csAttempt{cs: cs, dc: cs.cc.dopts.dc}
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
-	cs.attempt = &csAttempt{cs: cs, dc: cs.cc.dopts.dc}
 	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast)
 	if err != nil {
 		return err
@@ -331,10 +314,6 @@ func (a *csAttempt) newStream() error {
 	cs.callHdr.PreviousAttempts = cs.numRetries
 	s, err := a.t.NewStream(cs.ctx, cs.callHdr)
 	if err != nil {
-		if a.done != nil {
-			a.done(balancer.DoneInfo{Err: err})
-			a.done = nil
-		}
 		return toRPCErr(err)
 	}
 	cs.attempt.s = s
@@ -516,6 +495,7 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 			cs.commitAttemptLocked()
 			return err
 		}
+		cs.attempt.finish(lastErr)
 		if err := cs.newAttemptLocked(); err != nil {
 			return err
 		}
@@ -564,8 +544,11 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 	err := cs.withRetry(func(a *csAttempt) error {
 		var err error
 		m, err = a.s.Header()
-		return err
+		return toRPCErr(err)
 	}, cs.commitAttemptLocked)
+	if err != nil {
+		cs.finish(err)
+	}
 	return m, err
 }
 
@@ -691,11 +674,14 @@ func (cs *clientStream) finish(err error) {
 			cs.cc.incrCallsSucceeded()
 		}
 	}
-	if cs.attempt.s != nil {
+	if cs.attempt != nil {
 		cs.attempt.finish(err)
 	}
-	for _, o := range cs.opts {
-		o.after(cs.callInfo)
+	// after functions all rely upon having a stream.
+	if cs.attempt.s != nil {
+		for _, o := range cs.opts {
+			o.after(cs.callInfo)
+		}
 	}
 	cs.cancel()
 }
@@ -801,13 +787,19 @@ func (a *csAttempt) finish(err error) {
 		// Ending a stream with EOF indicates a success.
 		err = nil
 	}
-	a.t.CloseStream(a.s, err)
+	if a.s != nil {
+		a.t.CloseStream(a.s, err)
+	}
 
 	if a.done != nil {
+		br := false
+		if a.s != nil {
+			br = a.s.BytesReceived()
+		}
 		a.done(balancer.DoneInfo{
 			Err:           err,
-			BytesSent:     true,
-			BytesReceived: a.s.BytesReceived(),
+			BytesSent:     a.s != nil,
+			BytesReceived: br,
 		})
 	}
 	if a.statsHandler != nil {
