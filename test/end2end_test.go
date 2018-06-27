@@ -1888,9 +1888,7 @@ func TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	te.resolverScheme = r.Scheme()
 	te.nonBlockingDial = true
-	fmt.Println("1")
 	cc := te.clientConn()
-	fmt.Println("10")
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
@@ -3075,7 +3073,9 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 		argSize  = 1
 		respSize = -1
 	)
-	ctx := metadata.NewOutgoingContext(context.Background(), testMetadata)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -3151,20 +3151,20 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 }
 
-func TestRetry(t *testing.T) {
+func TestTransparentRetry(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		if e.name == "handler-tls" {
 			// Fails with RST_STREAM / FLOW_CONTROL_ERROR
 			continue
 		}
-		testRetry(t, e)
+		testTransparentRetry(t, e)
 	}
 }
 
-// This test make sure RPCs are retried times when they receive a RST_STREAM
+// This test makes sure RPCs are retried times when they receive a RST_STREAM
 // with the REFUSED_STREAM error code, which the InTapHandle provokes.
-func testRetry(t *testing.T, e env) {
+func testTransparentRetry(t *testing.T, e env) {
 	te := newTest(t, e)
 	attempts := 0
 	successAttempt := 2
@@ -4845,8 +4845,11 @@ type stubServer struct {
 
 	// A client connected to this service the test may use.  Created in Start().
 	client testpb.TestServiceClient
+	cc     *grpc.ClientConn
 
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
+
+	r *manual.Resolver
 }
 
 func (ss *stubServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -4858,7 +4861,11 @@ func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 }
 
 // Start starts the server and creates a client connected to it.
-func (ss *stubServer) Start(sopts []grpc.ServerOption) error {
+func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	ss.r = r
+	ss.cleanups = append(ss.cleanups, cleanup)
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return fmt.Errorf(`net.Listen("tcp", "localhost:0") = %v`, err)
@@ -4870,14 +4877,38 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption) error {
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	target := ss.r.Scheme() + ":///" + lis.Addr().String()
+
+	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+	cc, err := grpc.Dial(target, opts...)
 	if err != nil {
-		return fmt.Errorf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
 	}
+	ss.cc = cc
+	ss.r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	if err := ss.waitForReady(cc); err != nil {
+		return err
+	}
+
 	ss.cleanups = append(ss.cleanups, func() { cc.Close() })
 
 	ss.client = testpb.NewTestServiceClient(cc)
 	return nil
+}
+
+func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			return nil
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			return ctx.Err()
+		}
+	}
 }
 
 func (ss *stubServer) Stop() {
@@ -5125,7 +5156,7 @@ func TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 	}
 	sopts := []grpc.ServerOption{}
 	if err := ss.Start(sopts); err != nil {
-		t.Fatalf("Error starting endpoing server: %v", err)
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -5143,7 +5174,6 @@ func TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 			t.Fatalf("stream.Send(_) = %v, want io.EOF", err)
 		}
 	}
-
 }
 
 type windowSizeConfig struct {

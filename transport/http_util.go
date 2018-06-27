@@ -137,6 +137,9 @@ func isReservedHeader(hdr string) bool {
 		"grpc-status",
 		"grpc-timeout",
 		"grpc-status-details-bin",
+		// Intentionally exclude grpc-previous-rpc-attempts and
+		// grpc-retry-pushback-ms, which are "reserved", but their API
+		// intentionally works via metadata.
 		"te":
 		return true
 	default:
@@ -144,8 +147,8 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-// isWhitelistedHeader checks whether hdr should be propagated
-// into metadata visible to users.
+// isWhitelistedHeader checks whether hdr should be propagated into metadata
+// visible to users, even though it is classified as "reserved", above.
 func isWhitelistedHeader(hdr string) bool {
 	switch hdr {
 	case ":authority", "user-agent":

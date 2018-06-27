@@ -191,6 +191,8 @@ type Stream struct {
 	header  metadata.MD // the received header metadata.
 	trailer metadata.MD // the key-value map of trailer metadata.
 
+	noHeaders bool // set if the client never received headers (set only after the stream is done).
+
 	// On the server-side, headerSent is atomically set to 1 when the headers are sent out.
 	headerSent uint32
 
@@ -280,6 +282,19 @@ func (s *Stream) Header() (metadata.MD, error) {
 	default:
 	}
 	return nil, err
+}
+
+// TrailersOnly blocks until a header or trailers-only frame is received and
+// then returns true if the stream was trailers-only.  If the stream ends
+// before headers are received, returns true, nil.  If a context error happens
+// first, returns it as a status error.  Client-side only.
+func (s *Stream) TrailersOnly() (bool, error) {
+	err := s.waitOnHeader()
+	if err != nil {
+		return false, err
+	}
+	// if !headerDone, some other connection error occurred.
+	return s.noHeaders && atomic.LoadUint32(&s.headerDone) == 1, nil
 }
 
 // Trailer returns the cached trailer metedata. Note that if it is not called
@@ -534,6 +549,8 @@ type CallHdr struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
 	// for more details.
 	ContentSubtype string
+
+	PreviousAttempts int // value of grpc-previous-rpc-attempts header to set
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport
@@ -628,6 +645,11 @@ func streamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 		Code: c,
 		Desc: fmt.Sprintf(format, a...),
 	}
+}
+
+// streamError creates an StreamError with the specified error code and description.
+func streamError(c codes.Code, desc string) StreamError {
+	return StreamError{Code: c, Desc: desc}
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

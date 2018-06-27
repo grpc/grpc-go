@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
@@ -116,6 +118,7 @@ type dialOptions struct {
 	waitForHandshake     bool
 	channelzParentID     int64
 	disableServiceConfig bool
+	disableRetry         bool
 }
 
 const (
@@ -125,15 +128,6 @@ const (
 	defaultWriteBufSize = 32 * 1024
 	defaultReadBufSize  = 32 * 1024
 )
-
-func defaultDialOptions() dialOptions {
-	return dialOptions{
-		copts: transport.ConnectOptions{
-			WriteBufferSize: defaultWriteBufSize,
-			ReadBufferSize:  defaultReadBufSize,
-		},
-	}
-}
 
 // RegisterChannelz turns on channelz service.
 // This is an EXPERIMENTAL API.
@@ -453,6 +447,32 @@ func WithDisableServiceConfig() DialOption {
 	}
 }
 
+// WithDisableRetry returns a DialOption that disables retries, even if the
+// service config enables them.  This does not impact transparent retries,
+// which will happen automatically if no data is written to the wire or if the
+// RPC is unprocessed by the remote server.
+//
+// Retry support is currently disabled by default, but will be enabled by
+// default in the future.  Until then, it may be enabled by setting the
+// environment variable "GRPC_GO_RETRY" to "on".
+//
+// This API is EXPERIMENTAL.
+func WithDisableRetry() DialOption {
+	return func(o *dialOptions) {
+		o.disableRetry = true
+	}
+}
+
+func defaultDialOptions() dialOptions {
+	return dialOptions{
+		disableRetry: !envconfig.Retry,
+		copts: transport.ConnectOptions{
+			WriteBufferSize: defaultWriteBufSize,
+			ReadBufferSize:  defaultReadBufSize,
+		},
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
@@ -482,8 +502,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		dopts:          defaultDialOptions(),
 		blockingpicker: newPickerWrapper(),
 	}
+	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
+	cc.dopts = defaultDialOptions()
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -717,6 +739,7 @@ type ClientConn struct {
 	preBalancerName string // previous balancer name.
 	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
+	retryThrottler  atomic.Value
 
 	channelzID          int64 // channelz unique identification number
 	czmu                sync.RWMutex
@@ -1049,6 +1072,19 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	cc.mu.Lock()
 	cc.scRaw = js
 	cc.sc = sc
+
+	if sc.retryThrottling != nil {
+		newThrottler := &retryThrottler{
+			tokens: sc.retryThrottling.MaxTokens,
+			max:    sc.retryThrottling.MaxTokens,
+			thresh: sc.retryThrottling.MaxTokens / 2,
+			ratio:  sc.retryThrottling.TokenRatio,
+		}
+		cc.retryThrottler.Store(newThrottler)
+	} else {
+		cc.retryThrottler.Store((*retryThrottler)(nil))
+	}
+
 	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
 		if cc.curBalancerName == grpclbName {
 			// If current balancer is grpclb, there's at least one grpclb
@@ -1062,6 +1098,7 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
 		}
 	}
+
 	cc.mu.Unlock()
 	return nil
 }
@@ -1589,6 +1626,43 @@ func (ac *addrConn) incrCallsFailed() {
 	ac.czmu.Lock()
 	ac.callsFailed++
 	ac.czmu.Unlock()
+}
+
+type retryThrottler struct {
+	max    float64
+	thresh float64
+	ratio  float64
+
+	mu     sync.Mutex
+	tokens float64 // TODO(dfawley): replace with atomic and remove lock.
+}
+
+// throttle subtracts a retry token from the pool and returns whether a retry
+// should be throttled (disallowed) based upon the retry throttling policy in
+// the service config.
+func (rt *retryThrottler) throttle() bool {
+	if rt == nil {
+		return false
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.tokens--
+	if rt.tokens < 0 {
+		rt.tokens = 0
+	}
+	return rt.tokens <= rt.thresh
+}
+
+func (rt *retryThrottler) successfulRPC() {
+	if rt == nil {
+		return
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.tokens += rt.ratio
+	if rt.tokens > rt.max {
+		rt.tokens = rt.max
+	}
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
