@@ -39,6 +39,8 @@ import (
 )
 
 func init() {
+	// Assign protoToSocketOption to protoToSocketOpt in order to enable socket option
+	// data conversion from proto message to channelz defined struct.
 	protoToSocketOpt = protoToSocketOption
 }
 
