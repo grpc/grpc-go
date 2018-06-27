@@ -179,6 +179,10 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 }
 
 func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
+	// 1. Client connects to a server that doesn't send preface.
+	// 2. After minConnectTimeout(500 ms here), client disconnects and retries.
+	// 3. The new server sends its preface.
+	// 4. Client doesn't kill the connection this time.
 	mctBkp := getMinConnectTimeout()
 	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
@@ -204,6 +208,7 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 		}
 	}()
 	done := make(chan struct{})
+	accepted := make(chan struct{})
 	go func() { // Launch the server.
 		defer close(done)
 		conn1, err := lis.Accept()
@@ -218,6 +223,7 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			t.Errorf("Error while accepting. Err: %v", err)
 			return
 		}
+		close(accepted)
 		framer := http2.NewFramer(conn2, conn2)
 		if err = framer.WriteSettings(http2.Setting{}); err != nil {
 			t.Errorf("Error while writing settings. Err: %v", err)
@@ -242,9 +248,16 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
-	time.Sleep(time.Second * 2) // Let things play out.
+	// wait for connection to be accepted on the server.
+	timer := time.NewTimer(time.Second * 10)
+	select {
+	case <-accepted:
+	case <-timer.C:
+		t.Fatalf("Client didn't make another connection request in time.")
+	}
+	// Make sure the connection stays alive for sometime.
+	time.Sleep(time.Second * 2)
 	atomic.StoreUint32(&over, 1)
-	lis.Close()
 	client.Close()
 	<-done
 }
