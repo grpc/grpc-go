@@ -326,10 +326,6 @@ func (cs *clientStream) newAttemptLocked() error {
 	return nil
 }
 
-type fatalErr struct {
-	error
-}
-
 func (a *csAttempt) newStream() error {
 	cs := a.cs
 	cs.callHdr.PreviousAttempts = cs.numRetries
@@ -417,15 +413,14 @@ func (cs *clientStream) commitAttempt() {
 // shouldRetry returns nil if the RPC should be retried; otherwise it returns
 // the error that should be returned by the operation.
 func (cs *clientStream) shouldRetry(err error) error {
-	// In the event of any error from NewStream, we never attempted to write
-	// anything to the wire, so we can retry indefinitely for non-fail-fast
-	// RPCs.
 	if cs.attempt.s == nil && !cs.callInfo.failFast {
+		// In the event of any error from NewStream (attempt.s == nil), we
+		// never attempted to write anything to the wire, so we can retry
+		// indefinitely for non-fail-fast RPCs.
 		return nil
 	}
-
-	// Wait for the current attempt to complete so trailers have arrived.
 	if cs.finished || cs.committed {
+		// RPC is finished or committed; cannot retry.
 		return err
 	}
 	if cs.firstAttempt && !cs.callInfo.failFast && (cs.attempt.s == nil || cs.attempt.s.Unprocessed()) {
@@ -578,6 +573,9 @@ func (cs *clientStream) Trailer() metadata.MD {
 	// On RPC failure, we never need to retry, because usage requires that
 	// RecvMsg() returned a non-nil error before calling this function is valid.
 	// We would have retried earlier if necessary.
+	if cs.attempt.s == nil {
+		return nil
+	}
 	return cs.attempt.s.Trailer()
 }
 
