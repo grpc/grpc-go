@@ -259,14 +259,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	cs.callInfo.stream = cs
-	err = cs.newAttemptLocked()
-	// Only this initial attempt has stats/tracing.  Assign unconditionally so
-	// finish() will affect stats and tracing.
+	// Only this initial attempt has stats/tracing.
 	// TODO(dfawley): move to newAttempt when per-attempt stats are implemented.
-	cs.attempt.statsHandler = sh
-	cs.attempt.trInfo = trInfo
-
-	if err != nil {
+	if err := cs.newAttemptLocked(sh, trInfo); err != nil {
 		cs.finish(err)
 		return nil, err
 	}
@@ -295,8 +290,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cs, nil
 }
 
-func (cs *clientStream) newAttemptLocked() error {
-	cs.attempt = &csAttempt{cs: cs, dc: cs.cc.dopts.dc}
+func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo traceInfo) error {
+	cs.attempt = &csAttempt{
+		cs:           cs,
+		dc:           cs.cc.dopts.dc,
+		statsHandler: sh,
+		trInfo:       trInfo,
+	}
+
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
@@ -496,7 +497,7 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 			return err
 		}
 		cs.attempt.finish(lastErr)
-		if err := cs.newAttemptLocked(); err != nil {
+		if err := cs.newAttemptLocked(nil, traceInfo{}); err != nil {
 			return err
 		}
 		if lastErr = cs.replayBufferLocked(); lastErr == nil {
