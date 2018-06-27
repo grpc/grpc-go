@@ -59,15 +59,25 @@ type StreamDesc struct {
 type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context
-	// SendMsg blocks until it sends m, the stream is done or the stream
-	// breaks.
-	// On error, it aborts the stream and returns an RPC status on client
-	// side. On server side, it simply returns the error to the caller.
-	// SendMsg is called by generated code. Also Users can call SendMsg
-	// directly when it is really needed in their use cases.
-	// It's safe to have a goroutine calling SendMsg and another goroutine calling
-	// recvMsg on the same stream at the same time.
-	// But it is not safe to call SendMsg on the same stream in different goroutines.
+	// SendMsg is generally called by generated code. On error, SendMsg aborts
+	// the stream and returns an RPC status on the client side. On the server
+	// side, it simply returns the error to the caller.
+	//
+	// SendMsg blocks until:
+	//   - It schedules m with the transport, or
+	//   - The stream is done, or
+	//   - The stream breaks.
+	//
+	// SendMsg does not wait for an ack. An untimely stream closure
+	// can result in any buffered messages along the way (including
+	// those in the client-side buffer that comes with gRPC by default)
+	// being lost. To ensure delivery, users must call RecvMsg until
+	// receiving an EOF before closing the stream.
+	//
+	// It's safe to have a goroutine calling SendMsg and another
+	// goroutine calling RecvMsg on the same stream at the same
+	// time. It is not safe to call SendMsg on the same stream
+	// in different goroutines.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
