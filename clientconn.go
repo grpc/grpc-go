@@ -121,7 +121,19 @@ type dialOptions struct {
 const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultClientMaxSendMessageSize    = math.MaxInt32
+	// http2IOBufSize specifies the buffer size for sending frames.
+	defaultWriteBufSize = 32 * 1024
+	defaultReadBufSize  = 32 * 1024
 )
+
+func defaultDialOptions() dialOptions {
+	return dialOptions{
+		copts: transport.ConnectOptions{
+			WriteBufferSize: defaultWriteBufSize,
+			ReadBufferSize:  defaultReadBufSize,
+		},
+	}
+}
 
 // RegisterChannelz turns on channelz service.
 // This is an EXPERIMENTAL API.
@@ -141,8 +153,11 @@ func WithWaitForHandshake() DialOption {
 	}
 }
 
-// WithWriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
-// before doing a write on the wire.
+// WithWriteBufferSize determines how much data can be batched before doing a write on the wire.
+// The corresponding memory allocation for this buffer will be twice the size to keep syscalls low.
+// The default value for this buffer is 32KB.
+// Zero will disable the write buffer such that each write will be on underlying connection.
+// Note: A Send call may not directly translate to a write.
 func WithWriteBufferSize(s int) DialOption {
 	return func(o *dialOptions) {
 		o.copts.WriteBufferSize = s
@@ -151,6 +166,9 @@ func WithWriteBufferSize(s int) DialOption {
 
 // WithReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for each read syscall.
+// The default value for this buffer is 32KB
+// Zero will disable read buffer for a connection so data framer can access the underlying
+// conn directly.
 func WithReadBufferSize(s int) DialOption {
 	return func(o *dialOptions) {
 		o.copts.ReadBufferSize = s
@@ -458,10 +476,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target: target,
-		csMgr:  &connectivityStateManager{},
-		conns:  make(map[*addrConn]struct{}),
-
+		target:         target,
+		csMgr:          &connectivityStateManager{},
+		conns:          make(map[*addrConn]struct{}),
+		dopts:          defaultDialOptions(),
 		blockingpicker: newPickerWrapper(),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
