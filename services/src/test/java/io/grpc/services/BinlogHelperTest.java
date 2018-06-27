@@ -575,7 +575,7 @@ public final class BinlogHelperTest {
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
-            .setMethodName("service/method")
+            .setMethodName("/service/method")
             .setTimeout(Durations.fromMillis(1234))
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
@@ -592,7 +592,7 @@ public final class BinlogHelperTest {
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
-            .setMethodName("service/method")
+            .setMethodName("/service/method")
             .setType(GrpcLogEntry.Type.SEND_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
@@ -615,7 +615,7 @@ public final class BinlogHelperTest {
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
-            .setMethodName("service/method")
+            .setMethodName("/service/method")
             .setTimeout(Durations.fromMillis(1234))
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
@@ -634,7 +634,7 @@ public final class BinlogHelperTest {
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
-            .setMethodName("service/method")
+            .setMethodName("/service/method")
             .setType(GrpcLogEntry.Type.RECV_INITIAL_METADATA)
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
