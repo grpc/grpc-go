@@ -38,6 +38,10 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 )
 
+func init() {
+	protoToSocketOpt = protoToSocketOption
+}
+
 func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
 	if d != nil {
 		if dur, err := ptypes.Duration(d); err == nil {
@@ -116,57 +120,6 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 		}
 	}
 	return skdata
-}
-
-func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
-	ds := &dummySocket{}
-	pdata := s.GetData()
-	ds.streamsStarted = pdata.GetStreamsStarted()
-	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
-	ds.streamsFailed = pdata.GetStreamsFailed()
-	ds.messagesSent = pdata.GetMessagesSent()
-	ds.messagesReceived = pdata.GetMessagesReceived()
-	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastLocalStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastRemoteStreamCreatedTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageSentTimestamp = t
-		}
-	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageReceivedTimestamp = t
-		}
-	}
-	if v := pdata.GetLocalFlowControlWindow(); v != nil {
-		ds.localFlowControlWindow = v.Value
-	}
-	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
-		ds.remoteFlowControlWindow = v.Value
-	}
-	if v := pdata.GetOption(); v != nil {
-		ds.socketOptions = protoToSocketOption(v)
-	}
-	if v := s.GetSecurity(); v != nil {
-		ds.security = protoToSecurity(v)
-	}
-	if local := s.GetLocal(); local != nil {
-		ds.localAddr = protoToAddr(local)
-	}
-	if remote := s.GetRemote(); remote != nil {
-		ds.remoteAddr = protoToAddr(remote)
-	}
-	ds.remoteName = s.GetRemoteName()
-	return ds
 }
 
 func TestGetSocketOptions(t *testing.T) {

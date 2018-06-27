@@ -36,7 +36,14 @@ import (
 
 func init() {
 	channelz.TurnOn()
+	protoToSocketOpt = func([]*channelzpb.SocketOption) *channelz.SocketOptionData {
+		return nil
+	}
 }
+
+type protoToSocketOptFunc func([]*channelzpb.SocketOption) *channelz.SocketOptionData
+
+var protoToSocketOpt protoToSocketOptFunc
 
 // emptyTime is used for detecting unset value of time.Time type.
 // For go1.7 and earlier, ptypes.Timestamp will fill in the loc field of time.Time
@@ -163,6 +170,57 @@ func serverProtoToStruct(s *channelzpb.Server) *dummyServer {
 			ds.lastCallStartedTimestamp = t
 		}
 	}
+	return ds
+}
+
+func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
+	ds := &dummySocket{}
+	pdata := s.GetData()
+	ds.streamsStarted = pdata.GetStreamsStarted()
+	ds.streamsSucceeded = pdata.GetStreamsSucceeded()
+	ds.streamsFailed = pdata.GetStreamsFailed()
+	ds.messagesSent = pdata.GetMessagesSent()
+	ds.messagesReceived = pdata.GetMessagesReceived()
+	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
+	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastLocalStreamCreatedTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastRemoteStreamCreatedTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastMessageSentTimestamp = t
+		}
+	}
+	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
+		if !t.Equal(emptyTime) {
+			ds.lastMessageReceivedTimestamp = t
+		}
+	}
+	if v := pdata.GetLocalFlowControlWindow(); v != nil {
+		ds.localFlowControlWindow = v.Value
+	}
+	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
+		ds.remoteFlowControlWindow = v.Value
+	}
+	if v := pdata.GetOption(); v != nil {
+		ds.socketOptions = protoToSocketOption(v)
+	}
+	if v := s.GetSecurity(); v != nil {
+		ds.security = protoToSecurity(v)
+	}
+	if local := s.GetLocal(); local != nil {
+		ds.localAddr = protoToAddr(local)
+	}
+	if remote := s.GetRemote(); remote != nil {
+		ds.remoteAddr = protoToAddr(remote)
+	}
+	ds.remoteName = s.GetRemoteName()
 	return ds
 }
 
