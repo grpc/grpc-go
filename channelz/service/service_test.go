@@ -36,9 +36,6 @@ import (
 
 func init() {
 	channelz.TurnOn()
-	protoToSocketOpt = func([]*channelzpb.SocketOption) *channelz.SocketOptionData {
-		return nil
-	}
 }
 
 type protoToSocketOptFunc func([]*channelzpb.SocketOption) *channelz.SocketOptionData
@@ -208,8 +205,8 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 	if v := pdata.GetRemoteFlowControlWindow(); v != nil {
 		ds.remoteFlowControlWindow = v.Value
 	}
-	if v := pdata.GetOption(); v != nil {
-		ds.socketOptions = protoToSocketOption(v)
+	if v := pdata.GetOption(); v != nil && protoToSocketOpt != nil {
+		ds.socketOptions = protoToSocketOpt(v)
 	}
 	if v := s.GetSecurity(); v != nil {
 		ds.security = protoToSecurity(v)
