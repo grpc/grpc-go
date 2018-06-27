@@ -557,6 +557,11 @@ func (cs *clientStream) Trailer() metadata.MD {
 	// On RPC failure, we never need to retry, because usage requires that
 	// RecvMsg() returned a non-nil error before calling this function is valid.
 	// We would have retried earlier if necessary.
+	//
+	// Commit the attempt anyway, just in case users are not following those
+	// directions -- it will prevent races and should not meaningfully impact
+	// performance.
+	cs.commitAttempt()
 	if cs.attempt.s == nil {
 		return nil
 	}
