@@ -1,5 +1,3 @@
-// +build linux
-
 /*
  *
  * Copyright 2017 gRPC authors.
@@ -32,9 +30,9 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/benchmarkutil"
 )
 
 var (
@@ -59,14 +57,14 @@ func main() {
 	}
 	defer cf.Close()
 	pprof.StartCPUProfile(cf)
-	cpuBeg := getCPUTime()
+	cpuBeg := benchmarkutil.GetCPUTime()
 	// Launch server in a separate goroutine.
 	stop := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis})
 	// Wait on OS terminate signal.
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	<-ch
-	cpu := time.Duration(getCPUTime() - cpuBeg)
+	cpu := time.Duration(benchmarkutil.GetCPUTime() - cpuBeg)
 	stop()
 	pprof.StopCPUProfile()
 	mf, err := os.Create("/tmp/" + *testName + ".mem")
@@ -81,12 +79,4 @@ func main() {
 	fmt.Println("Server CPU utilization:", cpu)
 	fmt.Println("Server CPU profile:", cf.Name())
 	fmt.Println("Server Mem Profile:", mf.Name())
-}
-
-func getCPUTime() int64 {
-	var ts unix.Timespec
-	if err := unix.ClockGettime(unix.CLOCK_PROCESS_CPUTIME_ID, &ts); err != nil {
-		grpclog.Fatal(err)
-	}
-	return ts.Nano()
 }
