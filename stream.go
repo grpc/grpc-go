@@ -59,8 +59,12 @@ type StreamDesc struct {
 type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context
-	// SendMsg blocks until it sends m, the stream is done or the stream
-	// breaks. SendMsg does not wait for an ack - there is no guarantee
+	// SendMsg blocks until:
+	//   - It schedules m with the transport.
+	//   - The stream is done.
+	//   - The stream breaks.
+	//
+	// SendMsg does not wait for an ack - there is no guarantee
 	// of delivery unless an EOF is received from the server.
 	//
 	// Warning: since this method does not wait for an ack, any buffering
