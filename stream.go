@@ -413,6 +413,9 @@ func (cs *clientStream) shouldRetry(err error) error {
 		// RPC is finished or committed; cannot retry.
 		return err
 	}
+	if cs.attempt.s != nil {
+		<-cs.attempt.s.Done()
+	}
 	if cs.firstAttempt && !cs.callInfo.failFast && (cs.attempt.s == nil || cs.attempt.s.Unprocessed()) {
 		// First attempt, wait-for-ready, stream unprocessed: transparently retry.
 		cs.firstAttempt = false
@@ -502,11 +505,11 @@ func (cs *clientStream) shouldRetry(err error) error {
 // Returns nil if a retry was performed and succeeded; error otherwise.
 func (cs *clientStream) retryLocked(lastErr error) error {
 	for {
+		cs.attempt.finish(lastErr)
 		if err := cs.shouldRetry(lastErr); err != nil {
 			cs.commitAttemptLocked()
 			return err
 		}
-		cs.attempt.finish(lastErr)
 		if err := cs.newAttemptLocked(nil, traceInfo{}); err != nil {
 			return err
 		}
@@ -796,6 +799,7 @@ func (a *csAttempt) recvMsg(m interface{}) (err error) {
 func (a *csAttempt) finish(err error) {
 	a.mu.Lock()
 	if a.finished {
+		a.mu.Unlock()
 		return
 	}
 	a.finished = true
