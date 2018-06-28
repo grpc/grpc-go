@@ -351,15 +351,14 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @GuardedBy("lock")
   void streamReadyToStart(OkHttpClientStream clientStream) {
-    synchronized (lock) {
-      if (goAwayStatus != null) {
-        clientStream.transportState().transportReportStatus(goAwayStatus, true, new Metadata());
-      } else if (streams.size() >= maxConcurrentStreams) {
-        pendingStreams.add(clientStream);
-        setInUse();
-      } else {
-        startStream(clientStream);
-      }
+    if (goAwayStatus != null) {
+      clientStream.transportState().transportReportStatus(
+          goAwayStatus, RpcProgress.REFUSED, true, new Metadata());
+    } else if (streams.size() >= maxConcurrentStreams) {
+      pendingStreams.add(clientStream);
+      setInUse();
+    } else {
+      startStream(clientStream);
     }
   }
 
