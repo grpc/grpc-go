@@ -96,6 +96,17 @@ func main() {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else if *useALTS {
+		altsOpts := alts.DefaultClientOptions()
+		if *altsHSAddr != "" {
+			altsOpts.HandshakerServiceAddress = *altsHSAddr
+		}
+		altsTC := alts.NewClientCreds(altsOpts)
+		opts = append(opts, grpc.WithTransportCredentials(altsTC))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
+	}
+	if *useTLS || *useALTS {
 		if *testCase == "compute_engine_creds" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
@@ -113,15 +124,6 @@ func main() {
 		} else if *testCase == "oauth2_auth_token" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(interop.GetToken(*serviceAccountKeyFile, *oauthScope))))
 		}
-	} else if *useALTS {
-		altsOpts := alts.DefaultClientOptions()
-		if *altsHSAddr != "" {
-			altsOpts.HandshakerServiceAddress = *altsHSAddr
-		}
-		altsTC := alts.NewClientCreds(altsOpts)
-		opts = append(opts, grpc.WithTransportCredentials(altsTC))
-	} else {
-		opts = append(opts, grpc.WithInsecure())
 	}
 	opts = append(opts, grpc.WithBlock())
 	conn, err := grpc.Dial(serverAddr, opts...)
