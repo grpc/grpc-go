@@ -515,15 +515,13 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Nullable
-  @SuppressWarnings("unchecked")
   @VisibleForTesting
   static ResourceResolverFactory getResourceResolverFactory(ClassLoader loader) {
     Class<? extends ResourceResolverFactory> jndiClazz;
     try {
       jndiClazz =
-          (Class<? extends ResourceResolverFactory>)
-              Class.forName("io.grpc.internal.JndiResourceResolverFactory", true, loader);
-      assert ResourceResolverFactory.class.isAssignableFrom(jndiClazz);
+          Class.forName("io.grpc.internal.JndiResourceResolverFactory", true, loader)
+              .asSubclass(ResourceResolverFactory.class);
     } catch (ClassNotFoundException e) {
       logger.log(Level.FINE, "Unable to find JndiResourceResolverFactory, skipping.", e);
       return null;
