@@ -66,8 +66,9 @@ type Stream interface {
 	// possible to perform.
 	Context() context.Context
 	// SendMsg is generally called by generated code. On error, SendMsg aborts
-	// the stream and returns an RPC status on the client side. On the server
-	// side, it simply returns the error to the caller.
+	// the stream and returns an io.EOF on the client side; the status may be
+	// determined by calling RecvMsg. On the server side, it simply returns
+	// the error to the caller.
 	//
 	// SendMsg blocks until:
 	//   - It schedules m with the transport, or
@@ -78,7 +79,7 @@ type Stream interface {
 	// can result in any buffered messages along the way (including
 	// those in the client-side buffer that comes with gRPC by default)
 	// being lost. To ensure delivery, users must call RecvMsg until
-	// receiving an EOF before closing the stream.
+	// receiving an EOF before cancelling the context.
 	//
 	// It's safe to have a goroutine calling SendMsg and another
 	// goroutine calling RecvMsg on the same stream at the same
