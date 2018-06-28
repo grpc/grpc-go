@@ -19,8 +19,6 @@
 package roundrobin_test
 
 import (
-	"fmt"
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -30,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
+	"google.golang.org/grpc/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -61,33 +60,20 @@ func (t *test) cleanup() {
 	}
 }
 
-func startTestServers(count int) (_ *test, err error) {
+func startTestServers(tt *testing.T, count int) *test {
 	t := &test{}
 
-	defer func() {
-		if err != nil {
-			for _, s := range t.servers {
-				s.Stop()
-			}
-		}
-	}()
 	for i := 0; i < count; i++ {
-		lis, err := net.Listen("tcp", "localhost:0")
-		if err != nil {
-			return nil, fmt.Errorf("Failed to listen %v", err)
-		}
+		srv := grpctest.NewServer(tt)
 
-		s := grpc.NewServer()
-		testpb.RegisterTestServiceServer(s, &testServer{})
-		t.servers = append(t.servers, s)
-		t.addresses = append(t.addresses, lis.Addr().String())
+		testpb.RegisterTestServiceServer(srv.GRPC, &testServer{})
+		t.servers = append(t.servers, srv.GRPC)
+		t.addresses = append(t.addresses, srv.Addr)
 
-		go func(s *grpc.Server, l net.Listener) {
-			s.Serve(l)
-		}(s, lis)
+		srv.Start()
 	}
 
-	return t, nil
+	return t
 }
 
 func TestOneBackend(t *testing.T) {
@@ -95,10 +81,7 @@ func TestOneBackend(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	test, err := startTestServers(1)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, 1)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
@@ -127,10 +110,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	defer cleanup()
 
 	backendCount := 5
-	test, err := startTestServers(backendCount)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, backendCount)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
@@ -186,10 +166,7 @@ func TestAddressesRemoved(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	test, err := startTestServers(1)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, 1)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
@@ -228,10 +205,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	test, err := startTestServers(1)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, 1)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
@@ -262,10 +236,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	test, err := startTestServers(1)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, 1)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
@@ -311,10 +282,7 @@ func TestOneServerDown(t *testing.T) {
 	defer cleanup()
 
 	backendCount := 3
-	test, err := startTestServers(backendCount)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, backendCount)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name), grpc.WithWaitForHandshake())
@@ -409,10 +377,7 @@ func TestAllServersDown(t *testing.T) {
 	defer cleanup()
 
 	backendCount := 3
-	test, err := startTestServers(backendCount)
-	if err != nil {
-		t.Fatalf("failed to start servers: %v", err)
-	}
+	test := startTestServers(t, backendCount)
 	defer test.cleanup()
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name), grpc.WithWaitForHandshake())
