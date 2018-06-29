@@ -413,6 +413,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 		// RPC is finished or committed; cannot retry.
 		return err
 	}
+	// Wait for the trailers.
 	if cs.attempt.s != nil {
 		<-cs.attempt.s.Done()
 	}
