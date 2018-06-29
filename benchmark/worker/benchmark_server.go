@@ -154,15 +154,12 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		grpclog.Fatalf("failed to get port number from server address: %v", err)
 	}
 
-	rusage := new(benchmarkutil.Rusage)
-	benchmarkutil.Getrusage(rusage)
-
 	return &benchmarkServer{
 		port:            p,
 		cores:           numOfCores,
 		closeFunc:       closeFunc,
 		lastResetTime:   time.Now(),
-		rusageLastReset: rusage,
+		rusageLastReset: benchmarkutil.GetRusage(),
 	}, nil
 }
 
@@ -172,8 +169,7 @@ func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
 	wallTimeElapsed := time.Since(bs.lastResetTime).Seconds()
-	rusageLatest := new(benchmarkutil.Rusage)
-	benchmarkutil.Getrusage(rusageLatest)
+	rusageLatest := benchmarkutil.GetRusage()
 	uTimeElapsed, sTimeElapsed := benchmarkutil.CPUTimeDiff(bs.rusageLastReset, rusageLatest)
 
 	if reset {

@@ -217,9 +217,6 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		return nil, err
 	}
 
-	rusage := new(benchmarkutil.Rusage)
-	benchmarkutil.Getrusage(rusage)
-
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 	bc := &benchmarkClient{
 		histogramOptions: stats.HistogramOptions{
@@ -233,7 +230,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		stop:            make(chan bool),
 		lastResetTime:   time.Now(),
 		closeConns:      closeConns,
-		rusageLastReset: rusage,
+		rusageLastReset: benchmarkutil.GetRusage(),
 	}
 
 	if err = performRPCs(config, conns, bc); err != nil {
@@ -335,7 +332,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	var wallTimeElapsed, uTimeElapsed, sTimeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
-	latestRusage := new(benchmarkutil.Rusage)
 
 	if reset {
 		// Merging histogram may take some time.
@@ -350,7 +346,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		benchmarkutil.Getrusage(latestRusage)
+		latestRusage := benchmarkutil.GetRusage()
 		uTimeElapsed, sTimeElapsed = benchmarkutil.CPUTimeDiff(bc.rusageLastReset, latestRusage)
 
 		bc.rusageLastReset = latestRusage
@@ -362,8 +358,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		benchmarkutil.Getrusage(latestRusage)
-		uTimeElapsed, sTimeElapsed = benchmarkutil.CPUTimeDiff(bc.rusageLastReset, latestRusage)
+		uTimeElapsed, sTimeElapsed = benchmarkutil.CPUTimeDiff(bc.rusageLastReset, benchmarkutil.GetRusage())
 	}
 
 	b := make([]uint32, len(mergedHistogram.Buckets))

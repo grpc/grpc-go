@@ -35,8 +35,10 @@ func GetCPUTime() int64 {
 // Rusage is an empty struct under non-linux or appengine environment.
 type Rusage struct{}
 
-// Getrusage is a no-op function under non-linux or appengine environment.
-func Getrusage(rusage *Rusage) {}
+// GetRusage is a no-op function under non-linux or appengine environment.
+func GetRusage() (rusage *Rusage) {
+	return nil
+}
 
 // CPUTimeDiff returns the differences of user CPU time and system CPU time used
 // between two Rusage structs. It a no-op function for non-linux or appengine environment.

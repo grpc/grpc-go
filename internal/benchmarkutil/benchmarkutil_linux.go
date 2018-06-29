@@ -40,9 +40,11 @@ func GetCPUTime() int64 {
 // TODO(lyuxuan): use type alias after go1.8 is no longer supported.
 type Rusage syscall.Rusage
 
-// Getrusage returns the resource usage of current process.
-func Getrusage(rusage *Rusage) {
+// GetRusage returns the resource usage of current process.
+func GetRusage() (rusage *Rusage) {
+	rusage = new(Rusage)
 	syscall.Getrusage(syscall.RUSAGE_SELF, (*syscall.Rusage)(rusage))
+	return
 }
 
 // CPUTimeDiff returns the differences of user CPU time and system CPU time used
