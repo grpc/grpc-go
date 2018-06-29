@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.HandlerRegistry;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import java.util.ArrayList;
@@ -26,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-final class InternalHandlerRegistry {
+final class InternalHandlerRegistry extends HandlerRegistry {
 
   private final List<ServerServiceDefinition> services;
   private final Map<String, ServerMethodDefinition<?, ?>> methods;
@@ -40,16 +41,19 @@ final class InternalHandlerRegistry {
   /**
    * Returns the service definitions in this registry.
    */
+  @Override
   public List<ServerServiceDefinition> getServices() {
     return services;
   }
 
   @Nullable
-  ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
+  @Override
+  public ServerMethodDefinition<?, ?> lookupMethod(String methodName, @Nullable String authority) {
+    // TODO (carl-mastrangelo): honor authority header.
     return methods.get(methodName);
   }
 
-  static class Builder {
+  static final class Builder {
 
     // Store per-service first, to make sure services are added/replaced atomically.
     private final HashMap<String, ServerServiceDefinition> services =

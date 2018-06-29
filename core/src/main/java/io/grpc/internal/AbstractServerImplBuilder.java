@@ -65,8 +65,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       }
 
       @Override
-      public ServerMethodDefinition<?, ?> lookupMethod(String methodName,
-          @Nullable String authority) {
+      @Nullable
+      public ServerMethodDefinition<?, ?> lookupMethod(
+          String methodName, @Nullable String authority) {
         return null;
       }
     };

@@ -83,7 +83,7 @@ public final class ServerImpl extends io.grpc.Server implements Instrumented<Ser
   private final ObjectPool<? extends Executor> executorPool;
   /** Executor for application processing. Safe to read after {@link #start()}. */
   private Executor executor;
-  private final InternalHandlerRegistry registry;
+  private final HandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
   private final List<ServerTransportFilter> transportFilters;
   // This is iterated on a per-call basis.  Use an array instead of a Collection to avoid iterator
