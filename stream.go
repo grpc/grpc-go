@@ -645,8 +645,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 func (cs *clientStream) RecvMsg(m interface{}) error {
 	err := cs.withRetry(func(a *csAttempt) error {
 		err := a.recvMsg(m)
-		if err != nil || !cs.desc.ServerStreams {
-			// err != nil or non-server-streaming indicates end of stream.
+		if !cs.desc.ServerStreams {
+			// Finish for non-server-streaming RPCs even on non-nil error.
 			a.finish(err)
 		}
 		return err
