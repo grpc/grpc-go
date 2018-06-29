@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
 final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
 
   @VisibleForTesting
-  static final String ROUND_ROUND_LOAD_BALANCER_FACTORY_NAME =
+  static final String ROUND_ROBIN_LOAD_BALANCER_FACTORY_NAME =
       "io.grpc.util.RoundRobinLoadBalancerFactory";
   @VisibleForTesting
   static final String GRPCLB_LOAD_BALANCER_FACTORY_NAME =
@@ -165,7 +165,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
       if (serviceConfigChoiceBalancingPolicy != null) {
         if (serviceConfigChoiceBalancingPolicy.toUpperCase(Locale.ROOT).equals("ROUND_ROBIN")) {
           try {
-            Class<?> lbFactoryClass = Class.forName(ROUND_ROUND_LOAD_BALANCER_FACTORY_NAME);
+            Class<?> lbFactoryClass = Class.forName(ROUND_ROBIN_LOAD_BALANCER_FACTORY_NAME);
             Method getInstance = lbFactoryClass.getMethod("getInstance");
             return (LoadBalancer.Factory) getInstance.invoke(null);
           } catch (RuntimeException e) {
