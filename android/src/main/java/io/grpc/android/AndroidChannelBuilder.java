@@ -187,7 +187,15 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
       if (context != null) {
         connectivityManager =
             (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        configureNetworkMonitoring();
+        try {
+          configureNetworkMonitoring();
+        } catch (SecurityException e) {
+          Log.w(
+              LOG_TAG,
+              "Failed to configure network monitoring. Does app have ACCESS_NETWORK_STATE"
+                  + " permission?",
+              e);
+        }
       } else {
         connectivityManager = null;
       }
@@ -195,29 +203,10 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
     @GuardedBy("lock")
     private void configureNetworkMonitoring() {
-      // Eagerly check current network state to verify app has required permissions
-      NetworkInfo currentNetwork;
-      try {
-        currentNetwork = connectivityManager.getActiveNetworkInfo();
-      } catch (SecurityException e) {
-        Log.w(
-            LOG_TAG,
-            "Failed to configure network monitoring. Does app have ACCESS_NETWORK_STATE"
-                + " permission?",
-            e);
-        return;
-      }
-
       // Android N added the registerDefaultNetworkCallback API to listen to changes in the device's
       // default network. For earlier Android API levels, use the BroadcastReceiver API.
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && connectivityManager != null) {
-        // The connection status may change before registration of the listener is complete, but
-        // this will at worst result in invoking resetConnectBackoff() instead of enterIdle() (or
-        // vice versa) on the first network change.
-        boolean isConnected = currentNetwork != null && currentNetwork.isConnected();
-
-        final DefaultNetworkCallback defaultNetworkCallback =
-            new DefaultNetworkCallback(isConnected);
+        final DefaultNetworkCallback defaultNetworkCallback = new DefaultNetworkCallback();
         connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback);
         unregisterRunnable =
             new Runnable() {
@@ -313,11 +302,12 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     /** Respond to changes in the default network. Only used on API levels 24+. */
     @TargetApi(Build.VERSION_CODES.N)
     private class DefaultNetworkCallback extends ConnectivityManager.NetworkCallback {
+      // Registering a listener may immediate invoke onAvailable/onLost: the API docs do not specify
+      // if the methods are always invoked once, then again on any change, or only on change. When
+      // onAvailable() is invoked immediately without an actual network change, it's preferable to
+      // (spuriously) resetConnectBackoff() rather than enterIdle(), as the former is a no-op if the
+      // channel has already moved to CONNECTING.
       private boolean isConnected = false;
-
-      private DefaultNetworkCallback(boolean isConnected) {
-        this.isConnected = isConnected;
-      }
 
       @Override
       public void onAvailable(Network network) {

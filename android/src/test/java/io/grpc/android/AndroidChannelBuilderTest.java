@@ -256,15 +256,21 @@ public final class AndroidChannelBuilderTest {
 
   @Test
   @Config(sdk = 24)
-  public void newChannelWithConnection_entersIdleOnConnectionChange_api24() {
+  public void newChannelWithConnection_entersIdleOnSecondConnectionChange_api24() {
     shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel =
         new AndroidChannelBuilder.AndroidChannel(
             delegateChannel, RuntimeEnvironment.application.getApplicationContext());
 
+    // The first onAvailable() may just signal that the device was connected when the callback is
+    // registered, rather than indicating a changed network, so we do not enter idle.
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
+
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
 
     androidChannel.shutdown();
