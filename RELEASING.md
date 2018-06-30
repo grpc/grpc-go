@@ -67,6 +67,7 @@ $ VERSION_FILES=(
   android-interop-testing/app/build.gradle
   core/src/main/java/io/grpc/internal/GrpcUtil.java
   cronet/build.gradle
+  documentation/android-channel-builder.md
   examples/build.gradle
   examples/pom.xml
   examples/android/clientcache/app/build.gradle
