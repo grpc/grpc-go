@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"io/ioutil"
@@ -105,11 +106,10 @@ type Server struct {
 	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
 	channelzID          int64 // channelz unique identification number
-	czmu                sync.RWMutex
 	callsStarted        int64
 	callsFailed         int64
 	callsSucceeded      int64
-	lastCallStartedTime time.Time
+	lastCallStartedTime int64
 }
 
 type options struct {
@@ -784,33 +784,25 @@ func (s *Server) removeConn(c io.Closer) {
 // ChannelzMetric returns ServerInternalMetric of current server.
 // This is an EXPERIMENTAL API.
 func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
-	s.czmu.RLock()
-	defer s.czmu.RUnlock()
 	return &channelz.ServerInternalMetric{
-		CallsStarted:             s.callsStarted,
-		CallsSucceeded:           s.callsSucceeded,
-		CallsFailed:              s.callsFailed,
-		LastCallStartedTimestamp: s.lastCallStartedTime,
+		CallsStarted:             atomic.LoadInt64(&s.callsStarted),
+		CallsSucceeded:           atomic.LoadInt64(&s.callsSucceeded),
+		CallsFailed:              atomic.LoadInt64(&s.callsFailed),
+		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&s.lastCallStartedTime)),
 	}
 }
 
 func (s *Server) incrCallsStarted() {
-	s.czmu.Lock()
-	s.callsStarted++
-	s.lastCallStartedTime = time.Now()
-	s.czmu.Unlock()
+	atomic.AddInt64(&s.callsStarted, 1)
+	atomic.StoreInt64(&s.lastCallStartedTime, time.Now().UnixNano())
 }
 
 func (s *Server) incrCallsSucceeded() {
-	s.czmu.Lock()
-	s.callsSucceeded++
-	s.czmu.Unlock()
+	atomic.AddInt64(&s.callsSucceeded, 1)
 }
 
 func (s *Server) incrCallsFailed() {
-	s.czmu.Lock()
-	s.callsFailed++
-	s.czmu.Unlock()
+	atomic.AddInt64(&s.callsFailed, 1)
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
