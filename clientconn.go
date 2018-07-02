@@ -114,11 +114,12 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder      resolver.Builder
-	waitForHandshake     bool
-	channelzParentID     int64
-	disableServiceConfig bool
-	disableRetry         bool
+	resolverBuilder       resolver.Builder
+	waitForHandshake      bool
+	channelzParentID      int64
+	disableServiceConfig  bool
+	disableRetry          bool
+	fallbackServiceConfig string
 }
 
 const (
@@ -441,9 +442,20 @@ func WithChannelzParentID(id int64) DialOption {
 // WithDisableServiceConfig returns a DialOption that causes grpc to ignore any
 // service config provided by the resolver and provides a hint to the resolver
 // to not fetch service configs.
+// Note calling this function does not disable fallback service config from being used.
+// For testing purpose, user can disable service config fetch in resolver by calling
+// WithDisableServiceConfig and set a testing service config through WithFallbackServiceConfig.
 func WithDisableServiceConfig() DialOption {
 	return func(o *dialOptions) {
 		o.disableServiceConfig = true
+	}
+}
+
+// WithFallbackServiceConfig returns a DialOption that sets the fallback service
+// config to use when resolver does not provide a service config.
+func WithFallbackServiceConfig(sc string) DialOption {
+	return func(o *dialOptions) {
+		o.fallbackServiceConfig = sc
 	}
 }
 
@@ -638,6 +650,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		DialCreds:        credsClone,
 		Dialer:           cc.dopts.copts.Dialer,
 		ChannelzParentID: cc.channelzID,
+	}
+
+	// Before starts the resolver, apply fallbackServiceConfig to avoid race.
+	if cc.dopts.fallbackServiceConfig != "" {
+		if err := cc.handleServiceConfig(""); err != nil {
+			return nil, fmt.Errorf("failed to parse fallback service config JSON string: %v", err)
+		}
 	}
 
 	// Build the resolver.
@@ -1062,8 +1081,11 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
-	if cc.dopts.disableServiceConfig {
-		return nil
+	if cc.dopts.disableServiceConfig || js == "" {
+		if cc.dopts.fallbackServiceConfig == "" {
+			return nil
+		}
+		js = cc.dopts.fallbackServiceConfig
 	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
