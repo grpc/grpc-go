@@ -113,8 +113,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
             new EquivalentAddressGroup(new SocketAddress(){}, Attributes.EMPTY));
     Helper helper = new TestHelper() {
       @Override
-      public Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
-        assertThat(addrs).isEqualTo(servers.get(0));
+      public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
+        assertThat(addrs).isEqualTo(servers);
         return new TestSubchannel(addrs, attrs);
       }
 
@@ -147,8 +147,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
                 Attributes.EMPTY));
     Helper helper = new TestHelper() {
       @Override
-      public Subchannel createSubchannel(final EquivalentAddressGroup addrs, Attributes attrs) {
-        assertThat(addrs).isEqualTo(servers.get(0));
+      public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
+        assertThat(addrs).isEqualTo(servers);
         return new TestSubchannel(addrs, attrs);
       }
 
@@ -304,7 +304,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     }
 
     @Override
-    public Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
+    public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
       return delegate().createSubchannel(addrs, attrs);
     }
 
@@ -348,12 +348,12 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   }
 
   private static class TestSubchannel extends Subchannel {
-    TestSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
+    TestSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
       this.addrs = addrs;
       this.attrs = attrs;
     }
 
-    final EquivalentAddressGroup addrs;
+    final List<EquivalentAddressGroup> addrs;
     final Attributes attrs;
 
     @Override
@@ -365,7 +365,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     }
 
     @Override
-    public EquivalentAddressGroup getAddresses() {
+    public List<EquivalentAddressGroup> getAllAddresses() {
       return addrs;
     }
 

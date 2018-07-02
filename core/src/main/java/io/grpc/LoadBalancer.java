@@ -19,6 +19,7 @@ package io.grpc;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -455,14 +456,39 @@ public abstract class LoadBalancer {
      * <p>The LoadBalancer is responsible for closing unused Subchannels, and closing all
      * Subchannels within {@link #shutdown}.
      *
+     * <p>The default implementation calls {@link #createSubchannel(List, Attributes)}.
+     * Implementations should not override this method.
+     *
      * @since 1.2.0
      */
-    public abstract Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs);
+    public Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
+      Preconditions.checkNotNull(addrs, "addrs");
+      return createSubchannel(Collections.singletonList(addrs), attrs);
+    }
+
+    /**
+     * Creates a Subchannel, which is a logical connection to the given group of addresses which are
+     * considered equivalent.  The {@code attrs} are custom attributes associated with this
+     * Subchannel, and can be accessed later through {@link Subchannel#getAttributes
+     * Subchannel.getAttributes()}.
+     *
+     * <p>The LoadBalancer is responsible for closing unused Subchannels, and closing all
+     * Subchannels within {@link #shutdown}.
+     *
+     * @throws IllegalArgumentException if {@code addrs} is empty
+     * @since 1.14.0
+     */
+    public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
+      throw new UnsupportedOperationException();
+    }
 
     /**
      * Replaces the existing addresses used with {@code subchannel}. This method is superior to
      * {@link #createSubchannel} when the new and old addresses overlap, since the subchannel can
      * continue using an existing connection.
+     *
+     * <p>The default implementation calls {@link #updateSubchannelAddresses(
+     * LoadBalancer.Subchannel, List)}. Implementations should not override this method.
      *
      * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
      *     #createSubchannel}
@@ -470,6 +496,21 @@ public abstract class LoadBalancer {
      */
     public void updateSubchannelAddresses(
         Subchannel subchannel, EquivalentAddressGroup addrs) {
+      Preconditions.checkNotNull(addrs, "addrs");
+      updateSubchannelAddresses(subchannel, Collections.singletonList(addrs));
+    }
+
+    /**
+     * Replaces the existing addresses used with {@code subchannel}. This method is superior to
+     * {@link #createSubchannel} when the new and old addresses overlap, since the subchannel can
+     * continue using an existing connection.
+     *
+     * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
+     *     #createSubchannel} or {@code addrs} is empty
+     * @since 1.14.0
+     */
+    public void updateSubchannelAddresses(
+        Subchannel subchannel, List<EquivalentAddressGroup> addrs) {
       throw new UnsupportedOperationException();
     }
 
@@ -572,11 +613,30 @@ public abstract class LoadBalancer {
     public abstract void requestConnection();
 
     /**
-     * Returns the addresses that this Subchannel is bound to.
+     * Returns the addresses that this Subchannel is bound to. The default implementation calls
+     * getAllAddresses().
      *
+     * <p>The default implementation calls {@link #getAllAddresses()}. Implementations should not
+     * override this method.
+     *
+     * @throws IllegalStateException if this subchannel has more than one EquivalentAddressGroup.
+     *     Use getAllAddresses() instead
      * @since 1.2.0
      */
-    public abstract EquivalentAddressGroup getAddresses();
+    public EquivalentAddressGroup getAddresses() {
+      List<EquivalentAddressGroup> groups = getAllAddresses();
+      Preconditions.checkState(groups.size() == 1, "Does not have exactly one group");
+      return groups.get(0);
+    }
+
+    /**
+     * Returns the addresses that this Subchannel is bound to. The returned list will not be empty.
+     *
+     * @since 1.14.0
+     */
+    public List<EquivalentAddressGroup> getAllAddresses() {
+      throw new UnsupportedOperationException();
+    }
 
     /**
      * The same attributes passed to {@link Helper#createSubchannel Helper.createSubchannel()}.

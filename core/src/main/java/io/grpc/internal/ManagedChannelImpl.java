@@ -61,6 +61,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -1007,8 +1008,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
     @Override
     public AbstractSubchannel createSubchannel(
-        EquivalentAddressGroup addressGroup, Attributes attrs) {
-      checkNotNull(addressGroup, "addressGroup");
+        List<EquivalentAddressGroup> addressGroups, Attributes attrs) {
+      checkNotNull(addressGroups, "addressGroups");
       checkNotNull(attrs, "attrs");
       // TODO(ejona): can we be even stricter? Like loadBalancer == null?
       checkState(!terminated, "Channel is terminated");
@@ -1019,7 +1020,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
         subchannelTracer = new ChannelTracer(maxTraceEvents, subchannelCreationTime, "Subchannel");
       }
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
-          addressGroup,
+          addressGroups,
           authority(),
           userAgent,
           backoffPolicyProvider,
@@ -1070,7 +1071,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       channelz.addSubchannel(internalSubchannel);
       subchannel.subchannel = internalSubchannel;
       logger.log(Level.FINE, "[{0}] {1} created for {2}",
-          new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroup});
+          new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroups});
       runSerialized(new Runnable() {
           @Override
           public void run() {
@@ -1125,7 +1126,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
     @Override
     public void updateSubchannelAddresses(
-        LoadBalancer.Subchannel subchannel, EquivalentAddressGroup addrs) {
+        LoadBalancer.Subchannel subchannel, List<EquivalentAddressGroup> addrs) {
       checkArgument(subchannel instanceof SubchannelImpl,
           "subchannel must have been returned from createSubchannel");
       ((SubchannelImpl) subchannel).subchannel.updateAddresses(addrs);
@@ -1154,7 +1155,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
         subchannelTracer = new ChannelTracer(maxTraceEvents, oobChannelCreationTime, "Subchannel");
       }
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
-          addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
+          Collections.singletonList(addressGroup),
+          authority, userAgent, backoffPolicyProvider, transportFactory,
           transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
           // All callback methods are run from channelExecutor
           new InternalSubchannel.Callback() {
@@ -1413,8 +1415,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     }
 
     @Override
-    public EquivalentAddressGroup getAddresses() {
-      return subchannel.getAddressGroup();
+    public List<EquivalentAddressGroup> getAllAddresses() {
+      return subchannel.getAddressGroups();
     }
 
     @Override

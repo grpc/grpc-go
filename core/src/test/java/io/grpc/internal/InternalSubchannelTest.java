@@ -42,10 +42,12 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
 import io.grpc.internal.InternalSubchannel.CallTracingTransport;
+import io.grpc.internal.InternalSubchannel.Index;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
@@ -114,7 +116,6 @@ public class InternalSubchannelTest {
       };
 
   private InternalSubchannel internalSubchannel;
-  private EquivalentAddressGroup addressGroup;
   private BlockingQueue<MockClientTransportInfo> transports;
 
   @Before public void setUp() {
@@ -131,6 +132,16 @@ public class InternalSubchannelTest {
   @After public void noMorePendingTasks() {
     assertEquals(0, fakeClock.numPendingTasks());
     assertEquals(0, fakeExecutor.numPendingTasks());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void constructor_emptyEagList_throws() {
+    createInternalSubchannel(new EquivalentAddressGroup[0]);
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void constructor_eagListWithNull_throws() {
+    createInternalSubchannel(new EquivalentAddressGroup[] {null});
   }
 
   @Test public void singleAddressReconnect() {
@@ -379,6 +390,20 @@ public class InternalSubchannelTest {
     verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffNanos();
   }
 
+  @Test(expected = IllegalArgumentException.class)
+  public void updateAddresses_emptyEagList_throws() {
+    SocketAddress addr = new FakeSocketAddress();
+    createInternalSubchannel(addr);
+    internalSubchannel.updateAddresses(Arrays.<EquivalentAddressGroup>asList());
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void updateAddresses_eagListWithNull_throws() {
+    SocketAddress addr = new FakeSocketAddress();
+    createInternalSubchannel(addr);
+    internalSubchannel.updateAddresses(Arrays.asList((EquivalentAddressGroup) null));
+  }
+
   @Test public void updateAddresses_intersecting_ready() {
     SocketAddress addr1 = mock(SocketAddress.class);
     SocketAddress addr2 = mock(SocketAddress.class);
@@ -400,7 +425,8 @@ public class InternalSubchannelTest {
     assertEquals(READY, internalSubchannel.getState());
 
     // Update addresses
-    internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr2, addr3)));
+    internalSubchannel.updateAddresses(
+        Arrays.asList(new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
     assertNoCallbackInvoke();
     assertEquals(READY, internalSubchannel.getState());
     verify(transports.peek().transport, never()).shutdown(any(Status.class));
@@ -442,7 +468,8 @@ public class InternalSubchannelTest {
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Update addresses
-    internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr2, addr3)));
+    internalSubchannel.updateAddresses(
+        Arrays.asList(new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(transports.peek().transport, never()).shutdown(any(Status.class));
@@ -471,7 +498,7 @@ public class InternalSubchannelTest {
     SocketAddress addr2 = mock(SocketAddress.class);
 
     createInternalSubchannel(addr1);
-    internalSubchannel.updateAddresses(new EquivalentAddressGroup(addr2));
+    internalSubchannel.updateAddresses(Arrays.asList(new EquivalentAddressGroup(addr2)));
 
     // Nothing happened on address update
     verify(mockTransportFactory, never())
@@ -519,7 +546,8 @@ public class InternalSubchannelTest {
     assertEquals(READY, internalSubchannel.getState());
 
     // Update addresses
-    internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr3, addr4)));
+    internalSubchannel.updateAddresses(
+        Arrays.asList(new EquivalentAddressGroup(Arrays.asList(addr3, addr4))));
     assertExactCallbackInvokes("onStateChange:IDLE");
     assertEquals(IDLE, internalSubchannel.getState());
     verify(transports.peek().transport).shutdown(any(Status.class));
@@ -561,7 +589,8 @@ public class InternalSubchannelTest {
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Update addresses
-    internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr3, addr4)));
+    internalSubchannel.updateAddresses(
+        Arrays.asList(new EquivalentAddressGroup(Arrays.asList(addr3, addr4))));
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
 
@@ -946,9 +975,100 @@ public class InternalSubchannelTest {
     assertEquals(actualTransport.transport.getLogId(), registeredTransport.getLogId());
   }
 
+  @Test public void index_looping() {
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    SocketAddress addr4 = new FakeSocketAddress();
+    SocketAddress addr5 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1, addr2)),
+        new EquivalentAddressGroup(Arrays.asList(addr3)),
+        new EquivalentAddressGroup(Arrays.asList(addr4, addr5))));
+    assertThat(index.getCurrentAddress()).isSameAs(addr1);
+    assertThat(index.isAtBeginning()).isTrue();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameAs(addr2);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameAs(addr3);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameAs(addr4);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameAs(addr5);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isFalse();
+
+    index.reset();
+    assertThat(index.getCurrentAddress()).isSameAs(addr1);
+    assertThat(index.isAtBeginning()).isTrue();
+    assertThat(index.isValid()).isTrue();
+
+    // We want to make sure both groupIndex and addressIndex are reset
+    index.increment();
+    index.increment();
+    index.increment();
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameAs(addr5);
+    index.reset();
+    assertThat(index.getCurrentAddress()).isSameAs(addr1);
+  }
+
+  @Test public void index_updateGroups_resets() {
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1)),
+        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
+    index.increment();
+    index.increment();
+    // We want to make sure both groupIndex and addressIndex are reset
+    index.updateGroups(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1)),
+        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
+    assertThat(index.getCurrentAddress()).isSameAs(addr1);
+  }
+
+  @Test public void index_seekTo() {
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1, addr2)),
+        new EquivalentAddressGroup(Arrays.asList(addr3))));
+    assertThat(index.seekTo(addr3)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameAs(addr3);
+    assertThat(index.seekTo(addr1)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameAs(addr1);
+    assertThat(index.seekTo(addr2)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameAs(addr2);
+    index.seekTo(new FakeSocketAddress());
+    // Failed seekTo doesn't change the index
+    assertThat(index.getCurrentAddress()).isSameAs(addr2);
+  }
+
   private void createInternalSubchannel(SocketAddress ... addrs) {
-    addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
-    internalSubchannel = new InternalSubchannel(addressGroup, AUTHORITY, USER_AGENT,
+    createInternalSubchannel(new EquivalentAddressGroup(Arrays.asList(addrs)));
+  }
+
+  private void createInternalSubchannel(EquivalentAddressGroup ... addrs) {
+    List<EquivalentAddressGroup> addressGroups = Arrays.asList(addrs);
+    internalSubchannel = new InternalSubchannel(addressGroups, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), channelExecutor, mockInternalSubchannelCallback,
         channelz, CallTracer.getDefaultFactory().create(), null,
@@ -970,4 +1090,6 @@ public class InternalSubchannelTest {
     assertEquals(Arrays.asList(expectedInvokes), callbackInvokes);
     callbackInvokes.clear();
   }
+
+  private static class FakeSocketAddress extends SocketAddress {}
 }

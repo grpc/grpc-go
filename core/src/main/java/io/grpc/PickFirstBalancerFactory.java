@@ -26,8 +26,6 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
-import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -67,19 +65,15 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddressGroups(
         List<EquivalentAddressGroup> servers, Attributes attributes) {
-      // Flatten servers list received from name resolver into single address group. This means that
-      // as far as load balancer is concerned, there's virtually one single server with multiple
-      // addresses so the connection will be created only for the first address (pick first).
-      EquivalentAddressGroup newEag = flattenEquivalentAddressGroup(servers);
       if (subchannel == null) {
-        subchannel = helper.createSubchannel(newEag, Attributes.EMPTY);
+        subchannel = helper.createSubchannel(servers, Attributes.EMPTY);
 
         // The channel state does not get updated when doing name resolving today, so for the moment
         // let LB report CONNECTION and call subchannel.requestConnection() immediately.
         helper.updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
         subchannel.requestConnection();
       } else {
-        helper.updateSubchannelAddresses(subchannel, newEag);
+        helper.updateSubchannelAddresses(subchannel, servers);
       }
     }
 
@@ -125,18 +119,6 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
       if (subchannel != null) {
         subchannel.shutdown();
       }
-    }
-
-    /**
-     * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
-     */
-    private static EquivalentAddressGroup flattenEquivalentAddressGroup(
-        List<EquivalentAddressGroup> groupList) {
-      List<SocketAddress> addrs = new ArrayList<SocketAddress>();
-      for (EquivalentAddressGroup group : groupList) {
-        addrs.addAll(group.getAddresses());
-      }
-      return new EquivalentAddressGroup(addrs);
     }
   }
 

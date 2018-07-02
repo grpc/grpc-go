@@ -23,6 +23,9 @@ import io.grpc.ClientStreamTracer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Status;
+import java.net.SocketAddress;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -35,6 +38,11 @@ public class LoadBalancerTest {
   private final ClientStreamTracer.Factory tracerFactory = mock(ClientStreamTracer.Factory.class);
   private final Status status = Status.UNAVAILABLE.withDescription("for test");
   private final Status status2 = Status.UNAVAILABLE.withDescription("for test 2");
+  private final EquivalentAddressGroup eag = new EquivalentAddressGroup(new SocketAddress() {});
+  private final Attributes attrs = Attributes.newBuilder()
+      .set(Attributes.Key.create("trash"), new Object())
+      .build();
+  private final Subchannel emptySubchannel = new EmptySubchannel();
 
   @Test
   public void pickResult_withSubchannel() {
@@ -110,5 +118,115 @@ public class LoadBalancerTest {
 
     assertThat(error1.getStatus()).isEqualTo(drop1.getStatus());
     assertThat(error1).isNotEqualTo(drop1);
+  }
+
+  @Test
+  public void helper_createSubchannel_delegates() {
+    class OverrideCreateSubchannel extends NoopHelper {
+      boolean ran;
+
+      @Override
+      public Subchannel createSubchannel(List<EquivalentAddressGroup> addrsIn, Attributes attrsIn) {
+        assertThat(addrsIn).hasSize(1);
+        assertThat(addrsIn.get(0)).isSameAs(eag);
+        assertThat(attrsIn).isSameAs(attrs);
+        ran = true;
+        return subchannel;
+      }
+    }
+
+    OverrideCreateSubchannel helper = new OverrideCreateSubchannel();
+    assertThat(helper.createSubchannel(eag, attrs)).isSameAs(subchannel);
+    assertThat(helper.ran).isTrue();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void helper_createSubchannelList_throws() {
+    new NoopHelper().createSubchannel(Arrays.asList(eag), attrs);
+  }
+
+  @Test
+  public void helper_updateSubchannelAddresses_delegates() {
+    class OverrideUpdateSubchannel extends NoopHelper {
+      boolean ran;
+
+      @Override
+      public void updateSubchannelAddresses(
+          Subchannel subchannelIn, List<EquivalentAddressGroup> addrsIn) {
+        assertThat(subchannelIn).isSameAs(emptySubchannel);
+        assertThat(addrsIn).hasSize(1);
+        assertThat(addrsIn.get(0)).isSameAs(eag);
+        ran = true;
+      }
+    }
+
+    OverrideUpdateSubchannel helper = new OverrideUpdateSubchannel();
+    helper.updateSubchannelAddresses(emptySubchannel, eag);
+    assertThat(helper.ran).isTrue();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void helper_updateSubchannelAddressesList_throws() {
+    new NoopHelper().updateSubchannelAddresses(null, Arrays.asList(eag));
+  }
+
+  @Test
+  public void subchannel_getAddresses_delegates() {
+    class OverrideGetAllAddresses extends EmptySubchannel {
+      boolean ran;
+
+      @Override public List<EquivalentAddressGroup> getAllAddresses() {
+        ran = true;
+        return Arrays.asList(eag);
+      }
+    }
+
+    OverrideGetAllAddresses subchannel = new OverrideGetAllAddresses();
+    assertThat(subchannel.getAddresses()).isEqualTo(eag);
+    assertThat(subchannel.ran).isTrue();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void subchannel_getAddresses_throwsOnTwoAddrs() {
+    new EmptySubchannel() {
+      boolean ran;
+
+      @Override public List<EquivalentAddressGroup> getAllAddresses() {
+        ran = true;
+        // Doubling up eag is technically a bad idea, but nothing here cares
+        return Arrays.asList(eag, eag);
+      }
+    }.getAddresses();
+  }
+
+  private static class NoopHelper extends LoadBalancer.Helper {
+    @Override
+    public ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority) {
+      return null;
+    }
+
+    @Override
+    public void updateBalancingState(
+        ConnectivityState newState, LoadBalancer.SubchannelPicker newPicker) {}
+
+    @Override public void runSerialized(Runnable task) {}
+
+    @Override public NameResolver.Factory getNameResolverFactory() {
+      return null;
+    }
+
+    @Override public String getAuthority() {
+      return null;
+    }
+  }
+
+  private static class EmptySubchannel extends LoadBalancer.Subchannel {
+    @Override public void shutdown() {}
+
+    @Override public void requestConnection() {}
+
+    @Override public Attributes getAttributes() {
+      return null;
+    }
   }
 }

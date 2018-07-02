@@ -43,6 +43,7 @@ import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.ChannelTrace;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -159,8 +160,8 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
         }
 
         @Override
-        public EquivalentAddressGroup getAddresses() {
-          return subchannel.getAddressGroup();
+        public List<EquivalentAddressGroup> getAllAddresses() {
+          return subchannel.getAddressGroups();
         }
 
         @Override
@@ -181,7 +182,7 @@ final class OobChannel extends ManagedChannel implements Instrumented<ChannelSta
   }
 
   void updateAddresses(EquivalentAddressGroup eag) {
-    subchannel.updateAddresses(eag);
+    subchannel.updateAddresses(Collections.singletonList(eag));
   }
 
   @Override

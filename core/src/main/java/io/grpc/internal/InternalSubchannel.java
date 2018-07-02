@@ -42,6 +42,7 @@ import io.grpc.internal.Channelz.ChannelTrace;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -86,15 +87,12 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   // 3. Every synchronized("lock") must be inside a try-finally which calls drain() in "finally".
   private final ChannelExecutor channelExecutor;
 
-  @GuardedBy("lock")
-  private EquivalentAddressGroup addressGroup;
-
   /**
-   * The index of the address corresponding to pendingTransport/activeTransport, or 0 if both are
-   * null.
+   * The index of the address corresponding to pendingTransport/activeTransport, or at beginning if
+   * both are null.
    */
   @GuardedBy("lock")
-  private int addressIndex;
+  private Index addressIndex;
 
   /**
    * The policy to control back off between reconnects. Non-{@code null} when a reconnect task is
@@ -159,13 +157,17 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   @GuardedBy("lock")
   private Status shutdownReason;
 
-  InternalSubchannel(EquivalentAddressGroup addressGroup, String authority, String userAgent,
+  InternalSubchannel(List<EquivalentAddressGroup> addressGroups, String authority, String userAgent,
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
       Channelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer,
       TimeProvider timeProvider) {
-    this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
+    Preconditions.checkNotNull(addressGroups, "addressGroups");
+    Preconditions.checkArgument(!addressGroups.isEmpty(), "addressGroups is empty");
+    checkListHasNoNulls(addressGroups, "addressGroups contains null entry");
+    this.addressIndex = new Index(
+        Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(addressGroups)));
     this.authority = authority;
     this.userAgent = userAgent;
     this.backoffPolicyProvider = backoffPolicyProvider;
@@ -213,11 +215,10 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   private void startNewTransport() {
     Preconditions.checkState(reconnectTask == null, "Should have no reconnectTask scheduled");
 
-    if (addressIndex == 0) {
+    if (addressIndex.isAtBeginning()) {
       connectingTimer.reset().start();
     }
-    List<SocketAddress> addrs = addressGroup.getAddresses();
-    SocketAddress address = addrs.get(addressIndex);
+    SocketAddress address = addressIndex.getCurrentAddress();
 
     ProxyParameters proxy = null;
     if (address instanceof PairSocketAddress) {
@@ -336,28 +337,29 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   }
 
   /** Replaces the existing addresses, avoiding unnecessary reconnects. */
-  public void updateAddresses(EquivalentAddressGroup newAddressGroup) {
+  public void updateAddresses(List<EquivalentAddressGroup> newAddressGroups) {
+    Preconditions.checkNotNull(newAddressGroups, "newAddressGroups");
+    checkListHasNoNulls(newAddressGroups, "newAddressGroups contains null entry");
+    Preconditions.checkArgument(!newAddressGroups.isEmpty(), "newAddressGroups is empty");
+    newAddressGroups =
+        Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(newAddressGroups));
     ManagedClientTransport savedTransport = null;
     try {
       synchronized (lock) {
-        EquivalentAddressGroup oldAddressGroup = addressGroup;
-        addressGroup = newAddressGroup;
+        SocketAddress previousAddress = addressIndex.getCurrentAddress();
+        addressIndex.updateGroups(newAddressGroups);
         if (state.getState() == READY || state.getState() == CONNECTING) {
-          SocketAddress address = oldAddressGroup.getAddresses().get(addressIndex);
-          int newIndex = newAddressGroup.getAddresses().indexOf(address);
-          if (newIndex != -1) {
-            addressIndex = newIndex;
-          } else {
+          if (!addressIndex.seekTo(previousAddress)) {
             // Forced to drop the connection
             if (state.getState() == READY) {
               savedTransport = activeTransport;
               activeTransport = null;
-              addressIndex = 0;
+              addressIndex.reset();
               gotoNonErrorState(IDLE);
             } else {
               savedTransport = pendingTransport;
               pendingTransport = null;
-              addressIndex = 0;
+              addressIndex.reset();
               startNewTransport();
             }
           }
@@ -387,7 +389,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
         savedPendingTransport = pendingTransport;
         activeTransport = null;
         pendingTransport = null;
-        addressIndex = 0;
+        addressIndex.reset();
         if (transports.isEmpty()) {
           handleTermination();
           if (log.isLoggable(Level.FINE)) {
@@ -409,15 +411,15 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
 
   @Override
   public String toString() {
-    // addressGroupCopy being a little stale is fine, just avoid calling toString with the lock
+    // addressGroupsCopy being a little stale is fine, just avoid calling toString with the lock
     // since there may be many addresses.
-    Object addressGroupCopy;
+    Object addressGroupsCopy;
     synchronized (lock) {
-      addressGroupCopy = addressGroup;
+      addressGroupsCopy = addressIndex.getGroups();
     }
     return MoreObjects.toStringHelper(this)
           .add("logId", logId.getId())
-          .add("addressGroup", addressGroupCopy)
+          .add("addressGroups", addressGroupsCopy)
           .toString();
   }
 
@@ -456,10 +458,10 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     }
   }
 
-  EquivalentAddressGroup getAddressGroup() {
+  List<EquivalentAddressGroup> getAddressGroups() {
     try {
       synchronized (lock) {
-        return addressGroup;
+        return addressIndex.getGroups();
       }
     } finally {
       channelExecutor.drain();
@@ -487,14 +489,14 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     SettableFuture<ChannelStats> ret = SettableFuture.create();
     ChannelStats.Builder builder = new ChannelStats.Builder();
 
-    EquivalentAddressGroup addressGroupSnapshot;
+    List<EquivalentAddressGroup> addressGroupsSnapshot;
     List<WithLogId> transportsSnapshot;
     synchronized (lock) {
-      addressGroupSnapshot = addressGroup;
+      addressGroupsSnapshot = addressIndex.getGroups();
       transportsSnapshot = new ArrayList<WithLogId>(transports);
     }
 
-    builder.setTarget(addressGroupSnapshot.toString()).setState(getState());
+    builder.setTarget(addressGroupsSnapshot.toString()).setState(getState());
     builder.setSockets(transportsSnapshot);
     callsTracer.updateBuilder(builder);
     if (channelTracer != null) {
@@ -512,6 +514,12 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       }
     } finally {
       channelExecutor.drain();
+    }
+  }
+
+  private static void checkListHasNoNulls(List<?> list, String msg) {
+    for (Object item : list) {
+      Preconditions.checkNotNull(item, msg);
     }
   }
 
@@ -573,15 +581,15 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
           if (activeTransport == transport) {
             gotoNonErrorState(IDLE);
             activeTransport = null;
-            addressIndex = 0;
+            addressIndex.reset();
           } else if (pendingTransport == transport) {
             Preconditions.checkState(state.getState() == CONNECTING,
                 "Expected state is CONNECTING, actual state is %s", state.getState());
-            addressIndex++;
+            addressIndex.increment();
             // Continue reconnect if there are still addresses to try.
-            if (addressIndex >= addressGroup.getAddresses().size()) {
+            if (!addressIndex.isValid()) {
               pendingTransport = null;
-              addressIndex = 0;
+              addressIndex.reset();
               // Initiate backoff
               // Transition to TRANSIENT_FAILURE
               scheduleBackoff(s);
@@ -701,6 +709,70 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
           });
         }
       };
+    }
+  }
+
+  /** Index as in 'i', the pointer to an entry. Not a "search index." */
+  @VisibleForTesting
+  static final class Index {
+    private List<EquivalentAddressGroup> addressGroups;
+    private int groupIndex;
+    private int addressIndex;
+
+    public Index(List<EquivalentAddressGroup> groups) {
+      this.addressGroups = groups;
+    }
+
+    public boolean isValid() {
+      // addressIndex will never be invalid
+      return groupIndex < addressGroups.size();
+    }
+
+    public boolean isAtBeginning() {
+      return groupIndex == 0 && addressIndex == 0;
+    }
+
+    public void increment() {
+      EquivalentAddressGroup group = addressGroups.get(groupIndex);
+      addressIndex++;
+      if (addressIndex >= group.getAddresses().size()) {
+        groupIndex++;
+        addressIndex = 0;
+      }
+    }
+
+    public void reset() {
+      groupIndex = 0;
+      addressIndex = 0;
+    }
+
+    public SocketAddress getCurrentAddress() {
+      return addressGroups.get(groupIndex).getAddresses().get(addressIndex);
+    }
+
+    public List<EquivalentAddressGroup> getGroups() {
+      return addressGroups;
+    }
+
+    /** Update to new groups, resetting the current index. */
+    public void updateGroups(List<EquivalentAddressGroup> newGroups) {
+      addressGroups = newGroups;
+      reset();
+    }
+
+    /** Returns false if the needle was not found and the current index was left unchanged. */
+    public boolean seekTo(SocketAddress needle) {
+      for (int i = 0; i < addressGroups.size(); i++) {
+        EquivalentAddressGroup group = addressGroups.get(i);
+        int j = group.getAddresses().indexOf(needle);
+        if (j == -1) {
+          continue;
+        }
+        this.groupIndex = i;
+        this.addressIndex = j;
+        return true;
+      }
+      return false;
     }
   }
 }
