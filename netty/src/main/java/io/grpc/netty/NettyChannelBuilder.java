@@ -508,12 +508,15 @@ public final class NettyChannelBuilder
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress serverAddress, String authority, @Nullable String userAgent,
-        @Nullable ProxyParameters proxy) {
+        SocketAddress serverAddress, ClientTransportOptions options) {
       checkState(!closed, "The transport factory is closed.");
 
       TransportCreationParamsFilter dparams =
-          transportCreationParamsFilterFactory.create(serverAddress, authority, userAgent, proxy);
+          transportCreationParamsFilterFactory.create(
+              serverAddress,
+              options.getAuthority(),
+              options.getUserAgent(),
+              options.getProxyParameters());
 
       final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
       Runnable tooManyPingsRunnable = new Runnable() {

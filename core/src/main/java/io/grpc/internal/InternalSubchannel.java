@@ -30,6 +30,7 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.errorprone.annotations.ForOverride;
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -226,10 +227,15 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       address = ((PairSocketAddress) address).getAddress();
     }
 
+    ClientTransportFactory.ClientTransportOptions options =
+        new ClientTransportFactory.ClientTransportOptions()
+          .setAuthority(authority)
+          .setEagAttributes(addressIndex.getCurrentEagAttributes())
+          .setUserAgent(userAgent)
+          .setProxyParameters(proxy);
     ConnectionClientTransport transport =
         new CallTracingTransport(
-            transportFactory.newClientTransport(address, authority, userAgent, proxy),
-            callsTracer);
+            transportFactory.newClientTransport(address, options), callsTracer);
     channelz.addClientSocket(transport);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
@@ -748,6 +754,10 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
 
     public SocketAddress getCurrentAddress() {
       return addressGroups.get(groupIndex).getAddresses().get(addressIndex);
+    }
+
+    public Attributes getCurrentEagAttributes() {
+      return addressGroups.get(groupIndex).getAttributes();
     }
 
     public List<EquivalentAddressGroup> getGroups() {

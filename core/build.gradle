@@ -29,7 +29,8 @@ dependencies {
 
     testCompile project(':grpc-context').sourceSets.test.output,
             project(':grpc-testing'),
-            project(':grpc-grpclb')
+            project(':grpc-grpclb'),
+            libraries.guava_testlib
 
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }

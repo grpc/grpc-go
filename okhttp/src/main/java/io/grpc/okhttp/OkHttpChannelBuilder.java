@@ -33,7 +33,6 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.TransportTracer;
@@ -517,8 +516,7 @@ public class OkHttpChannelBuilder extends
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress addr, String authority, @Nullable String userAgent,
-        @Nullable ProxyParameters proxy) {
+        SocketAddress addr, ClientTransportOptions options) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
@@ -532,14 +530,14 @@ public class OkHttpChannelBuilder extends
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       OkHttpClientTransport transport = new OkHttpClientTransport(
           inetSocketAddr,
-          authority,
-          userAgent,
+          options.getAuthority(),
+          options.getUserAgent(),
           executor,
           socketFactory,
           hostnameVerifier,
           connectionSpec,
           maxMessageSize,
-          proxy,
+          options.getProxyParameters(),
           tooManyPingsRunnable,
           transportTracerFactory.create());
       if (enableKeepAlive) {

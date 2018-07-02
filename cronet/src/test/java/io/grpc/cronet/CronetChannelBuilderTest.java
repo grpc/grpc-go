@@ -27,6 +27,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.cronet.CronetChannelBuilder.CronetTransportFactory;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.testing.TestMethodDescriptors;
 import java.net.InetSocketAddress;
@@ -60,7 +61,7 @@ public final class CronetChannelBuilderTest {
     CronetClientTransport transport =
         (CronetClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress("localhost", 443), "", null, null);
+                new InetSocketAddress("localhost", 443), new ClientTransportOptions());
     CronetClientStream stream = transport.newStream(method, new Metadata(), CallOptions.DEFAULT);
 
     assertTrue(stream.idempotent);
@@ -74,7 +75,7 @@ public final class CronetChannelBuilderTest {
     CronetClientTransport transport =
         (CronetClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress("localhost", 443), "", null, null);
+                new InetSocketAddress("localhost", 443), new ClientTransportOptions());
     CronetClientStream stream = transport.newStream(method, new Metadata(), CallOptions.DEFAULT);
 
     assertFalse(stream.idempotent);

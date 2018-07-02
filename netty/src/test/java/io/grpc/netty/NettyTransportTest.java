@@ -96,9 +96,8 @@ public class NettyTransportTest extends AbstractTransportTest {
     int port = server.getPort();
     return clientFactory.newClientTransport(
         new InetSocketAddress("localhost", port),
-        testAuthority(server),
-        null /* agent */,
-        null /* proxy */);
+        new ClientTransportFactory.ClientTransportOptions()
+          .setAuthority(testAuthority(server)));
   }
 
   @Test

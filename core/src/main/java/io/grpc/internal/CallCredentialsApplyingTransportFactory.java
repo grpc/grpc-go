@@ -29,7 +29,6 @@ import io.grpc.Status;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.annotation.Nullable;
 
 final class CallCredentialsApplyingTransportFactory implements ClientTransportFactory {
   private final ClientTransportFactory delegate;
@@ -43,10 +42,9 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
 
   @Override
   public ConnectionClientTransport newClientTransport(
-      SocketAddress serverAddress, String authority, @Nullable String userAgent,
-      @Nullable ProxyParameters proxy) {
+      SocketAddress serverAddress, ClientTransportOptions options) {
     return new CallCredentialsApplyingTransport(
-        delegate.newClientTransport(serverAddress, authority, userAgent, proxy), authority);
+        delegate.newClientTransport(serverAddress, options), options.getAuthority());
   }
 
   @Override

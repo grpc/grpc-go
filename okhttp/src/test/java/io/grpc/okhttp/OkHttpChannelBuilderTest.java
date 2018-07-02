@@ -114,7 +114,7 @@ public class OkHttpChannelBuilderTest {
   public void usePlaintext_newClientTransportAllowed() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext();
     builder.buildTransportFactory().newClientTransport(new InetSocketAddress(5678),
-        "dummy_authority", "dummy_userAgent", null /* proxy */);
+        new ClientTransportFactory.ClientTransportOptions());
   }
 
   @Test

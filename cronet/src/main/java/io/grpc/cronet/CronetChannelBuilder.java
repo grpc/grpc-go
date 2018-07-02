@@ -228,11 +228,11 @@ public final class CronetChannelBuilder extends
     }
 
     @Override
-    public ConnectionClientTransport newClientTransport(SocketAddress addr, String authority,
-        @Nullable String userAgent, @Nullable ProxyParameters proxy) {
+    public ConnectionClientTransport newClientTransport(
+        SocketAddress addr, ClientTransportOptions options) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
-      return new CronetClientTransport(streamFactory, inetSocketAddr, authority, userAgent,
-          executor, maxMessageSize, alwaysUsePut, transportTracer);
+      return new CronetClientTransport(streamFactory, inetSocketAddr, options.getAuthority(),
+          options.getUserAgent(), executor, maxMessageSize, alwaysUsePut, transportTracer);
     }
 
     @Override

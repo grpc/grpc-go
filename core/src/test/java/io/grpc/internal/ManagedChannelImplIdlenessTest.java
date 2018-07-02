@@ -23,7 +23,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -159,7 +159,8 @@ public class ManagedChannelImplIdlenessTest {
     // Verify the initial idleness
     verify(mockLoadBalancerFactory, never()).newLoadBalancer(any(Helper.class));
     verify(mockTransportFactory, never()).newClientTransport(
-        any(SocketAddress.class), anyString(), anyString(), any(ProxyParameters.class));
+        any(SocketAddress.class),
+        any(ClientTransportFactory.ClientTransportOptions.class));
     verify(mockNameResolver, never()).start(any(NameResolver.Listener.class));
   }
 
@@ -359,13 +360,19 @@ public class ManagedChannelImplIdlenessTest {
     // Now make an RPC on an OOB channel
     ManagedChannel oob = helper.createOobChannel(servers.get(0), "oobauthority");
     verify(mockTransportFactory, never())
-        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT),
-            same(NO_PROXY));
+        .newClientTransport(
+            any(SocketAddress.class),
+            eq(new ClientTransportFactory.ClientTransportOptions()
+              .setAuthority("oobauthority")
+              .setUserAgent(USER_AGENT)));
     ClientCall<String, Integer> oobCall = oob.newCall(method, CallOptions.DEFAULT);
     oobCall.start(mockCallListener2, new Metadata());
     verify(mockTransportFactory)
-        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT),
-            same(NO_PROXY));
+        .newClientTransport(
+            any(SocketAddress.class),
+            eq(new ClientTransportFactory.ClientTransportOptions()
+              .setAuthority("oobauthority")
+              .setUserAgent(USER_AGENT)));
     MockClientTransportInfo oobTransportInfo = newTransports.poll();
     assertEquals(0, newTransports.size());
     // The OOB transport reports in-use state

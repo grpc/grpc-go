@@ -16,6 +16,9 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
+import io.grpc.Attributes;
 import java.io.Closeable;
 import java.net.SocketAddress;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,14 +27,15 @@ import javax.annotation.Nullable;
 /** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */
 public interface ClientTransportFactory extends Closeable {
   /**
-   * Creates an unstarted transport for exclusive use.
+   * Creates an unstarted transport for exclusive use. Ownership of {@code options} is passed to the
+   * callee; the caller should not reuse or read from the options after this method is called.
    *
    * @param serverAddress the address that the transport is connected to
-   * @param authority the HTTP/2 authority of the server
-   * @param proxy the proxy that should be used to connect to serverAddress
+   * @param options additional configuration
    */
-  ConnectionClientTransport newClientTransport(SocketAddress serverAddress, String authority,
-      @Nullable String userAgent, @Nullable ProxyParameters proxy);
+  ConnectionClientTransport newClientTransport(
+      SocketAddress serverAddress,
+      ClientTransportOptions options);
 
   /**
    * Returns an executor for scheduling provided by the transport. The service should be configured
@@ -53,4 +57,74 @@ public interface ClientTransportFactory extends Closeable {
    */
   @Override
   void close();
+
+  /**
+   * Options passed to {@link #newClientTransport(SocketAddress, ClientTransportOptions)}. Although
+   * it is safe to save this object if received, it is generally expected that the useful fields are
+   * copied and then the options object is discarded. This allows using {@code final} for those
+   * fields as well as avoids retaining unused objects contained in the options.
+   */
+  public static final class ClientTransportOptions {
+    private String authority = "unknown-authority";
+    private Attributes eagAttributes = Attributes.EMPTY;
+    private @Nullable String userAgent;
+    private @Nullable ProxyParameters proxyParameters;
+
+    public String getAuthority() {
+      return authority;
+    }
+
+    /** Sets the non-null authority. */
+    public ClientTransportOptions setAuthority(String authority) {
+      Preconditions.checkNotNull(authority, "authority");
+      this.authority = authority;
+      return this;
+    }
+
+    public Attributes getEagAttributes() {
+      return eagAttributes;
+    }
+
+    /** Sets the non-null EquivalentAddressGroup's attributes. */
+    public ClientTransportOptions setEagAttributes(Attributes eagAttributes) {
+      Preconditions.checkNotNull(eagAttributes, "eagAttributes");
+      this.eagAttributes = eagAttributes;
+      return this;
+    }
+
+    public String getUserAgent() {
+      return userAgent;
+    }
+
+    public ClientTransportOptions setUserAgent(@Nullable String userAgent) {
+      this.userAgent = userAgent;
+      return this;
+    }
+
+    public ProxyParameters getProxyParameters() {
+      return proxyParameters;
+    }
+
+    public ClientTransportOptions setProxyParameters(@Nullable ProxyParameters proxyParameters) {
+      this.proxyParameters = proxyParameters;
+      return this;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(authority, eagAttributes, userAgent, proxyParameters);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof ClientTransportOptions)) {
+        return false;
+      }
+      ClientTransportOptions that = (ClientTransportOptions) o;
+      return this.authority.equals(that.authority)
+          && this.eagAttributes.equals(that.eagAttributes)
+          && Objects.equal(this.userAgent, that.userAgent)
+          && Objects.equal(this.proxyParameters, that.proxyParameters);
+    }
+  }
 }
