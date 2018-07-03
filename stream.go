@@ -831,6 +831,7 @@ func (a *csAttempt) finish(err error) {
 }
 
 // ServerStream defines the interface a server stream has to satisfy.
+// All errors returned from ServerStream are compatible with the status package.
 type ServerStream interface {
 	// SetHeader sets the header metadata. It may be called multiple times.
 	// When call multiple times, all the provided metadata will be merged.
