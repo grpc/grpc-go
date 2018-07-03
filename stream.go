@@ -59,43 +59,11 @@ type StreamDesc struct {
 
 // Stream defines the common interface a client or server stream has to satisfy.
 //
-// All errors returned from Stream are compatible with the status package.
-type Stream interface {
-	// Context returns the context for this stream.  If called from the client,
-	// Should be done after Header or RecvMsg.  Otherwise, retries may not be
-	// possible to perform.
-	Context() context.Context
-	// SendMsg is generally called by generated code. On error, SendMsg aborts
-	// the stream and returns an RPC status on the client side. On the server
-	// side, it simply returns the error to the caller.
-	//
-	// SendMsg blocks until:
-	//   - It schedules m with the transport, or
-	//   - The stream is done, or
-	//   - The stream breaks.
-	//
-	// SendMsg does not wait for an ack. An untimely stream closure
-	// can result in any buffered messages along the way (including
-	// those in the client-side buffer that comes with gRPC by default)
-	// being lost. To ensure delivery, users must call RecvMsg until
-	// receiving an EOF before closing the stream.
-	//
-	// It's safe to have a goroutine calling SendMsg and another
-	// goroutine calling RecvMsg on the same stream at the same
-	// time. It is not safe to call SendMsg on the same stream
-	// in different goroutines.
-	SendMsg(m interface{}) error
-	// RecvMsg blocks until it receives a message or the stream is
-	// done. On client side, it returns io.EOF when the stream is done. On
-	// any other error, it aborts the stream and returns an RPC status. On
-	// server side, it simply returns the error to the caller.
-	// It's safe to have a goroutine calling SendMsg and another goroutine calling
-	// recvMsg on the same stream at the same time.
-	// But it is not safe to call RecvMsg on the same stream in different goroutines.
-	RecvMsg(m interface{}) error
-}
+// DEPRECATED: See ClientStream and ServerStream documentation instead.
+type Stream interface {}
 
 // ClientStream defines the interface a client stream has to satisfy.
+// All errors returned from ClientStream are compatible with the status package.
 type ClientStream interface {
 	// Header returns the header metadata received from the server if there
 	// is any. It blocks if the metadata is not ready to read.
@@ -107,13 +75,35 @@ type ClientStream interface {
 	// CloseSend closes the send direction of the stream. It closes the stream
 	// when non-nil error is met.
 	CloseSend() error
-	// Stream.SendMsg() may return a non-nil error when something wrong happens sending
-	// the request. The returned error indicates the status of this sending, not the final
-	// status of the RPC.
+	// Context returns the context for this stream.
+	Context() context.Context
+	// SendMsg is generally called by generated code. On error, SendMsg aborts
+	// the stream and returns an io.EOF; the status may be determined by
+	// inspecting the error returned by calling RecvMsg.
 	//
-	// Always call Stream.RecvMsg() to drain the stream and get the final
-	// status, otherwise there could be leaked resources.
-	Stream
+	// SendMsg blocks until:
+	//   - It schedules m with the transport, or
+	//   - The stream is done, or
+	//   - The stream breaks.
+	//
+	// SendMsg does not wait for an ack. An untimely stream closure can result
+	// in any buffered messages along the way (including those in the
+	// client-side buffer that comes with gRPC by default) being lost. To
+	// ensure delivery, users must call RecvMsg until receiving an EOF before
+	// cancelling the context.
+	//
+	// It's safe to have a goroutine calling SendMsg and another goroutine
+	// calling RecvMsg on the same stream at the same time. It is not safe
+	// to call SendMsg on the same stream in different goroutines.
+	SendMsg(m interface{}) error
+	// RecvMsg blocks until it receives a message or the stream is done. On
+	// client side, it returns io.EOF when the stream is done. On any other
+	// error, it aborts the stream and returns an RPC status. On server side,
+	// it simply returns the error to the caller. It is safe to have a
+	// goroutine calling SendMsg and another goroutine calling recvMsg on the
+	// same stream at the same time, but it is not safe to call RecvMsg on
+	// the same stream in different goroutines.
+	RecvMsg(m interface{}) error
 }
 
 // NewStream creates a new Stream for the client side. This is typically
@@ -856,7 +846,34 @@ type ServerStream interface {
 	// SetTrailer sets the trailer metadata which will be sent with the RPC status.
 	// When called more than once, all the provided metadata will be merged.
 	SetTrailer(metadata.MD)
-	Stream
+	// Context returns the context for this stream.
+	Context() context.Context
+	// SendMsg sends a message. On error, SendMsg aborts the stream and the
+	// error is returned directly.
+	//
+	// SendMsg blocks until:
+	//   - It schedules m with the transport, or
+	//   - The stream is done, or
+	//   - The stream breaks.
+	//
+	// SendMsg does not wait for an ack. An untimely stream closure can result
+	// in any buffered messages along the way (including those in the
+	// client-side buffer that comes with gRPC by default) being lost. To
+	// ensure delivery, users must call RecvMsg until receiving an EOF before
+	// cancelling the context.
+	//
+	// It's safe to have a goroutine calling SendMsg and another goroutine
+	// calling RecvMsg on the same stream at the same time. It is not safe
+	// to call SendMsg on the same stream in different goroutines.
+	SendMsg(m interface{}) error
+	// RecvMsg blocks until it receives a message or the stream is done. On
+	// client side, it returns io.EOF when the stream is done. On any other
+	// error, it aborts the stream and returns an RPC status. On server side,
+	// it simply returns the error to the caller. It is safe to have a
+	// goroutine calling SendMsg and another goroutine calling recvMsg on the
+	// same stream at the same time, but it is not safe to call RecvMsg on
+	// the same stream in different goroutines.
+	RecvMsg(m interface{}) error
 }
 
 // serverStream implements a server side Stream.
