@@ -33,6 +33,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 )
@@ -66,7 +67,7 @@ func NewBuilder() resolver.Builder {
 }
 
 type dnsBuilder struct {
-	// frequency of polling the DNS server.
+	// minimum frequency of polling the DNS server.
 	freq time.Duration
 }
 
@@ -99,6 +100,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &dnsResolver{
 		freq:                 b.freq,
+		backoff:              backoff.Exponential{MaxDelay: b.freq},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,
@@ -154,12 +156,14 @@ func (i *ipResolver) watcher() {
 
 // dnsResolver watches for the name resolution update for a non-IP target.
 type dnsResolver struct {
-	freq   time.Duration
-	host   string
-	port   string
-	ctx    context.Context
-	cancel context.CancelFunc
-	cc     resolver.ClientConn
+	freq       time.Duration
+	backoff    backoff.Exponential
+	retryCount int
+	host       string
+	port       string
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cc         resolver.ClientConn
 	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
 	rn chan struct{}
 	t  *time.Timer
@@ -198,8 +202,17 @@ func (d *dnsResolver) watcher() {
 		case <-d.rn:
 		}
 		result, sc := d.lookup()
-		// Next lookup should happen after an interval defined by d.freq.
-		d.t.Reset(d.freq)
+		// Next lookup should happen within an interval defined by d.freq. It may be
+		// more often due to exponential retry on empty address list.
+		if len(result) == 0 {
+			d.retryCount++
+			d.t.Reset(d.backoff.Backoff(d.retryCount))
+		} else {
+			if d.retryCount != 0 {
+				d.retryCount = 0
+			}
+			d.t.Reset(d.freq)
+		}
 		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
 	}
