@@ -70,7 +70,6 @@ import io.grpc.testing.TestMethodDescriptors;
 import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
 import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagValue;
-import io.opencensus.tags.Tags;
 import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.MessageEvent.Type;
@@ -261,7 +260,7 @@ public class CensusModulesTest {
         ctx.detach(origCtx);
       }
     } else {
-      assertEquals(Tags.getTagger().empty(), TAG_CONTEXT_KEY.get());
+      assertEquals(TAG_CONTEXT_KEY.get(Context.ROOT), TAG_CONTEXT_KEY.get());
       assertNull(ContextUtils.CONTEXT_SPAN_KEY.get());
       call = interceptedChannel.newCall(method, CALL_OPTIONS);
     }
