@@ -334,7 +334,7 @@ func (s *Stream) Method() string {
 
 // Status returns the status received from the server.
 // Status can be read safely only after the stream has ended,
-// that is, read or write has returned io.EOF.
+// that is, after Done() is closed.
 func (s *Stream) Status() *status.Status {
 	return s.status
 }
