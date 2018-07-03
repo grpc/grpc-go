@@ -60,7 +60,7 @@ type StreamDesc struct {
 // Stream defines the common interface a client or server stream has to satisfy.
 //
 // DEPRECATED: See ClientStream and ServerStream documentation instead.
-type Stream interface {}
+type Stream interface{}
 
 // ClientStream defines the interface a client stream has to satisfy.
 // All errors returned from ClientStream are compatible with the status package.
