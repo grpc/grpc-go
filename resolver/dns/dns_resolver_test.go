@@ -946,9 +946,8 @@ func TestDNSResolverRetry(t *testing.T) {
 		t.Fatalf("%v\n", err)
 	}
 	var addrs []resolver.Address
-	var cnt int
 	for {
-		addrs, cnt = cc.getAddress()
+		addrs, _ = cc.getAddress()
 		if len(addrs) == 1 {
 			break
 		}
@@ -978,7 +977,7 @@ func TestDNSResolverRetry(t *testing.T) {
 		case <-timer.C:
 			b = true
 		default:
-			addrs, cnt = cc.getAddress()
+			addrs, _ = cc.getAddress()
 			if len(addrs) == 1 {
 				b = true
 				break
