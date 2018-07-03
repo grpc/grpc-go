@@ -25,7 +25,7 @@ android {
         targetSdkVersion 26
         versionCode 1
         versionName "1.0"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
     }
     buildTypes {
@@ -80,8 +80,8 @@ dependencies {
     // workaround for https://github.com/google/protobuf/issues/1889
     protobuf 'com.google.protobuf:protobuf-java:3.0.2'
 
-    androidTestImplementation 'com.android.support.test:rules:1.0.1'
-    androidTestImplementation 'com.android.support.test:runner:1.0.1'
+    androidTestImplementation 'androidx.test:rules:1.1.0-alpha1'
+    androidTestImplementation 'androidx.test:runner:1.1.0-alpha1'
 }
 
 gradle.projectsEvaluated {

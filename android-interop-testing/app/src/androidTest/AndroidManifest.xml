@@ -8,7 +8,7 @@
         android:targetSdkVersion="22"/>
 
     <instrumentation
-        android:name="android.support.test.runner.AndroidJUnitRunner"
+        android:name="androidx.test.runner.AndroidJUnitRunner"
         android:targetPackage="io.grpc.android.integrationtest" />
 
     <application android:debuggable="true" >
