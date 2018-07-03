@@ -52,6 +52,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -720,7 +721,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
         maxHeaderListSize,
         stopwatchSupplier,
         tooManyPingsRunnable,
-        transportTracer);
+        transportTracer,
+        Attributes.EMPTY);
   }
 
   @Override

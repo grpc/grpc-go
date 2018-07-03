@@ -102,6 +102,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   // Returns new unstarted stopwatches
   private final Supplier<Stopwatch> stopwatchFactory;
   private final TransportTracer transportTracer;
+  private final Attributes eagAttributes;
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
   private Attributes attributes = Attributes.EMPTY;
@@ -114,7 +115,8 @@ class NettyClientHandler extends AbstractNettyHandler {
       int maxHeaderListSize,
       Supplier<Stopwatch> stopwatchFactory,
       Runnable tooManyPingsRunnable,
-      TransportTracer transportTracer) {
+      TransportTracer transportTracer,
+      Attributes eagAttributes) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ClientHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
@@ -136,7 +138,8 @@ class NettyClientHandler extends AbstractNettyHandler {
         maxHeaderListSize,
         stopwatchFactory,
         tooManyPingsRunnable,
-        transportTracer);
+        transportTracer,
+        eagAttributes);
   }
 
   @VisibleForTesting
@@ -150,7 +153,8 @@ class NettyClientHandler extends AbstractNettyHandler {
       int maxHeaderListSize,
       Supplier<Stopwatch> stopwatchFactory,
       Runnable tooManyPingsRunnable,
-      TransportTracer transportTracer) {
+      TransportTracer transportTracer,
+      Attributes eagAttributes) {
     Preconditions.checkNotNull(connection, "connection");
     Preconditions.checkNotNull(frameReader, "frameReader");
     Preconditions.checkNotNull(lifecycleManager, "lifecycleManager");
@@ -158,6 +162,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Preconditions.checkNotNull(stopwatchFactory, "stopwatchFactory");
     Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    Preconditions.checkNotNull(eagAttributes, "eagAttributes");
 
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyClientHandler.class);
     frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
@@ -199,7 +204,8 @@ class NettyClientHandler extends AbstractNettyHandler {
         keepAliveManager,
         stopwatchFactory,
         tooManyPingsRunnable,
-        transportTracer);
+        transportTracer,
+        eagAttributes);
   }
 
   private NettyClientHandler(
@@ -210,12 +216,14 @@ class NettyClientHandler extends AbstractNettyHandler {
       KeepAliveManager keepAliveManager,
       Supplier<Stopwatch> stopwatchFactory,
       final Runnable tooManyPingsRunnable,
-      TransportTracer transportTracer) {
+      TransportTracer transportTracer,
+      Attributes eagAttributes) {
     super(/* channelUnused= */ null, decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
     this.keepAliveManager = keepAliveManager;
     this.stopwatchFactory = stopwatchFactory;
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
+    this.eagAttributes = eagAttributes;
 
     // Set the frame listener on the decoder.
     decoder().frameListener(new FrameListener());
@@ -414,6 +422,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     this.attributes = attributes;
     this.securityInfo = securityInfo;
     super.handleProtocolNegotiationCompleted(attributes, securityInfo);
+  }
+
+  @Override
+  public Attributes getEagAttributes() {
+    return eagAttributes;
   }
 
   Channelz.Security getSecurityInfo() {

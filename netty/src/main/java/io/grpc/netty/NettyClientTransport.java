@@ -91,6 +91,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private ClientTransportLifecycleManager lifecycleManager;
   /** Since not thread-safe, may only be used from event loop. */
   private final TransportTracer transportTracer;
+  private final Attributes eagAttributes;
 
   NettyClientTransport(
       SocketAddress address, Class<? extends Channel> channelType,
@@ -98,7 +99,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
       int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
       boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent,
-      Runnable tooManyPingsRunnable, TransportTracer transportTracer) {
+      Runnable tooManyPingsRunnable, TransportTracer transportTracer, Attributes eagAttributes) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -115,6 +116,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
+    this.eagAttributes = Preconditions.checkNotNull(eagAttributes, "eagAttributes");
   }
 
   @Override
@@ -194,7 +196,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         maxHeaderListSize,
         GrpcUtil.STOPWATCH_SUPPLIER,
         tooManyPingsRunnable,
-        transportTracer);
+        transportTracer,
+        eagAttributes);
     NettyHandlerSettings.setAutoWindow(handler);
 
     negotiationHandler = negotiator.newHandler(handler);

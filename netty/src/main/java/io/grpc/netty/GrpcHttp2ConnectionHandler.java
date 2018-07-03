@@ -77,4 +77,9 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
   public void notifyUnused() {
     channelUnused.setSuccess(null);
   }
+
+  /** Get the attributes of the EquivalentAddressGroup used to create this transport. */
+  public Attributes getEagAttributes() {
+    return Attributes.EMPTY;
+  }
 }

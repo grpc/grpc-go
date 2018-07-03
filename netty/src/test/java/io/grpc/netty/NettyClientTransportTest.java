@@ -112,6 +112,7 @@ public class NettyClientTransportTest {
     // Throwing is useless in this method, because Netty doesn't propagate the exception
     @Override public void run() {}
   };
+  private Attributes eagAttributes = Attributes.EMPTY;
 
   private ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(SSL_CONTEXT);
 
@@ -174,7 +175,7 @@ public class NettyClientTransportTest {
         address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
         KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */,
-        tooManyPingsRunnable, new TransportTracer());
+        tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY);
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -414,7 +415,7 @@ public class NettyClientTransportTest {
         address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
-        null, tooManyPingsRunnable, new TransportTracer());
+        null, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY);
     transports.add(transport);
 
     // Should not throw
@@ -510,6 +511,22 @@ public class NettyClientTransportTest {
   }
 
   @Test
+  public void getEagAttributes_negotiatorHandler() throws Exception {
+    address = TestUtils.testServerAddress(12345);
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
+
+    NoopProtocolNegotiator npn = new NoopProtocolNegotiator();
+    eagAttributes = Attributes.newBuilder()
+        .set(Attributes.Key.create("trash"), "value")
+        .build();
+    NettyClientTransport transport = newTransport(npn);
+    callMeMaybe(transport.start(clientTransportListener));
+
+    // EAG Attributes are available before the negotiation is complete
+    assertSame(eagAttributes, npn.grpcHandler.getEagAttributes());
+  }
+
+  @Test
   public void clientStreamGetsAttributes() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
@@ -576,7 +593,7 @@ public class NettyClientTransportTest {
         DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
         keepAliveTimeNano, keepAliveTimeoutNano,
         false, authority, userAgent, tooManyPingsRunnable,
-        new TransportTracer());
+        new TransportTracer(), eagAttributes);
     transports.add(transport);
     return transport;
   }
@@ -796,10 +813,12 @@ public class NettyClientTransportTest {
   }
 
   private static class NoopProtocolNegotiator implements ProtocolNegotiator {
+    GrpcHttp2ConnectionHandler grpcHandler;
     NoopHandler handler;
 
     @Override
     public Handler newHandler(final GrpcHttp2ConnectionHandler grpcHandler) {
+      this.grpcHandler = grpcHandler;
       return handler = new NoopHandler(grpcHandler);
     }
   }

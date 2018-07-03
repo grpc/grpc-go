@@ -530,7 +530,7 @@ public final class NettyChannelBuilder
           dparams.getProtocolNegotiator(), flowControlWindow,
           maxMessageSize, maxHeaderListSize, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos,
           keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent(),
-          tooManyPingsRunnable, transportTracer);
+          tooManyPingsRunnable, transportTracer, options.getEagAttributes());
       return transport;
     }
 
