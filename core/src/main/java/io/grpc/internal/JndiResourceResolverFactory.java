@@ -29,6 +29,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -108,7 +109,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
             Level.FINER, "About to query TXT records for {0}", new Object[]{serviceConfigHostname});
       }
       List<String> serviceConfigRawTxtRecords =
-          getAllRecords(new InitialDirContext(), "TXT", "dns:///" + serviceConfigHostname);
+          getAllRecords("TXT", "dns:///" + serviceConfigHostname);
       if (logger.isLoggable(Level.FINER)) {
         logger.log(
             Level.FINER, "Found {0} TXT records", new Object[]{serviceConfigRawTxtRecords.size()});
@@ -130,7 +131,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
             Level.FINER, "About to query SRV records for {0}", new Object[]{grpclbHostname});
       }
       List<String> grpclbSrvRecords =
-          getAllRecords(new InitialDirContext(), "SRV", "dns:///" + grpclbHostname);
+          getAllRecords("SRV", "dns:///" + grpclbHostname);
       if (logger.isLoggable(Level.FINER)) {
         logger.log(
             Level.FINER, "Found {0} SRV records", new Object[]{grpclbSrvRecords.size()});
@@ -193,30 +194,64 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
       return new SrvRecord(parts[3], Integer.parseInt(parts[2]));
     }
 
-    private static List<String> getAllRecords(
-        DirContext dirContext, String recordType, String name) throws NamingException {
+    private static List<String> getAllRecords(String recordType, String name)
+        throws NamingException {
       String[] rrType = new String[]{recordType};
-      javax.naming.directory.Attributes attrs = dirContext.getAttributes(name, rrType);
       List<String> records = new ArrayList<String>();
 
-      NamingEnumeration<? extends Attribute> rrGroups = attrs.getAll();
+      @SuppressWarnings("JdkObsolete")
+      Hashtable<String, String> env = new Hashtable<String, String>();
+      env.put("com.sun.jndi.ldap.connect.timeout", "5000");
+      env.put("com.sun.jndi.ldap.read.timeout", "5000");
+      DirContext dirContext = new InitialDirContext(env);
+
       try {
-        while (rrGroups.hasMore()) {
-          Attribute rrEntry = rrGroups.next();
-          assert Arrays.asList(rrType).contains(rrEntry.getID());
-          NamingEnumeration<?> rrValues = rrEntry.getAll();
-          try {
-            while (rrValues.hasMore()) {
-              records.add(String.valueOf(rrValues.next()));
+        javax.naming.directory.Attributes attrs = dirContext.getAttributes(name, rrType);
+        NamingEnumeration<? extends Attribute> rrGroups = attrs.getAll();
+
+        try {
+          while (rrGroups.hasMore()) {
+            Attribute rrEntry = rrGroups.next();
+            assert Arrays.asList(rrType).contains(rrEntry.getID());
+            NamingEnumeration<?> rrValues = rrEntry.getAll();
+            try {
+              while (rrValues.hasMore()) {
+                records.add(String.valueOf(rrValues.next()));
+              }
+            } catch (NamingException ne) {
+              closeThenThrow(rrValues, ne);
             }
-          } finally {
             rrValues.close();
           }
+        } catch (NamingException ne) {
+          closeThenThrow(rrGroups, ne);
         }
-      } finally {
         rrGroups.close();
+      } catch (NamingException ne) {
+        closeThenThrow(dirContext, ne);
       }
+      dirContext.close();
+
       return records;
+    }
+
+    private static void closeThenThrow(NamingEnumeration<?> namingEnumeration, NamingException e)
+        throws NamingException {
+      try {
+        namingEnumeration.close();
+      } catch (NamingException ignored) {
+        // ignore
+      }
+      throw e;
+    }
+
+    private static void closeThenThrow(DirContext ctx, NamingException e) throws NamingException {
+      try {
+        ctx.close();
+      } catch (NamingException ignored) {
+        // ignore
+      }
+      throw e;
     }
 
     /**
