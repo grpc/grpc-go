@@ -634,6 +634,7 @@ class NettyClientHandler extends AbstractNettyHandler {
         return true;
       }
     });
+    promise.setSuccess();
   }
 
   /**

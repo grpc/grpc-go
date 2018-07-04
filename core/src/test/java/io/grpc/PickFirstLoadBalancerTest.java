@@ -132,7 +132,6 @@ public class PickFirstLoadBalancerTest {
   @Test
   public void pickAfterResolvedAndChanged() throws Exception {
     SocketAddress socketAddr = new FakeSocketAddress("newserver");
-    List<SocketAddress> newSocketAddresses = Lists.newArrayList(socketAddr);
     List<EquivalentAddressGroup> newServers =
         Lists.newArrayList(new EquivalentAddressGroup(socketAddr));
 

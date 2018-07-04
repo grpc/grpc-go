@@ -19,7 +19,6 @@ package io.grpc.internal;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.EquivalentAddressGroup;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
 import io.grpc.internal.JndiResourceResolverFactory.JndiResourceResolver;
 import io.grpc.internal.JndiResourceResolverFactory.JndiResourceResolver.SrvRecord;
@@ -58,16 +57,15 @@ public class JndiResourceResolverTest {
       }
     };
     JndiResourceResolver resolver = new JndiResourceResolver();
-    List<EquivalentAddressGroup> results = null;
     try {
-      results = resolver.resolveSrv(addressResolver, "localhost");
+      resolver.resolveSrv(addressResolver, "localhost");
     } catch (javax.naming.CommunicationException e) {
       Assume.assumeNoException(e);
     } catch (javax.naming.NameNotFoundException e) {
       Assume.assumeNoException(e);
     }
   }
-  
+
   @Test
   public void parseSrvRecord() {
     SrvRecord record = JndiResourceResolver.parseSrvRecord("0 0 1234 foo.bar.com");
