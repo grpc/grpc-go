@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/benchmarkutil"
+	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
@@ -72,7 +72,7 @@ type benchmarkClient struct {
 	lastResetTime     time.Time
 	histogramOptions  stats.HistogramOptions
 	lockingHistograms []lockingHistogram
-	rusageLastReset   *benchmarkutil.Rusage
+	rusageLastReset   *syscall.Rusage
 }
 
 func printClientConfig(config *testpb.ClientConfig) {
@@ -230,7 +230,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		stop:            make(chan bool),
 		lastResetTime:   time.Now(),
 		closeConns:      closeConns,
-		rusageLastReset: benchmarkutil.GetRusage(),
+		rusageLastReset: syscall.GetRusage(),
 	}
 
 	if err = performRPCs(config, conns, bc); err != nil {
@@ -346,8 +346,8 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		latestRusage := benchmarkutil.GetRusage()
-		uTimeElapsed, sTimeElapsed = benchmarkutil.CPUTimeDiff(bc.rusageLastReset, latestRusage)
+		latestRusage := syscall.GetRusage()
+		uTimeElapsed, sTimeElapsed = syscall.CPUTimeDiff(bc.rusageLastReset, latestRusage)
 
 		bc.rusageLastReset = latestRusage
 		bc.lastResetTime = time.Now()
@@ -358,7 +358,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		uTimeElapsed, sTimeElapsed = benchmarkutil.CPUTimeDiff(bc.rusageLastReset, benchmarkutil.GetRusage())
+		uTimeElapsed, sTimeElapsed = syscall.CPUTimeDiff(bc.rusageLastReset, syscall.GetRusage())
 	}
 
 	b := make([]uint32, len(mergedHistogram.Buckets))

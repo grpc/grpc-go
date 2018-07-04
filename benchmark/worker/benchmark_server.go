@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/benchmarkutil"
+	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
@@ -50,7 +50,7 @@ type benchmarkServer struct {
 	closeFunc       func()
 	mu              sync.RWMutex
 	lastResetTime   time.Time
-	rusageLastReset *benchmarkutil.Rusage
+	rusageLastReset *syscall.Rusage
 }
 
 func printServerConfig(config *testpb.ServerConfig) {
@@ -159,7 +159,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		cores:           numOfCores,
 		closeFunc:       closeFunc,
 		lastResetTime:   time.Now(),
-		rusageLastReset: benchmarkutil.GetRusage(),
+		rusageLastReset: syscall.GetRusage(),
 	}, nil
 }
 
@@ -169,8 +169,8 @@ func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
 	wallTimeElapsed := time.Since(bs.lastResetTime).Seconds()
-	rusageLatest := benchmarkutil.GetRusage()
-	uTimeElapsed, sTimeElapsed := benchmarkutil.CPUTimeDiff(bs.rusageLastReset, rusageLatest)
+	rusageLatest := syscall.GetRusage()
+	uTimeElapsed, sTimeElapsed := syscall.CPUTimeDiff(bs.rusageLastReset, rusageLatest)
 
 	if reset {
 		bs.lastResetTime = time.Now()

@@ -32,7 +32,7 @@ import (
 
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/benchmarkutil"
+	grpcsyscall "google.golang.org/grpc/internal/syscall"
 )
 
 var (
@@ -57,14 +57,14 @@ func main() {
 	}
 	defer cf.Close()
 	pprof.StartCPUProfile(cf)
-	cpuBeg := benchmarkutil.GetCPUTime()
+	cpuBeg := grpcsyscall.GetCPUTime()
 	// Launch server in a separate goroutine.
 	stop := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis})
 	// Wait on OS terminate signal.
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	<-ch
-	cpu := time.Duration(benchmarkutil.GetCPUTime() - cpuBeg)
+	cpu := time.Duration(grpcsyscall.GetCPUTime() - cpuBeg)
 	stop()
 	pprof.StopCPUProfile()
 	mf, err := os.Create("/tmp/" + *testName + ".mem")

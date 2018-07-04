@@ -18,7 +18,7 @@
  *
  */
 
-package benchmarkutil
+package syscall
 
 import "google.golang.org/grpc/grpclog"
 

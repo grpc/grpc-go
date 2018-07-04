@@ -33,7 +33,7 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/benchmarkutil"
+	"google.golang.org/grpc/internal/syscall"
 )
 
 var (
@@ -82,12 +82,12 @@ func main() {
 	}
 	defer cf.Close()
 	pprof.StartCPUProfile(cf)
-	cpuBeg := benchmarkutil.GetCPUTime()
+	cpuBeg := syscall.GetCPUTime()
 	for _, cc := range ccs {
 		runWithConn(cc, req, warmDeadline, endDeadline)
 	}
 	wg.Wait()
-	cpu := time.Duration(benchmarkutil.GetCPUTime() - cpuBeg)
+	cpu := time.Duration(syscall.GetCPUTime() - cpuBeg)
 	pprof.StopCPUProfile()
 	mf, err := os.Create("/tmp/" + *testName + ".mem")
 	if err != nil {
