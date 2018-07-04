@@ -69,8 +69,10 @@ type Stream interface{
 	RecvMsg(m interface{}) error
 }
 
-// ClientStream defines the interface a client stream has to satisfy.
-// All errors returned from ClientStream are compatible with the status package.
+// ClientStream defines the client-side behavior of a streaming RPC.
+//
+// All errors returned from ClientStream methods are compatible with the
+// status package.
 type ClientStream interface {
 	// Header returns the header metadata received from the server if there
 	// is any. It blocks if the metadata is not ready to read.
@@ -838,8 +840,10 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
-// ServerStream defines the interface a server stream has to satisfy.
-// All errors returned from ServerStream are compatible with the status package.
+// ServerStream defines the server-side behavior of a streaming RPC.
+//
+// All errors returned from ServerStream methods are compatible with the
+// status package.
 type ServerStream interface {
 	// SetHeader sets the header metadata. It may be called multiple times.
 	// When call multiple times, all the provided metadata will be merged.
