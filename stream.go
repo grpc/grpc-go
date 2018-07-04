@@ -60,7 +60,7 @@ type StreamDesc struct {
 // Stream defines the common interface a client or server stream has to satisfy.
 //
 // Deprecated: See ClientStream and ServerStream documentation instead.
-type Stream interface{
+type Stream interface {
 	// Deprecated: See ClientStream and ServerStream documentation instead.
 	Context() context.Context
 	// Deprecated: See ClientStream and ServerStream documentation instead.
