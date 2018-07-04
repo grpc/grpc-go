@@ -59,13 +59,13 @@ type StreamDesc struct {
 
 // Stream defines the common interface a client or server stream has to satisfy.
 //
-// DEPRECATED: See ClientStream and ServerStream documentation instead.
+// Deprecated: See ClientStream and ServerStream documentation instead.
 type Stream interface{
-	// DEPRECATED: See ClientStream and ServerStream documentation instead.
+	// Deprecated: See ClientStream and ServerStream documentation instead.
 	Context() context.Context
-	// DEPRECATED: See ClientStream and ServerStream documentation instead.
+	// Deprecated: See ClientStream and ServerStream documentation instead.
 	SendMsg(m interface{}) error
-	// DEPRECATED: See ClientStream and ServerStream documentation instead.
+	// Deprecated: See ClientStream and ServerStream documentation instead.
 	RecvMsg(m interface{}) error
 }
 
@@ -145,7 +145,7 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 
 // NewClientStream is a wrapper for ClientConn.NewStream.
 //
-// DEPRECATED: Use ClientConn.NewStream instead.
+// Deprecated: Use ClientConn.NewStream instead.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	return cc.NewStream(ctx, desc, method, opts...)
 }
