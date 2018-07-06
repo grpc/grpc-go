@@ -143,7 +143,10 @@ type Builder interface {
 }
 
 // PickOptions contains addition information for the Pick operation.
-type PickOptions struct{}
+type PickOptions struct {
+	// FullMethodName is the full method name of the RPC.
+	FullMethodName string
+}
 
 // DoneInfo contains additional information for done.
 type DoneInfo struct {
