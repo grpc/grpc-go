@@ -43,6 +43,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.LoadBalanceResponse.LoadBalanceResponseTypeCase;
 import io.grpc.internal.BackoffPolicy;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.LogId;
 import io.grpc.internal.TimeProvider;
 import io.grpc.stub.StreamObserver;
@@ -76,6 +77,8 @@ final class GrpclbState {
   private static final Logger logger = Logger.getLogger(GrpclbState.class.getName());
 
   static final long FALLBACK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+  private static final Attributes LB_PROVIDED_BACKEND_ATTRS =
+      Attributes.newBuilder().set(GrpcAttributes.ATTR_LB_PROVIDED_BACKEND, true).build();
 
   @VisibleForTesting
   static final PickResult DROP_PICK_RESULT =
@@ -579,7 +582,10 @@ final class GrpclbState {
                     .withCause(e));
             continue;
           }
-          EquivalentAddressGroup eag = new EquivalentAddressGroup(address);
+          // ALTS code can use the presence of ATTR_LB_PROVIDED_BACKEND to select ALTS instead of
+          // TLS, with Netty.
+          EquivalentAddressGroup eag =
+              new EquivalentAddressGroup(address, LB_PROVIDED_BACKEND_ATTRS);
           newBackendAddrList.add(new BackendAddressGroup(eag, token));
         }
       }
@@ -726,19 +732,27 @@ final class GrpclbState {
         eags.add(group.getAddresses());
       }
     }
-    return new LbAddressGroup(flattenEquivalentAddressGroup(eags), authority);
+    // ALTS code can use the presence of ATTR_LB_ADDR_AUTHORITY to select ALTS instead of TLS, with
+    // Netty.
+    // TODO(ejona): The process here is a bit of a hack because ATTR_LB_ADDR_AUTHORITY isn't
+    // actually used in the normal case. https://github.com/grpc/grpc-java/issues/4618 should allow
+    // this to be more obvious.
+    Attributes attrs = Attributes.newBuilder()
+        .set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, authority)
+        .build();
+    return new LbAddressGroup(flattenEquivalentAddressGroup(eags, attrs), authority);
   }
 
   /**
    * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
    */
   private static EquivalentAddressGroup flattenEquivalentAddressGroup(
-      List<EquivalentAddressGroup> groupList) {
+      List<EquivalentAddressGroup> groupList, Attributes attrs) {
     List<SocketAddress> addrs = new ArrayList<SocketAddress>();
     for (EquivalentAddressGroup group : groupList) {
       addrs.addAll(group.getAddresses());
     }
-    return new EquivalentAddressGroup(addrs);
+    return new EquivalentAddressGroup(addrs, attrs);
   }
 
   @VisibleForTesting

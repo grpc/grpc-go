@@ -523,6 +523,9 @@ public abstract class LoadBalancer {
      *
      * @since 1.4.0
      */
+    // TODO(ejona): Allow passing a List<EAG> here and to updateOobChannelAddresses, but want to
+    // wait until https://github.com/grpc/grpc-java/issues/4469 is done.
+    // https://github.com/grpc/grpc-java/issues/4618
     public abstract ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority);
 
     /**
