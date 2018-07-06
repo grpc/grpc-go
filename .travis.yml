@@ -2,6 +2,8 @@ language: go
 
 matrix:
   include:
+  - go: 1.10.x
+    env: VET=1 RACE=1
   - go: 1.6.x
   - go: 1.7.x
   - go: 1.8.x
@@ -12,22 +14,21 @@ matrix:
     env: RUN386=1
   - go: 1.10.x
     env: GRPC_GO_RETRY=on
-  - go: 1.10.x
-    env: VET=1 RACE=1
 
 go_import_path: google.golang.org/grpc
 
 before_install:
-  - [[ -n "$RUN386" ]] && export GOARCH=386
-  - [[ "$TRAVIS_EVENT_TYPE" = "cron" ]] && RACE=1
-  - [[ "$TRAVIS_EVENT_TYPE" != "cron" ]] && VET_SKIP_PROTO=1
+  - if [[ -n "$RUN386" ]]; then export GOARCH=386; fi
+  - if [[ "$TRAVIS_EVENT_TYPE" = "cron" ]]; then RACE=1; fi
+  - if [[ "$TRAVIS_EVENT_TYPE" != "cron" ]]; then VET_SKIP_PROTO=1; fi
 
 install:
-  - [[ "$GAE" = 1 ]] && source ./install_gae.sh
-  - [[ "$VET" = 1 ]] && ./vet.sh -install
+  - if [[ "$GAE" = 1 ]]; then source ./install_gae.sh; fi
+  - if [[ "$VET" = 1 ]]; then ./vet.sh -install; fi
 
 script:
-  - if [[ "$GAE" = 1 ]]; then make testappengine; exit; fi
-  - if [[ "$VET" = 1 ]]; then ./vet.sh || exit; fi
-  - make test || exit
-  - [[ "$RACE" = 1 ]] && make testrace
+  - set -e
+  - if [[ "$GAE" = 1 ]]; then make testappengine; exit 0; fi
+  - if [[ "$VET" = 1 ]]; then ./vet.sh; fi
+  - make test
+  - if [[ "$RACE" = 1 ]]; then make testrace; fi
