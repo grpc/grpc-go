@@ -100,17 +100,16 @@ type ClientStream interface {
 	// untimely stream closure may result in lost messages. To ensure delivery,
 	// users should ensure the RPC completed successfully using RecvMsg.
 	//
-	// It's safe to have a goroutine calling SendMsg and another goroutine
-	// calling RecvMsg on the same stream at the same time. It is not safe
+	// It is safe to have a goroutine calling SendMsg and another goroutine
+	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg on the same stream in different goroutines.
+	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the stream completes successfully. On
 	// any other error, the stream is aborted and the error contains the RPC
 	// status.
 	//
 	// It is safe to have a goroutine calling SendMsg and another goroutine
-	// calling RecvMsg on the same stream at the same time, but it is not
-	// safe to call RecvMsg on the same stream in different goroutines.
 	// calling RecvMsg on the same stream at the same time, but it is not
 	// safe to call RecvMsg on the same stream in different goroutines.
 	RecvMsg(m interface{}) error
@@ -873,8 +872,8 @@ type ServerStream interface {
 	// untimely stream closure may result in lost messages. To ensure delivery,
 	// users should ensure the RPC completed successfully using RecvMsg.
 	//
-	// It's safe to have a goroutine calling SendMsg and another goroutine
-	// calling RecvMsg on the same stream at the same time. It is not safe
+	// It is safe to have a goroutine calling SendMsg and another goroutine
+	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg or CloseSend on the same stream in different goroutines.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message into m or the stream is
