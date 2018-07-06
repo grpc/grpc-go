@@ -87,6 +87,13 @@ type service struct {
 	mdata  interface{}
 }
 
+type channelzData struct {
+	callsStarted        int64
+	callsFailed         int64
+	callsSucceeded      int64
+	lastCallStartedTime int64
+}
+
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
 	opts options
@@ -107,11 +114,8 @@ type Server struct {
 	channelzRemoveOnce sync.Once
 	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	channelzID          int64 // channelz unique identification number
-	callsStarted        int64
-	callsFailed         int64
-	callsSucceeded      int64
-	lastCallStartedTime int64
+	channelzID int64 // channelz unique identification number
+	czData     *channelzData
 }
 
 type options struct {
@@ -360,12 +364,13 @@ func NewServer(opt ...ServerOption) *Server {
 		o(&opts)
 	}
 	s := &Server{
-		lis:   make(map[net.Listener]bool),
-		opts:  opts,
-		conns: make(map[io.Closer]bool),
-		m:     make(map[string]*service),
-		quit:  make(chan struct{}),
-		done:  make(chan struct{}),
+		lis:    make(map[net.Listener]bool),
+		opts:   opts,
+		conns:  make(map[io.Closer]bool),
+		m:      make(map[string]*service),
+		quit:   make(chan struct{}),
+		done:   make(chan struct{}),
+		czData: new(channelzData),
 	}
 	s.cv = sync.NewCond(&s.mu)
 	if EnableTracing {
@@ -817,24 +822,24 @@ func (s *Server) removeConn(c io.Closer) {
 // This is an EXPERIMENTAL API.
 func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
 	return &channelz.ServerInternalMetric{
-		CallsStarted:             atomic.LoadInt64(&s.callsStarted),
-		CallsSucceeded:           atomic.LoadInt64(&s.callsSucceeded),
-		CallsFailed:              atomic.LoadInt64(&s.callsFailed),
-		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&s.lastCallStartedTime)),
+		CallsStarted:             atomic.LoadInt64(&s.czData.callsStarted),
+		CallsSucceeded:           atomic.LoadInt64(&s.czData.callsSucceeded),
+		CallsFailed:              atomic.LoadInt64(&s.czData.callsFailed),
+		LastCallStartedTimestamp: time.Unix(0, atomic.LoadInt64(&s.czData.lastCallStartedTime)),
 	}
 }
 
 func (s *Server) incrCallsStarted() {
-	atomic.AddInt64(&s.callsStarted, 1)
-	atomic.StoreInt64(&s.lastCallStartedTime, time.Now().UnixNano())
+	atomic.AddInt64(&s.czData.callsStarted, 1)
+	atomic.StoreInt64(&s.czData.lastCallStartedTime, time.Now().UnixNano())
 }
 
 func (s *Server) incrCallsSucceeded() {
-	atomic.AddInt64(&s.callsSucceeded, 1)
+	atomic.AddInt64(&s.czData.callsSucceeded, 1)
 }
 
 func (s *Server) incrCallsFailed() {
-	atomic.AddInt64(&s.callsFailed, 1)
+	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
