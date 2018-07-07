@@ -33,6 +33,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.SimpleRequest,
       io.grpc.testing.compiler.Test.SimpleResponse> getUnaryCallMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "UnaryCall",
+      inputType = io.grpc.testing.compiler.Test.SimpleRequest.class,
+      outputType = io.grpc.testing.compiler.Test.SimpleResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.SimpleRequest,
       io.grpc.testing.compiler.Test.SimpleResponse> getUnaryCallMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.SimpleRequest, io.grpc.testing.compiler.Test.SimpleResponse> getUnaryCallMethod;
@@ -60,6 +66,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "StreamingOutputCall",
+      inputType = io.grpc.testing.compiler.Test.StreamingOutputCallRequest.class,
+      outputType = io.grpc.testing.compiler.Test.StreamingOutputCallResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest, io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getStreamingOutputCallMethod;
@@ -87,6 +99,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest,
       io.grpc.testing.compiler.Test.StreamingInputCallResponse> getStreamingInputCallMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "StreamingInputCall",
+      inputType = io.grpc.testing.compiler.Test.StreamingInputCallRequest.class,
+      outputType = io.grpc.testing.compiler.Test.StreamingInputCallResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest,
       io.grpc.testing.compiler.Test.StreamingInputCallResponse> getStreamingInputCallMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest, io.grpc.testing.compiler.Test.StreamingInputCallResponse> getStreamingInputCallMethod;
@@ -114,6 +132,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getFullBidiCallMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "FullBidiCall",
+      inputType = io.grpc.testing.compiler.Test.StreamingOutputCallRequest.class,
+      outputType = io.grpc.testing.compiler.Test.StreamingOutputCallResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getFullBidiCallMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest, io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getFullBidiCallMethod;
@@ -141,6 +165,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getHalfBidiCallMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "HalfBidiCall",
+      inputType = io.grpc.testing.compiler.Test.StreamingOutputCallRequest.class,
+      outputType = io.grpc.testing.compiler.Test.StreamingOutputCallResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest,
       io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getHalfBidiCallMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingOutputCallRequest, io.grpc.testing.compiler.Test.StreamingOutputCallResponse> getHalfBidiCallMethod;
@@ -168,6 +198,12 @@ public final class TestServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest,
       io.grpc.testing.compiler.Test.StreamingInputCallResponse> getImportMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.compiler.TestService",
+      methodName = "Import",
+      inputType = io.grpc.testing.compiler.Test.StreamingInputCallRequest.class,
+      outputType = io.grpc.testing.compiler.Test.StreamingInputCallResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest,
       io.grpc.testing.compiler.Test.StreamingInputCallResponse> getImportMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.compiler.Test.StreamingInputCallRequest, io.grpc.testing.compiler.Test.StreamingInputCallResponse> getImportMethod;

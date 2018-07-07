@@ -33,6 +33,12 @@ public final class SimpleServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getUnaryRpcMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.SimpleService",
+      methodName = "UnaryRpc",
+      inputType = io.grpc.testing.protobuf.SimpleRequest.class,
+      outputType = io.grpc.testing.protobuf.SimpleResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getUnaryRpcMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest, io.grpc.testing.protobuf.SimpleResponse> getUnaryRpcMethod;
@@ -60,6 +66,12 @@ public final class SimpleServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getClientStreamingRpcMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.SimpleService",
+      methodName = "ClientStreamingRpc",
+      inputType = io.grpc.testing.protobuf.SimpleRequest.class,
+      outputType = io.grpc.testing.protobuf.SimpleResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getClientStreamingRpcMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest, io.grpc.testing.protobuf.SimpleResponse> getClientStreamingRpcMethod;
@@ -87,6 +99,12 @@ public final class SimpleServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getServerStreamingRpcMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.SimpleService",
+      methodName = "ServerStreamingRpc",
+      inputType = io.grpc.testing.protobuf.SimpleRequest.class,
+      outputType = io.grpc.testing.protobuf.SimpleResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getServerStreamingRpcMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest, io.grpc.testing.protobuf.SimpleResponse> getServerStreamingRpcMethod;
@@ -114,6 +132,12 @@ public final class SimpleServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getBidiStreamingRpcMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.SimpleService",
+      methodName = "BidiStreamingRpc",
+      inputType = io.grpc.testing.protobuf.SimpleRequest.class,
+      outputType = io.grpc.testing.protobuf.SimpleResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> getBidiStreamingRpcMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest, io.grpc.testing.protobuf.SimpleResponse> getBidiStreamingRpcMethod;

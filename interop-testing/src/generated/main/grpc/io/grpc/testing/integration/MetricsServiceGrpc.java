@@ -30,6 +30,12 @@ public final class MetricsServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage,
       io.grpc.testing.integration.Metrics.GaugeResponse> getGetAllGaugesMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.MetricsService",
+      methodName = "GetAllGauges",
+      inputType = io.grpc.testing.integration.Metrics.EmptyMessage.class,
+      outputType = io.grpc.testing.integration.Metrics.GaugeResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage,
       io.grpc.testing.integration.Metrics.GaugeResponse> getGetAllGaugesMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage, io.grpc.testing.integration.Metrics.GaugeResponse> getGetAllGaugesMethod;
@@ -57,6 +63,12 @@ public final class MetricsServiceGrpc {
   private static volatile io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest,
       io.grpc.testing.integration.Metrics.GaugeResponse> getGetGaugeMethod;
 
+  @io.grpc.stub.annotations.RpcMethod(
+      fullServiceName = "grpc.testing.MetricsService",
+      methodName = "GetGauge",
+      inputType = io.grpc.testing.integration.Metrics.GaugeRequest.class,
+      outputType = io.grpc.testing.integration.Metrics.GaugeResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest,
       io.grpc.testing.integration.Metrics.GaugeResponse> getGetGaugeMethod() {
     io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest, io.grpc.testing.integration.Metrics.GaugeResponse> getGetGaugeMethod;
