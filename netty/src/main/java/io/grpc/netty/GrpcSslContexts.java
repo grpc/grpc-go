@@ -219,6 +219,8 @@ public class GrpcSslContexts {
         apc = ALPN;
       } else if (JettyTlsUtil.isJettyNpnConfigured()) {
         apc = NPN;
+      } else if (JettyTlsUtil.isJava9AlpnAvailable()) {
+        apc = ALPN;
       } else {
         throw new IllegalArgumentException(
             SUN_PROVIDER_NAME + " selected, but Jetty NPN/ALPN unavailable");

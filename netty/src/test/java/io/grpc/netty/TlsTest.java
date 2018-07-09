@@ -65,7 +65,7 @@ import org.junit.runners.Parameterized.Parameters;
 public class TlsTest {
 
   public static enum TlsImpl {
-    TCNATIVE, JETTY, CONSCRYPT;
+    TCNATIVE, JDK, CONSCRYPT;
   }
 
   /**
@@ -74,7 +74,7 @@ public class TlsTest {
   @Parameters(name = "{0}")
   public static Iterable<Object[]> data() {
     return Arrays.asList(new Object[][] {
-      {TlsImpl.TCNATIVE}, {TlsImpl.JETTY}, {TlsImpl.CONSCRYPT},
+      {TlsImpl.TCNATIVE}, {TlsImpl.JDK}, {TlsImpl.CONSCRYPT},
     });
   }
 
@@ -101,7 +101,7 @@ public class TlsTest {
         Assume.assumeTrue(OpenSsl.isAvailable());
         sslProvider = SslProvider.OPENSSL;
         break;
-      case JETTY:
+      case JDK:
         Assume.assumeTrue(Arrays.asList(
             SSLContext.getDefault().getSupportedSSLParameters().getCipherSuites())
             .contains("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
@@ -109,9 +109,16 @@ public class TlsTest {
         jdkProvider = Security.getProvider("SunJSSE");
         Assume.assumeNotNull(jdkProvider);
         try {
-          GrpcSslContexts.configure(SslContextBuilder.forClient(), jdkProvider);
-        } catch (IllegalArgumentException ex) {
-          Assume.assumeNoException("Jetty ALPN does not seem available", ex);
+          // Check for presence of an (ironic) class added in Java 9
+          Class.forName("java.lang.Runtime$Version");
+          // Java 9+
+        } catch (ClassNotFoundException ignored) {
+          // Before Java 9
+          try {
+            GrpcSslContexts.configure(SslContextBuilder.forClient(), jdkProvider);
+          } catch (IllegalArgumentException ex) {
+            Assume.assumeNoException("Not Java 9+ and Jetty ALPN does not seem available", ex);
+          }
         }
         break;
       case CONSCRYPT:
