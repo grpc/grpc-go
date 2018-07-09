@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,7 @@ import (
 const (
 	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultServerMaxSendMessageSize    = math.MaxInt32
+	defaultChannelzDataCollectorNum    = 100
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor UnaryServerInterceptor) (interface{}, error)
@@ -106,12 +108,40 @@ type Server struct {
 	channelzRemoveOnce sync.Once
 	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	channelzID          int64 // channelz unique identification number
-	czmu                sync.RWMutex
-	callsStarted        int64
-	callsFailed         int64
-	callsSucceeded      int64
-	lastCallStartedTime time.Time
+	channelzID       int64 // channelz unique identification number
+	czdataCollectors []*channelzDataCollector
+}
+
+type channelzDataCollector struct {
+	czmu sync.RWMutex
+	sm   channelz.ServerInternalMetric
+}
+
+func (c *channelzDataCollector) incrCallsStarted() {
+	c.czmu.Lock()
+	c.sm.CallsStarted++
+	c.sm.LastCallStartedTimestamp = time.Now()
+	c.czmu.Unlock()
+}
+
+func (c *channelzDataCollector) incrCallsSucceeded() {
+	c.czmu.Lock()
+	c.sm.CallsSucceeded++
+	c.czmu.Unlock()
+}
+
+func (c *channelzDataCollector) incrCallsFailed() {
+	c.czmu.Lock()
+	c.sm.CallsFailed++
+	c.czmu.Unlock()
+}
+
+func (c *channelzDataCollector) currentMetrics() *channelz.ServerInternalMetric {
+	var cm channelz.ServerInternalMetric
+	c.czmu.RLock()
+	cm = c.sm
+	c.czmu.RUnlock()
+	return &cm
 }
 
 type options struct {
@@ -375,6 +405,10 @@ func NewServer(opt ...ServerOption) *Server {
 
 	if channelz.IsOn() {
 		s.channelzID = channelz.RegisterServer(s, "")
+		s.czdataCollectors = make([]*channelzDataCollector, defaultChannelzDataCollectorNum)
+		for i := 0; i < defaultChannelzDataCollectorNum; i++ {
+			s.czdataCollectors[i] = new(channelzDataCollector)
+		}
 	}
 	return s
 }
@@ -816,33 +850,18 @@ func (s *Server) removeConn(c io.Closer) {
 // ChannelzMetric returns ServerInternalMetric of current server.
 // This is an EXPERIMENTAL API.
 func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
-	s.czmu.RLock()
-	defer s.czmu.RUnlock()
-	return &channelz.ServerInternalMetric{
-		CallsStarted:             s.callsStarted,
-		CallsSucceeded:           s.callsSucceeded,
-		CallsFailed:              s.callsFailed,
-		LastCallStartedTimestamp: s.lastCallStartedTime,
+	var sm channelz.ServerInternalMetric
+	var cur *channelz.ServerInternalMetric
+	for i := 0; i < defaultChannelzDataCollectorNum; i++ {
+		cur = s.czdataCollectors[i].currentMetrics()
+		sm.CallsStarted += cur.CallsStarted
+		sm.CallsSucceeded += cur.CallsSucceeded
+		sm.CallsFailed += cur.CallsFailed
+		if sm.LastCallStartedTimestamp.Before(cur.LastCallStartedTimestamp) {
+			sm.LastCallStartedTimestamp = cur.LastCallStartedTimestamp
+		}
 	}
-}
-
-func (s *Server) incrCallsStarted() {
-	s.czmu.Lock()
-	s.callsStarted++
-	s.lastCallStartedTime = time.Now()
-	s.czmu.Unlock()
-}
-
-func (s *Server) incrCallsSucceeded() {
-	s.czmu.Lock()
-	s.callsSucceeded++
-	s.czmu.Unlock()
-}
-
-func (s *Server) incrCallsFailed() {
-	s.czmu.Lock()
-	s.callsFailed++
-	s.czmu.Unlock()
+	return &sm
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
@@ -868,14 +887,21 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	return err
 }
 
+func getCollectorID(stream *transport.Stream) int {
+	s := fmt.Sprintf("%p", stream)
+	i, _ := strconv.Atoi(s[len(s)-3 : len(s)-1])
+	return i % defaultChannelzDataCollectorNum
+}
+
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
-		s.incrCallsStarted()
+		dc := s.czdataCollectors[getCollectorID(stream)]
+		dc.incrCallsStarted()
 		defer func() {
 			if err != nil && err != io.EOF {
-				s.incrCallsFailed()
+				dc.incrCallsFailed()
 			} else {
-				s.incrCallsSucceeded()
+				dc.incrCallsSucceeded()
 			}
 		}()
 	}
@@ -1089,12 +1115,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
-		s.incrCallsStarted()
+		dc := s.czdataCollectors[getCollectorID(stream)]
+		dc.incrCallsStarted()
 		defer func() {
 			if err != nil && err != io.EOF {
-				s.incrCallsFailed()
+				dc.incrCallsFailed()
 			} else {
-				s.incrCallsSucceeded()
+				dc.incrCallsSucceeded()
 			}
 		}()
 	}
