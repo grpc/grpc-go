@@ -870,8 +870,7 @@ type ServerStream interface {
 	//   - The stream breaks.
 	//
 	// SendMsg does not wait until the message is received by the client. An
-	// untimely stream closure may result in lost messages. To ensure delivery,
-	// users should ensure the RPC completed successfully using RecvMsg.
+	// untimely stream closure may result in lost messages.
 	//
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not safe
