@@ -37,7 +37,6 @@ func GetCPUTime() int64 {
 }
 
 // Rusage is an alias for syscall.Rusage under linux non-appengine environment.
-// TODO(lyuxuan): use type alias after go1.8 is no longer supported.
 type Rusage syscall.Rusage
 
 // GetRusage returns the resource usage of current process.
