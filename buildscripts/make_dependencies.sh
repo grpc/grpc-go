@@ -25,10 +25,9 @@ if [ -f ${INSTALL_DIR}/bin/protoc ]; then
 # TODO(ejona): swap to `brew install --devel protobuf` once it is up-to-date
 else
   if [[ ! -d "$DOWNLOAD_DIR"/protobuf-"${PROTOBUF_VERSION}" ]]; then
-    wget -O - https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
+    wget -O - https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-all-${PROTOBUF_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
   fi
   pushd $DOWNLOAD_DIR/protobuf-${PROTOBUF_VERSION}
-  ./autogen.sh
   # install here so we don't need sudo
   ./configure CFLAGS=-m"$ARCH" CXXFLAGS=-m"$ARCH" --disable-shared \
     --prefix="$INSTALL_DIR"
