@@ -76,8 +76,7 @@ public interface ClientTransportFactory extends Closeable {
 
     /** Sets the non-null authority. */
     public ClientTransportOptions setAuthority(String authority) {
-      Preconditions.checkNotNull(authority, "authority");
-      this.authority = authority;
+      this.authority = Preconditions.checkNotNull(authority, "authority");
       return this;
     }
 
@@ -92,6 +91,7 @@ public interface ClientTransportFactory extends Closeable {
       return this;
     }
 
+    @Nullable
     public String getUserAgent() {
       return userAgent;
     }
@@ -101,6 +101,7 @@ public interface ClientTransportFactory extends Closeable {
       return this;
     }
 
+    @Nullable
     public ProxyParameters getProxyParameters() {
       return proxyParameters;
     }
