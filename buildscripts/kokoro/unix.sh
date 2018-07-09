@@ -23,9 +23,6 @@ cd $(dirname $0)/../..
 
 # TODO(zpencer): always make sure we are using Oracle jdk8
 
-# Proto deps
-export PROTOBUF_VERSION=3.5.1
-
 # ARCH is 64 bit unless otherwise specified.
 ARCH="${ARCH:-64}"
 

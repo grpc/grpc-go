@@ -3,6 +3,8 @@
 # Build protoc
 set -evux -o pipefail
 
+PROTOBUF_VERSION=3.5.1
+
 # ARCH is 64 bit unless otherwise specified.
 ARCH="${ARCH:-64}"
 DOWNLOAD_DIR=/tmp/source
@@ -44,3 +46,11 @@ if [[ -L /tmp/protobuf ]]; then
   rm /tmp/protobuf
 fi
 ln -s "$INSTALL_DIR" /tmp/protobuf
+
+cat <<EOF
+To compile with the build dependencies:
+
+export LDFLAGS=-L/tmp/protobuf/lib
+export CXXFLAGS=-I/tmp/protobuf/include
+export LD_LIBRARY_PATH=/tmp/protobuf/lib
+EOF

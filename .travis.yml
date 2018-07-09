@@ -5,7 +5,6 @@ language: java
 env:
   global:
     - GRADLE_OPTS=-Xmx512m
-    - PROTOBUF_VERSION=3.5.1
     - LDFLAGS=-L/tmp/protobuf/lib
     - CXXFLAGS=-I/tmp/protobuf/include
     - LD_LIBRARY_PATH=/tmp/protobuf/lib
@@ -52,7 +51,7 @@ notifications:
 
 cache:
   directories:
-    - /tmp/protobuf-${PROTOBUF_VERSION}
+    - /tmp/protobuf-*
     - /tmp/gradle-caches-modules-2
     - /tmp/gradle-wrapper
 
