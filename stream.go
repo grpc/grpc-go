@@ -877,9 +877,10 @@ type ServerStream interface {
 	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg on the same stream in different goroutines.
 	SendMsg(m interface{}) error
-	// RecvMsg blocks until it receives a message into m or the stream is done.
-	// It returns io.EOF when the stream completes successfully. On any non-EOF
-	// error, the stream is aborted and the error contains the RPC status.
+	// RecvMsg blocks until it receives a message into m or the stream is
+	// done. It returns io.EOF when the client has performed a CloseSend. On
+	// any non-EOF error, the stream is aborted and the error contains the
+	// RPC status.
 	//
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not
