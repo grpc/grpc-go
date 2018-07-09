@@ -595,7 +595,7 @@ func TestKeepaliveServer(t *testing.T) {
 	if n, err := client.Write(clientPreface); err != nil || n != len(clientPreface) {
 		t.Fatalf("Error writing client preface; n=%v, err=%v", n, err)
 	}
-	framer := newFramer(client, defaultWriteBufSize, defaultReadBufSize)
+	framer := newFramer(client, defaultWriteBufSize, defaultReadBufSize, 0)
 	if err := framer.fr.WriteSettings(http2.Setting{}); err != nil {
 		t.Fatal("Error writing settings frame:", err)
 	}

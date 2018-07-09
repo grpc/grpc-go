@@ -473,6 +473,14 @@ func defaultDialOptions() dialOptions {
 	}
 }
 
+// WithMaxHeaderListSize returns a DialOption that specifies the maximum (uncompressed) size of
+// header list that the client is prepared to accept.
+func WithMaxHeaderListSize(s uint32) DialOption {
+	return func(o *dialOptions) {
+		o.copts.MaxHeaderListSize = &s
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
