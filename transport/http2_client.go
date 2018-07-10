@@ -948,6 +948,13 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown
 	}
+	if statusCode == codes.Canceled {
+		// Our deadline was already exceeded, and that was likely the cause of
+		// this cancelation.  Alter the status code accordingly.
+		if d, ok := s.ctx.Deadline(); ok && d.After(time.Now()) {
+			statusCode = codes.DeadlineExceeded
+		}
+	}
 	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode), nil, false)
 }
 
