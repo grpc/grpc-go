@@ -1360,7 +1360,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 				// Didn't receive server preface, must kill this new transport now.
 				grpclog.Warningf("grpc: addrConn.createTransport failed to receive server preface before deadline.")
 				newTr.Close()
-				break
+				continue
 			case <-ac.ctx.Done():
 			}
 		}
