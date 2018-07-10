@@ -72,7 +72,7 @@ run(){
     ${out_dir}/client --port=${port} --d=${dur} --w=${warmup} --r=${nr} --c=${nc} --req=${req_sz} --resp=${resp_sz} --rpc_type=${r_type}  --test_name="client_"${test_name}
     client_status=$(echo $?)
 
-    kill ${server_pid}
+    kill -INT ${server_pid}
     wait ${server_pid}
 
     if [ ${client_status} == 0 ]; then
