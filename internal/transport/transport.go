@@ -19,7 +19,7 @@
 // Package transport defines and implements message oriented communication
 // channel to complete various transactions (e.g., an RPC).  It is meant for
 // grpc-internal usage and is not intended to be imported directly by users.
-package transport // externally used as import "google.golang.org/grpc/transport"
+package transport // externally used as import "google.golang.org/grpc/internal/transport"
 
 import (
 	"errors"
