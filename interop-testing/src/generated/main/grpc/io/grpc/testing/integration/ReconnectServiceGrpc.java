@@ -36,8 +36,8 @@ public final class ReconnectServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.ReconnectService",
       methodName = "Start",
-      inputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
-      outputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      requestType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      responseType = io.grpc.testing.integration.EmptyProtos.Empty.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getStartMethod() {
@@ -69,8 +69,8 @@ public final class ReconnectServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.ReconnectService",
       methodName = "Stop",
-      inputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
-      outputType = io.grpc.testing.integration.Messages.ReconnectInfo.class,
+      requestType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      responseType = io.grpc.testing.integration.Messages.ReconnectInfo.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> getStopMethod() {

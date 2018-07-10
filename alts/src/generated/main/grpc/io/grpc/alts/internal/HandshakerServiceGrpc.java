@@ -33,8 +33,8 @@ public final class HandshakerServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.gcp.HandshakerService",
       methodName = "DoHandshake",
-      inputType = io.grpc.alts.internal.Handshaker.HandshakerReq.class,
-      outputType = io.grpc.alts.internal.Handshaker.HandshakerResp.class,
+      requestType = io.grpc.alts.internal.Handshaker.HandshakerReq.class,
+      responseType = io.grpc.alts.internal.Handshaker.HandshakerResp.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.alts.internal.Handshaker.HandshakerReq,
       io.grpc.alts.internal.Handshaker.HandshakerResp> getDoHandshakeMethod() {

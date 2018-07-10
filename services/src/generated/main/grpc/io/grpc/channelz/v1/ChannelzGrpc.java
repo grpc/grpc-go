@@ -37,8 +37,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetTopChannels",
-      inputType = io.grpc.channelz.v1.GetTopChannelsRequest.class,
-      outputType = io.grpc.channelz.v1.GetTopChannelsResponse.class,
+      requestType = io.grpc.channelz.v1.GetTopChannelsRequest.class,
+      responseType = io.grpc.channelz.v1.GetTopChannelsResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetTopChannelsRequest,
       io.grpc.channelz.v1.GetTopChannelsResponse> getGetTopChannelsMethod() {
@@ -70,8 +70,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetServers",
-      inputType = io.grpc.channelz.v1.GetServersRequest.class,
-      outputType = io.grpc.channelz.v1.GetServersResponse.class,
+      requestType = io.grpc.channelz.v1.GetServersRequest.class,
+      responseType = io.grpc.channelz.v1.GetServersResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetServersRequest,
       io.grpc.channelz.v1.GetServersResponse> getGetServersMethod() {
@@ -103,8 +103,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetServerSockets",
-      inputType = io.grpc.channelz.v1.GetServerSocketsRequest.class,
-      outputType = io.grpc.channelz.v1.GetServerSocketsResponse.class,
+      requestType = io.grpc.channelz.v1.GetServerSocketsRequest.class,
+      responseType = io.grpc.channelz.v1.GetServerSocketsResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetServerSocketsRequest,
       io.grpc.channelz.v1.GetServerSocketsResponse> getGetServerSocketsMethod() {
@@ -136,8 +136,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetChannel",
-      inputType = io.grpc.channelz.v1.GetChannelRequest.class,
-      outputType = io.grpc.channelz.v1.GetChannelResponse.class,
+      requestType = io.grpc.channelz.v1.GetChannelRequest.class,
+      responseType = io.grpc.channelz.v1.GetChannelResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetChannelRequest,
       io.grpc.channelz.v1.GetChannelResponse> getGetChannelMethod() {
@@ -169,8 +169,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetSubchannel",
-      inputType = io.grpc.channelz.v1.GetSubchannelRequest.class,
-      outputType = io.grpc.channelz.v1.GetSubchannelResponse.class,
+      requestType = io.grpc.channelz.v1.GetSubchannelRequest.class,
+      responseType = io.grpc.channelz.v1.GetSubchannelResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetSubchannelRequest,
       io.grpc.channelz.v1.GetSubchannelResponse> getGetSubchannelMethod() {
@@ -202,8 +202,8 @@ public final class ChannelzGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.channelz.v1.Channelz",
       methodName = "GetSocket",
-      inputType = io.grpc.channelz.v1.GetSocketRequest.class,
-      outputType = io.grpc.channelz.v1.GetSocketResponse.class,
+      requestType = io.grpc.channelz.v1.GetSocketRequest.class,
+      responseType = io.grpc.channelz.v1.GetSocketResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.channelz.v1.GetSocketRequest,
       io.grpc.channelz.v1.GetSocketResponse> getGetSocketMethod() {

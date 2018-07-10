@@ -36,8 +36,8 @@ public final class AnotherDynamicServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.reflection.testing.AnotherDynamicService",
       methodName = "Method",
-      inputType = io.grpc.reflection.testing.DynamicRequest.class,
-      outputType = io.grpc.reflection.testing.DynamicReply.class,
+      requestType = io.grpc.reflection.testing.DynamicRequest.class,
+      responseType = io.grpc.reflection.testing.DynamicReply.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.reflection.testing.DynamicRequest,
       io.grpc.reflection.testing.DynamicReply> getMethodMethod() {

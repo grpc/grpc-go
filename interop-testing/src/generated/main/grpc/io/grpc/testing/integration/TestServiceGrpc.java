@@ -37,8 +37,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "EmptyCall",
-      inputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
-      outputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      requestType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      responseType = io.grpc.testing.integration.EmptyProtos.Empty.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getEmptyCallMethod() {
@@ -70,8 +70,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "UnaryCall",
-      inputType = io.grpc.testing.integration.Messages.SimpleRequest.class,
-      outputType = io.grpc.testing.integration.Messages.SimpleResponse.class,
+      requestType = io.grpc.testing.integration.Messages.SimpleRequest.class,
+      responseType = io.grpc.testing.integration.Messages.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getUnaryCallMethod() {
@@ -103,8 +103,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "CacheableUnaryCall",
-      inputType = io.grpc.testing.integration.Messages.SimpleRequest.class,
-      outputType = io.grpc.testing.integration.Messages.SimpleResponse.class,
+      requestType = io.grpc.testing.integration.Messages.SimpleRequest.class,
+      responseType = io.grpc.testing.integration.Messages.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> getCacheableUnaryCallMethod() {
@@ -136,8 +136,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "StreamingOutputCall",
-      inputType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
-      outputType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
+      requestType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
+      responseType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getStreamingOutputCallMethod() {
@@ -169,8 +169,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "StreamingInputCall",
-      inputType = io.grpc.testing.integration.Messages.StreamingInputCallRequest.class,
-      outputType = io.grpc.testing.integration.Messages.StreamingInputCallResponse.class,
+      requestType = io.grpc.testing.integration.Messages.StreamingInputCallRequest.class,
+      responseType = io.grpc.testing.integration.Messages.StreamingInputCallResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
       io.grpc.testing.integration.Messages.StreamingInputCallResponse> getStreamingInputCallMethod() {
@@ -202,8 +202,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "FullDuplexCall",
-      inputType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
-      outputType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
+      requestType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
+      responseType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getFullDuplexCallMethod() {
@@ -235,8 +235,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "HalfDuplexCall",
-      inputType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
-      outputType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
+      requestType = io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class,
+      responseType = io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> getHalfDuplexCallMethod() {
@@ -268,8 +268,8 @@ public final class TestServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.TestService",
       methodName = "UnimplementedCall",
-      inputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
-      outputType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      requestType = io.grpc.testing.integration.EmptyProtos.Empty.class,
+      responseType = io.grpc.testing.integration.EmptyProtos.Empty.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.testing.integration.EmptyProtos.Empty,
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod() {

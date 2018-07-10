@@ -33,8 +33,8 @@ public final class WorkerServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.WorkerService",
       methodName = "RunServer",
-      inputType = io.grpc.benchmarks.proto.Control.ServerArgs.class,
-      outputType = io.grpc.benchmarks.proto.Control.ServerStatus.class,
+      requestType = io.grpc.benchmarks.proto.Control.ServerArgs.class,
+      responseType = io.grpc.benchmarks.proto.Control.ServerStatus.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ServerArgs,
       io.grpc.benchmarks.proto.Control.ServerStatus> getRunServerMethod() {
@@ -66,8 +66,8 @@ public final class WorkerServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.WorkerService",
       methodName = "RunClient",
-      inputType = io.grpc.benchmarks.proto.Control.ClientArgs.class,
-      outputType = io.grpc.benchmarks.proto.Control.ClientStatus.class,
+      requestType = io.grpc.benchmarks.proto.Control.ClientArgs.class,
+      responseType = io.grpc.benchmarks.proto.Control.ClientStatus.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ClientArgs,
       io.grpc.benchmarks.proto.Control.ClientStatus> getRunClientMethod() {
@@ -99,8 +99,8 @@ public final class WorkerServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.WorkerService",
       methodName = "CoreCount",
-      inputType = io.grpc.benchmarks.proto.Control.CoreRequest.class,
-      outputType = io.grpc.benchmarks.proto.Control.CoreResponse.class,
+      requestType = io.grpc.benchmarks.proto.Control.CoreRequest.class,
+      responseType = io.grpc.benchmarks.proto.Control.CoreResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.CoreRequest,
       io.grpc.benchmarks.proto.Control.CoreResponse> getCoreCountMethod() {
@@ -132,8 +132,8 @@ public final class WorkerServiceGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.testing.WorkerService",
       methodName = "QuitWorker",
-      inputType = io.grpc.benchmarks.proto.Control.Void.class,
-      outputType = io.grpc.benchmarks.proto.Control.Void.class,
+      requestType = io.grpc.benchmarks.proto.Control.Void.class,
+      responseType = io.grpc.benchmarks.proto.Control.Void.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.Void,
       io.grpc.benchmarks.proto.Control.Void> getQuitWorkerMethod() {

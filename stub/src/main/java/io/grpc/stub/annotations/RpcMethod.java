@@ -16,14 +16,24 @@
 
 package io.grpc.stub.annotations;
 
-import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.MethodDescriptor;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotates a method descriptor method to provide metadata for annotation processing.
+ * {@link RpcMethod} contains a limited subset of information about the RPC to assist
+ * <a href="https://docs.oracle.com/javase/6/docs/api/javax/annotation/processing/Processor.html">
+ * Java Annotation Processors.</a>
+ *
+ * <p>
+ *   This annotation is used by the gRPC stub compiler to annotate {@link MethodDescriptor}
+ *   getters.  Users should not annotate their own classes with annotation.  Not all stubs may have
+ *   this annotation, so consumers should not assume that it is present.
+ * </p>
+ *
+ * @since 1.14.0
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
@@ -40,17 +50,17 @@ public @interface RpcMethod {
   String methodName();
 
   /**
-   * The input type of the method
+   * The request type of the method
    */
-  Class<?> inputType();
+  Class<?> requestType();
 
   /**
-   * The output type of the method
+   * The response type of the method
    */
-  Class<?> outputType();
+  Class<?> responseType();
 
   /**
    * The call type of the method
    */
-  MethodType methodType();
+  MethodDescriptor.MethodType methodType();
 }

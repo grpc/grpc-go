@@ -33,8 +33,8 @@ public final class HealthGrpc {
   @io.grpc.stub.annotations.RpcMethod(
       fullServiceName = "grpc.health.v1.Health",
       methodName = "Check",
-      inputType = io.grpc.health.v1.HealthCheckRequest.class,
-      outputType = io.grpc.health.v1.HealthCheckResponse.class,
+      requestType = io.grpc.health.v1.HealthCheckRequest.class,
+      responseType = io.grpc.health.v1.HealthCheckResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
   public static io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
       io.grpc.health.v1.HealthCheckResponse> getCheckMethod() {
