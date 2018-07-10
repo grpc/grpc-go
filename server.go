@@ -85,13 +85,6 @@ type service struct {
 	mdata  interface{}
 }
 
-type channelzData struct {
-	callsStarted        int64
-	callsFailed         int64
-	callsSucceeded      int64
-	lastCallStartedTime int64
-}
-
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
 	opts options
