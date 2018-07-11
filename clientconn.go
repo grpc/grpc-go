@@ -1059,8 +1059,10 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	return m
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{})
+func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{
+		FullMethodName: method,
+	})
 	if err != nil {
 		return nil, nil, toRPCErr(err)
 	}
