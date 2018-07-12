@@ -689,3 +689,137 @@ func TestDisableServiceConfigOption(t *testing.T) {
 		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %v", m)
 	}
 }
+
+func TestFallbackServiceConfig(t *testing.T) {
+	addr := "passthrough:///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithFallbackServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	time.Sleep(1 * time.Second)
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady == nil || *m.WaitForReady != true {
+		t.Fatalf("want: method (\"/foo/bar/\") config to be true, got: %v", m)
+	}
+}
+
+func TestFallbackWhenDisableResolverServiceConfigWithoutResolverReturningSC(t *testing.T) {
+	addr := "passthrough:///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithFallbackServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	time.Sleep(1 * time.Second)
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady == nil || *m.WaitForReady != true {
+		t.Fatalf("want: method (\"/foo/bar/\") config to be true, got: %v", m)
+	}
+}
+
+func TestFallbackWhenDisableResolverServiceConfigWithResolverReturningSC(t *testing.T) {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	addr := r.Scheme() + ":///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithFallbackServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`)
+	time.Sleep(1 * time.Second)
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady == nil || *m.WaitForReady != true {
+		t.Fatalf("want: method (\"/foo/bar/\") config to be true, got: %v", m)
+	}
+}
+
+func TestFallbackLowerPriorityThanResolverServiceConfig(t *testing.T) {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	addr := r.Scheme() + ":///non.existent"
+	cc, err := Dial(addr, WithInsecure(), WithFallbackServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`)
+	time.Sleep(1 * time.Second)
+	m := cc.GetMethodConfig("/foo/Bar")
+	if m.WaitForReady == nil || *m.WaitForReady != false {
+		t.Fatalf("want: method (\"/foo/bar/\") config to be true, got: %v", m)
+	}
+}
