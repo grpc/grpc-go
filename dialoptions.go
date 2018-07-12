@@ -47,6 +47,7 @@ type dialOptions struct {
 	insecure    bool
 	timeout     time.Duration
 	scChan      <-chan ServiceConfig
+	authority   string
 	copts       transport.ConnectOptions
 	callOptions []CallOption
 	// This is used by v1 balancer dial option WithBalancer to support v1
@@ -366,7 +367,7 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 // effect if TransportCredentials are present.
 func WithAuthority(a string) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Authority = a
+		o.authority = a
 	}
 }
 
