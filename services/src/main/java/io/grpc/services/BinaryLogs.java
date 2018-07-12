@@ -22,18 +22,32 @@ import java.io.IOException;
 
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4017")
 public final class BinaryLogs {
+  /**
+   * Creates a binary log that writes to a temp file. <b>Warning:</b> this implementation is
+   * not performance optimized, and RPCs will experience back pressure if disk IO does not keep
+   * up.
+   */
   public static BinaryLog createBinaryLog() throws IOException {
     return new BinaryLogProviderImpl();
   }
 
+  /**
+   * Creates a binary log with a custom {@link BinaryLogSink} for receiving the logged data.
+   */
   public static BinaryLog createBinaryLog(BinaryLogSink sink) throws IOException {
     return new BinaryLogProviderImpl(sink);
   }
 
+  /**
+   * Same as {@link #createBinaryLog()} except the call IDs are derived from census.
+   */
   public static BinaryLog createCensusBinaryLog() throws IOException {
     return new CensusBinaryLogProvider();
   }
 
+  /**
+   * Same as {@link #createBinaryLog(BinaryLogSink)} except the call IDs are derived from census.
+   */
   public static BinaryLog createCensusBinaryLog(BinaryLogSink sink) throws IOException {
     return new CensusBinaryLogProvider(sink);
   }
