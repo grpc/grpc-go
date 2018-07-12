@@ -18,6 +18,8 @@ package io.grpc.services;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ExperimentalApi;
+import io.grpc.ServerInterceptors;
+import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.channelz.v1.ChannelzGrpc;
 import io.grpc.channelz.v1.GetChannelRequest;
@@ -48,8 +50,25 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   private final Channelz channelz;
   private final int maxPageSize;
 
+  /**
+   * Creates an instance.
+   * @deprecated Call {@link #createInstance(int)}, which includes security interceptors.
+   */
+  @Deprecated
   public static ChannelzService newInstance(int maxPageSize) {
     return new ChannelzService(Channelz.instance(), maxPageSize);
+  }
+
+  /**
+   * Creates an instance. The return value may contain built in interceptors for web security.
+   *
+   * @param maxPageSize the number of items per set of paginated results.
+   * @return a {@link ServerServiceDefinition} that represents the channelz service.
+   */
+  public static ServerServiceDefinition createInstance(int maxPageSize) {
+    return ServerInterceptors.intercept(
+        new ChannelzService(Channelz.instance(), maxPageSize),
+        new RequireDoubleSubmitCookieInterceptor("grpc-channelz-v1-channelz-token"));
   }
 
   @VisibleForTesting
