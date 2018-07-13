@@ -1047,10 +1047,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.Options{
-		Last:  true,
-		Delay: false,
-	}
+	opts := &transport.Options{Last: true}
 
 	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {

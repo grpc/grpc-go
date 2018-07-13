@@ -467,9 +467,6 @@ func NewServerTransport(protocol string, conn net.Conn, config *ServerConfig) (S
 type ConnectOptions struct {
 	// UserAgent is the application user agent.
 	UserAgent string
-	// Authority is the :authority pseudo-header to use. This field has no effect if
-	// TransportCredentials is set.
-	Authority string
 	// Dialer specifies how to dial a network address.
 	Dialer func(context.Context, string) (net.Conn, error)
 	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
@@ -515,11 +512,6 @@ type Options struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
-
-	// Delay is a hint to the transport implementation for whether
-	// the data could be buffered for a batching write. The
-	// transport implementation may ignore the hint.
-	Delay bool
 }
 
 // CallHdr carries the information of a particular RPC.
@@ -536,14 +528,6 @@ type CallHdr struct {
 
 	// Creds specifies credentials.PerRPCCredentials for a call.
 	Creds credentials.PerRPCCredentials
-
-	// Flush indicates whether a new stream command should be sent
-	// to the peer without waiting for the first data. This is
-	// only a hint.
-	// If it's true, the transport may modify the flush decision
-	// for performance purposes.
-	// If it's false, new stream will never be flushed.
-	Flush bool
 
 	// ContentSubtype specifies the content-subtype for a request. For example, a
 	// content-subtype of "proto" will result in a content-type of

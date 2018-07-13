@@ -274,9 +274,7 @@ func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts
 		ht.writeCommonHeaders(s)
 		ht.rw.Write(hdr)
 		ht.rw.Write(data)
-		if !opts.Delay {
-			ht.rw.(http.Flusher).Flush()
-		}
+		ht.rw.(http.Flusher).Flush()
 	})
 }
 

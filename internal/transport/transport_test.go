@@ -498,7 +498,7 @@ func TestMaxConnectionIdle(t *testing.T) {
 	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
 	defer server.stop()
 	defer client.Close()
-	stream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	stream, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create RPC request: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestMaxConnectionIdleNegative(t *testing.T) {
 	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
 	defer server.stop()
 	defer client.Close()
-	_, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	_, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create RPC request: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	}
 	defer conn.Close()
 	// Create a stream.
-	_, err := tr.NewStream(context.Background(), &CallHdr{Flush: true})
+	_, err := tr.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create a new stream: %v", err)
 	}
@@ -782,7 +782,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	defer server.stop()
 	defer client.Close()
 
-	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
 		t.Fatalf("Client failed to create stream.")
 	}
 	timeout := time.NewTimer(10 * time.Second)
@@ -848,7 +848,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	defer server.stop()
 	defer client.Close()
 
-	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+	if _, err := client.NewStream(context.Background(), &CallHdr{}); err != nil {
 		t.Fatalf("Client failed to create stream.")
 	}
 
@@ -883,10 +883,7 @@ func TestClientSendAndReceive(t *testing.T) {
 	if s2.id != 3 {
 		t.Fatalf("wrong stream id: %d", s2.id)
 	}
-	opts := Options{
-		Last:  true,
-		Delay: false,
-	}
+	opts := Options{Last: true}
 	if err := ct.Write(s1, nil, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("failed to send data: %v", err)
 	}
@@ -920,10 +917,7 @@ func performOneRPC(ct ClientTransport) {
 	if err != nil {
 		return
 	}
-	opts := Options{
-		Last:  true,
-		Delay: false,
-	}
+	opts := Options{Last: true}
 	if err := ct.Write(s, []byte{}, expectedRequest, &opts); err == nil || err == io.EOF {
 		time.Sleep(5 * time.Millisecond)
 		// The following s.Recv()'s could error out because the
@@ -968,7 +962,7 @@ func TestLargeMessage(t *testing.T) {
 			if err != nil {
 				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 			}
-			if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
+			if err := ct.Write(s, []byte{}, expectedRequestLarge, &Options{Last: true}); err != nil && err != io.EOF {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
@@ -1342,7 +1336,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	notifyChan := make(chan struct{})
 	server.h.notify = notifyChan
 	server.mu.Unlock()
-	cstream1, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	cstream1, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create first stream. Err: %v", err)
 	}
@@ -1369,7 +1363,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	server.h.notify = notifyChan
 	server.mu.Unlock()
 	// Create another stream on client.
-	cstream2, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	cstream2, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create second stream. Err: %v", err)
 	}
@@ -1424,7 +1418,7 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		st = k.(*http2Server)
 	}
 	server.mu.Unlock()
-	cstream1, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	cstream1, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 1st stream. Err: %v", err)
 	}
@@ -1433,7 +1427,7 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
 	//Client should be able to create another stream and send data on it.
-	cstream2, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	cstream2, err := client.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
 	}
@@ -1668,10 +1662,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 	if err != nil {
 		return
 	}
-	opts := Options{
-		Last:  true,
-		Delay: false,
-	}
+	opts := Options{Last: true}
 	if err := ct.Write(s, nil, expectedRequest, &opts); err != nil && err != errStreamDone {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
@@ -2069,7 +2060,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		cancel() // Do not cancel in success path.
 		t.Fatalf("Error creating client. Err: %v", err)
 	}
-	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
+	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method"})
 	if err != nil {
 		t.Fatalf("Error creating stream at client-side. Err: %v", err)
 	}

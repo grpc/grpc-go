@@ -240,8 +240,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
-	} else if cc.dopts.insecure && cc.dopts.copts.Authority != "" {
-		cc.authority = cc.dopts.copts.Authority
+	} else if cc.dopts.insecure && cc.dopts.authority != "" {
+		cc.authority = cc.dopts.authority
 	} else {
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
