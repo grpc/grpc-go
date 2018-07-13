@@ -29,8 +29,8 @@ import java.lang.annotation.Target;
  *
  * <p>
  *   This annotation is used by the gRPC stub compiler to annotate {@link MethodDescriptor}
- *   getters.  Users should not annotate their own classes with annotation.  Not all stubs may have
- *   this annotation, so consumers should not assume that it is present.
+ *   getters.  Users should not annotate their own classes with this annotation.  Not all stubs may
+ *   have this annotation, so consumers should not assume that it is present.
  * </p>
  *
  * @since 1.14.0
@@ -40,27 +40,31 @@ import java.lang.annotation.Target;
 public @interface RpcMethod {
 
   /**
-   * The full service name for the method
+   * The fully qualified method name.  This should match the name as returned by
+   * {@link MethodDescriptor#generateFullMethodName(String, String)}.
    */
-  String fullServiceName();
+  String fullMethodName();
 
   /**
-   * The method name for the method
-   */
-  String methodName();
-
-  /**
-   * The request type of the method
+   * The request type of the method.  The request type class should be assignable from (i.e.
+   * {@link Class#isAssignableFrom(Class)} the request type {@code ReqT} of the
+   * {@link MethodDescriptor}.  Additionally, if the request {@code MethodDescriptor.Marshaller}
+   * is a {@code MethodDescriptor.ReflectableMarshaller}, the request type should be assignable
+   * from {@code MethodDescriptor.ReflectableMarshaller#getMessageClass()}.
    */
   Class<?> requestType();
 
   /**
-   * The response type of the method
+   * The response type of the method.  The response type class should be assignable from (i.e.
+   * {@link Class#isAssignableFrom(Class)} the response type {@code RespT} of the
+   * {@link MethodDescriptor}.  Additionally, if the response {@code MethodDescriptor.Marshaller}
+   * is a {@code MethodDescriptor.ReflectableMarshaller}, the response type should be assignable
+   * from {@code MethodDescriptor.ReflectableMarshaller#getMessageClass()}.
    */
   Class<?> responseType();
 
   /**
-   * The call type of the method
+   * The call type of the method.
    */
   MethodDescriptor.MethodType methodType();
 }

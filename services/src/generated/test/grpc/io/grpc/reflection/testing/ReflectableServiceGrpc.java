@@ -31,8 +31,7 @@ public final class ReflectableServiceGrpc {
       io.grpc.reflection.testing.Reply> getMethodMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.reflection.testing.ReflectableService",
-      methodName = "Method",
+      fullMethodName = SERVICE_NAME + '/' + "Method",
       requestType = io.grpc.reflection.testing.Request.class,
       responseType = io.grpc.reflection.testing.Reply.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)

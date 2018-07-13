@@ -35,8 +35,7 @@ public final class UnimplementedServiceGrpc {
       io.grpc.testing.integration.EmptyProtos.Empty> getUnimplementedCallMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.UnimplementedService",
-      methodName = "UnimplementedCall",
+      fullMethodName = SERVICE_NAME + '/' + "UnimplementedCall",
       requestType = io.grpc.testing.integration.EmptyProtos.Empty.class,
       responseType = io.grpc.testing.integration.EmptyProtos.Empty.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)

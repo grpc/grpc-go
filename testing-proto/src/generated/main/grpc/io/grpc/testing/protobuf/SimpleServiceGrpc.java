@@ -34,8 +34,7 @@ public final class SimpleServiceGrpc {
       io.grpc.testing.protobuf.SimpleResponse> getUnaryRpcMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.SimpleService",
-      methodName = "UnaryRpc",
+      fullMethodName = SERVICE_NAME + '/' + "UnaryRpc",
       requestType = io.grpc.testing.protobuf.SimpleRequest.class,
       responseType = io.grpc.testing.protobuf.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
@@ -67,8 +66,7 @@ public final class SimpleServiceGrpc {
       io.grpc.testing.protobuf.SimpleResponse> getClientStreamingRpcMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.SimpleService",
-      methodName = "ClientStreamingRpc",
+      fullMethodName = SERVICE_NAME + '/' + "ClientStreamingRpc",
       requestType = io.grpc.testing.protobuf.SimpleRequest.class,
       responseType = io.grpc.testing.protobuf.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
@@ -100,8 +98,7 @@ public final class SimpleServiceGrpc {
       io.grpc.testing.protobuf.SimpleResponse> getServerStreamingRpcMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.SimpleService",
-      methodName = "ServerStreamingRpc",
+      fullMethodName = SERVICE_NAME + '/' + "ServerStreamingRpc",
       requestType = io.grpc.testing.protobuf.SimpleRequest.class,
       responseType = io.grpc.testing.protobuf.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
@@ -133,8 +130,7 @@ public final class SimpleServiceGrpc {
       io.grpc.testing.protobuf.SimpleResponse> getBidiStreamingRpcMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.SimpleService",
-      methodName = "BidiStreamingRpc",
+      fullMethodName = SERVICE_NAME + '/' + "BidiStreamingRpc",
       requestType = io.grpc.testing.protobuf.SimpleRequest.class,
       responseType = io.grpc.testing.protobuf.SimpleResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)

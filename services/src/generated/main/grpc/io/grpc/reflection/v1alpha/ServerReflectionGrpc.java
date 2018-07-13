@@ -31,8 +31,7 @@ public final class ServerReflectionGrpc {
       io.grpc.reflection.v1alpha.ServerReflectionResponse> getServerReflectionInfoMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.reflection.v1alpha.ServerReflection",
-      methodName = "ServerReflectionInfo",
+      fullMethodName = SERVICE_NAME + '/' + "ServerReflectionInfo",
       requestType = io.grpc.reflection.v1alpha.ServerReflectionRequest.class,
       responseType = io.grpc.reflection.v1alpha.ServerReflectionResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)

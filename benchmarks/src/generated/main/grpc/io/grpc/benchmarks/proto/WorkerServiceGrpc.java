@@ -31,8 +31,7 @@ public final class WorkerServiceGrpc {
       io.grpc.benchmarks.proto.Control.ServerStatus> getRunServerMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.WorkerService",
-      methodName = "RunServer",
+      fullMethodName = SERVICE_NAME + '/' + "RunServer",
       requestType = io.grpc.benchmarks.proto.Control.ServerArgs.class,
       responseType = io.grpc.benchmarks.proto.Control.ServerStatus.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
@@ -64,8 +63,7 @@ public final class WorkerServiceGrpc {
       io.grpc.benchmarks.proto.Control.ClientStatus> getRunClientMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.WorkerService",
-      methodName = "RunClient",
+      fullMethodName = SERVICE_NAME + '/' + "RunClient",
       requestType = io.grpc.benchmarks.proto.Control.ClientArgs.class,
       responseType = io.grpc.benchmarks.proto.Control.ClientStatus.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
@@ -97,8 +95,7 @@ public final class WorkerServiceGrpc {
       io.grpc.benchmarks.proto.Control.CoreResponse> getCoreCountMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.WorkerService",
-      methodName = "CoreCount",
+      fullMethodName = SERVICE_NAME + '/' + "CoreCount",
       requestType = io.grpc.benchmarks.proto.Control.CoreRequest.class,
       responseType = io.grpc.benchmarks.proto.Control.CoreResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
@@ -130,8 +127,7 @@ public final class WorkerServiceGrpc {
       io.grpc.benchmarks.proto.Control.Void> getQuitWorkerMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.WorkerService",
-      methodName = "QuitWorker",
+      fullMethodName = SERVICE_NAME + '/' + "QuitWorker",
       requestType = io.grpc.benchmarks.proto.Control.Void.class,
       responseType = io.grpc.benchmarks.proto.Control.Void.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)

@@ -31,8 +31,7 @@ public final class LoadBalancerGrpc {
       io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.lb.v1.LoadBalancer",
-      methodName = "BalanceLoad",
+      fullMethodName = SERVICE_NAME + '/' + "BalanceLoad",
       requestType = io.grpc.grpclb.LoadBalanceRequest.class,
       responseType = io.grpc.grpclb.LoadBalanceResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)

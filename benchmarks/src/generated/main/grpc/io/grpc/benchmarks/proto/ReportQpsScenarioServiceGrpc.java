@@ -31,8 +31,7 @@ public final class ReportQpsScenarioServiceGrpc {
       io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
-      fullServiceName = "grpc.testing.ReportQpsScenarioService",
-      methodName = "ReportScenario",
+      fullMethodName = SERVICE_NAME + '/' + "ReportScenario",
       requestType = io.grpc.benchmarks.proto.Control.ScenarioResult.class,
       responseType = io.grpc.benchmarks.proto.Control.Void.class,
       methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
