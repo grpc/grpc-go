@@ -208,9 +208,7 @@ func (d *dnsResolver) watcher() {
 			d.retryCount++
 			d.t.Reset(d.backoff.Backoff(d.retryCount))
 		} else {
-			if d.retryCount != 0 {
-				d.retryCount = 0
-			}
+			d.retryCount = 0
 			d.t.Reset(d.freq)
 		}
 		d.cc.NewServiceConfig(sc)
