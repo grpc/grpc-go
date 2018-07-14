@@ -1140,7 +1140,10 @@ func (ac *addrConn) nextAddr() error {
 // If ac's state is IDLE, it will trigger ac to connect.
 func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 	ac.mu.Lock()
-	if ac.state == connectivity.Ready {
+	// TODO(deklerk) `cd test && go test . -v -failfast -race -run=TestFailFast -count=10`
+	// 				 The ac.transport != nil should not be necessary. There's probably some incorrect state transition
+	//               happening.
+	if ac.state == connectivity.Ready && ac.transport != nil {
 		t := ac.transport
 		ac.mu.Unlock()
 		return t, true
