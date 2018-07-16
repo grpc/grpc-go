@@ -1123,46 +1123,6 @@ func (ac *addrConn) transportMonitor() {
 	}
 }
 
-// wait blocks until i) the new transport is up or ii) ctx is done or iii) ac is closed or
-// iv) transport is in connectivity.TransientFailure and there is a balancer/failfast is true.
-func (ac *addrConn) wait(ctx context.Context, hasBalancer, failfast bool) (transport.ClientTransport, error) {
-	for {
-		ac.mu.Lock()
-		switch {
-		case ac.state == connectivity.Shutdown:
-			if failfast || !hasBalancer {
-				// RPC is failfast or balancer is nil. This RPC should fail with ac.tearDownErr.
-				err := ac.tearDownErr
-				ac.mu.Unlock()
-				return nil, err
-			}
-			ac.mu.Unlock()
-			return nil, errConnClosing
-		case ac.state == connectivity.Ready:
-			ct := ac.transport
-			ac.mu.Unlock()
-			return ct, nil
-		case ac.state == connectivity.TransientFailure:
-			if failfast || hasBalancer {
-				ac.mu.Unlock()
-				return nil, errConnUnavailable
-			}
-		}
-		ready := ac.ready
-		if ready == nil {
-			ready = make(chan struct{})
-			ac.ready = ready
-		}
-		ac.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return nil, toRPCErr(ctx.Err())
-		// Wait until the new transport is ready or failed.
-		case <-ready:
-		}
-	}
-}
-
 // getReadyTransport returns the transport if ac's state is READY.
 // Otherwise it returns nil, false.
 // If ac's state is IDLE, it will trigger ac to connect.
