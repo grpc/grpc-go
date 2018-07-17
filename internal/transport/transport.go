@@ -307,12 +307,6 @@ func (s *Stream) Trailer() metadata.MD {
 	return c
 }
 
-// ServerTransport returns the underlying ServerTransport for the stream.
-// The client side stream always returns nil.
-func (s *Stream) ServerTransport() ServerTransport {
-	return s.st
-}
-
 // ContentSubtype returns the content-subtype for a request. For example, a
 // content-subtype of "proto" will result in a content-type of
 // "application/grpc+proto". This will always be lowercase.  See
@@ -359,8 +353,7 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 // combined with any metadata set by previous calls to SetHeader and
 // then written to the transport stream.
 func (s *Stream) SendHeader(md metadata.MD) error {
-	t := s.ServerTransport()
-	return t.WriteHeader(s, md)
+	return s.st.WriteHeader(s, md)
 }
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status

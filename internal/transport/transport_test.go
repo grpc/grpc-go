@@ -140,9 +140,9 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 }
 
 func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
-	conn, ok := s.ServerTransport().(*http2Server)
+	conn, ok := s.st.(*http2Server)
 	if !ok {
-		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
+		t.Fatalf("Failed to convert %v to *http2Server", s.st)
 	}
 	var sent int
 	p := make([]byte, http2MaxFrameLen)
