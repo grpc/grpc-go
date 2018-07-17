@@ -30,9 +30,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/stats"
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -276,23 +274,6 @@ func WithBlock() DialOption {
 	})
 }
 
-// WithInsecure returns a DialOption which disables transport security for this
-// ClientConn. Note that transport security is required unless WithInsecure is
-// set.
-func WithInsecure() DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.insecure = true
-	})
-}
-
-// WithTransportCredentials returns a DialOption which configures a connection
-// level security credentials (e.g., TLS/SSL).
-func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.TransportCredentials = creds
-	})
-}
-
 // WithPerRPCCredentials returns a DialOption which sets credentials and places
 // auth state on each outbound RPC.
 func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
@@ -308,12 +289,6 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 func WithTimeout(d time.Duration) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.timeout = d
-	})
-}
-
-func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.Dialer = f
 	})
 }
 
@@ -336,14 +311,6 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 		})
 }
 
-// WithStatsHandler returns a DialOption that specifies the stats handler for
-// all the RPCs and underlying network connections in this ClientConn.
-func WithStatsHandler(h stats.Handler) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StatsHandler = h
-	})
-}
-
 // FailOnNonTempDialError returns a DialOption that specifies if gRPC fails on
 // non-temporary dial errors. If f is true, and dialer returns a non-temporary
 // error, gRPC will fail the connection to the network address and won't try to
@@ -361,30 +328,6 @@ func FailOnNonTempDialError(f bool) DialOption {
 func WithUserAgent(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.UserAgent = s
-	})
-}
-
-// WithKeepaliveParams returns a DialOption that specifies keepalive parameters
-// for the client transport.
-func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.KeepaliveParams = kp
-	})
-}
-
-// WithUnaryInterceptor returns a DialOption that specifies the interceptor for
-// unary RPCs.
-func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.unaryInt = f
-	})
-}
-
-// WithStreamInterceptor returns a DialOption that specifies the interceptor for
-// streaming RPCs.
-func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.streamInt = f
 	})
 }
 
