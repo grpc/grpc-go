@@ -897,8 +897,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		}
 
 		ac.mu.Lock()
-		//if ac.state == connectivity.Shutdown || ac.cc.GetState() == connectivity.Shutdown { // TODO(deklerk) we probably should not have to do ac.cc.GetState, but without it TestSwitchBalancer fails
-		if ac.state == connectivity.Shutdown || ac.cc.GetState() == connectivity.Shutdown { // TODO(deklerk) we probably should not have to do ac.cc.GetState, but without it TestSwitchBalancer fails
+		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
 			return
 		}
