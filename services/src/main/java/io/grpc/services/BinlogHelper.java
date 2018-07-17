@@ -83,6 +83,14 @@ final class BinlogHelper {
   private static final Logger logger = Logger.getLogger(BinlogHelper.class.getName());
   private static final boolean SERVER = true;
   private static final boolean CLIENT = false;
+  // Normally 'grpc-' metadata keys are set from within gRPC, and applications are not allowed
+  // to set them. This key is a special well known key that set from the application layer, but
+  // represents a com.google.rpc.Status and is given special first class treatment.
+  // See StatusProto.java
+  static final Metadata.Key<byte[]> STATUS_DETAILS_KEY =
+      Metadata.Key.of(
+          "grpc-status-details-bin",
+          Metadata.BINARY_BYTE_MARSHALLER);
 
   @VisibleForTesting
   static final SocketAddress DUMMY_SOCKET = new DummySocketAddress();
@@ -168,12 +176,23 @@ final class BinlogHelper {
     }
 
     @Override
-    void logTrailingMetadata(int seq, Metadata metadata, boolean isServer, CallId callId) {
+    void logTrailingMetadata(
+        int seq, Status status, Metadata metadata, boolean isServer, CallId callId) {
       GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
           .setSequenceIdWithinCall(seq)
           .setType(isServer ? Type.SEND_TRAILING_METADATA : Type.RECV_TRAILING_METADATA)
           .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId));
+          .setCallId(callIdToProto(callId))
+          .setStatusCode(status.getCode().value());
+      String statusDescription = status.getDescription();
+      if (statusDescription != null) {
+        entryBuilder.setStatusMessage(statusDescription);
+      }
+      byte[] statusDetailBytes = metadata.get(STATUS_DETAILS_KEY);
+      if (statusDetailBytes != null) {
+        entryBuilder.setStatusDetails(ByteString.copyFrom(statusDetailBytes));
+      }
+
       addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
       sink.write(entryBuilder.build());
     }
@@ -260,7 +279,8 @@ final class BinlogHelper {
      * Logs the trailing metadata. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logTrailingMetadata(int seq, Metadata metadata, boolean isServer, CallId callId);
+    abstract void logTrailingMetadata(
+        int seq, Status status, Metadata metadata, boolean isServer, CallId callId);
 
     /**
      * Logs the outbound message. This method logs the appropriate number of bytes from
@@ -359,7 +379,8 @@ final class BinlogHelper {
 
                   @Override
                   public void onClose(Status status, Metadata trailers) {
-                    writer.logTrailingMetadata(seq.getAndIncrement(), trailers, CLIENT, callId);
+                    writer.logTrailingMetadata(
+                        seq.getAndIncrement(), status, trailers, CLIENT, callId);
                     super.onClose(status, trailers);
                   }
                 };
@@ -425,7 +446,7 @@ final class BinlogHelper {
 
           @Override
           public void close(Status status, Metadata trailers) {
-            writer.logTrailingMetadata(seq.getAndIncrement(), trailers, SERVER, callId);
+            writer.logTrailingMetadata(seq.getAndIncrement(), status, trailers, SERVER, callId);
             super.close(status, trailers);
           }
         };

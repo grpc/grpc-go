@@ -19,6 +19,7 @@ package io.grpc.services;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 import static io.grpc.services.BinlogHelper.DUMMY_SOCKET;
+import static io.grpc.services.BinlogHelper.STATUS_DETAILS_KEY;
 import static io.grpc.services.BinlogHelper.getPeerSocket;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -667,7 +668,7 @@ public final class BinlogHelperTest {
 
   @Test
   public void logTrailingMetadata_server() throws Exception {
-    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_SERVER, CALL_ID);
+    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, Status.OK, nonEmptyMetadata, IS_SERVER, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
@@ -675,11 +676,32 @@ public final class BinlogHelperTest {
             .setLogger(GrpcLogEntry.Logger.SERVER)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
+
+    Metadata detailedStatus = new Metadata();
+    byte[] statusBytes = new byte[] {1, 2, 3, 4};
+    detailedStatus.merge(nonEmptyMetadata);
+    detailedStatus.put(STATUS_DETAILS_KEY, statusBytes);
+    sinkWriterImpl.logTrailingMetadata(
+        /*seq=*/ 1,
+        Status.INTERNAL.withDescription("description"),
+        detailedStatus,
+        IS_SERVER,
+        CALL_ID);
+    verify(sink).write(
+        metadataToProtoTestHelper(detailedStatus, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
+            .setType(GrpcLogEntry.Type.SEND_TRAILING_METADATA)
+            .setLogger(GrpcLogEntry.Logger.SERVER)
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setStatusCode(13)
+            .setStatusMessage("description")
+            .setStatusDetails(ByteString.copyFrom(statusBytes))
+            .build());
   }
 
   @Test
   public void logTrailingMetadata_client() throws Exception {
-    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, nonEmptyMetadata, IS_CLIENT, CALL_ID);
+    sinkWriterImpl.logTrailingMetadata(/*seq=*/ 1, Status.OK, nonEmptyMetadata, IS_CLIENT, CALL_ID);
     verify(sink).write(
         metadataToProtoTestHelper(nonEmptyMetadata, 10).toBuilder()
             .setSequenceIdWithinCall(1)
@@ -687,6 +709,28 @@ public final class BinlogHelperTest {
             .setLogger(GrpcLogEntry.Logger.CLIENT)
             .setCallId(BinlogHelper.callIdToProto(CALL_ID))
             .build());
+
+    Metadata detailedStatus = new Metadata();
+    byte[] statusBytes = new byte[] {1, 2, 3, 4};
+    detailedStatus.merge(nonEmptyMetadata);
+    detailedStatus.put(STATUS_DETAILS_KEY, statusBytes);
+    sinkWriterImpl.logTrailingMetadata(
+        /*seq=*/ 1,
+        Status.INTERNAL.withDescription("description"),
+        detailedStatus,
+        IS_CLIENT,
+        CALL_ID);
+    verify(sink).write(
+        metadataToProtoTestHelper(detailedStatus, 10).toBuilder()
+            .setSequenceIdWithinCall(1)
+            .setType(GrpcLogEntry.Type.RECV_TRAILING_METADATA)
+            .setLogger(GrpcLogEntry.Logger.CLIENT)
+            .setCallId(BinlogHelper.callIdToProto(CALL_ID))
+            .setStatusCode(13)
+            .setStatusMessage("description")
+            .setStatusDetails(ByteString.copyFrom(statusBytes))
+            .build());
+
   }
 
   @Test
@@ -1022,6 +1066,7 @@ public final class BinlogHelperTest {
       interceptedListener.get().onClose(status, trailers);
       verify(mockSinkWriter).logTrailingMetadata(
           /*seq=*/ eq(5),
+          same(status),
           same(trailers),
           eq(IS_CLIENT),
           same(CALL_ID));
@@ -1161,6 +1206,7 @@ public final class BinlogHelperTest {
       interceptedCall.get().close(status, trailers);
       verify(mockSinkWriter).logTrailingMetadata(
           /*seq=*/ eq(5),
+          same(status),
           same(trailers),
           eq(IS_SERVER),
           same(CALL_ID));
