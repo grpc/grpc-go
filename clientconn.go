@@ -1003,6 +1003,8 @@ var errReadTimedOut = errors.New("read timed out")
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, deadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	timedOutWaitingForPreface := make(chan struct{})
+	// TODO(deklerk): this is unnecessary. In the reader goroutine, we should be able to signal to onClose that the
+	// deadline was exceeded (we can't use a parameter to t.Close because it would mean changes in too many places)
 	onDeadline := func() {
 		close(timedOutWaitingForPreface)
 	}
@@ -1047,6 +1049,8 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 			ac.mu.Unlock()
 			return errConnClosing
 		}
+		ac.state = connectivity.TransientFailure
+		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 
