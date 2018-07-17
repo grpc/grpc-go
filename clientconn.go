@@ -140,7 +140,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {
-		opt(&cc.dopts)
+		opt.apply(&cc.dopts)
 	}
 
 	if channelz.IsOn() {
