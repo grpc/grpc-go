@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"sync/atomic"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -44,7 +46,6 @@ import (
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/resolver/passthrough" // To register passthrough resolver.
 	"google.golang.org/grpc/status"
-	"sync/atomic"
 )
 
 const (
