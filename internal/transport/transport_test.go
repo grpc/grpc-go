@@ -396,11 +396,11 @@ func setUpServerOnly(t *testing.T, port int, serverConfig *ServerConfig, ht hTyp
 	return server
 }
 
-func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport, context.CancelFunc) {
+func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport, func()) {
 	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{}, func() {})
 }
 
-func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions, onHandshake func()) (*server, ClientTransport, context.CancelFunc) {
+func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions, onHandshake func()) (*server, ClientTransport, func()) {
 	server := setUpServerOnly(t, port, serverConfig, ht)
 	addr := "localhost:" + server.port
 	var (
@@ -419,7 +419,7 @@ func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hTy
 	return server, ct, cancel
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) (ClientTransport, context.CancelFunc) {
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) (ClientTransport, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
@@ -755,7 +755,7 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions, func() {})
-	cancel()
+	defer cancel()
 	defer server.stop()
 	defer client.Close()
 
@@ -2050,7 +2050,7 @@ func (s *httpServer) cleanUp() {
 	}
 }
 
-func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream *Stream, cleanUp func(), cancel context.CancelFunc) {
+func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream *Stream, cleanUp func(), cancel func()) {
 	var (
 		err    error
 		lis    net.Listener
