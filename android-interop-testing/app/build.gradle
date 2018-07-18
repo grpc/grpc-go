@@ -42,7 +42,7 @@ protobuf {
     protoc { artifact = 'com.google.protobuf:protoc:3.5.1-1' }
     plugins {
         javalite { artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0" }
-        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
@@ -71,11 +71,11 @@ dependencies {
     implementation 'junit:junit:4.12'
 
     // You need to build grpc-java to obtain the grpc libraries below.
-    implementation 'io.grpc:grpc-auth:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-okhttp:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-protobuf-lite:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-stub:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-testing:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-auth:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-okhttp:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-protobuf-lite:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-stub:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-testing:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
     // workaround for https://github.com/google/protobuf/issues/1889
     protobuf 'com.google.protobuf:protobuf-java:3.0.2'
