@@ -17,6 +17,8 @@
 package io.grpc.testing;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.lenientFormat;
+import static com.google.common.truth.Fact.simpleFact;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.truth.ComparableSubject;
@@ -60,11 +62,11 @@ public final class DeadlineSubject extends ComparableSubject<DeadlineSubject, De
         BigInteger expectedTimeRemaining = BigInteger.valueOf(expected.timeRemaining(NANOSECONDS));
         BigInteger deltaNanos = BigInteger.valueOf(timeUnit.toNanos(delta));
         if (actualTimeRemaining.subtract(expectedTimeRemaining).abs().compareTo(deltaNanos) > 0) {
-          failWithRawMessage(
-              "%s and <%s> should have been within <%sns> of each other",
-              actualAsString(),
-              expected,
-              deltaNanos);
+          failWithoutActual(
+              simpleFact(
+                  lenientFormat(
+                      "%s and <%s> should have been within <%sns> of each other",
+                      actualAsString(), expected, deltaNanos)));
         }
       }
     };
