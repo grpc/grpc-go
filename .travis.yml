@@ -14,8 +14,6 @@ before_install:
     ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
   - mkdir -p $HOME/.gradle &&
     ln -s /tmp/gradle-wrapper $HOME/.gradle/wrapper
-    # Work around https://github.com/travis-ci/travis-ci/issues/2317
-  - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
@@ -44,7 +42,6 @@ os:
 jdk:
   - oraclejdk8
   - oraclejdk9
-  - oraclejdk10
 
 notifications:
   email: false

@@ -15,6 +15,9 @@
     <protobuf.version>3.5.1</protobuf.version>
     <protoc.version>3.5.1-1</protoc.version>
     <netty.tcnative.version>2.0.7.Final</netty.tcnative.version>
+    <!-- required for jdk9 -->
+    <maven.compiler.source>1.6</maven.compiler.source>
+    <maven.compiler.target>1.6</maven.compiler.target>
   </properties>
   <dependencies>
     <dependency>
