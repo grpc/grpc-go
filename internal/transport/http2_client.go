@@ -125,10 +125,10 @@ type http2Client struct {
 	lastMsgSent       time.Time
 	lastMsgRecv       time.Time
 
-	deadline             time.Time
-	didNotReceivePreface func() // TODO(deklerk): find a better name
-	onGoAway             func(GoAwayReason)
-	onClose              func()
+	deadline   time.Time
+	onDeadline func()
+	onGoAway   func(GoAwayReason)
+	onClose    func()
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -240,7 +240,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		deadline:              deadline,
-		didNotReceivePreface:  onDeadline,
+		onDeadline:            onDeadline,
 		onGoAway:              onGoAway,
 		onClose:               onClose,
 	}
@@ -1192,7 +1192,7 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		t.didNotReceivePreface()
+		t.onDeadline()
 		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}
@@ -1202,7 +1202,7 @@ func (t *http2Client) reader() {
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.didNotReceivePreface()
+		t.onDeadline()
 		t.Close() // this kicks off resetTransport, so must be last before return
 		return
 	}

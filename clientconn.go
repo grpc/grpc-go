@@ -861,30 +861,26 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // resetTransport makes sure that a healthy ac.transport exists.
 //
 // The transport will close when it encounters an error, or on GOAWAY,
-// or on deadline waiting for server preface, or when the clientconn is
+// or on deadline waiting for handshake, or when the clientconn is
 // closed. Each iteration creating a new transport will try a different
 // address that the resolver resolved to, until it has tried all
 // addresses. Once it has tried all addresses, it will re-resolve to get
-// a new address list. Once a successful server preface has been
+// a new address list. Once a successful handshake has been
 // received, the list is re-resolved and the next reset attempt will
 // try from the beginning.
 //
 // This method has backoff built in. The backoff amount starts at 0 and
 // increases each time resolution occurs (addresses are exhausted). The
-// backoff amount is reset to 0 each time a server preface is received.
+// backoff amount is reset to 0 each time a handshake is received.
 //
 // If the DialOption WithWaitForHandshake was set, resetTrasport returns
-// successfully only after server preface is received.
+// successfully only after handshake is received.
 func (ac *addrConn) resetTransport(resolveNow bool) {
 	for {
-		// TODO(deklerk): consolidate usage of the phrases "server preface"
-		// and "handshake" into one or the other
-
-		// TODO(deklerk): Reword this - we want to resolve immediately if
-		// this is the first in a line of resets, but not on subsequent
+		// We want to resolve immediately if this is the first in a line of resets, but not on subsequent
 		// resets unless we:
 		//   - Run out of addresses
-		//   - Successfully receive handshake (server preface)
+		//   - Successfully receive handshake
 		if resolveNow {
 			ac.mu.Lock()
 			ac.cc.resolveNow(resolver.ResolveNowOption{})
@@ -974,7 +970,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		ac.mu.Unlock()
 
 		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, backoffDeadline, onGoAway, onClose); err != nil {
-			// errReadTimeOut indicates that the server preface was not received before
+			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
 			if err == errReadTimedOut {
@@ -996,7 +992,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 	}
 }
 
-// TODO better name
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
@@ -1058,7 +1053,6 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 
 	if ac.dopts.waitForHandshake {
 		select {
-		// TODO(deklerk): this should stop waiting and bail hard if t.Close was called in reader goroutine
 		case <-timedOutWaitingForPreface:
 			return errReadTimedOut
 		case <-prefaceReceived:
@@ -1143,9 +1137,6 @@ func (ac *addrConn) nextAddr() error {
 // If ac's state is IDLE, it will trigger ac to connect.
 func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 	ac.mu.Lock()
-	// TODO(deklerk) `cd test && go test . -v -failfast -race -run=TestFailFast -count=10`
-	// 				 The ac.transport != nil should not be necessary. There's probably some incorrect state transition
-	//               happening.
 	if ac.state == connectivity.Ready && ac.transport != nil {
 		t := ac.transport
 		ac.mu.Unlock()
