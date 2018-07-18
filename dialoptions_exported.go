@@ -49,7 +49,7 @@ func WithInsecure() DialOption {
 // TransportCredentialsDialOption is a DialOption that configures a connection
 // level security credentials (e.g., TLS/SSL).
 type TransportCredentialsDialOption struct {
-	// creds == nil indicates insecure.
+	// If creds is nil, insecure will be set for the ClientConn.
 	creds credentials.TransportCredentials
 }
 
@@ -117,34 +117,36 @@ func (kpdo KeepaliveParamsDialOption) apply(do *dialOptions) {
 // unary RPCs.
 func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 	return UnaryInterceptorDialOption{
-		f: f,
+		Interceptor: f,
 	}
 }
 
 // UnaryInterceptorDialOption is a DialOption that specifies the interceptor for
 // unary RPCs.
 type UnaryInterceptorDialOption struct {
-	f UnaryClientInterceptor
+	// Interceptor is the interceptor to be installed.
+	Interceptor UnaryClientInterceptor
 }
 
 func (uido UnaryInterceptorDialOption) apply(do *dialOptions) {
-	do.unaryInt = uido.f
+	do.unaryInt = uido.Interceptor
 }
 
 // WithStreamInterceptor returns a DialOption that specifies the interceptor for
 // streaming RPCs.
 func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 	return StreamInterceptorDialOption{
-		f: f,
+		Interceptor: f,
 	}
 }
 
 // StreamInterceptorDialOption is a DialOption that specifies the interceptor
 // for streaming RPCs.
 type StreamInterceptorDialOption struct {
-	f StreamClientInterceptor
+	// Interceptor is the interceptor to be installed.
+	Interceptor StreamClientInterceptor
 }
 
 func (sido StreamInterceptorDialOption) apply(do *dialOptions) {
-	do.streamInt = sido.f
+	do.streamInt = sido.Interceptor
 }
