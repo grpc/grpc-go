@@ -917,8 +917,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			dialDuration = backoffFor
 		}
 		start := time.Now()
-		deadline := start.Add(backoffFor) // TODO(deklerk): why isn't it ac.connectDeadline??
-		ac.backoffDeadline = deadline
+		backoffDeadline := start.Add(backoffFor)
+		ac.backoffDeadline = backoffDeadline
 		ac.connectDeadline = start.Add(dialDuration)
 
 		ac.mu.Unlock()
@@ -929,7 +929,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
 
-		// TODO(deklerk): overly verbose?
 		// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
 		// onGoAway will reset the transport instead, which means when the original
 		// transport finally gets around to closing (onClose) it should not reset
@@ -974,7 +973,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, deadline, onGoAway, onClose); err != nil {
+		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, backoffDeadline, onGoAway, onClose); err != nil {
 			// errReadTimeOut indicates that the server preface was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
@@ -982,7 +981,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 				return
 			}
 
-			timer := time.NewTimer(deadline.Sub(time.Now()))
+			timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 			select {
 			case <-timer.C:
 			case <-ac.ctx.Done():
@@ -1001,7 +1000,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, deadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
+func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, backoffDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	timedOutWaitingForPreface := make(chan struct{})
 	// TODO(deklerk): this is unnecessary. In the reader goroutine, we should be able to signal to onClose that the
 	// deadline was exceeded (we can't use a parameter to t.Close because it would mean changes in too many places)
@@ -1039,7 +1038,7 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 		copts.ChannelzParentID = ac.channelzID
 	}
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, deadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, backoffDeadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
 	if err != nil {
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
