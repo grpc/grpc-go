@@ -1166,6 +1166,11 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Unlock()
 		return
 	}
+	// We have to set the state to Shutdown before we call ac.transports.GracefulClose, because it signals to
+	// onClose not to try reconnecting the transport.
+	ac.state = connectivity.Shutdown
+	ac.tearDownErr = err
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.curAddr = resolver.Address{}
 	if err == errConnDrain && ac.transport != nil {
 		// GracefulClose(...) may be executed multiple times when
@@ -1176,9 +1181,6 @@ func (ac *addrConn) tearDown(err error) {
 		ac.transport.GracefulClose()
 		ac.mu.Lock()
 	}
-	ac.state = connectivity.Shutdown
-	ac.tearDownErr = err
-	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.events != nil {
 		ac.events.Finish()
 		ac.events = nil
@@ -1190,20 +1192,7 @@ func (ac *addrConn) tearDown(err error) {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(ac.channelzID)
 	}
-
-	// TODO(deklerk) is this bad?
-	transports := map[int32]transport.ClientTransport{}
-	for i, v := range ac.transports {
-		transports[i] = v
-	}
-
 	ac.mu.Unlock()
-	for _, t := range transports {
-		err := t.GracefulClose()
-		if err != nil {
-			grpclog.Error(err)
-		}
-	}
 }
 
 func (ac *addrConn) getState() connectivity.State {
