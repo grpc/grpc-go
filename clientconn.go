@@ -536,7 +536,6 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		cc:                  cc,
 		addrs:               addrs,
 		dopts:               cc.dopts,
-		transports:          map[int32]transport.ClientTransport{},
 		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
@@ -796,8 +795,7 @@ type addrConn struct {
 	acbw   balancer.SubConn
 
 	transportIdx int32
-	transports   map[int32]transport.ClientTransport // All transports, including current and orphaned.
-	transport    transport.ClientTransport           // The current transport.
+	transport    transport.ClientTransport // The current transport.
 
 	addrIdx int                // The index in addrs list to start reconnecting from.
 	curAddr resolver.Address   // The current address.
@@ -941,7 +939,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		onClose := func() {
 			ac.mu.Lock()
-			delete(ac.transports, newTrID)
 			r := resetOnClose
 			if r {
 				ac.transport = nil
@@ -1080,7 +1077,6 @@ func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Addr
 		ac.ready = nil
 	}
 
-	ac.transports[id] = newTr
 	ac.mu.Unlock()
 	return nil
 }
