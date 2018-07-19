@@ -66,9 +66,10 @@ type DialOption interface {
 	apply(*dialOptions)
 }
 
-// EmptyDialOption does not alter the dial configuration.
+// EmptyDialOption does not alter the dial configuration. It can be embedded in
+// another structure to build custom dial options.
 //
-// It can be embedded in another structure to build custom dial options.
+// This API is EXPERIMENTAL.
 type EmptyDialOption struct{}
 
 func (EmptyDialOption) apply(*dialOptions) {}
