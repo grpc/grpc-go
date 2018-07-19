@@ -48,6 +48,8 @@ func WithInsecure() DialOption {
 
 // TransportCredentialsDialOption is a DialOption that configures a connection
 // level security credentials (e.g., TLS/SSL).
+//
+// This API is EXPERIMENTAL.
 type TransportCredentialsDialOption struct {
 	// If creds is nil, insecure will be set for the ClientConn.
 	creds credentials.TransportCredentials
@@ -71,6 +73,8 @@ func WithStatsHandler(h stats.Handler) DialOption {
 
 // StatsHandlerDialOption is a DialOption that specifies the stats handler for
 // all the RPCs and underlying network connections.
+//
+// This API is EXPERIMENTAL.
 type StatsHandlerDialOption struct {
 	handler stats.Handler
 }
@@ -87,6 +91,8 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 
 // ContextDialerDialOption is a DialOption that specifies a function to use for
 // dialing network addresses.
+//
+// This API is EXPERIMENTAL.
 type ContextDialerDialOption struct {
 	dial func(context.Context, string) (net.Conn, error)
 }
@@ -105,6 +111,8 @@ func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
 
 // KeepaliveParamsDialOption is a DialOption that specifies keepalive
 // parameters.
+//
+// This API is EXPERIMENTAL.
 type KeepaliveParamsDialOption struct {
 	kp keepalive.ClientParameters
 }
@@ -123,6 +131,8 @@ func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 
 // UnaryInterceptorDialOption is a DialOption that specifies the interceptor for
 // unary RPCs.
+//
+// This API is EXPERIMENTAL.
 type UnaryInterceptorDialOption struct {
 	// Interceptor is the interceptor to be installed.
 	Interceptor UnaryClientInterceptor
@@ -142,6 +152,8 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 
 // StreamInterceptorDialOption is a DialOption that specifies the interceptor
 // for streaming RPCs.
+//
+// This API is EXPERIMENTAL.
 type StreamInterceptorDialOption struct {
 	// Interceptor is the interceptor to be installed.
 	Interceptor StreamClientInterceptor
