@@ -18,7 +18,6 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -41,11 +40,13 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>Configuration is stored in {@link CallOptions} and is passed to the {@link Channel} when
  * performing an RPC.
  *
+ * <p>DO NOT MOCK: Customizing options doesn't work properly in mocks. Use InProcessChannelBuilder
+ * to create a real channel suitable for testing. It is also possible to mock Channel instead.
+ *
  * @since 1.0.0
  * @param <S> the concrete type of this stub.
  */
 @ThreadSafe
-@DoNotMock
 @CheckReturnValue
 public abstract class AbstractStub<S extends AbstractStub<S>> {
   private final Channel channel;

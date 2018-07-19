@@ -133,8 +133,8 @@ def com_google_code_gson():
 def com_google_errorprone_error_prone_annotations():
   native.maven_jar(
       name = "com_google_errorprone_error_prone_annotations",
-      artifact = "com.google.errorprone:error_prone_annotations:2.1.2",
-      sha1 = "6dcc08f90f678ac33e5ef78c3c752b6f59e63e0c",
+      artifact = "com.google.errorprone:error_prone_annotations:2.2.0",
+      sha1 = "88e3c593e9b3586e1c6177f89267da6fc6986f0c",
   )
 
 def com_google_guava():

@@ -16,7 +16,6 @@
 
 package io.grpc.stub;
 
-import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.ExperimentalApi;
 
 import javax.annotation.Nullable;
@@ -27,9 +26,11 @@ import javax.annotation.Nullable;
  *
  * <p>Like {@code StreamObserver}, implementations are not required to be thread-safe; if multiple
  * threads will be writing to an instance concurrently, the application must synchronize its calls.
+ *
+ * <p>DO NOT MOCK: The API is too complex to reliably mock. Use InProcessChannelBuilder to create
+ * "real" RPCs suitable for testing and make a fake for the server-side.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
-@DoNotMock
 public abstract class ClientCallStreamObserver<V> extends CallStreamObserver<V> {
   /**
    * Prevent any further processing for this {@code ClientCallStreamObserver}. No further messages

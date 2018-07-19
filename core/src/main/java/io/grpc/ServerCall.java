@@ -16,7 +16,6 @@
 
 package io.grpc;
 
-import com.google.errorprone.annotations.DoNotMock;
 import javax.annotation.Nullable;
 
 /**
@@ -33,10 +32,11 @@ import javax.annotation.Nullable;
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
  *
+ * <p>DO NOT MOCK: Use InProcessTransport and make a fake server instead.
+ *
  * @param <ReqT> parsed type of request message.
  * @param <RespT> parsed type of response message.
  */
-@DoNotMock("Use InProcessTransport and make a fake server instead")
 public abstract class ServerCall<ReqT, RespT> {
 
   /**

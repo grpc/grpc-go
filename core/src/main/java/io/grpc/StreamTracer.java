@@ -16,15 +16,15 @@
 
 package io.grpc;
 
-import com.google.errorprone.annotations.DoNotMock;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Listens to events on a stream to collect metrics.
+ *
+ * <p>DO NOT MOCK: Use TestStreamTracer. Mocks are not thread-safe
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2861")
 @ThreadSafe
-@DoNotMock
 public abstract class StreamTracer {
   /**
    * Stream is closed.  This will be called exactly once.

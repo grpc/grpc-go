@@ -16,7 +16,6 @@
 
 package io.grpc;
 
-import com.google.errorprone.annotations.DoNotMock;
 import javax.annotation.Nullable;
 
 /**
@@ -95,10 +94,11 @@ import javax.annotation.Nullable;
  *   call.request(1);
  * </pre>
  *
+ * <p>DO NOT MOCK: Use InProcessServerBuilder and make a test server instead.
+ *
  * @param <ReqT> type of message sent one or more times to the server.
  * @param <RespT> type of message received one or more times from the server.
  */
-@DoNotMock("Use InProcessServerBuilder and make a test server instead")
 public abstract class ClientCall<ReqT, RespT> {
   /**
    * Callbacks for receiving metadata, response messages and completion status from the server.
