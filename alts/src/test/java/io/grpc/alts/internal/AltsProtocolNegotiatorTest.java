@@ -24,7 +24,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.Grpc;
+import io.grpc.SecurityLevel;
 import io.grpc.alts.internal.Handshaker.HandshakerResult;
 import io.grpc.alts.internal.TsiFrameProtector.Consumer;
 import io.grpc.alts.internal.TsiPeer.Property;
@@ -343,6 +345,8 @@ public class AltsProtocolNegotiatorTest {
         .isEqualTo(mockedAltsContext);
     assertThat(grpcHandler.attrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString())
         .isEqualTo("embedded");
+    assertThat(grpcHandler.attrs.get(CallCredentials.ATTR_SECURITY_LEVEL))
+        .isEqualTo(SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 
   private void doHandshake() throws Exception {
