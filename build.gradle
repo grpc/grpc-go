@@ -26,7 +26,9 @@ subprojects {
     apply plugin: "com.google.osdetector"
     // The plugin only has an effect if a signature is specified
     apply plugin: "ru.vyarus.animalsniffer"
-    if (!rootProject.hasProperty('errorProne') || rootProject.errorProne.toBoolean()) {
+    // jdk10 not supported by errorprone: https://github.com/google/error-prone/issues/860
+    if (!JavaVersion.current().isJava10Compatible() &&
+        rootProject.properties.get('errorProne', true)) {
         apply plugin: "net.ltgt.errorprone"
         apply plugin: "net.ltgt.apt"
 
@@ -277,6 +279,15 @@ subprojects {
         allprojects {
             tasks.withType(Javadoc) {
                 options.addStringOption('Xdoclint:none', '-quiet')
+            }
+        }
+    }
+
+    // For jdk10 we must explicitly choose between html4 and html5, otherwise we get a warning
+    if (JavaVersion.current().isJava10Compatible()) {
+        allprojects {
+            tasks.withType(Javadoc) {
+                options.addBooleanOption('html4', true)
             }
         }
     }

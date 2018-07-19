@@ -40,8 +40,15 @@ os:
   - linux
 
 jdk:
-  - oraclejdk8
-  - oraclejdk9
+  # net.ltgt.errorprone supports jdk8 and jdk9, but has problems with jdk10
+  # For jdk10, we need to switch over to using net.ltgt.errorprone-javacplugin,
+  # and likely update to the latest com.google.errorprone:error_prone_core.
+  # We have decided not to make our build.gradle support both plugins, so when
+  # we finally move off of jdk8 and jdk9 we will need use the javac annotation
+  # processor based plugin.
+  - oraclejdk8  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
+  - oraclejdk9  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
+  - oraclejdk10
 
 notifications:
   email: false
