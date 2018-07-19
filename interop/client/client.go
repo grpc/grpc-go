@@ -155,32 +155,32 @@ func main() {
 		interop.DoTimeoutOnSleepingServer(tc)
 		grpclog.Infoln("TimeoutOnSleepingServer done")
 	case "compute_engine_creds":
-		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
+		if !*useTLS && !*useALTS {
+			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute compute_engine_creds test case.")
 		}
 		interop.DoComputeEngineCreds(tc, *defaultServiceAccount, *oauthScope)
 		grpclog.Infoln("ComputeEngineCreds done")
 	case "service_account_creds":
-		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+		if !*useTLS && !*useALTS {
+			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute service_account_creds test case.")
 		}
 		interop.DoServiceAccountCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("ServiceAccountCreds done")
 	case "jwt_token_creds":
-		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
+		if !*useTLS && !*useALTS {
+			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute jwt_token_creds test case.")
 		}
 		interop.DoJWTTokenCreds(tc, *serviceAccountKeyFile)
 		grpclog.Infoln("JWTtokenCreds done")
 	case "per_rpc_creds":
-		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
+		if !*useTLS && !*useALTS {
+			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute per_rpc_creds test case.")
 		}
 		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("PerRPCCreds done")
 	case "oauth2_auth_token":
-		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
+		if !*useTLS && !*useALTS {
+			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute oauth2_auth_token test case.")
 		}
 		interop.DoOauth2TokenCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("Oauth2TokenCreds done")
