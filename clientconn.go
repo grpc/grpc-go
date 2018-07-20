@@ -580,6 +580,12 @@ func (cc *ClientConn) ChannelzMetric() *channelz.ChannelInternalMetric {
 	}
 }
 
+// Target returns the target string of the ClientConn.
+// This is an EXPERIMENTAL API.
+func (cc *ClientConn) Target() string {
+	return cc.target
+}
+
 func (cc *ClientConn) incrCallsStarted() {
 	cc.czmu.Lock()
 	cc.callsStarted++
