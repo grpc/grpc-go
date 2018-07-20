@@ -559,8 +559,14 @@ public abstract class AbstractInteropTest {
       requestObserver.onNext(request);
     }
     requestObserver.onCompleted();
+
     assertEquals(goldenResponse, responseObserver.firstValue().get());
     responseObserver.awaitCompletion();
+    assertThat(responseObserver.getValues()).hasSize(1);
+    Throwable t = responseObserver.getError();
+    if (t != null) {
+      throw new AssertionError(t);
+    }
   }
 
   /**
