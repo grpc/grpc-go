@@ -19,12 +19,10 @@ package io.grpc.inprocess;
 import com.google.common.truth.Truth;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.FakeClock;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.SharedResourcePool;
 import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
 import org.junit.Test;
@@ -33,12 +31,12 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class InProcessServerTest {
+  private InProcessServerBuilder builder = InProcessServerBuilder.forName("name");
 
   @Test
   public void getPort_notStarted() throws Exception {
     InProcessServer s =
-        new InProcessServer("name", SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-            Collections.<ServerStreamTracer.Factory>emptyList());
+        new InProcessServer(builder, Collections.<ServerStreamTracer.Factory>emptyList());
 
     Truth.assertThat(s.getPort()).isEqualTo(-1);
   }
@@ -63,8 +61,9 @@ public class InProcessServerTest {
     }
 
     RefCountingObjectPool pool = new RefCountingObjectPool();
+    builder.schedulerPool = pool;
     InProcessServer s =
-        new InProcessServer("name", pool, Collections.<ServerStreamTracer.Factory>emptyList());
+        new InProcessServer(builder, Collections.<ServerStreamTracer.Factory>emptyList());
     Truth.assertThat(pool.count).isEqualTo(0);
     s.start(new ServerListener() {
       @Override public ServerTransportListener transportCreated(ServerTransport transport) {

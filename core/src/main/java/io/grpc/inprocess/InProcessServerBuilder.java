@@ -91,8 +91,9 @@ public final class InProcessServerBuilder
     return UUID.randomUUID().toString();
   }
 
-  private final String name;
-  private ObjectPool<ScheduledExecutorService> schedulerPool =
+  final String name;
+  int maxInboundMetadataSize = Integer.MAX_VALUE;
+  ObjectPool<ScheduledExecutorService> schedulerPool =
       SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
 
   private InProcessServerBuilder(String name) {
@@ -123,10 +124,29 @@ public final class InProcessServerBuilder
     return this;
   }
 
+  /**
+   * Sets the maximum size of metadata allowed to be received. {@code Integer.MAX_VALUE} disables
+   * the enforcement. Defaults to no limit ({@code Integer.MAX_VALUE}).
+   *
+   * <p>There is potential for performance penalty when this setting is enabled, as the Metadata
+   * must actually be serialized. Since the current implementation of Metadata pre-serializes, it's
+   * currently negligible. But Metadata is free to change its implementation.
+   *
+   * @param bytes the maximum size of received metadata
+   * @return this
+   * @throws IllegalArgumentException if bytes is non-positive
+   * @since 1.17.0
+   */
+  public InProcessServerBuilder maxInboundMetadataSize(int bytes) {
+    Preconditions.checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
+    this.maxInboundMetadataSize = bytes;
+    return this;
+  }
+
   @Override
   protected InProcessServer buildTransportServer(
       List<ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(name, schedulerPool, streamTracerFactories);
+    return new InProcessServer(this, streamTracerFactories);
   }
 
   @Override

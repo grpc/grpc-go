@@ -20,7 +20,6 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.SharedResourcePool;
 import io.grpc.internal.testing.AbstractTransportTest;
 import java.util.List;
 import org.junit.Ignore;
@@ -37,9 +36,10 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(
-        TRANSPORT_NAME,
-        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE), streamTracerFactories);
+    InProcessServerBuilder builder = InProcessServerBuilder
+        .forName(TRANSPORT_NAME)
+        .maxInboundMetadataSize(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
+    return new InProcessServer(builder, streamTracerFactories);
   }
 
   @Override
@@ -55,7 +55,8 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
-    return new InProcessTransport(TRANSPORT_NAME, testAuthority(server), USER_AGENT);
+    return new InProcessTransport(
+        TRANSPORT_NAME, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, testAuthority(server), USER_AGENT);
   }
 
   @Override
@@ -71,22 +72,4 @@ public class InProcessTransportTest extends AbstractTransportTest {
   public void socketStats() throws Exception {
     // test does not apply to in-process
   }
-
-  // not yet implemented
-  @Test
-  @Ignore
-  @Override
-  public void serverChecksInboundMetadataSize() {}
-
-  // not yet implemented
-  @Test
-  @Ignore
-  @Override
-  public void clientChecksInboundMetadataSize_header() {}
-
-  // not yet implemented
-  @Test
-  @Ignore
-  @Override
-  public void clientChecksInboundMetadataSize_trailer() {}
 }

@@ -44,6 +44,7 @@ final class InProcessServer implements InternalServer {
   }
 
   private final String name;
+  private final int maxInboundMetadataSize;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private ServerListener listener;
   private boolean shutdown;
@@ -56,10 +57,11 @@ final class InProcessServer implements InternalServer {
   private ScheduledExecutorService scheduler;
 
   InProcessServer(
-      String name, ObjectPool<ScheduledExecutorService> schedulerPool,
+      InProcessServerBuilder builder,
       List<ServerStreamTracer.Factory> streamTracerFactories) {
-    this.name = name;
-    this.schedulerPool = schedulerPool;
+    this.name = builder.name;
+    this.schedulerPool = builder.schedulerPool;
+    this.maxInboundMetadataSize = builder.maxInboundMetadataSize;
     this.streamTracerFactories =
         Collections.unmodifiableList(checkNotNull(streamTracerFactories, "streamTracerFactories"));
   }
@@ -110,6 +112,10 @@ final class InProcessServer implements InternalServer {
 
   ObjectPool<ScheduledExecutorService> getScheduledExecutorServicePool() {
     return schedulerPool;
+  }
+
+  int getMaxInboundMetadataSize() {
+    return maxInboundMetadataSize;
   }
 
   List<ServerStreamTracer.Factory> getStreamTracerFactories() {
