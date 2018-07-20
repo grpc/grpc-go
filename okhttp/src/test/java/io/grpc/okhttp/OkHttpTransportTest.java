@@ -98,4 +98,16 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   protected boolean haveTransportTracer() {
     return true;
   }
+
+  // not yet implemented
+  @Override
+  @org.junit.Test
+  @org.junit.Ignore
+  public void clientChecksInboundMetadataSize_header() {}
+
+  // not yet implemented
+  @Override
+  @org.junit.Test
+  @org.junit.Ignore
+  public void clientChecksInboundMetadataSize_trailer() {}
 }

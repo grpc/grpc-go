@@ -71,4 +71,22 @@ public class InProcessTransportTest extends AbstractTransportTest {
   public void socketStats() throws Exception {
     // test does not apply to in-process
   }
+
+  // not yet implemented
+  @Test
+  @Ignore
+  @Override
+  public void serverChecksInboundMetadataSize() {}
+
+  // not yet implemented
+  @Test
+  @Ignore
+  @Override
+  public void clientChecksInboundMetadataSize_header() {}
+
+  // not yet implemented
+  @Test
+  @Ignore
+  @Override
+  public void clientChecksInboundMetadataSize_trailer() {}
 }

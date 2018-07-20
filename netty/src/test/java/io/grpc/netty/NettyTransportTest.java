@@ -97,4 +97,11 @@ public class NettyTransportTest extends AbstractTransportTest {
         new ClientTransportFactory.ClientTransportOptions()
           .setAuthority(testAuthority(server)));
   }
+
+  @org.junit.Ignore
+  @org.junit.Test
+  @Override
+  public void clientChecksInboundMetadataSize_trailer() throws Exception {
+    // Server-side is flaky due to https://github.com/netty/netty/pull/8332
+  }
 }

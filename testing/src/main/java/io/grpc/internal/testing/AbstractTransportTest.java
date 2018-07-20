@@ -1775,6 +1775,126 @@ public abstract class AbstractTransportTest {
     assertTrue(serverSocketStats.socketOptions.others.containsKey("SO_SNDBUF"));
   }
 
+  /** This assumes the server limits metadata size to GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE. */
+  @Test
+  public void serverChecksInboundMetadataSize() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    startTransport(client, mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    Metadata tooLargeMetadata = new Metadata();
+    tooLargeMetadata.put(
+        Metadata.Key.of("foo-bin", Metadata.BINARY_BYTE_MARSHALLER),
+        new byte[GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE]);
+
+    ClientStream clientStream =
+        client.newStream(methodDescriptor, tooLargeMetadata, callOptions);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
+    clientStream.start(clientStreamListener);
+
+    clientStream.writeMessage(methodDescriptor.streamRequest("foo"));
+    clientStream.halfClose();
+    clientStream.request(1);
+    // Server shouldn't have created a stream, so nothing to clean up on server-side
+
+    // If this times out, the server probably isn't noticing the metadata size
+    Status status = clientStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    List<Status.Code> codeOptions = Arrays.asList(
+        Status.Code.UNKNOWN, Status.Code.RESOURCE_EXHAUSTED, Status.Code.INTERNAL);
+    if (!codeOptions.contains(status.getCode())) {
+      fail("Status code was not expected: " + status);
+    }
+  }
+
+  /** This assumes the client limits metadata size to GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE. */
+  @Test
+  public void clientChecksInboundMetadataSize_header() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    startTransport(client, mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    Metadata tooLargeMetadata = new Metadata();
+    tooLargeMetadata.put(
+        Metadata.Key.of("foo-bin", Metadata.BINARY_BYTE_MARSHALLER),
+        new byte[GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE]);
+
+    ClientStream clientStream =
+        client.newStream(methodDescriptor, new Metadata(), callOptions);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
+    clientStream.start(clientStreamListener);
+
+    clientStream.writeMessage(methodDescriptor.streamRequest("foo"));
+    clientStream.halfClose();
+    clientStream.request(1);
+
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    serverStreamCreation.stream.request(1);
+    serverStreamCreation.stream.writeHeaders(tooLargeMetadata);
+    serverStreamCreation.stream.writeMessage(methodDescriptor.streamResponse("response"));
+    serverStreamCreation.stream.close(Status.OK, new Metadata());
+
+    Status status = clientStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    List<Status.Code> codeOptions = Arrays.asList(
+        Status.Code.UNKNOWN, Status.Code.RESOURCE_EXHAUSTED, Status.Code.INTERNAL);
+    if (!codeOptions.contains(status.getCode())) {
+      fail("Status code was not expected: " + status);
+    }
+    assertFalse(clientStreamListener.headers.isDone());
+  }
+
+  /** This assumes the client limits metadata size to GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE. */
+  @Test
+  public void clientChecksInboundMetadataSize_trailer() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    startTransport(client, mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    Metadata.Key<String> tellTaleKey
+        = Metadata.Key.of("tell-tale", Metadata.ASCII_STRING_MARSHALLER);
+    Metadata tooLargeMetadata = new Metadata();
+    tooLargeMetadata.put(tellTaleKey, "true");
+    tooLargeMetadata.put(
+        Metadata.Key.of("foo-bin", Metadata.BINARY_BYTE_MARSHALLER),
+        new byte[GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE]);
+
+    ClientStream clientStream =
+        client.newStream(methodDescriptor, new Metadata(), callOptions);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
+    clientStream.start(clientStreamListener);
+
+    clientStream.writeMessage(methodDescriptor.streamRequest("foo"));
+    clientStream.halfClose();
+    clientStream.request(1);
+
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    serverStreamCreation.stream.request(1);
+    serverStreamCreation.stream.writeHeaders(new Metadata());
+    serverStreamCreation.stream.writeMessage(methodDescriptor.streamResponse("response"));
+    serverStreamCreation.stream.close(Status.OK, tooLargeMetadata);
+
+    Status status = clientStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    List<Status.Code> codeOptions = Arrays.asList(
+        Status.Code.UNKNOWN, Status.Code.RESOURCE_EXHAUSTED, Status.Code.INTERNAL);
+    if (!codeOptions.contains(status.getCode())) {
+      fail("Status code was not expected: " + status);
+    }
+    Metadata metadata = clientStreamListener.trailers.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    assertNull(metadata.get(tellTaleKey));
+  }
+
   /**
    * Helper that simply does an RPC. It can be used similar to a sleep for negative testing: to give
    * time for actions _not_ to happen. Since it is based on doing an actual RPC with actual
