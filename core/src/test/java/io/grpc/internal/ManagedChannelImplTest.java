@@ -47,8 +47,11 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
@@ -85,6 +88,8 @@ import io.grpc.internal.Channelz.ChannelStats;
 import io.grpc.internal.Channelz.ChannelTrace;
 import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
+import io.grpc.stub.ClientCalls;
+import io.grpc.testing.TestMethodDescriptors;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
@@ -97,12 +102,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
@@ -2556,6 +2564,105 @@ public class ManagedChannelImplTest {
     assertTrue(
         "channel.isTerminated() is expected to be true but was false",
         channel.isTerminated());
+  }
+
+  @Test
+  public void badServiceConfigIsRecoverable() throws Exception {
+    final List<EquivalentAddressGroup> addresses =
+        ImmutableList.of(new EquivalentAddressGroup(new SocketAddress() {}));
+    final class FakeNameResolver extends NameResolver {
+      Listener listener;
+
+      @Override
+      public String getServiceAuthority() {
+        return "also fake";
+      }
+
+      @Override
+      public void start(Listener listener) {
+        this.listener = listener;
+        listener.onAddresses(addresses,
+            Attributes.newBuilder()
+                .set(
+                    GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
+                    ImmutableMap.<String, Object>of("loadBalancingPolicy", "kaboom"))
+                .build());
+      }
+
+      @Override
+      public void shutdown() {}
+    }
+    
+    final class FakeNameResolverFactory extends NameResolver.Factory {
+      FakeNameResolver resolver;
+
+      @Nullable
+      @Override
+      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+        return (resolver = new FakeNameResolver());
+      }
+
+      @Override
+      public String getDefaultScheme() {
+        return "fake";
+      }
+    }
+    
+    FakeNameResolverFactory factory = new FakeNameResolverFactory();
+    final class CustomBuilder extends AbstractManagedChannelImplBuilder<CustomBuilder> {
+
+      CustomBuilder() {
+        super(TARGET);
+        this.executorPool = ManagedChannelImplTest.this.executorPool;
+        this.channelz = ManagedChannelImplTest.this.channelz;
+      }
+
+      @Override
+      protected ClientTransportFactory buildTransportFactory() {
+        return mockTransportFactory;
+      }
+    }
+
+    ManagedChannel mychannel = new CustomBuilder()
+        .nameResolverFactory(factory)
+        .loadBalancerFactory(new AutoConfiguredLoadBalancerFactory()).build();
+
+    ClientCall<Void, Void> call1 =
+        mychannel.newCall(TestMethodDescriptors.voidMethod(), CallOptions.DEFAULT);
+    ListenableFuture<Void> future1 = ClientCalls.futureUnaryCall(call1, null);
+    executor.runDueTasks();
+    try {
+      future1.get();
+      Assert.fail();
+    } catch (ExecutionException e) {
+      assertThat(Throwables.getStackTraceAsString(e.getCause())).contains("kaboom");
+    }
+
+    // ok the service config is bad, let's fix it.
+
+    factory.resolver.listener.onAddresses(addresses,
+        Attributes.newBuilder()
+        .set(
+            GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
+            ImmutableMap.<String, Object>of("loadBalancingPolicy", "round_robin"))
+        .build());
+
+    ClientCall<Void, Void> call2 = mychannel.newCall(
+        TestMethodDescriptors.voidMethod(),
+        CallOptions.DEFAULT.withDeadlineAfter(5, TimeUnit.SECONDS));
+    ListenableFuture<Void> future2 = ClientCalls.futureUnaryCall(call2, null);
+
+    timer.forwardTime(1234, TimeUnit.SECONDS);
+
+    executor.runDueTasks();
+    try {
+      future2.get();
+      Assert.fail();
+    } catch (ExecutionException e) {
+      assertThat(Throwables.getStackTraceAsString(e.getCause())).contains("deadline");
+    }
+
+    mychannel.shutdownNow();
   }
 
   private static final class ChannelBuilder

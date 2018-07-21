@@ -50,13 +50,21 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     return new AutoConfiguredLoadBalancer(helper);
   }
 
-  private static final class EmptySubchannelPicker extends SubchannelPicker {
+  private static final class NoopLoadBalancer extends LoadBalancer {
 
     @Override
-    public PickResult pickSubchannel(PickSubchannelArgs args) {
-      return PickResult.withNoResult();
-    }
+    public void handleResolvedAddressGroups(List<EquivalentAddressGroup> s, Attributes a) {}
+
+    @Override
+    public void handleNameResolutionError(Status error) {}
+
+    @Override
+    public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {}
+
+    @Override
+    public void shutdown() {}
   }
+
 
   @VisibleForTesting
   static final class AutoConfiguredLoadBalancer extends LoadBalancer {
@@ -75,9 +83,22 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     public void handleResolvedAddressGroups(
         List<EquivalentAddressGroup> servers, Attributes attributes) {
       Map<String, Object> configMap = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
-      Factory newlbf = decideLoadBalancerFactory(servers, configMap);
+      Factory newlbf;
+      try {
+        newlbf = decideLoadBalancerFactory(servers, configMap);
+      } catch (RuntimeException e) {
+        Status s = Status.INTERNAL
+            .withDescription("Failed to pick a load balancer from service config")
+            .withCause(e);
+        helper.updateBalancingState(ConnectivityState.TRANSIENT_FAILURE, new FailingPicker(s));
+        delegate.shutdown();
+        delegateFactory = null;
+        delegate = new NoopLoadBalancer();
+        return;
+      }
+
       if (newlbf != null && newlbf != delegateFactory) {
-        helper.updateBalancingState(ConnectivityState.CONNECTING, new EmptySubchannelPicker());
+        helper.updateBalancingState(ConnectivityState.CONNECTING, new EmptyPicker());
         delegate.shutdown();
         delegateFactory = newlbf;
         delegate = delegateFactory.newLoadBalancer(helper);
@@ -179,6 +200,27 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
       }
 
       return PickFirstBalancerFactory.getInstance();
+    }
+  }
+
+  private static final class EmptyPicker extends SubchannelPicker {
+
+    @Override
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
+      return PickResult.withNoResult();
+    }
+  }
+
+  private static final class FailingPicker extends SubchannelPicker {
+    private final Status failure;
+
+    FailingPicker(Status failure) {
+      this.failure = failure;
+    }
+
+    @Override
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
+      return PickResult.withError(failure);
     }
   }
 }
