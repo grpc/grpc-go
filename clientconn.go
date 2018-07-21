@@ -26,9 +26,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"time"
-
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -794,8 +793,7 @@ type addrConn struct {
 	events trace.EventLog
 	acbw   balancer.SubConn
 
-	transportIdx int32
-	transport    transport.ClientTransport // The current transport.
+	transport transport.ClientTransport // The current transport.
 
 	addrIdx int                // The index in addrs list to start reconnecting from.
 	curAddr resolver.Address   // The current address.
@@ -858,10 +856,10 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 
 // resetTransport makes sure that a healthy ac.transport exists.
 //
-// The transport will close when it encounters an error, or on GOAWAY,
+// The transport will close itself when it encounters an error, or on GOAWAY,
 // or on deadline waiting for handshake, or when the clientconn is
 // closed. Each iteration creating a new transport will try a different
-// address that the resolver resolved to, until it has tried all
+// address that the balancer assigned to the addrConn, until it has tried all
 // addresses. Once it has tried all addresses, it will re-resolve to get
 // a new address list. Once a successful handshake has been
 // received, the list is re-resolved and the next reset attempt will
@@ -921,8 +919,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 		ac.cc.mu.RUnlock()
 
-		newTrID := atomic.AddInt32(&ac.transportIdx, 1)
-
 		// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
 		// onGoAway will reset the transport instead, which means when the original
 		// transport finally gets around to closing (onClose) it should not reset
@@ -966,7 +962,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(newTrID, backoffIdx, addr, copts, backoffDeadline, onGoAway, onClose); err != nil {
+		if err := ac.createTransport(backoffIdx, addr, copts, backoffDeadline, onGoAway, onClose); err != nil {
 			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
@@ -992,7 +988,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(id int32, backoffNum int, addr resolver.Address, copts transport.ConnectOptions, backoffDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
+func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, backoffDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	timedOutWaitingForPreface := make(chan struct{})
 	// TODO(deklerk): this is unnecessary. In the reader goroutine, we should be able to signal to onClose that the
 	// deadline was exceeded (we can't use a parameter to t.Close because it would mean changes in too many places)
