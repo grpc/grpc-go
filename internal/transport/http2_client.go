@@ -125,7 +125,6 @@ type http2Client struct {
 	lastMsgSent       time.Time
 	lastMsgRecv       time.Time
 
-	deadline   time.Time
 	onDeadline func()
 	onGoAway   func(GoAwayReason)
 	onClose    func()
@@ -239,7 +238,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		maxConcurrentStreams:  defaultMaxStreamsClient,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
-		deadline:              deadline,
 		onDeadline:            onDeadline,
 		onGoAway:              onGoAway,
 		onClose:               onClose,
@@ -271,7 +269,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
-	conn.SetReadDeadline(t.deadline)
+	conn.SetReadDeadline(connectDeadline)
 	if t.kp.Time != infinity {
 		t.keepaliveEnabled = true
 		go t.keepalive()
