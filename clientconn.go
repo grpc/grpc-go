@@ -907,8 +907,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			dialDuration = backoffFor
 		}
 		start := time.Now()
-		backoffDeadline := start.Add(backoffFor)
-		ac.backoffDeadline = backoffDeadline
+		ac.backoffDeadline = start.Add(backoffFor)
 		ac.connectDeadline = start.Add(dialDuration)
 
 		ac.mu.Unlock()
@@ -965,14 +964,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
 			if err == errReadTimedOut {
-				return
-			}
-
-			timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
-			select {
-			case <-timer.C:
-			case <-ac.ctx.Done():
-				timer.Stop()
 				return
 			}
 
