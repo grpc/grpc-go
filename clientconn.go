@@ -960,7 +960,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(backoffIdx, addr, copts, backoffDeadline, onGoAway, onClose); err != nil {
+		if err := ac.createTransport(backoffIdx, addr, copts, onGoAway, onClose); err != nil {
 			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
@@ -986,7 +986,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, backoffDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
+func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	timedOutWaitingForPreface := make(chan struct{})
 	// TODO(deklerk): this is unnecessary. In the reader goroutine, we should be able to signal to onClose that the
 	// deadline was exceeded (we can't use a parameter to t.Close because it would mean changes in too many places)
@@ -1024,7 +1024,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		copts.ChannelzParentID = ac.channelzID
 	}
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, backoffDeadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, connectDeadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
 	if err != nil {
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
