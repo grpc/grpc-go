@@ -229,7 +229,7 @@ subprojects {
             // Test dependencies.
             junit: 'junit:junit:4.12',
             mockito: 'org.mockito:mockito-core:1.9.5',
-            truth: 'com.google.truth:truth:0.42',
+            truth: 'com.google.truth:truth:0.41',
             guava_testlib: 'com.google.guava:guava-testlib:20.0',
 
             // Benchmark dependencies
@@ -250,7 +250,9 @@ subprojects {
             // care for artifacts used as libraries by others.
             if (!(project.name in [
                 'grpc-benchmarks',
-                'grpc-interop-testing'
+                'grpc-interop-testing',
+                'grpc-gae-interop-testing-jdk7',
+                'grpc-gae-interop-testing-jdk8',
             ])) {
                 resolutionStrategy.failOnVersionConflict()
             }
