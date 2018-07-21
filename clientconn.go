@@ -873,10 +873,8 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // successfully only after handshake is received.
 func (ac *addrConn) resetTransport(resolveNow bool) {
 	for {
-		// We want to resolve immediately if this is the first in a line of resets, but not on subsequent
-		// resets unless we:
-		//   - Run out of addresses
-		//   - Successfully receive handshake
+		// If this is the first in a line of resets, we want to resolve immediately. The only other time we
+		// want to reset is if we have tried all the addresses handed to us.
 		if resolveNow {
 			ac.mu.Lock()
 			ac.cc.resolveNow(resolver.ResolveNowOption{})
@@ -922,7 +920,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
 		// onGoAway will reset the transport instead, which means when the original
 		// transport finally gets around to closing (onClose) it should not reset
-		// (since we already did it in onGoAway)
+		// (since we already did it in onGoAway).
 		resetOnClose := true
 
 		onGoAway := func(r transport.GoAwayReason) {
@@ -1084,10 +1082,10 @@ func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
 
 	// If a handshake has been observed, we expect the counters to have manually
-	// been adjusted and so we'll just re-resolve and return.
+	// been reset so we'll just return, since we want the next usage to start
+	// at index 0.
 	if ac.successfulHandshake {
 		ac.successfulHandshake = false
-		ac.cc.resolveNow(resolver.ResolveNowOption{})
 		ac.mu.Unlock()
 		return nil
 	}
