@@ -229,7 +229,7 @@ subprojects {
             // Test dependencies.
             junit: 'junit:junit:4.12',
             mockito: 'org.mockito:mockito-core:1.9.5',
-            truth: 'com.google.truth:truth:0.41',
+            truth: 'com.google.truth:truth:0.42',
             guava_testlib: 'com.google.guava:guava-testlib:20.0',
 
             // Benchmark dependencies

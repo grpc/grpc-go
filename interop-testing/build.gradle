@@ -23,8 +23,13 @@ dependencies {
             project(':grpc-testing'),
             libraries.junit,
             libraries.mockito,
-            libraries.oauth_client,
-            libraries.truth
+            libraries.oauth_client
+    compile (libraries.truth) {
+        // Disable because it uses Java 8 bytecode, which breaks gae-java7
+        exclude group: 'com.google.auto.value', module: 'auto-value-annotations'
+        // Disable because it uses Java 8 bytecode, which breaks gae-java7
+        exclude group: 'org.checkerframework', module: 'checker-qual'
+    }
     compileOnly libraries.javax_annotation
     runtime libraries.opencensus_impl,
             libraries.netty_tcnative
