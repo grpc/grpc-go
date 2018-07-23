@@ -107,18 +107,6 @@ public final class AndroidChannelBuilderTest {
   }
 
   @Test
-  public void hostnameVerifier() {
-    AndroidChannelBuilder.forTarget("target")
-        .hostnameVerifier(
-            new HostnameVerifier() {
-              @Override
-              public boolean verify(String hostname, SSLSession session) {
-                return true;
-              }
-            });
-  }
-
-  @Test
   public void sslSocketFactory() {
     AndroidChannelBuilder.forTarget("target")
         .sslSocketFactory((SSLSocketFactory) SSLSocketFactory.getDefault());

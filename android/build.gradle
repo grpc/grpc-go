@@ -25,6 +25,7 @@ apply plugin: "signing"
 android {
     compileSdkVersion 27
     defaultConfig {
+        consumerProguardFiles "proguard-rules.txt"
         minSdkVersion 14
         targetSdkVersion 27
         versionCode 1
