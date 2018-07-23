@@ -2183,6 +2183,40 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void channelTracing_nameResolvedEvent_zeorAndNonzeroBackends() throws Exception {
+    timer.forwardNanos(1234);
+    channelBuilder.maxTraceEvents(10);
+    List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
+    servers.add(new EquivalentAddressGroup(socketAddress));
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).setServers(servers).build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    int prevSize = getStats(channel).channelTrace.events.size();
+    nameResolverFactory.resolvers.get(0).listener.onAddresses(
+        Collections.singletonList(new EquivalentAddressGroup(
+            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
+        Attributes.EMPTY);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
+
+    prevSize = getStats(channel).channelTrace.events.size();
+    nameResolverFactory.resolvers.get(0).listener.onError(Status.INTERNAL);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
+
+    prevSize = getStats(channel).channelTrace.events.size();
+    nameResolverFactory.resolvers.get(0).listener.onError(Status.INTERNAL);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
+
+    prevSize = getStats(channel).channelTrace.events.size();
+    nameResolverFactory.resolvers.get(0).listener.onAddresses(
+        Collections.singletonList(new EquivalentAddressGroup(
+            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
+        Attributes.EMPTY);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
+  }
+
+  @Test
   public void channelTracing_stateChangeEvent() throws Exception {
     channelBuilder.maxTraceEvents(10);
     createChannel();
