@@ -123,6 +123,7 @@ public final class TransmitStatusRuntimeExceptionInterceptor implements ServerIn
     private static final String ERROR_MSG = "Encountered error during serialized access";
     private final SerializingExecutor serializingExecutor =
         new SerializingExecutor(MoreExecutors.directExecutor());
+    private boolean closeCalled = false;
 
     SerializingServerCall(ServerCall<ReqT, RespT> delegate) {
       super(delegate);
@@ -163,7 +164,11 @@ public final class TransmitStatusRuntimeExceptionInterceptor implements ServerIn
       serializingExecutor.execute(new Runnable() {
         @Override
         public void run() {
-          SerializingServerCall.super.close(status, trailers);
+          if (!closeCalled) {
+            closeCalled = true;
+
+            SerializingServerCall.super.close(status, trailers);
+          }
         }
       });
     }

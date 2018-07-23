@@ -42,12 +42,17 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class UtilServerInterceptorsTest {
+  private static class VoidCallListener extends ServerCall.Listener<Void> {
+    public void onCall(ServerCall<Void, Void> call, Metadata headers) { }
+  }
+
   private MethodDescriptor<Void, Void> flowMethod = TestMethodDescriptors.voidMethod();
   private final Metadata headers = new Metadata();
   private ServerCallHandler<Void, Void> handler = new ServerCallHandler<Void, Void>() {
       @Override
       public ServerCall.Listener<Void> startCall(
           ServerCall<Void, Void> call, Metadata headers) {
+        listener.onCall(call, headers);
         return listener;
       }
   };
@@ -55,7 +60,7 @@ public class UtilServerInterceptorsTest {
       ServerServiceDefinition.builder(new ServiceDescriptor("service_foo", flowMethod))
           .addMethod(flowMethod, handler)
           .build();
-  private ServerCall.Listener<Void> listener;
+  private VoidCallListener listener;
 
   @SuppressWarnings("unchecked")
   private static ServerMethodDefinition<Void, Void> getSoleMethod(
@@ -74,7 +79,7 @@ public class UtilServerInterceptorsTest {
         new FakeServerCall<Void, Void>(expectedStatus, expectedMetadata);
     final StatusRuntimeException exception =
         new StatusRuntimeException(expectedStatus, expectedMetadata);
-    listener = new ServerCall.Listener<Void>() {
+    listener = new VoidCallListener() {
       @Override
       public void onMessage(Void message) {
         throw exception;
@@ -112,6 +117,57 @@ public class UtilServerInterceptorsTest {
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onHalfClose();
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onReady();
     assertEquals(5, call.numCloses);
+  }
+
+  @Test
+  public void statusRuntimeExceptionTransmitterIgnoresClosedCalls() {
+    final Status expectedStatus = Status.UNAVAILABLE;
+    final Status unexpectedStatus = Status.CANCELLED;
+    final Metadata expectedMetadata = new Metadata();
+
+    FakeServerCall<Void, Void> call =
+        new FakeServerCall<Void, Void>(expectedStatus, expectedMetadata);
+    final StatusRuntimeException exception =
+        new StatusRuntimeException(expectedStatus, expectedMetadata);
+
+    listener = new VoidCallListener() {
+      @Override
+      public void onMessage(Void message) {
+        throw exception;
+      }
+
+      @Override
+      public void onHalfClose() {
+        throw exception;
+      }
+    };
+
+    ServerServiceDefinition intercepted = ServerInterceptors.intercept(
+        serviceDefinition,
+        Arrays.asList(TransmitStatusRuntimeExceptionInterceptor.instance()));
+    ServerCall.Listener<Void> callDoubleSreListener =
+        getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers);
+    callDoubleSreListener.onMessage(null); // the only close with our exception
+    callDoubleSreListener.onHalfClose(); // should not trigger a close
+
+    // this listener closes the call when it is initialized with startCall
+    listener = new VoidCallListener() {
+      @Override
+      public void onCall(ServerCall<Void, Void> call, Metadata headers) {
+        call.close(unexpectedStatus, headers);
+      }
+
+      @Override
+      public void onHalfClose() {
+        throw exception;
+      }
+    };
+
+    ServerCall.Listener<Void> callClosedListener =
+        getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers);
+    // call is already closed, does not match exception
+    callClosedListener.onHalfClose(); // should not trigger a close
+    assertEquals(1, call.numCloses);
   }
 
   private static class FakeServerCall<ReqT, RespT> extends NoopServerCall<ReqT, RespT> {
