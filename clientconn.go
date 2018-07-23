@@ -906,8 +906,9 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			dialDuration = backoffFor
 		}
 		start := time.Now()
+		connectDeadline := start.Add(dialDuration)
 		ac.backoffDeadline = start.Add(backoffFor)
-		ac.connectDeadline = start.Add(dialDuration)
+		ac.connectDeadline = connectDeadline
 
 		ac.mu.Unlock()
 
@@ -958,7 +959,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(backoffIdx, addr, copts, onGoAway, onClose); err != nil {
+		if err := ac.createTransport(backoffIdx, addr, copts, connectDeadline, onGoAway, onClose); err != nil {
 			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
@@ -976,14 +977,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, onGoAway func(transport.GoAwayReason), onClose func()) error {
-	timedOutWaitingForPreface := make(chan struct{})
-	// TODO(deklerk): this is unnecessary. In the reader goroutine, we should be able to signal to onClose that the
-	// deadline was exceeded (we can't use a parameter to t.Close because it would mean changes in too many places)
-	onDeadline := func() {
-		close(timedOutWaitingForPreface)
-	}
-
+func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
 	target := transport.TargetInfo{
 		Addr:      addr.Addr,
 		Metadata:  addr.Metadata,
@@ -1003,10 +997,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		ac.mu.Unlock()
 	}
 
-	ac.mu.Lock()
-	connectDeadline := ac.connectDeadline
-	ac.mu.Unlock()
-
 	// Do not cancel in the success path because of
 	// this issue in Go1.6: https://github.com/golang/go/issues/15078.
 	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
@@ -1014,7 +1004,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		copts.ChannelzParentID = ac.channelzID
 	}
 
-	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, connectDeadline, onPrefaceReceipt, onDeadline, onGoAway, onClose)
+	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 	if err != nil {
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
@@ -1033,12 +1023,21 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	if ac.dopts.waitForHandshake {
-		select {
-		case <-timedOutWaitingForPreface:
-			return errReadTimedOut
-		case <-prefaceReceived:
-		case <-ac.ctx.Done():
-			return errConnClosing
+		if ac.dopts.waitForHandshake {
+			timer := time.NewTimer(connectDeadline.Sub(time.Now()))
+			select {
+			case <-timer.C:
+				if newTr != nil {
+					newTr.Close()
+				}
+				cancel()
+				return errReadTimedOut
+			case <-prefaceReceived:
+				timer.Stop()
+			case <-ac.ctx.Done():
+				timer.Stop()
+				return errConnClosing
+			}
 		}
 	}
 
