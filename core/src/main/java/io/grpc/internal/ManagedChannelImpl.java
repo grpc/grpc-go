@@ -395,6 +395,9 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               .build());
     }
     channelStateManager.gotoState(IDLE);
+    if (inUseStateAggregator.isInUse()) {
+      exitIdleMode();
+    }
   }
 
   // Must be run from channelExecutor

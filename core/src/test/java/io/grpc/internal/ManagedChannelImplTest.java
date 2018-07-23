@@ -1936,6 +1936,50 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void enterIdle_exitsIdleIfDelayedStreamPending() {
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri)
+            .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+            .build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    // Start a call that will be buffered in delayedTransport
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+
+    // enterIdle() will shut down the name resolver and lb policy used to get a pick for the delayed
+    // call
+    channel.enterIdle();
+    assertEquals(IDLE, channel.getState(false));
+
+    // enterIdle() will restart the delayed call by exiting idle. This creates a new helper.
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(Helper.class);
+    verify(mockLoadBalancerFactory, times(2)).newLoadBalancer(helperCaptor.capture());
+    Helper helper2 = helperCaptor.getValue();
+
+    // Establish a connection
+    Subchannel subchannel = helper2.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel.requestConnection();
+    ClientStream mockStream = mock(ClientStream.class);
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream);
+    transportListener.transportReady();
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withSubchannel(subchannel));
+    helper2.updateBalancingState(READY, mockPicker);
+    assertEquals(READY, channel.getState(false));
+
+    // Verify the original call was drained
+    executor.runDueTasks();
+    verify(mockTransport).newStream(same(method), any(Metadata.class), any(CallOptions.class));
+    verify(mockStream).start(any(ClientStreamListener.class));
+  }
+
+  @Test
   public void updateBalancingStateDoesUpdatePicker() {
     ClientStream mockStream = mock(ClientStream.class);
     createChannel();
