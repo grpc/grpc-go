@@ -691,13 +691,12 @@ func TestDisableServiceConfigOption(t *testing.T) {
 }
 
 func TestGetClientConnTarget(t *testing.T) {
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
-	addr := r.Scheme() + ":///non.existent"
+	addr := "nonexist:///non.existent"
 	cc, err := Dial(addr, WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	defer cc.Close()
 	if cc.Target() != addr {
 		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
 	}
