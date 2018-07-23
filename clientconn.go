@@ -861,9 +861,8 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // closed. Each iteration creating a new transport will try a different
 // address that the balancer assigned to the addrConn, until it has tried all
 // addresses. Once it has tried all addresses, it will re-resolve to get
-// a new address list. Once a successful handshake has been
-// received, the list is re-resolved and the next reset attempt will
-// try from the beginning.
+// a new address list. If an error is received, the list is re-resolved
+// and the next reset attempt will try from the beginning.
 //
 // This method has backoff built in. The backoff amount starts at 0 and
 // increases each time resolution occurs (addresses are exhausted). The
