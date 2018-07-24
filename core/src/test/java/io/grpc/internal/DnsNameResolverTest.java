@@ -313,8 +313,8 @@ public class DnsNameResolverTest {
     EquivalentAddressGroup eag = result.get(0);
     assertThat(eag.getAddresses()).hasSize(1);
 
-    PairSocketAddress socketAddress = (PairSocketAddress) eag.getAddresses().get(0);
-    assertSame(proxyParameters, socketAddress.getAttributes().get(ProxyDetector.PROXY_PARAMS_KEY));
+    ProxySocketAddress socketAddress = (ProxySocketAddress) eag.getAddresses().get(0);
+    assertSame(proxyParameters, socketAddress.getProxyParameters());
     assertTrue(((InetSocketAddress) socketAddress.getAddress()).isUnresolved());
   }
 

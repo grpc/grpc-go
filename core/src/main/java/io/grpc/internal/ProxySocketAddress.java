@@ -18,26 +18,25 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import io.grpc.Attributes;
 import java.net.SocketAddress;
 
 /**
- * A data structure to associate a {@link SocketAddress} with {@link Attributes}.
+ * A data structure to associate a {@link SocketAddress} with {@link ProxyParameters}.
  */
-final class PairSocketAddress extends SocketAddress {
+final class ProxySocketAddress extends SocketAddress {
   private static final long serialVersionUID = -6854992294603212793L;
 
   private final SocketAddress address;
-  private final Attributes attributes;
+  private final ProxyParameters proxyParameters;
 
   @VisibleForTesting
-  PairSocketAddress(SocketAddress address, Attributes attributes) {
+  ProxySocketAddress(SocketAddress address, ProxyParameters proxyParameters) {
     this.address = Preconditions.checkNotNull(address);
-    this.attributes = Preconditions.checkNotNull(attributes);
+    this.proxyParameters = Preconditions.checkNotNull(proxyParameters);
   }
 
-  public Attributes getAttributes() {
-    return attributes;
+  public ProxyParameters getProxyParameters() {
+    return proxyParameters;
   }
 
   public SocketAddress getAddress() {

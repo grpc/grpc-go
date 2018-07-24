@@ -222,9 +222,9 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     SocketAddress address = addressIndex.getCurrentAddress();
 
     ProxyParameters proxy = null;
-    if (address instanceof PairSocketAddress) {
-      proxy = ((PairSocketAddress) address).getAttributes().get(ProxyDetector.PROXY_PARAMS_KEY);
-      address = ((PairSocketAddress) address).getAddress();
+    if (address instanceof ProxySocketAddress) {
+      proxy = ((ProxySocketAddress) address).getProxyParameters();
+      address = ((ProxySocketAddress) address).getAddress();
     }
 
     ClientTransportFactory.ClientTransportOptions options =

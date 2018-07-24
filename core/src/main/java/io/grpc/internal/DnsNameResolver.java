@@ -184,12 +184,7 @@ final class DnsNameResolver extends NameResolver {
           if (proxy != null) {
             EquivalentAddressGroup server =
                 new EquivalentAddressGroup(
-                    new PairSocketAddress(
-                        destination,
-                        Attributes
-                            .newBuilder()
-                            .set(ProxyDetector.PROXY_PARAMS_KEY, proxy)
-                            .build()));
+                    new ProxySocketAddress(destination, proxy));
             savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
             return;
           }
