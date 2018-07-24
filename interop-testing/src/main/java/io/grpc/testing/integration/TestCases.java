@@ -44,6 +44,7 @@ public enum TestCases {
   PER_RPC_CREDS("per rpc raw oauth2 access token auth"),
   CUSTOM_METADATA("unary and full duplex calls with metadata"),
   STATUS_CODE_AND_MESSAGE("request error code and message"),
+  SPECIAL_STATUS_MESSAGE("special characters in status message"),
   UNIMPLEMENTED_METHOD("call an unimplemented RPC method"),
   UNIMPLEMENTED_SERVICE("call an unimplemented RPC service"),
   CANCEL_AFTER_BEGIN("cancel stream after starting it"),

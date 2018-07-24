@@ -301,6 +301,10 @@ public class TestServiceClient {
         break;
       }
 
+      case SPECIAL_STATUS_MESSAGE:
+        tester.specialStatusMessage();
+        break;
+
       case UNIMPLEMENTED_METHOD: {
         tester.unimplementedMethod();
         break;
