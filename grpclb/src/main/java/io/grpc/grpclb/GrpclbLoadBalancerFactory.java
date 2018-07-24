@@ -18,12 +18,10 @@ package io.grpc.grpclb;
 
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
-import io.grpc.PickFirstBalancerFactory;
 import io.grpc.internal.ExponentialBackoffPolicy;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourcePool;
 import io.grpc.internal.TimeProvider;
-import io.grpc.util.RoundRobinLoadBalancerFactory;
 
 /**
  * A factory for {@link LoadBalancer}s that uses the GRPCLB protocol.
@@ -46,8 +44,7 @@ public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
   @Override
   public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new GrpclbLoadBalancer(
-        helper, new CachedSubchannelPool(), PickFirstBalancerFactory.getInstance(),
-        RoundRobinLoadBalancerFactory.getInstance(),
+        helper, new CachedSubchannelPool(),
         // TODO(zhangkun83): balancer sends load reporting RPCs from it, which also involves
         // channelExecutor thus may also run other tasks queued in the channelExecutor.  If such
         // load should not be on the shared scheduled executor, we should use a combination of the

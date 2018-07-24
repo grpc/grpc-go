@@ -24,7 +24,6 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
-import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.internal.BackoffPolicy;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.LogId;
@@ -35,8 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -46,46 +44,32 @@ import javax.annotation.Nullable;
  * or round-robin balancer.
  */
 class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
-  private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer.class.getName());
 
   private final LogId logId = LogId.allocate(getClass().getName());
-
-  private final Helper helper;
   private final SubchannelPool subchannelPool;
-  private final Factory pickFirstBalancerFactory;
-  private final Factory roundRobinBalancerFactory;
   private final ObjectPool<ScheduledExecutorService> timerServicePool;
-  private final TimeProvider time;
-  private final BackoffPolicy.Provider backoffPolicyProvider;
 
   // All mutable states in this class are mutated ONLY from Channel Executor
-
   private ScheduledExecutorService timerService;
 
-  // If not null, all work is delegated to it.
-  @Nullable
-  private LoadBalancer delegate;
-  private LbPolicy lbPolicy;
-
-  // Null if lbPolicy != GRPCLB
   @Nullable
   private GrpclbState grpclbState;
 
-  GrpclbLoadBalancer(Helper helper, SubchannelPool subchannelPool, Factory pickFirstBalancerFactory,
-      Factory roundRobinBalancerFactory, ObjectPool<ScheduledExecutorService> timerServicePool,
-      TimeProvider time, BackoffPolicy.Provider backoffPolicyProvider) {
-    this.helper = checkNotNull(helper, "helper");
-    this.pickFirstBalancerFactory =
-        checkNotNull(pickFirstBalancerFactory, "pickFirstBalancerFactory");
-    this.roundRobinBalancerFactory =
-        checkNotNull(roundRobinBalancerFactory, "roundRobinBalancerFactory");
+  GrpclbLoadBalancer(
+      Helper helper,
+      SubchannelPool subchannelPool,
+      ObjectPool<ScheduledExecutorService> timerServicePool,
+      TimeProvider time,
+      BackoffPolicy.Provider backoffPolicyProvider) {
+    checkNotNull(helper, "helper");
     this.timerServicePool = checkNotNull(timerServicePool, "timerServicePool");
     this.timerService = checkNotNull(timerServicePool.getObject(), "timerService");
-    this.time = checkNotNull(time, "time provider");
-    this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
+    checkNotNull(time, "time provider");
+    checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.subchannelPool.init(helper, timerService);
-    setLbPolicy(LbPolicy.GRPCLB);
+    grpclbState =
+        new GrpclbState(helper, subchannelPool, time, timerService, backoffPolicyProvider, logId);
   }
 
   @Override
@@ -95,19 +79,14 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
   @Override
   public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newState) {
-    if (delegate != null) {
-      delegate.handleSubchannelState(subchannel, newState);
-      return;
-    }
-    if (grpclbState != null) {
-      grpclbState.handleSubchannelState(subchannel, newState);
-    }
+    // grpclbState should never be null here since handleSubchannelState cannot be called while the
+    // lb is shutdown.
+    grpclbState.handleSubchannelState(subchannel, newState);
   }
 
   @Override
   public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> updatedServers, Attributes attributes) {
-    LbPolicy newLbPolicy = attributes.get(GrpclbConstants.ATTR_LB_POLICY);
     // LB addresses and backend addresses are treated separately
     List<LbAddressGroup> newLbAddressGroups = new ArrayList<LbAddressGroup>();
     List<EquivalentAddressGroup> newBackendServers = new ArrayList<EquivalentAddressGroup>();
@@ -122,65 +101,10 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
     newLbAddressGroups = Collections.unmodifiableList(newLbAddressGroups);
     newBackendServers = Collections.unmodifiableList(newBackendServers);
-
-    if (!newLbAddressGroups.isEmpty()) {
-      if (newLbPolicy != LbPolicy.GRPCLB) {
-        newLbPolicy = LbPolicy.GRPCLB;
-        logger.log(
-            Level.FINE, "[{0}] Switching to GRPCLB because there is at least one balancer", logId);
-      }
-    }
-    if (newLbPolicy == null) {
-      logger.log(Level.FINE, "[{0}] New config missing policy. Using PICK_FIRST", logId);
-      newLbPolicy = LbPolicy.PICK_FIRST;
-    }
-
-    // Switch LB policy if requested
-    setLbPolicy(newLbPolicy);
-
-    // Consume the new addresses
-    switch (lbPolicy) {
-      case PICK_FIRST:
-      case ROUND_ROBIN:
-        checkNotNull(delegate, "delegate should not be null. newLbPolicy=" + newLbPolicy);
-        delegate.handleResolvedAddressGroups(newBackendServers, attributes);
-        break;
-      case GRPCLB:
-        grpclbState.handleAddresses(newLbAddressGroups, newBackendServers);
-        break;
-      default:
-        // Do nothing
-    }
-  }
-
-  private void setLbPolicy(LbPolicy newLbPolicy) {
-    if (newLbPolicy != lbPolicy) {
-      resetStates();
-      switch (newLbPolicy) {
-        case PICK_FIRST:
-          delegate = checkNotNull(pickFirstBalancerFactory.newLoadBalancer(helper),
-              "pickFirstBalancerFactory.newLoadBalancer()");
-          break;
-        case ROUND_ROBIN:
-          delegate = checkNotNull(roundRobinBalancerFactory.newLoadBalancer(helper),
-              "roundRobinBalancerFactory.newLoadBalancer()");
-          break;
-        case GRPCLB:
-          grpclbState = new GrpclbState(
-              helper, subchannelPool, time, timerService, backoffPolicyProvider, logId);
-          break;
-        default:
-          // Do nohting
-      }
-    }
-    lbPolicy = newLbPolicy;
+    grpclbState.handleAddresses(newLbAddressGroups, newBackendServers);
   }
 
   private void resetStates() {
-    if (delegate != null) {
-      delegate.shutdown();
-      delegate = null;
-    }
     if (grpclbState != null) {
       grpclbState.shutdown();
       grpclbState = null;
@@ -195,9 +119,6 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
   @Override
   public void handleNameResolutionError(Status error) {
-    if (delegate != null) {
-      delegate.handleNameResolutionError(error);
-    }
     if (grpclbState != null) {
       grpclbState.propagateError(error);
     }
@@ -207,15 +128,5 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @Nullable
   GrpclbState getGrpclbState() {
     return grpclbState;
-  }
-
-  @VisibleForTesting
-  LoadBalancer getDelegate() {
-    return delegate;
-  }
-
-  @VisibleForTesting
-  LbPolicy getLbPolicy() {
-    return lbPolicy;
   }
 }

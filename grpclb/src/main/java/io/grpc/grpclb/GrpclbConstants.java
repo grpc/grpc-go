@@ -16,7 +16,6 @@
 
 package io.grpc.grpclb;
 
-import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 
@@ -25,20 +24,6 @@ import io.grpc.Metadata;
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1782")
 public final class GrpclbConstants {
-  /**
-   * The load-balancing policy designated by the naming system.
-   */
-  public enum LbPolicy {
-    PICK_FIRST,
-    ROUND_ROBIN,
-    GRPCLB
-  }
-
-  /**
-   * An attribute of a name resolution result, designating the LB policy.
-   */
-  public static final Attributes.Key<LbPolicy> ATTR_LB_POLICY =
-      Attributes.Key.create("io.grpc.grpclb.lbPolicy");
 
   /**
    * The opaque token given by the remote balancer for each returned server address.  The client
