@@ -73,6 +73,8 @@ public abstract class ManagedChannel extends Channel {
   /**
    * Gets the current connectivity state. Note the result may soon become outdated.
    *
+   * <p>Note that the core library did not provide an implementation of this method until v1.6.1.
+   *
    * @param requestConnection if {@code true}, the channel will try to make a connection if it is
    *        currently IDLE
    * @throws UnsupportedOperationException if not supported by implementation
@@ -95,6 +97,8 @@ public abstract class ManagedChannel extends Channel {
    * see every state transition. "Transitions" to the same state are possible, because intermediate
    * states may not have been observed. The API is only reliable in tracking the <em>current</em>
    * state.
+   *
+   * <p>Note that the core library did not provide an implementation of this method until v1.6.1.
    *
    * @param source the assumed current state, typically just returned by {@link #getState}
    * @param callback the one-off callback
