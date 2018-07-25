@@ -177,12 +177,14 @@ type isIdentity_IdentityOneof interface {
 type Identity_ServiceAccount struct {
 	ServiceAccount string `protobuf:"bytes,1,opt,name=service_account,json=serviceAccount,proto3,oneof"`
 }
+
 type Identity_Hostname struct {
 	Hostname string `protobuf:"bytes,2,opt,name=hostname,proto3,oneof"`
 }
 
 func (*Identity_ServiceAccount) isIdentity_IdentityOneof() {}
-func (*Identity_Hostname) isIdentity_IdentityOneof()       {}
+
+func (*Identity_Hostname) isIdentity_IdentityOneof() {}
 
 func (m *Identity) GetIdentityOneof() isIdentity_IdentityOneof {
 	if m != nil {
@@ -616,16 +618,20 @@ type isHandshakerReq_ReqOneof interface {
 type HandshakerReq_ClientStart struct {
 	ClientStart *StartClientHandshakeReq `protobuf:"bytes,1,opt,name=client_start,json=clientStart,proto3,oneof"`
 }
+
 type HandshakerReq_ServerStart struct {
 	ServerStart *StartServerHandshakeReq `protobuf:"bytes,2,opt,name=server_start,json=serverStart,proto3,oneof"`
 }
+
 type HandshakerReq_Next struct {
 	Next *NextHandshakeMessageReq `protobuf:"bytes,3,opt,name=next,proto3,oneof"`
 }
 
 func (*HandshakerReq_ClientStart) isHandshakerReq_ReqOneof() {}
+
 func (*HandshakerReq_ServerStart) isHandshakerReq_ReqOneof() {}
-func (*HandshakerReq_Next) isHandshakerReq_ReqOneof()        {}
+
+func (*HandshakerReq_Next) isHandshakerReq_ReqOneof() {}
 
 func (m *HandshakerReq) GetReqOneof() isHandshakerReq_ReqOneof {
 	if m != nil {

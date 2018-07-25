@@ -337,24 +337,32 @@ type isLoadParams_Load interface {
 type LoadParams_ClosedLoop struct {
 	ClosedLoop *ClosedLoopParams `protobuf:"bytes,1,opt,name=closed_loop,json=closedLoop,proto3,oneof"`
 }
+
 type LoadParams_Poisson struct {
 	Poisson *PoissonParams `protobuf:"bytes,2,opt,name=poisson,proto3,oneof"`
 }
+
 type LoadParams_Uniform struct {
 	Uniform *UniformParams `protobuf:"bytes,3,opt,name=uniform,proto3,oneof"`
 }
+
 type LoadParams_Determ struct {
 	Determ *DeterministicParams `protobuf:"bytes,4,opt,name=determ,proto3,oneof"`
 }
+
 type LoadParams_Pareto struct {
 	Pareto *ParetoParams `protobuf:"bytes,5,opt,name=pareto,proto3,oneof"`
 }
 
 func (*LoadParams_ClosedLoop) isLoadParams_Load() {}
-func (*LoadParams_Poisson) isLoadParams_Load()    {}
-func (*LoadParams_Uniform) isLoadParams_Load()    {}
-func (*LoadParams_Determ) isLoadParams_Load()     {}
-func (*LoadParams_Pareto) isLoadParams_Load()     {}
+
+func (*LoadParams_Poisson) isLoadParams_Load() {}
+
+func (*LoadParams_Uniform) isLoadParams_Load() {}
+
+func (*LoadParams_Determ) isLoadParams_Load() {}
+
+func (*LoadParams_Pareto) isLoadParams_Load() {}
 
 func (m *LoadParams) GetLoad() isLoadParams_Load {
 	if m != nil {
@@ -829,12 +837,14 @@ type isClientArgs_Argtype interface {
 type ClientArgs_Setup struct {
 	Setup *ClientConfig `protobuf:"bytes,1,opt,name=setup,proto3,oneof"`
 }
+
 type ClientArgs_Mark struct {
 	Mark *Mark `protobuf:"bytes,2,opt,name=mark,proto3,oneof"`
 }
 
 func (*ClientArgs_Setup) isClientArgs_Argtype() {}
-func (*ClientArgs_Mark) isClientArgs_Argtype()  {}
+
+func (*ClientArgs_Mark) isClientArgs_Argtype() {}
 
 func (m *ClientArgs) GetArgtype() isClientArgs_Argtype {
 	if m != nil {
@@ -1063,12 +1073,14 @@ type isServerArgs_Argtype interface {
 type ServerArgs_Setup struct {
 	Setup *ServerConfig `protobuf:"bytes,1,opt,name=setup,proto3,oneof"`
 }
+
 type ServerArgs_Mark struct {
 	Mark *Mark `protobuf:"bytes,2,opt,name=mark,proto3,oneof"`
 }
 
 func (*ServerArgs_Setup) isServerArgs_Argtype() {}
-func (*ServerArgs_Mark) isServerArgs_Argtype()  {}
+
+func (*ServerArgs_Mark) isServerArgs_Argtype() {}
 
 func (m *ServerArgs) GetArgtype() isServerArgs_Argtype {
 	if m != nil {
