@@ -2217,6 +2217,62 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void channelTracing_serviceConfigChange() throws Exception {
+    timer.forwardNanos(1234);
+    channelBuilder.maxTraceEvents(10);
+    List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
+    servers.add(new EquivalentAddressGroup(socketAddress));
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).setServers(servers).build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    int prevSize = getStats(channel).channelTrace.events.size();
+    Attributes attributes =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, new HashMap<String, Object>())
+            .build();
+    nameResolverFactory.resolvers.get(0).listener.onAddresses(
+        Collections.singletonList(new EquivalentAddressGroup(
+            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
+        attributes);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
+    assertThat(getStats(channel).channelTrace.events.get(prevSize))
+        .isEqualTo(new ChannelTrace.Event.Builder()
+            .setDescription("Service config changed")
+            .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+            .setTimestampNanos(timer.getTicker().read())
+            .build());
+
+    prevSize = getStats(channel).channelTrace.events.size();
+    nameResolverFactory.resolvers.get(0).listener.onAddresses(
+        Collections.singletonList(new EquivalentAddressGroup(
+            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
+        attributes);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
+
+    prevSize = getStats(channel).channelTrace.events.size();
+    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    serviceConfig.put("methodConfig", new HashMap<String, Object>());
+    attributes =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
+            .build();
+    timer.forwardNanos(1234);
+    nameResolverFactory.resolvers.get(0).listener.onAddresses(
+        Collections.singletonList(new EquivalentAddressGroup(
+            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
+        attributes);
+    assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
+    assertThat(getStats(channel).channelTrace.events.get(prevSize))
+        .isEqualTo(new ChannelTrace.Event.Builder()
+            .setDescription("Service config changed")
+            .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+            .setTimestampNanos(timer.getTicker().read())
+            .build());
+  }
+
+  @Test
   public void channelTracing_stateChangeEvent() throws Exception {
     channelBuilder.maxTraceEvents(10);
     createChannel();

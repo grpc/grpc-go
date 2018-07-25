@@ -211,7 +211,10 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   @CheckForNull
   private final ChannelTracer channelTracer;
   private final Channelz channelz;
-  private Boolean zeroBackends; // a flag for doing channel tracing when flipped
+  @CheckForNull
+  private Boolean haveBackends; // a flag for doing channel tracing when flipped
+  @Nullable
+  private Map<String, Object> lastServiceConfig; // used for channel tracing when value changed
 
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
@@ -1250,13 +1253,24 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             new Object[]{getLogId(), servers, config});
       }
 
-      if (channelTracer != null && (zeroBackends == null || zeroBackends)) {
+      if (channelTracer != null && (haveBackends == null || !haveBackends)) {
         channelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Address resolved: " + servers)
             .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
             .setTimestampNanos(timeProvider.currentTimeNanos())
             .build());
-        zeroBackends = false;
+        haveBackends = true;
+      }
+      final Map<String, Object> serviceConfig =
+          config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+      if (channelTracer != null && serviceConfig != null
+          && !serviceConfig.equals(lastServiceConfig)) {
+        channelTracer.reportEvent(new ChannelTrace.Event.Builder()
+            .setDescription("Service config changed")
+            .setSeverity(ChannelTrace.Event.Severity.CT_INFO)
+            .setTimestampNanos(timeProvider.currentTimeNanos())
+            .build());
+        lastServiceConfig = serviceConfig;
       }
 
       final class NamesResolved implements Runnable {
@@ -1269,8 +1283,6 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
           nameResolverBackoffPolicy = null;
 
-          Map<String, Object> serviceConfig =
-              config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
           if (serviceConfig != null) {
             try {
               serviceConfigInterceptor.handleUpdate(serviceConfig);
@@ -1297,13 +1309,13 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       checkArgument(!error.isOk(), "the error status must not be OK");
       logger.log(Level.WARNING, "[{0}] Failed to resolve name. status={1}",
           new Object[] {getLogId(), error});
-      if (channelTracer != null && (zeroBackends == null || !zeroBackends)) {
+      if (channelTracer != null && (haveBackends == null || haveBackends)) {
         channelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Failed to resolve name")
             .setSeverity(ChannelTrace.Event.Severity.CT_WARNING)
             .setTimestampNanos(timeProvider.currentTimeNanos())
             .build());
-        zeroBackends = true;
+        haveBackends = false;
       }
       channelExecutor
           .executeLater(
