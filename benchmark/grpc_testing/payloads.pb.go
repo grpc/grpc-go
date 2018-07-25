@@ -182,15 +182,19 @@ type isPayloadConfig_Payload interface {
 type PayloadConfig_BytebufParams struct {
 	BytebufParams *ByteBufferParams `protobuf:"bytes,1,opt,name=bytebuf_params,json=bytebufParams,proto3,oneof"`
 }
+
 type PayloadConfig_SimpleParams struct {
 	SimpleParams *SimpleProtoParams `protobuf:"bytes,2,opt,name=simple_params,json=simpleParams,proto3,oneof"`
 }
+
 type PayloadConfig_ComplexParams struct {
 	ComplexParams *ComplexProtoParams `protobuf:"bytes,3,opt,name=complex_params,json=complexParams,proto3,oneof"`
 }
 
 func (*PayloadConfig_BytebufParams) isPayloadConfig_Payload() {}
-func (*PayloadConfig_SimpleParams) isPayloadConfig_Payload()  {}
+
+func (*PayloadConfig_SimpleParams) isPayloadConfig_Payload() {}
+
 func (*PayloadConfig_ComplexParams) isPayloadConfig_Payload() {}
 
 func (m *PayloadConfig) GetPayload() isPayloadConfig_Payload {

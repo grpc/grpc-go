@@ -66,6 +66,13 @@ func (m *ServerReflectionRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerReflectionRequest proto.InternalMessageInfo
 
+func (m *ServerReflectionRequest) GetHost() string {
+	if m != nil {
+		return m.Host
+	}
+	return ""
+}
+
 type isServerReflectionRequest_MessageRequest interface {
 	isServerReflectionRequest_MessageRequest()
 }
@@ -73,37 +80,38 @@ type isServerReflectionRequest_MessageRequest interface {
 type ServerReflectionRequest_FileByFilename struct {
 	FileByFilename string `protobuf:"bytes,3,opt,name=file_by_filename,json=fileByFilename,proto3,oneof"`
 }
+
 type ServerReflectionRequest_FileContainingSymbol struct {
 	FileContainingSymbol string `protobuf:"bytes,4,opt,name=file_containing_symbol,json=fileContainingSymbol,proto3,oneof"`
 }
+
 type ServerReflectionRequest_FileContainingExtension struct {
 	FileContainingExtension *ExtensionRequest `protobuf:"bytes,5,opt,name=file_containing_extension,json=fileContainingExtension,proto3,oneof"`
 }
+
 type ServerReflectionRequest_AllExtensionNumbersOfType struct {
 	AllExtensionNumbersOfType string `protobuf:"bytes,6,opt,name=all_extension_numbers_of_type,json=allExtensionNumbersOfType,proto3,oneof"`
 }
+
 type ServerReflectionRequest_ListServices struct {
 	ListServices string `protobuf:"bytes,7,opt,name=list_services,json=listServices,proto3,oneof"`
 }
 
-func (*ServerReflectionRequest_FileByFilename) isServerReflectionRequest_MessageRequest()            {}
-func (*ServerReflectionRequest_FileContainingSymbol) isServerReflectionRequest_MessageRequest()      {}
-func (*ServerReflectionRequest_FileContainingExtension) isServerReflectionRequest_MessageRequest()   {}
+func (*ServerReflectionRequest_FileByFilename) isServerReflectionRequest_MessageRequest() {}
+
+func (*ServerReflectionRequest_FileContainingSymbol) isServerReflectionRequest_MessageRequest() {}
+
+func (*ServerReflectionRequest_FileContainingExtension) isServerReflectionRequest_MessageRequest() {}
+
 func (*ServerReflectionRequest_AllExtensionNumbersOfType) isServerReflectionRequest_MessageRequest() {}
-func (*ServerReflectionRequest_ListServices) isServerReflectionRequest_MessageRequest()              {}
+
+func (*ServerReflectionRequest_ListServices) isServerReflectionRequest_MessageRequest() {}
 
 func (m *ServerReflectionRequest) GetMessageRequest() isServerReflectionRequest_MessageRequest {
 	if m != nil {
 		return m.MessageRequest
 	}
 	return nil
-}
-
-func (m *ServerReflectionRequest) GetHost() string {
-	if m != nil {
-		return m.Host
-	}
-	return ""
 }
 
 func (m *ServerReflectionRequest) GetFileByFilename() string {
@@ -347,36 +355,6 @@ func (m *ServerReflectionResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerReflectionResponse proto.InternalMessageInfo
 
-type isServerReflectionResponse_MessageResponse interface {
-	isServerReflectionResponse_MessageResponse()
-}
-
-type ServerReflectionResponse_FileDescriptorResponse struct {
-	FileDescriptorResponse *FileDescriptorResponse `protobuf:"bytes,4,opt,name=file_descriptor_response,json=fileDescriptorResponse,proto3,oneof"`
-}
-type ServerReflectionResponse_AllExtensionNumbersResponse struct {
-	AllExtensionNumbersResponse *ExtensionNumberResponse `protobuf:"bytes,5,opt,name=all_extension_numbers_response,json=allExtensionNumbersResponse,proto3,oneof"`
-}
-type ServerReflectionResponse_ListServicesResponse struct {
-	ListServicesResponse *ListServiceResponse `protobuf:"bytes,6,opt,name=list_services_response,json=listServicesResponse,proto3,oneof"`
-}
-type ServerReflectionResponse_ErrorResponse struct {
-	ErrorResponse *ErrorResponse `protobuf:"bytes,7,opt,name=error_response,json=errorResponse,proto3,oneof"`
-}
-
-func (*ServerReflectionResponse_FileDescriptorResponse) isServerReflectionResponse_MessageResponse() {}
-func (*ServerReflectionResponse_AllExtensionNumbersResponse) isServerReflectionResponse_MessageResponse() {
-}
-func (*ServerReflectionResponse_ListServicesResponse) isServerReflectionResponse_MessageResponse() {}
-func (*ServerReflectionResponse_ErrorResponse) isServerReflectionResponse_MessageResponse()        {}
-
-func (m *ServerReflectionResponse) GetMessageResponse() isServerReflectionResponse_MessageResponse {
-	if m != nil {
-		return m.MessageResponse
-	}
-	return nil
-}
-
 func (m *ServerReflectionResponse) GetValidHost() string {
 	if m != nil {
 		return m.ValidHost
@@ -387,6 +365,42 @@ func (m *ServerReflectionResponse) GetValidHost() string {
 func (m *ServerReflectionResponse) GetOriginalRequest() *ServerReflectionRequest {
 	if m != nil {
 		return m.OriginalRequest
+	}
+	return nil
+}
+
+type isServerReflectionResponse_MessageResponse interface {
+	isServerReflectionResponse_MessageResponse()
+}
+
+type ServerReflectionResponse_FileDescriptorResponse struct {
+	FileDescriptorResponse *FileDescriptorResponse `protobuf:"bytes,4,opt,name=file_descriptor_response,json=fileDescriptorResponse,proto3,oneof"`
+}
+
+type ServerReflectionResponse_AllExtensionNumbersResponse struct {
+	AllExtensionNumbersResponse *ExtensionNumberResponse `protobuf:"bytes,5,opt,name=all_extension_numbers_response,json=allExtensionNumbersResponse,proto3,oneof"`
+}
+
+type ServerReflectionResponse_ListServicesResponse struct {
+	ListServicesResponse *ListServiceResponse `protobuf:"bytes,6,opt,name=list_services_response,json=listServicesResponse,proto3,oneof"`
+}
+
+type ServerReflectionResponse_ErrorResponse struct {
+	ErrorResponse *ErrorResponse `protobuf:"bytes,7,opt,name=error_response,json=errorResponse,proto3,oneof"`
+}
+
+func (*ServerReflectionResponse_FileDescriptorResponse) isServerReflectionResponse_MessageResponse() {}
+
+func (*ServerReflectionResponse_AllExtensionNumbersResponse) isServerReflectionResponse_MessageResponse() {
+}
+
+func (*ServerReflectionResponse_ListServicesResponse) isServerReflectionResponse_MessageResponse() {}
+
+func (*ServerReflectionResponse_ErrorResponse) isServerReflectionResponse_MessageResponse() {}
+
+func (m *ServerReflectionResponse) GetMessageResponse() isServerReflectionResponse_MessageResponse {
+	if m != nil {
+		return m.MessageResponse
 	}
 	return nil
 }

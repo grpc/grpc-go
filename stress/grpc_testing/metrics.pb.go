@@ -60,6 +60,13 @@ func (m *GaugeResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GaugeResponse proto.InternalMessageInfo
 
+func (m *GaugeResponse) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
 type isGaugeResponse_Value interface {
 	isGaugeResponse_Value()
 }
@@ -67,15 +74,19 @@ type isGaugeResponse_Value interface {
 type GaugeResponse_LongValue struct {
 	LongValue int64 `protobuf:"varint,2,opt,name=long_value,json=longValue,proto3,oneof"`
 }
+
 type GaugeResponse_DoubleValue struct {
 	DoubleValue float64 `protobuf:"fixed64,3,opt,name=double_value,json=doubleValue,proto3,oneof"`
 }
+
 type GaugeResponse_StringValue struct {
 	StringValue string `protobuf:"bytes,4,opt,name=string_value,json=stringValue,proto3,oneof"`
 }
 
-func (*GaugeResponse_LongValue) isGaugeResponse_Value()   {}
+func (*GaugeResponse_LongValue) isGaugeResponse_Value() {}
+
 func (*GaugeResponse_DoubleValue) isGaugeResponse_Value() {}
+
 func (*GaugeResponse_StringValue) isGaugeResponse_Value() {}
 
 func (m *GaugeResponse) GetValue() isGaugeResponse_Value {
@@ -83,13 +94,6 @@ func (m *GaugeResponse) GetValue() isGaugeResponse_Value {
 		return m.Value
 	}
 	return nil
-}
-
-func (m *GaugeResponse) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
 }
 
 func (m *GaugeResponse) GetLongValue() int64 {
