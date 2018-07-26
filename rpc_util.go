@@ -470,7 +470,7 @@ type parser struct {
 //   * io.EOF, when no messages remain
 //   * io.ErrUnexpectedEOF
 //   * of type transport.ConnectionError
-//   * of type transport.StreamError
+//   * an error from the status package
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.

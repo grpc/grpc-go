@@ -179,7 +179,7 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				},
 				RequestURI: "/service/foo.bar",
 			},
-			wantErr: `stream error: code = Internal desc = "malformed time-out: transport: timeout unit is not recognized: \"tomorrow\""`,
+			wantErr: `rpc error: code = Internal desc = malformed time-out: transport: timeout unit is not recognized: "tomorrow"`,
 		},
 		{
 			name: "with metadata",
@@ -220,7 +220,7 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 		}
 		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil)
 		if (gotErr != nil) != (tt.wantErr != "") || (gotErr != nil && gotErr.Error() != tt.wantErr) {
-			t.Errorf("%s: error = %v; want %q", tt.name, gotErr, tt.wantErr)
+			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
 			continue
 		}
 		if gotErr != nil {

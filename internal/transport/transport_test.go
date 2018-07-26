@@ -446,7 +446,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 }
 
 // TestInflightStreamClosing ensures that closing in-flight stream
-// sends StreamError to concurrent stream reader.
+// sends status error to concurrent stream reader.
 func TestInflightStreamClosing(t *testing.T) {
 	serverConfig := &ServerConfig{}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{}, func() {})
@@ -460,7 +460,7 @@ func TestInflightStreamClosing(t *testing.T) {
 	}
 
 	donec := make(chan struct{})
-	serr := StreamError{Desc: "client connection is closing"}
+	serr := status.Error(codes.Internal, "client connection is closing")
 	go func() {
 		defer close(donec)
 		if _, err := stream.Read(make([]byte, defaultWindowSize)); err != serr {
@@ -479,7 +479,7 @@ func TestInflightStreamClosing(t *testing.T) {
 			<-timeout.C
 		}
 	case <-timeout.C:
-		t.Fatalf("Test timed out, expected a StreamError.")
+		t.Fatalf("Test timed out, expected a status error.")
 	}
 }
 
@@ -1698,7 +1698,7 @@ func TestInvalidHeaderField(t *testing.T) {
 	}
 	p := make([]byte, http2MaxFrameLen)
 	_, err = s.trReader.(*transportReader).Read(p)
-	if se, ok := err.(StreamError); !ok || se.Code != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
+	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
 	}
 	ct.Close()
@@ -2093,12 +2093,12 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) 
 	if err == nil {
 		t.Fatalf("Stream.Read(_) unexpectedly returned no error. Expected stream error with code %v", want)
 	}
-	serr, ok := err.(StreamError)
+	serr, ok := status.FromError(err)
 	if !ok {
-		t.Fatalf("err.(Type) = %T, want StreamError", err)
+		t.Fatalf("err.(Type) = %T, want status error", err)
 	}
-	if want != serr.Code {
-		t.Fatalf("Want error code: %v, got: %v", want, serr.Code)
+	if want != serr.Code() {
+		t.Fatalf("Want error code: %v, got: %v", want, serr.Code())
 	}
 }
 
