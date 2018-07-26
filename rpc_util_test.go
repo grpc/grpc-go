@@ -177,7 +177,6 @@ func TestToRPCErr(t *testing.T) {
 		// outputs
 		errOut error
 	}{
-		{transport.StreamError{Code: codes.Unknown, Desc: ""}, status.Error(codes.Unknown, "")},
 		{transport.ErrConnClosing, status.Error(codes.Unavailable, transport.ErrConnClosing.Desc)},
 		{io.ErrUnexpectedEOF, status.Error(codes.Internal, io.ErrUnexpectedEOF.Error())},
 	} {

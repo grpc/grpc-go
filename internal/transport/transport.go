@@ -619,19 +619,6 @@ type ServerTransport interface {
 	IncrMsgRecv()
 }
 
-// streamErrorf creates an StreamError with the specified error code and description.
-func streamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
-	return StreamError{
-		Code: c,
-		Desc: fmt.Sprintf(format, a...),
-	}
-}
-
-// streamError creates an StreamError with the specified error code and description.
-func streamError(c codes.Code, desc string) StreamError {
-	return StreamError{Code: c, Desc: desc}
-}
-
 // connectionErrorf creates an ConnectionError with the specified error description.
 func connectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
@@ -674,7 +661,7 @@ var (
 	// errStreamDrain indicates that the stream is rejected because the
 	// connection is draining. This could be caused by goaway or balancer
 	// removing the address.
-	errStreamDrain = streamErrorf(codes.Unavailable, "the connection is draining")
+	errStreamDrain = status.Error(codes.Unavailable, "the connection is draining")
 	// errStreamDone is returned from write at the client side to indiacte application
 	// layer of an error.
 	errStreamDone = errors.New("the stream is done")
@@ -682,18 +669,6 @@ var (
 	// stream's ID in unprocessed RPCs.
 	statusGoAway = status.New(codes.Unavailable, "the stream is rejected because server is draining the connection")
 )
-
-// TODO: See if we can replace StreamError with status package errors.
-
-// StreamError is an error that only affects one stream within a connection.
-type StreamError struct {
-	Code codes.Code
-	Desc string
-}
-
-func (e StreamError) Error() string {
-	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
-}
 
 // GoAwayReason contains the reason for the GoAway frame received.
 type GoAwayReason uint8

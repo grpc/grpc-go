@@ -57,8 +57,6 @@ func toRPCErr(err error) error {
 		return err
 	}
 	switch e := err.(type) {
-	case transport.StreamError:
-		return status.Error(e.Code, e.Desc)
 	case transport.ConnectionError:
 		return status.Error(codes.Unavailable, e.Desc)
 	default:
