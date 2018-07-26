@@ -563,6 +563,25 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption
 	}
 }
 
+// DoSpecialStatusMessage verifies Unicode and whitespace is correctly processed
+// in status message.
+func DoSpecialStatusMessage(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	var (
+		code int32 = 2
+		msg        = "\t\ntest with whitespace\r\nand Unicode BMP ☺ and non-BMP 😈\t\n"
+	)
+	expectedErr := status.Error(codes.Code(code), msg)
+	req := &testpb.SimpleRequest{
+		ResponseStatus: &testpb.EchoStatus{
+			Code:    code,
+			Message: msg,
+		},
+	}
+	if _, err := tc.UnaryCall(context.Background(), req, args...); err == nil || err.Error() != expectedErr.Error() {
+		grpclog.Fatalf("%v.UnaryCall(_, %v) = _, %v, want _, %v", tc, req, err, expectedErr)
+	}
+}
+
 // DoUnimplementedService attempts to call a method from an unimplemented service.
 func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})

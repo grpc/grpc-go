@@ -64,6 +64,7 @@ var (
         cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
         cancel_after_first_response: cancellation after receiving 1st message from the server;
         status_code_and_message: status code propagated back to client;
+        special_status_message: Unicode and whitespace is correctly processed in status message;
         custom_metadata: server will echo custom metadata;
         unimplemented_method: client attempts to call unimplemented method;
         unimplemented_service: client attempts to call unimplemented service.`)
@@ -193,6 +194,9 @@ func main() {
 	case "status_code_and_message":
 		interop.DoStatusCodeAndMessage(tc)
 		grpclog.Infoln("StatusCodeAndMessage done")
+	case "special_status_message":
+		interop.DoSpecialStatusMessage(tc)
+		grpclog.Infoln("SpecialStatusMessage done")
 	case "custom_metadata":
 		interop.DoCustomMetadata(tc)
 		grpclog.Infoln("CustomMetadata done")
