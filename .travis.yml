@@ -4,6 +4,7 @@ matrix:
   include:
   - go: 1.10.x
     env: VET=1 RACE=1
+  - go: 1.6.x
   - go: 1.7.x
   - go: 1.8.x
   - go: 1.9.x
