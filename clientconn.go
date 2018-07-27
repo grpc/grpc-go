@@ -967,8 +967,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	prefaceReceived := make(chan struct{})
-	readyForWhatever := make(chan struct{})
-	defer close(readyForWhatever)
+	allowedToReset := make(chan struct{})
+	defer close(allowedToReset)
 
 	onClose := func() {
 		select {
@@ -977,14 +977,15 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			close(prefaceReceived)
 		}
 
-		<-readyForWhatever
 		ac.mu.Lock()
 		r := resetOnClose
 		if r {
 			ac.transport = nil
 		}
 		ac.mu.Unlock()
+
 		if r {
+			<-allowedToReset
 			ac.resetTransport(false)
 		}
 	}
