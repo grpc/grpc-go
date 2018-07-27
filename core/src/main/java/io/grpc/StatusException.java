@@ -33,9 +33,9 @@ public class StatusException extends Exception {
   }
 
   /**
-   * Constructs an exception with both a status and trailers.
+   * Constructs an exception with both a status and trailers.  See also
+   * {@link Status#asException(Metadata)}.
    */
-  @ExperimentalApi
   public StatusException(Status status, @Nullable Metadata trailers) {
     super(Status.formatThrowableMessage(status), status.getCause());
     this.status = status;
