@@ -82,10 +82,19 @@ final class DnsNameResolver extends NameResolver {
   private static final String GRPCLB_NAME_PREFIX = "_grpclb._tcp.";
 
   private static final String JNDI_PROPERTY =
-      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "false");
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "true");
+  private static final String JNDI_SRV_PROPERTY =
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_grpclb", "false");
+  private static final String JNDI_TXT_PROPERTY =
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_service_config", "false");
 
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
+  @VisibleForTesting
+  static boolean enableSrv = Boolean.parseBoolean(JNDI_SRV_PROPERTY);
+  @VisibleForTesting
+  static boolean enableTxt = Boolean.parseBoolean(JNDI_TXT_PROPERTY);
+
 
   private static final ResourceResolverFactory resourceResolverFactory =
       getResourceResolverFactory(DnsNameResolver.class.getClassLoader());
@@ -195,7 +204,8 @@ final class DnsNameResolver extends NameResolver {
             if (enableJndi) {
               resourceResolver = getResourceResolver();
             }
-            resolutionResults = resolveAll(addressResolver, resourceResolver, host);
+            resolutionResults =
+                resolveAll(addressResolver, resourceResolver, enableSrv, enableTxt, host);
           } catch (Exception e) {
             savedListener.onError(
                 Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
@@ -267,7 +277,11 @@ final class DnsNameResolver extends NameResolver {
 
   @VisibleForTesting
   static ResolutionResults resolveAll(
-      AddressResolver addressResolver, @Nullable ResourceResolver resourceResolver, String name) {
+      AddressResolver addressResolver,
+      @Nullable ResourceResolver resourceResolver,
+      boolean requestSrvRecords,
+      boolean requestTxtRecords,
+      String name) {
     List<? extends InetAddress> addresses = Collections.emptyList();
     Exception addressesException = null;
     List<EquivalentAddressGroup> balancerAddresses = Collections.emptyList();
@@ -281,17 +295,26 @@ final class DnsNameResolver extends NameResolver {
       addressesException = e;
     }
     if (resourceResolver != null) {
-      try {
-        balancerAddresses = resourceResolver.resolveSrv(addressResolver, GRPCLB_NAME_PREFIX + name);
-      } catch (Exception e) {
-        balancerAddressesException = e;
-      }
-      // Only do the TXT record lookup if one of the above address resolutions succeeded.
-      if (!(balancerAddressesException != null && addressesException != null)) {
+      if (requestSrvRecords) {
         try {
-          txtRecords = resourceResolver.resolveTxt(SERVICE_CONFIG_NAME_PREFIX + name);
+          balancerAddresses =
+              resourceResolver.resolveSrv(addressResolver, GRPCLB_NAME_PREFIX + name);
         } catch (Exception e) {
-          txtRecordsException = e;
+          balancerAddressesException = e;
+        }
+      }
+      if (requestTxtRecords) {
+        boolean balancerLookupFailedOrNotAttempted =
+            !requestSrvRecords || balancerAddressesException != null;
+        boolean dontResolveTxt =
+            (addressesException != null) && balancerLookupFailedOrNotAttempted;
+        // Only do the TXT record lookup if one of the above address resolutions succeeded.
+        if (!dontResolveTxt) {
+          try {
+            txtRecords = resourceResolver.resolveTxt(SERVICE_CONFIG_NAME_PREFIX + name);
+          } catch (Exception e) {
+            txtRecordsException = e;
+          }
         }
       }
     }

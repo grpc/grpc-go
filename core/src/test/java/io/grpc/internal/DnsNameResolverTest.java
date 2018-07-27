@@ -192,8 +192,11 @@ public class DnsNameResolverTest {
     when(mockResolver.resolveAddress(Matchers.anyString()))
         .thenReturn(Collections.<InetAddress>singletonList(backendAddr));
     ResourceResolver resourceResolver = null;
+    boolean resovleSrv = true;
+    boolean resolveTxt = true;
 
-    ResolutionResults res = DnsNameResolver.resolveAll(mockResolver, resourceResolver, hostname);
+    ResolutionResults res = DnsNameResolver.resolveAll(
+        mockResolver, resourceResolver, resovleSrv, resolveTxt, hostname);
     assertThat(res.addresses).containsExactly(backendAddr);
     assertThat(res.balancerAddresses).isEmpty();
     assertThat(res.txtRecords).isEmpty();
@@ -214,9 +217,11 @@ public class DnsNameResolverTest {
         .thenReturn(Collections.singletonList("service config"));
     when(mockResourceResolver.resolveSrv(Matchers.any(AddressResolver.class), Matchers.anyString()))
         .thenReturn(Collections.singletonList(balancerAddr));
+    boolean resovleSrv = true;
+    boolean resolveTxt = true;
 
-    ResolutionResults res =
-        DnsNameResolver.resolveAll(mockAddressResolver, mockResourceResolver, hostname);
+    ResolutionResults res = DnsNameResolver.resolveAll(
+        mockAddressResolver, mockResourceResolver, resovleSrv, resolveTxt, hostname);
     assertThat(res.addresses).containsExactly(backendAddr);
     assertThat(res.balancerAddresses).containsExactly(balancerAddr);
     assertThat(res.txtRecords).containsExactly("service config");
@@ -238,9 +243,11 @@ public class DnsNameResolverTest {
         .thenReturn(Collections.<String>emptyList());
     when(mockResourceResolver.resolveSrv(Matchers.any(AddressResolver.class), Matchers.anyString()))
         .thenReturn(Collections.singletonList(balancerAddr));
+    boolean resovleSrv = true;
+    boolean resolveTxt = true;
 
-    ResolutionResults res =
-        DnsNameResolver.resolveAll(mockAddressResolver, mockResourceResolver, hostname);
+    ResolutionResults res = DnsNameResolver.resolveAll(
+        mockAddressResolver, mockResourceResolver, resovleSrv, resolveTxt, hostname);
     assertThat(res.addresses).isEmpty();
     assertThat(res.balancerAddresses).containsExactly(balancerAddr);
     assertThat(res.txtRecords).isEmpty();
@@ -261,9 +268,11 @@ public class DnsNameResolverTest {
         .thenReturn(Collections.singletonList("service config"));
     when(mockResourceResolver.resolveSrv(Matchers.any(AddressResolver.class), Matchers.anyString()))
         .thenThrow(new Exception("something like javax.naming.NamingException"));
+    boolean resovleSrv = true;
+    boolean resolveTxt = true;
 
-    ResolutionResults res =
-        DnsNameResolver.resolveAll(mockAddressResolver, mockResourceResolver, hostname);
+    ResolutionResults res = DnsNameResolver.resolveAll(
+        mockAddressResolver, mockResourceResolver, resovleSrv, resolveTxt, hostname);
     assertThat(res.addresses).containsExactly(backendAddr);
     assertThat(res.balancerAddresses).isEmpty();
     assertThat(res.txtRecords).containsExactly("service config");
