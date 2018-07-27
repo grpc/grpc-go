@@ -2064,7 +2064,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 	}
 	server.start(t, lis)
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Time{}, func() {}, func(GoAwayReason) {}, func() {})
+	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("Error creating client. Err: %v", err)
