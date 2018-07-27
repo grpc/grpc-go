@@ -916,32 +916,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 		ac.cc.mu.RUnlock()
 
-		// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
-		// onGoAway will reset the transport instead, which means when the original
-		// transport finally gets around to closing (onClose) it should not reset
-		// (since we already did it in onGoAway).
-		resetOnClose := true
-
-		onGoAway := func(r transport.GoAwayReason) {
-			ac.mu.Lock()
-			resetOnClose = false
-			ac.adjustParams(r)
-			ac.mu.Unlock()
-			go ac.resetTransport(false)
-		}
-
-		onClose := func() {
-			ac.mu.Lock()
-			r := resetOnClose
-			if r {
-				ac.transport = nil
-			}
-			ac.mu.Unlock()
-			if r {
-				ac.resetTransport(false)
-			}
-		}
-
 		ac.mu.Lock()
 
 		if ac.state == connectivity.Shutdown {
@@ -959,7 +933,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
-		if err := ac.createTransport(backoffIdx, addr, copts, connectDeadline, onGoAway, onClose); err != nil {
+		if err := ac.createTransport(backoffIdx, addr, copts, connectDeadline); err != nil {
 			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
 			// use onClose to reset the transport.
@@ -977,13 +951,49 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
-func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time, onGoAway func(transport.GoAwayReason), onClose func()) error {
+func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
+	// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
+	// onGoAway will reset the transport instead, which means when the original
+	// transport finally gets around to closing (onClose) it should not reset
+	// (since we already did it in onGoAway).
+	resetOnClose := true
+
+	onGoAway := func(r transport.GoAwayReason) {
+		ac.mu.Lock()
+		resetOnClose = false
+		ac.adjustParams(r)
+		ac.mu.Unlock()
+		go ac.resetTransport(false)
+	}
+
+	prefaceReceived := make(chan struct{})
+	readyForWhatever := make(chan struct{})
+	defer close(readyForWhatever)
+
+	onClose := func() {
+		select {
+		case <-prefaceReceived:
+		default:
+			close(prefaceReceived)
+		}
+
+		<-readyForWhatever
+		ac.mu.Lock()
+		r := resetOnClose
+		if r {
+			ac.transport = nil
+		}
+		ac.mu.Unlock()
+		if r {
+			ac.resetTransport(false)
+		}
+	}
+
 	target := transport.TargetInfo{
 		Addr:      addr.Addr,
 		Metadata:  addr.Metadata,
 		Authority: ac.cc.authority,
 	}
-	prefaceReceived := make(chan struct{})
 
 	onPrefaceReceipt := func() {
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
@@ -1005,6 +1015,28 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
+
+	if err == nil {
+		prefaceTimer := time.AfterFunc(connectDeadline.Sub(time.Now()), func() {
+			ac.mu.Lock()
+			select {
+			case <-prefaceReceived:
+				ac.mu.Unlock()
+				return
+			default:
+			}
+			ac.mu.Unlock()
+			newTr.Close()
+		})
+		if ac.dopts.waitForHandshake {
+			select {
+			case <-prefaceTimer.C:
+				err = errors.New("timed out")
+			case <-prefaceReceived:
+			}
+		}
+	}
+
 	if err != nil {
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
@@ -1020,25 +1052,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 
 		return err
-	}
-
-	if ac.dopts.waitForHandshake {
-		if ac.dopts.waitForHandshake {
-			timer := time.NewTimer(connectDeadline.Sub(time.Now()))
-			select {
-			case <-timer.C:
-				if newTr != nil {
-					newTr.Close()
-				}
-				cancel()
-				return errReadTimedOut
-			case <-prefaceReceived:
-				timer.Stop()
-			case <-ac.ctx.Done():
-				timer.Stop()
-				return errConnClosing
-			}
-		}
 	}
 
 	ac.mu.Lock()
