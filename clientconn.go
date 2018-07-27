@@ -952,40 +952,39 @@ var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
-	// Generally, onClose should reset the transport. However, if we get a GO_AWAY,
-	// onGoAway will reset the transport instead, which means when the original
-	// transport finally gets around to closing (onClose) it should not reset
-	// (since we already did it in onGoAway).
-	resetOnClose := true
+	skipReset1 := make(chan struct{})
+	skipReset2 := make(chan struct{})
+	resetOnClose := make(chan struct{})
 
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
-		resetOnClose = false
 		ac.adjustParams(r)
 		ac.mu.Unlock()
 		go ac.resetTransport(false)
 	}
 
 	prefaceReceived := make(chan struct{})
-	allowedToReset := make(chan struct{})
-	defer close(allowedToReset)
+	prefaceReceivedMu := sync.Mutex{}
 
 	onClose := func() {
+		prefaceReceivedMu.Lock()
 		select {
 		case <-prefaceReceived:
 		default:
 			close(prefaceReceived)
 		}
+		prefaceReceivedMu.Unlock()
 
-		ac.mu.Lock()
-		r := resetOnClose
-		if r {
+		// wait for someone to either say "skip" or "reset"
+		select {
+		case <-skipReset1:
+			return
+		case <-skipReset2:
+			return
+		case <-resetOnClose:
+			ac.mu.Lock()
 			ac.transport = nil
-		}
-		ac.mu.Unlock()
-
-		if r {
-			<-allowedToReset
+			ac.mu.Unlock()
 			ac.resetTransport(false)
 		}
 	}
@@ -997,10 +996,13 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	onPrefaceReceipt := func() {
+		prefaceReceivedMu.Lock()
+		close(prefaceReceived)
+		prefaceReceivedMu.Unlock()
+
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
 		ac.successfulHandshake = true
-		close(prefaceReceived)
 		ac.backoffDeadline = time.Time{}
 		ac.connectDeadline = time.Time{}
 		ac.addrIdx = 0
@@ -1022,23 +1024,32 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			ac.mu.Lock()
 			select {
 			case <-prefaceReceived:
+				// we got the preface just in the nick of time - huzzah!
 				ac.mu.Unlock()
-				return
 			default:
+				// we didn't get the preface in time :(
+				ac.mu.Unlock()
+				newTr.Close() // close, BUT it's not allowed to reset until the outer createTransport is all done and closes resetOnClose chan
 			}
-			ac.mu.Unlock()
-			newTr.Close()
 		})
 		if ac.dopts.waitForHandshake {
 			select {
 			case <-prefaceTimer.C:
+				// we want to close but _not_ reset
+				close(skipReset1)
+				newTr.Close()
 				err = errors.New("timed out")
 			case <-prefaceReceived:
+				// we got the preface - huzzah! things are good
 			}
 		}
 	}
 
+	// skipReset1 might be closed at this point
+
 	if err != nil {
+		// newTr is either nil, or closed
+
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
 		ac.mu.Lock()
@@ -1059,7 +1070,11 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
-		// ac.tearDonn(...) has been invoked.
+
+		// we don't want to reset during this close because we prefer to kick out of this function and let the loop
+		// in resetTransport take care of reconnecting
+		close(skipReset2)
+
 		newTr.Close()
 		return errConnClosing
 	}
@@ -1075,6 +1090,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	ac.mu.Unlock()
+	close(resetOnClose) // ok, _now_ we will finally let the transport reset if it encounters a closable error
 	return nil
 }
 
