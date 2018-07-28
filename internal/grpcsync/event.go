@@ -45,7 +45,7 @@ func (e *Event) Done() <-chan struct{} {
 	return e.c
 }
 
-// HasFired returns true if Fired has been called.
+// HasFired returns true if Fire has been called.
 func (e *Event) HasFired() bool {
 	select {
 	case <-e.c:
