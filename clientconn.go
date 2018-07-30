@@ -856,20 +856,14 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 
 // resetTransport makes sure that a healthy ac.transport exists.
 //
-// The transport will close itself when it encounters an error, or on GOAWAY,
-// or on deadline waiting for handshake, or when the clientconn is
-// closed. Each iteration creating a new transport will try a different
-// address that the balancer assigned to the addrConn, until it has tried all
-// addresses. Once it has tried all addresses, it will re-resolve to get
-// a new address list. If an error is received, the list is re-resolved
-// and the next reset attempt will try from the beginning.
+// The transport will close itself when it encounters an error, or on GOAWAY, or on deadline waiting for handshake, or
+// when the clientconn is closed. Each iteration creating a new transport will try a different address that the balancer
+// assigned to the addrConn, until it has tried all addresses. Once it has tried all addresses, it will re-resolve to
+// get a new address list. If an error is received, the list is re-resolved and the next reset attempt will try from the
+// beginning. This method has backoff built in. The backoff amount starts at 0 and increases each time resolution occurs
+// (addresses are exhausted). The backoff amount is reset to 0 each time a handshake is received.
 //
-// This method has backoff built in. The backoff amount starts at 0 and
-// increases each time resolution occurs (addresses are exhausted). The
-// backoff amount is reset to 0 each time a handshake is received.
-//
-// If the DialOption WithWaitForHandshake was set, resetTrasport returns
-// successfully only after handshake is received.
+// If the DialOption WithWaitForHandshake was set, resetTransport returns successfully only after handshake is received.
 func (ac *addrConn) resetTransport(resolveNow bool) {
 	for {
 		// If this is the first in a line of resets, we want to resolve immediately. The only other time we
@@ -952,9 +946,9 @@ var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
-	skipReset1 := make(chan struct{})
-	skipReset2 := make(chan struct{})
-	resetOnClose := make(chan struct{})
+	timedOutWaitingForHandshake := make(chan struct{})
+	shutdownOccurred := make(chan struct{})
+	allowedToReset := make(chan struct{})
 
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
@@ -975,13 +969,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		}
 		prefaceReceivedMu.Unlock()
 
-		// wait for someone to either say "skip" or "reset"
 		select {
-		case <-skipReset1:
+		case <-timedOutWaitingForHandshake: // The outer resetTransport loop will handle reconnection.
 			return
-		case <-skipReset2:
+		case <-shutdownOccurred: // The outer resetTransport loop will handle reconnection.
 			return
-		case <-resetOnClose:
+		case <-allowedToReset: // We're in the clear to reset.
 			ac.mu.Lock()
 			ac.transport = nil
 			ac.mu.Unlock()
@@ -1010,8 +1003,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		ac.mu.Unlock()
 	}
 
-	// Do not cancel in the success path because of
-	// this issue in Go1.6: https://github.com/golang/go/issues/15078.
+	// Do not cancel in the success path because of this issue in Go1.6: https://github.com/golang/go/issues/15078.
 	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
 	if channelz.IsOn() {
 		copts.ChannelzParentID = ac.channelzID
@@ -1024,31 +1016,30 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			ac.mu.Lock()
 			select {
 			case <-prefaceReceived:
-				// we got the preface just in the nick of time - huzzah!
+				// We got the preface just in the nick of time - huzzah!
 				ac.mu.Unlock()
 			default:
-				// we didn't get the preface in time :(
+				// We didn't get the preface in time.
 				ac.mu.Unlock()
-				newTr.Close() // close, BUT it's not allowed to reset until the outer createTransport is all done and closes resetOnClose chan
+				newTr.Close()
 			}
 		})
 		if ac.dopts.waitForHandshake {
 			select {
 			case <-prefaceTimer.C:
-				// we want to close but _not_ reset
-				close(skipReset1)
+				// We want to close but _not_ reset, because we're going into the transient-failure-and-return flow
+				// and go into the next cycle of the resetTransport loop.
+				close(timedOutWaitingForHandshake)
 				newTr.Close()
 				err = errors.New("timed out")
 			case <-prefaceReceived:
-				// we got the preface - huzzah! things are good
+				// We got the preface - huzzah! things are good.
 			}
 		}
 	}
 
-	// skipReset1 might be closed at this point
-
 	if err != nil {
-		// newTr is either nil, or closed
+		// newTr is either nil, or closed.
 
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
@@ -1071,9 +1062,9 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 
-		// we don't want to reset during this close because we prefer to kick out of this function and let the loop
-		// in resetTransport take care of reconnecting
-		close(skipReset2)
+		// We don't want to reset during this close because we prefer to kick out of this function and let the loop
+		// in resetTransport take care of reconnecting.
+		close(shutdownOccurred)
 
 		newTr.Close()
 		return errConnClosing
@@ -1090,7 +1081,10 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	ac.mu.Unlock()
-	close(resetOnClose) // ok, _now_ we will finally let the transport reset if it encounters a closable error
+
+	// Ok, _now_ we will finally let the transport reset if it encounters a closable error. Without this, the reader
+	// goroutine failing races with all the code in this method that sets the connection to "ready".
+	close(allowedToReset)
 	return nil
 }
 
