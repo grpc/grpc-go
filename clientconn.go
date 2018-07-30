@@ -946,8 +946,7 @@ var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
-	timedOutWaitingForHandshake := make(chan struct{})
-	shutdownOccurred := make(chan struct{})
+	skipReset := make(chan struct{})
 	allowedToReset := make(chan struct{})
 
 	onGoAway := func(r transport.GoAwayReason) {
@@ -970,9 +969,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		prefaceReceivedMu.Unlock()
 
 		select {
-		case <-timedOutWaitingForHandshake: // The outer resetTransport loop will handle reconnection.
-			return
-		case <-shutdownOccurred: // The outer resetTransport loop will handle reconnection.
+		case <-skipReset: // The outer resetTransport loop will handle reconnection.
 			return
 		case <-allowedToReset: // We're in the clear to reset.
 			ac.mu.Lock()
@@ -1029,7 +1026,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			case <-prefaceTimer.C:
 				// We want to close but _not_ reset, because we're going into the transient-failure-and-return flow
 				// and go into the next cycle of the resetTransport loop.
-				close(timedOutWaitingForHandshake)
+				close(skipReset)
 				newTr.Close()
 				err = errors.New("timed out")
 			case <-prefaceReceived:
@@ -1047,12 +1044,21 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		if ac.state == connectivity.Shutdown {
 			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
+
+			// We don't want to reset during this close because we prefer to kick out of this function and let the loop
+			// in resetTransport take care of reconnecting.
+			close(skipReset)
+
 			return errConnClosing
 		}
 		ac.state = connectivity.TransientFailure
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
+
+		// We don't want to reset during this close because we prefer to kick out of this function and let the loop
+		// in resetTransport take care of reconnecting.
+		close(skipReset)
 
 		return err
 	}
@@ -1064,7 +1070,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 		// We don't want to reset during this close because we prefer to kick out of this function and let the loop
 		// in resetTransport take care of reconnecting.
-		close(shutdownOccurred)
+		close(skipReset)
 
 		newTr.Close()
 		return errConnClosing
