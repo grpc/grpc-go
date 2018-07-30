@@ -30,6 +30,7 @@ import java.util.Calendar;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.junit.Ignore;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
@@ -102,16 +103,24 @@ public final class NettyClientInteropServlet extends HttpServlet {
     }
 
     // grpc-test.sandbox.googleapis.com does not support these tests
+    @Ignore
     @Override
     public void customMetadata() { }
 
+    @Ignore
     @Override
     public void statusCodeAndMessage() { }
 
+    @Ignore
     @Override
     public void exchangeMetadataUnaryCall() { }
 
+    @Ignore
     @Override
     public void exchangeMetadataStreamingCall() { }
+
+    @Ignore
+    @Override
+    public void specialStatusMessage() {}
   }
 }

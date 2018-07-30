@@ -53,6 +53,11 @@ dependencies {
     runtime libraries.opencensus_impl_lite
 }
 
+compileJava {
+    // Disable "No processor claimed any of these annotations: org.junit.Ignore"
+    options.compilerArgs += ["-Xlint:-processing"]
+}
+
 // [START model]
 appengine {
     // App Engine tasks configuration

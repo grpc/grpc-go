@@ -158,16 +158,24 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
     }
 
     // grpc-test.sandbox.googleapis.com does not support these tests
+    @Ignore
     @Override
     public void customMetadata() { }
 
+    @Ignore
     @Override
     public void statusCodeAndMessage() { }
 
+    @Ignore
     @Override
     public void exchangeMetadataUnaryCall() { }
 
+    @Ignore
     @Override
     public void exchangeMetadataStreamingCall() { }
+
+    @Ignore
+    @Override
+    public void specialStatusMessage() {}
   }
 }
