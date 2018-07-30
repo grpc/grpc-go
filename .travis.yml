@@ -33,7 +33,7 @@ script:
 
 after_success:
     # Upload to coveralls once, instead of for each job in the matrix
-  - if \[\[ "$TRAVIS_JOB_NUMBER" == *.1 \]\]; then ./gradlew :grpc-all:coveralls; fi
+  - if [[ "$TRAVIS_JOB_NUMBER" == *.1 ]]; then ./gradlew :grpc-all:coveralls; fi
   - bash <(curl -s https://codecov.io/bash)
 
 os:
