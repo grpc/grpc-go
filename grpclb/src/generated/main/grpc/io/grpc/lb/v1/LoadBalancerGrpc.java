@@ -1,4 +1,4 @@
-package io.grpc.grpclb;
+package io.grpc.lb.v1;
 
 import static io.grpc.MethodDescriptor.generateFullMethodName;
 import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
@@ -27,30 +27,30 @@ public final class LoadBalancerGrpc {
   public static final String SERVICE_NAME = "grpc.lb.v1.LoadBalancer";
 
   // Static method descriptors that strictly reflect the proto.
-  private static volatile io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
-      io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod;
+  private static volatile io.grpc.MethodDescriptor<io.grpc.lb.v1.LoadBalanceRequest,
+      io.grpc.lb.v1.LoadBalanceResponse> getBalanceLoadMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "BalanceLoad",
-      requestType = io.grpc.grpclb.LoadBalanceRequest.class,
-      responseType = io.grpc.grpclb.LoadBalanceResponse.class,
+      requestType = io.grpc.lb.v1.LoadBalanceRequest.class,
+      responseType = io.grpc.lb.v1.LoadBalanceResponse.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
-  public static io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
-      io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod() {
-    io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest, io.grpc.grpclb.LoadBalanceResponse> getBalanceLoadMethod;
+  public static io.grpc.MethodDescriptor<io.grpc.lb.v1.LoadBalanceRequest,
+      io.grpc.lb.v1.LoadBalanceResponse> getBalanceLoadMethod() {
+    io.grpc.MethodDescriptor<io.grpc.lb.v1.LoadBalanceRequest, io.grpc.lb.v1.LoadBalanceResponse> getBalanceLoadMethod;
     if ((getBalanceLoadMethod = LoadBalancerGrpc.getBalanceLoadMethod) == null) {
       synchronized (LoadBalancerGrpc.class) {
         if ((getBalanceLoadMethod = LoadBalancerGrpc.getBalanceLoadMethod) == null) {
           LoadBalancerGrpc.getBalanceLoadMethod = getBalanceLoadMethod = 
-              io.grpc.MethodDescriptor.<io.grpc.grpclb.LoadBalanceRequest, io.grpc.grpclb.LoadBalanceResponse>newBuilder()
+              io.grpc.MethodDescriptor.<io.grpc.lb.v1.LoadBalanceRequest, io.grpc.lb.v1.LoadBalanceResponse>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(
                   "grpc.lb.v1.LoadBalancer", "BalanceLoad"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.grpc.grpclb.LoadBalanceRequest.getDefaultInstance()))
+                  io.grpc.lb.v1.LoadBalanceRequest.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.grpc.grpclb.LoadBalanceResponse.getDefaultInstance()))
+                  io.grpc.lb.v1.LoadBalanceResponse.getDefaultInstance()))
                   .setSchemaDescriptor(new LoadBalancerMethodDescriptorSupplier("BalanceLoad"))
                   .build();
           }
@@ -91,8 +91,8 @@ public final class LoadBalancerGrpc {
      * Bidirectional rpc to get a list of servers.
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
-        io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.lb.v1.LoadBalanceRequest> balanceLoad(
+        io.grpc.stub.StreamObserver<io.grpc.lb.v1.LoadBalanceResponse> responseObserver) {
       return asyncUnimplementedStreamingCall(getBalanceLoadMethod(), responseObserver);
     }
 
@@ -102,8 +102,8 @@ public final class LoadBalancerGrpc {
             getBalanceLoadMethod(),
             asyncBidiStreamingCall(
               new MethodHandlers<
-                io.grpc.grpclb.LoadBalanceRequest,
-                io.grpc.grpclb.LoadBalanceResponse>(
+                io.grpc.lb.v1.LoadBalanceRequest,
+                io.grpc.lb.v1.LoadBalanceResponse>(
                   this, METHODID_BALANCE_LOAD)))
           .build();
     }
@@ -132,8 +132,8 @@ public final class LoadBalancerGrpc {
      * Bidirectional rpc to get a list of servers.
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
-        io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.lb.v1.LoadBalanceRequest> balanceLoad(
+        io.grpc.stub.StreamObserver<io.grpc.lb.v1.LoadBalanceResponse> responseObserver) {
       return asyncBidiStreamingCall(
           getChannel().newCall(getBalanceLoadMethod(), getCallOptions()), responseObserver);
     }
@@ -208,7 +208,7 @@ public final class LoadBalancerGrpc {
       switch (methodId) {
         case METHODID_BALANCE_LOAD:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.balanceLoad(
-              (io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse>) responseObserver);
+              (io.grpc.stub.StreamObserver<io.grpc.lb.v1.LoadBalanceResponse>) responseObserver);
         default:
           throw new AssertionError();
       }
@@ -221,7 +221,7 @@ public final class LoadBalancerGrpc {
 
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.getDescriptor();
+      return io.grpc.lb.v1.LoadBalancerProto.getDescriptor();
     }
 
     @java.lang.Override

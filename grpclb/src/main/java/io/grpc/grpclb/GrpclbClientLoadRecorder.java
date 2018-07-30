@@ -24,6 +24,8 @@ import io.grpc.ClientStreamTracer;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.TimeProvider;
+import io.grpc.lb.v1.ClientStats;
+import io.grpc.lb.v1.ClientStatsPerToken;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;

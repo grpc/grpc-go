@@ -26,7 +26,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1";
 option java_multiple_files = true;
 option java_outer_classname = "LoadBalancerProto";
-option java_package = "io.grpc.grpclb";
+option java_package = "io.grpc.lb.v1";
 
 service LoadBalancer {
   // Bidirectional rpc to get a list of servers.
