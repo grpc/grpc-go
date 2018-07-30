@@ -8,7 +8,7 @@ PROTOBUF_VERSION=3.5.1
 # ARCH is 64 bit unless otherwise specified.
 ARCH="${ARCH:-64}"
 DOWNLOAD_DIR=/tmp/source
-INSTALL_DIR="/tmp/protobuf-$PROTOBUF_VERSION/$(uname -s)-$(uname -p)-x86_$ARCH"
+INSTALL_DIR="/tmp/protobuf-cache/$PROTOBUF_VERSION/$(uname -s)-$(uname -p)-x86_$ARCH"
 mkdir -p $DOWNLOAD_DIR
 
 # Start with a sane default
