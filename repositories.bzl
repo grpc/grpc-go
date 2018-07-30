@@ -181,8 +181,8 @@ def com_google_re2j():
 def com_google_truth_truth():
     native.maven_jar(
         name = "com_google_truth_truth",
-        artifact = "com.google.truth:truth:0.36",
-        sha1 = "7485219d2c1d341097a19382c02bde07e69ff5d2",
+        artifact = "com.google.truth:truth:0.42",
+        sha1 = "b5768f644b114e6cf5c3962c2ebcb072f788dcbb",
     )
 
 def com_squareup_okhttp():
