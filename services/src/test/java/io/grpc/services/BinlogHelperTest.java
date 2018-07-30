@@ -51,12 +51,12 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.Status;
-import io.grpc.binarylog.GrpcLogEntry;
-import io.grpc.binarylog.Message;
-import io.grpc.binarylog.MetadataEntry;
-import io.grpc.binarylog.Peer;
-import io.grpc.binarylog.Peer.PeerType;
-import io.grpc.binarylog.Uint128;
+import io.grpc.binarylog.v1alpha.GrpcLogEntry;
+import io.grpc.binarylog.v1alpha.Message;
+import io.grpc.binarylog.v1alpha.MetadataEntry;
+import io.grpc.binarylog.v1alpha.Peer;
+import io.grpc.binarylog.v1alpha.Peer.PeerType;
+import io.grpc.binarylog.v1alpha.Uint128;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.NoopClientCall;
 import io.grpc.internal.NoopServerCall;
@@ -397,7 +397,7 @@ public final class BinlogHelperTest {
   public void metadataToProto_empty() throws Exception {
     assertEquals(
         GrpcLogEntry.newBuilder()
-            .setMetadata(io.grpc.binarylog.Metadata.getDefaultInstance())
+            .setMetadata(io.grpc.binarylog.v1alpha.Metadata.getDefaultInstance())
             .build(),
         metadataToProtoTestHelper(new Metadata(), Integer.MAX_VALUE));
   }
@@ -407,7 +407,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .addEntry(ENTRY_B)
@@ -422,14 +422,14 @@ public final class BinlogHelperTest {
     // 0 byte limit not enough for any metadata
     assertEquals(
         GrpcLogEntry.newBuilder()
-            .setMetadata(io.grpc.binarylog.Metadata.getDefaultInstance())
+            .setMetadata(io.grpc.binarylog.v1alpha.Metadata.getDefaultInstance())
             .setTruncated(true)
             .build(),
         metadataToProtoTestHelper(nonEmptyMetadata, 0));
     // not enough bytes for first key value
     assertEquals(
         GrpcLogEntry.newBuilder()
-            .setMetadata(io.grpc.binarylog.Metadata.getDefaultInstance())
+            .setMetadata(io.grpc.binarylog.v1alpha.Metadata.getDefaultInstance())
             .setTruncated(true)
             .build(),
         metadataToProtoTestHelper(nonEmptyMetadata, 9));
@@ -437,7 +437,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .build())
@@ -448,7 +448,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .build())
@@ -458,7 +458,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .addEntry(ENTRY_B)
@@ -469,7 +469,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .addEntry(ENTRY_B)
@@ -481,7 +481,7 @@ public final class BinlogHelperTest {
     assertEquals(
         GrpcLogEntry.newBuilder()
             .setMetadata(
-                io.grpc.binarylog.Metadata
+                io.grpc.binarylog.v1alpha.Metadata
                     .newBuilder()
                     .addEntry(ENTRY_A)
                     .addEntry(ENTRY_B)

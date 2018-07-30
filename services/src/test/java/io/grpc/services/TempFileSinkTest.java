@@ -18,8 +18,8 @@ package io.grpc.services;
 
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.binarylog.GrpcLogEntry;
-import io.grpc.binarylog.Uint128;
+import io.grpc.binarylog.v1alpha.GrpcLogEntry;
+import io.grpc.binarylog.v1alpha.Uint128;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;

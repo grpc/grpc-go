@@ -50,13 +50,13 @@ import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
-import io.grpc.binarylog.GrpcLogEntry;
-import io.grpc.binarylog.GrpcLogEntry.Type;
-import io.grpc.binarylog.Message;
-import io.grpc.binarylog.Metadata.Builder;
-import io.grpc.binarylog.Peer;
-import io.grpc.binarylog.Peer.PeerType;
-import io.grpc.binarylog.Uint128;
+import io.grpc.binarylog.v1alpha.GrpcLogEntry;
+import io.grpc.binarylog.v1alpha.GrpcLogEntry.Type;
+import io.grpc.binarylog.v1alpha.Message;
+import io.grpc.binarylog.v1alpha.Metadata.Builder;
+import io.grpc.binarylog.v1alpha.Peer;
+import io.grpc.binarylog.v1alpha.Peer.PeerType;
+import io.grpc.binarylog.v1alpha.Uint128;
 import io.grpc.internal.GrpcUtil;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -683,7 +683,7 @@ final class BinlogHelper {
     checkNotNull(entryBuilder, "entryBuilder");
     checkNotNull(metadata, "metadata");
     checkArgument(maxHeaderBytes >= 0, "maxHeaderBytes must be non negative");
-    Builder metaBuilder = io.grpc.binarylog.Metadata.newBuilder();
+    Builder metaBuilder = io.grpc.binarylog.v1alpha.Metadata.newBuilder();
     // This code is tightly coupled with Metadata's implementation
     byte[][] serialized = null;
     if (maxHeaderBytes > 0 && (serialized = InternalMetadata.serialize(metadata)) != null) {
