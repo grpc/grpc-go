@@ -312,6 +312,26 @@ public class GoogleAuthLibraryCallCredentialsTest {
   }
 
   @Test
+  public void googleCredential_nullSecurityDenied() {
+    final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
+    final Credentials credentials = GoogleCredentials.create(token);
+    // Null should not (for the moment) crash in horrible ways. In the future this could be changed,
+    // since it technically isn't allowed per the API.
+    Attributes integrity = attrs.toBuilder()
+        .set(CallCredentials.ATTR_SECURITY_LEVEL, null)
+        .build();
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, integrity, executor, applier);
+    runPendingRunnables();
+
+    verify(applier).fail(statusCaptor.capture());
+    Status status = statusCaptor.getValue();
+    assertEquals(Status.Code.UNAUTHENTICATED, status.getCode());
+  }
+
+  @Test
   public void serviceUri() throws Exception {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);

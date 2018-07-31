@@ -163,9 +163,6 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
    */
   private static URI serviceUri(String authority, MethodDescriptor<?, ?> method)
       throws StatusException {
-    if (authority == null) {
-      throw Status.UNAUTHENTICATED.withDescription("Channel has no authority").asException();
-    }
     // Always use HTTPS, by definition.
     final String scheme = "https";
     final int defaultPort = 443;
