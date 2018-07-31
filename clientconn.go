@@ -874,9 +874,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.mu.Unlock()
 		}
 
-		err := ac.nextAddr()
-		if err != nil {
-			grpclog.Error(err)
+		if err := ac.nextAddr(); err != nil {
+			grpclog.Warningf("resetTransport: error from nextAddr: %v", err)
 		}
 
 		ac.mu.Lock()
