@@ -1181,6 +1181,7 @@ func (ac *addrConn) tearDown(err error) {
 		// i) receiving multiple GoAway frames from the server; or
 		// ii) there are concurrent name resolver/Balancer triggered
 		// address removal and GoAway.
+		// We have to unlock and re-lock here because GracefulClose => Close => onClose, which requires locking ac.mu.
 		ac.mu.Unlock()
 		ac.transport.GracefulClose()
 		ac.mu.Lock()
