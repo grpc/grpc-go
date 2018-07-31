@@ -689,3 +689,15 @@ func TestDisableServiceConfigOption(t *testing.T) {
 		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %v", m)
 	}
 }
+
+func TestGetClientConnTarget(t *testing.T) {
+	addr := "nonexist:///non.existent"
+	cc, err := Dial(addr, WithInsecure())
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	if cc.Target() != addr {
+		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
+	}
+}

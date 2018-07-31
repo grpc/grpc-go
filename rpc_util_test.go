@@ -30,9 +30,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	protoenc "google.golang.org/grpc/encoding/proto"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 	perfpb "google.golang.org/grpc/test/codec_perf"
-	"google.golang.org/grpc/transport"
 )
 
 type fullReader struct {
@@ -177,8 +177,8 @@ func TestToRPCErr(t *testing.T) {
 		// outputs
 		errOut error
 	}{
-		{transport.StreamError{Code: codes.Unknown, Desc: ""}, status.Error(codes.Unknown, "")},
 		{transport.ErrConnClosing, status.Error(codes.Unavailable, transport.ErrConnClosing.Desc)},
+		{io.ErrUnexpectedEOF, status.Error(codes.Internal, io.ErrUnexpectedEOF.Error())},
 	} {
 		err := toRPCErr(test.errIn)
 		if _, ok := status.FromError(err); !ok {

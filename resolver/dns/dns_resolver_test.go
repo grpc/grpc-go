@@ -46,7 +46,7 @@ type testClientConn struct {
 	target string
 	m1     sync.Mutex
 	addrs  []resolver.Address
-	a      int
+	a      int // how many times NewAddress() has been called
 	m2     sync.Mutex
 	sc     string
 	s      int
@@ -935,4 +935,61 @@ func TestDisableServiceConfig(t *testing.T) {
 		}
 		r.Close()
 	}
+}
+
+func TestDNSResolverRetry(t *testing.T) {
+	b := NewBuilder()
+	target := "ipv4.single.fake"
+	cc := &testClientConn{target: target}
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOption{})
+	if err != nil {
+		t.Fatalf("%v\n", err)
+	}
+	var addrs []resolver.Address
+	for {
+		addrs, _ = cc.getAddress()
+		if len(addrs) == 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	want := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}}
+	if !reflect.DeepEqual(want, addrs) {
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, addrs, want)
+	}
+	// mutate the host lookup table so the target has 0 address returned.
+	revertTbl := mutateTbl(target)
+	// trigger a resolve that will get empty address list
+	r.ResolveNow(resolver.ResolveNowOption{})
+	for {
+		addrs, _ = cc.getAddress()
+		if len(addrs) == 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	revertTbl()
+	// wait for the retry to happen in two seconds.
+	timer := time.NewTimer(2 * time.Second)
+	for {
+		b := false
+		select {
+		case <-timer.C:
+			b = true
+		default:
+			addrs, _ = cc.getAddress()
+			if len(addrs) == 1 {
+				b = true
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if b {
+			break
+		}
+	}
+	if !reflect.DeepEqual(want, addrs) {
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, addrs, want)
+	}
+	r.Close()
 }

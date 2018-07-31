@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
@@ -154,15 +154,12 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		grpclog.Fatalf("failed to get port number from server address: %v", err)
 	}
 
-	rusage := new(syscall.Rusage)
-	syscall.Getrusage(syscall.RUSAGE_SELF, rusage)
-
 	return &benchmarkServer{
 		port:            p,
 		cores:           numOfCores,
 		closeFunc:       closeFunc,
 		lastResetTime:   time.Now(),
-		rusageLastReset: rusage,
+		rusageLastReset: syscall.GetRusage(),
 	}, nil
 }
 
@@ -172,9 +169,8 @@ func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
 	wallTimeElapsed := time.Since(bs.lastResetTime).Seconds()
-	rusageLatest := new(syscall.Rusage)
-	syscall.Getrusage(syscall.RUSAGE_SELF, rusageLatest)
-	uTimeElapsed, sTimeElapsed := cpuTimeDiff(bs.rusageLastReset, rusageLatest)
+	rusageLatest := syscall.GetRusage()
+	uTimeElapsed, sTimeElapsed := syscall.CPUTimeDiff(bs.rusageLastReset, rusageLatest)
 
 	if reset {
 		bs.lastResetTime = time.Now()

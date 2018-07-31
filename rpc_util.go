@@ -36,11 +36,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/transport"
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -470,7 +470,7 @@ type parser struct {
 //   * io.EOF, when no messages remain
 //   * io.ErrUnexpectedEOF
 //   * of type transport.ConnectionError
-//   * of type transport.StreamError
+//   * an error from the status package
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.

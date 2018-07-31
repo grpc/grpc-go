@@ -23,7 +23,6 @@ import (
 	"math"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
@@ -217,9 +217,6 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		return nil, err
 	}
 
-	rusage := new(syscall.Rusage)
-	syscall.Getrusage(syscall.RUSAGE_SELF, rusage)
-
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 	bc := &benchmarkClient{
 		histogramOptions: stats.HistogramOptions{
@@ -233,7 +230,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		stop:            make(chan bool),
 		lastResetTime:   time.Now(),
 		closeConns:      closeConns,
-		rusageLastReset: rusage,
+		rusageLastReset: syscall.GetRusage(),
 	}
 
 	if err = performRPCs(config, conns, bc); err != nil {
@@ -335,7 +332,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	var wallTimeElapsed, uTimeElapsed, sTimeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
-	latestRusage := new(syscall.Rusage)
 
 	if reset {
 		// Merging histogram may take some time.
@@ -350,8 +346,8 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		syscall.Getrusage(syscall.RUSAGE_SELF, latestRusage)
-		uTimeElapsed, sTimeElapsed = cpuTimeDiff(bc.rusageLastReset, latestRusage)
+		latestRusage := syscall.GetRusage()
+		uTimeElapsed, sTimeElapsed = syscall.CPUTimeDiff(bc.rusageLastReset, latestRusage)
 
 		bc.rusageLastReset = latestRusage
 		bc.lastResetTime = time.Now()
@@ -362,8 +358,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		}
 
 		wallTimeElapsed = time.Since(bc.lastResetTime).Seconds()
-		syscall.Getrusage(syscall.RUSAGE_SELF, latestRusage)
-		uTimeElapsed, sTimeElapsed = cpuTimeDiff(bc.rusageLastReset, latestRusage)
+		uTimeElapsed, sTimeElapsed = syscall.CPUTimeDiff(bc.rusageLastReset, syscall.GetRusage())
 	}
 
 	b := make([]uint32, len(mergedHistogram.Buckets))

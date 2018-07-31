@@ -45,12 +45,12 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
-	"google.golang.org/grpc/transport"
 )
 
 const (
@@ -963,10 +963,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			switch st := err.(type) {
 			case transport.ConnectionError:
 				// Nothing to do here.
-			case transport.StreamError:
-				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-					grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
 			default:
 				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
 			}
@@ -1047,10 +1043,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.Options{
-		Last:  true,
-		Delay: false,
-	}
+	opts := &transport.Options{Last: true}
 
 	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
@@ -1065,10 +1058,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			switch st := err.(type) {
 			case transport.ConnectionError:
 				// Nothing to do here.
-			case transport.StreamError:
-				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-					grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
 			default:
 				panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
 			}
@@ -1188,12 +1177,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
 		if !ok {
-			switch err := appErr.(type) {
-			case transport.StreamError:
-				appStatus = status.New(err.Code, err.Desc)
-			default:
-				appStatus = status.New(codes.Unknown, appErr.Error())
-			}
+			appStatus = status.New(codes.Unknown, appErr.Error())
 			appErr = appStatus.Err()
 		}
 		if trInfo != nil {

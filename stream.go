@@ -34,10 +34,10 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/transport"
 )
 
 // StreamHandler defines the handler called by gRPC server to complete the
@@ -194,13 +194,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	callHdr := &transport.CallHdr{
-		Host:   cc.authority,
-		Method: method,
-		// If it's not client streaming, we should already have the request to be sent,
-		// so we don't flush the header.
-		// If it's client streaming, the user may never send a request or send it any
-		// time soon, so we ask the transport to flush the header.
-		Flush:          desc.ClientStreams,
+		Host:           cc.authority,
+		Method:         method,
 		ContentSubtype: c.contentSubtype,
 	}
 
@@ -311,7 +306,7 @@ func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo traceInfo) err
 	if err := cs.ctx.Err(); err != nil {
 		return toRPCErr(err)
 	}
-	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast)
+	t, done, err := cs.cc.getTransport(cs.ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
 		return err
 	}

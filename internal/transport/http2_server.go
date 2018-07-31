@@ -299,11 +299,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	streamID := frame.Header().StreamID
 	state := decodeState{serverSide: true}
 	if err := state.decodeHeader(frame); err != nil {
-		if se, ok := err.(StreamError); ok {
+		if se, ok := status.FromError(err); ok {
 			t.controlBuf.put(&cleanupStream{
 				streamID: streamID,
 				rst:      true,
-				rstCode:  statusCodeConvTab[se.Code],
+				rstCode:  statusCodeConvTab[se.Code()],
 				onWrite:  func() {},
 			})
 		}
@@ -863,7 +863,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
 			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
-			return streamErrorf(codes.Internal, "transport: %v", err)
+			return status.Errorf(codes.Internal, "transport: %v", err)
 		}
 	} else {
 		// Writing headers checks for this condition.

@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/internal/leakcheck"
-	"google.golang.org/grpc/transport"
+	"google.golang.org/grpc/internal/transport"
 )
 
 type emptyServiceServer interface{}

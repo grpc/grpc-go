@@ -19,7 +19,7 @@
 // Package transport defines and implements message oriented communication
 // channel to complete various transactions (e.g., an RPC).  It is meant for
 // grpc-internal usage and is not intended to be imported directly by users.
-package transport // externally used as import "google.golang.org/grpc/transport"
+package transport
 
 import (
 	"errors"
@@ -261,7 +261,7 @@ func (s *Stream) SetSendCompress(str string) {
 	s.sendCompress = str
 }
 
-// Done returns a chanel which is closed when it receives the final status
+// Done returns a channel which is closed when it receives the final status
 // from the server.
 func (s *Stream) Done() <-chan struct{} {
 	return s.done
@@ -305,12 +305,6 @@ func (s *Stream) TrailersOnly() (bool, error) {
 func (s *Stream) Trailer() metadata.MD {
 	c := s.trailer.Copy()
 	return c
-}
-
-// ServerTransport returns the underlying ServerTransport for the stream.
-// The client side stream always returns nil.
-func (s *Stream) ServerTransport() ServerTransport {
-	return s.st
 }
 
 // ContentSubtype returns the content-subtype for a request. For example, a
@@ -359,8 +353,7 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 // combined with any metadata set by previous calls to SetHeader and
 // then written to the transport stream.
 func (s *Stream) SendHeader(md metadata.MD) error {
-	t := s.ServerTransport()
-	return t.WriteHeader(s, md)
+	return s.st.WriteHeader(s, md)
 }
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
@@ -467,9 +460,6 @@ func NewServerTransport(protocol string, conn net.Conn, config *ServerConfig) (S
 type ConnectOptions struct {
 	// UserAgent is the application user agent.
 	UserAgent string
-	// Authority is the :authority pseudo-header to use. This field has no effect if
-	// TransportCredentials is set.
-	Authority string
 	// Dialer specifies how to dial a network address.
 	Dialer func(context.Context, string) (net.Conn, error)
 	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
@@ -515,11 +505,6 @@ type Options struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
-
-	// Delay is a hint to the transport implementation for whether
-	// the data could be buffered for a batching write. The
-	// transport implementation may ignore the hint.
-	Delay bool
 }
 
 // CallHdr carries the information of a particular RPC.
@@ -536,14 +521,6 @@ type CallHdr struct {
 
 	// Creds specifies credentials.PerRPCCredentials for a call.
 	Creds credentials.PerRPCCredentials
-
-	// Flush indicates whether a new stream command should be sent
-	// to the peer without waiting for the first data. This is
-	// only a hint.
-	// If it's true, the transport may modify the flush decision
-	// for performance purposes.
-	// If it's false, new stream will never be flushed.
-	Flush bool
 
 	// ContentSubtype specifies the content-subtype for a request. For example, a
 	// content-subtype of "proto" will result in a content-type of
@@ -642,19 +619,6 @@ type ServerTransport interface {
 	IncrMsgRecv()
 }
 
-// streamErrorf creates an StreamError with the specified error code and description.
-func streamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
-	return StreamError{
-		Code: c,
-		Desc: fmt.Sprintf(format, a...),
-	}
-}
-
-// streamError creates an StreamError with the specified error code and description.
-func streamError(c codes.Code, desc string) StreamError {
-	return StreamError{Code: c, Desc: desc}
-}
-
 // connectionErrorf creates an ConnectionError with the specified error description.
 func connectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
@@ -697,7 +661,7 @@ var (
 	// errStreamDrain indicates that the stream is rejected because the
 	// connection is draining. This could be caused by goaway or balancer
 	// removing the address.
-	errStreamDrain = streamErrorf(codes.Unavailable, "the connection is draining")
+	errStreamDrain = status.Error(codes.Unavailable, "the connection is draining")
 	// errStreamDone is returned from write at the client side to indiacte application
 	// layer of an error.
 	errStreamDone = errors.New("the stream is done")
@@ -705,18 +669,6 @@ var (
 	// stream's ID in unprocessed RPCs.
 	statusGoAway = status.New(codes.Unavailable, "the stream is rejected because server is draining the connection")
 )
-
-// TODO: See if we can replace StreamError with status package errors.
-
-// StreamError is an error that only affects one stream within a connection.
-type StreamError struct {
-	Code codes.Code
-	Desc string
-}
-
-func (e StreamError) Error() string {
-	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
-}
 
 // GoAwayReason contains the reason for the GoAway frame received.
 type GoAwayReason uint8

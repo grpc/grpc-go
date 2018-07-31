@@ -437,27 +437,6 @@ func (m *ChannelTraceEvent) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ChannelTraceEvent proto.InternalMessageInfo
 
-type isChannelTraceEvent_ChildRef interface {
-	isChannelTraceEvent_ChildRef()
-}
-
-type ChannelTraceEvent_ChannelRef struct {
-	ChannelRef *ChannelRef `protobuf:"bytes,4,opt,name=channel_ref,json=channelRef,proto3,oneof"`
-}
-type ChannelTraceEvent_SubchannelRef struct {
-	SubchannelRef *SubchannelRef `protobuf:"bytes,5,opt,name=subchannel_ref,json=subchannelRef,proto3,oneof"`
-}
-
-func (*ChannelTraceEvent_ChannelRef) isChannelTraceEvent_ChildRef()    {}
-func (*ChannelTraceEvent_SubchannelRef) isChannelTraceEvent_ChildRef() {}
-
-func (m *ChannelTraceEvent) GetChildRef() isChannelTraceEvent_ChildRef {
-	if m != nil {
-		return m.ChildRef
-	}
-	return nil
-}
-
 func (m *ChannelTraceEvent) GetDescription() string {
 	if m != nil {
 		return m.Description
@@ -475,6 +454,29 @@ func (m *ChannelTraceEvent) GetSeverity() ChannelTraceEvent_Severity {
 func (m *ChannelTraceEvent) GetTimestamp() *timestamp.Timestamp {
 	if m != nil {
 		return m.Timestamp
+	}
+	return nil
+}
+
+type isChannelTraceEvent_ChildRef interface {
+	isChannelTraceEvent_ChildRef()
+}
+
+type ChannelTraceEvent_ChannelRef struct {
+	ChannelRef *ChannelRef `protobuf:"bytes,4,opt,name=channel_ref,json=channelRef,proto3,oneof"`
+}
+
+type ChannelTraceEvent_SubchannelRef struct {
+	SubchannelRef *SubchannelRef `protobuf:"bytes,5,opt,name=subchannel_ref,json=subchannelRef,proto3,oneof"`
+}
+
+func (*ChannelTraceEvent_ChannelRef) isChannelTraceEvent_ChildRef() {}
+
+func (*ChannelTraceEvent_SubchannelRef) isChannelTraceEvent_ChildRef() {}
+
+func (m *ChannelTraceEvent) GetChildRef() isChannelTraceEvent_ChildRef {
+	if m != nil {
+		return m.ChildRef
 	}
 	return nil
 }
@@ -1249,15 +1251,19 @@ type isAddress_Address interface {
 type Address_TcpipAddress struct {
 	TcpipAddress *Address_TcpIpAddress `protobuf:"bytes,1,opt,name=tcpip_address,json=tcpipAddress,proto3,oneof"`
 }
+
 type Address_UdsAddress_ struct {
 	UdsAddress *Address_UdsAddress `protobuf:"bytes,2,opt,name=uds_address,json=udsAddress,proto3,oneof"`
 }
+
 type Address_OtherAddress_ struct {
 	OtherAddress *Address_OtherAddress `protobuf:"bytes,3,opt,name=other_address,json=otherAddress,proto3,oneof"`
 }
 
-func (*Address_TcpipAddress) isAddress_Address()  {}
-func (*Address_UdsAddress_) isAddress_Address()   {}
+func (*Address_TcpipAddress) isAddress_Address() {}
+
+func (*Address_UdsAddress_) isAddress_Address() {}
+
 func (*Address_OtherAddress_) isAddress_Address() {}
 
 func (m *Address) GetAddress() isAddress_Address {
@@ -1560,11 +1566,13 @@ type isSecurity_Model interface {
 type Security_Tls_ struct {
 	Tls *Security_Tls `protobuf:"bytes,1,opt,name=tls,proto3,oneof"`
 }
+
 type Security_Other struct {
 	Other *Security_OtherSecurity `protobuf:"bytes,2,opt,name=other,proto3,oneof"`
 }
 
-func (*Security_Tls_) isSecurity_Model()  {}
+func (*Security_Tls_) isSecurity_Model() {}
+
 func (*Security_Other) isSecurity_Model() {}
 
 func (m *Security) GetModel() isSecurity_Model {
@@ -1707,12 +1715,14 @@ type isSecurity_Tls_CipherSuite interface {
 type Security_Tls_StandardName struct {
 	StandardName string `protobuf:"bytes,1,opt,name=standard_name,json=standardName,proto3,oneof"`
 }
+
 type Security_Tls_OtherName struct {
 	OtherName string `protobuf:"bytes,2,opt,name=other_name,json=otherName,proto3,oneof"`
 }
 
 func (*Security_Tls_StandardName) isSecurity_Tls_CipherSuite() {}
-func (*Security_Tls_OtherName) isSecurity_Tls_CipherSuite()    {}
+
+func (*Security_Tls_OtherName) isSecurity_Tls_CipherSuite() {}
 
 func (m *Security_Tls) GetCipherSuite() isSecurity_Tls_CipherSuite {
 	if m != nil {

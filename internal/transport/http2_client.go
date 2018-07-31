@@ -152,7 +152,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func()) (_ ClientTransport, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func()) (_ *http2Client, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -476,7 +476,7 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 				return nil, err
 			}
 
-			return nil, streamErrorf(codes.Unauthenticated, "transport: %v", err)
+			return nil, status.Errorf(codes.Unauthenticated, "transport: %v", err)
 		}
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
@@ -494,11 +494,11 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
 		if !t.isSecure && callCreds.RequireTransportSecurity() {
-			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+			return nil, status.Error(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
 		}
 		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {
-			return nil, streamErrorf(codes.Internal, "transport: %v", err)
+			return nil, status.Errorf(codes.Internal, "transport: %v", err)
 		}
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
@@ -611,7 +611,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		var sz int64
 		for _, f := range hdrFrame.hf {
 			if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
-				hdrListSizeErr = streamErrorf(codes.Internal, "header list size to send violates the maximum size (%d bytes) set by server", *t.maxSendHeaderListSize)
+				hdrListSizeErr = status.Errorf(codes.Internal, "header list size to send violates the maximum size (%d bytes) set by server", *t.maxSendHeaderListSize)
 				return false
 			}
 		}
@@ -1206,7 +1206,7 @@ func (t *http2Client) reader() {
 					// use error detail to provide better err message
 					code := http2ErrConvTab[se.Code]
 					msg := t.framer.fr.ErrorDetail().Error()
-					t.closeStream(s, streamError(code, msg), true, http2.ErrCodeProtocol, status.New(code, msg), nil, false)
+					t.closeStream(s, status.Error(code, msg), true, http2.ErrCodeProtocol, status.New(code, msg), nil, false)
 				}
 				continue
 			} else {
