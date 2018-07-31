@@ -28,6 +28,11 @@ public class StatusException extends Exception {
   private final Status status;
   private final Metadata trailers;
 
+  /**
+   * Constructs an exception with both a status.  See also {@link Status#asException()}.
+   *
+   * @since 1.0.0
+   */
   public StatusException(Status status) {
     this(status, null);
   }
@@ -35,6 +40,8 @@ public class StatusException extends Exception {
   /**
    * Constructs an exception with both a status and trailers.  See also
    * {@link Status#asException(Metadata)}.
+   *
+   * @since 1.0.0
    */
   public StatusException(Status status, @Nullable Metadata trailers) {
     super(Status.formatThrowableMessage(status), status.getCause());
@@ -44,6 +51,8 @@ public class StatusException extends Exception {
 
   /**
    * Returns the status code as a {@link Status} object.
+   *
+   * @since 1.0.0
    */
   public final Status getStatus() {
     return status;
@@ -51,8 +60,9 @@ public class StatusException extends Exception {
 
   /**
    * Returns the received trailers.
+   *
+   * @since 1.0.0
    */
-  @ExperimentalApi
   public final Metadata getTrailers() {
     return trailers;
   }

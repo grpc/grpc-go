@@ -27,7 +27,7 @@ import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
  * {@link #getHealthService()} method.
  * The health status manager can update the health statuses of the server.
  */
-@io.grpc.ExperimentalApi
+@io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/4696")
 public final class HealthStatusManager {
 
   private final HealthServiceImpl healthService;

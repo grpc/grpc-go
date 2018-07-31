@@ -24,7 +24,7 @@ import java.util.Iterator;
  * Utility functions for working with {@link StreamObserver} and it's common subclasses like
  * {@link CallStreamObserver}.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4694")
 public final class StreamObservers {
   /**
    * Copy the values of an {@link Iterator} to the target {@link CallStreamObserver} while properly

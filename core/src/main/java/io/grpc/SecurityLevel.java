@@ -19,7 +19,7 @@ package io.grpc;
 /**
  * The level of security guarantee in communications.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4692")
 public enum SecurityLevel {
   /**
    * No security guarantee.

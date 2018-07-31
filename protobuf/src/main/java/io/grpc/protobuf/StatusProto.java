@@ -28,7 +28,7 @@ import io.grpc.protobuf.lite.ProtoLiteUtils;
 import javax.annotation.Nullable;
 
 /** Utility methods for working with {@link com.google.rpc.Status}. */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/4695")
 public final class StatusProto {
   private StatusProto() {}
 

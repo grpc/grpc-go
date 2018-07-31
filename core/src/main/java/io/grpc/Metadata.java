@@ -366,7 +366,7 @@ public final class Metadata {
    * Remove all values for the given key without returning them. This is a minor performance
    * optimization if you do not need the previous values.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4691")
   public <T> void discardAll(Key<T> key) {
     if (isEmpty()) {
       return;
