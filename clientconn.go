@@ -948,6 +948,8 @@ var errReadTimedOut = errors.New("read timed out")
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	skipReset := make(chan struct{})
 	allowedToReset := make(chan struct{})
+	prefaceReceived := make(chan struct{})
+	onCloseCalled := make(chan struct{})
 
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
@@ -956,17 +958,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		go ac.resetTransport(false)
 	}
 
-	prefaceReceived := make(chan struct{})
-	prefaceReceivedMu := sync.Mutex{}
-
 	onClose := func() {
-		prefaceReceivedMu.Lock()
-		select {
-		case <-prefaceReceived:
-		default:
-			close(prefaceReceived)
-		}
-		prefaceReceivedMu.Unlock()
+		close(onCloseCalled)
 
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
@@ -986,9 +979,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	onPrefaceReceipt := func() {
-		prefaceReceivedMu.Lock()
 		close(prefaceReceived)
-		prefaceReceivedMu.Unlock()
 
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
@@ -1012,6 +1003,9 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		prefaceTimer := time.AfterFunc(connectDeadline.Sub(time.Now()), func() {
 			ac.mu.Lock()
 			select {
+			case <-onCloseCalled:
+				// The transport has already closed - noop.
+				ac.mu.Unlock()
 			case <-prefaceReceived:
 				// We got the preface just in the nick of time - huzzah!
 				ac.mu.Unlock()
@@ -1031,6 +1025,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				err = errors.New("timed out")
 			case <-prefaceReceived:
 				// We got the preface - huzzah! things are good.
+			case <-onCloseCalled:
+				// The transport has already closed - noop.
 			}
 		}
 	}
