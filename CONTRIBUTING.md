@@ -9,6 +9,11 @@ If you are new to github, please start by reading [Pull Request howto](https://h
 In order to protect both you and ourselves, you will need to sign the
 [Contributor License Agreement](https://identity.linuxfoundation.org/projects/cncf).
 
+## Compiling
+
+See [COMPILING.md](COMPILING.md). Specifically, you'll generally want to set
+`skipCodegen=true` so you don't need to deal with the C++ compilation.
+
 ## Code style
 
 We follow the [Google Java Style
