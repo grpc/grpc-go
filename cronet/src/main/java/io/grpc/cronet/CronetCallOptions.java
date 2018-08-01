@@ -36,7 +36,7 @@ public final class CronetCallOptions {
    */
   @Deprecated
   public static final CallOptions.Key<Object> CRONET_ANNOTATION_KEY =
-      CallOptions.Key.of("cronet-annotation", null);
+      CallOptions.Key.create("cronet-annotation");
 
   /**
    * Returns a copy of {@code callOptions} with {@code annotation} included as one of the Cronet
@@ -61,5 +61,5 @@ public final class CronetCallOptions {
   }
 
   static final CallOptions.Key<Collection<Object>> CRONET_ANNOTATIONS_KEY =
-      CallOptions.Key.of("cronet-annotations", null);
+      CallOptions.Key.create("cronet-annotations");
 }
