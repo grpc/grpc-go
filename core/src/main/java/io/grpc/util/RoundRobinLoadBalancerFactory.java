@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -110,12 +111,14 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     private final Helper helper;
     private final Map<EquivalentAddressGroup, Subchannel> subchannels =
         new HashMap<EquivalentAddressGroup, Subchannel>();
+    private final Random random;
 
     @Nullable
     private StickinessState stickinessState;
 
     RoundRobinLoadBalancer(Helper helper) {
       this.helper = checkNotNull(helper, "helper");
+      this.random = new Random();
     }
 
     @Override
@@ -211,7 +214,12 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
      */
     private void updateBalancingState(ConnectivityState state, Status error) {
       List<Subchannel> activeList = filterNonFailingSubchannels(getSubchannels());
-      helper.updateBalancingState(state, new Picker(activeList, error, stickinessState));
+      // initialize the Picker to a random start index to ensure that a high frequency of Picker
+      // churn does not skew subchannel selection.
+      int startIndex = activeList.isEmpty() ? 0 : random.nextInt(activeList.size());
+      helper.updateBalancingState(
+          state,
+          new Picker(activeList, error, startIndex, stickinessState));
     }
 
     /**
@@ -388,14 +396,15 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     @Nullable
     private final RoundRobinLoadBalancer.StickinessState stickinessState;
     @SuppressWarnings("unused")
-    private volatile int index = -1; // start off at -1 so the address on first use is 0.
+    private volatile int index;
 
     Picker(
-        List<Subchannel> list, @Nullable Status status,
+        List<Subchannel> list, @Nullable Status status, int startIndex,
         @Nullable RoundRobinLoadBalancer.StickinessState stickinessState) {
       this.list = list;
       this.status = status;
       this.stickinessState = stickinessState;
+      this.index = startIndex - 1;
     }
 
     @Override

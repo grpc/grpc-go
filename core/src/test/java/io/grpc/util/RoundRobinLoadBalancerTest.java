@@ -272,14 +272,19 @@ public class RoundRobinLoadBalancerTest {
     verifyNoMoreInteractions(mockHelper);
   }
 
+  private Subchannel nextSubchannel(Subchannel current, List<Subchannel> allSubChannels) {
+    return allSubChannels.get((allSubChannels.indexOf(current) + 1) % allSubChannels.size());
+  }
+
   @Test
   public void pickerRoundRobin() throws Exception {
     Subchannel subchannel = mock(Subchannel.class);
     Subchannel subchannel1 = mock(Subchannel.class);
     Subchannel subchannel2 = mock(Subchannel.class);
 
-    Picker picker = new Picker(Collections.unmodifiableList(Lists.<Subchannel>newArrayList(
-        subchannel, subchannel1, subchannel2)), null /* status */, null /* stickinessState */);
+    Picker picker = new Picker(Collections.unmodifiableList(Lists.newArrayList(
+        subchannel, subchannel1, subchannel2)), null /* status */, 0 /* startIndex */,
+        null /* stickinessState */);
 
     assertThat(picker.getList()).containsExactly(subchannel, subchannel1, subchannel2);
 
@@ -292,7 +297,7 @@ public class RoundRobinLoadBalancerTest {
   @Test
   public void pickerEmptyList() throws Exception {
     Picker picker =
-        new Picker(Lists.<Subchannel>newArrayList(), Status.UNKNOWN, null /* stickinessState */);
+        new Picker(Lists.<Subchannel>newArrayList(), Status.UNKNOWN, 0, null /* stickinessState */);
 
     assertEquals(null, picker.pickSubchannel(mockArgs).getSubchannel());
     assertEquals(Status.UNKNOWN,
@@ -395,14 +400,16 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue).when(mockArgs).getHeaders();
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
-    Subchannel sc3 = subchannelIterator.next();
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc3, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    List<Subchannel> allSubchannels = picker.getList();
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc3 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc4 = picker.pickSubchannel(mockArgs).getSubchannel();
+
+    assertEquals(nextSubchannel(sc1, allSubchannels), sc2);
+    assertEquals(nextSubchannel(sc2, allSubchannels), sc3);
+    assertEquals(nextSubchannel(sc3, allSubchannels), sc1);
+    assertEquals(sc4, sc1);
 
     assertNull(loadBalancer.getStickinessMapForTest());
   }
@@ -423,15 +430,17 @@ public class RoundRobinLoadBalancerTest {
 
     doReturn(new Metadata()).when(mockArgs).getHeaders();
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
-    Subchannel sc3 = subchannelIterator.next();
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc3, picker.pickSubchannel(mockArgs).getSubchannel());
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    List<Subchannel> allSubchannels = picker.getList();
 
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc3 = picker.pickSubchannel(mockArgs).getSubchannel();
+    Subchannel sc4 = picker.pickSubchannel(mockArgs).getSubchannel();
+
+    assertEquals(nextSubchannel(sc1, allSubchannels), sc2);
+    assertEquals(nextSubchannel(sc2, allSubchannels), sc3);
+    assertEquals(nextSubchannel(sc3, allSubchannels), sc1);
+    assertEquals(sc4, sc1);
     verify(mockArgs, times(4)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
     assertThat(loadBalancer.getStickinessMapForTest()).isEmpty();
@@ -456,7 +465,7 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue).when(mockArgs).getHeaders();
 
-    Subchannel sc1 = loadBalancer.getSubchannels().iterator().next();
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
     assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
     assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
     assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
@@ -488,21 +497,24 @@ public class RoundRobinLoadBalancerTest {
     Metadata headerWithStickinessValue2 = new Metadata();
     headerWithStickinessValue2.put(stickinessKey, "my-sticky-value2");
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
+    List<Subchannel> allSubchannels = picker.getList();
 
     doReturn(headerWithStickinessValue1).when(mockArgs).getHeaders();
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc1a = picker.pickSubchannel(mockArgs).getSubchannel();
 
     doReturn(headerWithStickinessValue2).when(mockArgs).getHeaders();
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc2a = picker.pickSubchannel(mockArgs).getSubchannel();
 
     doReturn(headerWithStickinessValue1).when(mockArgs).getHeaders();
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc1b = picker.pickSubchannel(mockArgs).getSubchannel();
 
     doReturn(headerWithStickinessValue2).when(mockArgs).getHeaders();
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc2b = picker.pickSubchannel(mockArgs).getSubchannel();
+
+    assertEquals(sc1a, sc1b);
+    assertEquals(sc2a, sc2b);
+    assertEquals(nextSubchannel(sc1a, allSubchannels), sc2a);
+    assertEquals(nextSubchannel(sc1b, allSubchannels), sc2b);
 
     verify(mockArgs, atLeast(4)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
@@ -528,12 +540,10 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue).when(mockArgs).getHeaders();
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
+    List<Subchannel> allSubchannels = picker.getList();
 
     // first pick
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go to transient failure
     loadBalancer
@@ -542,8 +552,9 @@ public class RoundRobinLoadBalancerTest {
     verify(mockHelper, times(5))
         .updateBalancingState(stateCaptor.capture(), pickerCaptor.capture());
     picker = pickerCaptor.getValue();
+
     // second pick
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go back to ready
     loadBalancer.handleSubchannelState(sc1, ConnectivityStateInfo.forNonError(READY));
@@ -551,9 +562,10 @@ public class RoundRobinLoadBalancerTest {
     verify(mockHelper, times(6))
         .updateBalancingState(stateCaptor.capture(), pickerCaptor.capture());
     picker = pickerCaptor.getValue();
-    // third pick
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
 
+    // third pick
+    Subchannel sc3 = picker.pickSubchannel(mockArgs).getSubchannel();
+    assertEquals(sc2, sc3);
     verify(mockArgs, atLeast(3)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
     assertThat(loadBalancer.getStickinessMapForTest()).hasSize(1);
@@ -578,12 +590,10 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue1.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue1).when(mockArgs).getHeaders();
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
+    List<Subchannel> allSubchannels = picker.getList();
 
     // first pick
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go to transient failure
     loadBalancer
@@ -595,8 +605,9 @@ public class RoundRobinLoadBalancerTest {
     verify(mockHelper, times(5))
         .updateBalancingState(stateCaptor.capture(), pickerCaptor.capture());
     picker = pickerCaptor.getValue();
+
     // second pick with a different stickiness value
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go back to ready
     loadBalancer.handleSubchannelState(sc1, ConnectivityStateInfo.forNonError(READY));
@@ -605,8 +616,10 @@ public class RoundRobinLoadBalancerTest {
     verify(mockHelper, times(6))
         .updateBalancingState(stateCaptor.capture(), pickerCaptor.capture());
     picker = pickerCaptor.getValue();
+
     // third pick with my-sticky-value1
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc3 = picker.pickSubchannel(mockArgs).getSubchannel();
+    assertEquals(sc1, sc3);
 
     verify(mockArgs, atLeast(3)).getHeaders();
     assertNotNull(loadBalancer.getStickinessMapForTest());
@@ -632,18 +645,17 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue).when(mockArgs).getHeaders();
 
-    Iterator<Subchannel> subchannelIterator = loadBalancer.getSubchannels().iterator();
-    Subchannel sc1 = subchannelIterator.next();
-    Subchannel sc2 = subchannelIterator.next();
+    List<Subchannel> allSubchannels = Lists.newArrayList(picker.getList());
 
-    assertEquals(sc1, picker.pickSubchannel(mockArgs).getSubchannel());
+    Subchannel sc1 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     loadBalancer
         .handleSubchannelState(sc1, ConnectivityStateInfo.forNonError(ConnectivityState.SHUTDOWN));
 
     assertNull(loadBalancer.getStickinessMapForTest().get("my-sticky-value").value);
 
-    assertEquals(sc2, picker.pickSubchannel(mockArgs).getSubchannel());
+    assertEquals(nextSubchannel(sc1, allSubchannels),
+                 picker.pickSubchannel(mockArgs).getSubchannel());
     assertThat(loadBalancer.getStickinessMapForTest()).hasSize(1);
     verify(mockArgs, atLeast(2)).getHeaders();
   }
