@@ -124,9 +124,6 @@ type http2Client struct {
 	msgRecv           int64
 	lastMsgSent       time.Time
 	lastMsgRecv       time.Time
-
-	onGoAway func(GoAwayReason)
-	onClose  func()
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -155,7 +152,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func(), onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func()) (_ *http2Client, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -237,8 +234,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		maxConcurrentStreams:  defaultMaxStreamsClient,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
-		onGoAway:              onGoAway,
-		onClose:               func() {},
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -271,6 +266,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.keepaliveEnabled = true
 		go t.keepalive()
 	}
+	// Start the reader goroutine for incoming message. Each transport has
+	// a dedicated goroutine which reads HTTP2 frame from network. Then it
+	// dispatches the frame to the corresponding stream entity.
+	go t.reader()
 	// Send connection preface to server.
 	n, err := t.conn.Write(clientPreface)
 	if err != nil {
@@ -307,15 +306,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 			return nil, connectionErrorf(true, err, "transport: failed to write window update: %v", err)
 		}
 	}
-
-	// We only assign onClose after we're sure there can not be any more t.Close calls in this goroutine, because
-	// onClose may (frequently does) block.
-	t.onClose = onClose
-
-	// Start the reader goroutine for incoming message. Each transport has
-	// a dedicated goroutine which reads HTTP2 frame from network. Then it
-	// dispatches the frame to the corresponding stream entity.
-	go t.reader()
 	t.framer.writer.Flush()
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
@@ -745,10 +735,6 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
 // accessed any more.
-//
-// This method blocks until the addrConn that initiated this transport is
-// re-connected. This happens because t.onClose() begins reconnect logic at the
-// addrConn level and blocks until the addrConn is successfully connected.
 func (t *http2Client) Close() error {
 	t.mu.Lock()
 	// Make sure we only Close once.
@@ -776,7 +762,6 @@ func (t *http2Client) Close() error {
 		}
 		t.statsHandler.HandleConn(t.ctx, connEnd)
 	}
-	t.onClose()
 	return err
 }
 
@@ -1073,9 +1058,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		close(t.goAway)
 		t.state = draining
 		t.controlBuf.put(&incomingGoAway{})
-
-		// This has to be a new goroutine because we're still using the current goroutine to read in the transport.
-		t.onGoAway(t.goAwayReason)
 	}
 	// All streams with IDs greater than the GoAwayId
 	// and smaller than the previous GoAway ID should be killed.
@@ -1192,16 +1174,15 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		t.Close() // this kicks off resetTransport, so must be last before return
+		t.Close()
 		return
 	}
-	t.conn.SetReadDeadline(time.Time{}) // reset deadline once we get the settings frame (we didn't time out, yay!)
 	if t.keepaliveEnabled {
 		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.Close() // this kicks off resetTransport, so must be last before return
+		t.Close()
 		return
 	}
 	t.onSuccess()
