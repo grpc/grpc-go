@@ -631,6 +631,10 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		if te.e.security != "tls" {
 			te.t.Fatalf("unsupported environment settings")
 		}
+		cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		if err != nil {
+			te.t.Fatal("Error creating TLS certificate: ", err)
+		}
 		hs := &http.Server{
 			Handler: s,
 		}
@@ -639,11 +643,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		})
 		if err != nil {
 			te.t.Fatal("error starting http2 server: ", err)
-		}
-
-		cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
-		if err != nil {
-			te.t.Fatal("Error creating TLS certificate: ", err)
 		}
 		hs.TLSConfig.Certificates = []tls.Certificate{cert}
 		tlsListener := tls.NewListener(lis, hs.TLSConfig)
