@@ -673,6 +673,7 @@ func (w *wrapHS) Accept() (net.Conn, error) {
 	}
 	w.Lock()
 	if w.conns == nil {
+		w.Unlock()
 		c.Close()
 		return nil, errors.New("connection after listener closed")
 	}
