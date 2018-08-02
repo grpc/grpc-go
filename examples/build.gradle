@@ -30,7 +30,7 @@ def protocVersion = '3.5.1-1'
 dependencies {
     compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
     compile "io.grpc:grpc-alts:${grpcVersion}"
-    compile "io.grpc:grpc-netty:${grpcVersion}"
+    compile "io.grpc:grpc-netty-shaded:${grpcVersion}"
     compile "io.grpc:grpc-protobuf:${grpcVersion}"
     compile "io.grpc:grpc-stub:${grpcVersion}"
     compileOnly "javax.annotation:javax.annotation-api:1.2"

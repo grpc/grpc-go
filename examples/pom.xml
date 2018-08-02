@@ -22,7 +22,7 @@
   <dependencies>
     <dependency>
       <groupId>io.grpc</groupId>
-      <artifactId>grpc-netty</artifactId>
+      <artifactId>grpc-netty-shaded</artifactId>
       <version>${grpc.version}</version>
     </dependency>
     <dependency>

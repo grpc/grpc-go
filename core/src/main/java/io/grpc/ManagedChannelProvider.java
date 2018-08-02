@@ -58,7 +58,8 @@ public abstract class ManagedChannelProvider {
   public static ManagedChannelProvider provider() {
     if (provider == null) {
       throw new ProviderNotFoundException("No functional channel service provider found. "
-          + "Try adding a dependency on the grpc-okhttp or grpc-netty artifact");
+          + "Try adding a dependency on the grpc-okhttp, grpc-netty, or grpc-netty-shaded "
+          + "artifact");
     }
     return provider;
   }

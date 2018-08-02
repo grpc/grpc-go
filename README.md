@@ -30,7 +30,7 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 ```xml
 <dependency>
   <groupId>io.grpc</groupId>
-  <artifactId>grpc-netty</artifactId>
+  <artifactId>grpc-netty-shaded</artifactId>
   <version>1.14.0</version>
 </dependency>
 <dependency>
@@ -47,12 +47,12 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 
 Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-netty:1.14.0'
+compile 'io.grpc:grpc-netty-shaded:1.14.0'
 compile 'io.grpc:grpc-protobuf:1.14.0'
 compile 'io.grpc:grpc-stub:1.14.0'
 ```
 
-For Android client, use `grpc-okhttp` instead of `grpc-netty` and
+For Android client, use `grpc-okhttp` instead of `grpc-netty-shaded` and
 `grpc-protobuf-lite` or `grpc-protobuf-nano` instead of `grpc-protobuf`:
 ```gradle
 compile 'io.grpc:grpc-okhttp:1.14.0'

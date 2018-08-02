@@ -23,7 +23,7 @@ need to make the following changes:
 +++ b/examples/build.gradle
 @@ -27,6 +27,7 @@
  dependencies {
-   compile "io.grpc:grpc-netty:${grpcVersion}"
+   compile "io.grpc:grpc-netty-shaded:${grpcVersion}"
    compile "io.grpc:grpc-protobuf:${grpcVersion}"
 +  compile "io.grpc:grpc-services:${grpcVersion}"
    compile "io.grpc:grpc-stub:${grpcVersion}"

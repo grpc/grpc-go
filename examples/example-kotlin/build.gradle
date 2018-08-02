@@ -40,7 +40,7 @@ def grpcVersion = '1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
-    compile "io.grpc:grpc-netty:${grpcVersion}"
+    compile "io.grpc:grpc-netty-shaded:${grpcVersion}"
     compile "io.grpc:grpc-protobuf:${grpcVersion}"
     compile "io.grpc:grpc-stub:${grpcVersion}"
 
