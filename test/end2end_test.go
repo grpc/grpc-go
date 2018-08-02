@@ -646,9 +646,10 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		}
 		hs.TLSConfig.Certificates = []tls.Certificate{cert}
 		tlsListener := tls.NewListener(lis, hs.TLSConfig)
-		go hs.Serve(tlsListener)
+		whs := &wrapHS{sync.Mutex{}, tlsListener, hs, make(map[net.Conn]bool)}
+		te.srv = whs
+		go hs.Serve(whs)
 
-		te.srv = (*wrapHS)(hs)
 		return lis
 	}
 
@@ -656,16 +657,65 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	return lis
 }
 
-type wrapHS http.Server
-
-func (w *wrapHS) Stop() {
-	(*http.Server)(w).Close()
+// TODO: delete wrapHS and wrapConn when Go1.6 and Go1.7 support are gone and
+// call s.Close and s.Shutdown instead.
+type wrapHS struct {
+	sync.Mutex
+	net.Listener
+	s     *http.Server
+	conns map[net.Conn]bool
 }
 
+func (w *wrapHS) Accept() (net.Conn, error) {
+	c, err := w.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	w.Lock()
+	if w.conns == nil {
+		c.Close()
+		return nil, errors.New("connection after listener closed")
+	}
+	w.conns[&wrapConn{c, w}] = true
+	w.Unlock()
+	return c, nil
+}
+
+func (w *wrapHS) Stop() {
+	w.Listener.Close()
+	w.Lock()
+	conns := w.conns
+	w.conns = nil
+	w.Unlock()
+	for c := range conns {
+		c.Close()
+	}
+}
+
+// Poll for now..
 func (w *wrapHS) GracefulStop() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	(*http.Server)(w).Shutdown(ctx)
+	w.Listener.Close()
+	for {
+		w.Lock()
+		l := len(w.conns)
+		w.Unlock()
+		if l == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+type wrapConn struct {
+	net.Conn
+	hs *wrapHS
+}
+
+func (w *wrapConn) Close() error {
+	w.hs.Lock()
+	delete(w.hs.conns, w.Conn)
+	w.hs.Unlock()
+	return w.Conn.Close()
 }
 
 func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
