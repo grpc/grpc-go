@@ -31,6 +31,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -40,8 +41,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import org.junit.Before;
 import org.junit.Test;
@@ -94,6 +93,13 @@ public final class AndroidChannelBuilderTest {
   public void channelBuilderClassFoundReflectively() {
     // This should not throw with OkHttpChannelBuilder on the classpath
     AndroidChannelBuilder.forTarget("target");
+  }
+
+  @Test
+  public void fromBuilderConstructor() {
+    OkHttpChannelBuilder wrappedBuilder = OkHttpChannelBuilder.forTarget("target");
+    AndroidChannelBuilder androidBuilder = AndroidChannelBuilder.fromBuilder(wrappedBuilder);
+    assertThat(androidBuilder.delegate()).isSameAs(wrappedBuilder);
   }
 
   @Test

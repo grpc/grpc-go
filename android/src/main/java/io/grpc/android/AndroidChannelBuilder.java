@@ -27,6 +27,7 @@ import android.net.NetworkInfo;
 import android.os.Build;
 import android.util.Log;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityState;
@@ -41,7 +42,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -81,6 +81,10 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     return forTarget(GrpcUtil.authorityFromHostAndPort(name, port));
   }
 
+  public static AndroidChannelBuilder fromBuilder(ManagedChannelBuilder builder) {
+    return new AndroidChannelBuilder(builder);
+  }
+
   private AndroidChannelBuilder(String target) {
     if (OKHTTP_CHANNEL_BUILDER_CLASS == null) {
       throw new UnsupportedOperationException("No ManagedChannelBuilder found on the classpath");
@@ -96,13 +100,23 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     }
   }
 
+  private AndroidChannelBuilder(ManagedChannelBuilder delegateBuilder) {
+    this.delegateBuilder = Preconditions.checkNotNull(delegateBuilder, "delegateBuilder");
+  }
+
   /** Enables automatic monitoring of the device's network state. */
   public AndroidChannelBuilder context(Context context) {
     this.context = context;
     return this;
   }
 
-  /** Set the delegate channel builder's transportExecutor. */
+  /**
+   * Set the delegate channel builder's transportExecutor.
+   *
+   * @deprecated Use {@link #fromBuilder(ManagedChannelBuilder)} with a pre-configured
+   *     ManagedChannelBuilder instead.
+   */
+  @Deprecated
   public AndroidChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
     try {
       OKHTTP_CHANNEL_BUILDER_CLASS
@@ -114,7 +128,13 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     }
   }
 
-  /** Set the delegate channel builder's sslSocketFactory. */
+  /**
+   * Set the delegate channel builder's sslSocketFactory.
+   *
+   * @deprecated Use {@link #fromBuilder(ManagedChannelBuilder)} with a pre-configured
+   *     ManagedChannelBuilder instead.
+   */
+  @Deprecated
   public AndroidChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
     try {
       OKHTTP_CHANNEL_BUILDER_CLASS
@@ -126,7 +146,13 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     }
   }
 
-  /** Set the delegate channel builder's scheduledExecutorService. */
+  /**
+   * Set the delegate channel builder's scheduledExecutorService.
+   *
+   * @deprecated Use {@link #fromBuilder(ManagedChannelBuilder)} with a pre-configured
+   *     ManagedChannelBuilder instead.
+   */
+  @Deprecated
   public AndroidChannelBuilder scheduledExecutorService(
       ScheduledExecutorService scheduledExecutorService) {
     try {
