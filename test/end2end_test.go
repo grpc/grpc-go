@@ -30,6 +30,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"reflect"
 	"runtime"
@@ -55,7 +56,6 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -485,7 +485,7 @@ type test struct {
 	nonBlockingDial bool
 
 	// srv and srvAddr are set once startServer is called.
-	srv     *grpc.Server
+	srv     stopper
 	srvAddr string
 
 	// srvs and srvAddrs are set once startServers is called.
@@ -494,6 +494,11 @@ type test struct {
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
 	restoreLogs func()           // nil unless declareLogNoise is used
+}
+
+type stopper interface {
+	Stop()
+	GracefulStop()
 }
 
 func (te *test) tearDown() {
@@ -603,9 +608,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
-	if te.e.httpHandler {
-		internal.TestingUseHandlerImpl(s)
-	}
 	if te.healthServer != nil {
 		healthgrpc.RegisterHealthServer(s, te.healthServer)
 	}
@@ -623,9 +625,42 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		addr = "localhost:" + port
 	}
 
-	go s.Serve(lis)
 	te.srvAddr = addr
+
+	if te.e.httpHandler {
+		if te.e.security != "tls" {
+			te.t.Fatalf("unsupported environment settings")
+		}
+		hs := &http.Server{
+			Handler: s,
+		}
+		err := http2.ConfigureServer(hs, &http2.Server{
+			MaxConcurrentStreams: te.maxStream,
+		})
+		if err != nil {
+			te.t.Fatalf("error starting http2 server")
+		}
+
+		go hs.ServeTLS(lis, testdata.Path("server1.pem"), testdata.Path("server1.key"))
+
+		te.srv = (*wrapHS)(hs)
+		return lis
+	}
+
+	go s.Serve(lis)
 	return lis
+}
+
+type wrapHS http.Server
+
+func (w *wrapHS) Stop() {
+	(*http.Server)(w).Close()
+}
+
+func (w *wrapHS) GracefulStop() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	(*http.Server)(w).Shutdown(ctx)
 }
 
 func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {

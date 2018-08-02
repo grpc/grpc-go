@@ -237,9 +237,9 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 		if ht.stats != nil {
 			ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 		}
-		ht.Close()
 		close(ht.writes)
 	}
+	ht.Close()
 	return err
 }
 
@@ -326,11 +326,11 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	go func() {
 		select {
 		case <-requestOver:
-			return
 		case <-ht.closedCh:
 		case <-clientGone:
 		}
 		cancel()
+		ht.Close()
 	}()
 
 	req := ht.req
