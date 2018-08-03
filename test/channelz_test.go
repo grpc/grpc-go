@@ -42,7 +42,7 @@ import (
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	for i := 0; i < num; i++ {
 		te.startServer(ts)
-		te.srvs = append(te.srvs, te.srv)
+		te.srvs = append(te.srvs, te.srv.(*grpc.Server))
 		te.srvAddrs = append(te.srvAddrs, te.srvAddr)
 		te.srv = nil
 		te.srvAddr = ""

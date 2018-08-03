@@ -30,6 +30,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"reflect"
 	"runtime"
@@ -55,7 +56,6 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -485,7 +485,7 @@ type test struct {
 	nonBlockingDial bool
 
 	// srv and srvAddr are set once startServer is called.
-	srv     *grpc.Server
+	srv     stopper
 	srvAddr string
 
 	// srvs and srvAddrs are set once startServers is called.
@@ -494,6 +494,11 @@ type test struct {
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
 	restoreLogs func()           // nil unless declareLogNoise is used
+}
+
+type stopper interface {
+	Stop()
+	GracefulStop()
 }
 
 func (te *test) tearDown() {
@@ -603,9 +608,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
-	if te.e.httpHandler {
-		internal.TestingUseHandlerImpl(s)
-	}
 	if te.healthServer != nil {
 		healthgrpc.RegisterHealthServer(s, te.healthServer)
 	}
@@ -623,9 +625,98 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		addr = "localhost:" + port
 	}
 
-	go s.Serve(lis)
 	te.srvAddr = addr
+
+	if te.e.httpHandler {
+		if te.e.security != "tls" {
+			te.t.Fatalf("unsupported environment settings")
+		}
+		cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		if err != nil {
+			te.t.Fatal("Error creating TLS certificate: ", err)
+		}
+		hs := &http.Server{
+			Handler: s,
+		}
+		err = http2.ConfigureServer(hs, &http2.Server{
+			MaxConcurrentStreams: te.maxStream,
+		})
+		if err != nil {
+			te.t.Fatal("error starting http2 server: ", err)
+		}
+		hs.TLSConfig.Certificates = []tls.Certificate{cert}
+		tlsListener := tls.NewListener(lis, hs.TLSConfig)
+		whs := &wrapHS{Listener: tlsListener, s: hs, conns: make(map[net.Conn]bool)}
+		te.srv = whs
+		go hs.Serve(whs)
+
+		return lis
+	}
+
+	go s.Serve(lis)
 	return lis
+}
+
+// TODO: delete wrapHS and wrapConn when Go1.6 and Go1.7 support are gone and
+// call s.Close and s.Shutdown instead.
+type wrapHS struct {
+	sync.Mutex
+	net.Listener
+	s     *http.Server
+	conns map[net.Conn]bool
+}
+
+func (w *wrapHS) Accept() (net.Conn, error) {
+	c, err := w.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	w.Lock()
+	if w.conns == nil {
+		w.Unlock()
+		c.Close()
+		return nil, errors.New("connection after listener closed")
+	}
+	w.conns[&wrapConn{Conn: c, hs: w}] = true
+	w.Unlock()
+	return c, nil
+}
+
+func (w *wrapHS) Stop() {
+	w.Listener.Close()
+	w.Lock()
+	conns := w.conns
+	w.conns = nil
+	w.Unlock()
+	for c := range conns {
+		c.Close()
+	}
+}
+
+// Poll for now..
+func (w *wrapHS) GracefulStop() {
+	w.Listener.Close()
+	for {
+		w.Lock()
+		l := len(w.conns)
+		w.Unlock()
+		if l == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+type wrapConn struct {
+	net.Conn
+	hs *wrapHS
+}
+
+func (w *wrapConn) Close() error {
+	w.hs.Lock()
+	delete(w.hs.conns, w.Conn)
+	w.hs.Unlock()
+	return w.Conn.Close()
 }
 
 func (te *test) startServerWithConnControl(ts testpb.TestServiceServer) *listenerWrapper {
