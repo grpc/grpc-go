@@ -646,7 +646,7 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		}
 		hs.TLSConfig.Certificates = []tls.Certificate{cert}
 		tlsListener := tls.NewListener(lis, hs.TLSConfig)
-		whs := &wrapHS{sync.Mutex{}, tlsListener, hs, make(map[net.Conn]bool)}
+		whs := &wrapHS{Listener: tlsListener, s: hs, conns: make(map[net.Conn]bool)}
 		te.srv = whs
 		go hs.Serve(whs)
 
@@ -677,7 +677,7 @@ func (w *wrapHS) Accept() (net.Conn, error) {
 		c.Close()
 		return nil, errors.New("connection after listener closed")
 	}
-	w.conns[&wrapConn{c, w}] = true
+	w.conns[&wrapConn{Conn: c, hs: w}] = true
 	w.Unlock()
 	return c, nil
 }
