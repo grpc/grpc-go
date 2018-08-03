@@ -16,6 +16,8 @@
 
 package io.grpc.inprocess;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.net.SocketAddress;
 
 /**
@@ -26,16 +28,47 @@ public final class InProcessSocketAddress extends SocketAddress {
 
   private final String name;
 
+  /**
+   * @param name - The name of the inprocess channel or server.
+   * @since 1.0.0
+   */
   public InProcessSocketAddress(String name) {
-    this.name = name;
+    this.name = checkNotNull(name, "name");
   }
 
+  /**
+   * Gets the name of the inprocess channel or server.
+   *
+   * @since 1.0.0
+   */
   public String getName() {
     return name;
   }
-  
+
+  /**
+   * @since 1.14.0
+   */
   @Override
   public String toString() {
     return name;
+  }
+
+  /**
+   * @since 1.15.0
+   */
+  @Override
+  public int hashCode() {
+    return name.hashCode();
+  }
+
+  /**
+   * @since 1.15.0
+   */
+  @Override
+  public boolean equals(Object obj) {
+    if (!(obj instanceof InProcessSocketAddress)) {
+      return false;
+    }
+    return name.equals(((InProcessSocketAddress) obj).name);
   }
 }
