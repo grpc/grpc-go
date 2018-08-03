@@ -114,23 +114,6 @@ type http2Client struct {
 	czData     *channelzData
 }
 
-type channelzData struct {
-	kpCount int64
-	// The number of streams that have started, including already finished ones.
-	streamsStarted int64
-	// Client side: The number of streams that have ended successfully by receiving
-	// EoS bit set frame from server.
-	// Server side: The number of streams that have ended successfully by sending
-	// frame with EoS bit set.
-	streamsSucceeded  int64
-	streamsFailed     int64
-	lastStreamCreated int64
-	msgSent           int64
-	msgRecv           int64
-	lastMsgSent       int64
-	lastMsgRecv       int64
-}
-
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
 	if fn != nil {
 		return fn(ctx, addr)

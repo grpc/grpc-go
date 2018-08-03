@@ -731,3 +731,24 @@ const (
 	// "too_many_pings".
 	GoAwayTooManyPings GoAwayReason = 2
 )
+
+// channelzData is used to store channelz related data for http2Client and http2Server.
+// These fields cannot be embedded in the original structs (e.g. http2Client), since to do atomic
+// operation on int64 variable on 32-bit machine, user is responsible to enforce memory alignment.
+// Here, by grouping those int64 fields inside a struct, we are enforcing the alignment.
+type channelzData struct {
+	kpCount int64
+	// The number of streams that have started, including already finished ones.
+	streamsStarted int64
+	// Client side: The number of streams that have ended successfully by receiving
+	// EoS bit set frame from server.
+	// Server side: The number of streams that have ended successfully by sending
+	// frame with EoS bit set.
+	streamsSucceeded  int64
+	streamsFailed     int64
+	lastStreamCreated int64
+	msgSent           int64
+	msgRecv           int64
+	lastMsgSent       int64
+	lastMsgRecv       int64
+}

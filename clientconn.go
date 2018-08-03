@@ -723,13 +723,6 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 	return csm.notifyChan
 }
 
-type channelzData struct {
-	callsStarted        int64
-	callsFailed         int64
-	callsSucceeded      int64
-	lastCallStartedTime int64
-}
-
 // ClientConn represents a client connection to an RPC server.
 type ClientConn struct {
 	ctx    context.Context
@@ -758,7 +751,6 @@ type ClientConn struct {
 	retryThrottler  atomic.Value
 
 	channelzID int64 // channelz unique identification number
-	czmu       sync.RWMutex
 	czData     *channelzData
 }
 
