@@ -310,7 +310,6 @@ public final class CensusStatsModule {
     }
 
     private final CensusStatsModule module;
-    private final String fullMethodName;
     private final Stopwatch stopwatch;
     private volatile ClientTracer streamTracer;
     private volatile int callEnded;
@@ -325,7 +324,6 @@ public final class CensusStatsModule {
         boolean recordStartedRpcs,
         boolean recordFinishedRpcs) {
       this.module = module;
-      this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.parentCtx = checkNotNull(parentCtx);
       this.startCtx =
           module.tagger.toBuilder(parentCtx)
@@ -475,7 +473,6 @@ public final class CensusStatsModule {
     }
 
     private final CensusStatsModule module;
-    private final String fullMethodName;
     private final TagContext parentCtx;
     private volatile int streamClosed;
     private final Stopwatch stopwatch;
@@ -490,14 +487,12 @@ public final class CensusStatsModule {
 
     ServerTracer(
         CensusStatsModule module,
-        String fullMethodName,
         TagContext parentCtx,
         Supplier<Stopwatch> stopwatchSupplier,
         Tagger tagger,
         boolean recordStartedRpcs,
         boolean recordFinishedRpcs) {
       this.module = module;
-      this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.stopwatch = stopwatchSupplier.get().start();
       this.tagger = tagger;
@@ -644,7 +639,6 @@ public final class CensusStatsModule {
               .build();
       return new ServerTracer(
           CensusStatsModule.this,
-          fullMethodName,
           parentCtx,
           stopwatchSupplier,
           tagger,
