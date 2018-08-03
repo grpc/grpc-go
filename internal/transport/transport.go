@@ -696,11 +696,14 @@ type channelzData struct {
 	// EoS bit set frame from server.
 	// Server side: The number of streams that have ended successfully by sending
 	// frame with EoS bit set.
-	streamsSucceeded  int64
-	streamsFailed     int64
-	lastStreamCreated int64
-	msgSent           int64
-	msgRecv           int64
-	lastMsgSent       int64
-	lastMsgRecv       int64
+	streamsSucceeded int64
+	streamsFailed    int64
+	// lastStreamCreatedTime stores the timestamp that the last stream gets created. It is of int64 type
+	// instead of time.Time since it's more costly to atomically update time.Time variable than int64
+	// variable. The same goes for lastMsgSentTime and lastMsgRecvTime.
+	lastStreamCreatedTime int64
+	msgSent               int64
+	msgRecv               int64
+	lastMsgSentTime       int64
+	lastMsgRecvTime       int64
 }

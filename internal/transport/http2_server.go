@@ -382,7 +382,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	t.mu.Unlock()
 	if channelz.IsOn() {
 		atomic.AddInt64(&t.czData.streamsStarted, 1)
-		atomic.StoreInt64(&t.czData.lastStreamCreated, time.Now().UnixNano())
+		atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
 	}
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
@@ -1128,9 +1128,9 @@ func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
 		MessagesSent:                     atomic.LoadInt64(&t.czData.msgSent),
 		MessagesReceived:                 atomic.LoadInt64(&t.czData.msgRecv),
 		KeepAlivesSent:                   atomic.LoadInt64(&t.czData.kpCount),
-		LastRemoteStreamCreatedTimestamp: time.Unix(0, atomic.LoadInt64(&t.czData.lastStreamCreated)),
-		LastMessageSentTimestamp:         time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgSent)),
-		LastMessageReceivedTimestamp:     time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecv)),
+		LastRemoteStreamCreatedTimestamp: time.Unix(0, atomic.LoadInt64(&t.czData.lastStreamCreatedTime)),
+		LastMessageSentTimestamp:         time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgSentTime)),
+		LastMessageReceivedTimestamp:     time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecvTime)),
 		LocalFlowControlWindow:           int64(t.fc.getSize()),
 		SocketOptions:                    channelz.GetSocketOption(t.conn),
 		LocalAddr:                        t.localAddr,
@@ -1146,12 +1146,12 @@ func (t *http2Server) ChannelzMetric() *channelz.SocketInternalMetric {
 
 func (t *http2Server) IncrMsgSent() {
 	atomic.AddInt64(&t.czData.msgSent, 1)
-	atomic.StoreInt64(&t.czData.lastMsgSent, time.Now().UnixNano())
+	atomic.StoreInt64(&t.czData.lastMsgSentTime, time.Now().UnixNano())
 }
 
 func (t *http2Server) IncrMsgRecv() {
 	atomic.AddInt64(&t.czData.msgRecv, 1)
-	atomic.StoreInt64(&t.czData.lastMsgRecv, time.Now().UnixNano())
+	atomic.StoreInt64(&t.czData.lastMsgRecvTime, time.Now().UnixNano())
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {
