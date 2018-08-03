@@ -540,7 +540,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.activeStreams[id] = s
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
-				atomic.StoreInt64(&t.czData.lastStreamCreated, time.Now().UnixNano())
+				atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
 			}
 			var sendPing bool
 			// If the number of active streams change from 0 to 1, then check if keepalive
@@ -1295,9 +1295,9 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 		MessagesSent:                    atomic.LoadInt64(&t.czData.msgSent),
 		MessagesReceived:                atomic.LoadInt64(&t.czData.msgRecv),
 		KeepAlivesSent:                  atomic.LoadInt64(&t.czData.kpCount),
-		LastLocalStreamCreatedTimestamp: time.Unix(0, atomic.LoadInt64(&t.czData.lastStreamCreated)),
-		LastMessageSentTimestamp:        time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgSent)),
-		LastMessageReceivedTimestamp:    time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecv)),
+		LastLocalStreamCreatedTimestamp: time.Unix(0, atomic.LoadInt64(&t.czData.lastStreamCreatedTime)),
+		LastMessageSentTimestamp:        time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgSentTime)),
+		LastMessageReceivedTimestamp:    time.Unix(0, atomic.LoadInt64(&t.czData.lastMsgRecvTime)),
 		LocalFlowControlWindow:          int64(t.fc.getSize()),
 		SocketOptions:                   channelz.GetSocketOption(t.conn),
 		LocalAddr:                       t.localAddr,
@@ -1313,12 +1313,12 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 
 func (t *http2Client) IncrMsgSent() {
 	atomic.AddInt64(&t.czData.msgSent, 1)
-	atomic.StoreInt64(&t.czData.lastMsgSent, time.Now().UnixNano())
+	atomic.StoreInt64(&t.czData.lastMsgSentTime, time.Now().UnixNano())
 }
 
 func (t *http2Client) IncrMsgRecv() {
 	atomic.AddInt64(&t.czData.msgRecv, 1)
-	atomic.StoreInt64(&t.czData.lastMsgRecv, time.Now().UnixNano())
+	atomic.StoreInt64(&t.czData.lastMsgRecvTime, time.Now().UnixNano())
 }
 
 func (t *http2Client) getOutFlowWindow() int64 {

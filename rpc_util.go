@@ -755,9 +755,11 @@ func parseDialTarget(target string) (net string, addr string) {
 // operation on int64 variable on 32-bit machine, user is responsible to enforce memory alignment.
 // Here, by grouping those int64 fields inside a struct, we are enforcing the alignment.
 type channelzData struct {
-	callsStarted        int64
-	callsFailed         int64
-	callsSucceeded      int64
+	callsStarted   int64
+	callsFailed    int64
+	callsSucceeded int64
+	// lastCallStartedTime stores the timestamp that last call starts. It is of int64 type instead of
+	// time.Time since it's more costly to atomically update time.Time variable than int64 variable.
 	lastCallStartedTime int64
 }
 
