@@ -120,7 +120,7 @@ buildscript {
   dependencies {
     // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier
     // gradle versions
-    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.3'
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5'
   }
 }
 
