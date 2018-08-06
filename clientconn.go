@@ -146,9 +146,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
-			cc.channelzID = channelz.RegisterChannel(cc, cc.dopts.channelzParentID, target)
+			cc.channelzID = channelz.RegisterChannel(&ChannelzChannel{cc}, cc.dopts.channelzParentID, target)
 		} else {
-			cc.channelzID = channelz.RegisterChannel(cc, 0, target)
+			cc.channelzID = channelz.RegisterChannel(&ChannelzChannel{cc}, 0, target)
 		}
 	}
 
@@ -542,7 +542,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
-		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
+		ac.channelzID = channelz.RegisterSubChannel(&ChannelzSubChannel{ac}, cc.channelzID, "")
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -562,9 +562,7 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	ac.tearDown(err)
 }
 
-// ChannelzMetric returns ChannelInternalMetric of current ClientConn.
-// This is an EXPERIMENTAL API.
-func (cc *ClientConn) ChannelzMetric() *channelz.ChannelInternalMetric {
+func (cc *ClientConn) channelzMetric() *channelz.ChannelInternalMetric {
 	return &channelz.ChannelInternalMetric{
 		State:                    cc.GetState(),
 		Target:                   cc.target,
@@ -1177,7 +1175,7 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
+func (ac *addrConn) channelzMetric() *channelz.ChannelInternalMetric {
 	ac.mu.Lock()
 	addr := ac.curAddr.Addr
 	ac.mu.Unlock()
@@ -1239,6 +1237,23 @@ func (rt *retryThrottler) successfulRPC() {
 	if rt.tokens > rt.max {
 		rt.tokens = rt.max
 	}
+}
+
+// ChannelzChannel is a wrapper of ClientConn to provide channelz metrics.
+type ChannelzChannel struct {
+	cc *ClientConn
+}
+
+func (c *ChannelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
+	return c.cc.channelzMetric()
+}
+
+type ChannelzSubChannel struct {
+	ac *addrConn
+}
+
+func (c *ChannelzSubChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
+	return c.ac.channelzMetric()
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the

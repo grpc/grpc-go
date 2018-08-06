@@ -369,7 +369,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 
 	if channelz.IsOn() {
-		s.channelzID = channelz.RegisterServer(s, "")
+		s.channelzID = channelz.RegisterServer(&ChannelzServer{s}, "")
 	}
 	return s
 }
@@ -779,9 +779,7 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
-// ChannelzMetric returns ServerInternalMetric of current server.
-// This is an EXPERIMENTAL API.
-func (s *Server) ChannelzMetric() *channelz.ServerInternalMetric {
+func (s *Server) channelzMetric() *channelz.ServerInternalMetric {
 	return &channelz.ServerInternalMetric{
 		CallsStarted:             atomic.LoadInt64(&s.czData.callsStarted),
 		CallsSucceeded:           atomic.LoadInt64(&s.czData.callsSucceeded),
@@ -1065,11 +1063,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
 	ss := &serverStream{
-		ctx:   ctx,
-		t:     t,
-		s:     stream,
-		p:     &parser{r: stream},
-		codec: s.getCodec(stream.ContentSubtype()),
+		ctx:                   ctx,
+		t:                     t,
+		s:                     stream,
+		p:                     &parser{r: stream},
+		codec:                 s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
@@ -1438,4 +1436,12 @@ func Method(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return s.Method(), true
+}
+
+type ChannelzServer struct {
+	s *Server
+}
+
+func (c *ChannelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
+	return c.s.channelzMetric()
 }
