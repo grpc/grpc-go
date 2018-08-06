@@ -369,7 +369,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 
 	if channelz.IsOn() {
-		s.channelzID = channelz.RegisterServer(&ChannelzServer{s}, "")
+		s.channelzID = channelz.RegisterServer(&channelzServer{s}, "")
 	}
 	return s
 }
@@ -1063,11 +1063,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
 	ss := &serverStream{
-		ctx:                   ctx,
-		t:                     t,
-		s:                     stream,
-		p:                     &parser{r: stream},
-		codec:                 s.getCodec(stream.ContentSubtype()),
+		ctx:   ctx,
+		t:     t,
+		s:     stream,
+		p:     &parser{r: stream},
+		codec: s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
@@ -1438,10 +1438,10 @@ func Method(ctx context.Context) (string, bool) {
 	return s.Method(), true
 }
 
-type ChannelzServer struct {
+type channelzServer struct {
 	s *Server
 }
 
-func (c *ChannelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
+func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 	return c.s.channelzMetric()
 }

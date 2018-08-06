@@ -146,9 +146,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
-			cc.channelzID = channelz.RegisterChannel(&ChannelzChannel{cc}, cc.dopts.channelzParentID, target)
+			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 		} else {
-			cc.channelzID = channelz.RegisterChannel(&ChannelzChannel{cc}, 0, target)
+			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
 		}
 	}
 
@@ -542,7 +542,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
-		ac.channelzID = channelz.RegisterSubChannel(&ChannelzSubChannel{ac}, cc.channelzID, "")
+		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -1175,7 +1175,7 @@ func (ac *addrConn) getState() connectivity.State {
 	return ac.state
 }
 
-func (ac *addrConn) channelzMetric() *channelz.ChannelInternalMetric {
+func (ac *addrConn) ChannelzMetric() *channelz.ChannelInternalMetric {
 	ac.mu.Lock()
 	addr := ac.curAddr.Addr
 	ac.mu.Unlock()
@@ -1239,21 +1239,12 @@ func (rt *retryThrottler) successfulRPC() {
 	}
 }
 
-// ChannelzChannel is a wrapper of ClientConn to provide channelz metrics.
-type ChannelzChannel struct {
+type channelzChannel struct {
 	cc *ClientConn
 }
 
-func (c *ChannelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
+func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
 	return c.cc.channelzMetric()
-}
-
-type ChannelzSubChannel struct {
-	ac *addrConn
-}
-
-func (c *ChannelzSubChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
-	return c.ac.channelzMetric()
 }
 
 // ErrClientConnTimeout indicates that the ClientConn cannot establish the
