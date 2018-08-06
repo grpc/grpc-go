@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -52,8 +51,6 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class Status {
-
-  private static final Logger logger = Logger.getLogger(Status.class.getName());
 
   /**
    * The set of canonical status codes. If new codes are added over time they must choose
@@ -525,10 +522,7 @@ public final class Status {
    * exception.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4683")
-  public StatusRuntimeException asRuntimeException(Metadata trailers) {
-    if (trailers == null) {
-      logger.warning("trailers cannot be null, this will become an error in gRPC 1.16");
-    }
+  public StatusRuntimeException asRuntimeException(@Nullable Metadata trailers) {
     return new StatusRuntimeException(this, trailers);
   }
 
@@ -544,10 +538,7 @@ public final class Status {
    * Same as {@link #asException()} but includes the provided trailers in the returned exception.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4683")
-  public StatusException asException(Metadata trailers) {
-    if (trailers == null) {
-      logger.warning("trailers cannot be null, this will become an error in gRPC 1.16");
-    }
+  public StatusException asException(@Nullable Metadata trailers) {
     return new StatusException(this, trailers);
   }
 
