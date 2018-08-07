@@ -301,7 +301,7 @@ artifacts {
     }
 }
 
-def configureTestTask(Task task, String dep, String extraPackage) {
+def configureTestTask(Task task, String dep, String extraPackage, String serviceName) {
     test.dependsOn task
     task.dependsOn "generateTest${dep}Proto"
     if (osdetector.os != 'windows') {
@@ -312,13 +312,19 @@ def configureTestTask(Task task, String dep, String extraPackage) {
     }
     // File isn't found on Windows if last slash is forward-slash
     def slash = System.getProperty("file.separator")
-    task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/compiler${extraPackage}${slash}TestServiceGrpc.java",
-            "$projectDir/src/test${dep}/golden/TestService.java.txt"
+    task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/compiler${extraPackage}${slash}${serviceName}Grpc.java",
+            "$projectDir/src/test${dep}/golden/${serviceName}.java.txt"
 }
 
 task testGolden(type: Exec)
 task testLiteGolden(type: Exec)
 task testNanoGolden(type: Exec)
-configureTestTask(testGolden, '', '')
-configureTestTask(testLiteGolden, 'Lite', '')
-configureTestTask(testNanoGolden, 'Nano', '/nano')
+task testDeprecatedGolden(type: Exec)
+task testDeprecatedLiteGolden(type: Exec)
+task testDeprecatedNanoGolden(type: Exec)
+configureTestTask(testGolden, '', '', 'TestService')
+configureTestTask(testLiteGolden, 'Lite', '', 'TestService')
+configureTestTask(testNanoGolden, 'Nano', '/nano', 'TestService')
+configureTestTask(testDeprecatedGolden, '', '', 'TestDeprecatedService')
+configureTestTask(testDeprecatedLiteGolden, 'Lite', '', 'TestDeprecatedService')
+configureTestTask(testDeprecatedNanoGolden, 'Nano', '/nano', 'TestDeprecatedService')

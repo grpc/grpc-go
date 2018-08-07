@@ -1,3 +1,6 @@
 TestService.java.txt binary
 TestServiceLite.java.txt binary
 TestServiceNano.java.txt binary
+TestDeprecatedService.java.txt binary
+TestDeprecatedServiceLite.java.txt binary
+TestDeprecatedServiceNano.java.txt binary

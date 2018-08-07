@@ -71,3 +71,13 @@ service TestService {
   // method should have a '_' appended.
   rpc Import(stream StreamingInputCallRequest) returns (stream StreamingInputCallResponse);
 }
+
+// Test service that has been deprecated and should generate with Java's @Deprecated annotation
+service TestDeprecatedService {
+  option deprecated = true;
+
+  // An RPC method that has been deprecated and should generate with Java's @Deprecated annotation
+  rpc DeprecatedMethod(SimpleRequest) returns (SimpleResponse) {
+    option deprecated = true;
+  }
+}

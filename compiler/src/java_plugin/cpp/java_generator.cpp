@@ -8,6 +8,7 @@
 #include <vector>
 #include <google/protobuf/compiler/java/java_names.h>
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 
@@ -644,6 +645,11 @@ static void PrintStub(
   if (!interface) {
     GrpcWriteServiceDocComment(p, service);
   }
+
+  if (service->options().deprecated()) {
+    p->Print(*vars, "@$Deprecated$\n");
+  }
+
   if (impl_base) {
     p->Print(
         *vars,
@@ -713,6 +719,11 @@ static void PrintStub(
     if (!interface) {
       GrpcWriteMethodDocComment(p, method);
     }
+
+    if (method->options().deprecated()) {
+      p->Print(*vars, "@$Deprecated$\n");
+    }
+
     p->Print("public ");
     switch (call_type) {
       case BLOCKING_CALL:
@@ -1152,7 +1163,14 @@ static void PrintService(const ServiceDescriptor* service,
       *vars,
       "@$Generated$(\n"
       "    value = \"by gRPC proto compiler$grpc_version$\",\n"
-      "    comments = \"Source: $file_name$\")\n"
+      "    comments = \"Source: $file_name$\")\n");
+
+  if (service->options().deprecated()) {
+    p->Print(*vars, "@$Deprecated$\n");
+  }
+
+  p->Print(
+      *vars,
       "public final class $service_class_name$ {\n\n");
   p->Indent();
   p->Print(
