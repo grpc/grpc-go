@@ -540,6 +540,7 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue).when(mockArgs).getHeaders();
 
+    @SuppressWarnings("unused")
     List<Subchannel> allSubchannels = picker.getList();
 
     // first pick
@@ -590,6 +591,7 @@ public class RoundRobinLoadBalancerTest {
     headerWithStickinessValue1.put(stickinessKey, "my-sticky-value");
     doReturn(headerWithStickinessValue1).when(mockArgs).getHeaders();
 
+    @SuppressWarnings("unused")
     List<Subchannel> allSubchannels = picker.getList();
 
     // first pick
@@ -607,6 +609,7 @@ public class RoundRobinLoadBalancerTest {
     picker = pickerCaptor.getValue();
 
     // second pick with a different stickiness value
+    @SuppressWarnings("unused")
     Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go back to ready
