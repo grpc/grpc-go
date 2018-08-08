@@ -1399,6 +1399,7 @@ public class GrpclbLoadBalancerTest {
     deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
 
     assertEquals(1, fakeOobChannels.size());
+    @SuppressWarnings("unused")
     ManagedChannel oobChannel = fakeOobChannels.poll();
 
     // First balancer RPC
