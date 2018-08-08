@@ -69,7 +69,7 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     }
   }
 
-  private final ManagedChannelBuilder delegateBuilder;
+  private final ManagedChannelBuilder<?> delegateBuilder;
 
   @Nullable private Context context;
 
@@ -81,7 +81,7 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     return forTarget(GrpcUtil.authorityFromHostAndPort(name, port));
   }
 
-  public static AndroidChannelBuilder fromBuilder(ManagedChannelBuilder builder) {
+  public static AndroidChannelBuilder fromBuilder(ManagedChannelBuilder<?> builder) {
     return new AndroidChannelBuilder(builder);
   }
 
@@ -100,7 +100,7 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     }
   }
 
-  private AndroidChannelBuilder(ManagedChannelBuilder delegateBuilder) {
+  private AndroidChannelBuilder(ManagedChannelBuilder<?> delegateBuilder) {
     this.delegateBuilder = Preconditions.checkNotNull(delegateBuilder, "delegateBuilder");
   }
 
