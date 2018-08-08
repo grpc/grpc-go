@@ -245,7 +245,6 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   protected ByteBuf grpcDataFrame(int streamId, boolean endStream, byte[] content) {
     final ByteBuf compressionFrame = Unpooled.buffer(content.length);
-    TransportTracer noTransportTracer = null;
     MessageFramer framer = new MessageFramer(
         new MessageFramer.Sink() {
           @Override
