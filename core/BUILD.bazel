@@ -44,6 +44,7 @@ java_library(
         "@com_google_guava_guava//jar",
         "@io_opencensus_opencensus_api//jar",
         "@io_opencensus_opencensus_contrib_grpc_metrics//jar",
+        "@org_codehaus_mojo_animal_sniffer_annotations//jar",
     ],
 )
 

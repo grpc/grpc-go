@@ -40,6 +40,7 @@ import javax.naming.NamingException;
 import javax.naming.directory.Attribute;
 import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
+import org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement;
 
 /**
  * {@link JndiResourceResolverFactory} resolves additional records for the DnsNameResolver.
@@ -194,6 +195,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
       return new SrvRecord(parts[3], Integer.parseInt(parts[2]));
     }
 
+    @IgnoreJRERequirement
     private static List<String> getAllRecords(String recordType, String name)
         throws NamingException {
       String[] rrType = new String[]{recordType};
@@ -235,6 +237,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
       return records;
     }
 
+    @IgnoreJRERequirement
     private static void closeThenThrow(NamingEnumeration<?> namingEnumeration, NamingException e)
         throws NamingException {
       try {
@@ -245,6 +248,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
       throw e;
     }
 
+    @IgnoreJRERequirement
     private static void closeThenThrow(DirContext ctx, NamingException e) throws NamingException {
       try {
         ctx.close();

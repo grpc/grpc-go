@@ -30,7 +30,8 @@ def grpc_java_repositories(
         omit_io_opencensus_grpc_metrics = False,
         omit_javax_annotation = False,
         omit_junit_junit = False,
-        omit_org_apache_commons_lang3 = False):
+        omit_org_apache_commons_lang3 = False,
+        omit_org_codehaus_mojo_animal_sniffer_annotations = False):
     """Imports dependencies for grpc-java."""
     if not omit_com_google_api_grpc_google_common_protos:
         com_google_api_grpc_google_common_protos()
@@ -92,6 +93,8 @@ def grpc_java_repositories(
         junit_junit()
     if not omit_org_apache_commons_lang3:
         org_apache_commons_lang3()
+    if not omit_org_codehaus_mojo_animal_sniffer_annotations:
+        org_codehaus_mojo_animal_sniffer_annotations()
 
     native.bind(
         name = "guava",
@@ -310,4 +313,11 @@ def org_apache_commons_lang3():
         name = "org_apache_commons_commons_lang3",
         artifact = "org.apache.commons:commons-lang3:3.5",
         sha1 = "6c6c702c89bfff3cd9e80b04d668c5e190d588c6",
+    )
+
+def org_codehaus_mojo_animal_sniffer_annotations():
+    native.maven_jar(
+        name = "org_codehaus_mojo_animal_sniffer_annotations",
+        artifact = "org.codehaus.mojo:animal-sniffer-annotations:1.17",
+        sha1 = "f97ce6decaea32b36101e37979f8b647f00681fb",
     )

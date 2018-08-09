@@ -3,7 +3,8 @@ dependencies {
     compile project(':grpc-core')
     testCompile libraries.truth,
             project(':grpc-testing')
-    signature "org.codehaus.mojo.signature:java16:1.1@signature"
+    signature "org.codehaus.mojo.signature:java17:1.0@signature"
+    signature "net.sf.androidscents.signature:android-api-level-14:4.0_r4@signature"
 }
 
 javadoc.options.links "https://google.github.io/guava/releases/${guavaVersion}/api/docs/"
