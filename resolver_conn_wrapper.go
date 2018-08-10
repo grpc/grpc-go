@@ -23,17 +23,19 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/resolver"
 )
 
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConnection interface.
 type ccResolverWrapper struct {
-	cc       *ClientConn
-	resolver resolver.Resolver
-	addrCh   chan []resolver.Address
-	scCh     chan string
-	done     chan struct{}
+	cc                 *ClientConn
+	resolver           resolver.Resolver
+	addrCh             chan []resolver.Address
+	scCh               chan string
+	done               chan struct{}
+	lastAddressesCount int
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -114,6 +116,25 @@ func (ccr *ccResolverWrapper) watcher() {
 			default:
 			}
 			grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
+			if channelz.IsOn() {
+				if len(addrs) == 0 && ccr.lastAddressesCount != 0 {
+					channelz.TraceAddressResolutionChange(ccr.cc.channelzID, channelz.EmptyAddressList, "")
+				} else if len(addrs) != 0 && ccr.lastAddressesCount == 0 {
+					var s string
+					for i, a := range addrs {
+						if a.ServerName != "" {
+							s += a.Addr + "(" + a.ServerName + ")"
+						} else {
+							s += a.Addr
+						}
+						if i != len(addrs)-1 {
+							s += " "
+						}
+					}
+					channelz.TraceAddressResolutionChange(ccr.cc.channelzID, channelz.NonEmptyAddressList, s)
+				}
+				ccr.lastAddressesCount = len(addrs)
+			}
 			ccr.cc.handleResolvedAddrs(addrs, nil)
 		case sc := <-ccr.scCh:
 			select {
