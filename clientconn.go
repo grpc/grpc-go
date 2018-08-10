@@ -150,6 +150,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
 		}
+		cc.csMgr.czTraceConnectivityChange = func(s connectivity.State) {
+			channelz.TraceChannelConnectivityChange(cc.channelzID, s)
+		}
 	}
 
 	if !cc.dopts.insecure {
@@ -308,9 +311,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
 type connectivityStateManager struct {
-	mu         sync.Mutex
-	state      connectivity.State
-	notifyChan chan struct{}
+	mu                        sync.Mutex
+	state                     connectivity.State
+	notifyChan                chan struct{}
+	czTraceConnectivityChange func(state connectivity.State)
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -326,6 +330,9 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	if channelz.IsOn() {
+		csm.czTraceConnectivityChange(state)
+	}
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
 		close(csm.notifyChan)
@@ -503,10 +510,20 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	builder := balancer.Get(name)
+	// TODO(yuxuanli): If user send a service config that does not contain a valid balancer name, should
+	// we reuse previous one?
+	if channelz.IsOn() {
+		if builder == nil {
+			channelz.TraceAddressResolutionChange(cc.channelzID, channelz.NewLBPolicy, PickFirstBalancerName+"(fallback: due to invalid balancer name)")
+		} else {
+			channelz.TraceAddressResolutionChange(cc.channelzID, channelz.NewLBPolicy, name)
+		}
+	}
 	if builder == nil {
 		grpclog.Infof("failed to get balancer builder for: %v, using pick_first instead", name)
 		builder = newPickfirstBuilder()
 	}
+
 	cc.preBalancerName = cc.curBalancerName
 	cc.curBalancerName = builder.Name()
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
@@ -607,7 +624,7 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
-	ac.state = connectivity.Connecting
+	ac.updateConnectivityState(connectivity.Connecting)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
 
@@ -691,6 +708,12 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 func (cc *ClientConn) handleServiceConfig(js string) error {
 	if cc.dopts.disableServiceConfig {
 		return nil
+	}
+	if cc.scRaw == js {
+		return nil
+	}
+	if channelz.IsOn() {
+		channelz.TraceAddressResolutionChange(cc.channelzID, channelz.ServiceConfigChange, js)
 	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
@@ -791,7 +814,8 @@ type addrConn struct {
 	mu           sync.Mutex
 	curAddr      resolver.Address
 	reconnectIdx int // The index in addrs list to start reconnecting from.
-	state        connectivity.State
+	// Use updateConnectivityState for updating addrConn's connectivity state.
+	state connectivity.State
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready     chan struct{}
@@ -810,6 +834,13 @@ type addrConn struct {
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
+}
+
+func (ac *addrConn) updateConnectivityState(s connectivity.State) {
+	ac.state = s
+	if channelz.IsOn() {
+		channelz.TraceSubChannelConnectivityChange(ac.channelzID, s)
+	}
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -904,7 +935,7 @@ func (ac *addrConn) resetTransport() error {
 		}
 		ac.printf("connecting")
 		if ac.state != connectivity.Connecting {
-			ac.state = connectivity.Connecting
+			ac.updateConnectivityState(connectivity.Connecting)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
 		// copy ac.addrs in case of race
@@ -927,6 +958,9 @@ func (ac *addrConn) resetTransport() error {
 func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions) (bool, error) {
 	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
+		if channelz.IsOn() {
+			channelz.TraceSubChannelPickNewAddress(ac.channelzID, addr.Addr)
+		}
 		target := transport.TargetInfo{
 			Addr:      addr.Addr,
 			Metadata:  addr.Metadata,
@@ -987,7 +1021,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			return false, errConnClosing
 		}
 		ac.printf("ready")
-		ac.state = connectivity.Ready
+		ac.updateConnectivityState(connectivity.Ready)
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.transport = newTr
 		ac.curAddr = addr
@@ -1013,7 +1047,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		ac.mu.Unlock()
 		return false, errConnClosing
 	}
-	ac.state = connectivity.TransientFailure
+	ac.updateConnectivityState(connectivity.TransientFailure)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.cc.resolveNow(resolver.ResolveNowOption{})
 	if ac.ready != nil {
@@ -1092,7 +1126,7 @@ func (ac *addrConn) transportMonitor() {
 		}
 		// Set connectivity state to TransientFailure before calling
 		// resetTransport. Transition READY->CONNECTING is not valid.
-		ac.state = connectivity.TransientFailure
+		ac.updateConnectivityState(connectivity.TransientFailure)
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.cc.resolveNow(resolver.ResolveNowOption{})
 		ac.curAddr = resolver.Address{}
@@ -1153,7 +1187,7 @@ func (ac *addrConn) tearDown(err error) {
 		// address removal and GoAway.
 		ac.transport.GracefulClose()
 	}
-	ac.state = connectivity.Shutdown
+	ac.updateConnectivityState(connectivity.Shutdown)
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.events != nil {

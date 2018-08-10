@@ -29,7 +29,9 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/grpclb"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
@@ -1187,6 +1189,447 @@ func TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 		}
 		if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
 			return false, fmt.Errorf("There should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZChannelTraceCreationDeletion(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	// avoid calling API to set balancer type, which will void service config's change of balancer.
+	e.balancer = ""
+	te := newTest(t, e)
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
+	r.InitialAddrs(resolvedAddrs)
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var nestedConn int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].NestedChans) != 1 {
+			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+		}
+		for k := range tcs[0].NestedChans {
+			nestedConn = k
+		}
+		ncm := channelz.GetChannel(nestedConn)
+		if ncm.Trace == nil {
+			return false, fmt.Errorf("Trace for nested channel should not be empty")
+		}
+		if len(ncm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for nested channel not 0")
+		}
+		if ncm.Trace.Events[0].Desc != "Channel Created" {
+			return false, fmt.Errorf("The first trace event should be \"Channel Created\", not %q", ncm.Trace.Events[0].Desc)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+
+	// wait for the shutdown of grpclb balancer
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].NestedChans) != 0 {
+			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+		}
+		ncm := channelz.GetChannel(nestedConn)
+		if ncm == nil {
+			return false, fmt.Errorf("Nested channel should still exist due to parent's trace reference")
+		}
+		if ncm.Trace == nil {
+			return false, fmt.Errorf("Trace for nested channel should not be empty")
+		}
+		if len(ncm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for nested channel not 0")
+		}
+		if ncm.Trace.Events[len(ncm.Trace.Events)-1].Desc != "Channel Deleted" {
+			return false, fmt.Errorf("The first trace event should be \"Channel Deleted\", not %q", ncm.Trace.Events[0].Desc)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var subConn int64
+	// Here, we just wait for all sockets to be up. In the future, if we implement
+	// IDLE, we may need to make several rpc calls to create the sockets.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+		}
+		for k := range tcs[0].SubChans {
+			subConn = k
+		}
+		scm := channelz.GetSubChannel(subConn)
+		if scm == nil {
+			return false, fmt.Errorf("SubChannel does not exist")
+		}
+		if scm.Trace == nil {
+			return false, fmt.Errorf("Trace for subChannel should not be empty")
+		}
+		if len(scm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+		}
+		if scm.Trace.Events[0].Desc != "Subchannel Created" {
+			return false, fmt.Errorf("The first trace event should be \"Subchannel Created\", not %q", scm.Trace.Events[0].Desc)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewAddress([]resolver.Address{})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 0 {
+			return false, fmt.Errorf("There should be 0 subchannel not %d", len(tcs[0].SubChans))
+		}
+		scm := channelz.GetSubChannel(subConn)
+		if scm == nil {
+			return false, fmt.Errorf("SubChannel should still exist due to parent's trace reference")
+		}
+		if scm.Trace == nil {
+			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+		}
+		if len(scm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+		}
+		if scm.Trace.Events[len(scm.Trace.Events)-1].Desc != "Subchannel Deleted" {
+			return false, fmt.Errorf("The first trace event should be \"Subchannel Deleted\", not %q", scm.Trace.Events[0].Desc)
+		}
+
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZChannelAddressResolutionChange(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	e.balancer = ""
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var cid int64
+	// Here, we just wait for all sockets to be up. In the future, if we implement
+	// IDLE, we may need to make several rpc calls to create the sockets.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		cid = tcs[0].ID
+		for i := len(tcs[0].Trace.Events) - 1; i >= 0; i-- {
+			if tcs[0].Trace.Events[i].Desc == fmt.Sprintf("Adressses resolved (from empty address state): %q", te.srvAddr) {
+				break
+			}
+			if i == 0 {
+				return false, fmt.Errorf("Events do not contain expected address resolution from empty address state")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(cid)
+		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
+			if cm.Trace.Events[i].Desc == fmt.Sprintf("New LB policy from address resolution: %q", roundrobin.Name) {
+				break
+			}
+			if i == 0 {
+				return false, fmt.Errorf("Events do not contain expected address resolution change of LB policy")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	newSc := `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+            ],
+            "waitForReady": false,
+            "timeout": ".001s"
+        }
+    ]
+}`
+
+	r.NewServiceConfig(newSc)
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(cid)
+
+		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
+			if cm.Trace.Events[i].Desc == fmt.Sprintf("New service config resolved: \"%s\"", newSc) {
+				break
+			}
+			if i == 0 {
+				return false, fmt.Errorf("Events do not contain expected address resolution of new service config")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewAddress([]resolver.Address{})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(cid)
+		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
+			if cm.Trace.Events[i].Desc == "Addresses resolved is empty" {
+				break
+			}
+			if i == 0 {
+				return false, fmt.Errorf("Events do not contain expected address resolution of empty address")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZSubChannelPickedNewAddress(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	e.balancer = ""
+	te := newTest(t, e)
+	te.startServers(&testServer{security: e.security}, 3)
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	var svrAddrs []resolver.Address
+	for _, a := range te.srvAddrs {
+		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
+	}
+	r.InitialAddrs(svrAddrs)
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	// Here, we just wait for all sockets to be up. In the future, if we implement
+	// IDLE, we may need to make several rpc calls to create the sockets.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		te.srvs[0].Stop()
+		te.srvs[1].Stop()
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+		}
+		var subConn int64
+		for k := range tcs[0].SubChans {
+			subConn = k
+		}
+		scm := channelz.GetSubChannel(subConn)
+		if scm.Trace == nil {
+			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+		}
+		if len(scm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+		}
+		for i := len(scm.Trace.Events) - 1; i >= 0; i-- {
+			if scm.Trace.Events[i].Desc == fmt.Sprintf("Subchannel picked a new address: %q", te.srvAddrs[2]) {
+				break
+			}
+			if i == 0 {
+				return false, fmt.Errorf("Events do not contain expected address resolution of subchannel picked new address")
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZSubChannelConnectivityState(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var subConn int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		te.srv.Stop()
+		// we need to obtain the SubChannel id before it gets deleted from Channel's children list (due
+		// to effect of r.NewAddress([]resolver.Address{}))
+		if subConn == 0 {
+			tcs, _ := channelz.GetTopChannels(0)
+			if len(tcs) != 1 {
+				return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			}
+			if len(tcs[0].SubChans) != 1 {
+				return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+			}
+			for k := range tcs[0].SubChans {
+				// get the SubChannel id for further trace inquiry.
+				subConn = k
+			}
+		}
+		scm := channelz.GetSubChannel(subConn)
+		if scm == nil {
+			return false, fmt.Errorf("SubChannel should still exist due to parent's trace reference")
+		}
+		if scm.Trace == nil {
+			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+		}
+		if len(scm.Trace.Events) == 0 {
+			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+		}
+		var ready, connecting, transient, shutdown int
+		for _, e := range scm.Trace.Events {
+			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.TransientFailure) {
+				transient++
+			}
+		}
+		// Make sure the SubChannel has already seen transient failure before shutting it down through
+		// r.NewAddress([]resolver.Address{}).
+		if transient == 0 {
+			return false, fmt.Errorf("Transient failure has not happened on SubChannel yet.")
+		}
+		transient = 0
+		r.NewAddress([]resolver.Address{})
+		for _, e := range scm.Trace.Events {
+			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Ready) {
+				ready++
+			}
+			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Connecting) {
+				connecting++
+			}
+			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.TransientFailure) {
+				transient++
+			}
+			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Shutdown) {
+				shutdown++
+			}
+		}
+		// example:
+		// Subchannel Created
+		// Subchannel's connectivity state changed to CONNECTING
+		// Subchannel picked a new address: "localhost:36011"
+		// Subchannel's connectivity state changed to READY
+		// Subchannel's connectivity state changed to TRANSIENT_FAILURE
+		// Subchannel's connectivity state changed to CONNECTING
+		// Subchannel picked a new address: "localhost:36011"
+		// Subchannel's connectivity state changed to SHUTDOWN
+		// Subchannel Deleted
+		if ready != 1 || connecting < 1 || transient < 1 || shutdown != 1 {
+			return false, fmt.Errorf("got: ready = %d, connecting = %d, transient = %d, shutdown = %d, want: 1, >=1, >=1, 1", ready, connecting, transient, shutdown)
+		}
+
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZChannelConnectivityState(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		te.srv.Stop()
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+
+		var ready, connecting, transient int
+		for _, e := range tcs[0].Trace.Events {
+			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.Ready) {
+				ready++
+			}
+			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.Connecting) {
+				connecting++
+			}
+			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.TransientFailure) {
+				transient++
+			}
+		}
+
+		// example:
+		// Channel Created
+		// Adressses resolved (from empty address state): "localhost:40467"
+		// SubChannel (id: 4[]) Created
+		// Channel's connectivity state changed to CONNECTING
+		// Channel's connectivity state changed to READY
+		// Channel's connectivity state changed to TRANSIENT_FAILURE
+		// Channel's connectivity state changed to CONNECTING
+		// Channel's connectivity state changed to TRANSIENT_FAILURE
+		if ready != 1 || connecting < 1 || transient < 1 {
+			return false, fmt.Errorf("got: ready = %d, connecting = %d, transient = %d, want: 1, >=1, >=1", ready, connecting, transient)
 		}
 		return true, nil
 	}); err != nil {

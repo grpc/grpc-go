@@ -28,6 +28,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"time"
+
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -35,8 +38,9 @@ var (
 	db    dbWrapper
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
-	EntryPerPage = 50
-	curState     int32
+	EntryPerPage  = 50
+	curState      int32
+	maxTraceEntry int32 = 30
 )
 
 // TurnOn turns on channelz data collection.
@@ -50,6 +54,15 @@ func TurnOn() {
 // IsOn returns whether channelz data collection is on.
 func IsOn() bool {
 	return atomic.CompareAndSwapInt32(&curState, 1, 1)
+}
+
+func SetMaxTraceEntry(i int32) {
+	atomic.StoreInt32(&maxTraceEntry, i)
+}
+
+func getMaxTraceEntry() int {
+	i := atomic.LoadInt32(&maxTraceEntry)
+	return int(i)
 }
 
 // dbWarpper wraps around a reference to internal channelz data storage, and
@@ -146,6 +159,7 @@ func RegisterChannel(c Channel, pid int64, ref string) int64 {
 		nestedChans: make(map[int64]string),
 		id:          id,
 		pid:         pid,
+		trace:       &channelTrace{createdTime: time.Now(), events: make([]*event, 0, getMaxTraceEntry())},
 	}
 	if pid == 0 {
 		db.get().addChannel(id, cn, true, pid, ref)
@@ -170,6 +184,7 @@ func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 		sockets: make(map[int64]string),
 		id:      id,
 		pid:     pid,
+		trace:   &channelTrace{createdTime: time.Now(), events: make([]*event, 0, getMaxTraceEntry())},
 	}
 	db.get().addSubChannel(id, sc, pid, ref)
 	return id
@@ -226,6 +241,22 @@ func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
 
+func TraceChannelConnectivityChange(id int64, s connectivity.State) {
+	db.get().traceChannelConnectivityChange(id, s)
+}
+
+func TraceSubChannelConnectivityChange(id int64, s connectivity.State) {
+	db.get().traceSubChannelConnectivityChange(id, s)
+}
+
+func TraceSubChannelPickNewAddress(id int64, addr string) {
+	db.get().traceSubChannelPickNewAddress(id, addr)
+}
+
+func TraceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
+	db.get().traceAddressResolutionChange(id, t, desc)
+}
+
 // channelMap is the storage data structure for channelz.
 // Methods of channelMap can be divided in two two categories with respect to locking.
 // 1. Methods acquire the global lock.
@@ -251,20 +282,24 @@ func (c *channelMap) addServer(id int64, s *server) {
 func (c *channelMap) addChannel(id int64, cn *channel, isTopChannel bool, pid int64, ref string) {
 	c.mu.Lock()
 	cn.cm = c
+	cn.trace.cm = c
 	c.channels[id] = cn
 	if isTopChannel {
 		c.topLevelChannels[id] = struct{}{}
 	} else {
 		c.findEntry(pid).addChild(id, cn)
 	}
+	c.traceChannelCreated(pid, id, ref)
 	c.mu.Unlock()
 }
 
 func (c *channelMap) addSubChannel(id int64, sc *subChannel, pid int64, ref string) {
 	c.mu.Lock()
 	sc.cm = c
+	sc.trace.cm = c
 	c.subChannels[id] = sc
 	c.findEntry(pid).addChild(id, sc)
+	c.traceSubChannelCreated(pid, id, ref)
 	c.mu.Unlock()
 }
 
@@ -291,6 +326,16 @@ func (c *channelMap) addNormalSocket(id int64, ns *normalSocket, pid int64, ref 
 func (c *channelMap) removeEntry(id int64) {
 	c.mu.Lock()
 	c.findEntry(id).triggerDelete()
+	c.mu.Unlock()
+}
+
+func (c *channelMap) startCleanup(id int64) {
+	c.mu.Lock()
+	e := c.findEntry(id)
+	if v, ok := e.(tracedChannel); ok {
+		v.decrTraceCount()
+		v.cleanup()
+	}
 	c.mu.Unlock()
 }
 
@@ -345,6 +390,115 @@ func (c *channelMap) deleteEntry(id int64) {
 		delete(c.servers, id)
 		return
 	}
+}
+
+func (c *channelMap) traceChannelCreated(pid int64, id int64, ref string) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	child := c.findEntry(id)
+	parent := c.findEntry(pid)
+	if c, ok := child.(tracedChannel); ok {
+		if p, ok := parent.(tracedChannel); ok {
+			p.getChannelTrace().ChannelCreated(id, ref)
+		}
+		c.getChannelTrace().ChannelCreated(0, "")
+	}
+}
+
+// caller of this function must already hold the c.mu lock
+func (c *channelMap) traceChannelDeleted(pid int64, id int64) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	child := c.findEntry(id)
+	parent := c.findEntry(pid)
+	if c, ok := child.(tracedChannel); ok {
+		if p, ok := parent.(tracedChannel); ok {
+			p.getChannelTrace().ChannelDeleted(id, c.getRefName())
+			c.incrTraceCount()
+		}
+		c.getChannelTrace().ChannelDeleted(0, "")
+	}
+}
+
+func (c *channelMap) traceSubChannelCreated(pid int64, id int64, ref string) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	child := c.findEntry(id)
+	parent := c.findEntry(pid)
+
+	if c, ok := child.(tracedChannel); ok {
+		if p, ok := parent.(tracedChannel); ok {
+			p.getChannelTrace().SubChannelCreated(id, ref)
+		}
+		c.getChannelTrace().SubChannelCreated(0, "")
+	}
+}
+
+// caller of this function must already hold the c.mu lock
+func (c *channelMap) traceSubChannelDeleted(pid int64, id int64) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	child := c.findEntry(id)
+	parent := c.findEntry(pid)
+	if c, ok := child.(tracedChannel); ok {
+		if p, ok := parent.(tracedChannel); ok {
+			p.getChannelTrace().SubChannelDeleted(id, c.getRefName())
+			c.incrTraceCount()
+		}
+		c.getChannelTrace().SubChannelDeleted(0, "")
+	}
+}
+
+func (c *channelMap) traceChannelConnectivityChange(id int64, s connectivity.State) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	c.mu.Lock()
+	e := c.findEntry(id)
+	if v, ok := e.(tracedChannel); ok {
+		v.getChannelTrace().ChannelConnectivityChange(s)
+	}
+	c.mu.Unlock()
+}
+
+func (c *channelMap) traceSubChannelConnectivityChange(id int64, s connectivity.State) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	c.mu.Lock()
+	e := c.findEntry(id)
+	if v, ok := e.(tracedChannel); ok {
+		v.getChannelTrace().SubChannelConnectivityChange(s)
+	}
+	c.mu.Unlock()
+}
+
+func (c *channelMap) traceSubChannelPickNewAddress(id int64, addr string) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	c.mu.Lock()
+	e := c.findEntry(id)
+	if v, ok := e.(tracedChannel); ok {
+		v.getChannelTrace().SubChannelPickNewAddress(addr)
+	}
+	c.mu.Unlock()
+}
+
+func (c *channelMap) traceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	c.mu.Lock()
+	e := c.findEntry(id)
+	if v, ok := e.(tracedChannel); ok {
+		v.getChannelTrace().AddressResolutionChange(t, desc)
+	}
+	c.mu.Unlock()
 }
 
 type int64Slice []int64
@@ -408,6 +562,7 @@ func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 		t[i].ChannelData = cn.c.ChannelzMetric()
 		t[i].ID = cn.id
 		t[i].RefName = cn.refName
+		t[i].Trace = cn.trace.dumpData()
 	}
 	return t, end
 }
@@ -518,6 +673,7 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	cm.ChannelData = cn.c.ChannelzMetric()
 	cm.ID = cn.id
 	cm.RefName = cn.refName
+	cm.Trace = cn.trace.dumpData()
 	return cm
 }
 
@@ -536,6 +692,7 @@ func (c *channelMap) GetSubChannel(id int64) *SubChannelMetric {
 	cm.ChannelData = sc.c.ChannelzMetric()
 	cm.ID = sc.id
 	cm.RefName = sc.refName
+	cm.Trace = sc.trace.dumpData()
 	return cm
 }
 
