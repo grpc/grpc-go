@@ -157,11 +157,12 @@ type ChannelTrace struct {
 }
 
 type TraceEvent struct {
-	Desc      string
-	Severity  Severity
-	Timestamp time.Time
-	ID        int64
-	RefName   string
+	Desc         string
+	Severity     Severity
+	Timestamp    time.Time
+	ID           int64
+	RefName      string
+	IsRefChannel bool
 }
 
 // Channel is the interface that should be satisfied in order to be tracked by
@@ -544,15 +545,18 @@ const (
 )
 
 type event struct {
-	timestamp         time.Time
-	t                 eventType
-	refId             int64
-	refName           string
+	t         eventType
+	timestamp time.Time
+	refId     int64
+	refName   string
+	//distinguish whether the referenced entity is a channel or subchannel.
+	isRefChannel      bool
 	connectivityState connectivity.State
 	addrEventType     AddressResolutionChangeType
 	addrEventDesc     string
 }
 
+// change the format string inside this function will lead to test failures.
 func (e *event) getDesc() string {
 	switch e.t {
 	case channelCreate:
@@ -672,11 +676,11 @@ func (c *channelTrace) clear() {
 
 // nid is the nested channel id.
 func (c *channelTrace) ChannelCreated(nid int64, ref string) {
-	c.append(&event{t: channelCreate, refId: nid, refName: ref})
+	c.append(&event{t: channelCreate, refId: nid, refName: ref, isRefChannel: true})
 }
 
 func (c *channelTrace) ChannelDeleted(nid int64, ref string) {
-	c.append(&event{t: channelDelete, refId: nid, refName: ref})
+	c.append(&event{t: channelDelete, refId: nid, refName: ref, isRefChannel: true})
 }
 
 func (c *channelTrace) SubChannelCreated(scID int64, ref string) {
@@ -727,11 +731,12 @@ func (c *channelTrace) dumpData() *ChannelTrace {
 	ct.Events = make([]*TraceEvent, 0, len(c.events))
 	for _, e := range c.events {
 		ct.Events = append(ct.Events, &TraceEvent{
-			Desc:      e.getDesc(),
-			Severity:  e.getSeverity(),
-			Timestamp: e.timestamp,
-			ID:        e.refId,
-			RefName:   e.refName,
+			Desc:         e.getDesc(),
+			Severity:     e.getSeverity(),
+			Timestamp:    e.timestamp,
+			ID:           e.refId,
+			RefName:      e.refName,
+			IsRefChannel: e.isRefChannel,
 		})
 	}
 	c.mu.Unlock()

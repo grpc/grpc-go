@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/net/context"
@@ -403,7 +405,7 @@ func TestGetServerSockets(t *testing.T) {
 
 func TestGetChannel(t *testing.T) {
 	channelz.NewChannelzStorage()
-	refNames := []string{"top channel 1", "nested channel 1", "nested channel 2", "nested channel 3"}
+	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
@@ -420,13 +422,37 @@ func TestGetChannel(t *testing.T) {
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[1] || nestedChans[0].GetChannelId() != ids[1] {
 		t.Fatalf("GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[1], Name: refNames[1]}}, nestedChans)
 	}
-
+	trace := metrics.GetData().GetTrace()
+	want := []struct {
+		desc     string
+		severity channelzpb.ChannelTraceEvent_Severity
+		childID  int64
+		childRef string
+	}{
+		{"Channel Created", channelzpb.ChannelTraceEvent_CT_INFO, 0, ""},
+		{fmt.Sprintf("Nested Channel (id: %d[%s]) Created", ids[1], refNames[1]), channelzpb.ChannelTraceEvent_CT_INFO, ids[1], refNames[1]},
+		{fmt.Sprintf("SubChannel (id: %d[%s]) Created", ids[2], refNames[2]), channelzpb.ChannelTraceEvent_CT_INFO, ids[2], refNames[2]},
+	}
+	for i, e := range trace.Events {
+		if e.GetDescription() != want[i].desc {
+			t.Fatalf("Trace: GetDescription want %#v, got %#v", want[i].desc, e.GetDescription())
+		}
+		if e.GetSeverity() != want[i].severity {
+			t.Fatalf("Trace: GetSeverity want %#v, got %#v", want[i].severity, e.GetSeverity())
+		}
+		if e.GetChannelRef().GetChannelId() != want[i].childID || e.GetChannelRef().GetName() != want[i].childRef {
+			if e.GetSubchannelRef().GetSubchannelId() != want[i].childID || e.GetSubchannelRef().GetName() != want[i].childRef {
+				t.Fatalf("Trace: GetChannelRef/GetSubchannelRef want (child ID: %d, child name: %q), got %#v and %#v", want[i].childID, want[i].childRef, e.GetChannelRef(), e.GetSubchannelRef())
+			}
+		}
+	}
 	resp, _ = svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[1]})
 	metrics = resp.GetChannel()
 	nestedChans = metrics.GetChannelRef()
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3] {
 		t.Fatalf("GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[3], Name: refNames[3]}}, nestedChans)
 	}
+
 }
 
 func TestGetSubChannel(t *testing.T) {
