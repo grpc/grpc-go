@@ -1222,6 +1222,11 @@ func TestCZChannelTraceCreationDeletion(t *testing.T) {
 		for k := range tcs[0].NestedChans {
 			nestedConn = k
 		}
+		for _, e := range tcs[0].Trace.Events {
+			if e.ID == nestedConn && !e.IsRefChannel {
+				return false, fmt.Errorf("Nested channel trace event shoud have IsRefChannel to be true")
+			}
+		}
 		ncm := channelz.GetChannel(nestedConn)
 		if ncm.Trace == nil {
 			return false, fmt.Errorf("Trace for nested channel should not be empty")
@@ -1293,6 +1298,11 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		}
 		for k := range tcs[0].SubChans {
 			subConn = k
+		}
+		for _, e := range tcs[0].Trace.Events {
+			if e.ID == subConn && e.IsRefChannel {
+				return false, fmt.Errorf("Subchannel trace event shoud have IsRefChannel to be false")
+			}
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
