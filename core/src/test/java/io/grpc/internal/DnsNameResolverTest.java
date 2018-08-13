@@ -156,6 +156,26 @@ public class DnsNameResolverTest {
   }
 
   @Test
+  public void nullDnsName() {
+    try {
+      newResolver(null, DEFAULT_PORT);
+      fail("Expected NullPointerException");
+    } catch (NullPointerException e) {
+      // expected
+    }
+  }
+
+  @Test
+  public void invalidDnsName_containsUnderscore() {
+    try {
+      newResolver("host_1", DEFAULT_PORT);
+      fail("Expected IllegalArgumentException");
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
+  }
+
+  @Test
   public void resolve() throws Exception {
     final List<InetAddress> answer1 = createAddressList(2);
     final List<InetAddress> answer2 = createAddressList(1);
