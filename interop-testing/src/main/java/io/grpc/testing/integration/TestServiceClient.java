@@ -161,7 +161,7 @@ public class TestServiceClient {
           + validTestCasesHelpText()
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_alts=true|false       Whether to use ALTS. Enable ALTS will disable TLS."
-          + "\n                              Default " + c.useTls
+          + "\n                              Default " + c.useAlts
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Requires --use_tls=true "
           + "\n                              to have effect. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
