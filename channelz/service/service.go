@@ -85,9 +85,9 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 			cte.Timestamp = ts
 		}
 		if e.IsRefChannel {
-			cte.ChildRef = &channelzpb.ChannelTraceEvent_ChannelRef{ChannelRef: &channelzpb.ChannelRef{ChannelId: e.ID, Name: e.RefName}}
+			cte.ChildRef = &channelzpb.ChannelTraceEvent_ChannelRef{ChannelRef: &channelzpb.ChannelRef{ChannelId: e.RefID, Name: e.RefName}}
 		} else {
-			cte.ChildRef = &channelzpb.ChannelTraceEvent_SubchannelRef{SubchannelRef: &channelzpb.SubchannelRef{SubchannelId: e.ID, Name: e.RefName}}
+			cte.ChildRef = &channelzpb.ChannelTraceEvent_SubchannelRef{SubchannelRef: &channelzpb.SubchannelRef{SubchannelId: e.RefID, Name: e.RefName}}
 		}
 		events = append(events, cte)
 	}
