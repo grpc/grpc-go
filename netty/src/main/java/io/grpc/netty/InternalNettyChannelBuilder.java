@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
+import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ProxyParameters;
 import java.net.SocketAddress;
 
@@ -72,6 +73,10 @@ public final class InternalNettyChannelBuilder {
 
   public static void setStatsRecordStartedRpcs(NettyChannelBuilder builder, boolean value) {
     builder.setStatsRecordStartedRpcs(value);
+  }
+
+  public static ClientTransportFactory buildTransportFactory(NettyChannelBuilder builder) {
+    return builder.buildTransportFactory();
   }
 
   private InternalNettyChannelBuilder() {}
