@@ -19,14 +19,11 @@
 package channelz
 
 import (
-	"net"
-	"time"
-
-	"sync"
-
-	"sync/atomic"
-
 	"fmt"
+	"net"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -150,18 +147,32 @@ type ChannelInternalMetric struct {
 	LastCallStartedTimestamp time.Time
 }
 
+// ChannelTrace stores traced events on a channel/subchannel and related info.
 type ChannelTrace struct {
-	EventNum     int64
+	// EventNum is the number of events that ever got traced (i.e. including those that have been deleted)
+	EventNum int64
+	// CreationTime is the creation time of the trace.
 	CreationTime time.Time
-	Events       []*TraceEvent
+	// Events stores the most recent trace events (up to $maxTraceEntry, newer event will overwrite the
+	// oldest one)
+	Events []*TraceEvent
 }
 
+// TraceEvent represent a single trace event
 type TraceEvent struct {
-	Desc         string
-	Severity     Severity
-	Timestamp    time.Time
-	ID           int64
-	RefName      string
+	// Desc is a simple description of the trace event.
+	Desc string
+	// Severity states the severity of this trace event.
+	Severity Severity
+	// Timestamp is the event time.
+	Timestamp time.Time
+	// RefID is the id of the entity that gets referenced in the event. RefID is 0 if no other entity is
+	// involved in this event.
+	// e.g. SubChannel (id: 4[]) Created. --> RefID = 4
+	RefID int64
+	// RefName is the reference name for the entity that gets referenced in the event.
+	RefName string
+	// IsRefChannel indicates whether the referenced entity is a Channel or not.
 	IsRefChannel bool
 }
 
@@ -642,6 +653,7 @@ func (e *event) getSeverity() Severity {
 type channelTrace struct {
 	cm          *channelMap
 	createdTime time.Time
+	eventCount  int64
 	mu          sync.Mutex
 	events      []*event
 }
@@ -658,6 +670,7 @@ func (c *channelTrace) append(e *event) {
 	}
 	e.timestamp = time.Now()
 	c.events = append(c.events, e)
+	c.eventCount++
 	c.mu.Unlock()
 }
 
@@ -727,14 +740,14 @@ const (
 
 func (c *channelTrace) dumpData() *ChannelTrace {
 	c.mu.Lock()
-	ct := &ChannelTrace{EventNum: int64(len(c.events)), CreationTime: c.createdTime}
+	ct := &ChannelTrace{EventNum: c.eventCount, CreationTime: c.createdTime}
 	ct.Events = make([]*TraceEvent, 0, len(c.events))
 	for _, e := range c.events {
 		ct.Events = append(ct.Events, &TraceEvent{
 			Desc:         e.getDesc(),
 			Severity:     e.getSeverity(),
 			Timestamp:    e.timestamp,
-			ID:           e.refId,
+			RefID:        e.refId,
 			RefName:      e.refName,
 			IsRefChannel: e.isRefChannel,
 		})

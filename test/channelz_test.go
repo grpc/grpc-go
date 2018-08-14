@@ -1223,7 +1223,7 @@ func TestCZChannelTraceCreationDeletion(t *testing.T) {
 			nestedConn = k
 		}
 		for _, e := range tcs[0].Trace.Events {
-			if e.ID == nestedConn && !e.IsRefChannel {
+			if e.RefID == nestedConn && !e.IsRefChannel {
 				return false, fmt.Errorf("Nested channel trace event shoud have IsRefChannel to be true")
 			}
 		}
@@ -1300,7 +1300,7 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 			subConn = k
 		}
 		for _, e := range tcs[0].Trace.Events {
-			if e.ID == subConn && e.IsRefChannel {
+			if e.RefID == subConn && e.IsRefChannel {
 				return false, fmt.Errorf("Subchannel trace event shoud have IsRefChannel to be false")
 			}
 		}
