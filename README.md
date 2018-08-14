@@ -72,7 +72,7 @@ compile 'io.grpc:grpc-stub:1.14.0'
 ```
 
 [the JARs]:
-http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%221.14.0%22
+https://search.maven.org/search?q=g:io.grpc%20AND%20v:1.14.0
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
