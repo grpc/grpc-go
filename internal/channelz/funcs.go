@@ -38,9 +38,10 @@ var (
 	db    dbWrapper
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
-	EntryPerPage  = 50
-	curState      int32
-	maxTraceEntry int32 = 30
+	EntryPerPage         = 50
+	curState             int32
+	defaultMaxTraceEntry int32 = 30
+	maxTraceEntry        int32 = defaultMaxTraceEntry
 )
 
 // TurnOn turns on channelz data collection.
@@ -56,8 +57,15 @@ func IsOn() bool {
 	return atomic.CompareAndSwapInt32(&curState, 1, 1)
 }
 
+// SetMaxTraceEntry sets maximum number of trace entry per entity (i.e. channel/subchannel).
+// Setting it to 0 will disable channel tracing.
 func SetMaxTraceEntry(i int32) {
 	atomic.StoreInt32(&maxTraceEntry, i)
+}
+
+// ResetMaxTraceEntryToDefault resets the the maximum number of trace entry per entity to default.
+func ResetMaxTraceEntryToDefault() {
+	atomic.StoreInt32(&maxTraceEntry, defaultMaxTraceEntry)
 }
 
 func getMaxTraceEntry() int {
@@ -334,7 +342,7 @@ func (c *channelMap) startCleanup(id int64) {
 	e := c.findEntry(id)
 	if v, ok := e.(tracedChannel); ok {
 		v.decrTraceCount()
-		v.cleanup()
+		v.deleteSelfIfReady()
 	}
 	c.mu.Unlock()
 }
@@ -392,6 +400,7 @@ func (c *channelMap) deleteEntry(id int64) {
 	}
 }
 
+// caller of this function must already hold the c.mu lock
 func (c *channelMap) traceChannelCreated(pid int64, id int64, ref string) {
 	if getMaxTraceEntry() == 0 {
 		return
@@ -422,6 +431,7 @@ func (c *channelMap) traceChannelDeleted(pid int64, id int64) {
 	}
 }
 
+// caller of this function must already hold the c.mu lock
 func (c *channelMap) traceSubChannelCreated(pid int64, id int64, ref string) {
 	if getMaxTraceEntry() == 0 {
 		return

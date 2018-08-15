@@ -1646,3 +1646,167 @@ func TestCZChannelConnectivityState(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	// avoid calling API to set balancer type, which will void service config's change of balancer.
+	e.balancer = ""
+	te := newTest(t, e)
+	channelz.SetMaxTraceEntry(1)
+	defer channelz.ResetMaxTraceEntryToDefault()
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
+	r.InitialAddrs(resolvedAddrs)
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var nestedConn int64
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].NestedChans) != 1 {
+			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+		}
+		for k := range tcs[0].NestedChans {
+			nestedConn = k
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+
+	// wait for the shutdown of grpclb balancer
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].NestedChans) != 0 {
+			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// verify that the nested channel no longer exist due to trace referencing it got overwritten.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(nestedConn)
+		if cm != nil {
+			return false, fmt.Errorf("Nested channel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	channelz.SetMaxTraceEntry(1)
+	defer channelz.ResetMaxTraceEntryToDefault()
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	defer te.tearDown()
+	var subConn int64
+	// Here, we just wait for all sockets to be up. In the future, if we implement
+	// IDLE, we may need to make several rpc calls to create the sockets.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+		}
+		for k := range tcs[0].SubChans {
+			subConn = k
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.NewAddress([]resolver.Address{})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 0 {
+			return false, fmt.Errorf("There should be 0 subchannel not %d", len(tcs[0].SubChans))
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// verify that the subchannel no longer exist due to trace referencing it got overwritten.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(subConn)
+		if cm != nil {
+			return false, fmt.Errorf("Subchannel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	te.resolverScheme = r.Scheme()
+	te.clientConn()
+	var subConn int64
+	// Here, we just wait for all sockets to be up. In the future, if we implement
+	// IDLE, we may need to make several rpc calls to create the sockets.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tcs, _ := channelz.GetTopChannels(0)
+		if len(tcs) != 1 {
+			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+		}
+		if len(tcs[0].SubChans) != 1 {
+			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+		}
+		for k := range tcs[0].SubChans {
+			subConn = k
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	te.tearDown()
+	// verify that the subchannel no longer exist due to parent channel got deleted and its trace cleared.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm := channelz.GetChannel(subConn)
+		if cm != nil {
+			return false, fmt.Errorf("Subchannel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

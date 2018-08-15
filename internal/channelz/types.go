@@ -224,19 +224,29 @@ func (c *channel) triggerDelete() {
 	c.deleteSelfIfReady()
 }
 
-func (c *channel) deleteSelfIfReady() {
+func (c *channel) deleteSelfFromTree() bool {
 	if !c.closeCalled || len(c.subChans)+len(c.nestedChans) != 0 {
-		return
-	}
-	if c.getTraceCount() != 0 {
-		// free the grpc struct (i.e. ChannelzChannel(wrapped ClientConn))
-		c.c = &dummyChannel{}
-	} else {
-		c.cm.deleteEntry(c.id)
+		return false
 	}
 	// not top channel
 	if c.pid != 0 {
 		c.cm.findEntry(c.pid).deleteChild(c.id)
+	}
+	return true
+}
+
+func (c *channel) deleteSelfFromMap() {
+	if c.getTraceCount() != 0 {
+		c.c = &dummyChannel{}
+	} else {
+		c.cm.deleteEntry(c.id)
+		c.trace.clear()
+	}
+}
+
+func (c *channel) deleteSelfIfReady() {
+	if c.deleteSelfFromTree() {
+		c.deleteSelfFromMap()
 	}
 }
 
@@ -255,15 +265,6 @@ func (c *channel) decrTraceCount() {
 func (c *channel) getTraceCount() int {
 	i := atomic.LoadInt32(&c.traceRefCount)
 	return int(i)
-}
-
-func (c *channel) cleanup() {
-	if c.getTraceCount() != 0 {
-		// should never gets here
-		return
-	}
-	c.cm.deleteEntry(c.id)
-	c.trace.clear()
 }
 
 func (c *channel) getRefName() string {
@@ -301,17 +302,28 @@ func (sc *subChannel) triggerDelete() {
 	sc.deleteSelfIfReady()
 }
 
-func (sc *subChannel) deleteSelfIfReady() {
+func (sc *subChannel) deleteSelfFromTree() bool {
 	if !sc.closeCalled || len(sc.sockets) != 0 {
-		return
+		return false
 	}
+	sc.cm.findEntry(sc.pid).deleteChild(sc.id)
+	return true
+}
+
+func (sc *subChannel) deleteSelfFromMap() {
 	if sc.getTraceCount() != 0 {
 		// free the grpc struct (i.e. addrConn)
 		sc.c = &dummyChannel{}
 	} else {
 		sc.cm.deleteEntry(sc.id)
+		sc.trace.clear()
 	}
-	sc.cm.findEntry(sc.pid).deleteChild(sc.id)
+}
+
+func (sc *subChannel) deleteSelfIfReady() {
+	if sc.deleteSelfFromTree() {
+		sc.deleteSelfFromMap()
+	}
 }
 
 func (sc *subChannel) getChannelTrace() *channelTrace {
@@ -329,15 +341,6 @@ func (sc *subChannel) decrTraceCount() {
 func (sc *subChannel) getTraceCount() int {
 	i := atomic.LoadInt32(&sc.traceRefCount)
 	return int(i)
-}
-
-func (sc *subChannel) cleanup() {
-	if sc.getTraceCount() != 0 {
-		// should never gets here
-		return
-	}
-	sc.cm.deleteEntry(sc.id)
-	sc.trace.clear()
 }
 
 func (sc *subChannel) getRefName() string {
@@ -538,7 +541,7 @@ type tracedChannel interface {
 	getChannelTrace() *channelTrace
 	incrTraceCount()
 	decrTraceCount()
-	cleanup()
+	deleteSelfIfReady()
 	getRefName() string
 }
 
@@ -680,7 +683,7 @@ func (c *channelTrace) clear() {
 		if e.t == channelDelete || e.t == subChannelDelete {
 			if v, ok := c.cm.findEntry(e.refId).(tracedChannel); ok {
 				v.decrTraceCount()
-				v.cleanup()
+				v.deleteSelfIfReady()
 			}
 		}
 	}
