@@ -452,7 +452,6 @@ func TestGetChannel(t *testing.T) {
 	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3] {
 		t.Fatalf("GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[3], Name: refNames[3]}}, nestedChans)
 	}
-
 }
 
 func TestGetSubChannel(t *testing.T) {
