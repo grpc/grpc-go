@@ -16,7 +16,6 @@ DUMMY_DEFAULT_VERSION='dummy-default'
 
 function cleanup() {
   echo "Performing cleanup now."
-  gcloud app services set-traffic $KOKORO_GAE_SERVICE --quiet --splits $DUMMY_DEFAULT_VERSION=1.0
   gcloud app services delete $KOKORO_GAE_SERVICE --version $KOKORO_GAE_APP_VERSION --quiet
 }
 trap cleanup SIGHUP SIGINT SIGTERM EXIT
@@ -26,9 +25,9 @@ cd ./github/grpc-java
 ##
 ## Deploy the dummy 'default' version of the service
 ##
-GRADLE_FLAGS="--stacktrace -DgaeStopPreviousVersion=false -DgaePromote=false -PskipCodegen=true"
+GRADLE_FLAGS="--stacktrace -DgaeStopPreviousVersion=false -PskipCodegen=true"
 DUMMY_EXISTS_CMD="gcloud app versions describe $DUMMY_DEFAULT_VERSION --service=$KOKORO_GAE_SERVICE"
-DEPLOY_DUMMY_CMD="./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$DUMMY_DEFAULT_VERSION :grpc-gae-interop-testing-jdk8:appengineDeploy"
+DEPLOY_DUMMY_CMD="./gradlew $GRADLE_FLAGS -DgaeDeployVersion=$DUMMY_DEFAULT_VERSION -DgaePromote=true :grpc-gae-interop-testing-jdk8:appengineDeploy"
 
 # Deploy the dummy 'default' version. We only require that it exists when cleanup() is called.
 # It ok if we race with another run and fail here, because the end result is idempotent.

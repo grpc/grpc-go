@@ -66,8 +66,8 @@ appengine {
         // deploy configuration
         // default - stop the current version
         stopPreviousVersion = System.getProperty('gaeStopPreviousVersion') ?: true
-        // default - make this the current version
-        promote = System.getProperty('gaePromote') ?: true
+        // default - do not make this the promoted version
+        promote = System.getProperty('gaePromote') ?: false
         // Use -DgaeDeployVersion if set, otherwise the version is null and the plugin will generate it
         version = System.getProperty('gaeDeployVersion')
     }
