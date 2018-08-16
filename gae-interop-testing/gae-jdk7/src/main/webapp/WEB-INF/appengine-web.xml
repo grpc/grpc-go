@@ -12,10 +12,9 @@
   limitations under the License.
 -->
 <!-- [START config] -->
-<appengine-web-app xmlns="http://appengine.google.com/ns/1.0">
-  <application>YOUR-PROJECT-ID</application>
-  <version>YOUR-VERSION-ID</version>
+<appengine-web-app xmlns='http://appengine.google.com/ns/1.0'>
   <threadsafe>true</threadsafe>
+  <service>java-gae-interop-test</service>
   <runtime>java7</runtime>
 </appengine-web-app>
 <!-- [END config] -->
