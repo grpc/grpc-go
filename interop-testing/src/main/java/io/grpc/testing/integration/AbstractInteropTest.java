@@ -1604,7 +1604,7 @@ public abstract class AbstractInteropTest {
       // This can happen if the stream has already been terminated due to deadline exceeded.
     }
 
-    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+    assertTrue(responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     assertEquals(0, responseObserver.getValues().size());
     assertEquals(Status.DEADLINE_EXCEEDED.getCode(),
                  Status.fromThrowable(responseObserver.getError()).getCode());
