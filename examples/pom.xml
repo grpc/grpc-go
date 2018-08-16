@@ -46,11 +46,19 @@
       <version>${grpc.version}</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- Used in HelloWorldServerTls -->
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-netty</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
       <version>${netty.tcnative.version}</version>
     </dependency>
+
     <dependency>
       <groupId>com.google.api.grpc</groupId>
       <artifactId>proto-google-common-protos</artifactId>

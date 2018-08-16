@@ -35,7 +35,8 @@ dependencies {
     compile "io.grpc:grpc-stub:${grpcVersion}"
     compileOnly "javax.annotation:javax.annotation-api:1.2"
 
-    // Used for TLS in HelloWorldServerTls
+    // Used in HelloWorldServerTls
+    compile "io.grpc:grpc-netty:${grpcVersion}"
     compile "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
 
     compile "com.google.protobuf:protobuf-java-util:${protobufVersion}"

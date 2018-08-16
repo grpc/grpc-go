@@ -24,6 +24,12 @@ artifacts { // We want uploadArchives to handle the shadowJar; we don't care abo
     // uploadShadow
     archives shadowJar }
 
+jar {
+    // Must use a different classifier to avoid conflicting with shadowJar
+    classifier = 'original'
+}
+configurations.archives.artifacts.removeAll { it.classifier == "original" }
+
 shadowJar {
     classifier = null
     dependencies {

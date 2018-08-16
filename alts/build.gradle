@@ -1,3 +1,10 @@
+buildscript {
+    repositories { jcenter() }
+    dependencies { classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4' }
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+
 description = "gRPC: ALTS"
 
 sourceCompatibility = 1.7
@@ -39,3 +46,36 @@ configureProtoCompilation()
 }
 
 javadoc { exclude 'io/grpc/alts/internal/**' }
+
+artifacts {
+    archives shadowJar
+}
+
+jar {
+    // Must use a different classifier to avoid conflicting with shadowJar
+    classifier = 'original'
+}
+configurations.archives.artifacts.removeAll { it.classifier == "original" }
+
+// We want to use grpc-netty-shaded instead of grpc-netty. But we also want our
+// source to work with Bazel, so we rewrite the code as part of the build.
+shadowJar {
+    classifier = null
+    dependencies {
+        exclude(dependency {true})
+    }
+    relocate 'io.grpc.netty', 'io.grpc.netty.shaded.io.grpc.netty'
+    relocate 'io.netty', 'io.grpc.netty.shaded.io.netty'
+}
+
+[
+    install.repositories.mavenInstaller,
+    uploadArchives.repositories.mavenDeployer,
+]*.pom*.whenConfigured { pom ->
+    def netty = pom.dependencies.find {dep -> dep.artifactId == 'grpc-netty'}
+    // Swap our dependency to grpc-netty-shaded. Projects depending on this via
+    // project(':grpc-alts') will still be using the non-shaded form.
+    netty.artifactId = "grpc-netty-shaded"
+    // Depend on specific version of grpc-netty-shaded because it is unstable API
+    netty.version = "[" + netty.version + "]"
+}
