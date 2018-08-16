@@ -222,7 +222,13 @@ class ProxyDetectorImpl implements ProxyDetector {
       return null;
     }
 
-    List<Proxy> proxies = proxySelector.get().select(uri);
+    ProxySelector proxySelector = this.proxySelector.get();
+    if (proxySelector == null) {
+      log.log(Level.FINE, "proxy selector is null, so continuing without proxy lookup");
+      return null;
+    }
+
+    List<Proxy> proxies = proxySelector.select(uri);
     if (proxies.size() > 1) {
       log.warning("More than 1 proxy detected, gRPC will select the first one");
     }

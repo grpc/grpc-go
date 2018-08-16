@@ -197,4 +197,18 @@ public class ProxyDetectorImplTest {
             proxyPassword),
         detected);
   }
+
+  @Test
+  public void proxySelectorReturnsNull() throws Exception {
+    ProxyDetectorImpl proxyDetector = new ProxyDetectorImpl(
+        new Supplier<ProxySelector>() {
+          @Override
+          public ProxySelector get() {
+            return null;
+          }
+        },
+        authenticator,
+        null);
+    assertNull(proxyDetector.proxyFor(destination));
+  }
 }
