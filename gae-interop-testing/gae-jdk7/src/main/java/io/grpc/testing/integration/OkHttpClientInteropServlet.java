@@ -130,17 +130,16 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
         for (Method before : befores) {
           before.invoke(tester);
         }
-        method.invoke(tester);
-        for (Method after : afters) {
-          after.invoke(tester);
+        try (AutoCloseable unused = toCloseable(tester, afters)) {
+          method.invoke(tester);
         }
         sb.append("================\n");
         sb.append("PASS: Test method: ").append(method).append("\n");
-      } catch (Exception e) {
+      } catch (Throwable t) {
         // The default JUnit4 test runner skips tests with failed assumptions.
         // We will do the same here.
         boolean assumptionViolated = false;
-        for (Throwable iter = e; iter != null; iter = iter.getCause()) {
+        for (Throwable iter = t; iter != null; iter = iter.getCause()) {
           if (iter instanceof AssumptionViolatedException) {
             assumptionViolated = true;
             break;
@@ -155,7 +154,7 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
         failures++;
         StringWriter stringWriter = new StringWriter();
         PrintWriter printWriter = new PrintWriter(stringWriter);
-        e.printStackTrace(printWriter);
+        t.printStackTrace(printWriter);
         sb.append(stringWriter);
       }
     }
@@ -176,6 +175,17 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
               ignored));
     }
     writer.println(sb);
+  }
+
+  private static AutoCloseable toCloseable(final Object o, final List<Method> methods) {
+    return new AutoCloseable() {
+      @Override
+      public void close() throws Exception {
+        for (Method method : methods) {
+          method.invoke(o);
+        }
+      }
+    };
   }
 
   public static final class Tester extends AbstractInteropTest {
