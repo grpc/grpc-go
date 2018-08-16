@@ -1,7 +1,9 @@
 #!/bin/bash
 
 set -exu -o pipefail
-cat /VERSION
+if [[ -f /VERSION ]]; then
+  cat /VERSION
+fi
 
 KOKORO_GAE_SERVICE="java-gae-interop-test"
 
@@ -20,7 +22,8 @@ function cleanup() {
 }
 trap cleanup SIGHUP SIGINT SIGTERM EXIT
 
-cd ./github/grpc-java
+readonly GRPC_JAVA_DIR="$(cd "$(dirname "$0")"/../.. && pwd)"
+cd "$GRPC_JAVA_DIR"
 
 ##
 ## Deploy the dummy 'default' version of the service
@@ -47,8 +50,8 @@ set +e
 echo "Cleaning out stale deploys from previous runs, it is ok if this part fails"
 
 # Sometimes the trap based cleanup fails.
-# Delete all versions whose name starts with 'kokoro' and is older than 1 hour.
+# Delete all versions whose name is not 'dummy-default' and is older than 1 hour.
 # This expression is an ISO8601 relative date:
 # https://cloud.google.com/sdk/gcloud/reference/topic/datetimes
-gcloud app versions list --format="get(version.id)" --filter="service=$KOKORO_GAE_SERVICE AND version : 'kokoro*' AND version.createTime<'-p1h'" | xargs -i gcloud app services delete $KOKORO_GAE_SERVICE --version {} --quiet
+gcloud app versions list --format="get(version.id)" --filter="service=$KOKORO_GAE_SERVICE AND NOT version : 'dummy-default' AND version.createTime<'-p1h'" | xargs -i gcloud app services delete "$KOKORO_GAE_SERVICE" --version {} --quiet
 exit 0
