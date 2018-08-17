@@ -55,6 +55,10 @@ compileJava {
     options.compilerArgs += ["-Xlint:-processing"]
 }
 
+def createDefaultVersion() {
+    return new java.text.SimpleDateFormat("yyyyMMdd't'HHmmss").format(new Date())
+}
+
 // [START model]
 appengine {
     // App Engine tasks configuration
@@ -69,7 +73,7 @@ appengine {
         // default - do not make this the promoted version
         promote = System.getProperty('gaePromote') ?: false
         // Use -DgaeDeployVersion if set, otherwise the version is null and the plugin will generate it
-        version = System.getProperty('gaeDeployVersion')
+        version = System.getProperty('gaeDeployVersion', createDefaultVersion())
     }
 }
 // [END model]
@@ -98,18 +102,14 @@ String getGaeProject() {
 String getService(java.nio.file.Path projectPath) {
     Node xml = new XmlParser().parse(projectPath.resolve("src/main/webapp/WEB-INF/appengine-web.xml").toFile())
     if (xml.service.isEmpty()) {
-        return null
+        return "default"
     } else {
         return xml.service.text()
     }
 }
 
 String getAppUrl(String project, String service, String version) {
-    if (version != null && service != null) {
-        return "http://${version}.${service}.${project}.appspot.com"
-    } else {
-        return "http://${project}.appspot.com"
-    }
+    return "http://${version}.${service}.${project}.appspot.com"
 }
 
 task runInteropTestRemote(dependsOn: 'appengineDeploy') {
@@ -120,7 +120,7 @@ task runInteropTestRemote(dependsOn: 'appengineDeploy') {
         def appUrl = getAppUrl(
                 getGaeProject(),
                 getService(project.getProjectDir().toPath()),
-                System.getProperty('gaeDeployVersion'))
+                appengine.deploy.version)
         logger.log(LogLevel.INFO, "the appURL=" + appUrl)
         def client = new com.squareup.okhttp.OkHttpClient()
         // The '?jdk8' argument is ignored by the server, it exists only to tag the request log entry
