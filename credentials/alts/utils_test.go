@@ -98,6 +98,34 @@ func TestAuthInfoFromContext(t *testing.T) {
 	}
 }
 
+func TestAuthInfoFromPeer(t *testing.T) {
+	altsAuthInfo := &fakeALTSAuthInfo{}
+	p := peer.Peer{
+		AuthInfo: altsAuthInfo,
+	}
+	for _, tc := range []struct {
+		desc    string
+		p       peer.Peer
+		success bool
+		out     AuthInfo
+	}{
+		{
+			"working case",
+			p,
+			true,
+			altsAuthInfo,
+		},
+	} {
+		authInfo, err := AuthInfoFromPeer(tc.p)
+		if got, want := (err == nil), tc.success; got != want {
+			t.Errorf("%v: AuthInfoFromPeer(_)=(err=nil)=%v, want %v", tc.desc, got, want)
+		}
+		if got, want := authInfo, tc.out; got != want {
+			t.Errorf("%v:, AuthInfoFromPeer(_)=(%v, _), want (%v, _)", tc.desc, got, want)
+		}
+	}
+}
+
 type fakeALTSAuthInfo struct{}
 
 func (*fakeALTSAuthInfo) AuthType() string            { return "" }

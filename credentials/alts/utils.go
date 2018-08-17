@@ -124,11 +124,18 @@ func readManufacturer() ([]byte, error) {
 // information about the communicating peer. For client-side, use grpc.Peer()
 // CallOption.
 func AuthInfoFromContext(ctx context.Context) (AuthInfo, error) {
-	peer, ok := peer.FromContext(ctx)
+	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("no Peer found in Context")
 	}
-	altsAuthInfo, ok := peer.AuthInfo.(AuthInfo)
+	return AuthInfoFromPeer(*p)
+}
+
+// AuthInfoFromPeer extracts the alts.AuthInfo object from the given peer, if it
+// exists. This API should be used by gRPC clients after obtaining a peer object
+// using the grpc.Peer() CallOption.
+func AuthInfoFromPeer(p peer.Peer) (AuthInfo, error) {
+	altsAuthInfo, ok := p.AuthInfo.(AuthInfo)
 	if !ok {
 		return nil, errors.New("no alts.AuthInfo found in Context")
 	}
