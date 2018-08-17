@@ -296,9 +296,15 @@ public abstract class AbstractInteropTest {
 
   /** Clean up. */
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     if (channel != null) {
-      channel.shutdownNow().awaitTermination(1, TimeUnit.SECONDS);
+      channel.shutdownNow();
+      try {
+        channel.awaitTermination(1, TimeUnit.SECONDS);
+      } catch (InterruptedException unused) {
+        // Best effort. If there is an interruption, we want to continue cleaning up, but quickly
+        Thread.currentThread().interrupt();
+      }
     }
     stopServer();
   }
