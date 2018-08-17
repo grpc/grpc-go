@@ -25,7 +25,7 @@ Running the tests in GAE
 You can run the gradle task to execute the interop tests.
 ```bash
 # cd into either gae-jdk7 or gae-jdk8
-$ ./gradlew runInteropTestRemote
+$ ../../gradlew runInteropTestRemote
 
 # Or run one of these from the root gRPC Java directory:
 $ ./gradlew :grpc-gae-interop-testing-jdk7:runInteropTestRemote
