@@ -25,6 +25,7 @@ import io.grpc.okhttp.internal.framed.Settings;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import okio.Buffer;
@@ -36,10 +37,12 @@ class AsyncFrameWriter implements FrameWriter {
   // Although writes are thread-safe, we serialize them to prevent consuming many Threads that are
   // just waiting on each other.
   private final SerializingExecutor executor;
-  private final OkHttpClientTransport transport;
+  private final TransportExceptionHandler transportExceptionHandler;
+  private final AtomicLong flushCounter = new AtomicLong();
 
-  public AsyncFrameWriter(OkHttpClientTransport transport, SerializingExecutor executor) {
-    this.transport = transport;
+  public AsyncFrameWriter(
+      TransportExceptionHandler transportExceptionHandler, SerializingExecutor executor) {
+    this.transportExceptionHandler = transportExceptionHandler;
     this.executor = executor;
   }
 
@@ -89,10 +92,17 @@ class AsyncFrameWriter implements FrameWriter {
 
   @Override
   public void flush() {
+    // keep track of version of flushes to skip flush if another flush task is queued.
+    final long flushCount = flushCounter.incrementAndGet();
+
     executor.execute(new WriteRunnable() {
       @Override
       public void doRun() throws IOException {
-        frameWriter.flush();
+        // There can be a flush starvation if there are continuous flood of flush is queued, this
+        // is not an issue with OkHttp since it flushes if the buffer is full.
+        if (flushCounter.get() == flushCount) {
+          frameWriter.flush();
+        }
       }
     });
   }
@@ -219,9 +229,9 @@ class AsyncFrameWriter implements FrameWriter {
         }
         doRun();
       } catch (RuntimeException e) {
-        transport.onException(e);
+        transportExceptionHandler.onException(e);
       } catch (Exception e) {
-        transport.onException(e);
+        transportExceptionHandler.onException(e);
       }
     }
 
@@ -232,5 +242,12 @@ class AsyncFrameWriter implements FrameWriter {
   public int maxDataLength() {
     return frameWriter == null ? 0x4000 /* 16384, the minimum required by the HTTP/2 spec */
         : frameWriter.maxDataLength();
+  }
+
+  /** A class that handles transport exception. */
+  interface TransportExceptionHandler {
+
+    /** Handles exception. */
+    void onException(Throwable throwable);
   }
 }

@@ -55,6 +55,7 @@ import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
+import io.grpc.okhttp.AsyncFrameWriter.TransportExceptionHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -98,7 +99,7 @@ import okio.Timeout;
 /**
  * A okhttp-based {@link ConnectionClientTransport} implementation.
  */
-class OkHttpClientTransport implements ConnectionClientTransport {
+class OkHttpClientTransport implements ConnectionClientTransport, TransportExceptionHandler {
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS = buildErrorCodeToStatusMap();
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
   private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
@@ -728,7 +729,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   /**
    * Finish all active streams due to an IOException, then close the transport.
    */
-  void onException(Throwable failureCause) {
+  @Override
+  public void onException(Throwable failureCause) {
     Preconditions.checkNotNull(failureCause, "failureCause");
     Status status = Status.UNAVAILABLE.withCause(failureCause);
     startGoAway(0, ErrorCode.INTERNAL_ERROR, status);
