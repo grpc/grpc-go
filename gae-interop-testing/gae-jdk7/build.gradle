@@ -140,6 +140,7 @@ task runInteropTestRemote(dependsOn: 'appengineDeploy') {
             try {
                 def response = client.newCall(interopRequest).execute()
                 result = response.body().string()
+                project.println(result)
                 if (response.code() == 200) {
                     return
                 }
@@ -148,6 +149,6 @@ task runInteropTestRemote(dependsOn: 'appengineDeploy') {
                 logger.log(LogLevel.ERROR, "caught exception. will retry if possible", t)
             }
         }
-        throw new GradleException("Interop test failed:\nresponse: ${result}\nthrowable:${caught}")
+        throw new GradleException("Interop test failed:\nthrowable:${caught}")
     }
 }

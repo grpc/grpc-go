@@ -30,6 +30,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -49,8 +55,45 @@ import org.junit.internal.AssumptionViolatedException;
 public final class OkHttpClientInteropServlet extends HttpServlet {
   private static final String INTEROP_TEST_ADDRESS = "grpc-test.sandbox.googleapis.com:443";
 
+  private static final class LogEntryRecorder extends Handler {
+    private Queue<LogRecord> loggedMessages = new ConcurrentLinkedQueue<>();
+
+    @Override
+    public void publish(LogRecord logRecord) {
+      loggedMessages.add(logRecord);
+    }
+
+    @Override
+    public void flush() {}
+
+    @Override
+    public void close() {}
+
+    public String getLogOutput() {
+      SimpleFormatter formatter = new SimpleFormatter();
+      StringBuilder sb = new StringBuilder();
+      for (LogRecord loggedMessage : loggedMessages) {
+        sb.append(formatter.format(loggedMessage));
+      }
+      return sb.toString();
+    }
+  }
+
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    LogEntryRecorder handler = new LogEntryRecorder();
+    Logger.getLogger("").addHandler(handler);
+    try {
+      doGetHelper(req, resp);
+    } finally {
+      Logger.getLogger("").removeHandler(handler);
+    }
+    resp.getWriter().append("=======================================\n")
+        .append("Server side java.util.logging messages:\n")
+        .append(handler.getLogOutput());
+  }
+
+  private void doGetHelper(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     resp.setContentType("text/plain");
     PrintWriter writer = resp.getWriter();
     writer.println("Test invoked at: ");
@@ -91,6 +134,8 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
         for (Method after : afters) {
           after.invoke(tester);
         }
+        sb.append("================\n");
+        sb.append("PASS: Test method: ").append(method).append("\n");
       } catch (Exception e) {
         // The default JUnit4 test runner skips tests with failed assumptions.
         // We will do the same here.
@@ -106,7 +151,7 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
         }
 
         sb.append("================\n");
-        sb.append("Test method: ").append(method).append("\n");
+        sb.append("FAILED: Test method: ").append(method).append("\n");
         failures++;
         StringWriter stringWriter = new StringWriter();
         PrintWriter printWriter = new PrintWriter(stringWriter);

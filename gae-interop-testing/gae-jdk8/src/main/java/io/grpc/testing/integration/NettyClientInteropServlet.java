@@ -27,6 +27,12 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -45,8 +51,45 @@ import org.junit.runner.notification.Failure;
 public final class NettyClientInteropServlet extends HttpServlet {
   private static final String INTEROP_TEST_ADDRESS = "grpc-test.sandbox.googleapis.com:443";
 
+  private static final class LogEntryRecorder extends Handler {
+    private Queue<LogRecord> loggedMessages = new ConcurrentLinkedQueue<>();
+
+    @Override
+    public void publish(LogRecord logRecord) {
+      loggedMessages.add(logRecord);
+    }
+
+    @Override
+    public void flush() {}
+
+    @Override
+    public void close() {}
+
+    public String getLogOutput() {
+      SimpleFormatter formatter = new SimpleFormatter();
+      StringBuilder sb = new StringBuilder();
+      for (LogRecord loggedMessage : loggedMessages) {
+        sb.append(formatter.format(loggedMessage));
+      }
+      return sb.toString();
+    }
+  }
+
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    LogEntryRecorder handler = new LogEntryRecorder();
+    Logger.getLogger("").addHandler(handler);
+    try {
+      doGetHelper(req, resp);
+    } finally {
+      Logger.getLogger("").removeHandler(handler);
+    }
+    resp.getWriter().append("=======================================\n")
+        .append("Server side java.util.logging messages:\n")
+        .append(handler.getLogOutput());
+  }
+
+  private void doGetHelper(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     resp.setContentType("text/plain");
     PrintWriter writer = resp.getWriter();
     writer.println("Test invoked at: ");
