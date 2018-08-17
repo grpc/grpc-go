@@ -222,5 +222,10 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
     @Ignore
     @Override
     public void specialStatusMessage() {}
+
+    // grpc-java/issues/4626: this test has become flakey on GAE JDK7
+    @Ignore
+    @Override
+    public void timeoutOnSleepingServer() {}
   }
 }
