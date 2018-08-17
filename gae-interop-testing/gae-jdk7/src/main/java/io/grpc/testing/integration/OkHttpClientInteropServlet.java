@@ -21,6 +21,7 @@ import static org.junit.Assert.assertTrue;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.internal.MoreThrowables;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -181,8 +182,21 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
     return new AutoCloseable() {
       @Override
       public void close() throws Exception {
+        Throwable failure = null;
         for (Method method : methods) {
-          method.invoke(o);
+          try {
+            method.invoke(o);
+          } catch (Throwable t) {
+            if (failure == null) {
+              failure = t;
+            } else {
+              failure.addSuppressed(t);
+            }
+          }
+        }
+        if (failure != null) {
+          MoreThrowables.throwIfUnchecked(failure);
+          throw new Exception(failure);
         }
       }
     };
