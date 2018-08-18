@@ -10,6 +10,7 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf/lib
 
 before_install:
+  - rm ~/.m2/settings.xml || true # Avoid repository.apache.org, which has QPS limits and is useless
   - mkdir -p $HOME/.gradle/caches &&
     ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
   - mkdir -p $HOME/.gradle &&
