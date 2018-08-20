@@ -16,14 +16,13 @@
 
 package io.grpc;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableSet;
-import io.grpc.NameResolverProvider.HardcodedClasses;
 import io.grpc.internal.DnsNameResolverProvider;
 import java.net.URI;
 import java.util.Collections;
@@ -47,7 +46,7 @@ public class NameResolverProviderTest {
     try {
       factory.getDefaultScheme();
       fail("Expected exception");
-    } catch (IllegalStateException ex) {
+    } catch (RuntimeException ex) {
       assertTrue(ex.toString(), ex.getMessage().contains("No NameResolverProviders found"));
     }
   }
@@ -73,7 +72,7 @@ public class NameResolverProviderTest {
     try {
       factory.newNameResolver(uri, attributes);
       fail("Expected exception");
-    } catch (IllegalStateException ex) {
+    } catch (RuntimeException ex) {
       assertTrue(ex.toString(), ex.getMessage().contains("No NameResolverProviders found"));
     }
   }
@@ -87,11 +86,10 @@ public class NameResolverProviderTest {
   }
 
   @Test
-  public void getClassesViaHardcoded_triesToLoadClasses() throws Exception {
-    ServiceProvidersTestUtil.testHardcodedClasses(
-        HardcodedClassesCallable.class.getName(),
-        getClass().getClassLoader(),
-        ImmutableSet.of("io.grpc.internal.DnsNameResolverProvider"));
+  public void getClassesViaHardcoded_classesPresent() throws Exception {
+    List<Class<?>> classes = NameResolverProvider.getHardCodedClasses();
+    assertThat(classes).hasSize(1);
+    assertThat(classes.get(0).getName()).isEqualTo("io.grpc.internal.DnsNameResolverProvider");
   }
 
   @Test
@@ -119,8 +117,8 @@ public class NameResolverProviderTest {
 
   public static final class HardcodedClassesCallable implements Callable<Iterator<Class<?>>> {
     @Override
-    public Iterator<Class<?>> call() throws Exception {
-      return new HardcodedClasses().iterator();
+    public Iterator<Class<?>> call() {
+      return NameResolverProvider.getHardCodedClasses().iterator();
     }
   }
 
