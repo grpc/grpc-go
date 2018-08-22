@@ -751,6 +751,11 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 // ResetConnectBackoff wakes up all subchannels in transient failure and causes
 // them to attempt another connection immediately.
 //
+// In general, this function should not be used.  Typical service or network
+// outages result in a reasonable client reconnection strategy by default.
+// However, if a previously unavailable network becomes available, this may be
+// used to trigger an immediate reconnect.
+//
 // This API is EXPERIMENTAL.
 func (cc *ClientConn) ResetConnectBackoff() {
 	cc.mu.Lock()
