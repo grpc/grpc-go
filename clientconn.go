@@ -1053,6 +1053,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 	select {
 	case <-timer.C:
 	case <-resetBackoff:
+		timer.Stop()
 		ac.mu.Lock()
 		ac.connectRetryNum = 0
 		ac.mu.Unlock()
