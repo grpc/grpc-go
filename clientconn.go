@@ -536,10 +536,11 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // Caller needs to make sure len(addrs) > 0.
 func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	ac := &addrConn{
-		cc:     cc,
-		addrs:  addrs,
-		dopts:  cc.dopts,
-		czData: new(channelzData),
+		cc:           cc,
+		addrs:        addrs,
+		dopts:        cc.dopts,
+		czData:       new(channelzData),
+		resetBackoff: make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -747,6 +748,16 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 	go r.resolveNow(o)
 }
 
+// ResetConnectBackoff wakes up all subchannels in transient failure and causes
+// them to attempt another connection immediately.
+func (cc *ClientConn) ResetConnectBackoff() {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	for ac := range cc.conns {
+		ac.resetConnectBackoff()
+	}
+}
+
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
 	defer cc.cancel()
@@ -814,6 +825,8 @@ type addrConn struct {
 	// connectDeadline is the time by which all connection
 	// negotiations must complete.
 	connectDeadline time.Time
+
+	resetBackoff chan struct{}
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
@@ -1027,15 +1040,24 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		close(ac.ready)
 		ac.ready = nil
 	}
+	resetBackoff := ac.resetBackoff
 	ac.mu.Unlock()
 	timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 	select {
 	case <-timer.C:
+	case <-resetBackoff:
 	case <-ac.ctx.Done():
 		timer.Stop()
 		return false, ac.ctx.Err()
 	}
 	return false, nil
+}
+
+func (ac *addrConn) resetConnectBackoff() {
+	ac.mu.Lock()
+	close(ac.resetBackoff)
+	ac.resetBackoff = make(chan struct{})
+	ac.mu.Unlock()
 }
 
 // Run in a goroutine to track the error in transport and create the
