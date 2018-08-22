@@ -750,6 +750,8 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 
 // ResetConnectBackoff wakes up all subchannels in transient failure and causes
 // them to attempt another connection immediately.
+//
+// This API is EXPERIMENTAL.
 func (cc *ClientConn) ResetConnectBackoff() {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
