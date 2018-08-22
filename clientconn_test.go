@@ -729,6 +729,7 @@ type backoffForever struct{}
 func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
 
 func TestResetConnectBackoff(t *testing.T) {
+	defer leakcheck.Check(t)
 	dials := make(chan struct{})
 	dialer := func(string, time.Duration) (net.Conn, error) {
 		dials <- struct{}{}
