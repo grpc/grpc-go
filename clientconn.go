@@ -1054,9 +1054,6 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 	case <-timer.C:
 	case <-resetBackoff:
 		timer.Stop()
-		ac.mu.Lock()
-		ac.connectRetryNum = 0
-		ac.mu.Unlock()
 	case <-ac.ctx.Done():
 		timer.Stop()
 		return false, ac.ctx.Err()
@@ -1068,6 +1065,7 @@ func (ac *addrConn) resetConnectBackoff() {
 	ac.mu.Lock()
 	close(ac.resetBackoff)
 	ac.resetBackoff = make(chan struct{})
+	ac.connectRetryNum = 0
 	ac.mu.Unlock()
 }
 
