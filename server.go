@@ -1068,7 +1068,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		s:     stream,
 		p:     &parser{r: stream},
 		codec: s.getCodec(stream.ContentSubtype()),
-
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,

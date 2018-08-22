@@ -749,7 +749,8 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 }
 
 // ResetConnectBackoff wakes up all subchannels in transient failure and causes
-// them to attempt another connection immediately.
+// them to attempt another connection immediately.  It also resets the backoff
+// times used for subsequent attempts regardless of the current state.
 //
 // In general, this function should not be used.  Typical service or network
 // outages result in a reasonable client reconnection strategy by default.
@@ -899,6 +900,7 @@ func (ac *addrConn) resetTransport() error {
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 	ac.cc.mu.RUnlock()
 	var backoffDeadline, connectDeadline time.Time
+	var resetBackoff chan struct{}
 	for connectRetryNum := 0; ; connectRetryNum++ {
 		ac.mu.Lock()
 		if ac.backoffDeadline.IsZero() {
@@ -906,6 +908,7 @@ func (ac *addrConn) resetTransport() error {
 			// or this is the first time this addrConn is trying to establish a
 			// connection.
 			backoffFor := ac.dopts.bs.Backoff(connectRetryNum) // time.Duration.
+			resetBackoff = ac.resetBackoff
 			// This will be the duration that dial gets to finish.
 			dialDuration := getMinConnectTimeout()
 			if backoffFor > dialDuration {
@@ -939,7 +942,7 @@ func (ac *addrConn) resetTransport() error {
 		copy(addrsIter, ac.addrs)
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
-		connected, err := ac.createTransport(connectRetryNum, ridx, backoffDeadline, connectDeadline, addrsIter, copts)
+		connected, err := ac.createTransport(connectRetryNum, ridx, backoffDeadline, connectDeadline, addrsIter, copts, resetBackoff)
 		if err != nil {
 			return err
 		}
@@ -951,7 +954,7 @@ func (ac *addrConn) resetTransport() error {
 
 // createTransport creates a connection to one of the backends in addrs.
 // It returns true if a connection was established.
-func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions) (bool, error) {
+func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions, resetBackoff chan struct{}) (bool, error) {
 	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
 		target := transport.TargetInfo{
@@ -1047,7 +1050,6 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		close(ac.ready)
 		ac.ready = nil
 	}
-	resetBackoff := ac.resetBackoff
 	ac.mu.Unlock()
 	timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 	select {
