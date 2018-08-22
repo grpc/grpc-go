@@ -736,10 +736,10 @@ func TestResetConnectBackoff(t *testing.T) {
 		return nil, errors.New("failed to fake dial")
 	}
 	cc, err := Dial("any", WithInsecure(), WithDialer(dialer), withBackoff(backoffForever{}))
-	defer cc.Close()
 	if err != nil {
 		t.Fatalf("Dial() = _, %v; want _, nil", err)
 	}
+	defer cc.Close()
 	select {
 	case <-dials:
 		break
