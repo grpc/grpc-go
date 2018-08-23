@@ -100,12 +100,12 @@ func TestAuthInfoFromContext(t *testing.T) {
 
 func TestAuthInfoFromPeer(t *testing.T) {
 	altsAuthInfo := &fakeALTSAuthInfo{}
-	p := peer.Peer{
+	p := &peer.Peer{
 		AuthInfo: altsAuthInfo,
 	}
 	for _, tc := range []struct {
 		desc    string
-		p       peer.Peer
+		p       *peer.Peer
 		success bool
 		out     AuthInfo
 	}{
