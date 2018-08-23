@@ -45,6 +45,7 @@ public final class ServiceConfigUtil {
   private static final String METHOD_CONFIG_MAX_RESPONSE_MESSAGE_BYTES_KEY =
       "maxResponseMessageBytes";
   private static final String METHOD_CONFIG_RETRY_POLICY_KEY = "retryPolicy";
+  private static final String METHOD_CONFIG_HEDGING_POLICY_KEY = "hedgingPolicy";
   private static final String NAME_SERVICE_KEY = "service";
   private static final String NAME_METHOD_KEY = "method";
   private static final String RETRY_POLICY_MAX_ATTEMPTS_KEY = "maxAttempts";
@@ -52,6 +53,9 @@ public final class ServiceConfigUtil {
   private static final String RETRY_POLICY_MAX_BACKOFF_KEY = "maxBackoff";
   private static final String RETRY_POLICY_BACKOFF_MULTIPLIER_KEY = "backoffMultiplier";
   private static final String RETRY_POLICY_RETRYABLE_STATUS_CODES_KEY = "retryableStatusCodes";
+  private static final String HEDGING_POLICY_MAX_ATTEMPTS_KEY = "maxAttempts";
+  private static final String HEDGING_POLICY_HEDGING_DELAY_KEY = "hedgingDelay";
+  private static final String HEDGING_POLICY_NON_FATAL_STATUS_CODES_KEY = "nonFatalStatusCodes";
 
   private static final long DURATION_SECONDS_MIN = -315576000000L;
   private static final long DURATION_SECONDS_MAX = 315576000000L;
@@ -144,6 +148,35 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
+  static Integer getMaxAttemptsFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+    if (!hedgingPolicy.containsKey(HEDGING_POLICY_MAX_ATTEMPTS_KEY)) {
+      return null;
+    }
+    return getDouble(hedgingPolicy, RETRY_POLICY_MAX_ATTEMPTS_KEY).intValue();
+  }
+
+  @Nullable
+  static Long getHedgingDelayNanosFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+    if (!hedgingPolicy.containsKey(HEDGING_POLICY_HEDGING_DELAY_KEY)) {
+      return null;
+    }
+    String rawHedgingDelay = getString(hedgingPolicy, HEDGING_POLICY_HEDGING_DELAY_KEY);
+    try {
+      return parseDuration(rawHedgingDelay);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Nullable
+  static List<String> getNonFatalStatusCodesFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+    if (!hedgingPolicy.containsKey(HEDGING_POLICY_NON_FATAL_STATUS_CODES_KEY)) {
+      return null;
+    }
+    return checkStringList(getList(hedgingPolicy, HEDGING_POLICY_NON_FATAL_STATUS_CODES_KEY));
+  }
+
+  @Nullable
   static String getServiceFromName(Map<String, Object> name) {
     if (!name.containsKey(NAME_SERVICE_KEY)) {
       return null;
@@ -165,6 +198,14 @@ public final class ServiceConfigUtil {
       return null;
     }
     return getObject(methodConfig, METHOD_CONFIG_RETRY_POLICY_KEY);
+  }
+
+  @Nullable
+  static Map<String, Object> getHedgingPolicyFromMethodConfig(Map<String, Object> methodConfig) {
+    if (!methodConfig.containsKey(METHOD_CONFIG_HEDGING_POLICY_KEY)) {
+      return null;
+    }
+    return getObject(methodConfig, METHOD_CONFIG_HEDGING_POLICY_KEY);
   }
 
   @Nullable

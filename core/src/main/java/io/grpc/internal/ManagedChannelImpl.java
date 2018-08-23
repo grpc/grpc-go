@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
+import static io.grpc.internal.ServiceConfigInterceptor.HEDGING_POLICY_KEY;
 import static io.grpc.internal.ServiceConfigInterceptor.RETRY_POLICY_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -504,7 +505,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       return new RetriableStream<ReqT>(
           method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit,
           getCallExecutor(callOptions), transportFactory.getScheduledExecutorService(),
-          callOptions.getOption(RETRY_POLICY_KEY), throttle) {
+          callOptions.getOption(RETRY_POLICY_KEY), callOptions.getOption(HEDGING_POLICY_KEY),
+          throttle) {
         @Override
         Status prestart() {
           return uncommittedRetriableStreamsRegistry.add(this);
@@ -559,7 +561,8 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     this.transportFactory =
         new CallCredentialsApplyingTransportFactory(clientTransportFactory, this.executor);
     this.retryEnabled = builder.retryEnabled && !builder.temporarilyDisableRetry;
-    serviceConfigInterceptor = new ServiceConfigInterceptor(retryEnabled, builder.maxRetryAttempts);
+    serviceConfigInterceptor = new ServiceConfigInterceptor(
+        retryEnabled, builder.maxRetryAttempts, builder.maxHedgedAttempts);
     Channel channel = new RealChannel();
     channel = ClientInterceptors.intercept(channel, serviceConfigInterceptor);
     if (builder.binlog != null) {

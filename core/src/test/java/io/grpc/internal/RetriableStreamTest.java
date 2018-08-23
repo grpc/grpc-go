@@ -131,6 +131,7 @@ public class RetriableStreamTest {
         Executor callExecutor,
         ScheduledExecutorService scheduledExecutorService,
         final RetryPolicy retryPolicy,
+        final HedgingPolicy hedgingPolicy,
         @Nullable Throttle throttle) {
       super(
           method, headers, channelBufferUsed, perRpcBufferLimit, channelBufferLimit, callExecutor,
@@ -139,6 +140,12 @@ public class RetriableStreamTest {
             @Override
             public RetryPolicy get() {
               return retryPolicy;
+            }
+          },
+          new HedgingPolicy.Provider() {
+            @Override
+            public HedgingPolicy get() {
+              return hedgingPolicy;
             }
           },
           throttle);
@@ -173,7 +180,7 @@ public class RetriableStreamTest {
     return new RecordedRetriableStream(
         method, new Metadata(), channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
         MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(), RETRY_POLICY,
-        throttle);
+        HedgingPolicy.DEFAULT, throttle);
   }
 
   @After

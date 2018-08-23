@@ -1,0 +1,54 @@
+{
+  "loadBalancingPolicy":"round_robin",
+  "methodConfig":[
+    {
+      "name":[
+        {
+          "service":"SimpleService1"
+        }
+      ],
+      "waitForReady":false,
+      "hedgingPolicy":{
+        "maxAttempts":3,
+        "hedgingDelay":"2.1s",
+        "nonFatalStatusCodes":[
+          "UNAVAILABLE",
+          "RESOURCE_EXHAUSTED"
+        ]
+      }
+    },
+    {
+      "name":[
+        {
+          "service":"SimpleService2"
+        }
+      ],
+      "waitForReady":false
+    },
+    {
+      "name":[
+        {
+          "service":"SimpleService1",
+          "method":"Foo1"
+        },
+        {
+          "service":"SimpleService2",
+          "method":"Foo2"
+        }
+      ],
+      "waitForReady":true,
+      "hedgingPolicy":{
+        "maxAttempts":5,
+        "hedgingDelay":"0.1s",
+        "nonFatalStatusCodes":[
+          "UNAVAILABLE"
+        ]
+      }
+    }
+  ],
+
+  "retryThrottling": {
+    "maxTokens": 10,
+    "tokenRatio": 0.1
+  }
+}

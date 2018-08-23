@@ -93,15 +93,13 @@ final class RetryPolicy {
   }
 
   /**
-   * Providers the most suitable retry policy for a call when this will have to provide a retry
-   * policy.
+   * Provides the most suitable retry policy for a call.
    */
   interface Provider {
 
     /**
-     * This method is used no more than once for each call.
+     * This method is used no more than once for each call. Never returns null.
      */
-    @Nonnull
     RetryPolicy get();
   }
 }

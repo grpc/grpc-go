@@ -65,6 +65,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
   // Must not modify it.
   private final Metadata headers;
   private final RetryPolicy.Provider retryPolicyProvider;
+  private final HedgingPolicy.Provider hedgingPolicyProvider;
   private RetryPolicy retryPolicy;
 
   /** Must be held when updating state, accessing state.buffer, or certain substream attributes. */
@@ -97,7 +98,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
       MethodDescriptor<ReqT, ?> method, Metadata headers,
       ChannelBufferMeter channelBufferUsed, long perRpcBufferLimit, long channelBufferLimit,
       Executor callExecutor, ScheduledExecutorService scheduledExecutorService,
-      RetryPolicy.Provider retryPolicyProvider, @Nullable Throttle throttle) {
+      RetryPolicy.Provider retryPolicyProvider, HedgingPolicy.Provider hedgingPolicyProvider,
+      @Nullable Throttle throttle) {
     this.method = method;
     this.channelBufferUsed = channelBufferUsed;
     this.perRpcBufferLimit = perRpcBufferLimit;
@@ -106,6 +108,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     this.scheduledExecutorService = scheduledExecutorService;
     this.headers = headers;
     this.retryPolicyProvider = checkNotNull(retryPolicyProvider, "retryPolicyProvider");
+    this.hedgingPolicyProvider = checkNotNull(hedgingPolicyProvider, "hedgingPolicyProvider");
     this.throttle = throttle;
   }
 

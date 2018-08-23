@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Verify.verify;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
@@ -60,14 +61,16 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
 
   private final boolean retryEnabled;
   private final int maxRetryAttemptsLimit;
+  private final int maxHedgedAttemptsLimit;
 
   // Setting this to true and observing this equal to true are run in different threads.
   private volatile boolean nameResolveComplete;
 
   ServiceConfigInterceptor(
-      boolean retryEnabled, int maxRetryAttemptsLimit) {
+      boolean retryEnabled, int maxRetryAttemptsLimit, int maxHedgedAttemptsLimit) {
     this.retryEnabled = retryEnabled;
     this.maxRetryAttemptsLimit = maxRetryAttemptsLimit;
+    this.maxHedgedAttemptsLimit = maxHedgedAttemptsLimit;
   }
 
   void handleUpdate(@Nonnull Map<String, Object> serviceConfig) {
@@ -86,7 +89,8 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     }
 
     for (Map<String, Object> methodConfig : methodConfigs) {
-      MethodInfo info = new MethodInfo(methodConfig, retryEnabled, maxRetryAttemptsLimit);
+      MethodInfo info = new MethodInfo(
+          methodConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit);
 
       List<Map<String, Object>> nameList =
           ServiceConfigUtil.getNameListFromMethodConfig(methodConfig);
@@ -129,6 +133,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     final Integer maxInboundMessageSize;
     final Integer maxOutboundMessageSize;
     final RetryPolicy retryPolicy;
+    final HedgingPolicy hedgingPolicy;
 
     /**
      * Constructor.
@@ -136,7 +141,8 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
      * @param retryEnabled when false, the argument maxRetryAttemptsLimit will have no effect.
      */
     MethodInfo(
-        Map<String, Object> methodConfig, boolean retryEnabled, int maxRetryAttemptsLimit) {
+        Map<String, Object> methodConfig, boolean retryEnabled, int maxRetryAttemptsLimit,
+        int maxHedgedAttemptsLimit) {
       timeoutNanos = ServiceConfigUtil.getTimeoutFromMethodConfig(methodConfig);
       waitForReady = ServiceConfigUtil.getWaitForReadyFromMethodConfig(methodConfig);
       maxInboundMessageSize =
@@ -154,10 +160,15 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
             "maxOutboundMessageSize %s exceeds bounds", maxOutboundMessageSize);
       }
 
-      Map<String, Object> policy =
+      Map<String, Object> retryPolicyMap =
           retryEnabled ? ServiceConfigUtil.getRetryPolicyFromMethodConfig(methodConfig) : null;
-      retryPolicy =
-          policy == null ? RetryPolicy.DEFAULT : retryPolicy(policy, maxRetryAttemptsLimit);
+      retryPolicy = retryPolicyMap == null
+          ? RetryPolicy.DEFAULT : retryPolicy(retryPolicyMap, maxRetryAttemptsLimit);
+
+      Map<String, Object> hedgingPolicyMap =
+          retryEnabled ? ServiceConfigUtil.getHedgingPolicyFromMethodConfig(methodConfig) : null;
+      hedgingPolicy = hedgingPolicyMap == null
+          ? HedgingPolicy.DEFAULT : hedgingPolicy(hedgingPolicyMap, maxHedgedAttemptsLimit);
     }
 
     @Override
@@ -190,6 +201,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           .toString();
     }
 
+    @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
     private static RetryPolicy retryPolicy(Map<String, Object> retryPolicy, int maxAttemptsLimit) {
       int maxAttempts = checkNotNull(
           ServiceConfigUtil.getMaxAttemptsFromRetryPolicy(retryPolicy),
@@ -226,6 +238,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
       EnumSet<Code> codes = EnumSet.noneOf(Code.class);
       // service config doesn't say if duplicates are allowed, so just accept them.
       for (String rawCode : rawCodes) {
+        verify(!"OK".equals(rawCode), "rawCode can not be \"OK\"");
         codes.add(Code.valueOf(rawCode));
       }
       Set<Code> retryableStatusCodes = Collections.unmodifiableSet(codes);
@@ -236,9 +249,42 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     }
   }
 
+  @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
+  private static HedgingPolicy hedgingPolicy(
+      Map<String, Object> hedgingPolicy, int maxAttemptsLimit) {
+    int maxAttempts = checkNotNull(
+        ServiceConfigUtil.getMaxAttemptsFromHedgingPolicy(hedgingPolicy),
+        "maxAttempts cannot be empty");
+    checkArgument(maxAttempts >= 2, "maxAttempts must be greater than 1: %s", maxAttempts);
+    maxAttempts = Math.min(maxAttempts, maxAttemptsLimit);
+
+    long hedgingDelayNanos = checkNotNull(
+        ServiceConfigUtil.getHedgingDelayNanosFromHedgingPolicy(hedgingPolicy),
+        "hedgingDelay cannot be empty");
+    checkArgument(
+        hedgingDelayNanos >= 0, "hedgingDelay must not be negative: %s", hedgingDelayNanos);
+
+    List<String> rawCodes =
+        ServiceConfigUtil.getNonFatalStatusCodesFromHedgingPolicy(hedgingPolicy);
+    checkNotNull(rawCodes, "rawCodes must be present");
+    checkArgument(!rawCodes.isEmpty(), "rawCodes can't be empty");
+    EnumSet<Code> codes = EnumSet.noneOf(Code.class);
+    // service config doesn't say if duplicates are allowed, so just accept them.
+    for (String rawCode : rawCodes) {
+      verify(!"OK".equals(rawCode), "rawCode can not be \"OK\"");
+      codes.add(Code.valueOf(rawCode));
+    }
+    Set<Code> nonFatalStatusCodes = Collections.unmodifiableSet(codes);
+
+    return new HedgingPolicy(maxAttempts, hedgingDelayNanos, nonFatalStatusCodes);
+  }
+
   static final CallOptions.Key<RetryPolicy.Provider> RETRY_POLICY_KEY =
       CallOptions.Key.create("internal-retry-policy");
+  static final CallOptions.Key<HedgingPolicy.Provider> HEDGING_POLICY_KEY =
+      CallOptions.Key.create("internal-hedging-policy");
 
+  @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
@@ -252,7 +298,21 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           }
         }
 
-        callOptions = callOptions.withOption(RETRY_POLICY_KEY, new ImmediateRetryPolicyProvider());
+        final HedgingPolicy hedgingPolicy = getHedgingPolicyFromConfig(method);
+        final class ImmediateHedgingPolicyProvider implements HedgingPolicy.Provider {
+          @Override
+          public HedgingPolicy get() {
+            return hedgingPolicy;
+          }
+        }
+
+        verify(
+            retryPolicy.equals(RetryPolicy.DEFAULT) || hedgingPolicy.equals(HedgingPolicy.DEFAULT),
+            "Can not apply both retry and hedging policy for the method '%s'", method);
+
+        callOptions = callOptions
+            .withOption(RETRY_POLICY_KEY, new ImmediateRetryPolicyProvider())
+            .withOption(HEDGING_POLICY_KEY, new ImmediateHedgingPolicyProvider());
       } else {
         final class DelayedRetryPolicyProvider implements RetryPolicy.Provider {
           /**
@@ -270,7 +330,30 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           }
         }
 
-        callOptions = callOptions.withOption(RETRY_POLICY_KEY, new DelayedRetryPolicyProvider());
+        final class DelayedHedgingPolicyProvider implements HedgingPolicy.Provider {
+          /**
+           * Returns HedgingPolicy.DEFAULT if name resolving is not complete at the moment the
+           * method is invoked, otherwise returns the HedgingPolicy computed from service config.
+           *
+           * <p>Note that this method is used no more than once for each call.
+           */
+          @Override
+          public HedgingPolicy get() {
+            if (!nameResolveComplete) {
+              return HedgingPolicy.DEFAULT;
+            }
+            HedgingPolicy hedgingPolicy = getHedgingPolicyFromConfig(method);
+            verify(
+                hedgingPolicy.equals(HedgingPolicy.DEFAULT)
+                    || getRetryPolicyFromConfig(method).equals(RetryPolicy.DEFAULT),
+                "Can not apply both retry and hedging policy for the method '%s'", method);
+            return hedgingPolicy;
+          }
+        }
+
+        callOptions = callOptions
+            .withOption(RETRY_POLICY_KEY, new DelayedRetryPolicyProvider())
+            .withOption(HEDGING_POLICY_KEY, new DelayedHedgingPolicyProvider());
       }
     }
 
@@ -333,9 +416,12 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   @VisibleForTesting
   RetryPolicy getRetryPolicyFromConfig(MethodDescriptor<?, ?> method) {
     MethodInfo info = getMethodInfo(method);
-    if (info == null || info.retryPolicy == null) {
-      return RetryPolicy.DEFAULT;
-    }
-    return info.retryPolicy;
+    return info == null ? RetryPolicy.DEFAULT : info.retryPolicy;
+  }
+
+  @VisibleForTesting
+  HedgingPolicy getHedgingPolicyFromConfig(MethodDescriptor<?, ?> method) {
+    MethodInfo info = getMethodInfo(method);
+    return info == null ? HedgingPolicy.DEFAULT : info.hedgingPolicy;
   }
 }
