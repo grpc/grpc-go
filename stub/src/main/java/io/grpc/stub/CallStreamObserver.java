@@ -84,9 +84,9 @@ public abstract class CallStreamObserver<V> implements StreamObserver<V> {
    *   <li>{@link io.grpc.MethodDescriptor.MethodType#UNARY} operations on both the
    *   client and server.
    *   </li>
-   *   <li>{@link io.grpc.MethodDescriptor.MethodType#CLIENT_STREAMING} operations on the server.
+   *   <li>{@link io.grpc.MethodDescriptor.MethodType#CLIENT_STREAMING} operations on the client.
    *   </li>
-   *   <li>{@link io.grpc.MethodDescriptor.MethodType#SERVER_STREAMING} operations on the client.
+   *   <li>{@link io.grpc.MethodDescriptor.MethodType#SERVER_STREAMING} operations on the server.
    *   </li>
    * </ul>
    * </p>
