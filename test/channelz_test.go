@@ -1470,13 +1470,19 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 	}
 	r.InitialAddrs(svrAddrs)
 	te.resolverScheme = r.Scheme()
-	te.clientConn()
+	cc := te.clientConn()
 	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(cc)
+	// make sure the connection is up
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	te.srvs[0].Stop()
+	te.srvs[1].Stop()
 	// Here, we just wait for all sockets to be up. In the future, if we implement
 	// IDLE, we may need to make several rpc calls to create the sockets.
 	if err := verifyResultWithDelay(func() (bool, error) {
-		te.srvs[0].Stop()
-		te.srvs[1].Stop()
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
@@ -1519,11 +1525,18 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 	defer cleanup()
 	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
 	te.resolverScheme = r.Scheme()
-	te.clientConn()
+	cc := te.clientConn()
 	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(cc)
+	// make sure the connection is up
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
 	var subConn int64
+	te.srv.Stop()
+
 	if err := verifyResultWithDelay(func() (bool, error) {
-		te.srv.Stop()
 		// we need to obtain the SubChannel id before it gets deleted from Channel's children list (due
 		// to effect of r.NewAddress([]resolver.Address{}))
 		if subConn == 0 {
@@ -1606,11 +1619,16 @@ func TestCZChannelConnectivityState(t *testing.T) {
 	defer cleanup()
 	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
 	te.resolverScheme = r.Scheme()
-	te.clientConn()
+	cc := te.clientConn()
 	defer te.tearDown()
-
+	tc := testpb.NewTestServiceClient(cc)
+	// make sure the connection is up
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	te.srv.Stop()
 	if err := verifyResultWithDelay(func() (bool, error) {
-		te.srv.Stop()
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
 			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
