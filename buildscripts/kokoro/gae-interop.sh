@@ -43,9 +43,6 @@ set -e
 # Deploy and test the real app (jdk8)
 ./gradlew $GRADLE_FLAGS -DgaeDeployVersion="$KOKORO_GAE_APP_VERSION" :grpc-gae-interop-testing-jdk8:runInteropTestRemote
 
-# Deploy and test the real app (jdk7)
-./gradlew $GRADLE_FLAGS -DgaeDeployVersion="$KOKORO_GAE_APP_VERSION" :grpc-gae-interop-testing-jdk7:runInteropTestRemote
-
 set +e
 echo "Cleaning out stale deploys from previous runs, it is ok if this part fails"
 
