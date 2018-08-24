@@ -567,6 +567,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		dopts:               cc.dopts,
 		czData:              new(channelzData),
 		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
+		resetBackoff:        make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -863,10 +864,12 @@ type addrConn struct {
 
 	transport transport.ClientTransport // The current transport.
 
+	mu      sync.Mutex
 	addrIdx int                // The index in addrs list to start reconnecting from.
 	curAddr resolver.Address   // The current address.
 	addrs   []resolver.Address // All addresses that the resolver resolved to.
 
+	// Use updateConnectivityState for updating addrConn's connectivity state.
 	state connectivity.State
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
@@ -890,6 +893,7 @@ type addrConn struct {
 	successfulHandshake bool
 }
 
+// Note: this requires a lock on ac.mu.
 func (ac *addrConn) updateConnectivityState(s connectivity.State) {
 	ac.state = s
 	if channelz.IsOn() {
@@ -1002,6 +1006,13 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		copts := ac.dopts.copts
 		ac.mu.Unlock()
 
+		if channelz.IsOn() {
+			channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel picks a new address %q to connect", addr.Addr),
+				Severity: channelz.CtINFO,
+			})
+		}
+
 		if err := ac.createTransport(backoffIdx, addr, copts, connectDeadline); err != nil {
 			// errReadTimeOut indicates that the handshake was not received before
 			// the deadline. We exit here because the transport's reader goroutine will
@@ -1021,6 +1032,7 @@ var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
+	oneReset := sync.Once{}
 	skipReset := make(chan struct{})
 	allowedToReset := make(chan struct{})
 	prefaceReceived := make(chan struct{})
@@ -1030,7 +1042,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		ac.mu.Lock()
 		ac.adjustParams(r)
 		ac.mu.Unlock()
-		go ac.resetTransport(false)
+		select {
+		case <-skipReset: // The outer resetTransport loop will handle reconnection.
+			return
+		case <-allowedToReset: // We're in the clear to reset.
+			go oneReset.Do(func() { ac.resetTransport(false) })
+		}
 	}
 
 	onClose := func() {
@@ -1043,7 +1060,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			ac.mu.Lock()
 			ac.transport = nil
 			ac.mu.Unlock()
-			ac.resetTransport(false)
+			oneReset.Do(func() { ac.resetTransport(false) })
 		}
 	}
 
@@ -1122,7 +1139,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 			return errConnClosing
 		}
-		ac.state = connectivity.TransientFailure
+		ac.updateConnectivityState(connectivity.TransientFailure)
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
@@ -1148,7 +1165,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	ac.printf("ready")
-	ac.state = connectivity.Ready
+	ac.updateConnectivityState(connectivity.Ready)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.transport = newTr
 	ac.curAddr = addr
@@ -1201,17 +1218,26 @@ func (ac *addrConn) nextAddr() error {
 		ac.ready = nil
 	}
 	backoffDeadline := ac.backoffDeadline
+	b := ac.resetBackoff
 	ac.mu.Unlock()
 	timer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 	select {
 	case <-timer.C:
-	case <-resetBackoff:
+	case <-b:
 		timer.Stop()
 	case <-ac.ctx.Done():
 		timer.Stop()
 		return ac.ctx.Err()
 	}
 	return nil
+}
+
+func (ac *addrConn) resetConnectBackoff() {
+	ac.mu.Lock()
+	close(ac.resetBackoff)
+	ac.backoffIdx = 0
+	ac.resetBackoff = make(chan struct{})
+	ac.mu.Unlock()
 }
 
 // getReadyTransport returns the transport if ac's state is READY.
@@ -1250,7 +1276,7 @@ func (ac *addrConn) tearDown(err error) {
 	}
 	// We have to set the state to Shutdown before we call ac.transports.GracefulClose, because it signals to
 	// onClose not to try reconnecting the transport.
-	ac.state = connectivity.Shutdown
+	ac.updateConnectivityState(connectivity.Shutdown)
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.curAddr = resolver.Address{}
