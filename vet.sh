@@ -37,6 +37,7 @@ if [ "$1" = "-install" ]; then
       die "Please install protoc into your path"
     fi
   fi
+  GOBIN=$GOPATH/bin go install go_vet/vet.go
   exit 0
 elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
@@ -49,9 +50,8 @@ if git status --porcelain | read; then
 fi
 
 git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | tee /dev/stderr | (! read)
-git ls-files "*.go" | xargs grep -l '"unsafe"' 2>&1 | (! grep -v '_test.go') | tee /dev/stderr | (! read)
 git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand') | tee /dev/stderr | (! read)
-git ls-files | xargs dirname | sort |uniq | xargs go run go_vet/vet.go | tee /dev/stderr | (! read)
+git ls-files | xargs dirname | sort | uniq | xargs $GOPATH/bin/vet | tee /dev/stderr | (! read)
 gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)
 goimports -l . 2>&1 | tee /dev/stderr | (! read)
 golint ./... 2>&1 | (grep -vE "(_mock|\.pb)\.go:" || true) | tee /dev/stderr | (! read)

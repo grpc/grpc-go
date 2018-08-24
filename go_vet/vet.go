@@ -1,5 +1,23 @@
-// vet.go is a script to check whether files that are supposed to be built on
-// appengine import "syscall" package.
+/*
+ *
+ * Copyright 2018 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// vet.go is a script to check whether files that are supposed to be built on appengine import
+// unsupported package (e.g. "unsafe", "syscall") or not.
 package main
 
 import (
@@ -11,18 +29,13 @@ import (
 func main() {
 	b := build.Default
 	b.BuildTags = []string{"appengine", "appenginevm"}
-	good := true
 	argsWithoutProg := os.Args[1:]
 	for _, dir := range argsWithoutProg {
 		p, _ := b.Import(".", dir, 0)
 		for _, pkg := range p.Imports {
-			if pkg == "syscall" {
-				fmt.Println("Package", p.Dir+"/"+p.Name, "importing \"syscall\" package without appengine build tag is NOT ALLOWED!")
-				good = false
+			if pkg == "syscall" || pkg == "unsafe" {
+				fmt.Fprintln(os.Stdout, "Package", p.Dir+"/"+p.Name, "importing", pkg, "package without appengine build tag is NOT ALLOWED!")
 			}
 		}
-	}
-	if !good {
-		os.Exit(1)
 	}
 }
