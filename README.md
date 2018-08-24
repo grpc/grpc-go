@@ -154,6 +154,12 @@ protobuf {
 
 [protobuf-gradle-plugin]: https://github.com/google/protobuf-gradle-plugin
 
+The prebuilt protoc-gen-grpc-java binary uses glibc on Linux. If you are
+compiling on Alpine Linux, you may want to use the [Alpine grpc-java package][]
+which uses musl instead.
+
+[Alpine grpc-java package]: https://pkgs.alpinelinux.org/package/edge/testing/x86_64/grpc-java
+
 API Stability
 -------------
 
