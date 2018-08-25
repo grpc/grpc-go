@@ -19,7 +19,6 @@
 package channelz
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -43,6 +42,8 @@ type entry interface {
 	// deleteSelfIfReady check whether triggerDelete() has been called before, and whether child
 	// list is now empty. If both conditions are met, then delete self from database.
 	deleteSelfIfReady()
+	// getParentID returns parent ID of the entry. 0 value parent ID means no parent.
+	getParentID() int64
 }
 
 // dummyEntry is a fake entry to handle entry not found case.
@@ -74,6 +75,10 @@ func (d *dummyEntry) triggerDelete() {
 
 func (*dummyEntry) deleteSelfIfReady() {
 	// code should not reach here. deleteSelfIfReady is always called on an existing entry.
+}
+
+func (*dummyEntry) getParentID() int64 {
+	return 0
 }
 
 // ChannelMetric defines the info channelz provides for a specific Channel, which
@@ -219,9 +224,12 @@ func (c *channel) deleteChild(id int64) {
 }
 
 func (c *channel) triggerDelete() {
-	c.cm.traceChannelDeleted(c.pid, c.id)
 	c.closeCalled = true
 	c.deleteSelfIfReady()
+}
+
+func (c *channel) getParentID() int64 {
+	return c.pid
 }
 
 func (c *channel) deleteSelfFromTree() bool {
@@ -297,9 +305,12 @@ func (sc *subChannel) deleteChild(id int64) {
 }
 
 func (sc *subChannel) triggerDelete() {
-	sc.cm.traceSubChannelDeleted(sc.pid, sc.id)
 	sc.closeCalled = true
 	sc.deleteSelfIfReady()
+}
+
+func (sc *subChannel) getParentID() int64 {
+	return sc.pid
 }
 
 func (sc *subChannel) deleteSelfFromTree() bool {
@@ -438,6 +449,10 @@ func (ls *listenSocket) deleteSelfIfReady() {
 	grpclog.Errorf("cannot call deleteSelfIfReady on a listen socket")
 }
 
+func (ls *listenSocket) getParentID() int64 {
+	return ls.pid
+}
+
 type normalSocket struct {
 	refName string
 	s       Socket
@@ -461,6 +476,10 @@ func (ns *normalSocket) triggerDelete() {
 
 func (ns *normalSocket) deleteSelfIfReady() {
 	grpclog.Errorf("cannot call deleteSelfIfReady on a normal socket")
+}
+
+func (ns *normalSocket) getParentID() int64 {
+	return ns.pid
 }
 
 // ServerMetric defines the info channelz provides for a specific Server, which
@@ -537,6 +556,10 @@ func (s *server) deleteSelfIfReady() {
 	s.cm.deleteEntry(s.id)
 }
 
+func (s *server) getParentID() int64 {
+	return 0
+}
+
 type tracedChannel interface {
 	getChannelTrace() *channelTrace
 	incrTraceCount()
@@ -545,112 +568,14 @@ type tracedChannel interface {
 	getRefName() string
 }
 
-type eventType int
-
-const (
-	channelCreate eventType = iota
-	channelDelete
-	subChannelCreate
-	subChannelDelete
-	channelConnectivityChange
-	subChannelConnectivityChange
-	subChannelPickNewAddress
-	addressResolutionChange
-)
-
 type event struct {
-	t         eventType
+	desc      string
+	severity  Severity
 	timestamp time.Time
 	refId     int64
 	refName   string
 	//distinguish whether the referenced entity is a channel or subchannel.
-	isRefChannel      bool
-	connectivityState connectivity.State
-	addrEventType     AddressResolutionChangeType
-	addrEventDesc     string
-}
-
-// change the format string inside this function will lead to test failures.
-func (e *event) getDesc() string {
-	switch e.t {
-	case channelCreate:
-		if e.refId != 0 {
-			return fmt.Sprintf("Nested Channel (id: %d[%s]) Created", e.refId, e.refName)
-		}
-		return "Channel Created"
-	case channelDelete:
-		if e.refId != 0 {
-			return fmt.Sprintf("Nested Channel (id: %d[%s]) Deleted", e.refId, e.refName)
-		}
-		return "Channel Deleted"
-	case subChannelCreate:
-		if e.refId != 0 {
-			return fmt.Sprintf("SubChannel (id: %d[%s]) Created", e.refId, e.refName)
-		}
-		return "Subchannel Created"
-	case subChannelDelete:
-		if e.refId != 0 {
-			return fmt.Sprintf("SubChannel (id: %d[%s]) Deleted", e.refId, e.refName)
-		}
-		return "Subchannel Deleted"
-	case channelConnectivityChange:
-		return fmt.Sprintf("Channel's connectivity state changed to %s", e.connectivityState.String())
-	case subChannelConnectivityChange:
-		return fmt.Sprintf("Subchannel's connectivity state changed to %s", e.connectivityState.String())
-	case subChannelPickNewAddress:
-		return fmt.Sprintf("Subchannel picked a new address: %q", e.addrEventDesc)
-	case addressResolutionChange:
-		switch e.addrEventType {
-		case ServiceConfigChange:
-			return fmt.Sprintf("New service config resolved: \"%s\"", e.addrEventDesc)
-		case NonEmptyAddressList:
-			return fmt.Sprintf("Adressses resolved (from empty address state): %q", e.addrEventDesc)
-		case EmptyAddressList:
-			return "Addresses resolved is empty"
-		case NewLBPolicy:
-			return fmt.Sprintf("New LB policy from address resolution: %q", e.addrEventDesc)
-		default:
-			//should not get here
-		}
-	default:
-		//should not get here
-	}
-	return ""
-}
-
-func (e *event) getSeverity() Severity {
-	switch e.t {
-	case channelCreate:
-		return CtINFO
-	case channelDelete:
-		return CtINFO
-	case subChannelCreate:
-		return CtINFO
-	case subChannelDelete:
-		return CtINFO
-	case channelConnectivityChange:
-		return CtINFO
-	case subChannelConnectivityChange:
-		return CtINFO
-	case subChannelPickNewAddress:
-		return CtINFO
-	case addressResolutionChange:
-		switch e.addrEventType {
-		case ServiceConfigChange:
-			return CtINFO
-		case NonEmptyAddressList:
-			return CtINFO
-		case EmptyAddressList:
-			return CtWarning
-		case NewLBPolicy:
-			return CtINFO
-		default:
-			//should not get here
-		}
-	default:
-		//should not get here
-	}
-	return CtUNKNOWN
+	isRefChannel bool
 }
 
 type channelTrace struct {
@@ -666,7 +591,7 @@ func (c *channelTrace) append(e *event) {
 	if len(c.events) == getMaxTraceEntry() {
 		del := c.events[0]
 		c.events = c.events[1:]
-		if del.t == channelDelete || del.t == subChannelDelete {
+		if del.refId != 0 {
 			// start recursive cleanup in a goroutine to not block the call originated from grpc.
 			go c.cm.startCleanup(del.refId)
 		}
@@ -680,7 +605,7 @@ func (c *channelTrace) append(e *event) {
 func (c *channelTrace) clear() {
 	c.mu.Lock()
 	for _, e := range c.events {
-		if e.t == channelDelete || e.t == subChannelDelete {
+		if e.refId != 0 {
 			if v, ok := c.cm.findEntry(e.refId).(tracedChannel); ok {
 				v.decrTraceCount()
 				v.deleteSelfIfReady()
@@ -688,48 +613,6 @@ func (c *channelTrace) clear() {
 		}
 	}
 	c.mu.Unlock()
-}
-
-// nid is the nested channel id.
-func (c *channelTrace) ChannelCreated(nid int64, ref string) {
-	c.append(&event{t: channelCreate, refId: nid, refName: ref, isRefChannel: true})
-}
-
-func (c *channelTrace) ChannelDeleted(nid int64, ref string) {
-	c.append(&event{t: channelDelete, refId: nid, refName: ref, isRefChannel: true})
-}
-
-func (c *channelTrace) SubChannelCreated(scID int64, ref string) {
-	c.append(&event{t: subChannelCreate, refId: scID, refName: ref})
-}
-
-func (c *channelTrace) SubChannelDeleted(scID int64, ref string) {
-	c.append(&event{t: subChannelDelete, refId: scID, refName: ref})
-}
-
-func (c *channelTrace) ChannelConnectivityChange(s connectivity.State) {
-	c.append(&event{t: channelConnectivityChange, connectivityState: s})
-}
-
-func (c *channelTrace) SubChannelConnectivityChange(s connectivity.State) {
-	c.append(&event{t: subChannelConnectivityChange, connectivityState: s})
-}
-
-func (c *channelTrace) SubChannelPickNewAddress(addr string) {
-	c.append(&event{t: subChannelPickNewAddress, addrEventDesc: addr})
-}
-
-type AddressResolutionChangeType int
-
-const (
-	ServiceConfigChange AddressResolutionChangeType = iota
-	NonEmptyAddressList
-	EmptyAddressList
-	NewLBPolicy
-)
-
-func (c *channelTrace) AddressResolutionChange(t AddressResolutionChangeType, desc string) {
-	c.append(&event{t: addressResolutionChange, addrEventType: t, addrEventDesc: desc})
 }
 
 type Severity int
@@ -747,8 +630,8 @@ func (c *channelTrace) dumpData() *ChannelTrace {
 	ct.Events = make([]*TraceEvent, 0, len(c.events))
 	for _, e := range c.events {
 		ct.Events = append(ct.Events, &TraceEvent{
-			Desc:         e.getDesc(),
-			Severity:     e.getSeverity(),
+			Desc:         e.desc,
+			Severity:     e.severity,
 			Timestamp:    e.timestamp,
 			RefID:        e.refId,
 			RefName:      e.refName,

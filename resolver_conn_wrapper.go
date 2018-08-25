@@ -118,7 +118,10 @@ func (ccr *ccResolverWrapper) watcher() {
 			grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
 			if channelz.IsOn() {
 				if len(addrs) == 0 && ccr.lastAddressesCount != 0 {
-					channelz.TraceAddressResolutionChange(ccr.cc.channelzID, channelz.EmptyAddressList, "")
+					channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
+						Desc:     fmt.Sprintf("Resolver returns an empty address list"),
+						Severity: channelz.CtWarning,
+					})
 				} else if len(addrs) != 0 && ccr.lastAddressesCount == 0 {
 					var s string
 					for i, a := range addrs {
@@ -131,7 +134,10 @@ func (ccr *ccResolverWrapper) watcher() {
 							s += " "
 						}
 					}
-					channelz.TraceAddressResolutionChange(ccr.cc.channelzID, channelz.NonEmptyAddressList, s)
+					channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
+						Desc:     fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", s),
+						Severity: channelz.CtINFO,
+					})
 				}
 				ccr.lastAddressesCount = len(addrs)
 			}

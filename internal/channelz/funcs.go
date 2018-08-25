@@ -30,7 +30,6 @@ import (
 
 	"time"
 
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -249,21 +248,39 @@ func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
 
-func TraceChannelConnectivityChange(id int64, s connectivity.State) {
-	db.get().traceChannelConnectivityChange(id, s)
+type TraceEventDesc struct {
+	Desc     string
+	Severity Severity
+	// whether add trace to parent
+	ParentTrace       bool
+	RefParentDesc     string
+	RefParentSeverity Severity
+	// whether the traced event is on Channel (as opposed to Subchannel)
+	IsChannel bool
 }
 
-func TraceSubChannelConnectivityChange(id int64, s connectivity.State) {
-	db.get().traceSubChannelConnectivityChange(id, s)
+func AddTraceEvent(id int64, desc *TraceEventDesc) {
+	if getMaxTraceEntry() == 0 {
+		return
+	}
+	db.get().traceEvent(id, desc)
 }
 
-func TraceSubChannelPickNewAddress(id int64, addr string) {
-	db.get().traceSubChannelPickNewAddress(id, addr)
-}
-
-func TraceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
-	db.get().traceAddressResolutionChange(id, t, desc)
-}
+//func TraceChannelConnectivityChange(id int64, s connectivity.State) {
+//	db.get().traceChannelConnectivityChange(id, s)
+//}
+//
+//func TraceSubChannelConnectivityChange(id int64, s connectivity.State) {
+//	db.get().traceSubChannelConnectivityChange(id, s)
+//}
+//
+//func TraceSubChannelPickNewAddress(id int64, addr string) {
+//	db.get().traceSubChannelPickNewAddress(id, addr)
+//}
+//
+//func TraceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
+//	db.get().traceAddressResolutionChange(id, t, desc)
+//}
 
 // channelMap is the storage data structure for channelz.
 // Methods of channelMap can be divided in two two categories with respect to locking.
@@ -297,7 +314,6 @@ func (c *channelMap) addChannel(id int64, cn *channel, isTopChannel bool, pid in
 	} else {
 		c.findEntry(pid).addChild(id, cn)
 	}
-	c.traceChannelCreated(pid, id, ref)
 	c.mu.Unlock()
 }
 
@@ -307,7 +323,6 @@ func (c *channelMap) addSubChannel(id int64, sc *subChannel, pid int64, ref stri
 	sc.trace.cm = c
 	c.subChannels[id] = sc
 	c.findEntry(pid).addChild(id, sc)
-	c.traceSubChannelCreated(pid, id, ref)
 	c.mu.Unlock()
 }
 
@@ -400,113 +415,29 @@ func (c *channelMap) deleteEntry(id int64) {
 	}
 }
 
-// caller of this function must already hold the c.mu lock
-func (c *channelMap) traceChannelCreated(pid int64, id int64, ref string) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	child := c.findEntry(id)
-	parent := c.findEntry(pid)
-	if c, ok := child.(tracedChannel); ok {
-		if p, ok := parent.(tracedChannel); ok {
-			p.getChannelTrace().ChannelCreated(id, ref)
-		}
-		c.getChannelTrace().ChannelCreated(0, "")
-	}
-}
-
-// caller of this function must already hold the c.mu lock
-func (c *channelMap) traceChannelDeleted(pid int64, id int64) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	child := c.findEntry(id)
-	parent := c.findEntry(pid)
-	if c, ok := child.(tracedChannel); ok {
-		if p, ok := parent.(tracedChannel); ok {
-			p.getChannelTrace().ChannelDeleted(id, c.getRefName())
-			c.incrTraceCount()
-		}
-		c.getChannelTrace().ChannelDeleted(0, "")
-	}
-}
-
-// caller of this function must already hold the c.mu lock
-func (c *channelMap) traceSubChannelCreated(pid int64, id int64, ref string) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	child := c.findEntry(id)
-	parent := c.findEntry(pid)
-
-	if c, ok := child.(tracedChannel); ok {
-		if p, ok := parent.(tracedChannel); ok {
-			p.getChannelTrace().SubChannelCreated(id, ref)
-		}
-		c.getChannelTrace().SubChannelCreated(0, "")
-	}
-}
-
-// caller of this function must already hold the c.mu lock
-func (c *channelMap) traceSubChannelDeleted(pid int64, id int64) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	child := c.findEntry(id)
-	parent := c.findEntry(pid)
-	if c, ok := child.(tracedChannel); ok {
-		if p, ok := parent.(tracedChannel); ok {
-			p.getChannelTrace().SubChannelDeleted(id, c.getRefName())
-			c.incrTraceCount()
-		}
-		c.getChannelTrace().SubChannelDeleted(0, "")
-	}
-}
-
-func (c *channelMap) traceChannelConnectivityChange(id int64, s connectivity.State) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
+func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	c.mu.Lock()
-	e := c.findEntry(id)
-	if v, ok := e.(tracedChannel); ok {
-		v.getChannelTrace().ChannelConnectivityChange(s)
-	}
-	c.mu.Unlock()
-}
-
-func (c *channelMap) traceSubChannelConnectivityChange(id int64, s connectivity.State) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	c.mu.Lock()
-	e := c.findEntry(id)
-	if v, ok := e.(tracedChannel); ok {
-		v.getChannelTrace().SubChannelConnectivityChange(s)
-	}
-	c.mu.Unlock()
-}
-
-func (c *channelMap) traceSubChannelPickNewAddress(id int64, addr string) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	c.mu.Lock()
-	e := c.findEntry(id)
-	if v, ok := e.(tracedChannel); ok {
-		v.getChannelTrace().SubChannelPickNewAddress(addr)
-	}
-	c.mu.Unlock()
-}
-
-func (c *channelMap) traceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
-	if getMaxTraceEntry() == 0 {
-		return
-	}
-	c.mu.Lock()
-	e := c.findEntry(id)
-	if v, ok := e.(tracedChannel); ok {
-		v.getChannelTrace().AddressResolutionChange(t, desc)
+	child := c.findEntry(id)
+	if !desc.ParentTrace {
+		if v, ok := child.(tracedChannel); ok {
+			v.getChannelTrace().append(&event{desc: desc.Desc, severity: desc.Severity, timestamp: time.Now()})
+		}
+	} else {
+		parent := c.findEntry(child.getParentID())
+		if c, ok := child.(tracedChannel); ok {
+			if p, ok := parent.(tracedChannel); ok {
+				p.getChannelTrace().append(&event{
+					desc:         desc.RefParentDesc,
+					severity:     desc.RefParentSeverity,
+					timestamp:    time.Now(),
+					refId:        id,
+					refName:      c.getRefName(),
+					isRefChannel: desc.IsChannel,
+				})
+				c.incrTraceCount()
+			}
+			c.getChannelTrace().append(&event{desc: desc.Desc, severity: desc.Severity, timestamp: time.Now()})
+		}
 	}
 	c.mu.Unlock()
 }

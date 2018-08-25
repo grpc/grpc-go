@@ -147,11 +147,26 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:              fmt.Sprintf("Channel Created"),
+				Severity:          channelz.CtINFO,
+				ParentTrace:       true,
+				RefParentDesc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
+				RefParentSeverity: channelz.CtINFO,
+				IsChannel:         true,
+			})
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel Created"),
+				Severity: channelz.CtINFO,
+			})
 		}
 		cc.csMgr.czTraceConnectivityChange = func(s connectivity.State) {
-			channelz.TraceChannelConnectivityChange(cc.channelzID, s)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel Connectivity change to %v", s),
+				Severity: channelz.CtINFO,
+			})
 		}
 	}
 
@@ -514,9 +529,15 @@ func (cc *ClientConn) switchBalancer(name string) {
 	// we reuse previous one?
 	if channelz.IsOn() {
 		if builder == nil {
-			channelz.TraceAddressResolutionChange(cc.channelzID, channelz.NewLBPolicy, PickFirstBalancerName+"(fallback: due to invalid balancer name)")
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel switches to new LB policy %q due to fallback from invalid balancer name", PickFirstBalancerName),
+				Severity: channelz.CtWarning,
+			})
 		} else {
-			channelz.TraceAddressResolutionChange(cc.channelzID, channelz.NewLBPolicy, name)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel switches to new LB policy %q", name),
+				Severity: channelz.CtINFO,
+			})
 		}
 	}
 	if builder == nil {
@@ -560,6 +581,14 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	}
 	if channelz.IsOn() {
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:              fmt.Sprintf("Subchannel Created"),
+			Severity:          channelz.CtINFO,
+			ParentTrace:       true,
+			RefParentDesc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
+			RefParentSeverity: channelz.CtINFO,
+			IsChannel:         false,
+		})
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -713,7 +742,10 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 		return nil
 	}
 	if channelz.IsOn() {
-		channelz.TraceAddressResolutionChange(cc.channelzID, channelz.ServiceConfigChange, js)
+		channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Channel has a new service config \"%s\"", js),
+			Severity: channelz.CtINFO,
+		})
 	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
@@ -795,6 +827,19 @@ func (cc *ClientConn) Close() error {
 		ac.tearDown(ErrClientConnClosing)
 	}
 	if channelz.IsOn() {
+		ted := &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Channel Deleted"),
+			Severity: channelz.CtINFO,
+		}
+		if cc.dopts.channelzParentID != 0 {
+			ted.RefParentDesc = fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID)
+			ted.RefParentSeverity = channelz.CtINFO
+			ted.IsChannel = true
+			ted.ParentTrace = true
+		}
+		channelz.AddTraceEvent(cc.channelzID, ted)
+		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
+		// the entity beng deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(cc.channelzID)
 	}
 	return nil
@@ -839,7 +884,10 @@ type addrConn struct {
 func (ac *addrConn) updateConnectivityState(s connectivity.State) {
 	ac.state = s
 	if channelz.IsOn() {
-		channelz.TraceSubChannelConnectivityChange(ac.channelzID, s)
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Subchannel Connectivity change to %v", s),
+			Severity: channelz.CtINFO,
+		})
 	}
 }
 
@@ -959,7 +1007,10 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
 		if channelz.IsOn() {
-			channelz.TraceSubChannelPickNewAddress(ac.channelzID, addr.Addr)
+			channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel picks a new address %q to connect", addr.Addr),
+				Severity: channelz.CtINFO,
+			})
 		}
 		target := transport.TargetInfo{
 			Addr:      addr.Addr,
@@ -1199,6 +1250,16 @@ func (ac *addrConn) tearDown(err error) {
 		ac.ready = nil
 	}
 	if channelz.IsOn() {
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:              fmt.Sprintf("Subchannel Deleted"),
+			Severity:          channelz.CtINFO,
+			ParentTrace:       true,
+			RefParentDesc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
+			RefParentSeverity: channelz.CtINFO,
+			IsChannel:         false,
+		})
+		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
+		// the entity beng deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(ac.channelzID)
 	}
 }

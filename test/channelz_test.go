@@ -1375,7 +1375,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 		}
 		cid = tcs[0].ID
 		for i := len(tcs[0].Trace.Events) - 1; i >= 0; i-- {
-			if tcs[0].Trace.Events[i].Desc == fmt.Sprintf("Adressses resolved (from empty address state): %q", te.srvAddr) {
+			if tcs[0].Trace.Events[i].Desc == fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", te.srvAddr) {
 				break
 			}
 			if i == 0 {
@@ -1392,7 +1392,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == fmt.Sprintf("New LB policy from address resolution: %q", roundrobin.Name) {
+			if cm.Trace.Events[i].Desc == fmt.Sprintf("Channel switches to new LB policy %q", roundrobin.Name) {
 				break
 			}
 			if i == 0 {
@@ -1425,7 +1425,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 		cm := channelz.GetChannel(cid)
 
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == fmt.Sprintf("New service config resolved: \"%s\"", newSc) {
+			if cm.Trace.Events[i].Desc == fmt.Sprintf("Channel has a new service config \"%s\"", newSc) {
 				break
 			}
 			if i == 0 {
@@ -1442,7 +1442,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == "Addresses resolved is empty" {
+			if cm.Trace.Events[i].Desc == "Resolver returns an empty address list" {
 				break
 			}
 			if i == 0 {
@@ -1502,7 +1502,7 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
 		}
 		for i := len(scm.Trace.Events) - 1; i >= 0; i-- {
-			if scm.Trace.Events[i].Desc == fmt.Sprintf("Subchannel picked a new address: %q", te.srvAddrs[2]) {
+			if scm.Trace.Events[i].Desc == fmt.Sprintf("Subchannel picks a new address %q to connect", te.srvAddrs[2]) {
 				break
 			}
 			if i == 0 {
@@ -1564,7 +1564,7 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 		}
 		var ready, connecting, transient, shutdown int
 		for _, e := range scm.Trace.Events {
-			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.TransientFailure) {
+			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.TransientFailure) {
 				transient++
 			}
 		}
@@ -1576,16 +1576,16 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 		transient = 0
 		r.NewAddress([]resolver.Address{})
 		for _, e := range scm.Trace.Events {
-			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Ready) {
+			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready) {
 				ready++
 			}
-			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Connecting) {
+			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Connecting) {
 				connecting++
 			}
-			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.TransientFailure) {
+			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.TransientFailure) {
 				transient++
 			}
-			if e.Desc == fmt.Sprintf("Subchannel's connectivity state changed to %s", connectivity.Shutdown) {
+			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Shutdown) {
 				shutdown++
 			}
 		}
@@ -1636,13 +1636,13 @@ func TestCZChannelConnectivityState(t *testing.T) {
 
 		var ready, connecting, transient int
 		for _, e := range tcs[0].Trace.Events {
-			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.Ready) {
+			if e.Desc == fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready) {
 				ready++
 			}
-			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.Connecting) {
+			if e.Desc == fmt.Sprintf("Channel Connectivity change to %v", connectivity.Connecting) {
 				connecting++
 			}
-			if e.Desc == fmt.Sprintf("Channel's connectivity state changed to %s", connectivity.TransientFailure) {
+			if e.Desc == fmt.Sprintf("Channel Connectivity change to %v", connectivity.TransientFailure) {
 				transient++
 			}
 		}
