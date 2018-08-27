@@ -572,7 +572,7 @@ type event struct {
 	desc      string
 	severity  Severity
 	timestamp time.Time
-	refId     int64
+	refID     int64
 	refName   string
 	//distinguish whether the referenced entity is a channel or subchannel.
 	isRefChannel bool
@@ -591,9 +591,9 @@ func (c *channelTrace) append(e *event) {
 	if len(c.events) == getMaxTraceEntry() {
 		del := c.events[0]
 		c.events = c.events[1:]
-		if del.refId != 0 {
+		if del.refID != 0 {
 			// start recursive cleanup in a goroutine to not block the call originated from grpc.
-			go c.cm.startCleanup(del.refId)
+			go c.cm.startCleanup(del.refID)
 		}
 	}
 	e.timestamp = time.Now()
@@ -605,8 +605,8 @@ func (c *channelTrace) append(e *event) {
 func (c *channelTrace) clear() {
 	c.mu.Lock()
 	for _, e := range c.events {
-		if e.refId != 0 {
-			if v, ok := c.cm.findEntry(e.refId).(tracedChannel); ok {
+		if e.refID != 0 {
+			if v, ok := c.cm.findEntry(e.refID).(tracedChannel); ok {
 				v.decrTraceCount()
 				v.deleteSelfIfReady()
 			}
@@ -615,12 +615,19 @@ func (c *channelTrace) clear() {
 	c.mu.Unlock()
 }
 
+// Severity is the severity level of a trace event.
+// The canonical enumeration of all valid values is here:
+// https://github.com/grpc/grpc-proto/blob/9b13d199cc0d4703c7ea26c9c330ba695866eb23/grpc/channelz/v1/channelz.proto#L126.
 type Severity int
 
 const (
+	// CtUNKNOWN indicates unknown severity of a trace event.
 	CtUNKNOWN Severity = iota
+	// CtINFO indicates info level severity of a trace event.
 	CtINFO
+	// CtWarning indicates warning level severity of a trace event.
 	CtWarning
+	// CtError indicates error level severity of a trace event.
 	CtError
 )
 
@@ -633,7 +640,7 @@ func (c *channelTrace) dumpData() *ChannelTrace {
 			Desc:         e.desc,
 			Severity:     e.severity,
 			Timestamp:    e.timestamp,
-			RefID:        e.refId,
+			RefID:        e.refID,
 			RefName:      e.refName,
 			IsRefChannel: e.isRefChannel,
 		})

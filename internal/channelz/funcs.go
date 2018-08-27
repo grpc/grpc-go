@@ -40,7 +40,7 @@ var (
 	EntryPerPage         = 50
 	curState             int32
 	defaultMaxTraceEntry int32 = 30
-	maxTraceEntry        int32 = defaultMaxTraceEntry
+	maxTraceEntry              = defaultMaxTraceEntry
 )
 
 // TurnOn turns on channelz data collection.
@@ -248,39 +248,32 @@ func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
 
+// TraceEventDesc is what caller of AddTraceEvent should provide to describe the event to be added
+// to channel trace.
+// The first two fields: Desc and Severity are required for all trace events.
+// The last four fields: ParentTrace, RefParentDesc, RefParentSeverity and IsChannel are required
+// when the event should be recorded in both the subject's trace and the trace of its parent. For
+// example, a subchannel creation will have an entry in the subchannel's trace, along with an entry
+// in its parent channel's trace.
 type TraceEventDesc struct {
 	Desc     string
 	Severity Severity
-	// whether add trace to parent
+	// ParentTrace indiciates whether add an entry to parent's trace
 	ParentTrace       bool
 	RefParentDesc     string
 	RefParentSeverity Severity
-	// whether the traced event is on Channel (as opposed to Subchannel)
+	// IsChannel indicates whether the traced event is on Channel (as opposed to Subchannel)
+	// Note, this field has meaning only when ParentTrace field is true.
 	IsChannel bool
 }
 
+// AddTraceEvent adds trace related to entity with specified id, using the provided TraceEventDesc.
 func AddTraceEvent(id int64, desc *TraceEventDesc) {
 	if getMaxTraceEntry() == 0 {
 		return
 	}
 	db.get().traceEvent(id, desc)
 }
-
-//func TraceChannelConnectivityChange(id int64, s connectivity.State) {
-//	db.get().traceChannelConnectivityChange(id, s)
-//}
-//
-//func TraceSubChannelConnectivityChange(id int64, s connectivity.State) {
-//	db.get().traceSubChannelConnectivityChange(id, s)
-//}
-//
-//func TraceSubChannelPickNewAddress(id int64, addr string) {
-//	db.get().traceSubChannelPickNewAddress(id, addr)
-//}
-//
-//func TraceAddressResolutionChange(id int64, t AddressResolutionChangeType, desc string) {
-//	db.get().traceAddressResolutionChange(id, t, desc)
-//}
 
 // channelMap is the storage data structure for channelz.
 // Methods of channelMap can be divided in two two categories with respect to locking.
@@ -430,7 +423,7 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 					desc:         desc.RefParentDesc,
 					severity:     desc.RefParentSeverity,
 					timestamp:    time.Now(),
-					refId:        id,
+					refID:        id,
 					refName:      c.getRefName(),
 					isRefChannel: desc.IsChannel,
 				})
@@ -566,7 +559,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 	for k := range svrskts {
 		ids = append(ids, k)
 	}
-	sort.Sort((int64Slice(ids)))
+	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
 	count := 0
 	var end bool

@@ -123,7 +123,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 		}
 		if err := verifyResultWithDelay(func() (bool, error) {
 			if tcs, end := channelz.GetTopChannels(c.start); len(tcs) != c.length || end != c.end {
-				return false, fmt.Errorf("GetTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)
+				return false, fmt.Errorf("getTopChannels(%d) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(%d)) = %d, end: %+v", c.start, tcs, len(tcs), end, c.start, c.length, c.end)
 			}
 			return true, nil
 		}); err != nil {
@@ -136,7 +136,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 
 		if err := verifyResultWithDelay(func() (bool, error) {
 			if tcs, end := channelz.GetTopChannels(c.start); len(tcs) != 0 || !end {
-				return false, fmt.Errorf("GetTopChannels(0) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(0)) = 0, end: true", tcs, len(tcs), end)
+				return false, fmt.Errorf("getTopChannels(0) = %+v (len of which: %d), end: %+v, want len(GetTopChannels(0)) = 0, end: true", tcs, len(tcs), end)
 			}
 			return true, nil
 		}); err != nil {
@@ -164,10 +164,10 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 1 {
-			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		return true, nil
 	}); err != nil {
@@ -181,10 +181,10 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 0 {
-			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		return true, nil
 	}); err != nil {
@@ -214,10 +214,10 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != num {
-			return false, fmt.Errorf("There should be %d subchannel not %d", num, len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be %d subchannel not %d", num, len(tcs[0].SubChans))
 		}
 		count := 0
 		for k := range tcs[0].SubChans {
@@ -228,7 +228,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 			count += len(sc.Sockets)
 		}
 		if count != num {
-			return false, fmt.Errorf("There should be %d sockets not %d", num, count)
+			return false, fmt.Errorf("there should be %d sockets not %d", num, count)
 		}
 
 		return true, nil
@@ -241,10 +241,10 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != num-1 {
-			return false, fmt.Errorf("There should be %d subchannel not %d", num-1, len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be %d subchannel not %d", num-1, len(tcs[0].SubChans))
 		}
 		count := 0
 		for k := range tcs[0].SubChans {
@@ -255,7 +255,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 			count += len(sc.Sockets)
 		}
 		if count != num-1 {
-			return false, fmt.Errorf("There should be %d sockets not %d", num-1, count)
+			return false, fmt.Errorf("there should be %d sockets not %d", num-1, count)
 		}
 
 		return true, nil
@@ -287,14 +287,14 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		if len(ss[0].ListenSockets) != 1 {
-			return false, fmt.Errorf("There should only be one server listen socket, not %d", len(ss[0].ListenSockets))
+			return false, fmt.Errorf("there should only be one server listen socket, not %d", len(ss[0].ListenSockets))
 		}
 		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 		if len(ns) != num {
-			return false, fmt.Errorf("There should be %d normal sockets not %d", num, len(ns))
+			return false, fmt.Errorf("there should be %d normal sockets not %d", num, len(ns))
 		}
 		svrID = ss[0].ID
 		return true, nil
@@ -307,7 +307,7 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		if len(ns) != num-1 {
-			return false, fmt.Errorf("There should be %d normal sockets not %d", num-1, len(ns))
+			return false, fmt.Errorf("there should be %d normal sockets not %d", num-1, len(ns))
 		}
 		return true, nil
 	}); err != nil {
@@ -327,10 +327,10 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		if len(ss[0].ListenSockets) != 1 {
-			return false, fmt.Errorf("There should only be one server listen socket, not %d", len(ss[0].ListenSockets))
+			return false, fmt.Errorf("there should only be one server listen socket, not %d", len(ss[0].ListenSockets))
 		}
 		return true, nil
 	}); err != nil {
@@ -341,7 +341,7 @@ func TestCZServerListenSocketDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should be 1 server, not %d", len(ss))
+			return false, fmt.Errorf("there should be 1 server, not %d", len(ss))
 		}
 		return true, nil
 	}); err != nil {
@@ -463,10 +463,10 @@ func TestCZChannelMetrics(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != num {
-			return false, fmt.Errorf("There should be %d subchannel not %d", num, len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be %d subchannel not %d", num, len(tcs[0].SubChans))
 		}
 		var cst, csu, cf int64
 		for k := range tcs[0].SubChans {
@@ -479,22 +479,22 @@ func TestCZChannelMetrics(t *testing.T) {
 			cf += sc.ChannelData.CallsFailed
 		}
 		if cst != 3 {
-			return false, fmt.Errorf("There should be 3 CallsStarted not %d", cst)
+			return false, fmt.Errorf("there should be 3 CallsStarted not %d", cst)
 		}
 		if csu != 1 {
-			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", csu)
+			return false, fmt.Errorf("there should be 1 CallsSucceeded not %d", csu)
 		}
 		if cf != 1 {
-			return false, fmt.Errorf("There should be 1 CallsFailed not %d", cf)
+			return false, fmt.Errorf("there should be 1 CallsFailed not %d", cf)
 		}
 		if tcs[0].ChannelData.CallsStarted != 3 {
-			return false, fmt.Errorf("There should be 3 CallsStarted not %d", tcs[0].ChannelData.CallsStarted)
+			return false, fmt.Errorf("there should be 3 CallsStarted not %d", tcs[0].ChannelData.CallsStarted)
 		}
 		if tcs[0].ChannelData.CallsSucceeded != 1 {
-			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", tcs[0].ChannelData.CallsSucceeded)
+			return false, fmt.Errorf("there should be 1 CallsSucceeded not %d", tcs[0].ChannelData.CallsSucceeded)
 		}
 		if tcs[0].ChannelData.CallsFailed != 1 {
-			return false, fmt.Errorf("There should be 1 CallsFailed not %d", tcs[0].ChannelData.CallsFailed)
+			return false, fmt.Errorf("there should be 1 CallsFailed not %d", tcs[0].ChannelData.CallsFailed)
 		}
 		return true, nil
 	}); err != nil {
@@ -541,16 +541,16 @@ func TestCZServerMetrics(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		if ss[0].ServerData.CallsStarted != 3 {
-			return false, fmt.Errorf("There should be 3 CallsStarted not %d", ss[0].ServerData.CallsStarted)
+			return false, fmt.Errorf("there should be 3 CallsStarted not %d", ss[0].ServerData.CallsStarted)
 		}
 		if ss[0].ServerData.CallsSucceeded != 1 {
-			return false, fmt.Errorf("There should be 1 CallsSucceeded not %d", ss[0].ServerData.CallsSucceeded)
+			return false, fmt.Errorf("there should be 1 CallsSucceeded not %d", ss[0].ServerData.CallsSucceeded)
 		}
 		if ss[0].ServerData.CallsFailed != 1 {
-			return false, fmt.Errorf("There should be 1 CallsFailed not %d", ss[0].ServerData.CallsFailed)
+			return false, fmt.Errorf("there should be 1 CallsFailed not %d", ss[0].ServerData.CallsFailed)
 		}
 		return true, nil
 	}); err != nil {
@@ -804,10 +804,10 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0)
 		if len(tchan) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tchan))
 		}
 		if len(tchan[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+			return false, fmt.Errorf("there should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
 		}
 
 		for scID = range tchan[0].SubChans {
@@ -815,10 +815,10 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		}
 		sc := channelz.GetSubChannel(scID)
 		if sc == nil {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", scID)
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not 0", scID)
 		}
 		if len(sc.Sockets) != 1 {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
 		}
 		for skID = range sc.Sockets {
 			break
@@ -905,10 +905,10 @@ func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testi
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0)
 		if len(tchan) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tchan))
 		}
 		if len(tchan[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+			return false, fmt.Errorf("there should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
 		}
 		var id int64
 		for id = range tchan[0].SubChans {
@@ -916,10 +916,10 @@ func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testi
 		}
 		sc := channelz.GetSubChannel(id)
 		if sc == nil {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not 0", id)
 		}
 		if len(sc.Sockets) != 1 {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
 		}
 		for id = range sc.Sockets {
 			break
@@ -931,16 +931,16 @@ func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testi
 		}
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 
 		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 		if len(ns) != 1 {
-			return false, fmt.Errorf("There should be one server normal socket, not %d", len(ns))
+			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
 		}
 		sktData = ns[0].SocketData
 		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 0 || sktData.StreamsFailed != 1 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
+			return false, fmt.Errorf("server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed) = (1, 0, 1), got (%d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed)
 		}
 		return true, nil
 	}); err != nil {
@@ -971,10 +971,10 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0)
 		if len(tchan) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tchan))
 		}
 		if len(tchan[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+			return false, fmt.Errorf("there should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
 		}
 		var id int64
 		for id = range tchan[0].SubChans {
@@ -982,10 +982,10 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 		}
 		sc := channelz.GetSubChannel(id)
 		if sc == nil {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not 0", id)
 		}
 		if len(sc.Sockets) != 1 {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
 		}
 		for id = range sc.Sockets {
 			break
@@ -994,16 +994,16 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 		sktData := skt.SocketData
 		// 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
 		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
-			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 		sktData = ns[0].SocketData
 		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65486 {
-			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		cliSktID, svrSktID = id, ss[0].ID
 		return true, nil
@@ -1019,16 +1019,16 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 		// Local: 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
 		// Remote: 65536 - 5 (Length-Prefixed-Message size) * 10 - 10011 = 55475
 		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 55475 {
-			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 55475), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 55475), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		ns, _ := channelz.GetServerSockets(svrSktID, 0)
 		sktData = ns[0].SocketData
 		if sktData.LocalFlowControlWindow != 55475 || sktData.RemoteFlowControlWindow != 65486 {
-			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (55475, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (55475, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		return true, nil
 	}); err != nil {
@@ -1044,16 +1044,16 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 		// Local: 65536 - 5 (Length-Prefixed-Message size) * 10 = 65486
 		// Remote: 65536
 		if sktData.LocalFlowControlWindow != 65486 || sktData.RemoteFlowControlWindow != 65536 {
-			return false, fmt.Errorf("Client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 65536), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("client: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65486, 65536), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		ns, _ := channelz.GetServerSockets(svrSktID, 0)
 		sktData = ns[0].SocketData
 		if sktData.LocalFlowControlWindow != 65536 || sktData.RemoteFlowControlWindow != 65486 {
-			return false, fmt.Errorf("Server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
+			return false, fmt.Errorf("server: (LocalFlowControlWindow, RemoteFlowControlWindow) size should be (65536, 65486), not (%d, %d)", sktData.LocalFlowControlWindow, sktData.RemoteFlowControlWindow)
 		}
 		return true, nil
 	}); err != nil {
@@ -1076,10 +1076,10 @@ func TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0)
 		if len(tchan) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tchan))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tchan))
 		}
 		if len(tchan[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+			return false, fmt.Errorf("there should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
 		}
 		var id int64
 		for id = range tchan[0].SubChans {
@@ -1087,17 +1087,17 @@ func TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 		}
 		sc := channelz.GetSubChannel(id)
 		if sc == nil {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not 0", id)
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not 0", id)
 		}
 		if len(sc.Sockets) != 1 {
-			return false, fmt.Errorf("There should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
 		}
 		for id = range sc.Sockets {
 			break
 		}
 		skt := channelz.GetSocket(id)
 		if skt.SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-			return false, fmt.Errorf("There should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
+			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
 		}
 		return true, nil
 	}); err != nil {
@@ -1121,7 +1121,7 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should only be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should only be one server, not %d", len(ss))
 		}
 		svrID = ss[0].ID
 		return true, nil
@@ -1134,7 +1134,7 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		sktData := ns[0].SocketData
 		if sktData.StreamsStarted != 1 || sktData.StreamsSucceeded != 1 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+			return false, fmt.Errorf("server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, MessagesSent, MessagesReceived) = (1, 1, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
 		}
 		return true, nil
 	}); err != nil {
@@ -1146,7 +1146,7 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		sktData := ns[0].SocketData
 		if sktData.StreamsStarted != 2 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 0 || sktData.MessagesSent != 1 || sktData.MessagesReceived != 1 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (2, 2, 0, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+			return false, fmt.Errorf("server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (2, 2, 0, 1, 1), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
 		}
 		return true, nil
 	}); err != nil {
@@ -1158,7 +1158,7 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 		ns, _ := channelz.GetServerSockets(svrID, 0)
 		sktData := ns[0].SocketData
 		if sktData.StreamsStarted != 3 || sktData.StreamsSucceeded != 2 || sktData.StreamsFailed != 1 || sktData.MessagesSent != 2 || sktData.MessagesReceived != 2 {
-			return false, fmt.Errorf("Server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
+			return false, fmt.Errorf("server socket metric with ID %d, want (StreamsStarted, StreamsSucceeded, StreamsFailed, MessagesSent, MessagesReceived) = (3, 2, 1, 2, 2), got (%d, %d, %d, %d, %d)", ns[0].ID, sktData.StreamsStarted, sktData.StreamsSucceeded, sktData.StreamsFailed, sktData.MessagesSent, sktData.MessagesReceived)
 		}
 		return true, nil
 	}); err != nil {
@@ -1181,14 +1181,14 @@ func TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		ss, _ := channelz.GetServers(0)
 		if len(ss) != 1 {
-			return false, fmt.Errorf("There should be one server, not %d", len(ss))
+			return false, fmt.Errorf("there should be one server, not %d", len(ss))
 		}
 		ns, _ := channelz.GetServerSockets(ss[0].ID, 0)
 		if len(ns) != 1 {
-			return false, fmt.Errorf("There should be one server normal socket, not %d", len(ns))
+			return false, fmt.Errorf("there should be one server normal socket, not %d", len(ns))
 		}
 		if ns[0].SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
-			return false, fmt.Errorf("There should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
+			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
 		}
 		return true, nil
 	}); err != nil {
@@ -1214,28 +1214,28 @@ func TestCZChannelTraceCreationDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 1 {
-			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		for k := range tcs[0].NestedChans {
 			nestedConn = k
 		}
 		for _, e := range tcs[0].Trace.Events {
 			if e.RefID == nestedConn && !e.IsRefChannel {
-				return false, fmt.Errorf("Nested channel trace event shoud have IsRefChannel to be true")
+				return false, fmt.Errorf("nested channel trace event shoud have IsRefChannel to be true")
 			}
 		}
 		ncm := channelz.GetChannel(nestedConn)
 		if ncm.Trace == nil {
-			return false, fmt.Errorf("Trace for nested channel should not be empty")
+			return false, fmt.Errorf("trace for nested channel should not be empty")
 		}
 		if len(ncm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for nested channel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for nested channel not 0")
 		}
 		if ncm.Trace.Events[0].Desc != "Channel Created" {
-			return false, fmt.Errorf("The first trace event should be \"Channel Created\", not %q", ncm.Trace.Events[0].Desc)
+			return false, fmt.Errorf("the first trace event should be \"Channel Created\", not %q", ncm.Trace.Events[0].Desc)
 		}
 		return true, nil
 	}); err != nil {
@@ -1249,23 +1249,23 @@ func TestCZChannelTraceCreationDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 0 {
-			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		ncm := channelz.GetChannel(nestedConn)
 		if ncm == nil {
-			return false, fmt.Errorf("Nested channel should still exist due to parent's trace reference")
+			return false, fmt.Errorf("nested channel should still exist due to parent's trace reference")
 		}
 		if ncm.Trace == nil {
-			return false, fmt.Errorf("Trace for nested channel should not be empty")
+			return false, fmt.Errorf("trace for nested channel should not be empty")
 		}
 		if len(ncm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for nested channel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for nested channel not 0")
 		}
 		if ncm.Trace.Events[len(ncm.Trace.Events)-1].Desc != "Channel Deleted" {
-			return false, fmt.Errorf("The first trace event should be \"Channel Deleted\", not %q", ncm.Trace.Events[0].Desc)
+			return false, fmt.Errorf("the first trace event should be \"Channel Deleted\", not %q", ncm.Trace.Events[0].Desc)
 		}
 		return true, nil
 	}); err != nil {
@@ -1291,31 +1291,31 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		for k := range tcs[0].SubChans {
 			subConn = k
 		}
 		for _, e := range tcs[0].Trace.Events {
 			if e.RefID == subConn && e.IsRefChannel {
-				return false, fmt.Errorf("Subchannel trace event shoud have IsRefChannel to be false")
+				return false, fmt.Errorf("subchannel trace event shoud have IsRefChannel to be false")
 			}
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
-			return false, fmt.Errorf("SubChannel does not exist")
+			return false, fmt.Errorf("subChannel does not exist")
 		}
 		if scm.Trace == nil {
-			return false, fmt.Errorf("Trace for subChannel should not be empty")
+			return false, fmt.Errorf("trace for subChannel should not be empty")
 		}
 		if len(scm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
 		if scm.Trace.Events[0].Desc != "Subchannel Created" {
-			return false, fmt.Errorf("The first trace event should be \"Subchannel Created\", not %q", scm.Trace.Events[0].Desc)
+			return false, fmt.Errorf("the first trace event should be \"Subchannel Created\", not %q", scm.Trace.Events[0].Desc)
 		}
 		return true, nil
 	}); err != nil {
@@ -1327,23 +1327,23 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("There should be 0 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
-			return false, fmt.Errorf("SubChannel should still exist due to parent's trace reference")
+			return false, fmt.Errorf("subChannel should still exist due to parent's trace reference")
 		}
 		if scm.Trace == nil {
-			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+			return false, fmt.Errorf("trace for SubChannel should not be empty")
 		}
 		if len(scm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
 		if scm.Trace.Events[len(scm.Trace.Events)-1].Desc != "Subchannel Deleted" {
-			return false, fmt.Errorf("The first trace event should be \"Subchannel Deleted\", not %q", scm.Trace.Events[0].Desc)
+			return false, fmt.Errorf("the first trace event should be \"Subchannel Deleted\", not %q", scm.Trace.Events[0].Desc)
 		}
 
 		return true, nil
@@ -1371,7 +1371,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		cid = tcs[0].ID
 		for i := len(tcs[0].Trace.Events) - 1; i >= 0; i-- {
@@ -1379,7 +1379,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("Events do not contain expected address resolution from empty address state")
+				return false, fmt.Errorf("events do not contain expected address resolution from empty address state")
 			}
 		}
 		return true, nil
@@ -1396,7 +1396,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("Events do not contain expected address resolution change of LB policy")
+				return false, fmt.Errorf("events do not contain expected address resolution change of LB policy")
 			}
 		}
 		return true, nil
@@ -1429,7 +1429,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("Events do not contain expected address resolution of new service config")
+				return false, fmt.Errorf("events do not contain expected address resolution of new service config")
 			}
 		}
 		return true, nil
@@ -1446,7 +1446,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("Events do not contain expected address resolution of empty address")
+				return false, fmt.Errorf("events do not contain expected address resolution of empty address")
 			}
 		}
 		return true, nil
@@ -1474,7 +1474,8 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -1485,10 +1486,10 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		var subConn int64
 		for k := range tcs[0].SubChans {
@@ -1496,17 +1497,17 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm.Trace == nil {
-			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+			return false, fmt.Errorf("trace for SubChannel should not be empty")
 		}
 		if len(scm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
 		for i := len(scm.Trace.Events) - 1; i >= 0; i-- {
 			if scm.Trace.Events[i].Desc == fmt.Sprintf("Subchannel picks a new address %q to connect", te.srvAddrs[2]) {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("Events do not contain expected address resolution of subchannel picked new address")
+				return false, fmt.Errorf("events do not contain expected address resolution of subchannel picked new address")
 			}
 		}
 		return true, nil
@@ -1529,7 +1530,8 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -1542,10 +1544,10 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 		if subConn == 0 {
 			tcs, _ := channelz.GetTopChannels(0)
 			if len(tcs) != 1 {
-				return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+				return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 			}
 			if len(tcs[0].SubChans) != 1 {
-				return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+				return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 			}
 			for k := range tcs[0].SubChans {
 				// get the SubChannel id for further trace inquiry.
@@ -1554,13 +1556,13 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 		}
 		scm := channelz.GetSubChannel(subConn)
 		if scm == nil {
-			return false, fmt.Errorf("SubChannel should still exist due to parent's trace reference")
+			return false, fmt.Errorf("subChannel should still exist due to parent's trace reference")
 		}
 		if scm.Trace == nil {
-			return false, fmt.Errorf("Trace for SubChannel should not be empty")
+			return false, fmt.Errorf("trace for SubChannel should not be empty")
 		}
 		if len(scm.Trace.Events) == 0 {
-			return false, fmt.Errorf("There should be at least one trace event for subChannel not 0")
+			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
 		var ready, connecting, transient, shutdown int
 		for _, e := range scm.Trace.Events {
@@ -1571,7 +1573,7 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 		// Make sure the SubChannel has already seen transient failure before shutting it down through
 		// r.NewAddress([]resolver.Address{}).
 		if transient == 0 {
-			return false, fmt.Errorf("Transient failure has not happened on SubChannel yet.")
+			return false, fmt.Errorf("transient failure has not happened on SubChannel yet")
 		}
 		transient = 0
 		r.NewAddress([]resolver.Address{})
@@ -1623,7 +1625,8 @@ func TestCZChannelConnectivityState(t *testing.T) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
 	// make sure the connection is up
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -1631,7 +1634,7 @@ func TestCZChannelConnectivityState(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 
 		var ready, connecting, transient int
@@ -1685,10 +1688,10 @@ func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 1 {
-			return false, fmt.Errorf("There should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be one nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		for k := range tcs[0].NestedChans {
 			nestedConn = k
@@ -1705,10 +1708,10 @@ func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].NestedChans) != 0 {
-			return false, fmt.Errorf("There should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
+			return false, fmt.Errorf("there should be 0 nested channel from grpclb, not %d", len(tcs[0].NestedChans))
 		}
 		return true, nil
 	}); err != nil {
@@ -1719,7 +1722,7 @@ func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(nestedConn)
 		if cm != nil {
-			return false, fmt.Errorf("Nested channel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+			return false, fmt.Errorf("nested channel should have been deleted since its parent's trace should not contain any reference to it anymore")
 		}
 		return true, nil
 	}); err != nil {
@@ -1747,10 +1750,10 @@ func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		for k := range tcs[0].SubChans {
 			subConn = k
@@ -1765,10 +1768,10 @@ func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 0 {
-			return false, fmt.Errorf("There should be 0 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 0 subchannel not %d", len(tcs[0].SubChans))
 		}
 		return true, nil
 	}); err != nil {
@@ -1779,7 +1782,7 @@ func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(subConn)
 		if cm != nil {
-			return false, fmt.Errorf("Subchannel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+			return false, fmt.Errorf("subchannel should have been deleted since its parent's trace should not contain any reference to it anymore")
 		}
 		return true, nil
 	}); err != nil {
@@ -1804,10 +1807,10 @@ func TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0)
 		if len(tcs) != 1 {
-			return false, fmt.Errorf("There should only be one top channel, not %d", len(tcs))
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tcs))
 		}
 		if len(tcs[0].SubChans) != 1 {
-			return false, fmt.Errorf("There should be 1 subchannel not %d", len(tcs[0].SubChans))
+			return false, fmt.Errorf("there should be 1 subchannel not %d", len(tcs[0].SubChans))
 		}
 		for k := range tcs[0].SubChans {
 			subConn = k
@@ -1821,7 +1824,7 @@ func TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(subConn)
 		if cm != nil {
-			return false, fmt.Errorf("Subchannel should have been deleted since its parent's trace should not contain any reference to it anymore.")
+			return false, fmt.Errorf("subchannel should have been deleted since its parent's trace should not contain any reference to it anymore")
 		}
 		return true, nil
 	}); err != nil {
