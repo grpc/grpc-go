@@ -55,8 +55,8 @@ subprojects {
     group = "io.grpc"
     version = "1.15.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
-    sourceCompatibility = 1.6
-    targetCompatibility = 1.6
+    sourceCompatibility = 1.7
+    targetCompatibility = 1.7
 
     repositories {
         maven { // The google mirror is less flaky than mavenCentral()
