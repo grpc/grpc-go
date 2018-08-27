@@ -742,7 +742,6 @@ func TestResetConnectBackoff(t *testing.T) {
 	defer cc.Close()
 	select {
 	case <-dials:
-		break
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Fatal("Failed to call dial within 10s")
 	}
@@ -751,14 +750,12 @@ func TestResetConnectBackoff(t *testing.T) {
 	case <-dials:
 		t.Fatal("Dial called unexpectedly before resetting backoff")
 	case <-time.NewTimer(100 * time.Millisecond).C:
-		break
 	}
 
 	cc.ResetConnectBackoff()
 
 	select {
 	case <-dials:
-		break
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Fatal("Failed to call dial within 10s after resetting backoff")
 	}
