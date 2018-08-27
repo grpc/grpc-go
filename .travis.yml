@@ -2,17 +2,17 @@ language: go
 
 matrix:
   include:
-  - go: 1.10.x
+  - go: 1.11.x
     env: VET=1 RACE=1
   - go: 1.6.x
-  - go: 1.7.x
   - go: 1.8.x
   - go: 1.9.x
   - go: 1.9.x
     env: GAE=1
   - go: 1.10.x
+  - go: 1.11.x
     env: RUN386=1
-  - go: 1.10.x
+  - go: 1.11.x
     env: GRPC_GO_RETRY=on
 
 go_import_path: google.golang.org/grpc
