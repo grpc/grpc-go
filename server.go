@@ -1063,11 +1063,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
 	ss := &serverStream{
-		ctx:   ctx,
-		t:     t,
-		s:     stream,
-		p:     &parser{r: stream},
-		codec: s.getCodec(stream.ContentSubtype()),
+		ctx:                   ctx,
+		t:                     t,
+		s:                     stream,
+		p:                     &parser{r: stream},
+		codec:                 s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,

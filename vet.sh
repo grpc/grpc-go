@@ -85,5 +85,7 @@ google.golang.org/grpc/test/end2end_test.go:SA1019
 google.golang.org/grpc/balancer_test.go:SA1019
 google.golang.org/grpc/balancer.go:SA1019
 google.golang.org/grpc/clientconn_test.go:SA1019
+google.golang.org/grpc/internal/transport/handler_server_test.go:SA1019
+google.golang.org/grpc/internal/transport/handler_server.go:SA1019
 ' ./...
 misspell -error .
