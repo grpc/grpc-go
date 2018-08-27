@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
 import io.grpc.ManagedChannel;
 import io.grpc.alts.AltsChannelBuilder;
+import io.grpc.alts.GoogleDefaultChannelBuilder;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.TestUtils;
@@ -78,6 +79,7 @@ public class TestServiceClient {
   private String testCase = "empty_unary";
   private boolean useTls = true;
   private boolean useAlts = false;
+  private String customCredentialsType;
   private boolean useTestCa;
   private boolean useOkHttp;
   private String defaultServiceAccount;
@@ -120,6 +122,8 @@ public class TestServiceClient {
         useTls = Boolean.parseBoolean(value);
       } else if ("use_alts".equals(key)) {
         useAlts = Boolean.parseBoolean(value);
+      } else if ("custom_credentials_type".equals(key)) {
+        customCredentialsType = value;
       } else if ("use_test_ca".equals(key)) {
         useTestCa = Boolean.parseBoolean(value);
       } else if ("use_okhttp".equals(key)) {
@@ -162,6 +166,8 @@ public class TestServiceClient {
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_alts=true|false       Whether to use ALTS. Enable ALTS will disable TLS."
           + "\n                              Default " + c.useAlts
+          + "\n  --custom_credentials_type   Custom credentials type to use. Default "
+            + c.customCredentialsType
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Requires --use_tls=true "
           + "\n                              to have effect. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
@@ -338,6 +344,10 @@ public class TestServiceClient {
   private class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
+      if (customCredentialsType != null
+          && customCredentialsType.equals("google_default_credentials")) {
+        return GoogleDefaultChannelBuilder.forAddress(serverHost, serverPort).build();
+      }
       if (useAlts) {
         return AltsChannelBuilder.forAddress(serverHost, serverPort).build();
       }

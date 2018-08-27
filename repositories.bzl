@@ -3,6 +3,7 @@
 def grpc_java_repositories(
         omit_com_google_api_grpc_google_common_protos = False,
         omit_com_google_auth_google_auth_library_credentials = False,
+        omit_com_google_auth_google_auth_library_oauth2_http = False,
         omit_com_google_code_findbugs_jsr305 = False,
         omit_com_google_code_gson = False,
         omit_com_google_errorprone_error_prone_annotations = False,
@@ -37,6 +38,8 @@ def grpc_java_repositories(
         com_google_api_grpc_google_common_protos()
     if not omit_com_google_auth_google_auth_library_credentials:
         com_google_auth_google_auth_library_credentials()
+    if not omit_com_google_auth_google_auth_library_oauth2_http:
+        com_google_auth_google_auth_library_oauth2_http()
     if not omit_com_google_code_findbugs_jsr305:
         com_google_code_findbugs_jsr305()
     if not omit_com_google_code_gson:
@@ -117,6 +120,13 @@ def com_google_auth_google_auth_library_credentials():
         name = "com_google_auth_google_auth_library_credentials",
         artifact = "com.google.auth:google-auth-library-credentials:0.9.0",
         sha1 = "8e2b181feff6005c9cbc6f5c1c1e2d3ec9138d46",
+    )
+
+def com_google_auth_google_auth_library_oauth2_http():
+    native.maven_jar(
+        name = "com_google_auth_google_auth_library_oauth2_http",
+        artifact = "com.google.auth:google-auth-library-oauth2-http:0.9.0",
+        sha1 = "04e6152c3aead24148627e84f5651e79698c00d9",
     )
 
 def com_google_code_findbugs_jsr305():

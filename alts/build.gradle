@@ -19,18 +19,27 @@ buildscript {
 }
 
 dependencies {
-    compile project(':grpc-core'),
+    compile project(':grpc-auth'),
+            project(':grpc-core'),
             project(':grpc-netty'),
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             libraries.lang,
             libraries.protobuf
+    compile (libraries.google_auth_oauth2_http) {
+        // prefer 3.0.0 from libraries instead of 1.3.9
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        // prefer 20.0 from libraries instead of 19.0
+        exclude group: 'com.google.guava', module: 'guava'
+    }
     runtime project(':grpc-grpclb')
     testCompile libraries.guava,
             libraries.guava_testlib,
             libraries.junit,
             libraries.mockito,
             libraries.truth
+    testRuntime libraries.netty_tcnative,
+            libraries.conscrypt
     signature 'org.codehaus.mojo.signature:java17:1.0@signature'
 }
 

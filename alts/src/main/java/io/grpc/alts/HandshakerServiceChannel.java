@@ -28,7 +28,7 @@ import java.util.concurrent.ThreadFactory;
  * the handshaker service is local and is over plaintext. Each application will have at most one
  * connection to the handshaker service.
  *
- * <p>TODO: Release the channel if it is not used.
+ * <p>TODO: Release the channel if it is not used. https://github.com/grpc/grpc-java/issues/4755.
  */
 final class HandshakerServiceChannel {
   // Default handshaker service address.
