@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"errors"
 	"math"
 	"net"
 	"sync/atomic"
@@ -720,5 +721,42 @@ func TestGetClientConnTarget(t *testing.T) {
 	defer cc.Close()
 	if cc.Target() != addr {
 		t.Fatalf("Target() = %s, want %s", cc.Target(), addr)
+	}
+}
+
+type backoffForever struct{}
+
+func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
+
+func TestResetConnectBackoff(t *testing.T) {
+	defer leakcheck.Check(t)
+	dials := make(chan struct{})
+	dialer := func(string, time.Duration) (net.Conn, error) {
+		dials <- struct{}{}
+		return nil, errors.New("failed to fake dial")
+	}
+	cc, err := Dial("any", WithInsecure(), WithDialer(dialer), withBackoff(backoffForever{}))
+	if err != nil {
+		t.Fatalf("Dial() = _, %v; want _, nil", err)
+	}
+	defer cc.Close()
+	select {
+	case <-dials:
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Fatal("Failed to call dial within 10s")
+	}
+
+	select {
+	case <-dials:
+		t.Fatal("Dial called unexpectedly before resetting backoff")
+	case <-time.NewTimer(100 * time.Millisecond).C:
+	}
+
+	cc.ResetConnectBackoff()
+
+	select {
+	case <-dials:
+	case <-time.NewTimer(10 * time.Second).C:
+		t.Fatal("Failed to call dial within 10s after resetting backoff")
 	}
 }
