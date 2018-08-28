@@ -38,7 +38,7 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class InteropInstrumentationTest {
-  private static final int TIMEOUT_SECONDS = 10;
+  private static final int TIMEOUT_SECONDS = 60;
   private static final String LOG_TAG = "GrpcInteropInstrumentationTest";
 
   private String host;
