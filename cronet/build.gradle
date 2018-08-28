@@ -39,8 +39,8 @@ android {
 }
 
 dependencies {
-    implementation 'io.grpc:grpc-core:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    testImplementation 'io.grpc:grpc-testing:1.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-core:1.16.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    testImplementation 'io.grpc:grpc-testing:1.16.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
     implementation "org.chromium.net:cronet-embedded:66.3359.158"
 

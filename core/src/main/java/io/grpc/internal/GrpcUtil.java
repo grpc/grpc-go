@@ -199,7 +199,7 @@ public final class GrpcUtil {
 
   public static final Splitter ACCEPT_ENCODING_SPLITTER = Splitter.on(',').trimResults();
 
-  private static final String IMPLEMENTATION_VERSION = "1.15.0-SNAPSHOT"; // CURRENT_GRPC_VERSION
+  private static final String IMPLEMENTATION_VERSION = "1.16.0-SNAPSHOT"; // CURRENT_GRPC_VERSION
 
   /**
    * The default delay in nanos before we send a keepalive.
