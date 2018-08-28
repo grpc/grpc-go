@@ -1,11 +1,5 @@
 description = "gRPC: OkHttp"
 
-// Workaround:
-//   Util.java:219: warning: [unchecked] Possible heap pollution from parameterized vararg type T
-// Need to verify the @SafeVarargs annotation is safe for Android
-sourceCompatibility = 1.6
-targetCompatibility = 1.6
-
 dependencies {
     compile project(':grpc-core'),
             libraries.okhttp,
