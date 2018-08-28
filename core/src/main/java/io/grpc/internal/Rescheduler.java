@@ -60,7 +60,7 @@ final class Rescheduler {
       if (wakeUp != null) {
         wakeUp.cancel(false);
       }
-      wakeUp = scheduler.schedule(new FutureRunnable(this), delayNanos, TimeUnit.NANOSECONDS);
+      wakeUp = scheduler.schedule(new FutureRunnable(), delayNanos, TimeUnit.NANOSECONDS);
     }
     runAtNanos = newRunAtNanos;
   }
@@ -74,17 +74,14 @@ final class Rescheduler {
     }
   }
 
-  private static final class FutureRunnable implements Runnable {
-
-    private final Rescheduler rescheduler;
-
-    FutureRunnable(Rescheduler rescheduler) {
-      this.rescheduler = rescheduler;
-    }
-
+  private final class FutureRunnable implements Runnable {
     @Override
     public void run() {
-      rescheduler.serializingExecutor.execute(rescheduler.new ChannelFutureRunnable());
+      Rescheduler.this.serializingExecutor.execute(new ChannelFutureRunnable());
+    }
+
+    private boolean isEnabled() {
+      return Rescheduler.this.enabled;
     }
   }
 
@@ -99,7 +96,7 @@ final class Rescheduler {
       long now = nanoTime();
       if (runAtNanos - now > 0) {
         wakeUp = scheduler.schedule(
-            new FutureRunnable(Rescheduler.this), runAtNanos - now,  TimeUnit.NANOSECONDS);
+            new FutureRunnable(), runAtNanos - now,  TimeUnit.NANOSECONDS);
       } else {
         enabled = false;
         wakeUp = null;
@@ -110,7 +107,7 @@ final class Rescheduler {
 
   @VisibleForTesting
   static boolean isEnabled(Runnable r) {
-    return ((FutureRunnable) r).rescheduler.enabled;
+    return ((FutureRunnable) r).isEnabled();
   }
 
   private long nanoTime() {

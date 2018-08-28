@@ -1,11 +1,5 @@
 description = 'gRPC: Core'
 
-// Workaround:
-// [Undefined reference (android-api-level-14-4.0_r4)] io.grpc.internal.(Rescheduler.java:87)
-//   >> Object java.util.Objects.requireNonNull(Object)
-sourceCompatibility = 1.6
-targetCompatibility = 1.6
-
 dependencies {
     compile project(':grpc-context'),
             libraries.gson,
