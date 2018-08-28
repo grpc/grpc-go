@@ -65,7 +65,7 @@ would be used to create all `v1.7` tags (e.g. `v1.7.0`, `v1.7.1`).
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
      "${VERSION_FILES[@]}"
    $ sed -i s/$MAJOR.$MINOR.$PATCH/$MAJOR.$((MINOR+1)).0/ \
-     compiler/src/test{,Lite,Nano}/golden/TestService.java.txt
+     compiler/src/test{,Lite,Nano}/golden/Test{,Deprecated}Service.java.txt
    $ ./gradlew build
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
