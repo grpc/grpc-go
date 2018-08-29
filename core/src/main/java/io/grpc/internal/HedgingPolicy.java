@@ -28,7 +28,7 @@ import javax.annotation.concurrent.Immutable;
  * Hedging policy data object.
  */
 @Immutable
-class HedgingPolicy {
+final class HedgingPolicy {
   final int maxAttempts;
   final long hedgingDelayNanos;
   final Set<Code> nonFatalStatusCodes;
