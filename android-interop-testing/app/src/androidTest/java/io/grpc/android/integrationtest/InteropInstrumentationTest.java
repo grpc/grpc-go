@@ -131,6 +131,6 @@ public class InteropInstrumentationTest {
             testCase)
         .execute();
     String result = resultFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    assertEquals(testCase + " failed", result, InteropTask.SUCCESS_MESSAGE);
+    assertEquals(testCase + " failed", InteropTask.SUCCESS_MESSAGE, result);
   }
 }
