@@ -30,6 +30,7 @@ import org.apache.commons.lang3.SystemUtils;
 
 /** Class for checking if the system is running on Google Cloud Platform (GCP). */
 final class CheckGcpEnvironment {
+
   private static final Logger logger = Logger.getLogger(CheckGcpEnvironment.class.getName());
   private static final String DMI_PRODUCT_NAME = "/sys/class/dmi/id/product_name";
   private static final String WINDOWS_COMMAND = "powershell.exe";
@@ -38,18 +39,7 @@ final class CheckGcpEnvironment {
   // Construct me not!
   private CheckGcpEnvironment() {}
 
-  public static void check(boolean enableUntrustedAlts) {
-    if (enableUntrustedAlts) {
-      logger.log(
-          Level.WARNING,
-          "Untrusted ALTS mode is enabled and we cannot guarantee the trustworthiness of the ALTS "
-              + "handshaker service.");
-    } else if (!isOnGcp()) {
-      throw new RuntimeException("ALTS is only allowed to run on Google Cloud Platform.");
-    }
-  }
-
-  private static synchronized boolean isOnGcp() {
+  static synchronized boolean isOnGcp() {
     if (cachedResult == null) {
       cachedResult = isRunningOnGcp();
     }

@@ -20,13 +20,15 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallOptions;
+import io.grpc.Channel;
 import io.grpc.ClientCall;
-import io.grpc.ConnectivityState;
+import io.grpc.ClientInterceptor;
 import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingChannelBuilder;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 import io.grpc.alts.internal.AltsClientOptions;
 import io.grpc.alts.internal.AltsProtocolNegotiator;
 import io.grpc.alts.internal.AltsTsiHandshaker;
@@ -43,6 +45,8 @@ import io.grpc.netty.NettyChannelBuilder;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -52,6 +56,7 @@ import javax.annotation.Nullable;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4151")
 public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChannelBuilder> {
 
+  private static final Logger logger = Logger.getLogger(AltsChannelBuilder.class.getName());
   private final NettyChannelBuilder delegate;
   private final AltsClientOptions.Builder handshakerOptionsBuilder =
       new AltsClientOptions.Builder();
@@ -115,13 +120,24 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
 
   @Override
   public ManagedChannel build() {
-    CheckGcpEnvironment.check(enableUntrustedAlts);
+    if (!CheckGcpEnvironment.isOnGcp()) {
+      if (enableUntrustedAlts) {
+        logger.log(
+            Level.WARNING,
+            "Untrusted ALTS mode is enabled and we cannot guarantee the trustworthiness of the "
+                + "ALTS handshaker service");
+      } else {
+        Status status =
+            Status.INTERNAL.withDescription("ALTS is only allowed to run on Google Cloud Platform");
+        delegate().intercept(new FailingClientInterceptor(status));
+      }
+    }
+
     TcpfFactory tcpfFactory = new TcpfFactory();
     InternalNettyChannelBuilder.setDynamicTransportParamsFactory(delegate(), tcpfFactory);
-
     tcpfFactoryForTest = tcpfFactory;
 
-    return new AltsChannel(delegate().build());
+    return delegate().build();
   }
 
   @VisibleForTesting
@@ -140,6 +156,7 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
   }
 
   private final class TcpfFactory implements TransportCreationParamsFilterFactory {
+
     final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
 
     private final TsiHandshakerFactory altsHandshakerFactory =
@@ -189,69 +206,19 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
     }
   }
 
-  static final class AltsChannel extends ManagedChannel {
-    private final ManagedChannel delegate;
+  /** An implementation of {@link ClientInterceptor} that fails each call. */
+  static final class FailingClientInterceptor implements ClientInterceptor {
 
-    AltsChannel(ManagedChannel delegate) {
-      this.delegate = delegate;
+    private final Status status;
+
+    public FailingClientInterceptor(Status status) {
+      this.status = status;
     }
 
     @Override
-    public ConnectivityState getState(boolean requestConnection) {
-      return delegate.getState(requestConnection);
-    }
-
-    @Override
-    public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
-      delegate.notifyWhenStateChanged(source, callback);
-    }
-
-    @Override
-    public AltsChannel shutdown() {
-      delegate.shutdown();
-      return this;
-    }
-
-    @Override
-    public boolean isShutdown() {
-      return delegate.isShutdown();
-    }
-
-    @Override
-    public boolean isTerminated() {
-      return delegate.isTerminated();
-    }
-
-    @Override
-    public AltsChannel shutdownNow() {
-      delegate.shutdownNow();
-      return this;
-    }
-
-    @Override
-    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-      return delegate.awaitTermination(timeout, unit);
-    }
-
-    @Override
-    public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
-        MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
-      return delegate.newCall(methodDescriptor, callOptions);
-    }
-
-    @Override
-    public String authority() {
-      return delegate.authority();
-    }
-
-    @Override
-    public void resetConnectBackoff() {
-      delegate.resetConnectBackoff();
-    }
-
-    @Override
-    public void enterIdle() {
-      delegate.enterIdle();
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      return new FailingClientCall<>(status);
     }
   }
 }
