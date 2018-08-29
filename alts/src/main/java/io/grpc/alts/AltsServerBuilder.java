@@ -21,6 +21,7 @@ import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -39,6 +40,8 @@ import io.grpc.alts.internal.HandshakerServiceGrpc;
 import io.grpc.alts.internal.RpcProtocolVersionsUtil;
 import io.grpc.alts.internal.TsiHandshaker;
 import io.grpc.alts.internal.TsiHandshakerFactory;
+import io.grpc.internal.ObjectPool;
+import io.grpc.internal.SharedResourcePool;
 import io.grpc.netty.NettyServerBuilder;
 import java.io.File;
 import java.net.InetSocketAddress;
@@ -56,6 +59,8 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
   private static final Logger logger = Logger.getLogger(AltsServerBuilder.class.getName());
   private final NettyServerBuilder delegate;
+  private ObjectPool<ManagedChannel> handshakerChannelPool =
+      SharedResourcePool.forResource(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
   private boolean enableUntrustedAlts;
 
   private AltsServerBuilder(NettyServerBuilder nettyDelegate) {
@@ -85,7 +90,10 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
   /** Sets a new handshaker service address for testing. */
   public AltsServerBuilder setHandshakerAddressForTesting(String handshakerAddress) {
-    HandshakerServiceChannel.setHandshakerAddressForTesting(handshakerAddress);
+    // Instead of using the default shared channel to the handshaker service, create a fix object
+    // pool of handshaker service channel for testing.
+    handshakerChannelPool =
+        HandshakerServiceChannel.getHandshakerChannelPoolForTesting(handshakerAddress);
     return this;
   }
 
@@ -194,8 +202,10 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
               @Override
               public TsiHandshaker newHandshaker() {
                 // Used the shared grpc channel to connecting to the ALTS handshaker service.
+                // TODO: Release the channel if it is not used.
+                // https://github.com/grpc/grpc-java/issues/4755.
                 return AltsTsiHandshaker.newServer(
-                    HandshakerServiceGrpc.newStub(HandshakerServiceChannel.get()),
+                    HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
                     new AltsHandshakerOptions(RpcProtocolVersionsUtil.getRpcProtocolVersions()));
               }
             }));
