@@ -131,7 +131,6 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    *
    * @since 1.8.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3605")
   public final S withExecutor(Executor executor) {
     return build(channel, callOptions.withExecutor(executor));
   }
