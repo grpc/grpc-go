@@ -65,6 +65,7 @@ class CronetClientStream extends AbstractClientStream {
   private static final String LOG_TAG = "grpc-java-cronet";
   private final String url;
   private final String userAgent;
+  private final StatsTraceContext statsTraceCtx;
   private final Executor executor;
   private final Metadata headers;
   private final CronetClientTransport transport;
@@ -98,6 +99,7 @@ class CronetClientStream extends AbstractClientStream {
         method.isSafe());
     this.url = Preconditions.checkNotNull(url, "url");
     this.userAgent = Preconditions.checkNotNull(userAgent, "userAgent");
+    this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.headers = Preconditions.checkNotNull(headers, "headers");
     this.transport = Preconditions.checkNotNull(transport, "transport");
@@ -221,6 +223,8 @@ class CronetClientStream extends AbstractClientStream {
     private Status cancelReason;
     @GuardedBy("lock")
     private boolean readClosed;
+    @GuardedBy("lock")
+    private boolean firstWriteComplete;
 
     public TransportState(
         int maxMessageSize, StatsTraceContext statsTraceCtx, Object lock,
@@ -418,6 +422,12 @@ class CronetClientStream extends AbstractClientStream {
         Log.v(LOG_TAG, "onWriteCompleted");
       }
       synchronized (state.lock) {
+        if (!state.firstWriteComplete) {
+          // Cronet API doesn't notify when headers are written to wire, but it occurs before first
+          // onWriteCompleted callback.
+          state.firstWriteComplete = true;
+          statsTraceCtx.clientOutboundHeaders();
+        }
         state.onSentBytes(buffer.position());
       }
     }
