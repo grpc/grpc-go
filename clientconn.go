@@ -101,12 +101,6 @@ const (
 	defaultReadBufSize  = 32 * 1024
 )
 
-// RegisterChannelz turns on channelz service.
-// This is an EXPERIMENTAL API.
-func RegisterChannelz() {
-	channelz.TurnOn()
-}
-
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)

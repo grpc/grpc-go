@@ -66,6 +66,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -452,7 +453,7 @@ func main() {
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
 		if enableChannelz[featuresPos[8]] {
-			grpc.RegisterChannelz()
+			channelz.TurnOn()
 		}
 		if runMode[0] {
 			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)

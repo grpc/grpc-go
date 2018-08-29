@@ -56,6 +56,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -71,7 +72,7 @@ import (
 )
 
 func init() {
-	grpc.RegisterChannelz()
+	channelz.TurnOn()
 }
 
 var (
