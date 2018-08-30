@@ -35,6 +35,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -70,6 +71,7 @@ import io.grpc.testing.TestMethodDescriptors;
 import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
 import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagValue;
+import io.opencensus.trace.BlankSpan;
 import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.MessageEvent.Type;
@@ -82,8 +84,10 @@ import io.opencensus.trace.propagation.SpanContextParseException;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Before;
@@ -715,6 +719,48 @@ public class CensusModulesTest {
 
     Context filteredContext = serverTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
+  }
+
+  @Test
+  public void traceHeaders_propagateSpanContext() throws Exception {
+    CensusTracingModule.ClientCallTracer callTracer =
+        censusTracing.newClientCallTracer(fakeClientParentSpan, method);
+    Metadata headers = new Metadata();
+
+    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+
+    assertThat(headers.keys()).isNotEmpty();
+  }
+
+  @Test
+  public void traceHeaders_missingCensusImpl_notPropagateSpanContext()
+      throws Exception {
+    reset(spyClientSpanBuilder);
+    when(spyClientSpanBuilder.startSpan()).thenReturn(BlankSpan.INSTANCE);
+    Metadata headers = new Metadata();
+
+    CensusTracingModule.ClientCallTracer callTracer =
+        censusTracing.newClientCallTracer(BlankSpan.INSTANCE, method);
+    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+
+    assertThat(headers.keys()).isEmpty();
+  }
+
+  @Test
+  public void traceHeaders_clientMissingCensusImpl_preservingHeaders() throws Exception {
+    reset(spyClientSpanBuilder);
+    when(spyClientSpanBuilder.startSpan()).thenReturn(BlankSpan.INSTANCE);
+    Metadata headers = new Metadata();
+    headers.put(
+        Metadata.Key.of("never-used-key-bin", Metadata.BINARY_BYTE_MARSHALLER),
+        new byte[] {});
+    Set<String> originalHeaderKeys = new HashSet<String>(headers.keys());
+
+    CensusTracingModule.ClientCallTracer callTracer =
+        censusTracing.newClientCallTracer(BlankSpan.INSTANCE, method);
+    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+
+    assertThat(headers.keys()).containsExactlyElementsIn(originalHeaderKeys);
   }
 
   @Test

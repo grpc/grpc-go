@@ -34,6 +34,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.StreamTracer;
+import io.opencensus.trace.BlankSpan;
 import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.MessageEvent.Type;
@@ -245,8 +246,10 @@ final class CensusTracingModule {
 
     @Override
     public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
-      headers.discardAll(tracingHeader);
-      headers.put(tracingHeader, span.getContext());
+      if (span != BlankSpan.INSTANCE) {
+        headers.discardAll(tracingHeader);
+        headers.put(tracingHeader, span.getContext());
+      }
       return new ClientTracer(span);
     }
 
