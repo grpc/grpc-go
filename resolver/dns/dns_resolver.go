@@ -62,13 +62,18 @@ var (
 )
 
 // NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
-func NewBuilder() resolver.Builder {
-	return &dnsBuilder{minFreq: defaultFreq}
+func NewBuilder(opts ...BuilderOption) resolver.Builder {
+	b := &dnsBuilder{
+		bopts: defaultBuilderOptions(),
+	}
+	for _, opt := range opts {
+		opt.apply(&b.bopts)
+	}
+	return b
 }
 
 type dnsBuilder struct {
-	// minimum frequency of polling the DNS server.
-	minFreq time.Duration
+	bopts builderOptions
 }
 
 // Build creates and starts a DNS resolver that watches the name resolution of the target.
@@ -99,8 +104,8 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &dnsResolver{
-		freq:                 b.minFreq,
-		backoff:              backoff.Exponential{MaxDelay: b.minFreq},
+		freq:                 b.bopts.minFreq,
+		backoff:              backoff.Exponential{MaxDelay: b.bopts.minFreq},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,

@@ -993,3 +993,56 @@ func TestDNSResolverRetry(t *testing.T) {
 	}
 	r.Close()
 }
+
+func TestDNSResolverFreq(t *testing.T) {
+	b := NewBuilder(WithFreq(time.Second))
+	target := "ipv4.multi.fake"
+	cc := &testClientConn{target: target}
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOption{})
+	if err != nil {
+		t.Fatalf("%v\n", err)
+	}
+	var addrs []resolver.Address
+	for {
+		addrs, _ = cc.getAddress()
+		if len(addrs) > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	want := []resolver.Address{
+		{Addr: "1.2.3.4" + colonDefaultPort},
+		{Addr: "5.6.7.8" + colonDefaultPort},
+		{Addr: "9.10.11.12" + colonDefaultPort},
+	}
+	if !reflect.DeepEqual(want, addrs) {
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, addrs, want)
+	}
+	// mutate the host lookup table so the target has 2 address returned.
+	revertTbl := mutateTbl(target)
+	// wait for the next lookup to happen in two seconds.
+	timer := time.NewTimer(2 * time.Second)
+	for {
+		b := false
+		select {
+		case <-timer.C:
+			b = true
+		default:
+			addrs, _ = cc.getAddress()
+			if len(addrs) == 2 {
+				b = true
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if b {
+			break
+		}
+	}
+	want = want[:len(want)-1]
+	if !reflect.DeepEqual(want, addrs) {
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, addrs, want)
+	}
+	revertTbl()
+	r.Close()
+}
