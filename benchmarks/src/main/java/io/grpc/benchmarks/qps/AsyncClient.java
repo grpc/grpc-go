@@ -48,10 +48,8 @@ import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
 
@@ -179,7 +177,7 @@ public class AsyncClient {
         histogram.recordValue((now - lastCall) / 1000);
         lastCall = now;
 
-        if (endTime > now) {
+        if (endTime - now > 0) {
           stub.unaryCall(request, this);
         } else {
           future.done();
@@ -236,7 +234,7 @@ public class AsyncClient {
       histogram.recordValue((now - lastCall) / 1000);
       lastCall = now;
 
-      if (endTime > now) {
+      if (endTime - now > 0) {
         requestObserver.onNext(request);
       } else {
         requestObserver.onCompleted();
@@ -352,7 +350,7 @@ public class AsyncClient {
     }
 
     @Override
-    public synchronized Histogram get() throws InterruptedException, ExecutionException {
+    public synchronized Histogram get() throws InterruptedException {
       while (!isDone() && !isCancelled()) {
         wait();
       }
@@ -365,9 +363,7 @@ public class AsyncClient {
     }
 
     @Override
-    public Histogram get(long timeout, TimeUnit unit) throws InterruptedException,
-        ExecutionException,
-        TimeoutException {
+    public Histogram get(long timeout, TimeUnit unit) {
       throw new UnsupportedOperationException();
     }
 

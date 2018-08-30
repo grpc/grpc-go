@@ -203,7 +203,7 @@ public class OpenLoopClient {
     private void waitForRpcsToComplete(int duration) {
       long now = System.nanoTime();
       long end = now + duration * 1000 * 1000 * 1000;
-      while (histogram.getTotalCount() < numRpcs && now < end) {
+      while (histogram.getTotalCount() < numRpcs && end - now > 0) {
         now = System.nanoTime();
       }
     }
