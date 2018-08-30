@@ -31,10 +31,16 @@ func main() {
 	b.BuildTags = []string{"appengine", "appenginevm"}
 	argsWithoutProg := os.Args[1:]
 	for _, dir := range argsWithoutProg {
-		p, _ := b.Import(".", dir, 0)
+		p, err := b.Import(".", dir, 0)
+		if _, ok := err.(*build.NoGoError); ok {
+			continue
+		} else if err != nil {
+			fmt.Printf("build.Import failed due to %v\n", err)
+			continue
+		}
 		for _, pkg := range p.Imports {
 			if pkg == "syscall" || pkg == "unsafe" {
-				fmt.Fprintln(os.Stdout, "Package", p.Dir+"/"+p.Name, "importing", pkg, "package without appengine build tag is NOT ALLOWED!")
+				fmt.Printf("Package %s/%s importing %s package without appengine build tag is NOT ALLOWED!\n", p.Dir, p.Name, pkg)
 			}
 		}
 	}
