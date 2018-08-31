@@ -23,8 +23,6 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
-// FIXME: add all experimental comments.
-
 // NewDefaultCredentials returns a credentials bundle that is configured to work
 // with google services.
 //
@@ -35,16 +33,15 @@ func NewDefaultCredentials() credentials.Bundle {
 
 // creds implements credentials.Bundle.
 type creds struct {
+	// Supported modes are defined in internal/internal.go.
 	mode string
 }
 
-// GetTransportCredentials returns a TransportCredentials based on the mode.
-func (c *creds) GetTransportCredentials() credentials.TransportCredentials {
+func (c *creds) TransportCredentials() credentials.TransportCredentials {
 	return nil
 }
 
-// GetPerRPCCredentials returns a PerRPCCredentials based on the mode.
-func (c *creds) GetPerRPCCredentials() credentials.PerRPCCredentials {
+func (c *creds) PerRPCCredentials() credentials.PerRPCCredentials {
 	return nil
 }
 

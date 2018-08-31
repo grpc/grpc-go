@@ -41,7 +41,7 @@ type testCredsBundle struct {
 	mode string
 }
 
-func (c *testCredsBundle) GetTransportCredentials() credentials.TransportCredentials {
+func (c *testCredsBundle) TransportCredentials() credentials.TransportCredentials {
 	if c.mode == bundlePerRPCOnly {
 		return nil
 	}
@@ -54,7 +54,7 @@ func (c *testCredsBundle) GetTransportCredentials() credentials.TransportCredent
 	return creds
 }
 
-func (c *testCredsBundle) GetPerRPCCredentials() credentials.PerRPCCredentials {
+func (c *testCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 	if c.mode == bundleTLSOnly {
 		return nil
 	}
