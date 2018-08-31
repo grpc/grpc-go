@@ -27,20 +27,22 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-
 	"time"
 
 	"google.golang.org/grpc/grpclog"
+)
+
+const (
+	defaultMaxTraceEntry int32 = 30
 )
 
 var (
 	db    dbWrapper
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
-	EntryPerPage         = 50
-	curState             int32
-	defaultMaxTraceEntry int32 = 30
-	maxTraceEntry              = defaultMaxTraceEntry
+	EntryPerPage  = 50
+	curState      int32
+	maxTraceEntry = defaultMaxTraceEntry
 )
 
 // TurnOn turns on channelz data collection.
@@ -166,7 +168,7 @@ func RegisterChannel(c Channel, pid int64, ref string) int64 {
 		nestedChans: make(map[int64]string),
 		id:          id,
 		pid:         pid,
-		trace:       &channelTrace{createdTime: time.Now(), events: make([]*event, 0, getMaxTraceEntry())},
+		trace:       &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
 	if pid == 0 {
 		db.get().addChannel(id, cn, true, pid, ref)
@@ -191,7 +193,7 @@ func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 		sockets: make(map[int64]string),
 		id:      id,
 		pid:     pid,
-		trace:   &channelTrace{createdTime: time.Now(), events: make([]*event, 0, getMaxTraceEntry())},
+		trace:   &channelTrace{createdTime: time.Now(), events: make([]*TraceEvent, 0, getMaxTraceEntry())},
 	}
 	db.get().addSubChannel(id, sc, pid, ref)
 	return id
@@ -250,20 +252,19 @@ func RemoveEntry(id int64) {
 
 // TraceEventDesc is what caller of AddTraceEvent should provide to describe the event to be added
 // to channel trace.
-// The first two fields: Desc and Severity are required for all trace events.
-// The last four fields: ParentTrace, RefParentDesc, RefParentSeverity and IsChannel are required
-// when the event should be recorded in both the subject's trace and the trace of its parent. For
-// example, a subchannel creation will have an entry in the subchannel's trace, along with an entry
-// in its parent channel's trace.
+// The Parent field is optional. It is used for event that will be recorded in the entity's parent
+// trace also.
 type TraceEventDesc struct {
 	Desc     string
 	Severity Severity
-	// ParentTrace indiciates whether add an entry to parent's trace
-	ParentTrace       bool
+	Parent   *ParentTraceEventDesc
+}
+
+// ParentTraceEventDesc describes the trace event to be added to the entity's parent trace.
+type ParentTraceEventDesc struct {
 	RefParentDesc     string
 	RefParentSeverity Severity
 	// IsChannel indicates whether the traced event is on Channel (as opposed to Subchannel)
-	// Note, this field has meaning only when ParentTrace field is true.
 	IsChannel bool
 }
 
@@ -345,14 +346,13 @@ func (c *channelMap) removeEntry(id int64) {
 	c.mu.Unlock()
 }
 
-func (c *channelMap) startCleanup(id int64) {
-	c.mu.Lock()
+// c.mu must be held by the caller
+func (c *channelMap) attemptCleanup(id int64) {
 	e := c.findEntry(id)
 	if v, ok := e.(tracedChannel); ok {
-		v.decrTraceCount()
-		v.deleteSelfIfReady()
+		v.decrTraceRefCount()
+		e.deleteSelfIfReady()
 	}
-	c.mu.Unlock()
 }
 
 // c.mu must be held by the caller.
@@ -411,25 +411,25 @@ func (c *channelMap) deleteEntry(id int64) {
 func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	c.mu.Lock()
 	child := c.findEntry(id)
-	if !desc.ParentTrace {
-		if v, ok := child.(tracedChannel); ok {
-			v.getChannelTrace().append(&event{desc: desc.Desc, severity: desc.Severity, timestamp: time.Now()})
-		}
+	childTC, ok := child.(tracedChannel)
+	if ok {
+		childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
 	} else {
+		c.mu.Unlock()
+		return
+	}
+	if desc.Parent != nil {
 		parent := c.findEntry(child.getParentID())
-		if c, ok := child.(tracedChannel); ok {
-			if p, ok := parent.(tracedChannel); ok {
-				p.getChannelTrace().append(&event{
-					desc:         desc.RefParentDesc,
-					severity:     desc.RefParentSeverity,
-					timestamp:    time.Now(),
-					refID:        id,
-					refName:      c.getRefName(),
-					isRefChannel: desc.IsChannel,
-				})
-				c.incrTraceCount()
-			}
-			c.getChannelTrace().append(&event{desc: desc.Desc, severity: desc.Severity, timestamp: time.Now()})
+		if parentTC, ok := parent.(tracedChannel); ok {
+			parentTC.getChannelTrace().append(&TraceEvent{
+				Desc:         desc.Parent.RefParentDesc,
+				Severity:     desc.Parent.RefParentSeverity,
+				Timestamp:    time.Now(),
+				RefID:        id,
+				RefName:      childTC.getRefName(),
+				IsRefChannel: desc.Parent.IsChannel,
+			})
+			childTC.incrTraceRefCount()
 		}
 	}
 	c.mu.Unlock()

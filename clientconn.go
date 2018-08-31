@@ -142,26 +142,22 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
 			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
-				Desc:              fmt.Sprintf("Channel Created"),
-				Severity:          channelz.CtINFO,
-				ParentTrace:       true,
-				RefParentDesc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
-				RefParentSeverity: channelz.CtINFO,
-				IsChannel:         true,
+				Desc:     "Channel Created",
+				Severity: channelz.CtINFO,
+				Parent: &channelz.ParentTraceEventDesc{
+					RefParentDesc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
+					RefParentSeverity: channelz.CtINFO,
+					IsChannel:         true,
+				},
 			})
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
 			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Channel Created"),
+				Desc:     "Channel Created",
 				Severity: channelz.CtINFO,
 			})
 		}
-		cc.csMgr.czTraceConnectivityChange = func(s connectivity.State) {
-			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Channel Connectivity change to %v", s),
-				Severity: channelz.CtINFO,
-			})
-		}
+		cc.csMgr.channelzID = cc.channelzID
 	}
 
 	if !cc.dopts.insecure {
@@ -327,10 +323,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
 type connectivityStateManager struct {
-	mu                        sync.Mutex
-	state                     connectivity.State
-	notifyChan                chan struct{}
-	czTraceConnectivityChange func(state connectivity.State)
+	mu         sync.Mutex
+	state      connectivity.State
+	notifyChan chan struct{}
+	channelzID int64
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -347,7 +343,10 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 	}
 	csm.state = state
 	if channelz.IsOn() {
-		csm.czTraceConnectivityChange(state)
+		channelz.AddTraceEvent(csm.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Channel Connectivity change to %v", state),
+			Severity: channelz.CtINFO,
+		})
 	}
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
@@ -584,12 +583,13 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	if channelz.IsOn() {
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-			Desc:              fmt.Sprintf("Subchannel Created"),
-			Severity:          channelz.CtINFO,
-			ParentTrace:       true,
-			RefParentDesc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
-			RefParentSeverity: channelz.CtINFO,
-			IsChannel:         false,
+			Desc:     "Subchannel Created",
+			Severity: channelz.CtINFO,
+			Parent: &channelz.ParentTraceEventDesc{
+				RefParentDesc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
+				RefParentSeverity: channelz.CtINFO,
+				IsChannel:         false,
+			},
 		})
 	}
 	cc.conns[ac] = struct{}{}
@@ -745,6 +745,8 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+			// The special formatting of \"%s\" instead of %q is to provide nice printing of service config
+			// for human consumption.
 			Desc:     fmt.Sprintf("Channel has a new service config \"%s\"", js),
 			Severity: channelz.CtINFO,
 		})
@@ -848,14 +850,15 @@ func (cc *ClientConn) Close() error {
 	}
 	if channelz.IsOn() {
 		ted := &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("Channel Deleted"),
+			Desc:     "Channel Deleted",
 			Severity: channelz.CtINFO,
 		}
 		if cc.dopts.channelzParentID != 0 {
-			ted.RefParentDesc = fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID)
-			ted.RefParentSeverity = channelz.CtINFO
-			ted.IsChannel = true
-			ted.ParentTrace = true
+			ted.Parent = &channelz.ParentTraceEventDesc{
+				RefParentDesc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
+				RefParentSeverity: channelz.CtINFO,
+				IsChannel:         true,
+			}
 		}
 		channelz.AddTraceEvent(cc.channelzID, ted)
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
@@ -1285,12 +1288,13 @@ func (ac *addrConn) tearDown(err error) {
 	}
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-			Desc:              fmt.Sprintf("Subchannel Deleted"),
-			Severity:          channelz.CtINFO,
-			ParentTrace:       true,
-			RefParentDesc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
-			RefParentSeverity: channelz.CtINFO,
-			IsChannel:         false,
+			Desc:     "Subchannel Deleted",
+			Severity: channelz.CtINFO,
+			Parent: &channelz.ParentTraceEventDesc{
+				RefParentDesc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
+				RefParentSeverity: channelz.CtINFO,
+				IsChannel:         false,
+			},
 		})
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
 		// the entity beng deleted, and thus prevent it from being deleted right away.

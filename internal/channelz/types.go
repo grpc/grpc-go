@@ -173,7 +173,7 @@ type TraceEvent struct {
 	Timestamp time.Time
 	// RefID is the id of the entity that gets referenced in the event. RefID is 0 if no other entity is
 	// involved in this event.
-	// e.g. SubChannel (id: 4[]) Created. --> RefID = 4
+	// e.g. SubChannel (id: 4[]) Created. --> RefID = 4, RefName = "" (inside [])
 	RefID int64
 	// RefName is the reference name for the entity that gets referenced in the event.
 	RefName string
@@ -194,15 +194,17 @@ func (d *dummyChannel) ChannelzMetric() *ChannelInternalMetric {
 }
 
 type channel struct {
-	refName       string
-	c             Channel
-	closeCalled   bool
-	nestedChans   map[int64]string
-	subChans      map[int64]string
-	id            int64
-	pid           int64
-	cm            *channelMap
-	trace         *channelTrace
+	refName     string
+	c           Channel
+	closeCalled bool
+	nestedChans map[int64]string
+	subChans    map[int64]string
+	id          int64
+	pid         int64
+	cm          *channelMap
+	trace       *channelTrace
+	// traceRefCount is the number of trace events that reference this channel.
+	// Non-zero traceRefCount means the trace of this channel cannot be deleted.
 	traceRefCount int32
 }
 
@@ -232,7 +234,14 @@ func (c *channel) getParentID() int64 {
 	return c.pid
 }
 
-func (c *channel) deleteSelfFromTree() bool {
+// deleteSelfFromTree tries to delete the channel from the channelz entry relation tree, which means
+// deleting the channel reference from its parent's child list.
+//
+// In order for a channel to be deleted from the tree, it must meet the criteria that, removal of the
+// corresponding grpc object has been invoked, and the channel does not have any children.
+//
+// The returned boolean value indicates whether the channel has been successfully deleted from tree.
+func (c *channel) deleteSelfFromTree() (deleted bool) {
 	if !c.closeCalled || len(c.subChans)+len(c.nestedChans) != 0 {
 		return false
 	}
@@ -243,8 +252,18 @@ func (c *channel) deleteSelfFromTree() bool {
 	return true
 }
 
+// deleteSelfFromMap tries to delete the channel from the map, which means deleting the channel from
+// channelz's tracking entirely. Users can no longer use id to query the channel, and its memory will
+// be garbage collected.
+//
+// The trace reference count of the channel must be 0 in order to be deleted from the map. This is
+// specified in the channel tracing gRFC that as long as some other trace has reference to an entity,
+// the trace of the referenced entity must not be deleted. In order to release the resource allocated
+// by grpc, the reference to the grpc object is reset to a dummy object.
+//
+// deleteSelfFromMap must be called after deleteSelfFromTree returns true.
 func (c *channel) deleteSelfFromMap() {
-	if c.getTraceCount() != 0 {
+	if c.getTraceRefCount() != 0 {
 		c.c = &dummyChannel{}
 	} else {
 		c.cm.deleteEntry(c.id)
@@ -252,6 +271,12 @@ func (c *channel) deleteSelfFromMap() {
 	}
 }
 
+// deleteSelfIfReady tries to delete the channel itself from channelz database.
+// The delete process includes two steps:
+// 1. delete the channel from the entry relation tree, i.e. delete the channel reference from its
+//    parent's child list.
+// 2. delete the channel from the map, i.e. delete the channel entirely from channelz. Lookup by id
+//    will return entry not found error.
 func (c *channel) deleteSelfIfReady() {
 	if c.deleteSelfFromTree() {
 		c.deleteSelfFromMap()
@@ -262,15 +287,15 @@ func (c *channel) getChannelTrace() *channelTrace {
 	return c.trace
 }
 
-func (c *channel) incrTraceCount() {
+func (c *channel) incrTraceRefCount() {
 	atomic.AddInt32(&c.traceRefCount, 1)
 }
 
-func (c *channel) decrTraceCount() {
+func (c *channel) decrTraceRefCount() {
 	atomic.AddInt32(&c.traceRefCount, -1)
 }
 
-func (c *channel) getTraceCount() int {
+func (c *channel) getTraceRefCount() int {
 	i := atomic.LoadInt32(&c.traceRefCount)
 	return int(i)
 }
@@ -313,7 +338,14 @@ func (sc *subChannel) getParentID() int64 {
 	return sc.pid
 }
 
-func (sc *subChannel) deleteSelfFromTree() bool {
+// deleteSelfFromTree tries to delete the subchannel from the channelz entry relation tree, which
+// means deleting the subchannel reference from its parent's child list.
+//
+// In order for a subchannel to be deleted from the tree, it must meet the criteria that, removal of
+// the corresponding grpc object has been invoked, and the subchannel does not have any children.
+//
+// The returned boolean value indicates whether the channel has been successfully deleted from tree
+func (sc *subChannel) deleteSelfFromTree() (deleted bool) {
 	if !sc.closeCalled || len(sc.sockets) != 0 {
 		return false
 	}
@@ -321,8 +353,18 @@ func (sc *subChannel) deleteSelfFromTree() bool {
 	return true
 }
 
+// deleteSelfFromMap tries to delete the subchannel from the map, which means deleting the subchannel
+// from channelz's tracking entirely. Users can no longer use id to query the subchannel, and its
+// memory will be garbage collected.
+//
+// The trace reference count of the subchannel must be 0 in order to be deleted from the map. This is
+// specified in the channel tracing gRFC that as long as some other trace has reference to an entity,
+// the trace of the referenced entity must not be deleted. In order to release the resource allocated
+// by grpc, the reference to the grpc object is reset to a dummy object.
+//
+// deleteSelfFromMap must be called after deleteSelfFromTree returns true.
 func (sc *subChannel) deleteSelfFromMap() {
-	if sc.getTraceCount() != 0 {
+	if sc.getTraceRefCount() != 0 {
 		// free the grpc struct (i.e. addrConn)
 		sc.c = &dummyChannel{}
 	} else {
@@ -331,6 +373,12 @@ func (sc *subChannel) deleteSelfFromMap() {
 	}
 }
 
+// deleteSelfIfReady tries to delete the subchannel itself from channelz database.
+// The delete process includes two steps:
+// 1. delete the subchannel from the entry relation tree, i.e. delete the subchannel reference from
+//    its parent's child list.
+// 2. delete the subchannel from the map, i.e. delete the subchannel entirely from channelz. Lookup
+//    by id will return entry not found error.
 func (sc *subChannel) deleteSelfIfReady() {
 	if sc.deleteSelfFromTree() {
 		sc.deleteSelfFromMap()
@@ -341,15 +389,15 @@ func (sc *subChannel) getChannelTrace() *channelTrace {
 	return sc.trace
 }
 
-func (sc *subChannel) incrTraceCount() {
+func (sc *subChannel) incrTraceRefCount() {
 	atomic.AddInt32(&sc.traceRefCount, 1)
 }
 
-func (sc *subChannel) decrTraceCount() {
+func (sc *subChannel) decrTraceRefCount() {
 	atomic.AddInt32(&sc.traceRefCount, -1)
 }
 
-func (sc *subChannel) getTraceCount() int {
+func (sc *subChannel) getTraceRefCount() int {
 	i := atomic.LoadInt32(&sc.traceRefCount)
 	return int(i)
 }
@@ -562,20 +610,19 @@ func (s *server) getParentID() int64 {
 
 type tracedChannel interface {
 	getChannelTrace() *channelTrace
-	incrTraceCount()
-	decrTraceCount()
-	deleteSelfIfReady()
+	incrTraceRefCount()
+	decrTraceRefCount()
 	getRefName() string
 }
 
 type event struct {
-	desc      string
+	Desc      string
 	severity  Severity
-	timestamp time.Time
-	refID     int64
-	refName   string
+	Timestamp time.Time
+	RefID     int64
+	RefName   string
 	//distinguish whether the referenced entity is a channel or subchannel.
-	isRefChannel bool
+	IsRefChannel bool
 }
 
 type channelTrace struct {
@@ -583,20 +630,25 @@ type channelTrace struct {
 	createdTime time.Time
 	eventCount  int64
 	mu          sync.Mutex
-	events      []*event
+	events      []*TraceEvent
 }
 
-func (c *channelTrace) append(e *event) {
+func (c *channelTrace) append(e *TraceEvent) {
 	c.mu.Lock()
 	if len(c.events) == getMaxTraceEntry() {
 		del := c.events[0]
 		c.events = c.events[1:]
-		if del.refID != 0 {
+		if del.RefID != 0 {
 			// start recursive cleanup in a goroutine to not block the call originated from grpc.
-			go c.cm.startCleanup(del.refID)
+			go func() {
+				// need to acquire c.cm.mu lock to call the unlocked attemptCleanup func.
+				c.cm.mu.Lock()
+				c.cm.attemptCleanup(del.RefID)
+				c.cm.mu.Unlock()
+			}()
 		}
 	}
-	e.timestamp = time.Now()
+	e.Timestamp = time.Now()
 	c.events = append(c.events, e)
 	c.eventCount++
 	c.mu.Unlock()
@@ -605,11 +657,9 @@ func (c *channelTrace) append(e *event) {
 func (c *channelTrace) clear() {
 	c.mu.Lock()
 	for _, e := range c.events {
-		if e.refID != 0 {
-			if v, ok := c.cm.findEntry(e.refID).(tracedChannel); ok {
-				v.decrTraceCount()
-				v.deleteSelfIfReady()
-			}
+		if e.RefID != 0 {
+			// caller should have already held the c.cm.mu lock.
+			c.cm.attemptCleanup(e.RefID)
 		}
 	}
 	c.mu.Unlock()
@@ -634,17 +684,7 @@ const (
 func (c *channelTrace) dumpData() *ChannelTrace {
 	c.mu.Lock()
 	ct := &ChannelTrace{EventNum: c.eventCount, CreationTime: c.createdTime}
-	ct.Events = make([]*TraceEvent, 0, len(c.events))
-	for _, e := range c.events {
-		ct.Events = append(ct.Events, &TraceEvent{
-			Desc:         e.desc,
-			Severity:     e.severity,
-			Timestamp:    e.timestamp,
-			RefID:        e.refID,
-			RefName:      e.refName,
-			IsRefChannel: e.isRefChannel,
-		})
-	}
+	ct.Events = c.events[:len(c.events)]
 	c.mu.Unlock()
 	return ct
 }

@@ -117,29 +117,7 @@ func (ccr *ccResolverWrapper) watcher() {
 			}
 			grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
 			if channelz.IsOn() {
-				if len(addrs) == 0 && ccr.lastAddressesCount != 0 {
-					channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
-						Desc:     fmt.Sprintf("Resolver returns an empty address list"),
-						Severity: channelz.CtWarning,
-					})
-				} else if len(addrs) != 0 && ccr.lastAddressesCount == 0 {
-					var s string
-					for i, a := range addrs {
-						if a.ServerName != "" {
-							s += a.Addr + "(" + a.ServerName + ")"
-						} else {
-							s += a.Addr
-						}
-						if i != len(addrs)-1 {
-							s += " "
-						}
-					}
-					channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
-						Desc:     fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", s),
-						Severity: channelz.CtINFO,
-					})
-				}
-				ccr.lastAddressesCount = len(addrs)
+				ccr.addChannelzTraceEvent(addrs)
 			}
 			ccr.cc.handleResolvedAddrs(addrs, nil)
 		case sc := <-ccr.scCh:
@@ -182,4 +160,30 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 	default:
 	}
 	ccr.scCh <- sc
+}
+
+func (ccr *ccResolverWrapper) addChannelzTraceEvent(addrs []resolver.Address) {
+	if len(addrs) == 0 && ccr.lastAddressesCount != 0 {
+		channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
+			Desc:     "Resolver returns an empty address list",
+			Severity: channelz.CtWarning,
+		})
+	} else if len(addrs) != 0 && ccr.lastAddressesCount == 0 {
+		var s string
+		for i, a := range addrs {
+			if a.ServerName != "" {
+				s += a.Addr + "(" + a.ServerName + ")"
+			} else {
+				s += a.Addr
+			}
+			if i != len(addrs)-1 {
+				s += " "
+			}
+		}
+		channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", s),
+			Severity: channelz.CtINFO,
+		})
+	}
+	ccr.lastAddressesCount = len(addrs)
 }
