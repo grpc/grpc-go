@@ -722,7 +722,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
         stopwatchSupplier,
         tooManyPingsRunnable,
         transportTracer,
-        Attributes.EMPTY);
+        Attributes.EMPTY,
+        "someauthority");
   }
 
   @Override

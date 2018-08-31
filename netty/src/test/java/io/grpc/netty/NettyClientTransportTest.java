@@ -293,7 +293,7 @@ public class NettyClientTransportTest {
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
         .keyManager(clientCert, clientKey)
         .build();
-    ProtocolNegotiator negotiator = ProtocolNegotiators.tls(clientContext, authority);
+    ProtocolNegotiator negotiator = ProtocolNegotiators.tls(clientContext);
     final NettyClientTransport transport = newTransport(negotiator);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -573,7 +573,7 @@ public class NettyClientTransportTest {
     File caCert = TestUtils.loadCert("ca.pem");
     SslContext clientContext = GrpcSslContexts.forClient().trustManager(caCert)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
-    return ProtocolNegotiators.tls(clientContext, authority);
+    return ProtocolNegotiators.tls(clientContext);
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {

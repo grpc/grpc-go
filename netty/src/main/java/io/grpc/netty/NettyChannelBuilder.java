@@ -331,8 +331,25 @@ public final class NettyChannelBuilder
   @CheckReturnValue
   @Internal
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
-        negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
+    TransportCreationParamsFilterFactory transportCreationParamsFilterFactory =
+        dynamicParamsFactory;
+    if (transportCreationParamsFilterFactory == null) {
+      SslContext localSslContext = sslContext;
+      if (negotiationType == NegotiationType.TLS && localSslContext == null) {
+        try {
+          localSslContext = GrpcSslContexts.forClient().build();
+        } catch (SSLException ex) {
+          throw new RuntimeException(ex);
+        }
+      }
+      ProtocolNegotiator negotiator =
+          createProtocolNegotiatorByType(negotiationType, localSslContext);
+      transportCreationParamsFilterFactory =
+          new DefaultNettyTransportCreationParamsFilterFactory(negotiator);
+    }
+    return new NettyTransportFactory(
+        transportCreationParamsFilterFactory, channelType, channelOptions,
+        eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
         maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls,
         transportTracerFactory.create());
   }
@@ -362,23 +379,7 @@ public final class NettyChannelBuilder
 
   @VisibleForTesting
   @CheckReturnValue
-  static ProtocolNegotiator createProtocolNegotiator(
-      String authority,
-      NegotiationType negotiationType,
-      SslContext sslContext,
-      ProxyParameters proxy) {
-    ProtocolNegotiator negotiator =
-        createProtocolNegotiatorByType(authority, negotiationType, sslContext);
-    if (proxy != null) {
-      negotiator = ProtocolNegotiators.httpProxy(
-          proxy.proxyAddress, proxy.username, proxy.password, negotiator);
-    }
-    return negotiator;
-  }
-
-  @CheckReturnValue
-  private static ProtocolNegotiator createProtocolNegotiatorByType(
-      String authority,
+  static ProtocolNegotiator createProtocolNegotiatorByType(
       NegotiationType negotiationType,
       SslContext sslContext) {
     switch (negotiationType) {
@@ -387,7 +388,7 @@ public final class NettyChannelBuilder
       case PLAINTEXT_UPGRADE:
         return ProtocolNegotiators.plaintextUpgrade();
       case TLS:
-        return ProtocolNegotiators.tls(sslContext, authority);
+        return ProtocolNegotiators.tls(sslContext);
       default:
         throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
     }
@@ -461,7 +462,6 @@ public final class NettyChannelBuilder
     private final TransportCreationParamsFilterFactory transportCreationParamsFilterFactory;
     private final Class<? extends Channel> channelType;
     private final Map<ChannelOption<?>, ?> channelOptions;
-    private final NegotiationType negotiationType;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
@@ -476,27 +476,20 @@ public final class NettyChannelBuilder
 
     NettyTransportFactory(TransportCreationParamsFilterFactory transportCreationParamsFilterFactory,
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
-        NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
-        int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+        EventLoopGroup group, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
         long keepAliveTimeNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls,
         TransportTracer transportTracer) {
-      this.channelType = channelType;
-      this.negotiationType = negotiationType;
-      this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
-      this.transportTracer = transportTracer;
-
-      if (transportCreationParamsFilterFactory == null) {
-        transportCreationParamsFilterFactory =
-            new DefaultNettyTransportCreationParamsFilterFactory(sslContext);
-      }
       this.transportCreationParamsFilterFactory = transportCreationParamsFilterFactory;
-
+      this.channelType = channelType;
+      this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
       this.maxHeaderListSize = maxHeaderListSize;
       this.keepAliveTimeNanos = new AtomicBackoff("keepalive time nanos", keepAliveTimeNanos);
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
+      this.transportTracer = transportTracer;
+
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
         // The group was unspecified, using the shared group.
@@ -550,71 +543,69 @@ public final class NettyChannelBuilder
         SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
       }
     }
+  }
 
-    private final class DefaultNettyTransportCreationParamsFilterFactory
-        implements TransportCreationParamsFilterFactory {
-      private final SslContext sslContext;
+  private static final class DefaultNettyTransportCreationParamsFilterFactory
+      implements TransportCreationParamsFilterFactory {
+    final ProtocolNegotiator negotiator;
 
-      private DefaultNettyTransportCreationParamsFilterFactory(SslContext sslContext) {
-        if (negotiationType == NegotiationType.TLS && sslContext == null) {
-          try {
-            sslContext = GrpcSslContexts.forClient().build();
-          } catch (SSLException ex) {
-            throw new RuntimeException(ex);
-          }
-        }
-        this.sslContext = sslContext;
+    DefaultNettyTransportCreationParamsFilterFactory(ProtocolNegotiator negotiator) {
+      this.negotiator = negotiator;
+    }
+
+    @Override
+    public TransportCreationParamsFilter create(
+        SocketAddress targetServerAddress,
+        String authority,
+        String userAgent,
+        ProxyParameters proxyParams) {
+      ProtocolNegotiator localNegotiator = negotiator;
+      if (proxyParams != null) {
+        localNegotiator = ProtocolNegotiators.httpProxy(
+            proxyParams.proxyAddress, proxyParams.username, proxyParams.password, negotiator);
       }
+      return new DynamicNettyTransportParams(
+          targetServerAddress, authority, userAgent, localNegotiator);
+    }
+  }
 
-      @Override
-      public TransportCreationParamsFilter create(
-          SocketAddress targetServerAddress,
-          String authority,
-          String userAgent,
-          ProxyParameters proxyParams) {
-        return new DynamicNettyTransportParams(
-            targetServerAddress, authority, userAgent, proxyParams);
-      }
+  @CheckReturnValue
+  private static final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
 
-      @CheckReturnValue
-      private final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
+    private final SocketAddress targetServerAddress;
+    private final String authority;
+    @Nullable private final String userAgent;
+    private final ProtocolNegotiator protocolNegotiator;
 
-        private final SocketAddress targetServerAddress;
-        private final String authority;
-        @Nullable private final String userAgent;
-        private ProxyParameters proxyParams;
+    private DynamicNettyTransportParams(
+        SocketAddress targetServerAddress,
+        String authority,
+        String userAgent,
+        ProtocolNegotiator protocolNegotiator) {
+      this.targetServerAddress = targetServerAddress;
+      this.authority = authority;
+      this.userAgent = userAgent;
+      this.protocolNegotiator = protocolNegotiator;
+    }
 
-        private DynamicNettyTransportParams(
-            SocketAddress targetServerAddress,
-            String authority,
-            String userAgent,
-            ProxyParameters proxyParams) {
-          this.targetServerAddress = targetServerAddress;
-          this.authority = authority;
-          this.userAgent = userAgent;
-          this.proxyParams = proxyParams;
-        }
+    @Override
+    public SocketAddress getTargetServerAddress() {
+      return targetServerAddress;
+    }
 
-        @Override
-        public SocketAddress getTargetServerAddress() {
-          return targetServerAddress;
-        }
+    @Override
+    public String getAuthority() {
+      return authority;
+    }
 
-        @Override
-        public String getAuthority() {
-          return authority;
-        }
+    @Override
+    public String getUserAgent() {
+      return userAgent;
+    }
 
-        @Override
-        public String getUserAgent() {
-          return userAgent;
-        }
-
-        @Override
-        public ProtocolNegotiator getProtocolNegotiator() {
-          return createProtocolNegotiator(authority, negotiationType, sslContext, proxyParams);
-        }
-      }
+    @Override
+    public ProtocolNegotiator getProtocolNegotiator() {
+      return protocolNegotiator;
     }
   }
 }

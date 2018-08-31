@@ -84,4 +84,13 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
   public Attributes getEagAttributes() {
     return Attributes.EMPTY;
   }
+
+  /**
+   * Returns the authority of the server. Only available on the client-side.
+   *
+   * @throws UnsupportedOperationException if on server-side
+   */
+  public String getAuthority() {
+    throw new UnsupportedOperationException();
+  }
 }

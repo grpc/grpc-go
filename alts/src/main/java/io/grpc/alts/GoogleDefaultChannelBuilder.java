@@ -144,7 +144,7 @@ public final class GoogleDefaultChannelBuilder
           "%s must be a InetSocketAddress",
           serverAddress);
       final GoogleDefaultProtocolNegotiator negotiator =
-          new GoogleDefaultProtocolNegotiator(altsHandshakerFactory, sslContext, authority);
+          new GoogleDefaultProtocolNegotiator(altsHandshakerFactory, sslContext);
       return new TransportCreationParamsFilter() {
         @Override
         public SocketAddress getTargetServerAddress() {

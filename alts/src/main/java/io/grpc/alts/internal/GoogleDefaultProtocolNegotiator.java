@@ -28,10 +28,9 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
   private final ProtocolNegotiator altsProtocolNegotiator;
   private final ProtocolNegotiator tlsProtocolNegotiator;
 
-  public GoogleDefaultProtocolNegotiator(
-      TsiHandshakerFactory altsFactory, SslContext sslContext, String authority) {
+  public GoogleDefaultProtocolNegotiator(TsiHandshakerFactory altsFactory, SslContext sslContext) {
     altsProtocolNegotiator = AltsProtocolNegotiator.create(altsFactory);
-    tlsProtocolNegotiator = ProtocolNegotiators.tls(sslContext, authority);
+    tlsProtocolNegotiator = ProtocolNegotiators.tls(sslContext);
   }
 
   @VisibleForTesting

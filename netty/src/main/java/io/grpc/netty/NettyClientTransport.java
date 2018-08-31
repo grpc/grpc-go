@@ -68,6 +68,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
   private final ProtocolNegotiator negotiator;
+  private final String authorityString;
   private final AsciiString authority;
   private final AsciiString userAgent;
   private final int flowControlWindow;
@@ -109,6 +110,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.keepAliveTimeNanos = keepAliveTimeNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
     this.keepAliveWithoutCalls = keepAliveWithoutCalls;
+    this.authorityString = authority;
     this.authority = new AsciiString(authority);
     this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
     this.tooManyPingsRunnable =
@@ -195,7 +197,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         GrpcUtil.STOPWATCH_SUPPLIER,
         tooManyPingsRunnable,
         transportTracer,
-        eagAttributes);
+        eagAttributes,
+        authorityString);
     NettyHandlerSettings.setAutoWindow(handler);
 
     negotiationHandler = negotiator.newHandler(handler);

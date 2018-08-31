@@ -259,57 +259,49 @@ public final class ProtocolNegotiators {
    * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
    * may happen immediately, even before the TLS Handshake is complete.
    */
-  public static ProtocolNegotiator tls(SslContext sslContext, String authority) {
-    Preconditions.checkNotNull(sslContext, "sslContext");
-    URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
-    String host;
-    int port;
-    if (uri.getHost() != null) {
-      host = uri.getHost();
-      port = uri.getPort();
-    } else {
-      /*
-       * Implementation note: We pick -1 as the port here rather than deriving it from the original
-       * socket address.  The SSL engine doens't use this port number when contacting the remote
-       * server, but rather it is used for other things like SSL Session caching.  When an invalid
-       * authority is provided (like "bad_cert"), picking the original port and passing it in would
-       * mean that the port might used under the assumption that it was correct.   By using -1 here,
-       * it forces the SSL implementation to treat it as invalid.
-       */
-      host = authority;
-      port = -1;
-    }
-
-    return new TlsNegotiator(sslContext, host, port);
+  public static ProtocolNegotiator tls(SslContext sslContext) {
+    return new TlsNegotiator(sslContext);
   }
 
+  @VisibleForTesting
   static final class TlsNegotiator implements ProtocolNegotiator {
     private final SslContext sslContext;
-    private final String host;
-    private final int port;
 
-    TlsNegotiator(SslContext sslContext, String host, int port) {
+    TlsNegotiator(SslContext sslContext) {
       this.sslContext = checkNotNull(sslContext, "sslContext");
-      this.host = checkNotNull(host, "host");
-      this.port = port;
     }
 
     @VisibleForTesting
-    String getHost() {
-      return host;
-    }
-
-    @VisibleForTesting
-    int getPort() {
-      return port;
+    HostPort parseAuthority(String authority) {
+      URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
+      String host;
+      int port;
+      if (uri.getHost() != null) {
+        host = uri.getHost();
+        port = uri.getPort();
+      } else {
+        /*
+         * Implementation note: We pick -1 as the port here rather than deriving it from the
+         * original socket address.  The SSL engine doens't use this port number when contacting the
+         * remote server, but rather it is used for other things like SSL Session caching.  When an
+         * invalid authority is provided (like "bad_cert"), picking the original port and passing it
+         * in would mean that the port might used under the assumption that it was correct.   By
+         * using -1 here, it forces the SSL implementation to treat it as invalid.
+         */
+        host = authority;
+        port = -1;
+      }
+      return new HostPort(host, port);
     }
 
     @Override
     public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
+      final HostPort hostPort = parseAuthority(handler.getAuthority());
+
       ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
         @Override
         public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-          SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), host, port);
+          SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), hostPort.host, hostPort.port);
           SSLParameters sslParams = sslEngine.getSSLParameters();
           sslParams.setEndpointIdentificationAlgorithm("HTTPS");
           sslEngine.setSSLParameters(sslParams);
@@ -317,6 +309,18 @@ public final class ProtocolNegotiators {
         }
       };
       return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
+    }
+  }
+
+  /** A tuple of (host, port). */
+  @VisibleForTesting
+  static final class HostPort {
+    final String host;
+    final int port;
+
+    public HostPort(String host, int port) {
+      this.host = host;
+      this.port = port;
     }
   }
 

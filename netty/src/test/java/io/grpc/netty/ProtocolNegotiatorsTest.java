@@ -27,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
 import io.grpc.internal.testing.TestUtils;
+import io.grpc.netty.ProtocolNegotiators.HostPort;
 import io.grpc.netty.ProtocolNegotiators.ServerTlsHandler;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.bootstrap.Bootstrap;
@@ -253,36 +254,39 @@ public class ProtocolNegotiatorsTest {
   public void tls_failsOnNullSslContext() {
     thrown.expect(NullPointerException.class);
 
-    Object unused = ProtocolNegotiators.tls(null, "authority");
+    Object unused = ProtocolNegotiators.tls(null);
   }
 
   @Test
   public void tls_hostAndPort() throws SSLException {
     SslContext ctx = GrpcSslContexts.forClient().build();
-    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "authority:1234");
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx);
+    HostPort hostPort = negotiator.parseAuthority("authority:1234");
 
-    assertEquals("authority", negotiator.getHost());
-    assertEquals(1234, negotiator.getPort());
+    assertEquals("authority", hostPort.host);
+    assertEquals(1234, hostPort.port);
   }
 
   @Test
   public void tls_host() throws SSLException {
     SslContext ctx = GrpcSslContexts.forClient().build();
-    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "[::1]");
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx);
+    HostPort hostPort = negotiator.parseAuthority("[::1]");
 
-    assertEquals("[::1]", negotiator.getHost());
-    assertEquals(-1, negotiator.getPort());
+    assertEquals("[::1]", hostPort.host);
+    assertEquals(-1, hostPort.port);
   }
 
   @Test
   public void tls_invalidHost() throws SSLException {
     SslContext ctx = GrpcSslContexts.forClient().build();
-    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "bad_host:1234");
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx);
+    HostPort hostPort = negotiator.parseAuthority("bad_host:1234");
 
     // Even though it looks like a port, we treat it as part of the authority, since the host is
     // invalid.
-    assertEquals("bad_host:1234", negotiator.getHost());
-    assertEquals(-1, negotiator.getPort());
+    assertEquals("bad_host:1234", hostPort.host);
+    assertEquals(-1, hostPort.port);
   }
 
   @Test
