@@ -18,8 +18,13 @@ if git status --porcelain | read; then
   die "Uncommitted or untracked files found; commit changes first"
 fi
 
+if [[ -d "$GOPATH/src" ]]; then
+  die "\$GOPATH/src ($GOPATH/src) exists; this script will delete it."
+fi
+
 # Undo any edits made by this script.
 cleanup() {
+  rm -rf "$GOPATH/src"
   git reset --hard HEAD
 }
 trap cleanup EXIT
@@ -92,14 +97,11 @@ fi
 # Make a symlink in $GOPATH/src to its $GOPATH/pkg/mod equivalent for every package we use.
 for x in $(find "$GOPATH/pkg/mod" -name '*@*' | grep -v \/mod\/cache\/); do
   pkg="$(echo ${x#"$GOPATH/pkg/mod/"} | cut -f1 -d@)";
+  # If multiple versions exist, just use the existing one.
+  if [[ -L "$GOPATH/src/$pkg" ]]; then continue; fi
   mkdir -p "$(dirname "$GOPATH/src/$pkg")";
   ln -s $x "$GOPATH/src/$pkg";
 done
-
-cleanupSRC() {
-  rm -rf "$GOPATH/src"
-}
-trap cleanupSRC EXIT
 ### END HACK HACK HACK
 
 # TODO(menghanl): fix errors in transport_test.
