@@ -319,7 +319,7 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 		return
 	}
 	lb.fallbackTimerExpired = true
-	lb.refreshSubConns(lb.resolvedBackendAddrs)
+	lb.refreshSubConns(lb.resolvedBackendAddrs, false)
 	lb.mu.Unlock()
 }
 
@@ -366,7 +366,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 		// This means we received a new list of resolved backends, and we are
 		// still in fallback mode. Need to update the list of backends we are
 		// using to the new list of backends.
-		lb.refreshSubConns(lb.resolvedBackendAddrs)
+		lb.refreshSubConns(lb.resolvedBackendAddrs, false)
 	}
 	lb.mu.Unlock()
 }

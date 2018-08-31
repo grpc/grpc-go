@@ -80,7 +80,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	}
 
 	// Call refreshSubConns to create/remove SubConns.
-	lb.refreshSubConns(backendAddrs)
+	lb.refreshSubConns(backendAddrs, true)
 	// Regenerate and update picker no matter if there's update on backends (if
 	// any SubConn will be newed/removed). Because since the full serverList was
 	// different, there might be updates in drops or pick weights(different
@@ -96,7 +96,12 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 // indicating whether the backendAddrs are different from the cached
 // backendAddrs (whether any SubConn was newed/removed).
 // Caller must hold lb.mu.
-func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
+func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) bool {
+	opts := balancer.NewSubConnOptions{}
+	if fromGRPCLBServer {
+		opts.CredsBundle = lb.grpclbBackendCreds
+	}
+
 	lb.backendAddrs = nil
 	var backendsUpdated bool
 	// addrsSet is the set converted from backendAddrs, it's used to quick
@@ -113,7 +118,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 			backendsUpdated = true
 
 			// Use addrWithMD to create the SubConn.
-			sc, err := lb.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
+			sc, err := lb.cc.NewSubConn([]resolver.Address{addr}, opts)
 			if err != nil {
 				grpclog.Warningf("roundrobinBalancer: failed to create new SubConn: %v", err)
 				continue
@@ -266,6 +271,8 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 			grpclog.Warningf("grpclb: failed to override the server name in the credentials: %v, using Insecure", err)
 			dopts = append(dopts, grpc.WithInsecure())
 		}
+	} else if bundle := lb.grpclbClientConnCreds; bundle != nil {
+		dopts = append(dopts, grpc.WithCreds(bundle))
 	} else {
 		dopts = append(dopts, grpc.WithInsecure())
 	}
