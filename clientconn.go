@@ -80,6 +80,9 @@ var (
 	// being set for ClientConn. Users should either set one or explicitly
 	// call WithInsecure DialOption to disable security.
 	errNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
+	// errTransportCredsAndBundle indicates that creds bundle is used together
+	// with other individual Transport Credentials.
+	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle shouldn't be used together with individual TransportCredentials")
 	// errTransportCredentialsMissing indicates that users want to transmit security
 	// information (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.
@@ -156,11 +159,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	if !cc.dopts.insecure {
-		if cc.dopts.copts.TransportCredentials == nil {
+		if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
 			return nil, errNoTransportSecurity
 		}
+		if cc.dopts.copts.TransportCredentials != nil && cc.dopts.copts.CredsBundle != nil {
+			return nil, errTransportCredsAndBundle
+		}
 	} else {
-		if cc.dopts.copts.TransportCredentials != nil {
+		if cc.dopts.copts.TransportCredentials != nil || cc.dopts.copts.CredsBundle != nil {
 			return nil, errCredentialsConflict
 		}
 		for _, cd := range cc.dopts.copts.PerRPCCredentials {
@@ -560,10 +566,11 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
-func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
+func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (*addrConn, error) {
 	ac := &addrConn{
 		cc:                  cc,
 		addrs:               addrs,
+		scopts:              opts,
 		dopts:               cc.dopts,
 		czData:              new(channelzData),
 		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
@@ -861,6 +868,7 @@ type addrConn struct {
 	dopts  dialOptions
 	events trace.EventLog
 	acbw   balancer.SubConn
+	scopts balancer.NewSubConnOptions
 
 	transport transport.ClientTransport // The current transport.
 
@@ -1004,6 +1012,9 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		addr := ac.addrs[ac.addrIdx]
 		copts := ac.dopts.copts
+		if ac.scopts.CredsBundle != nil {
+			copts.CredsBundle = ac.scopts.CredsBundle
+		}
 		ac.mu.Unlock()
 
 		if channelz.IsOn() {

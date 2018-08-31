@@ -465,8 +465,12 @@ type ConnectOptions struct {
 	FailOnNonTempDialError bool
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
-	// TransportCredentials stores the Authenticator required to setup a client connection.
+	// TransportCredentials stores the Authenticator required to setup a client
+	// connection. Only one of TransportCredentials and CredsBundle is non-nil.
 	TransportCredentials credentials.TransportCredentials
+	// CredsBundle is the credentials bundle to be used. Only one of
+	// TransportCredentials and CredsBundle is non-nil.
+	CredsBundle credentials.Bundle
 	// KeepaliveParams stores the keepalive parameters.
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.

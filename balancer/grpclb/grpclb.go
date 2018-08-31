@@ -37,7 +37,9 @@ import (
 	"google.golang.org/grpc/balancer"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/resolver"
 )
@@ -166,13 +168,28 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		backoff:        defaultBackoffConfig, // TODO: make backoff configurable.
 	}
 
+	if opt.CredsBundle != nil {
+		lb.grpclbClientConnCreds = opt.CredsBundle.SwitchMode(internal.CredsBundleModeGRPCLB)
+		lb.grpclbBackendCreds = opt.CredsBundle.SwitchMode(internal.CredsBundleModeALTS)
+	}
+
 	return lb
 }
 
 type lbBalancer struct {
-	cc              *lbCacheClientConn
-	target          string
-	opt             balancer.BuildOptions
+	cc     *lbCacheClientConn
+	target string
+	opt    balancer.BuildOptions
+
+	// grpclbClientConnCreds is the creds bundle to be used to connect to grpclb
+	// servers. If it's nil, use the TransportCredentials from BuildOptions
+	// instead.
+	grpclbClientConnCreds credentials.Bundle
+	// grpclbBackendCreds is the creds bundle to be used for addresses that are
+	// returned by grpclb server. If it's nil, don't set anything when creating
+	// SubConns.
+	grpclbBackendCreds credentials.Bundle
+
 	fallbackTimeout time.Duration
 	doneCh          chan struct{}
 

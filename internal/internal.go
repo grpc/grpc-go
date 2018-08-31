@@ -26,3 +26,12 @@ var (
 	// WithResolverBuilder is exported by clientconn.go
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 )
+
+const (
+	// CredsBundleModeGRPCLB switches GoogleDefaultCreds to grpclb CredsBundleMode.
+	CredsBundleModeGRPCLB = "grpclb"
+	// CredsBundleModeTLS switches GoogleDefaultCreds to TLS CredsBundleMode.
+	CredsBundleModeTLS = "tls"
+	// CredsBundleModeALTS switches GoogleDefaultCreds to ALTS CredsBundleMode.
+	CredsBundleModeALTS = "alts"
+)
