@@ -61,10 +61,36 @@ public final class GoogleDefaultChannelBuilder
     extends ForwardingChannelBuilder<GoogleDefaultChannelBuilder> {
 
   private final NettyChannelBuilder delegate;
-  private final TcpfFactory tcpfFactory = new TcpfFactory();
+  private final TcpfFactory tcpfFactory;
 
   private GoogleDefaultChannelBuilder(String target) {
     delegate = NettyChannelBuilder.forTarget(target);
+
+    final AltsClientOptions handshakerOptions =
+        new AltsClientOptions.Builder()
+            .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
+            .build();
+    TsiHandshakerFactory altsHandshakerFactory =
+        new TsiHandshakerFactory() {
+          @Override
+          public TsiHandshaker newHandshaker() {
+            // Used the shared grpc channel to connecting to the ALTS handshaker service.
+            // TODO: Release the channel if it is not used.
+            // https://github.com/grpc/grpc-java/issues/4755.
+            ManagedChannel channel =
+                SharedResourceHolder.get(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
+            return AltsTsiHandshaker.newClient(
+                HandshakerServiceGrpc.newStub(channel), handshakerOptions);
+          }
+        };
+    SslContext sslContext;
+    try {
+      sslContext = GrpcSslContexts.forClient().build();
+    } catch (SSLException ex) {
+      throw new RuntimeException(ex);
+    }
+    tcpfFactory = new TcpfFactory(
+        new GoogleDefaultProtocolNegotiator(altsHandshakerFactory, sslContext));
     InternalNettyChannelBuilder.setDynamicTransportParamsFactory(delegate(), tcpfFactory);
   }
 
@@ -104,33 +130,10 @@ public final class GoogleDefaultChannelBuilder
   }
 
   private static final class TcpfFactory implements TransportCreationParamsFilterFactory {
+    private final GoogleDefaultProtocolNegotiator negotiator;
 
-    private final SslContext sslContext;
-    private final AltsClientOptions handshakerOptions =
-        new AltsClientOptions.Builder()
-            .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
-            .build();
-
-    private final TsiHandshakerFactory altsHandshakerFactory =
-        new TsiHandshakerFactory() {
-          @Override
-          public TsiHandshaker newHandshaker() {
-            // Used the shared grpc channel to connecting to the ALTS handshaker service.
-            // TODO: Release the channel if it is not used.
-            // https://github.com/grpc/grpc-java/issues/4755.
-            ManagedChannel channel =
-                SharedResourceHolder.get(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
-            return AltsTsiHandshaker.newClient(
-                HandshakerServiceGrpc.newStub(channel), handshakerOptions);
-          }
-        };
-
-    private TcpfFactory() {
-      try {
-        sslContext = GrpcSslContexts.forClient().build();
-      } catch (SSLException ex) {
-        throw new RuntimeException(ex);
-      }
+    private TcpfFactory(GoogleDefaultProtocolNegotiator negotiator) {
+      this.negotiator = negotiator;
     }
 
     @Override
@@ -143,8 +146,6 @@ public final class GoogleDefaultChannelBuilder
           serverAddress instanceof InetSocketAddress,
           "%s must be a InetSocketAddress",
           serverAddress);
-      final GoogleDefaultProtocolNegotiator negotiator =
-          new GoogleDefaultProtocolNegotiator(altsHandshakerFactory, sslContext);
       return new TransportCreationParamsFilter() {
         @Override
         public SocketAddress getTargetServerAddress() {

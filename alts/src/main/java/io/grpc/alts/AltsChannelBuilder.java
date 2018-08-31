@@ -140,7 +140,22 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
       }
     }
 
-    TcpfFactory tcpfFactory = new TcpfFactory();
+    final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
+    TsiHandshakerFactory altsHandshakerFactory =
+        new TsiHandshakerFactory() {
+          @Override
+          public TsiHandshaker newHandshaker() {
+            // Used the shared grpc channel to connecting to the ALTS handshaker service.
+            // TODO: Release the channel if it is not used.
+            // https://github.com/grpc/grpc-java/issues/4755.
+            return AltsTsiHandshaker.newClient(
+                HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
+                handshakerOptions);
+          }
+        };
+    AltsProtocolNegotiator negotiator = AltsProtocolNegotiator.create(altsHandshakerFactory);
+
+    TcpfFactory tcpfFactory = new TcpfFactory(handshakerOptions, negotiator);
     InternalNettyChannelBuilder.setDynamicTransportParamsFactory(delegate(), tcpfFactory);
     tcpfFactoryForTest = tcpfFactory;
 
@@ -162,22 +177,15 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
     return tcpfFactoryForTest.handshakerOptions;
   }
 
-  private final class TcpfFactory implements TransportCreationParamsFilterFactory {
+  private static final class TcpfFactory implements TransportCreationParamsFilterFactory {
 
-    final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
+    final AltsClientOptions handshakerOptions;
+    private final AltsProtocolNegotiator negotiator;
 
-    private final TsiHandshakerFactory altsHandshakerFactory =
-        new TsiHandshakerFactory() {
-          @Override
-          public TsiHandshaker newHandshaker() {
-            // Used the shared grpc channel to connecting to the ALTS handshaker service.
-            // TODO: Release the channel if it is not used.
-            // https://github.com/grpc/grpc-java/issues/4755.
-            return AltsTsiHandshaker.newClient(
-                HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
-                handshakerOptions);
-          }
-        };
+    public TcpfFactory(AltsClientOptions handshakerOptions, AltsProtocolNegotiator negotiator) {
+      this.handshakerOptions = handshakerOptions;
+      this.negotiator = negotiator;
+    }
 
     @Override
     public TransportCreationParamsFilter create(
@@ -189,8 +197,6 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
           serverAddress instanceof InetSocketAddress,
           "%s must be a InetSocketAddress",
           serverAddress);
-      final AltsProtocolNegotiator negotiator =
-          AltsProtocolNegotiator.create(altsHandshakerFactory);
       return new TransportCreationParamsFilter() {
         @Override
         public SocketAddress getTargetServerAddress() {
