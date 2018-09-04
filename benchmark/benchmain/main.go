@@ -114,14 +114,14 @@ var (
 )
 
 func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) {
-	caller, close := makeFuncUnary(benchFeatures)
-	defer close()
+	caller, cleanup := makeFuncUnary(benchFeatures)
+	defer cleanup()
 	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
 func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) {
-	caller, close := makeFuncStream(benchFeatures)
-	defer close()
+	caller, cleanup := makeFuncStream(benchFeatures)
+	defer cleanup()
 	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 

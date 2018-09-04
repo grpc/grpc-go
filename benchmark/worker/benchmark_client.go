@@ -51,12 +51,12 @@ func (h *lockingHistogram) add(value int64) {
 	h.histogram.Add(value)
 }
 
-// swap sets h.histogram to new, and returns its old value.
-func (h *lockingHistogram) swap(new *stats.Histogram) *stats.Histogram {
+// swap sets h.histogram to o and returns its old value.
+func (h *lockingHistogram) swap(o *stats.Histogram) *stats.Histogram {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	old := h.histogram
-	h.histogram = new
+	h.histogram = o
 	return old
 }
 

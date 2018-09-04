@@ -89,8 +89,8 @@ func (t *testRPCStream) Send(req *altspb.HandshakerReq) error {
 		}
 	} else {
 		// Add delay to test concurrent calls.
-		close := stat.Update()
-		defer close()
+		cleanup := stat.Update()
+		defer cleanup()
 		time.Sleep(t.delay)
 
 		// Generate the response to be returned by Recv() for the

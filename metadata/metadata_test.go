@@ -46,12 +46,12 @@ func TestPairsMD(t *testing.T) {
 func TestCopy(t *testing.T) {
 	const key, val = "key", "val"
 	orig := Pairs(key, val)
-	copy := orig.Copy()
-	if !reflect.DeepEqual(orig, copy) {
-		t.Errorf("copied value not equal to the original, got %v, want %v", copy, orig)
+	cpy := orig.Copy()
+	if !reflect.DeepEqual(orig, cpy) {
+		t.Errorf("copied value not equal to the original, got %v, want %v", cpy, orig)
 	}
 	orig[key][0] = "foo"
-	if v := copy[key][0]; v != val {
+	if v := cpy[key][0]; v != val {
 		t.Errorf("change in original should not affect copy, got %q, want %q", v, val)
 	}
 }
