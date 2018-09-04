@@ -56,8 +56,7 @@ func TestGetSocketOpt(t *testing.T) {
 	recvTimout := &unix.Timeval{Sec: 100}
 	sendTimeout := &unix.Timeval{Sec: 8888}
 	raw.Control(func(fd uintptr) {
-		var err error
-		err = unix.SetsockoptLinger(int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER, l)
+		err := unix.SetsockoptLinger(int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER, l)
 		if err != nil {
 			t.Fatalf("failed to SetsockoptLinger(%v,%v,%v,%v) due to %v", int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER, l, err)
 		}
