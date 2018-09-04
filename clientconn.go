@@ -65,8 +65,6 @@ var (
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
 	errConnClosing = errors.New("grpc: the connection is closing")
-	// errConnUnavailable indicates that the connection is unavailable.
-	errConnUnavailable = errors.New("grpc: the connection is unavailable")
 	// errBalancerClosed indicates that the balancer is closed.
 	errBalancerClosed = errors.New("grpc: balancer is closed")
 	// We use an accessor so that minConnectTimeout can be
@@ -89,8 +87,6 @@ var (
 	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
 	// and grpc.WithInsecure() are both called for a connection.
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
-	// errNetworkIO indicates that the connection is down due to some network I/O error.
-	errNetworkIO = errors.New("grpc: failed with network I/O error")
 )
 
 const (
@@ -853,14 +849,6 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 func (ac *addrConn) printf(format string, a ...interface{}) {
 	if ac.events != nil {
 		ac.events.Printf(format, a...)
-	}
-}
-
-// errorf records an error in ac's event log, unless ac has been closed.
-// REQUIRES ac.mu is held.
-func (ac *addrConn) errorf(format string, a ...interface{}) {
-	if ac.events != nil {
-		ac.events.Errorf(format, a...)
 	}
 }
 

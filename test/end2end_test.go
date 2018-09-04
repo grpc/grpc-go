@@ -3059,10 +3059,6 @@ func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	const (
-		argSize  = 1
-		respSize = 1
-	)
 	ctx := metadata.NewOutgoingContext(context.Background(), testMetadata)
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
@@ -4659,9 +4655,7 @@ func TestCredsHandshakeAuthority(t *testing.T) {
 	}
 }
 
-type clientFailCreds struct {
-	got string
-}
+type clientFailCreds struct{}
 
 func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil

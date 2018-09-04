@@ -47,7 +47,7 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
-	channelzgrpc.RegisterChannelzServer(s, &serverImpl{})
+	channelzgrpc.RegisterChannelzServer(s, newCZServer())
 }
 
 func newCZServer() channelzgrpc.ChannelzServer {

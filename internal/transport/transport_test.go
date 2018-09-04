@@ -1747,13 +1747,6 @@ func TestContextErr(t *testing.T) {
 	}
 }
 
-func max(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 type windowSizeConfig struct {
 	serverStream int32
 	serverConn   int32

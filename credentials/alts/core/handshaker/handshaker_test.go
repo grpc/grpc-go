@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	testAppProtocols   = []string{"grpc"}
 	testRecordProtocol = rekeyRecordProtocolName
 	testKey            = []byte{
 		// 44 arbitrary bytes.

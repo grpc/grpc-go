@@ -156,13 +156,11 @@ type callInfo struct {
 	compressorType        string
 	failFast              bool
 	stream                *clientStream
-	traceInfo             traceInfo // in trace.go
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
 	creds                 credentials.PerRPCCredentials
 	contentSubtype        string
 	codec                 baseCodec
-	disableRetry          bool
 	maxRetryRPCBufferSize int
 }
 

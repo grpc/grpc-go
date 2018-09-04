@@ -176,7 +176,6 @@ type Stream struct {
 	buf          *recvBuffer
 	trReader     io.Reader
 	fc           *inFlow
-	recvQuota    uint32
 	wq           *writeQuota
 
 	// Callback to state application's intentions to read data. This
