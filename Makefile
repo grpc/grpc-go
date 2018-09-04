@@ -19,14 +19,14 @@ proto:
 test: testdeps
 	go test -cpu 1,4 -timeout 5m google.golang.org/grpc/...
 
-testappengine: testgaedeps
+testappengine: testappenginedeps
 	goapp test -cpu 1,4 -timeout 5m google.golang.org/grpc/...
+
+testappenginedeps:
+	goapp get -d -v -t -tags 'appengine appenginevm' google.golang.org/grpc/...
 
 testdeps:
 	go get -d -v -t google.golang.org/grpc/...
-
-testgaedeps:
-	goapp get -d -v -t -tags 'appengine appenginevm' google.golang.org/grpc/...
 
 testrace: testdeps
 	go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
@@ -51,8 +51,8 @@ vetdeps:
 	proto \
 	test \
 	testappengine \
+	testappenginedeps \
 	testdeps \
-	testgaedeps \
 	testrace \
 	updatedeps \
 	updatetestdeps \
