@@ -35,11 +35,15 @@ import io.grpc.CallOptions;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ChannelTrace;
+import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ChannelTrace;
+import io.grpc.WithLogId;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -69,7 +73,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
   private final ScheduledExecutorService scheduledExecutor;
-  private final Channelz channelz;
+  private final InternalChannelz channelz;
   private final CallTracer callsTracer;
   @CheckForNull
   private final ChannelTracer channelTracer;
@@ -162,7 +166,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
-      Channelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer,
+      InternalChannelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer,
       TimeProvider timeProvider) {
     Preconditions.checkNotNull(addressGroups, "addressGroups");
     Preconditions.checkArgument(!addressGroups.isEmpty(), "addressGroups is empty");

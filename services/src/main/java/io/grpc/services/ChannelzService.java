@@ -18,6 +18,12 @@ package io.grpc.services;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ExperimentalApi;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ServerList;
+import io.grpc.InternalChannelz.ServerSocketsList;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
@@ -34,12 +40,6 @@ import io.grpc.channelz.v1.GetSubchannelRequest;
 import io.grpc.channelz.v1.GetSubchannelResponse;
 import io.grpc.channelz.v1.GetTopChannelsRequest;
 import io.grpc.channelz.v1.GetTopChannelsResponse;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ServerList;
-import io.grpc.internal.Channelz.ServerSocketsList;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Instrumented;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -47,7 +47,7 @@ import io.grpc.stub.StreamObserver;
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4206")
 public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
-  private final Channelz channelz;
+  private final InternalChannelz channelz;
   private final int maxPageSize;
 
   /**
@@ -56,7 +56,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
    */
   @Deprecated
   public static ChannelzService newInstance(int maxPageSize) {
-    return new ChannelzService(Channelz.instance(), maxPageSize);
+    return new ChannelzService(InternalChannelz.instance(), maxPageSize);
   }
 
   /**
@@ -67,12 +67,12 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
    */
   public static ServerServiceDefinition createInstance(int maxPageSize) {
     return ServerInterceptors.intercept(
-        new ChannelzService(Channelz.instance(), maxPageSize),
+        new ChannelzService(InternalChannelz.instance(), maxPageSize),
         new RequireDoubleSubmitCookieInterceptor("grpc-channelz-v1-channelz-token"));
   }
 
   @VisibleForTesting
-  ChannelzService(Channelz channelz, int maxPageSize) {
+  ChannelzService(InternalChannelz channelz, int maxPageSize) {
     this.channelz = channelz;
     this.maxPageSize = maxPageSize;
   }
@@ -81,7 +81,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   @Override
   public void getTopChannels(
       GetTopChannelsRequest request, StreamObserver<GetTopChannelsResponse> responseObserver) {
-    Channelz.RootChannelList rootChannels
+    InternalChannelz.RootChannelList rootChannels
         = channelz.getRootChannels(request.getStartChannelId(), maxPageSize);
 
     responseObserver.onNext(ChannelzProtoUtil.toGetTopChannelResponse(rootChannels));

@@ -18,7 +18,7 @@ package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import io.grpc.internal.Channelz.TcpInfo;
+import io.grpc.InternalChannelz.TcpInfo;
 import io.netty.channel.Channel;
 import java.util.Map;
 import javax.annotation.Nullable;

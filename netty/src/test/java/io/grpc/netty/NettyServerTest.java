@@ -18,16 +18,16 @@ package io.grpc.netty;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.internal.Channelz.id;
+import static io.grpc.InternalChannelz.id;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.ServerStreamTracer;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Instrumented;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
@@ -43,14 +43,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class NettyServerTest {
-  private final Channelz channelz = new Channelz();
+  private final InternalChannelz channelz = new InternalChannelz();
 
   @Test
   public void getPort() throws Exception {

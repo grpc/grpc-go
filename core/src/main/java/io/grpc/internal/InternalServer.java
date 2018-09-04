@@ -16,7 +16,8 @@
 
 package io.grpc.internal;
 
-import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz.SocketStats;
 import java.io.IOException;
 import java.util.List;
 import javax.annotation.concurrent.ThreadSafe;

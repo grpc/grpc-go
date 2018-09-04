@@ -20,10 +20,11 @@ import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.SocketStats;
 import java.util.concurrent.Executor;
 
 abstract class ForwardingConnectionClientTransport implements ConnectionClientTransport {

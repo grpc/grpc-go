@@ -40,6 +40,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Grpc;
+import io.grpc.InternalChannelz;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -47,7 +48,6 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.Channelz;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
@@ -107,7 +107,7 @@ public class NettyClientTransportTest {
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private final EchoServerListener serverListener = new EchoServerListener();
-  private final Channelz channelz = new Channelz();
+  private final InternalChannelz channelz = new InternalChannelz();
   private Runnable tooManyPingsRunnable = new Runnable() {
     // Throwing is useless in this method, because Netty doesn't propagate the exception
     @Override public void run() {}

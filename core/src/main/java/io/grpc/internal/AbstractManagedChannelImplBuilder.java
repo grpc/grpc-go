@@ -27,6 +27,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalChannelz;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -134,7 +135,7 @@ public abstract class AbstractManagedChannelImplBuilder
   // TODO(zdapeng): delete me
   boolean temporarilyDisableRetry;
 
-  Channelz channelz = Channelz.instance();
+  InternalChannelz channelz = InternalChannelz.instance();
   int maxTraceEvents;
 
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();

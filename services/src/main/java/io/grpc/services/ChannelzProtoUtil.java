@@ -24,7 +24,18 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ChannelTrace.Event;
+import io.grpc.InternalChannelz.RootChannelList;
+import io.grpc.InternalChannelz.ServerList;
+import io.grpc.InternalChannelz.ServerSocketsList;
+import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalChannelz.TransportStats;
 import io.grpc.Status;
+import io.grpc.WithLogId;
 import io.grpc.channelz.v1.Address;
 import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
@@ -56,17 +67,6 @@ import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ChannelTrace.Event;
-import io.grpc.internal.Channelz.RootChannelList;
-import io.grpc.internal.Channelz.ServerList;
-import io.grpc.internal.Channelz.ServerSocketsList;
-import io.grpc.internal.Channelz.ServerStats;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Channelz.TransportStats;
-import io.grpc.internal.Instrumented;
-import io.grpc.internal.WithLogId;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.cert.CertificateEncodingException;
@@ -142,7 +142,7 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static Security toSecurity(Channelz.Security security) {
+  static Security toSecurity(InternalChannelz.Security security) {
     Preconditions.checkNotNull(security);
     Preconditions.checkState(
         security.tls != null ^ security.other != null,
@@ -276,7 +276,7 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static SocketOption toSocketOptionTcpInfo(Channelz.TcpInfo i) {
+  static SocketOption toSocketOptionTcpInfo(InternalChannelz.TcpInfo i) {
     SocketOptionTcpInfo tcpInfo = SocketOptionTcpInfo.newBuilder()
         .setTcpiState(i.state)
         .setTcpiCaState(i.caState)
@@ -321,7 +321,7 @@ final class ChannelzProtoUtil {
     return SocketOption.newBuilder().setName(name).setValue(value).build();
   }
 
-  static List<SocketOption> toSocketOptionsList(Channelz.SocketOptions options) {
+  static List<SocketOption> toSocketOptionsList(InternalChannelz.SocketOptions options) {
     Preconditions.checkNotNull(options);
     List<SocketOption> ret = new ArrayList<SocketOption>();
     if (options.lingerSeconds != null) {
@@ -352,7 +352,7 @@ final class ChannelzProtoUtil {
     return channelBuilder.build();
   }
 
-  static ChannelData extractChannelData(Channelz.ChannelStats stats) {
+  static ChannelData extractChannelData(InternalChannelz.ChannelStats stats) {
     ChannelData.Builder builder = ChannelData.newBuilder();
     builder.setTarget(stats.target)
         .setState(toChannelConnectivityState(stats.state))
@@ -370,7 +370,7 @@ final class ChannelzProtoUtil {
     return ChannelConnectivityState.newBuilder().setState(toState(s)).build();
   }
 
-  private static ChannelTrace toChannelTrace(Channelz.ChannelTrace channelTrace) {
+  private static ChannelTrace toChannelTrace(InternalChannelz.ChannelTrace channelTrace) {
     return ChannelTrace.newBuilder()
         .setNumEventsLogged(channelTrace.numEventsLogged)
         .setCreationTimestamp(Timestamps.fromNanos(channelTrace.creationTimeNanos))

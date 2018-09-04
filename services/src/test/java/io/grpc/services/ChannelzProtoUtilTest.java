@@ -17,7 +17,7 @@
 package io.grpc.services;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.internal.Channelz.id;
+import static io.grpc.InternalChannelz.id;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,6 +32,18 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ChannelTrace.Event;
+import io.grpc.InternalChannelz.ChannelTrace.Event.Severity;
+import io.grpc.InternalChannelz.RootChannelList;
+import io.grpc.InternalChannelz.ServerList;
+import io.grpc.InternalChannelz.ServerSocketsList;
+import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketOptions;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.WithLogId;
 import io.grpc.channelz.v1.Address;
 import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
@@ -62,18 +74,6 @@ import io.grpc.channelz.v1.SocketOptionTimeout;
 import io.grpc.channelz.v1.SocketRef;
 import io.grpc.channelz.v1.Subchannel;
 import io.grpc.channelz.v1.SubchannelRef;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ChannelTrace.Event;
-import io.grpc.internal.Channelz.ChannelTrace.Event.Severity;
-import io.grpc.internal.Channelz.RootChannelList;
-import io.grpc.internal.Channelz.ServerList;
-import io.grpc.internal.Channelz.ServerSocketsList;
-import io.grpc.internal.Channelz.ServerStats;
-import io.grpc.internal.Channelz.SocketOptions;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Instrumented;
-import io.grpc.internal.WithLogId;
 import io.grpc.services.ChannelzTestHelper.TestChannel;
 import io.grpc.services.ChannelzTestHelper.TestListenSocket;
 import io.grpc.services.ChannelzTestHelper.TestServer;
@@ -188,8 +188,8 @@ public final class ChannelzProtoUtilTest {
       .setValue("some-made-up-value")
       .build();
 
-  private final Channelz.TcpInfo channelzTcpInfo
-      = new Channelz.TcpInfo.Builder()
+  private final InternalChannelz.TcpInfo channelzTcpInfo
+      = new InternalChannelz.TcpInfo.Builder()
       .setState(70)
       .setCaState(71)
       .setRetransmits(72)
@@ -440,8 +440,8 @@ public final class ChannelzProtoUtilTest {
     when(local.getEncoded()).thenReturn("localcert".getBytes(Charsets.UTF_8));
     when(remote.getEncoded()).thenReturn("remotecert".getBytes(Charsets.UTF_8));
 
-    socket.security = new Channelz.Security(
-        new Channelz.Tls("TLS_NULL_WITH_NULL_NULL", local, remote));
+    socket.security = new InternalChannelz.Security(
+        new InternalChannelz.Tls("TLS_NULL_WITH_NULL_NULL", local, remote));
     assertEquals(
         Security.newBuilder().setTls(
             Tls.newBuilder()
@@ -451,8 +451,8 @@ public final class ChannelzProtoUtilTest {
         .build(),
         ChannelzProtoUtil.toSocket(socket).getSecurity());
 
-    socket.security = new Channelz.Security(
-        new Channelz.Tls("TLS_NULL_WITH_NULL_NULL", /*localCert=*/ null, remote));
+    socket.security = new InternalChannelz.Security(
+        new InternalChannelz.Tls("TLS_NULL_WITH_NULL_NULL", /*localCert=*/ null, remote));
     assertEquals(
         Security.newBuilder().setTls(
             Tls.newBuilder()
@@ -461,8 +461,8 @@ public final class ChannelzProtoUtilTest {
         .build(),
         ChannelzProtoUtil.toSocket(socket).getSecurity());
 
-    socket.security = new Channelz.Security(
-        new Channelz.Tls("TLS_NULL_WITH_NULL_NULL", local, /*remoteCert=*/ null));
+    socket.security = new InternalChannelz.Security(
+        new InternalChannelz.Tls("TLS_NULL_WITH_NULL_NULL", local, /*remoteCert=*/ null));
     assertEquals(
         Security.newBuilder().setTls(
             Tls.newBuilder()
@@ -478,7 +478,8 @@ public final class ChannelzProtoUtilTest {
     Message contents = GetChannelRequest.newBuilder().setChannelId(1).build();
     Any packed = Any.pack(contents);
     socket.security
-        = new Channelz.Security(new Channelz.OtherSecurity("other_security", packed));
+        = new InternalChannelz.Security(
+            new InternalChannelz.OtherSecurity("other_security", packed));
     assertEquals(
         Security.newBuilder().setOther(
             OtherSecurity.newBuilder().setName("other_security").setValue(packed))
@@ -808,22 +809,22 @@ public final class ChannelzProtoUtilTest {
   public void toSocketOptionsList() {
     assertThat(
         ChannelzProtoUtil.toSocketOptionsList(
-            new Channelz.SocketOptions.Builder().build()))
+            new InternalChannelz.SocketOptions.Builder().build()))
         .isEmpty();
 
     assertThat(
         ChannelzProtoUtil.toSocketOptionsList(
-            new Channelz.SocketOptions.Builder().setSocketOptionLingerSeconds(10).build()))
+            new InternalChannelz.SocketOptions.Builder().setSocketOptionLingerSeconds(10).build()))
         .containsExactly(sockOptlinger10s);
 
     assertThat(
         ChannelzProtoUtil.toSocketOptionsList(
-            new Channelz.SocketOptions.Builder().setSocketOptionTimeoutMillis(200).build()))
+            new InternalChannelz.SocketOptions.Builder().setSocketOptionTimeoutMillis(200).build()))
         .containsExactly(sockOptTimeout200ms);
 
     assertThat(
         ChannelzProtoUtil.toSocketOptionsList(
-            new Channelz.SocketOptions
+            new InternalChannelz.SocketOptions
                 .Builder()
                 .addOption("SO_MADE_UP_OPTION", "some-made-up-value")
                 .build()))
@@ -836,7 +837,7 @@ public final class ChannelzProtoUtilTest {
         .build();
     assertThat(
         ChannelzProtoUtil.toSocketOptionsList(
-            new Channelz.SocketOptions.Builder()
+            new InternalChannelz.SocketOptions.Builder()
                 .addOption("SO_MADE_UP_OPTION", "some-made-up-value")
                 .addOption("SO_MADE_UP_OPTION2", "some-made-up-value2")
                 .build()))
@@ -846,7 +847,7 @@ public final class ChannelzProtoUtilTest {
   @Test
   public void channelTrace_withoutEvents() {
     ChannelStats stats = toBuilder(channel.stats)
-        .setChannelTrace(new Channelz.ChannelTrace.Builder()
+        .setChannelTrace(new InternalChannelz.ChannelTrace.Builder()
             .setNumEventsLogged(1234)
             .setCreationTimeNanos(1000)
             .build())
@@ -874,7 +875,7 @@ public final class ChannelzProtoUtilTest {
     ChannelStats stats =
         toBuilder(channel.stats)
             .setChannelTrace(
-                new Channelz.ChannelTrace.Builder()
+                new InternalChannelz.ChannelTrace.Builder()
                     .setNumEventsLogged(1234)
                     .setCreationTimeNanos(1000)
                     .setEvents(Arrays.asList(event1, event2))

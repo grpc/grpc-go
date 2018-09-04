@@ -20,16 +20,16 @@ import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ConnectivityState;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.Security;
-import io.grpc.internal.Channelz.ServerStats;
-import io.grpc.internal.Channelz.SocketOptions;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Channelz.TransportStats;
-import io.grpc.internal.Instrumented;
-import io.grpc.internal.LogId;
-import io.grpc.internal.WithLogId;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.Security;
+import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketOptions;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalChannelz.TransportStats;
+import io.grpc.LogId;
+import io.grpc.WithLogId;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Collections;
@@ -57,7 +57,8 @@ final class ChannelzTestHelper {
         /*remoteFlowControlWindow=*/ 12);
     SocketAddress local = new InetSocketAddress("10.0.0.1", 1000);
     SocketAddress remote = new InetSocketAddress("10.0.0.2", 1000);
-    Channelz.SocketOptions socketOptions = new Channelz.SocketOptions.Builder().build();
+    InternalChannelz.SocketOptions socketOptions
+        = new InternalChannelz.SocketOptions.Builder().build();
     Security security = null;
 
     @Override

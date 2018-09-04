@@ -26,17 +26,17 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.LogId;
 import io.grpc.ServerStreamTracer;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Instrumented;
+import io.grpc.WithLogId;
 import io.grpc.internal.InternalServer;
-import io.grpc.internal.LogId;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.TransportTracer;
-import io.grpc.internal.WithLogId;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -92,7 +92,7 @@ class NettyServer implements InternalServer, WithLogId {
   private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private final TransportTracer.Factory transportTracerFactory;
-  private final Channelz channelz;
+  private final InternalChannelz channelz;
   // Only modified in event loop but safe to read any time. Set at startup and unset at shutdown.
   // In the future we may have >1 listen socket.
   private volatile ImmutableList<Instrumented<SocketStats>> listenSockets = ImmutableList.of();
@@ -108,7 +108,7 @@ class NettyServer implements InternalServer, WithLogId {
       long maxConnectionIdleInNanos,
       long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
       boolean permitKeepAliveWithoutCalls, long permitKeepAliveTimeInNanos,
-      Channelz channelz) {
+      InternalChannelz channelz) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     checkNotNull(channelOptions, "channelOptions");

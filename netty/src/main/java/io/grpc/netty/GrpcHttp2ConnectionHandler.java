@@ -18,7 +18,7 @@ package io.grpc.netty;
 
 import io.grpc.Attributes;
 import io.grpc.Internal;
-import io.grpc.internal.Channelz;
+import io.grpc.InternalChannelz;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
@@ -45,8 +45,8 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
   }
 
   /**
-   * Same as {@link #handleProtocolNegotiationCompleted(Attributes, Channelz.Security)}
-   * but with no {@link io.grpc.internal.Channelz.Security}.
+   * Same as {@link #handleProtocolNegotiationCompleted(Attributes, InternalChannelz.Security)}
+   * but with no {@link InternalChannelz.Security}.
    *
    * @deprecated Use the two argument method instead.
    */
@@ -64,7 +64,8 @@ public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler 
    * @param attrs arbitrary attributes passed after protocol negotiation (eg. SSLSession).
    * @param securityInfo informs channelz about the security protocol.
    */
-  public void handleProtocolNegotiationCompleted(Attributes attrs, Channelz.Security securityInfo) {
+  public void handleProtocolNegotiationCompleted(
+      Attributes attrs, InternalChannelz.Security securityInfo) {
   }
 
   /**

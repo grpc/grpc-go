@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.internal.Channelz.id;
+import static io.grpc.InternalChannelz.id;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -28,13 +28,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.RootChannelList;
-import io.grpc.internal.Channelz.ServerList;
-import io.grpc.internal.Channelz.ServerSocketsList;
-import io.grpc.internal.Channelz.ServerStats;
-import io.grpc.internal.Channelz.SocketStats;
-import io.grpc.internal.Channelz.Tls;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.RootChannelList;
+import io.grpc.InternalChannelz.ServerList;
+import io.grpc.InternalChannelz.ServerSocketsList;
+import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalChannelz.Tls;
 import java.security.cert.Certificate;
 import javax.net.ssl.SSLSession;
 import org.junit.Test;
@@ -42,9 +42,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public final class ChannelzTest {
+public final class InternalChannelzTest {
 
-  private final Channelz channelz = new Channelz();
+  private final InternalChannelz channelz = new InternalChannelz();
 
   @Test
   public void getRootChannels_empty() {

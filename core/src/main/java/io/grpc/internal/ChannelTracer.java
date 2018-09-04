@@ -19,9 +19,9 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ChannelTrace;
-import io.grpc.internal.Channelz.ChannelTrace.Event;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ChannelTrace;
+import io.grpc.InternalChannelz.ChannelTrace.Event;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;

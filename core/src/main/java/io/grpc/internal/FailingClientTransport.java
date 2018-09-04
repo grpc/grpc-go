@@ -21,10 +21,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.util.concurrent.Executor;
 

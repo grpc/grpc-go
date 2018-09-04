@@ -17,8 +17,9 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.LoadBalancer;
-import io.grpc.internal.Channelz.ChannelStats;
 import javax.annotation.Nullable;
 
 /**

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-import io.grpc.ConnectivityState;
 import java.net.SocketAddress;
 import java.security.cert.Certificate;
 import java.util.ArrayList;
@@ -42,9 +41,13 @@ import javax.annotation.concurrent.Immutable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 
-public final class Channelz {
-  private static final Logger log = Logger.getLogger(Channelz.class.getName());
-  private static final Channelz INSTANCE = new Channelz();
+/**
+ * This is an internal API. Do NOT use.
+ */
+@Internal
+public final class InternalChannelz {
+  private static final Logger log = Logger.getLogger(InternalChannelz.class.getName());
+  private static final InternalChannelz INSTANCE = new InternalChannelz();
 
   private final ConcurrentNavigableMap<Long, Instrumented<ServerStats>> servers
       = new ConcurrentSkipListMap<Long, Instrumented<ServerStats>>();
@@ -65,10 +68,10 @@ public final class Channelz {
   }
 
   @VisibleForTesting
-  public Channelz() {
+  public InternalChannelz() {
   }
 
-  public static Channelz instance() {
+  public static InternalChannelz instance() {
     return INSTANCE;
   }
 

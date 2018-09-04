@@ -25,9 +25,9 @@ import io.grpc.Attributes;
 import io.grpc.CallCredentials;
 import io.grpc.Grpc;
 import io.grpc.Internal;
+import io.grpc.InternalChannelz;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
-import io.grpc.internal.Channelz;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
@@ -158,7 +158,7 @@ public final class ProtocolNegotiators {
                     .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
                     .build(),
-                new Channelz.Security(new Channelz.Tls(session)));
+                new InternalChannelz.Security(new InternalChannelz.Tls(session)));
             // Replace this handler with the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
           } else {
@@ -649,7 +649,7 @@ public final class ProtocolNegotiators {
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
                     .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
                     .build(),
-                new Channelz.Security(new Channelz.Tls(session)));
+                new InternalChannelz.Security(new InternalChannelz.Tls(session)));
             writeBufferedAndRemove(ctx);
           } else {
             Exception ex = new Exception(

@@ -22,6 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.grpc.CallOptions;
+import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import java.net.SocketAddress;

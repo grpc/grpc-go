@@ -17,8 +17,11 @@
 package io.grpc.internal;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import io.grpc.internal.Channelz.ServerStats;
-import io.grpc.internal.Channelz.SocketStats;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.LogId;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -38,7 +41,7 @@ public class ChannelzBenchmark {
   @Param({"10", "100", "1000", "10000"})
   public int preexisting;
 
-  public Channelz channelz = new Channelz();
+  public InternalChannelz channelz = new InternalChannelz();
 
   public Instrumented<ServerStats> serverToRemove;
 

@@ -19,7 +19,7 @@ package io.grpc.okhttp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import io.grpc.internal.Channelz.SocketOptions;
+import io.grpc.InternalChannelz.SocketOptions;
 import io.grpc.okhttp.internal.CipherSuite;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.TlsVersion;

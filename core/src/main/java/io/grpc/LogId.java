@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * An object that has an ID that is unique within the JVM, primarily for debug logging.
+ * An internal class. Do not use.
+ *
+ *<p>An object that has an ID that is unique within the JVM, primarily for debug logging.
  */
+@Internal
 public final class LogId {
   private static final AtomicLong idAlloc = new AtomicLong();
 

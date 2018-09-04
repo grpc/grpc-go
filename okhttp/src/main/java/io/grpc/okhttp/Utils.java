@@ -17,9 +17,9 @@
 package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
+import io.grpc.InternalChannelz;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
-import io.grpc.internal.Channelz;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.CipherSuite;
 import io.grpc.okhttp.internal.ConnectionSpec;
@@ -88,11 +88,11 @@ class Utils {
 
   /**
    * Attempts to capture all known socket options and return the results as a
-   * {@link Channelz.SocketOptions}. If getting a socket option threw an exception,
+   * {@link InternalChannelz.SocketOptions}. If getting a socket option threw an exception,
    * log the error to the logger and report the value as an error in the response.
    */
-  static Channelz.SocketOptions getSocketOptions(Socket socket) {
-    Channelz.SocketOptions.Builder builder = new Channelz.SocketOptions.Builder();
+  static InternalChannelz.SocketOptions getSocketOptions(Socket socket) {
+    InternalChannelz.SocketOptions.Builder builder = new InternalChannelz.SocketOptions.Builder();
     try {
       builder.setSocketOptionLingerSeconds(socket.getSoLinger());
     } catch (SocketException e) {

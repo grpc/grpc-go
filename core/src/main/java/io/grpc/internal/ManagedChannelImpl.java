@@ -44,17 +44,21 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalChannelz.ChannelTrace;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
+import io.grpc.LogId;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.ChannelStats;
-import io.grpc.internal.Channelz.ChannelTrace;
+import io.grpc.WithLogId;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.Throttle;
@@ -211,7 +215,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   private final CallTracer channelCallTracer;
   @CheckForNull
   private final ChannelTracer channelTracer;
-  private final Channelz channelz;
+  private final InternalChannelz channelz;
   @CheckForNull
   private Boolean haveBackends; // a flag for doing channel tracing when flipped
   @Nullable
@@ -297,7 +301,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
-        ChannelStats.Builder builder = new Channelz.ChannelStats.Builder();
+        ChannelStats.Builder builder = new InternalChannelz.ChannelStats.Builder();
         channelCallTracer.updateBuilder(builder);
         if (channelTracer != null) {
           channelTracer.updateBuilder(builder);

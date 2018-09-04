@@ -20,7 +20,7 @@ import static io.grpc.internal.TimeProvider.SYSTEM_TIME_PROVIDER;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.InternalChannelz.TransportStats;
 
 /**
  * A class for gathering statistics about a transport. This is an experimental feature.

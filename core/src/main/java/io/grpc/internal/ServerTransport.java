@@ -16,8 +16,9 @@
 
 package io.grpc.internal;
 
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.Status;
-import io.grpc.internal.Channelz.SocketStats;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** An inbound connection. */

@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
+
+import com.google.common.util.concurrent.ListenableFuture;
 
 /**
- * A loggable ID, unique for the duration of the program.
+ * An internal class. Do not use.
+ *
+ * <p>An interface for types that <b>may</b> support instrumentation. If the actual type does not
+ * support instrumentation, then the future will return a {@code null}.
  */
-public interface WithLogId {
+@Internal
+public interface Instrumented<T> extends WithLogId {
+
   /**
-   * Returns an ID that is primarily used in debug logs. It usually contains the class name and a
-   * numeric ID that is unique among the instances.
-   *
-   * <p>The subclasses of this interface usually want to include the log ID in their {@link
-   * #toString} results.
+   * Returns the stats object.
    */
-  LogId getLogId();
+  ListenableFuture<T> getStats();
 }

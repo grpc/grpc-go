@@ -17,9 +17,10 @@
 package io.grpc.internal;
 
 import io.grpc.CallOptions;
+import io.grpc.Instrumented;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.internal.Channelz.SocketStats;
 import java.util.concurrent.Executor;
 import javax.annotation.concurrent.ThreadSafe;
 

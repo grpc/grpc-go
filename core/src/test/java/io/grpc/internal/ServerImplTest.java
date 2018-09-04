@@ -17,7 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.internal.Channelz.id;
+import static io.grpc.InternalChannelz.id;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -54,8 +54,13 @@ import io.grpc.Compressor;
 import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
+import io.grpc.Instrumented;
 import io.grpc.IntegerMarshaller;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.ServerSocketsList;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalServerInterceptors;
+import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -69,8 +74,6 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.internal.Channelz.ServerSocketsList;
-import io.grpc.internal.Channelz.SocketStats;
 import io.grpc.internal.ServerImpl.JumpToApplicationThreadServerStreamListener;
 import io.grpc.internal.testing.SingleMessageProducer;
 import io.grpc.internal.testing.TestServerStreamTracer;
@@ -142,7 +145,7 @@ public class ServerImplTest {
 
   private final FakeClock executor = new FakeClock();
   private final FakeClock timer = new FakeClock();
-  private final Channelz channelz = new Channelz();
+  private final InternalChannelz channelz = new InternalChannelz();
 
   @Mock
   private ServerStreamTracer.Factory streamTracerFactory;

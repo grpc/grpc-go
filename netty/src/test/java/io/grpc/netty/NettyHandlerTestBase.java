@@ -29,7 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
-import io.grpc.internal.Channelz.TransportStats;
+import io.grpc.InternalChannelz.TransportStats;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.MessageFramer;
 import io.grpc.internal.StatsTraceContext;

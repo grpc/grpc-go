@@ -28,6 +28,7 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
+import io.grpc.InternalChannelz;
 import io.grpc.InternalNotifyOnServerBuild;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -113,7 +114,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   protected BinaryLog binlog;
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
-  protected Channelz channelz = Channelz.instance();
+  protected InternalChannelz channelz = InternalChannelz.instance();
   protected CallTracer.Factory callTracerFactory = CallTracer.getDefaultFactory();
 
   @Override

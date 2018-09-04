@@ -17,7 +17,7 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
-import io.grpc.internal.Channelz.TcpInfo;
+import io.grpc.InternalChannelz.TcpInfo;
 import java.util.Map;
 
 /**

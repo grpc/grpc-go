@@ -22,10 +22,10 @@ import static org.junit.Assert.assertSame;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.truth.Truth;
+import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.SocketOptions;
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.internal.Channelz;
-import io.grpc.internal.Channelz.SocketOptions;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
@@ -131,7 +131,7 @@ public class UtilsTest {
   public void channelOptionsTest_noLinger() {
     Channel channel = new EmbeddedChannel();
     assertNull(channel.config().getOption(ChannelOption.SO_LINGER));
-    Channelz.SocketOptions socketOptions = Utils.getSocketOptions(channel);
+    InternalChannelz.SocketOptions socketOptions = Utils.getSocketOptions(channel);
     assertNull(socketOptions.lingerSeconds);
   }
 
@@ -149,7 +149,7 @@ public class UtilsTest {
     assertNull(socketOptions.soTimeoutMillis);
   }
 
-  private static Channelz.SocketOptions setAndValidateGeneric(Channel channel) {
+  private static InternalChannelz.SocketOptions setAndValidateGeneric(Channel channel) {
     channel.config().setOption(ChannelOption.SO_LINGER, 3);
     // only applicable for OIO channels:
     channel.config().setOption(ChannelOption.SO_TIMEOUT, 250);
@@ -158,7 +158,7 @@ public class UtilsTest {
     WriteBufferWaterMark writeBufWaterMark = new WriteBufferWaterMark(10, 20);
     channel.config().setOption(ChannelOption.WRITE_BUFFER_WATER_MARK, writeBufWaterMark);
 
-    Channelz.SocketOptions socketOptions = Utils.getSocketOptions(channel);
+    InternalChannelz.SocketOptions socketOptions = Utils.getSocketOptions(channel);
     assertEquals(3, (int) socketOptions.lingerSeconds);
     assertEquals("true", socketOptions.others.get("SO_KEEPALIVE"));
     assertEquals(
