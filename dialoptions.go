@@ -330,7 +330,7 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 	return withContextDialer(
 		func(ctx context.Context, addr string) (net.Conn, error) {
 			if deadline, ok := ctx.Deadline(); ok {
-				return f(addr, deadline.Sub(time.Now()))
+				return f(addr, time.Until(deadline))
 			}
 			return f(addr, 0)
 		})

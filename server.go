@@ -749,7 +749,7 @@ func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Strea
 	trInfo.firstLine.remoteAddr = st.RemoteAddr()
 
 	if dl, ok := stream.Context().Deadline(); ok {
-		trInfo.firstLine.deadline = dl.Sub(time.Now())
+		trInfo.firstLine.deadline = time.Until(dl)
 	}
 	return trInfo
 }
