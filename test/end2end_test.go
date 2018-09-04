@@ -6591,7 +6591,7 @@ func testServerMaxHeaderListSizeClientUserViolation(t *testing.T, e env) {
 func TestClientMaxHeaderListSizeServerUserViolation(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		if e.httpHandler == true {
+		if e.httpHandler {
 			continue
 		}
 		testClientMaxHeaderListSizeServerUserViolation(t, e)
@@ -6623,7 +6623,7 @@ func testClientMaxHeaderListSizeServerUserViolation(t *testing.T, e env) {
 func TestServerMaxHeaderListSizeClientIntentionalViolation(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		if e.httpHandler == true || e.security == "tls" {
+		if e.httpHandler || e.security == "tls" {
 			continue
 		}
 		testServerMaxHeaderListSizeClientIntentionalViolation(t, e)
@@ -6666,7 +6666,7 @@ func testServerMaxHeaderListSizeClientIntentionalViolation(t *testing.T, e env) 
 func TestClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		if e.httpHandler == true || e.security == "tls" {
+		if e.httpHandler || e.security == "tls" {
 			continue
 		}
 		testClientMaxHeaderListSizeServerIntentionalViolation(t, e)
