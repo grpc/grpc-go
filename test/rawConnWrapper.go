@@ -161,24 +161,24 @@ func (rcw *rawConnWrapper) greet() error {
 func (rcw *rawConnWrapper) writePreface() error {
 	n, err := rcw.cc.Write([]byte(http2.ClientPreface))
 	if err != nil {
-		return fmt.Errorf("Error writing client preface: %v", err)
+		return fmt.Errorf("error writing client preface: %v", err)
 	}
 	if n != len(http2.ClientPreface) {
-		return fmt.Errorf("Writing client preface, wrote %d bytes; want %d", n, len(http2.ClientPreface))
+		return fmt.Errorf("writing client preface, wrote %d bytes; want %d", n, len(http2.ClientPreface))
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeInitialSettings() error {
 	if err := rcw.fr.WriteSettings(); err != nil {
-		return fmt.Errorf("Error writing initial SETTINGS frame from client to server: %v", err)
+		return fmt.Errorf("error writing initial SETTINGS frame from client to server: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeSettingsAck() error {
 	if err := rcw.fr.WriteSettingsAck(); err != nil {
-		return fmt.Errorf("Error writing ACK of server's SETTINGS: %v", err)
+		return fmt.Errorf("error writing ACK of server's SETTINGS: %v", err)
 	}
 	return nil
 }
@@ -186,7 +186,7 @@ func (rcw *rawConnWrapper) writeSettingsAck() error {
 func (rcw *rawConnWrapper) wantSettings() (*http2.SettingsFrame, error) {
 	f, err := rcw.readFrame()
 	if err != nil {
-		return nil, fmt.Errorf("Error while expecting a SETTINGS frame: %v", err)
+		return nil, fmt.Errorf("error while expecting a SETTINGS frame: %v", err)
 	}
 	sf, ok := f.(*http2.SettingsFrame)
 	if !ok {
@@ -202,10 +202,10 @@ func (rcw *rawConnWrapper) wantSettingsAck() error {
 	}
 	sf, ok := f.(*http2.SettingsFrame)
 	if !ok {
-		return fmt.Errorf("Wanting a settings ACK, received a %T", f)
+		return fmt.Errorf("wanting a settings ACK, received a %T", f)
 	}
 	if !sf.IsAck() {
-		return fmt.Errorf("Settings Frame didn't have ACK set")
+		return fmt.Errorf("settings Frame didn't have ACK set")
 	}
 	return nil
 }
@@ -304,42 +304,42 @@ func (rcw *rawConnWrapper) writeHeadersGRPC(streamID uint32, path string) {
 
 func (rcw *rawConnWrapper) writeHeaders(p http2.HeadersFrameParam) error {
 	if err := rcw.fr.WriteHeaders(p); err != nil {
-		return fmt.Errorf("Error writing HEADERS: %v", err)
+		return fmt.Errorf("error writing HEADERS: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeData(streamID uint32, endStream bool, data []byte) error {
 	if err := rcw.fr.WriteData(streamID, endStream, data); err != nil {
-		return fmt.Errorf("Error writing DATA: %v", err)
+		return fmt.Errorf("error writing DATA: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeRSTStream(streamID uint32, code http2.ErrCode) error {
 	if err := rcw.fr.WriteRSTStream(streamID, code); err != nil {
-		return fmt.Errorf("Error writing RST_STREAM: %v", err)
+		return fmt.Errorf("error writing RST_STREAM: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeDataPadded(streamID uint32, endStream bool, data, padding []byte) error {
 	if err := rcw.fr.WriteDataPadded(streamID, endStream, data, padding); err != nil {
-		return fmt.Errorf("Error writing DATA with padding: %v", err)
+		return fmt.Errorf("error writing DATA with padding: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeGoAway(maxStreamID uint32, code http2.ErrCode, debugData []byte) error {
 	if err := rcw.fr.WriteGoAway(maxStreamID, code, debugData); err != nil {
-		return fmt.Errorf("Error writing GoAway: %v", err)
+		return fmt.Errorf("error writing GoAway: %v", err)
 	}
 	return nil
 }
 
 func (rcw *rawConnWrapper) writeRawFrame(t http2.FrameType, flags http2.Flags, streamID uint32, payload []byte) error {
 	if err := rcw.fr.WriteRawFrame(t, flags, streamID, payload); err != nil {
-		return fmt.Errorf("Error writing Raw Frame: %v", err)
+		return fmt.Errorf("error writing Raw Frame: %v", err)
 	}
 	return nil
 }
