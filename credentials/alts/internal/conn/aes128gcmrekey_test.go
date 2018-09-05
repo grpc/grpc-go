@@ -41,12 +41,12 @@ func getRekeyCryptoPair(key []byte, counter []byte, t *testing.T) (ALTSRecordCry
 	}
 	// set counter if provided.
 	if counter != nil {
-		if counterSide(counter) == core.ClientSide {
-			client.(*aes128gcmRekey).outCounter = counterFromValue(counter, overflowLenAES128GCMRekey)
-			server.(*aes128gcmRekey).inCounter = counterFromValue(counter, overflowLenAES128GCMRekey)
+		if CounterSide(counter) == core.ClientSide {
+			client.(*aes128gcmRekey).outCounter = CounterFromValue(counter, overflowLenAES128GCMRekey)
+			server.(*aes128gcmRekey).inCounter = CounterFromValue(counter, overflowLenAES128GCMRekey)
 		} else {
-			server.(*aes128gcmRekey).outCounter = counterFromValue(counter, overflowLenAES128GCMRekey)
-			client.(*aes128gcmRekey).inCounter = counterFromValue(counter, overflowLenAES128GCMRekey)
+			server.(*aes128gcmRekey).outCounter = CounterFromValue(counter, overflowLenAES128GCMRekey)
+			client.(*aes128gcmRekey).inCounter = CounterFromValue(counter, overflowLenAES128GCMRekey)
 		}
 	}
 	return client, server

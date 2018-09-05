@@ -43,8 +43,8 @@ type aes128gcmRekey struct {
 	// inCounter is used in ALTS record to check that incoming counters are
 	// as expected, since ALTS record guarantees that messages are unwrapped
 	// in the same order that the peer wrapped them.
-	inCounter  counter
-	outCounter counter
+	inCounter  Counter
+	outCounter Counter
 	inAEAD     cipher.AEAD
 	outAEAD    cipher.AEAD
 }
@@ -54,8 +54,8 @@ type aes128gcmRekey struct {
 // are used as a key for HKDF-expand and the remainining 12 bytes are used
 // as a random mask for the counter.
 func NewAES128GCMRekey(side core.Side, key []byte) (ALTSRecordCrypto, error) {
-	inCounter := newInCounter(side, overflowLenAES128GCMRekey)
-	outCounter := newOutCounter(side, overflowLenAES128GCMRekey)
+	inCounter := NewInCounter(side, overflowLenAES128GCMRekey)
+	outCounter := NewOutCounter(side, overflowLenAES128GCMRekey)
 	inAEAD, err := newRekeyAEAD(key)
 	if err != nil {
 		return nil, err
