@@ -29,7 +29,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/peer"
@@ -41,7 +40,6 @@ const (
 	windowsCheckCommandArgs  = "Get-WmiObject -Class Win32_BIOS"
 	powershellOutputFilter   = "Manufacturer"
 	windowsManufacturerRegex = ":(.*)"
-	windowsCheckTimeout      = 30 * time.Second
 )
 
 type platformError string

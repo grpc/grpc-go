@@ -30,10 +30,6 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const (
-	value = "test_value"
-)
-
 var (
 	hsAddr     = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	serverAddr = flag.String("server_address", ":8080", "The port on which the server is listening")

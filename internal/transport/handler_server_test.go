@@ -252,7 +252,6 @@ func newTestHandlerResponseWriter() http.ResponseWriter {
 type handleStreamTest struct {
 	t     *testing.T
 	bodyw *io.PipeWriter
-	req   *http.Request
 	rw    testHandlerResponseWriter
 	ht    *serverHandlerTransport
 }
