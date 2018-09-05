@@ -32,10 +32,10 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/alts/core"
-	"google.golang.org/grpc/credentials/alts/core/handshaker"
-	"google.golang.org/grpc/credentials/alts/core/handshaker/service"
-	altspb "google.golang.org/grpc/credentials/alts/core/proto/grpc_gcp"
+	core "google.golang.org/grpc/credentials/alts/internal"
+	"google.golang.org/grpc/credentials/alts/internal/handshaker"
+	"google.golang.org/grpc/credentials/alts/internal/handshaker/service"
+	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/grpclog"
 )
 

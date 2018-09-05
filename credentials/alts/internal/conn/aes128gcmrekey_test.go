@@ -21,7 +21,7 @@ package conn
 import (
 	"testing"
 
-	"google.golang.org/grpc/credentials/alts/core"
+	core "google.golang.org/grpc/credentials/alts/internal"
 )
 
 // cryptoTestVector is struct for a rekey test vector
