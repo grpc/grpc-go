@@ -29,22 +29,6 @@ const (
 	testOverflowLen = 5
 )
 
-// counterFromValue creates a new counter given an initial value.
-func counterFromValue(value []byte, overflowLen int) (c counter) {
-	c.overflowLen = overflowLen
-	copy(c.value[:], value)
-	return
-}
-
-// counterSide returns the connection side (client/server) a sequence counter is
-// associated with.
-func counterSide(c []byte) core.Side {
-	if c[counterLen-1]&0x80 == 0x80 {
-		return core.ServerSide
-	}
-	return core.ClientSide
-}
-
 func TestCounterSides(t *testing.T) {
 	for _, side := range []core.Side{core.ClientSide, core.ServerSide} {
 		outCounter := newOutCounter(side, testOverflowLen)

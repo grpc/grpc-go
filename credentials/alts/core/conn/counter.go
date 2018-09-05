@@ -63,6 +63,13 @@ func newInCounter(s core.Side, overflowLen int) (c counter) {
 	return
 }
 
+// counterFromValue creates a new counter given an initial value.
+func counterFromValue(value []byte, overflowLen int) (c counter) {
+	c.overflowLen = overflowLen
+	copy(c.value[:], value)
+	return
+}
+
 // Value returns the current value of the counter as a byte slice.
 func (c *counter) Value() ([]byte, error) {
 	if c.invalid {
@@ -87,4 +94,13 @@ func (c *counter) Inc() {
 	if i == c.overflowLen {
 		c.invalid = true
 	}
+}
+
+// counterSide returns the connection side (client/server) a sequence counter is
+// associated with.
+func counterSide(c []byte) core.Side {
+	if c[counterLen-1]&0x80 == 0x80 {
+		return core.ServerSide
+	}
+	return core.ClientSide
 }
