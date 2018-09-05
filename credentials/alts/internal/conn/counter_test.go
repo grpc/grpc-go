@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"testing"
 
-	"google.golang.org/grpc/credentials/alts/core"
+	core "google.golang.org/grpc/credentials/alts/internal"
 )
 
 const (
