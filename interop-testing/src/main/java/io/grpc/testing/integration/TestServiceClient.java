@@ -336,6 +336,11 @@ public class TestServiceClient {
         break;
       }
 
+      case VERY_LARGE_REQUEST: {
+        tester.veryLargeRequest();
+        break;
+      }
+
       default:
         throw new IllegalArgumentException("Unknown test case: " + testCase);
     }

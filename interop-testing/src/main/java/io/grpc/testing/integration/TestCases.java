@@ -49,7 +49,8 @@ public enum TestCases {
   UNIMPLEMENTED_SERVICE("call an unimplemented RPC service"),
   CANCEL_AFTER_BEGIN("cancel stream after starting it"),
   CANCEL_AFTER_FIRST_RESPONSE("cancel on first response"),
-  TIMEOUT_ON_SLEEPING_SERVER("timeout before receiving a response");
+  TIMEOUT_ON_SLEEPING_SERVER("timeout before receiving a response"),
+  VERY_LARGE_REQUEST("very large request");
 
   private final String description;
 
