@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Verify;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
@@ -42,6 +43,7 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -88,6 +90,19 @@ final class DnsNameResolver extends NameResolver {
   private static final String JNDI_TXT_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_service_config", "false");
 
+  /**
+   * Java networking system properties name for caching DNS result.
+   *
+   * <p>Default value is -1 (cache forever) if security manager is installed. If security manager is
+   * not installed, the ttl value is {@code null} which falls back to {@link
+   * #DEFAULT_NETWORK_CACHE_TTL_SECONDS gRPC default value}.
+   */
+  @VisibleForTesting
+  static final String NETWORKADDRESS_CACHE_TTL_PROPERTY = "networkaddress.cache.ttl";
+  /** Default DNS cache duration if network cache ttl value is not specified ({@code null}). */
+  @VisibleForTesting
+  static final long DEFAULT_NETWORK_CACHE_TTL_SECONDS = 30;
+
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
   @VisibleForTesting
@@ -115,6 +130,8 @@ final class DnsNameResolver extends NameResolver {
   private final String host;
   private final int port;
   private final Resource<ExecutorService> executorResource;
+  private final long networkAddressCacheTtlNanos;
+  private final Stopwatch stopwatch;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
@@ -123,10 +140,11 @@ final class DnsNameResolver extends NameResolver {
   private boolean resolving;
   @GuardedBy("this")
   private Listener listener;
+  private ResolutionResults cachedResolutionResults;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
-      Resource<ExecutorService> executorResource,
-      ProxyDetector proxyDetector) {
+      Resource<ExecutorService> executorResource, ProxyDetector proxyDetector,
+      Stopwatch stopwatch) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
     this.executorResource = executorResource;
@@ -149,6 +167,8 @@ final class DnsNameResolver extends NameResolver {
       port = nameUri.getPort();
     }
     this.proxyDetector = proxyDetector;
+    this.stopwatch = Preconditions.checkNotNull(stopwatch, "stopwatch");
+    this.networkAddressCacheTtlNanos = getNetworkAddressCacheTtlNanos();
   }
 
   @Override
@@ -176,6 +196,13 @@ final class DnsNameResolver extends NameResolver {
         Listener savedListener;
         synchronized (DnsNameResolver.this) {
           if (shutdown) {
+            return;
+          }
+          boolean resourceRefreshRequired = cachedResolutionResults == null
+              || networkAddressCacheTtlNanos == 0
+              || (networkAddressCacheTtlNanos > 0
+                  && stopwatch.elapsed(TimeUnit.NANOSECONDS) > networkAddressCacheTtlNanos);
+          if (!resourceRefreshRequired) {
             return;
           }
           savedListener = listener;
@@ -207,6 +234,10 @@ final class DnsNameResolver extends NameResolver {
             }
             resolutionResults =
                 resolveAll(addressResolver, resourceResolver, enableSrv, enableTxt, host);
+            cachedResolutionResults = resolutionResults;
+            if (networkAddressCacheTtlNanos > 0) {
+              stopwatch.reset().start();
+            }
           } catch (Exception e) {
             savedListener.onError(
                 Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
@@ -252,6 +283,23 @@ final class DnsNameResolver extends NameResolver {
         }
       }
     };
+
+  /** Returns value of network address cache ttl property. */
+  private static long getNetworkAddressCacheTtlNanos() {
+    String cacheTtlPropertyValue = System.getProperty(NETWORKADDRESS_CACHE_TTL_PROPERTY);
+    long cacheTtl = DEFAULT_NETWORK_CACHE_TTL_SECONDS;
+    if (cacheTtlPropertyValue != null) {
+      try {
+        cacheTtl = Long.parseLong(cacheTtlPropertyValue);
+      } catch (NumberFormatException e) {
+        logger.log(
+            Level.WARNING,
+            "Property({0}) valid is not valid number format({1}), fall back to default({2})",
+            new Object[] {NETWORKADDRESS_CACHE_TTL_PROPERTY, cacheTtlPropertyValue, cacheTtl});
+      }
+    }
+    return cacheTtl > 0 ? TimeUnit.SECONDS.toNanos(cacheTtl) : cacheTtl;
+  }
 
   @GuardedBy("this")
   private void resolve() {
