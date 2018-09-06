@@ -18,12 +18,12 @@ package io.grpc.services;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.ExperimentalApi;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ServerList;
 import io.grpc.InternalChannelz.ServerSocketsList;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
@@ -92,7 +92,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   @Override
   public void getChannel(
       GetChannelRequest request, StreamObserver<GetChannelResponse> responseObserver) {
-    Instrumented<ChannelStats> s = channelz.getRootChannel(request.getChannelId());
+    InternalInstrumented<ChannelStats> s = channelz.getRootChannel(request.getChannelId());
     if (s == null) {
       responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
       return;
@@ -120,7 +120,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   @Override
   public void getSubchannel(
       GetSubchannelRequest request, StreamObserver<GetSubchannelResponse> responseObserver) {
-    Instrumented<ChannelStats> s = channelz.getSubchannel(request.getSubchannelId());
+    InternalInstrumented<ChannelStats> s = channelz.getSubchannel(request.getSubchannelId());
     if (s == null) {
       responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
       return;
@@ -138,7 +138,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
   @Override
   public void getSocket(
       GetSocketRequest request, StreamObserver<GetSocketResponse> responseObserver) {
-    Instrumented<SocketStats> s = channelz.getSocket(request.getSocketId());
+    InternalInstrumented<SocketStats> s = channelz.getSocket(request.getSocketId());
     if (s == null) {
       responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
       return;

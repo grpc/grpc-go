@@ -55,9 +55,9 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -2037,7 +2037,7 @@ public class OkHttpClientTransportTest {
     }
   }
 
-  private static TransportStats getTransportStats(Instrumented<SocketStats> obj)
+  private static TransportStats getTransportStats(InternalInstrumented<SocketStats> obj)
       throws ExecutionException, InterruptedException {
     return obj.getStats().get().data;
   }

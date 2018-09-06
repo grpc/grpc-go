@@ -25,7 +25,7 @@ import com.google.common.util.concurrent.ListenableFuture;
  * support instrumentation, then the future will return a {@code null}.
  */
 @Internal
-public interface Instrumented<T> extends WithLogId {
+public interface InternalInstrumented<T> extends InternalWithLogId {
 
   /**
    * Returns the stats object.

@@ -23,7 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.InternalChannelz.SocketStats;
-import io.grpc.LogId;
+import io.grpc.InternalLogId;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.ServerTransport;
@@ -55,7 +55,7 @@ class NettyServerTransport implements ServerTransport {
       "Connection reset by peer",
       "An existing connection was forcibly closed by the remote host");
 
-  private final LogId logId = LogId.allocate(getClass().getName());
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final Channel channel;
   private final ChannelPromise channelUnused;
   private final ProtocolNegotiator protocolNegotiator;
@@ -162,7 +162,7 @@ class NettyServerTransport implements ServerTransport {
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return logId;
   }
 

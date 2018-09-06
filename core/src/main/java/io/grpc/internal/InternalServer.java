@@ -16,8 +16,8 @@
 
 package io.grpc.internal;
 
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
 import java.io.IOException;
 import java.util.List;
 import javax.annotation.concurrent.ThreadSafe;
@@ -54,5 +54,5 @@ public interface InternalServer {
   /**
    * Returns the listen sockets of this server. May return an empty list but never returns null.
    */
-  List<Instrumented<SocketStats>> getListenSockets();
+  List<InternalInstrumented<SocketStats>> getListenSockets();
 }

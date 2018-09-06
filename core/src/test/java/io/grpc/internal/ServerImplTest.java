@@ -54,13 +54,13 @@ import io.grpc.Compressor;
 import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
-import io.grpc.Instrumented;
 import io.grpc.IntegerMarshaller;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ServerSocketsList;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
-import io.grpc.LogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -1364,7 +1364,7 @@ public class ServerImplTest {
     }
 
     @Override
-    public List<Instrumented<SocketStats>> getListenSockets() {
+    public List<InternalInstrumented<SocketStats>> getListenSockets() {
       return Collections.emptyList();
     }
 
@@ -1380,7 +1380,7 @@ public class ServerImplTest {
 
   private class SimpleServerTransport implements ServerTransport {
     ServerTransportListener listener;
-    LogId id = LogId.allocate(getClass().getName());
+    InternalLogId id = InternalLogId.allocate(getClass().getName());
 
     @Override
     public void shutdown() {
@@ -1393,7 +1393,7 @@ public class ServerImplTest {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       return id;
     }
 

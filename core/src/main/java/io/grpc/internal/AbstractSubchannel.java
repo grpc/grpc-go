@@ -17,8 +17,8 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.ChannelStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.LoadBalancer;
 import javax.annotation.Nullable;
 
@@ -39,5 +39,5 @@ abstract class AbstractSubchannel extends LoadBalancer.Subchannel {
    * unit tests.
    */
   @VisibleForTesting
-  abstract Instrumented<ChannelStats> getInternalSubchannel();
+  abstract InternalInstrumented<ChannelStats> getInternalSubchannel();
 }

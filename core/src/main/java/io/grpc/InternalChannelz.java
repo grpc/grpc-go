@@ -49,21 +49,21 @@ public final class InternalChannelz {
   private static final Logger log = Logger.getLogger(InternalChannelz.class.getName());
   private static final InternalChannelz INSTANCE = new InternalChannelz();
 
-  private final ConcurrentNavigableMap<Long, Instrumented<ServerStats>> servers
-      = new ConcurrentSkipListMap<Long, Instrumented<ServerStats>>();
-  private final ConcurrentNavigableMap<Long, Instrumented<ChannelStats>> rootChannels
-      = new ConcurrentSkipListMap<Long, Instrumented<ChannelStats>>();
-  private final ConcurrentMap<Long, Instrumented<ChannelStats>> subchannels
-      = new ConcurrentHashMap<Long, Instrumented<ChannelStats>>();
+  private final ConcurrentNavigableMap<Long, InternalInstrumented<ServerStats>> servers
+      = new ConcurrentSkipListMap<Long, InternalInstrumented<ServerStats>>();
+  private final ConcurrentNavigableMap<Long, InternalInstrumented<ChannelStats>> rootChannels
+      = new ConcurrentSkipListMap<Long, InternalInstrumented<ChannelStats>>();
+  private final ConcurrentMap<Long, InternalInstrumented<ChannelStats>> subchannels
+      = new ConcurrentHashMap<Long, InternalInstrumented<ChannelStats>>();
   // An InProcessTransport can appear in both otherSockets and perServerSockets simultaneously
-  private final ConcurrentMap<Long, Instrumented<SocketStats>> otherSockets
-      = new ConcurrentHashMap<Long, Instrumented<SocketStats>>();
+  private final ConcurrentMap<Long, InternalInstrumented<SocketStats>> otherSockets
+      = new ConcurrentHashMap<Long, InternalInstrumented<SocketStats>>();
   private final ConcurrentMap<Long, ServerSocketMap> perServerSockets
       = new ConcurrentHashMap<Long, ServerSocketMap>();
 
   // A convenience class to avoid deeply nested types.
   private static final class ServerSocketMap
-      extends ConcurrentSkipListMap<Long, Instrumented<SocketStats>> {
+      extends ConcurrentSkipListMap<Long, InternalInstrumented<SocketStats>> {
     private static final long serialVersionUID = -7883772124944661414L;
   }
 
@@ -76,65 +76,66 @@ public final class InternalChannelz {
   }
 
   /** Adds a server. */
-  public void addServer(Instrumented<ServerStats> server) {
+  public void addServer(InternalInstrumented<ServerStats> server) {
     ServerSocketMap prev = perServerSockets.put(id(server), new ServerSocketMap());
     assert prev == null;
     add(servers, server);
   }
 
   /** Adds a subchannel. */
-  public void addSubchannel(Instrumented<ChannelStats> subchannel) {
+  public void addSubchannel(InternalInstrumented<ChannelStats> subchannel) {
     add(subchannels, subchannel);
   }
 
   /** Adds a root channel. */
-  public void addRootChannel(Instrumented<ChannelStats> rootChannel) {
+  public void addRootChannel(InternalInstrumented<ChannelStats> rootChannel) {
     add(rootChannels, rootChannel);
   }
 
   /** Adds a socket. */
-  public void addClientSocket(Instrumented<SocketStats> socket) {
+  public void addClientSocket(InternalInstrumented<SocketStats> socket) {
     add(otherSockets, socket);
   }
 
-  public void addListenSocket(Instrumented<SocketStats> socket) {
+  public void addListenSocket(InternalInstrumented<SocketStats> socket) {
     add(otherSockets, socket);
   }
 
   /** Adds a server socket. */
-  public void addServerSocket(Instrumented<ServerStats> server, Instrumented<SocketStats> socket) {
+  public void addServerSocket(
+      InternalInstrumented<ServerStats> server, InternalInstrumented<SocketStats> socket) {
     ServerSocketMap serverSockets = perServerSockets.get(id(server));
     assert serverSockets != null;
     add(serverSockets, socket);
   }
 
   /** Removes a server. */
-  public void removeServer(Instrumented<ServerStats> server) {
+  public void removeServer(InternalInstrumented<ServerStats> server) {
     remove(servers, server);
     ServerSocketMap prev = perServerSockets.remove(id(server));
     assert prev != null;
     assert prev.isEmpty();
   }
 
-  public void removeSubchannel(Instrumented<ChannelStats> subchannel) {
+  public void removeSubchannel(InternalInstrumented<ChannelStats> subchannel) {
     remove(subchannels, subchannel);
   }
 
-  public void removeRootChannel(Instrumented<ChannelStats> channel) {
+  public void removeRootChannel(InternalInstrumented<ChannelStats> channel) {
     remove(rootChannels, channel);
   }
 
-  public void removeClientSocket(Instrumented<SocketStats> socket) {
+  public void removeClientSocket(InternalInstrumented<SocketStats> socket) {
     remove(otherSockets, socket);
   }
 
-  public void removeListenSocket(Instrumented<SocketStats> socket) {
+  public void removeListenSocket(InternalInstrumented<SocketStats> socket) {
     remove(otherSockets, socket);
   }
 
   /** Removes a server socket. */
   public void removeServerSocket(
-      Instrumented<ServerStats> server, Instrumented<SocketStats> socket) {
+      InternalInstrumented<ServerStats> server, InternalInstrumented<SocketStats> socket) {
     ServerSocketMap socketsOfServer = perServerSockets.get(id(server));
     assert socketsOfServer != null;
     remove(socketsOfServer, socket);
@@ -142,8 +143,9 @@ public final class InternalChannelz {
 
   /** Returns a {@link RootChannelList}. */
   public RootChannelList getRootChannels(long fromId, int maxPageSize) {
-    List<Instrumented<ChannelStats>> channelList = new ArrayList<Instrumented<ChannelStats>>();
-    Iterator<Instrumented<ChannelStats>> iterator
+    List<InternalInstrumented<ChannelStats>> channelList
+        = new ArrayList<InternalInstrumented<ChannelStats>>();
+    Iterator<InternalInstrumented<ChannelStats>> iterator
         = rootChannels.tailMap(fromId).values().iterator();
 
     while (iterator.hasNext() && channelList.size() < maxPageSize) {
@@ -154,21 +156,22 @@ public final class InternalChannelz {
 
   /** Returns a channel. */
   @Nullable
-  public Instrumented<ChannelStats> getChannel(long id) {
+  public InternalInstrumented<ChannelStats> getChannel(long id) {
     return rootChannels.get(id);
   }
 
   /** Returns a subchannel. */
   @Nullable
-  public Instrumented<ChannelStats> getSubchannel(long id) {
+  public InternalInstrumented<ChannelStats> getSubchannel(long id) {
     return subchannels.get(id);
   }
 
   /** Returns a server list. */
   public ServerList getServers(long fromId, int maxPageSize) {
-    List<Instrumented<ServerStats>> serverList
-        = new ArrayList<Instrumented<ServerStats>>(maxPageSize);
-    Iterator<Instrumented<ServerStats>> iterator = servers.tailMap(fromId).values().iterator();
+    List<InternalInstrumented<ServerStats>> serverList
+        = new ArrayList<InternalInstrumented<ServerStats>>(maxPageSize);
+    Iterator<InternalInstrumented<ServerStats>> iterator
+        = servers.tailMap(fromId).values().iterator();
 
     while (iterator.hasNext() && serverList.size() < maxPageSize) {
       serverList.add(iterator.next());
@@ -183,8 +186,8 @@ public final class InternalChannelz {
     if (serverSockets == null) {
       return null;
     }
-    List<WithLogId> socketList = new ArrayList<WithLogId>(maxPageSize);
-    Iterator<Instrumented<SocketStats>> iterator
+    List<InternalWithLogId> socketList = new ArrayList<InternalWithLogId>(maxPageSize);
+    Iterator<InternalInstrumented<SocketStats>> iterator
         = serverSockets.tailMap(fromId).values().iterator();
     while (socketList.size() < maxPageSize && iterator.hasNext()) {
       socketList.add(iterator.next());
@@ -194,17 +197,17 @@ public final class InternalChannelz {
 
   /** Returns a socket. */
   @Nullable
-  public Instrumented<SocketStats> getSocket(long id) {
-    Instrumented<SocketStats> clientSocket = otherSockets.get(id);
+  public InternalInstrumented<SocketStats> getSocket(long id) {
+    InternalInstrumented<SocketStats> clientSocket = otherSockets.get(id);
     if (clientSocket != null) {
       return clientSocket;
     }
     return getServerSocket(id);
   }
 
-  private Instrumented<SocketStats> getServerSocket(long id) {
+  private InternalInstrumented<SocketStats> getServerSocket(long id) {
     for (ServerSocketMap perServerSockets : perServerSockets.values()) {
-      Instrumented<SocketStats> serverSocket = perServerSockets.get(id);
+      InternalInstrumented<SocketStats> serverSocket = perServerSockets.get(id);
       if (serverSocket != null) {
         return serverSocket;
       }
@@ -213,66 +216,67 @@ public final class InternalChannelz {
   }
 
   @VisibleForTesting
-  public boolean containsServer(LogId serverRef) {
+  public boolean containsServer(InternalLogId serverRef) {
     return contains(servers, serverRef);
   }
 
   @VisibleForTesting
-  public boolean containsSubchannel(LogId subchannelRef) {
+  public boolean containsSubchannel(InternalLogId subchannelRef) {
     return contains(subchannels, subchannelRef);
   }
 
-  public Instrumented<ChannelStats> getRootChannel(long id) {
+  public InternalInstrumented<ChannelStats> getRootChannel(long id) {
     return rootChannels.get(id);
   }
 
   @VisibleForTesting
-  public boolean containsClientSocket(LogId transportRef) {
+  public boolean containsClientSocket(InternalLogId transportRef) {
     return contains(otherSockets, transportRef);
   }
 
-  private static <T extends Instrumented<?>> void add(Map<Long, T> map, T object) {
+  private static <T extends InternalInstrumented<?>> void add(Map<Long, T> map, T object) {
     T prev = map.put(object.getLogId().getId(), object);
     assert prev == null;
   }
 
-  private static <T extends Instrumented<?>> void remove(Map<Long, T> map, T object) {
+  private static <T extends InternalInstrumented<?>> void remove(Map<Long, T> map, T object) {
     T prev = map.remove(id(object));
     assert prev != null;
   }
 
-  private static <T extends Instrumented<?>> boolean contains(Map<Long, T> map, LogId id) {
+  private static <T extends InternalInstrumented<?>> boolean contains(
+      Map<Long, T> map, InternalLogId id) {
     return map.containsKey(id.getId());
   }
 
   public static final class RootChannelList {
-    public final List<Instrumented<ChannelStats>> channels;
+    public final List<InternalInstrumented<ChannelStats>> channels;
     public final boolean end;
 
     /** Creates an instance. */
-    public RootChannelList(List<Instrumented<ChannelStats>> channels, boolean end) {
+    public RootChannelList(List<InternalInstrumented<ChannelStats>> channels, boolean end) {
       this.channels = checkNotNull(channels);
       this.end = end;
     }
   }
 
   public static final class ServerList {
-    public final List<Instrumented<ServerStats>> servers;
+    public final List<InternalInstrumented<ServerStats>> servers;
     public final boolean end;
 
     /** Creates an instance. */
-    public ServerList(List<Instrumented<ServerStats>> servers, boolean end) {
+    public ServerList(List<InternalInstrumented<ServerStats>> servers, boolean end) {
       this.servers = checkNotNull(servers);
       this.end = end;
     }
   }
 
   public static final class ServerSocketsList {
-    public final List<WithLogId> sockets;
+    public final List<InternalWithLogId> sockets;
     public final boolean end;
 
     /** Creates an instance. */
-    public ServerSocketsList(List<WithLogId> sockets, boolean end) {
+    public ServerSocketsList(List<InternalWithLogId> sockets, boolean end) {
       this.sockets = sockets;
       this.end = end;
     }
@@ -284,7 +288,7 @@ public final class InternalChannelz {
     public final long callsSucceeded;
     public final long callsFailed;
     public final long lastCallStartedNanos;
-    public final List<Instrumented<SocketStats>> listenSockets;
+    public final List<InternalInstrumented<SocketStats>> listenSockets;
 
     /**
      * Creates an instance.
@@ -294,7 +298,7 @@ public final class InternalChannelz {
         long callsSucceeded,
         long callsFailed,
         long lastCallStartedNanos,
-        List<Instrumented<SocketStats>> listenSockets) {
+        List<InternalInstrumented<SocketStats>> listenSockets) {
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
       this.callsFailed = callsFailed;
@@ -307,7 +311,7 @@ public final class InternalChannelz {
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedNanos;
-      public List<Instrumented<SocketStats>> listenSockets = Collections.emptyList();
+      public List<InternalInstrumented<SocketStats>> listenSockets = Collections.emptyList();
 
       public Builder setCallsStarted(long callsStarted) {
         this.callsStarted = callsStarted;
@@ -330,10 +334,10 @@ public final class InternalChannelz {
       }
 
       /** Sets the listen sockets. */
-      public Builder setListenSockets(List<Instrumented<SocketStats>> listenSockets) {
+      public Builder setListenSockets(List<InternalInstrumented<SocketStats>> listenSockets) {
         checkNotNull(listenSockets);
         this.listenSockets = Collections.unmodifiableList(
-            new ArrayList<Instrumented<SocketStats>>(listenSockets));
+            new ArrayList<InternalInstrumented<SocketStats>>(listenSockets));
         return this;
       }
 
@@ -363,8 +367,8 @@ public final class InternalChannelz {
     public final long callsSucceeded;
     public final long callsFailed;
     public final long lastCallStartedNanos;
-    public final List<WithLogId> subchannels;
-    public final List<WithLogId> sockets;
+    public final List<InternalWithLogId> subchannels;
+    public final List<InternalWithLogId> sockets;
 
     /**
      * Creates an instance.
@@ -377,8 +381,8 @@ public final class InternalChannelz {
         long callsSucceeded,
         long callsFailed,
         long lastCallStartedNanos,
-        List<WithLogId> subchannels,
-        List<WithLogId> sockets) {
+        List<InternalWithLogId> subchannels,
+        List<InternalWithLogId> sockets) {
       checkState(
           subchannels.isEmpty() || sockets.isEmpty(),
           "channels can have subchannels only, subchannels can have either sockets OR subchannels, "
@@ -402,8 +406,8 @@ public final class InternalChannelz {
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedNanos;
-      private List<WithLogId> subchannels = Collections.emptyList();
-      private List<WithLogId> sockets = Collections.emptyList();
+      private List<InternalWithLogId> subchannels = Collections.emptyList();
+      private List<InternalWithLogId> sockets = Collections.emptyList();
 
       public Builder setTarget(String target) {
         this.target = target;
@@ -441,14 +445,14 @@ public final class InternalChannelz {
       }
 
       /** Sets the subchannels. */
-      public Builder setSubchannels(List<WithLogId> subchannels) {
+      public Builder setSubchannels(List<InternalWithLogId> subchannels) {
         checkState(sockets.isEmpty());
         this.subchannels = Collections.unmodifiableList(checkNotNull(subchannels));
         return this;
       }
 
       /** Sets the sockets. */
-      public Builder setSockets(List<WithLogId> sockets) {
+      public Builder setSockets(List<InternalWithLogId> sockets) {
         checkState(subchannels.isEmpty());
         this.sockets = Collections.unmodifiableList(checkNotNull(sockets));
         return this;
@@ -519,8 +523,8 @@ public final class InternalChannelz {
       public final long timestampNanos;
 
       // the oneof child_ref field in proto: one of channelRef and channelRef
-      @Nullable public final WithLogId channelRef;
-      @Nullable public final WithLogId subchannelRef;
+      @Nullable public final InternalWithLogId channelRef;
+      @Nullable public final InternalWithLogId subchannelRef;
 
       public enum Severity {
         CT_UNKNOWN, CT_INFO, CT_WARNING, CT_ERROR
@@ -528,7 +532,7 @@ public final class InternalChannelz {
 
       private Event(
           String description, Severity severity, long timestampNanos,
-          @Nullable WithLogId channelRef, @Nullable WithLogId subchannelRef) {
+          @Nullable InternalWithLogId channelRef, @Nullable InternalWithLogId subchannelRef) {
         this.description = description;
         this.severity = checkNotNull(severity, "severity");
         this.timestampNanos = timestampNanos;
@@ -569,8 +573,8 @@ public final class InternalChannelz {
         private String description;
         private Severity severity;
         private Long timestampNanos;
-        private WithLogId channelRef;
-        private WithLogId subchannelRef;
+        private InternalWithLogId channelRef;
+        private InternalWithLogId subchannelRef;
 
         public Builder setDescription(String description) {
           this.description = description;
@@ -587,12 +591,12 @@ public final class InternalChannelz {
           return this;
         }
 
-        public Builder setChannelRef(WithLogId channelRef) {
+        public Builder setChannelRef(InternalWithLogId channelRef) {
           this.channelRef = channelRef;
           return this;
         }
 
-        public Builder setSubchannelRef(WithLogId subchannelRef) {
+        public Builder setSubchannelRef(InternalWithLogId subchannelRef) {
           this.subchannelRef = subchannelRef;
           return this;
         }
@@ -1087,8 +1091,8 @@ public final class InternalChannelz {
     }
   }
 
-  /** Unwraps a {@link LogId} to return a {@code long}. */
-  public static long id(WithLogId withLogId) {
+  /** Unwraps a {@link InternalLogId} to return a {@code long}. */
+  public static long id(InternalWithLogId withLogId) {
     return withLogId.getLogId().getId();
   }
 }

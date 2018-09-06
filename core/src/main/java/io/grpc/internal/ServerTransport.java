@@ -16,13 +16,13 @@
 
 package io.grpc.internal;
 
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.Status;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** An inbound connection. */
-public interface ServerTransport extends Instrumented<SocketStats> {
+public interface ServerTransport extends InternalInstrumented<SocketStats> {
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
    * eventually begin failing. New streams "eventually" begin failing because shutdown may need to

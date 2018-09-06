@@ -24,7 +24,6 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace.Event;
@@ -34,8 +33,9 @@ import io.grpc.InternalChannelz.ServerSocketsList;
 import io.grpc.InternalChannelz.ServerStats;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalWithLogId;
 import io.grpc.Status;
-import io.grpc.WithLogId;
 import io.grpc.channelz.v1.Address;
 import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
@@ -88,7 +88,7 @@ final class ChannelzProtoUtil {
     // do not instantiate.
   }
 
-  static ChannelRef toChannelRef(WithLogId obj) {
+  static ChannelRef toChannelRef(InternalWithLogId obj) {
     return ChannelRef
         .newBuilder()
         .setChannelId(obj.getLogId().getId())
@@ -96,7 +96,7 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static SubchannelRef toSubchannelRef(WithLogId obj) {
+  static SubchannelRef toSubchannelRef(InternalWithLogId obj) {
     return SubchannelRef
         .newBuilder()
         .setSubchannelId(obj.getLogId().getId())
@@ -104,7 +104,7 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static ServerRef toServerRef(WithLogId obj) {
+  static ServerRef toServerRef(InternalWithLogId obj) {
     return ServerRef
         .newBuilder()
         .setServerId(obj.getLogId().getId())
@@ -112,7 +112,7 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static SocketRef toSocketRef(WithLogId obj) {
+  static SocketRef toSocketRef(InternalWithLogId obj) {
     return SocketRef
         .newBuilder()
         .setSocketId(obj.getLogId().getId())
@@ -120,13 +120,13 @@ final class ChannelzProtoUtil {
         .build();
   }
 
-  static Server toServer(Instrumented<ServerStats> obj) {
+  static Server toServer(InternalInstrumented<ServerStats> obj) {
     ServerStats stats = getFuture(obj.getStats());
     Server.Builder builder = Server
         .newBuilder()
         .setRef(toServerRef(obj))
         .setData(toServerData(stats));
-    for (Instrumented<SocketStats> listenSocket : stats.listenSockets) {
+    for (InternalInstrumented<SocketStats> listenSocket : stats.listenSockets) {
       builder.addListenSocket(toSocketRef(listenSocket));
     }
     return builder.build();
@@ -172,7 +172,7 @@ final class ChannelzProtoUtil {
     }
   }
 
-  static Socket toSocket(Instrumented<SocketStats> obj) {
+  static Socket toSocket(InternalInstrumented<SocketStats> obj) {
     SocketStats socketStats = getFuture(obj.getStats());
     Builder builder = Socket.newBuilder()
         .setRef(toSocketRef(obj))
@@ -339,13 +339,13 @@ final class ChannelzProtoUtil {
     return ret;
   }
 
-  static Channel toChannel(Instrumented<ChannelStats> channel) {
+  static Channel toChannel(InternalInstrumented<ChannelStats> channel) {
     ChannelStats stats = getFuture(channel.getStats());
     Channel.Builder channelBuilder = Channel
         .newBuilder()
         .setRef(toChannelRef(channel))
         .setData(extractChannelData(stats));
-    for (WithLogId subchannel : stats.subchannels) {
+    for (InternalWithLogId subchannel : stats.subchannels) {
       channelBuilder.addSubchannelRef(toSubchannelRef(subchannel));
     }
 
@@ -407,17 +407,17 @@ final class ChannelzProtoUtil {
     }
   }
 
-  static Subchannel toSubchannel(Instrumented<ChannelStats> subchannel) {
+  static Subchannel toSubchannel(InternalInstrumented<ChannelStats> subchannel) {
     ChannelStats stats = getFuture(subchannel.getStats());
     Subchannel.Builder subchannelBuilder = Subchannel
         .newBuilder()
         .setRef(toSubchannelRef(subchannel))
         .setData(extractChannelData(stats));
     Preconditions.checkState(stats.sockets.isEmpty() || stats.subchannels.isEmpty());
-    for (WithLogId childSocket : stats.sockets) {
+    for (InternalWithLogId childSocket : stats.sockets) {
       subchannelBuilder.addSocketRef(toSocketRef(childSocket));
     }
-    for (WithLogId childSubchannel : stats.subchannels) {
+    for (InternalWithLogId childSubchannel : stats.subchannels) {
       subchannelBuilder.addSubchannelRef(toSubchannelRef(childSubchannel));
     }
     return subchannelBuilder.build();
@@ -427,7 +427,7 @@ final class ChannelzProtoUtil {
     GetTopChannelsResponse.Builder responseBuilder = GetTopChannelsResponse
         .newBuilder()
         .setEnd(rootChannels.end);
-    for (Instrumented<ChannelStats> c : rootChannels.channels) {
+    for (InternalInstrumented<ChannelStats> c : rootChannels.channels) {
       responseBuilder.addChannel(ChannelzProtoUtil.toChannel(c));
     }
     return responseBuilder.build();
@@ -437,7 +437,7 @@ final class ChannelzProtoUtil {
     GetServersResponse.Builder responseBuilder = GetServersResponse
         .newBuilder()
         .setEnd(servers.end);
-    for (Instrumented<ServerStats> s : servers.servers) {
+    for (InternalInstrumented<ServerStats> s : servers.servers) {
       responseBuilder.addServer(ChannelzProtoUtil.toServer(s));
     }
     return responseBuilder.build();
@@ -447,7 +447,7 @@ final class ChannelzProtoUtil {
     GetServerSocketsResponse.Builder responseBuilder = GetServerSocketsResponse
         .newBuilder()
         .setEnd(serverSockets.end);
-    for (WithLogId s : serverSockets.sockets) {
+    for (InternalWithLogId s : serverSockets.sockets) {
       responseBuilder.addSocketRef(ChannelzProtoUtil.toSocketRef(s));
     }
     return responseBuilder.build();

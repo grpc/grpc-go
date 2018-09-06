@@ -36,7 +36,7 @@ import io.grpc.CallOptions;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.SocketStats;
-import io.grpc.LogId;
+import io.grpc.InternalLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -144,7 +144,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private AsyncFrameWriter frameWriter;
   private OutboundFlowController outboundFlow;
   private final Object lock = new Object();
-  private final LogId logId = LogId.allocate(getClass().getName());
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   @GuardedBy("lock")
   private int nextStreamId;
   @GuardedBy("lock")
@@ -629,7 +629,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return logId;
   }
 

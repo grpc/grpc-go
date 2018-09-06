@@ -55,7 +55,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getRootChannels_onePage() {
-    Instrumented<ChannelStats> root1 = create();
+    InternalInstrumented<ChannelStats> root1 = create();
     channelz.addRootChannel(root1);
     RootChannelList page = channelz.getRootChannels(/*fromId=*/ 0, /*maxPageSize=*/ 1);
     assertTrue(page.end);
@@ -64,8 +64,8 @@ public final class InternalChannelzTest {
 
   @Test
   public void getRootChannels_onePage_multi() {
-    Instrumented<ChannelStats> root1 = create();
-    Instrumented<ChannelStats> root2 = create();
+    InternalInstrumented<ChannelStats> root1 = create();
+    InternalInstrumented<ChannelStats> root2 = create();
     channelz.addRootChannel(root1);
     channelz.addRootChannel(root2);
     RootChannelList page = channelz.getRootChannels(/*fromId=*/ 0, /*maxPageSize=*/ 2);
@@ -75,8 +75,8 @@ public final class InternalChannelzTest {
 
   @Test
   public void getRootChannels_paginate() {
-    Instrumented<ChannelStats> root1 = create();
-    Instrumented<ChannelStats> root2 = create();
+    InternalInstrumented<ChannelStats> root1 = create();
+    InternalInstrumented<ChannelStats> root2 = create();
     channelz.addRootChannel(root1);
     channelz.addRootChannel(root2);
     RootChannelList page1 = channelz.getRootChannels(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -90,7 +90,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getRootChannels_remove() {
-    Instrumented<ChannelStats> root1 = create();
+    InternalInstrumented<ChannelStats> root1 = create();
     channelz.addRootChannel(root1);
     channelz.removeRootChannel(root1);
     RootChannelList page = channelz.getRootChannels(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -100,7 +100,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getRootChannels_addAfterLastPage() {
-    Instrumented<ChannelStats> root1 = create();
+    InternalInstrumented<ChannelStats> root1 = create();
     {
       channelz.addRootChannel(root1);
       RootChannelList page1 = channelz.getRootChannels(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -108,7 +108,7 @@ public final class InternalChannelzTest {
       assertThat(page1.channels).containsExactly(root1);
     }
 
-    Instrumented<ChannelStats> root2 = create();
+    InternalInstrumented<ChannelStats> root2 = create();
     {
       channelz.addRootChannel(root2);
       RootChannelList page2
@@ -127,7 +127,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getServers_onePage() {
-    Instrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server1 = create();
     channelz.addServer(server1);
     ServerList page = channelz.getServers(/*fromId=*/ 0, /*maxPageSize=*/ 1);
     assertTrue(page.end);
@@ -136,8 +136,8 @@ public final class InternalChannelzTest {
 
   @Test
   public void getServers_onePage_multi() {
-    Instrumented<ServerStats> server1 = create();
-    Instrumented<ServerStats> server2 = create();
+    InternalInstrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server2 = create();
     channelz.addServer(server1);
     channelz.addServer(server2);
     ServerList page = channelz.getServers(/*fromId=*/ 0, /*maxPageSize=*/ 2);
@@ -147,8 +147,8 @@ public final class InternalChannelzTest {
 
   @Test
   public void getServers_paginate() {
-    Instrumented<ServerStats> server1 = create();
-    Instrumented<ServerStats> server2 = create();
+    InternalInstrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server2 = create();
     channelz.addServer(server1);
     channelz.addServer(server2);
     ServerList page1 = channelz.getServers(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -162,7 +162,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getServers_remove() {
-    Instrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server1 = create();
     channelz.addServer(server1);
     channelz.removeServer(server1);
     ServerList page = channelz.getServers(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -172,7 +172,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getServers_addAfterLastPage() {
-    Instrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server1 = create();
     {
       channelz.addServer(server1);
       ServerList page = channelz.getServers(/*fromId=*/ 0, /*maxPageSize=*/ 1);
@@ -180,7 +180,7 @@ public final class InternalChannelzTest {
       assertThat(page.servers).containsExactly(server1);
     }
 
-    Instrumented<ServerStats> server2 = create();
+    InternalInstrumented<ServerStats> server2 = create();
     {
       channelz.addServer(server2);
       ServerList page
@@ -192,7 +192,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getChannel() {
-    Instrumented<ChannelStats> root = create();
+    InternalInstrumented<ChannelStats> root = create();
     assertNull(channelz.getChannel(id(root)));
 
     channelz.addRootChannel(root);
@@ -205,7 +205,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getSubchannel() {
-    Instrumented<ChannelStats> sub = create();
+    InternalInstrumented<ChannelStats> sub = create();
     assertNull(channelz.getSubchannel(id(sub)));
 
     channelz.addSubchannel(sub);
@@ -218,7 +218,7 @@ public final class InternalChannelzTest {
 
   @Test
   public void getSocket() {
-    Instrumented<SocketStats> socket = create();
+    InternalInstrumented<SocketStats> socket = create();
     assertNull(channelz.getSocket(id(socket)));
 
     channelz.addClientSocket(socket);
@@ -235,10 +235,10 @@ public final class InternalChannelzTest {
 
   @Test
   public void serverSocket() {
-    Instrumented<ServerStats> server = create();
+    InternalInstrumented<ServerStats> server = create();
     channelz.addServer(server);
 
-    Instrumented<SocketStats> socket = create();
+    InternalInstrumented<SocketStats> socket = create();
     assertEmptyServerSocketsPage(id(server), id(socket));
 
     channelz.addServerSocket(server, socket);
@@ -254,11 +254,11 @@ public final class InternalChannelzTest {
 
   @Test
   public void serverSocket_eachServerSeparate() {
-    Instrumented<ServerStats> server1 = create();
-    Instrumented<ServerStats> server2 = create();
+    InternalInstrumented<ServerStats> server1 = create();
+    InternalInstrumented<ServerStats> server2 = create();
 
-    Instrumented<SocketStats> socket1 = create();
-    Instrumented<SocketStats> socket2 = create();
+    InternalInstrumented<SocketStats> socket1 = create();
+    InternalInstrumented<SocketStats> socket2 = create();
 
     channelz.addServer(server1);
     channelz.addServer(server2);
@@ -301,16 +301,16 @@ public final class InternalChannelzTest {
     assertThat(emptyPage.sockets).isEmpty();
   }
 
-  private static <T> Instrumented<T> create() {
-    return new Instrumented<T>() {
-      final LogId id = LogId.allocate("fake-tag");
+  private static <T> InternalInstrumented<T> create() {
+    return new InternalInstrumented<T>() {
+      final InternalLogId id = InternalLogId.allocate("fake-tag");
       @Override
       public ListenableFuture<T> getStats() {
         throw new UnsupportedOperationException();
       }
 
       @Override
-      public LogId getLogId() {
+      public InternalLogId getLogId() {
         return id;
       }
     };

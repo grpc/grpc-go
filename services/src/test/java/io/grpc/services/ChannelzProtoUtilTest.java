@@ -32,7 +32,6 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.ConnectivityState;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace.Event;
@@ -43,7 +42,8 @@ import io.grpc.InternalChannelz.ServerSocketsList;
 import io.grpc.InternalChannelz.ServerStats;
 import io.grpc.InternalChannelz.SocketOptions;
 import io.grpc.InternalChannelz.SocketStats;
-import io.grpc.WithLogId;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalWithLogId;
 import io.grpc.channelz.v1.Address;
 import io.grpc.channelz.v1.Address.OtherAddress;
 import io.grpc.channelz.v1.Address.TcpIpAddress;
@@ -538,7 +538,7 @@ public final class ChannelzProtoUtilTest {
 
     // 1 listen socket
     server.serverStats = toBuilder(server.serverStats)
-        .setListenSockets(ImmutableList.<Instrumented<SocketStats>>of(listenSocket))
+        .setListenSockets(ImmutableList.<InternalInstrumented<SocketStats>>of(listenSocket))
         .build();
     assertEquals(
         serverProto
@@ -552,7 +552,7 @@ public final class ChannelzProtoUtilTest {
     SocketRef otherListenSocketRef = ChannelzProtoUtil.toSocketRef(otherListenSocket);
     server.serverStats = toBuilder(server.serverStats)
         .setListenSockets(
-            ImmutableList.<Instrumented<SocketStats>>of(listenSocket, otherListenSocket))
+            ImmutableList.<InternalInstrumented<SocketStats>>of(listenSocket, otherListenSocket))
         .build();
     assertEquals(
         serverProto
@@ -573,7 +573,7 @@ public final class ChannelzProtoUtilTest {
     assertEquals(channelProto, ChannelzProtoUtil.toChannel(channel));
 
     channel.stats = toBuilder(channel.stats)
-        .setSubchannels(ImmutableList.<WithLogId>of(subchannel))
+        .setSubchannels(ImmutableList.<InternalWithLogId>of(subchannel))
         .build();
 
     assertEquals(
@@ -585,7 +585,7 @@ public final class ChannelzProtoUtilTest {
 
     TestChannel otherSubchannel = new TestChannel();
     channel.stats = toBuilder(channel.stats)
-        .setSubchannels(ImmutableList.<WithLogId>of(subchannel, otherSubchannel))
+        .setSubchannels(ImmutableList.<InternalWithLogId>of(subchannel, otherSubchannel))
         .build();
     assertEquals(
         channelProto
@@ -611,7 +611,7 @@ public final class ChannelzProtoUtilTest {
   @Test
   public void toSubchannel_socketChildren() throws Exception {
     subchannel.stats = toBuilder(subchannel.stats)
-        .setSockets(ImmutableList.<WithLogId>of(socket))
+        .setSockets(ImmutableList.<InternalWithLogId>of(socket))
         .build();
 
     assertEquals(
@@ -622,7 +622,7 @@ public final class ChannelzProtoUtilTest {
 
     TestSocket otherSocket = new TestSocket();
     subchannel.stats = toBuilder(subchannel.stats)
-        .setSockets(ImmutableList.<WithLogId>of(socket, otherSocket))
+        .setSockets(ImmutableList.<InternalWithLogId>of(socket, otherSocket))
         .build();
     assertEquals(
         subchannelProto
@@ -637,7 +637,7 @@ public final class ChannelzProtoUtilTest {
   public void toSubchannel_subchannelChildren() throws Exception {
     TestChannel subchannel1 = new TestChannel();
     subchannel.stats = toBuilder(subchannel.stats)
-        .setSubchannels(ImmutableList.<WithLogId>of(subchannel1))
+        .setSubchannels(ImmutableList.<InternalWithLogId>of(subchannel1))
         .build();
     assertEquals(
         subchannelProto.toBuilder()
@@ -647,7 +647,7 @@ public final class ChannelzProtoUtilTest {
 
     TestChannel subchannel2 = new TestChannel();
     subchannel.stats = toBuilder(subchannel.stats)
-        .setSubchannels(ImmutableList.<WithLogId>of(subchannel1, subchannel2))
+        .setSubchannels(ImmutableList.<InternalWithLogId>of(subchannel1, subchannel2))
         .build();
     assertEquals(
         subchannelProto
@@ -664,7 +664,8 @@ public final class ChannelzProtoUtilTest {
     assertEquals(
         GetTopChannelsResponse.newBuilder().setEnd(true).build(),
         ChannelzProtoUtil.toGetTopChannelResponse(
-            new RootChannelList(Collections.<Instrumented<ChannelStats>>emptyList(), true)));
+            new RootChannelList(
+                Collections.<InternalInstrumented<ChannelStats>>emptyList(), true)));
 
     // 1 result, paginated
     assertEquals(
@@ -673,7 +674,8 @@ public final class ChannelzProtoUtilTest {
             .addChannel(channelProto)
             .build(),
         ChannelzProtoUtil.toGetTopChannelResponse(
-            new RootChannelList(ImmutableList.<Instrumented<ChannelStats>>of(channel), false)));
+            new RootChannelList(
+                ImmutableList.<InternalInstrumented<ChannelStats>>of(channel), false)));
 
     // 1 result, end
     assertEquals(
@@ -683,7 +685,8 @@ public final class ChannelzProtoUtilTest {
             .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetTopChannelResponse(
-            new RootChannelList(ImmutableList.<Instrumented<ChannelStats>>of(channel), true)));
+            new RootChannelList(
+                ImmutableList.<InternalInstrumented<ChannelStats>>of(channel), true)));
 
     // 2 results, end
     TestChannel channel2 = new TestChannel();
@@ -696,7 +699,7 @@ public final class ChannelzProtoUtilTest {
             .build(),
         ChannelzProtoUtil.toGetTopChannelResponse(
             new RootChannelList(
-                ImmutableList.<Instrumented<ChannelStats>>of(channel, channel2), true)));
+                ImmutableList.<InternalInstrumented<ChannelStats>>of(channel, channel2), true)));
   }
 
   @Test
@@ -705,7 +708,7 @@ public final class ChannelzProtoUtilTest {
     assertEquals(
         GetServersResponse.getDefaultInstance(),
         ChannelzProtoUtil.toGetServersResponse(
-            new ServerList(Collections.<Instrumented<ServerStats>>emptyList(), false)));
+            new ServerList(Collections.<InternalInstrumented<ServerStats>>emptyList(), false)));
 
     // 1 result, paginated
     assertEquals(
@@ -714,7 +717,7 @@ public final class ChannelzProtoUtilTest {
             .addServer(serverProto)
             .build(),
         ChannelzProtoUtil.toGetServersResponse(
-            new ServerList(ImmutableList.<Instrumented<ServerStats>>of(server), false)));
+            new ServerList(ImmutableList.<InternalInstrumented<ServerStats>>of(server), false)));
 
     // 1 result, end
     assertEquals(
@@ -724,7 +727,7 @@ public final class ChannelzProtoUtilTest {
             .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetServersResponse(
-            new ServerList(ImmutableList.<Instrumented<ServerStats>>of(server), true)));
+            new ServerList(ImmutableList.<InternalInstrumented<ServerStats>>of(server), true)));
 
     TestServer server2 = new TestServer();
     // 2 results, end
@@ -736,7 +739,8 @@ public final class ChannelzProtoUtilTest {
             .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetServersResponse(
-            new ServerList(ImmutableList.<Instrumented<ServerStats>>of(server, server2), true)));
+            new ServerList(
+                ImmutableList.<InternalInstrumented<ServerStats>>of(server, server2), true)));
   }
 
   @Test
@@ -745,7 +749,7 @@ public final class ChannelzProtoUtilTest {
     assertEquals(
         GetServerSocketsResponse.getDefaultInstance(),
         ChannelzProtoUtil.toGetServerSocketsResponse(
-            new ServerSocketsList(Collections.<WithLogId>emptyList(), false)));
+            new ServerSocketsList(Collections.<InternalWithLogId>emptyList(), false)));
 
     // 1 result, paginated
     assertEquals(
@@ -754,7 +758,7 @@ public final class ChannelzProtoUtilTest {
             .addSocketRef(socketRef)
             .build(),
         ChannelzProtoUtil.toGetServerSocketsResponse(
-            new ServerSocketsList(ImmutableList.<WithLogId>of(socket), false)));
+            new ServerSocketsList(ImmutableList.<InternalWithLogId>of(socket), false)));
 
     // 1 result, end
     assertEquals(
@@ -764,7 +768,7 @@ public final class ChannelzProtoUtilTest {
             .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetServerSocketsResponse(
-            new ServerSocketsList(ImmutableList.<WithLogId>of(socket), true)));
+            new ServerSocketsList(ImmutableList.<InternalWithLogId>of(socket), true)));
 
     TestSocket socket2 = new TestSocket();
     // 2 results, end
@@ -776,7 +780,7 @@ public final class ChannelzProtoUtilTest {
             .setEnd(true)
             .build(),
         ChannelzProtoUtil.toGetServerSocketsResponse(
-            new ServerSocketsList(ImmutableList.<WithLogId>of(socket, socket2), true)));
+            new ServerSocketsList(ImmutableList.<InternalWithLogId>of(socket, socket2), true)));
   }
 
   @Test

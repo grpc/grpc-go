@@ -44,21 +44,21 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalLogId;
+import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
-import io.grpc.LogId;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
-import io.grpc.WithLogId;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.Throttle;
@@ -86,7 +86,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-final class ManagedChannelImpl extends ManagedChannel implements Instrumented<ChannelStats> {
+final class ManagedChannelImpl extends ManagedChannel implements
+    InternalInstrumented<ChannelStats> {
   static final Logger logger = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
@@ -112,7 +113,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   static final Status SUBCHANNEL_SHUTDOWN_STATUS =
       Status.UNAVAILABLE.withDescription("Subchannel shutdown invoked");
 
-  private final LogId logId = LogId.allocate(getClass().getName());
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final String target;
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
@@ -307,7 +308,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
           channelTracer.updateBuilder(builder);
         }
         builder.setTarget(target).setState(channelStateManager.getState());
-        List<WithLogId> children = new ArrayList<WithLogId>();
+        List<InternalWithLogId> children = new ArrayList<InternalWithLogId>();
         children.addAll(subchannels);
         children.addAll(oobChannels);
         builder.setSubchannels(children);
@@ -318,7 +319,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return logId;
   }
 
@@ -1389,7 +1390,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     }
 
     @Override
-    Instrumented<ChannelStats> getInternalSubchannel() {
+    InternalInstrumented<ChannelStats> getInternalSubchannel() {
       return subchannel;
     }
 

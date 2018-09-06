@@ -68,11 +68,11 @@ import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.Instrumented;
 import io.grpc.IntegerMarshaller;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace;
+import io.grpc.InternalInstrumented;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
@@ -2950,7 +2950,7 @@ public class ManagedChannelImplTest {
   }
 
   private static ChannelStats getStats(
-      Instrumented<ChannelStats> instrumented) throws Exception {
+      InternalInstrumented<ChannelStats> instrumented) throws Exception {
     return instrumented.getStats().get();
   }
 

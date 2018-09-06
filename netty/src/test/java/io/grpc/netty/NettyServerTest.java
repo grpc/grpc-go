@@ -24,9 +24,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.google.common.util.concurrent.SettableFuture;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
@@ -212,7 +212,7 @@ public class NettyServerTest {
     });
     assertThat(ns.getPort()).isGreaterThan(0);
 
-    Instrumented<SocketStats> listenSocket = getOnlyElement(ns.getListenSockets());
+    InternalInstrumented<SocketStats> listenSocket = getOnlyElement(ns.getListenSockets());
     assertSame(listenSocket, channelz.getSocket(id(listenSocket)));
 
     // very basic sanity check of the contents

@@ -19,8 +19,8 @@ package io.grpc.inprocess;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.MoreObjects;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.SocketStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ObjectPool;
@@ -80,7 +80,7 @@ final class InProcessServer implements InternalServer {
   }
 
   @Override
-  public List<Instrumented<SocketStats>> getListenSockets() {
+  public List<InternalInstrumented<SocketStats>> getListenSockets() {
     return Collections.emptyList();
   }
 

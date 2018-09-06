@@ -48,9 +48,9 @@ import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Grpc;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
+import io.grpc.InternalInstrumented;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
@@ -2043,7 +2043,7 @@ public abstract class AbstractTransportTest {
     }
   }
 
-  private static TransportStats getTransportStats(Instrumented<SocketStats> socket)
+  private static TransportStats getTransportStats(InternalInstrumented<SocketStats> socket)
       throws ExecutionException, InterruptedException {
     return socket.getStats().get().data;
   }

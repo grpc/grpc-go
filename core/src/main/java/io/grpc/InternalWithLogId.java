@@ -22,7 +22,7 @@ package io.grpc;
  * <p>A loggable ID, unique for the duration of the program.
  */
 @Internal
-public interface WithLogId {
+public interface InternalWithLogId {
   /**
    * Returns an ID that is primarily used in debug logs. It usually contains the class name and a
    * numeric ID that is unique among the instances.
@@ -30,5 +30,5 @@ public interface WithLogId {
    * <p>The subclasses of this interface usually want to include the log ID in their {@link
    * #toString} results.
    */
-  LogId getLogId();
+  InternalLogId getLogId();
 }

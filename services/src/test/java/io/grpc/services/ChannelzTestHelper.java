@@ -20,7 +20,6 @@ import com.google.common.base.MoreObjects;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ConnectivityState;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.Security;
@@ -28,8 +27,9 @@ import io.grpc.InternalChannelz.ServerStats;
 import io.grpc.InternalChannelz.SocketOptions;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
-import io.grpc.LogId;
-import io.grpc.WithLogId;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalLogId;
+import io.grpc.InternalWithLogId;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Collections;
@@ -40,8 +40,8 @@ import java.util.Collections;
  */
 final class ChannelzTestHelper {
 
-  static final class TestSocket implements Instrumented<SocketStats> {
-    private final LogId id = LogId.allocate("socket");
+  static final class TestSocket implements InternalInstrumented<SocketStats> {
+    private final InternalLogId id = InternalLogId.allocate("socket");
     TransportStats transportStats = new TransportStats(
         /*streamsStarted=*/ 1,
         /*lastLocalStreamCreatedTimeNanos=*/ 2,
@@ -75,7 +75,7 @@ final class ChannelzTestHelper {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       return id;
     }
 
@@ -87,8 +87,8 @@ final class ChannelzTestHelper {
     }
   }
 
-  static final class TestListenSocket implements Instrumented<SocketStats> {
-    private final LogId id = LogId.allocate("listensocket");
+  static final class TestListenSocket implements InternalInstrumented<SocketStats> {
+    private final InternalLogId id = InternalLogId.allocate("listensocket");
     SocketAddress listenAddress = new InetSocketAddress("10.0.0.1", 1234);
 
     @Override
@@ -105,7 +105,7 @@ final class ChannelzTestHelper {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       return id;
     }
 
@@ -117,14 +117,14 @@ final class ChannelzTestHelper {
     }
   }
 
-  static final class TestServer implements Instrumented<ServerStats> {
-    private final LogId id = LogId.allocate("server");
+  static final class TestServer implements InternalInstrumented<ServerStats> {
+    private final InternalLogId id = InternalLogId.allocate("server");
     ServerStats serverStats = new ServerStats(
         /*callsStarted=*/ 1,
         /*callsSucceeded=*/ 2,
         /*callsFailed=*/ 3,
         /*lastCallStartedNanos=*/ 4,
-        Collections.<Instrumented<SocketStats>>emptyList());
+        Collections.<InternalInstrumented<SocketStats>>emptyList());
 
     @Override
     public ListenableFuture<ServerStats> getStats() {
@@ -134,7 +134,7 @@ final class ChannelzTestHelper {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       return id;
     }
 
@@ -146,8 +146,8 @@ final class ChannelzTestHelper {
     }
   }
 
-  static final class TestChannel implements Instrumented<ChannelStats> {
-    private final LogId id = LogId.allocate("channel-or-subchannel");
+  static final class TestChannel implements InternalInstrumented<ChannelStats> {
+    private final InternalLogId id = InternalLogId.allocate("channel-or-subchannel");
 
     ChannelStats stats = new ChannelStats.Builder()
         .setTarget("sometarget")
@@ -156,8 +156,8 @@ final class ChannelzTestHelper {
         .setCallsSucceeded(2)
         .setCallsFailed(3)
         .setLastCallStartedNanos(4)
-        .setSubchannels(Collections.<WithLogId>emptyList())
-        .setSockets(Collections.<WithLogId>emptyList())
+        .setSubchannels(Collections.<InternalWithLogId>emptyList())
+        .setSockets(Collections.<InternalWithLogId>emptyList())
         .build();
 
     @Override
@@ -168,7 +168,7 @@ final class ChannelzTestHelper {
     }
 
     @Override
-    public LogId getLogId() {
+    public InternalLogId getLogId() {
       return id;
     }
 

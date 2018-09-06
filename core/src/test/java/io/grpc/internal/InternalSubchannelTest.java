@@ -42,8 +42,8 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.InternalChannelz;
+import io.grpc.InternalWithLogId;
 import io.grpc.Status;
-import io.grpc.WithLogId;
 import io.grpc.internal.InternalSubchannel.CallTracingTransport;
 import io.grpc.internal.InternalSubchannel.Index;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
@@ -983,7 +983,7 @@ public class InternalSubchannelTest {
     createInternalSubchannel(addr);
     internalSubchannel.obtainActiveTransport();
 
-    WithLogId registeredTransport
+    InternalWithLogId registeredTransport
         = Iterables.getOnlyElement(internalSubchannel.getStats().get().sockets);
     MockClientTransportInfo actualTransport = Iterables.getOnlyElement(transports);
     assertEquals(actualTransport.transport.getLogId(), registeredTransport.getLogId());

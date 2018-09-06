@@ -35,15 +35,15 @@ import io.grpc.CallOptions;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.Instrumented;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace;
-import io.grpc.LogId;
+import io.grpc.InternalInstrumented;
+import io.grpc.InternalLogId;
+import io.grpc.InternalWithLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.WithLogId;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,10 +63,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * Transports for a single {@link SocketAddress}.
  */
 @ThreadSafe
-final class InternalSubchannel implements Instrumented<ChannelStats> {
+final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   private static final Logger log = Logger.getLogger(InternalSubchannel.class.getName());
 
-  private final LogId logId = LogId.allocate(getClass().getName());
+  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final String authority;
   private final String userAgent;
   private final BackoffPolicy.Provider backoffPolicyProvider;
@@ -489,7 +489,7 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
   }
 
   @Override
-  public LogId getLogId() {
+  public InternalLogId getLogId() {
     return logId;
   }
 
@@ -500,10 +500,10 @@ final class InternalSubchannel implements Instrumented<ChannelStats> {
     ChannelStats.Builder builder = new ChannelStats.Builder();
 
     List<EquivalentAddressGroup> addressGroupsSnapshot;
-    List<WithLogId> transportsSnapshot;
+    List<InternalWithLogId> transportsSnapshot;
     synchronized (lock) {
       addressGroupsSnapshot = addressIndex.getGroups();
-      transportsSnapshot = new ArrayList<WithLogId>(transports);
+      transportsSnapshot = new ArrayList<InternalWithLogId>(transports);
     }
 
     builder.setTarget(addressGroupsSnapshot.toString()).setState(getState());
