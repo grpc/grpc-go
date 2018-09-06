@@ -38,6 +38,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -113,6 +114,7 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -752,6 +754,40 @@ public class OkHttpClientTransportTest {
     frameHandler().windowUpdate(3, HEADER_LENGTH + 20);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 20));
+
+    stream.cancel(Status.CANCELLED);
+    listener.waitUntilStreamClosed();
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void outboundFlowControlWithInitialWindowSizeChangeInMiddleOfStream() throws Exception {
+    initTransport();
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream.start(listener);
+    int messageLength = 20;
+    setInitialWindowSize(HEADER_LENGTH + 10);
+    InputStream input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input);
+    stream.flush();
+    // part of the message can be sent.
+    verify(frameWriter, timeout(TIME_OUT_MS))
+        .data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 10));
+    // Avoid connection flow control.
+    frameHandler().windowUpdate(0, HEADER_LENGTH + 20);
+
+    // Increase initial window size
+    setInitialWindowSize(HEADER_LENGTH + 20);
+
+    // wait until pending frames sent (inOrder doesn't support timeout)
+    verify(frameWriter, timeout(TIME_OUT_MS).atLeastOnce())
+        .data(eq(false), eq(3), any(Buffer.class), eq(10));
+    // It should ack the settings, then send remaining message.
+    InOrder inOrder = inOrder(frameWriter);
+    inOrder.verify(frameWriter).ackSettings(any(Settings.class));
+    inOrder.verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(10));
 
     stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
