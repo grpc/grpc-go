@@ -144,10 +144,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
 				Desc:     "Channel Created",
 				Severity: channelz.CtINFO,
-				Parent: &channelz.ParentTraceEventDesc{
-					RefParentDesc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
-					RefParentSeverity: channelz.CtINFO,
-					IsChannel:         true,
+				Parent: &channelz.TraceEventDesc{
+					Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
+					Severity: channelz.CtINFO,
 				},
 			})
 		} else {
@@ -585,10 +584,9 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Created",
 			Severity: channelz.CtINFO,
-			Parent: &channelz.ParentTraceEventDesc{
-				RefParentDesc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
-				RefParentSeverity: channelz.CtINFO,
-				IsChannel:         false,
+			Parent: &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
+				Severity: channelz.CtINFO,
 			},
 		})
 	}
@@ -854,10 +852,9 @@ func (cc *ClientConn) Close() error {
 			Severity: channelz.CtINFO,
 		}
 		if cc.dopts.channelzParentID != 0 {
-			ted.Parent = &channelz.ParentTraceEventDesc{
-				RefParentDesc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
-				RefParentSeverity: channelz.CtINFO,
-				IsChannel:         true,
+			ted.Parent = &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
+				Severity: channelz.CtINFO,
 			}
 		}
 		channelz.AddTraceEvent(cc.channelzID, ted)
@@ -1290,10 +1287,9 @@ func (ac *addrConn) tearDown(err error) {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
 			Desc:     "Subchannel Deleted",
 			Severity: channelz.CtINFO,
-			Parent: &channelz.ParentTraceEventDesc{
-				RefParentDesc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
-				RefParentSeverity: channelz.CtINFO,
-				IsChannel:         false,
+			Parent: &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
+				Severity: channelz.CtINFO,
 			},
 		})
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to

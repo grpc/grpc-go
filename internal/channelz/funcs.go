@@ -250,25 +250,17 @@ func RemoveEntry(id int64) {
 	db.get().removeEntry(id)
 }
 
-// TraceEventDesc is what caller of AddTraceEvent should provide to describe the event to be added
-// to channel trace.
+// TraceEventDesc is what the caller of AddTraceEvent should provide to describe the event to be added
+// to the channel trace.
 // The Parent field is optional. It is used for event that will be recorded in the entity's parent
 // trace also.
 type TraceEventDesc struct {
 	Desc     string
 	Severity Severity
-	Parent   *ParentTraceEventDesc
+	Parent   *TraceEventDesc
 }
 
-// ParentTraceEventDesc describes the trace event to be added to the entity's parent trace.
-type ParentTraceEventDesc struct {
-	RefParentDesc     string
-	RefParentSeverity Severity
-	// IsChannel indicates whether the traced event is on Channel (as opposed to Subchannel)
-	IsChannel bool
-}
-
-// AddTraceEvent adds trace related to entity with specified id, using the provided TraceEventDesc.
+// AddTraceEvent adds trace related to the entity with specified id, using the provided TraceEventDesc.
 func AddTraceEvent(id int64, desc *TraceEventDesc) {
 	if getMaxTraceEntry() == 0 {
 		return
@@ -336,10 +328,10 @@ func (c *channelMap) addNormalSocket(id int64, ns *normalSocket, pid int64, ref 
 	c.mu.Unlock()
 }
 
-// removeEntry triggers the removal of an entry, which may not indeed delete the
-// entry, if it has to wait on the deletion of its children, or may lead to a chain
-// of entry deletion. For example, deleting the last socket of a gracefully shutting
-// down server will lead to the server being also deleted.
+// removeEntry triggers the removal of an entry, which may not indeed delete the entry, if it has to
+// wait on the deletion of its children and until no other entity's channel trace references it.
+// It may lead to a chain of entry deletion. For example, deleting the last socket of a gracefully
+// shutting down server will lead to the server being also deleted.
 func (c *channelMap) removeEntry(id int64) {
 	c.mu.Lock()
 	c.findEntry(id).triggerDelete()
@@ -347,7 +339,7 @@ func (c *channelMap) removeEntry(id int64) {
 }
 
 // c.mu must be held by the caller
-func (c *channelMap) attemptCleanup(id int64) {
+func (c *channelMap) decrTraceRefCount(id int64) {
 	e := c.findEntry(id)
 	if v, ok := e.(tracedChannel); ok {
 		v.decrTraceRefCount()
@@ -412,22 +404,22 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	c.mu.Lock()
 	child := c.findEntry(id)
 	childTC, ok := child.(tracedChannel)
-	if ok {
-		childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
-	} else {
+	if !ok {
 		c.mu.Unlock()
 		return
 	}
+	childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
 	if desc.Parent != nil {
 		parent := c.findEntry(child.getParentID())
+		_, isChannel := child.(*channel)
 		if parentTC, ok := parent.(tracedChannel); ok {
 			parentTC.getChannelTrace().append(&TraceEvent{
-				Desc:         desc.Parent.RefParentDesc,
-				Severity:     desc.Parent.RefParentSeverity,
+				Desc:         desc.Parent.Desc,
+				Severity:     desc.Parent.Severity,
 				Timestamp:    time.Now(),
 				RefID:        id,
 				RefName:      childTC.getRefName(),
-				IsRefChannel: desc.Parent.IsChannel,
+				IsRefChannel: isChannel,
 			})
 			childTC.incrTraceRefCount()
 		}
