@@ -20,8 +20,6 @@ package binarylog
 
 import "testing"
 
-///////////////////////////////////////////////////////////////////////////
-
 func TestParseMethodName(t *testing.T) {
 	testCases := []struct {
 		methodName      string

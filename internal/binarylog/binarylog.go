@@ -24,8 +24,10 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// Logger is the global binary logger for the binary. There are individual
-// method loggers for each different method.
+// Logger is the global binary logger for the binary. One of this should be
+// built at init time from the configuration (environment varialbe or flags).
+//
+// It is used to get a methodLogger for each individual method.
 var Logger *logger
 
 func init() {

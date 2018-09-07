@@ -24,10 +24,9 @@ import (
 
 // MethodLogger is the sub-logger for each method.
 type MethodLogger struct {
-	// client                      bool // Client side or not.
 	headerMaxLen, messageMaxLen uint64
 
-	sink io.Writer // TODO: make this plugable.
+	sink io.Writer // TODO(blog): make this plugable.
 }
 
 func newMethodLogger(h, m uint64) *MethodLogger {
@@ -35,6 +34,6 @@ func newMethodLogger(h, m uint64) *MethodLogger {
 		headerMaxLen:  h,
 		messageMaxLen: m,
 
-		sink: nil, // FIXME: make it plugable.
+		sink: nil, // TODO(blog): make it plugable.
 	}
 }
