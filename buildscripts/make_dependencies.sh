@@ -35,7 +35,7 @@ else
     --prefix="$INSTALL_DIR"
   # the same source dir is used for 32 and 64 bit builds, so we need to clean stale data first
   make clean
-  make -j$NUM_CPU
+  make V=0 -j$NUM_CPU
   make install
   popd
 fi

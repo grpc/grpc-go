@@ -36,7 +36,7 @@ if "%PLATFORM%" == "X64" (
   SET CMAKE_VSARCH=
 )
 cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio %VisualStudioVersion:~0,2%%CMAKE_VSARCH%" .. || exit /b 1
-msbuild /maxcpucount /p:Configuration=Release libprotoc.vcxproj || exit /b 1
+msbuild /maxcpucount /p:Configuration=Release /verbosity:minimal libprotoc.vcxproj || exit /b 1
 call extract_includes.bat || exit /b 1
 popd
 goto :eof
