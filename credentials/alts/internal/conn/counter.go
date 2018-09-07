@@ -20,8 +20,6 @@ package conn
 
 import (
 	"errors"
-
-	core "google.golang.org/grpc/credentials/alts/internal"
 )
 
 const counterLen = 12
@@ -30,48 +28,15 @@ var (
 	errInvalidCounter = errors.New("invalid counter")
 )
 
-// counter is a 96-bit, little-endian counter.
-type counter struct {
+// Counter is a 96-bit, little-endian counter.
+type Counter struct {
 	value       [counterLen]byte
 	invalid     bool
 	overflowLen int
 }
 
-// newOutCounter returns an outgoing counter initialized to the starting sequence
-// number for the client/server side of a connection.
-func newOutCounter(s core.Side, overflowLen int) (c counter) {
-	c.overflowLen = overflowLen
-	if s == core.ServerSide {
-		// Server counters in ALTS record have the little-endian high bit
-		// set.
-		c.value[counterLen-1] = 0x80
-	}
-	return
-}
-
-// newInCounter returns an incoming counter initialized to the starting sequence
-// number for the client/server side of a connection. This is used in ALTS record
-// to check that incoming counters are as expected, since ALTS record guarantees
-// that messages are unwrapped in the same order that the peer wrapped them.
-func newInCounter(s core.Side, overflowLen int) (c counter) {
-	c.overflowLen = overflowLen
-	if s == core.ClientSide {
-		// Server counters in ALTS record have the little-endian high bit
-		// set.
-		c.value[counterLen-1] = 0x80
-	}
-	return
-}
-
-// counterFromValue creates a new counter given an initial value.
-func counterFromValue(value []byte, overflowLen int) (c counter) {
-	c.overflowLen = overflowLen
-	copy(c.value[:], value)
-	return
-}
-
 // Value returns the current value of the counter as a byte slice.
-func (c *counter) Value() ([]byte, error) {
+func (c *Counter) Value() ([]byte, error) {
 	if c.invalid {
 		return nil, errInvalidCounter
 	}
@@ -79,7 +44,7 @@ func (c *counter) Value() ([]byte, error) {
 }
 
 // Inc increments the counter and checks for overflow.
-func (c *counter) Inc() {
+func (c *Counter) Inc() {
 	// If the counter is already invalid, there is not need to increase it.
 	if c.invalid {
 		return
@@ -94,13 +59,4 @@ func (c *counter) Inc() {
 	if i == c.overflowLen {
 		c.invalid = true
 	}
-}
-
-// counterSide returns the connection side (client/server) a sequence counter is
-// associated with.
-func counterSide(c []byte) core.Side {
-	if c[counterLen-1]&0x80 == 0x80 {
-		return core.ServerSide
-	}
-	return core.ClientSide
 }

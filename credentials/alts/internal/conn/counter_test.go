@@ -31,17 +31,17 @@ const (
 
 func TestCounterSides(t *testing.T) {
 	for _, side := range []core.Side{core.ClientSide, core.ServerSide} {
-		outCounter := newOutCounter(side, testOverflowLen)
-		inCounter := newInCounter(side, testOverflowLen)
+		outCounter := NewOutCounter(side, testOverflowLen)
+		inCounter := NewInCounter(side, testOverflowLen)
 		for i := 0; i < 1024; i++ {
 			value, _ := outCounter.Value()
-			if g, w := counterSide(value), side; g != w {
-				t.Errorf("after %d iterations, counterSide(outCounter.Value()) = %v, want %v", i, g, w)
+			if g, w := CounterSide(value), side; g != w {
+				t.Errorf("after %d iterations, CounterSide(outCounter.Value()) = %v, want %v", i, g, w)
 				break
 			}
 			value, _ = inCounter.Value()
-			if g, w := counterSide(value), side; g == w {
-				t.Errorf("after %d iterations, counterSide(inCounter.Value()) = %v, want %v", i, g, w)
+			if g, w := CounterSide(value), side; g == w {
+				t.Errorf("after %d iterations, CounterSide(inCounter.Value()) = %v, want %v", i, g, w)
 				break
 			}
 			outCounter.Inc()
@@ -80,7 +80,7 @@ func TestCounterInc(t *testing.T) {
 			want:    []byte{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80},
 		},
 	} {
-		c := counterFromValue(test.counter, overflowLenAES128GCM)
+		c := CounterFromValue(test.counter, overflowLenAES128GCM)
 		c.Inc()
 		value, _ := c.Value()
 		if g, w := value, test.want; !bytes.Equal(g, w) || c.invalid {
@@ -116,7 +116,7 @@ func TestRolloverCounter(t *testing.T) {
 			overflowLen: 8,
 		},
 	} {
-		c := counterFromValue(test.value, overflowLenAES128GCM)
+		c := CounterFromValue(test.value, overflowLenAES128GCM)
 
 		// First Inc() + Value() should work.
 		c.Inc()

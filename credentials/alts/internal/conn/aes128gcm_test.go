@@ -43,12 +43,12 @@ func getGCMCryptoPair(key []byte, counter []byte, t *testing.T) (ALTSRecordCrypt
 	}
 	// set counter if provided.
 	if counter != nil {
-		if counterSide(counter) == core.ClientSide {
-			client.(*aes128gcm).outCounter = counterFromValue(counter, overflowLenAES128GCM)
-			server.(*aes128gcm).inCounter = counterFromValue(counter, overflowLenAES128GCM)
+		if CounterSide(counter) == core.ClientSide {
+			client.(*aes128gcm).outCounter = CounterFromValue(counter, overflowLenAES128GCM)
+			server.(*aes128gcm).inCounter = CounterFromValue(counter, overflowLenAES128GCM)
 		} else {
-			server.(*aes128gcm).outCounter = counterFromValue(counter, overflowLenAES128GCM)
-			client.(*aes128gcm).inCounter = counterFromValue(counter, overflowLenAES128GCM)
+			server.(*aes128gcm).outCounter = CounterFromValue(counter, overflowLenAES128GCM)
+			client.(*aes128gcm).inCounter = CounterFromValue(counter, overflowLenAES128GCM)
 		}
 	}
 	return client, server
@@ -150,7 +150,7 @@ func TestAES128GCMEncrypt(t *testing.T) {
 	} {
 		// Test encryption and decryption for aes128gcm.
 		client, server := getGCMCryptoPair(test.key, test.counter, t)
-		if counterSide(test.counter) == core.ClientSide {
+		if CounterSide(test.counter) == core.ClientSide {
 			testGCMEncryptionDecryption(client, server, &test, false, t)
 		} else {
 			testGCMEncryptionDecryption(server, client, &test, false, t)
