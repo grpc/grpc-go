@@ -344,6 +344,8 @@ final class GrpclbState {
   private void useRoundRobinLists(
       List<DropEntry> newDropList, List<BackendAddressGroup> newBackendAddrList,
       @Nullable GrpclbClientLoadRecorder loadRecorder) {
+    logger.log(Level.FINE, "[{0}] Using round-robin list: {1}, droplist={2}",
+         new Object[] {logId, newBackendAddrList, newDropList});
     HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
         new HashMap<EquivalentAddressGroup, Subchannel>();
     List<BackendEntry> newBackendList = new ArrayList<BackendEntry>();
@@ -540,7 +542,7 @@ final class GrpclbState {
       if (closed) {
         return;
       }
-      logger.log(Level.FINE, "[{0}] Got an LB response: {1}", new Object[] {logId, response});
+      logger.log(Level.FINER, "[{0}] Got an LB response: {1}", new Object[] {logId, response});
 
       LoadBalanceResponseTypeCase typeCase = response.getLoadBalanceResponseTypeCase();
       if (!initialResponseReceived) {

@@ -39,4 +39,9 @@ final class BackendAddressGroup {
   String getToken() {
     return token;
   }
+
+  @Override
+  public String toString() {
+    return "[addrs=" + addresses + " token=" + token + "]";
+  }
 }
