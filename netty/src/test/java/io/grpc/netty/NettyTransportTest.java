@@ -26,8 +26,6 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
-import org.junit.Ignore;
-import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -99,9 +97,4 @@ public class NettyTransportTest extends AbstractTransportTest {
         new ClientTransportFactory.ClientTransportOptions()
           .setAuthority(testAuthority(server)));
   }
-
-  @Test
-  @Ignore("flaky")
-  @Override
-  public void flowControlPushBack() {}
 }

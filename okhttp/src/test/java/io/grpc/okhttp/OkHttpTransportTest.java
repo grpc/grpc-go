@@ -28,8 +28,6 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
-import org.junit.Ignore;
-import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -95,12 +93,6 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   protected long fakeCurrentTimeNanos() {
     return fakeClock.getTicker().read();
   }
-
-  // TODO(ejona): Flaky/Broken
-  @Test
-  @Ignore
-  @Override
-  public void flowControlPushBack() {}
 
   @Override
   protected boolean haveTransportTracer() {
