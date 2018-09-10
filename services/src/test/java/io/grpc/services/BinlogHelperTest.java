@@ -905,9 +905,7 @@ public final class BinlogHelperTest {
                 .getClientInterceptor(CALL_ID)
                 .interceptCall(
                     method,
-                    CallOptions.DEFAULT.withOption(
-                        BinaryLogProvider.CLIENT_CALL_ID_CALLOPTION_KEY, CALL_ID)
-                        .withDeadlineAfter(1, TimeUnit.SECONDS),
+                    CallOptions.DEFAULT.withDeadlineAfter(1, TimeUnit.SECONDS),
                     new Channel() {
                       @Override
                       public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(

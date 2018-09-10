@@ -30,9 +30,6 @@ public abstract class BinaryLog implements Closeable {
 
   public abstract Channel wrapChannel(Channel channel);
 
-  public static final CallOptions.Key<CallId> CLIENT_CALL_ID_CALLOPTION_KEY
-      = CallOptions.Key.create("binarylog-calloptions-key");
-
   /**
    * A CallId is two byte[] arrays both of size 8 that uniquely identifies the RPC. Users are
    * free to use the byte arrays however they see fit.

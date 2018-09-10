@@ -33,7 +33,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
@@ -43,10 +42,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.BinaryLog;
-import io.grpc.BinaryLog.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -67,7 +63,6 @@ import io.grpc.internal.testing.StatsTestUtils.FakeTagContextBinarySerializer;
 import io.grpc.internal.testing.StatsTestUtils.FakeTagger;
 import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
 import io.grpc.testing.GrpcServerRule;
-import io.grpc.testing.TestMethodDescriptors;
 import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
 import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagValue;
@@ -83,7 +78,6 @@ import io.opencensus.trace.propagation.BinaryFormat;
 import io.opencensus.trace.propagation.SpanContextParseException;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -998,57 +992,6 @@ public class CensusModulesTest {
         "Sent.io.grpc.Foo", CensusTracingModule.generateTraceSpanName(false, "io.grpc/Foo"));
     assertEquals(
         "Recv.io.grpc.Bar", CensusTracingModule.generateTraceSpanName(true, "io.grpc/Bar"));
-  }
-
-  /**
-   * Tests integration with binary logging.
-   */
-  @Test
-  public void callIdFromSpan() {
-    MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
-    CallId callId = new CallId(
-        0,
-        ByteBuffer.wrap(
-            mockableSpan.getContext().getSpanId().getBytes()).getLong());
-    assertThat(callId.hi).isEqualTo(0);
-    assertThat(callId.lo)
-        .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());
-  }
-
-  /**
-   * Tests integration with binary logging.
-   */
-  @Test
-  public void censusTracerSetsCallId() throws Exception {
-    Tracer tracer = mock(Tracer.class);
-    SpanBuilder builder = mock(SpanBuilder.class);
-    when(tracer.spanBuilderWithExplicitParent(any(String.class), any(Span.class)))
-        .thenReturn(builder);
-    when(builder.setRecordEvents(any(Boolean.class))).thenReturn(builder);
-    MockableSpan mockableSpan = MockableSpan.generateRandomSpan(new Random(0));
-    when(builder.startSpan()).thenReturn(mockableSpan);
-
-    final SettableFuture<CallOptions> options = SettableFuture.create();
-    Channel c = new Channel() {
-      @Override
-      public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
-          MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
-        options.set(callOptions);
-        return null;
-      }
-
-      @Override
-      public String authority() {
-        return null;
-      }
-    };
-    new CensusTracingModule(tracer, mock(BinaryFormat.class))
-        .getClientInterceptor()
-        .interceptCall(TestMethodDescriptors.voidMethod(), CallOptions.DEFAULT, c);
-    CallId callId = options.get().getOption(BinaryLog.CLIENT_CALL_ID_CALLOPTION_KEY);
-    assertThat(callId.hi).isEqualTo(0);
-    assertThat(callId.lo)
-        .isEqualTo(ByteBuffer.wrap(mockableSpan.getContext().getSpanId().getBytes()).getLong());
   }
 
   private static void assertNoServerContent(StatsTestUtils.MetricsRecord record) {

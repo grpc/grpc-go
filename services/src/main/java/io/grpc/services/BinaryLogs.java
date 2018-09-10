@@ -38,19 +38,5 @@ public final class BinaryLogs {
     return new BinaryLogProviderImpl(sink);
   }
 
-  /**
-   * Same as {@link #createBinaryLog()} except the call IDs are derived from census.
-   */
-  public static BinaryLog createCensusBinaryLog() throws IOException {
-    return new CensusBinaryLogProvider();
-  }
-
-  /**
-   * Same as {@link #createBinaryLog(BinaryLogSink)} except the call IDs are derived from census.
-   */
-  public static BinaryLog createCensusBinaryLog(BinaryLogSink sink) throws IOException {
-    return new CensusBinaryLogProvider(sink);
-  }
-
   private BinaryLogs() {}
 }
