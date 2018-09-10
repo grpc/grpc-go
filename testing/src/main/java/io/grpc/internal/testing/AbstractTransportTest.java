@@ -709,7 +709,7 @@ public abstract class AbstractTransportTest {
     assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
 
     serverStream.request(1);
-    assertTrue(clientStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(clientStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(clientStream.isReady());
     clientStream.writeMessage(methodDescriptor.streamRequest("Hello!"));
     assertThat(clientStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
@@ -761,7 +761,7 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(headers.getAll(binaryKey)));
 
     clientStream.request(1);
-    assertTrue(serverStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(serverStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(serverStream.isReady());
     serverStream.writeMessage(methodDescriptor.streamResponse("Hi. Who are you?"));
     assertThat(serverStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
@@ -1121,7 +1121,7 @@ public abstract class AbstractTransportTest {
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListenerBase serverStreamListener = serverStreamCreation.listener;
-    assertTrue(serverStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(serverStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
 
     assertTrue(serverStream.isReady());
     serverStream.writeHeaders(new Metadata());
@@ -1231,7 +1231,7 @@ public abstract class AbstractTransportTest {
     }
 
     serverStream.request(1);
-    assertTrue(clientStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(clientStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(clientStream.isReady());
     final int maxToSend = 10 * 1024;
     int clientSent;
@@ -1256,7 +1256,7 @@ public abstract class AbstractTransportTest {
     int serverReceived = verifyMessageCountAndClose(serverStreamListener.messageQueue, 1);
 
     clientStream.request(1);
-    assertTrue(serverStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(serverStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(serverStream.isReady());
     int serverSent;
     // Verify that flow control will push back on server.
@@ -1293,10 +1293,9 @@ public abstract class AbstractTransportTest {
     serverReceived +=
         verifyMessageCountAndClose(serverStreamListener.messageQueue, clientSent - serverReceived);
 
-    assertTrue(clientStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
-    assertTrue(clientStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(clientStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(clientStream.isReady());
-    assertTrue(serverStreamListener.awaitOnReady(TIMEOUT_MS, TimeUnit.MILLISECONDS)); // ???
+    assertTrue(serverStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(serverStream.isReady());
 
     // Request four more
@@ -1895,12 +1894,22 @@ public abstract class AbstractTransportTest {
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
     private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<InputStream>();
-    private final CountDownLatch onReadyLatch = new CountDownLatch(1);
+    // Would have used Void instead of Object, but null elements are not allowed
+    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<Object>();
     private final CountDownLatch halfClosedLatch = new CountDownLatch(1);
     private final SettableFuture<Status> status = SettableFuture.create();
 
     private boolean awaitOnReady(int timeout, TimeUnit unit) throws Exception {
-      return onReadyLatch.await(timeout, unit);
+      return readyQueue.poll(timeout, unit) != null;
+    }
+
+    private boolean awaitOnReadyAndDrain(int timeout, TimeUnit unit) throws Exception {
+      if (!awaitOnReady(timeout, unit)) {
+        return false;
+      }
+      // Throw the rest away
+      readyQueue.drainTo(Lists.newArrayList());
+      return true;
     }
 
     private boolean awaitHalfClosed(int timeout, TimeUnit unit) throws Exception {
@@ -1923,7 +1932,7 @@ public abstract class AbstractTransportTest {
       if (status.isDone()) {
         fail("onReady invoked after closed");
       }
-      onReadyLatch.countDown();
+      readyQueue.add(new Object());
     }
 
     @Override
@@ -1945,13 +1954,23 @@ public abstract class AbstractTransportTest {
 
   private static class ClientStreamListenerBase implements ClientStreamListener {
     private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<InputStream>();
-    private final CountDownLatch onReadyLatch = new CountDownLatch(1);
+    // Would have used Void instead of Object, but null elements are not allowed
+    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<Object>();
     private final SettableFuture<Metadata> headers = SettableFuture.create();
     private final SettableFuture<Metadata> trailers = SettableFuture.create();
     private final SettableFuture<Status> status = SettableFuture.create();
 
     private boolean awaitOnReady(int timeout, TimeUnit unit) throws Exception {
-      return onReadyLatch.await(timeout, unit);
+      return readyQueue.poll(timeout, unit) != null;
+    }
+
+    private boolean awaitOnReadyAndDrain(int timeout, TimeUnit unit) throws Exception {
+      if (!awaitOnReady(timeout, unit)) {
+        return false;
+      }
+      // Throw the rest away
+      readyQueue.drainTo(Lists.newArrayList());
+      return true;
     }
 
     @Override
@@ -1970,7 +1989,7 @@ public abstract class AbstractTransportTest {
       if (status.isDone()) {
         fail("onReady invoked after closed");
       }
-      onReadyLatch.countDown();
+      readyQueue.add(new Object());
     }
 
     @Override
