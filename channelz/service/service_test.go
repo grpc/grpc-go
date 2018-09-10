@@ -407,9 +407,46 @@ func TestGetChannel(t *testing.T) {
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
+	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+		Desc:     "Channel Created",
+		Severity: channelz.CtINFO,
+	})
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
+	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+		Desc:     "Channel Created",
+		Severity: channelz.CtINFO,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[1]),
+			Severity: channelz.CtINFO,
+		},
+	})
+
 	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
+	channelz.AddTraceEvent(ids[2], &channelz.TraceEventDesc{
+		Desc:     "SubChannel Created",
+		Severity: channelz.CtINFO,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("SubChannel(id:%d) created", ids[2]),
+			Severity: channelz.CtINFO,
+		},
+	})
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
+	channelz.AddTraceEvent(ids[3], &channelz.TraceEventDesc{
+		Desc:     "Channel Created",
+		Severity: channelz.CtINFO,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[3]),
+			Severity: channelz.CtINFO,
+		},
+	})
+	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+		Desc:     fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready),
+		Severity: channelz.CtINFO,
+	})
+	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+		Desc:     "Resolver returns an empty address list",
+		Severity: channelz.CtWarning,
+	})
 	svr := newCZServer()
 	resp, _ := svr.GetChannel(context.Background(), &channelzpb.GetChannelRequest{ChannelId: ids[0]})
 	metrics := resp.GetChannel()
@@ -428,9 +465,11 @@ func TestGetChannel(t *testing.T) {
 		childID  int64
 		childRef string
 	}{
-		{"Channel Created", channelzpb.ChannelTraceEvent_CT_INFO, 0, ""},
-		{fmt.Sprintf("Nested Channel (id: %d[%s]) Created", ids[1], refNames[1]), channelzpb.ChannelTraceEvent_CT_INFO, ids[1], refNames[1]},
-		{fmt.Sprintf("SubChannel (id: %d[%s]) Created", ids[2], refNames[2]), channelzpb.ChannelTraceEvent_CT_INFO, ids[2], refNames[2]},
+		{desc: "Channel Created", severity: channelzpb.ChannelTraceEvent_CT_INFO},
+		{desc: fmt.Sprintf("Nested Channel(id:%d) created", ids[1]), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[1], childRef: refNames[1]},
+		{desc: fmt.Sprintf("SubChannel(id:%d) created", ids[2]), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[2], childRef: refNames[2]},
+		{desc: fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready), severity: channelzpb.ChannelTraceEvent_CT_INFO},
+		{desc: "Resolver returns an empty address list", severity: channelzpb.ChannelTraceEvent_CT_WARNING},
 	}
 	for i, e := range trace.Events {
 		if e.GetDescription() != want[i].desc {
@@ -454,13 +493,38 @@ func TestGetChannel(t *testing.T) {
 }
 
 func TestGetSubChannel(t *testing.T) {
+	var (
+		subchanCreated            = "SubChannel Created"
+		subchanConnectivityChange = fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready)
+		subChanPickNewAddress     = fmt.Sprintf("Subchannel picks a new address %q to connect", "0.0.0.0")
+	)
 	channelz.NewChannelzStorage()
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
+	channelz.AddTraceEvent(ids[0], &channelz.TraceEventDesc{
+		Desc:     "Channel Created",
+		Severity: channelz.CtINFO,
+	})
 	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
+	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+		Desc:     subchanCreated,
+		Severity: channelz.CtINFO,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[0]),
+			Severity: channelz.CtINFO,
+		},
+	})
 	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
 	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
+	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+		Desc:     subchanConnectivityChange,
+		Severity: channelz.CtINFO,
+	})
+	channelz.AddTraceEvent(ids[1], &channelz.TraceEventDesc{
+		Desc:     subChanPickNewAddress,
+		Severity: channelz.CtINFO,
+	})
 	svr := newCZServer()
 	resp, _ := svr.GetSubchannel(context.Background(), &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
 	metrics := resp.GetSubchannel()
@@ -470,6 +534,31 @@ func TestGetSubChannel(t *testing.T) {
 	}
 	if !reflect.DeepEqual(convertSocketRefSliceToMap(metrics.GetSocketRef()), want) {
 		t.Fatalf("GetSocketRef() want %#v: got: %#v", want, metrics.GetSocketRef())
+	}
+
+	trace := metrics.GetData().GetTrace()
+	wantTrace := []struct {
+		desc     string
+		severity channelzpb.ChannelTraceEvent_Severity
+		childID  int64
+		childRef string
+	}{
+		{desc: subchanCreated, severity: channelzpb.ChannelTraceEvent_CT_INFO},
+		{desc: subchanConnectivityChange, severity: channelzpb.ChannelTraceEvent_CT_INFO},
+		{desc: subChanPickNewAddress, severity: channelzpb.ChannelTraceEvent_CT_INFO},
+	}
+	for i, e := range trace.Events {
+		if e.GetDescription() != wantTrace[i].desc {
+			t.Fatalf("Trace: GetDescription want %#v, got %#v", wantTrace[i].desc, e.GetDescription())
+		}
+		if e.GetSeverity() != wantTrace[i].severity {
+			t.Fatalf("Trace: GetSeverity want %#v, got %#v", wantTrace[i].severity, e.GetSeverity())
+		}
+		if e.GetChannelRef().GetChannelId() != wantTrace[i].childID || e.GetChannelRef().GetName() != wantTrace[i].childRef {
+			if e.GetSubchannelRef().GetSubchannelId() != wantTrace[i].childID || e.GetSubchannelRef().GetName() != wantTrace[i].childRef {
+				t.Fatalf("Trace: GetChannelRef/GetSubchannelRef want (child ID: %d, child name: %q), got %#v and %#v", wantTrace[i].childID, wantTrace[i].childRef, e.GetChannelRef(), e.GetSubchannelRef())
+			}
+		}
 	}
 }
 
