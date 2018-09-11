@@ -55,7 +55,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -66,6 +68,9 @@ import org.mockito.MockitoAnnotations;
  */
 @RunWith(JUnit4.class)
 public class InternalSubchannelTest {
+
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
 
   private static final String AUTHORITY = "fakeauthority";
   private static final String USER_AGENT = "mosaic";
@@ -404,18 +409,21 @@ public class InternalSubchannelTest {
     verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffNanos();
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void updateAddresses_emptyEagList_throws() {
     SocketAddress addr = new FakeSocketAddress();
     createInternalSubchannel(addr);
+    thrown.expect(IllegalArgumentException.class);
     internalSubchannel.updateAddresses(Arrays.<EquivalentAddressGroup>asList());
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void updateAddresses_eagListWithNull_throws() {
     SocketAddress addr = new FakeSocketAddress();
     createInternalSubchannel(addr);
-    internalSubchannel.updateAddresses(Arrays.asList((EquivalentAddressGroup) null));
+    List<EquivalentAddressGroup> eags = Arrays.asList((EquivalentAddressGroup) null);
+    thrown.expect(NullPointerException.class);
+    internalSubchannel.updateAddresses(eags);
   }
 
   @Test public void updateAddresses_intersecting_ready() {

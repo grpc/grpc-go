@@ -52,6 +52,7 @@ final class HandshakerServiceChannel {
         }
 
         @Override
+        @SuppressWarnings("FutureReturnValueIgnored") // netty ChannelFuture
         public void close(ManagedChannel instance) {
           instance.shutdownNow();
           if (eventGroup != null) {

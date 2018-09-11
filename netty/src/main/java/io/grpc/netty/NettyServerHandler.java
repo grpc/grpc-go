@@ -868,7 +868,6 @@ class NettyServerHandler extends AbstractNettyHandler {
           ByteBufUtil.writeAscii(ctx.alloc(), goAwayMessage),
           ctx.newPromise());
 
-      long gracefulShutdownPingTimeout = GRACEFUL_SHUTDOWN_PING_TIMEOUT_NANOS;
       pingFuture = ctx.executor().schedule(
           new Runnable() {
             @Override
