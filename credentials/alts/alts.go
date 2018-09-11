@@ -148,7 +148,7 @@ func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
 
 func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
 	once.Do(func() {
-		vmOnGCP = isRunningOnGCP()
+		vmOnGCP = IsRunningOnGCP()
 	})
 
 	if hsAddress == "" {

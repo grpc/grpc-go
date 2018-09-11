@@ -79,9 +79,9 @@ var (
 	vmOnGCP bool
 )
 
-// isRunningOnGCP checks whether the local system, without doing a network request is
+// IsRunningOnGCP checks whether the local system, without doing a network request is
 // running on GCP.
-func isRunningOnGCP() bool {
+func IsRunningOnGCP() bool {
 	manufacturer, err := readManufacturer()
 	if err != nil {
 		log.Fatalf("failure to read manufacturer information: %v", err)

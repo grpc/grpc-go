@@ -21,6 +21,7 @@ package test
 // TODO: move all creds releated tests to this file.
 
 import (
+	"fmt"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -41,24 +42,23 @@ type testCredsBundle struct {
 	mode string
 }
 
-func (c *testCredsBundle) TransportCredentials() credentials.TransportCredentials {
+func (c *testCredsBundle) TransportCredentials() (credentials.TransportCredentials, error) {
 	if c.mode == bundlePerRPCOnly {
-		return nil
+		return nil, nil
 	}
 
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
-		c.t.Logf("Failed to load credentials: %v", err)
-		return nil
+		return nil, fmt.Errorf("Failed to load credentials: %v", err)
 	}
-	return creds
+	return creds, nil
 }
 
-func (c *testCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+func (c *testCredsBundle) PerRPCCredentials() (credentials.PerRPCCredentials, error) {
 	if c.mode == bundleTLSOnly {
-		return nil
+		return nil, nil
 	}
-	return testPerRPCCredentials{}
+	return testPerRPCCredentials{}, nil
 }
 
 func (c *testCredsBundle) SwitchMode(mode string) credentials.Bundle {

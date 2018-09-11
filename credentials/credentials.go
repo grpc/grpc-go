@@ -118,8 +118,8 @@ type TransportCredentials interface {
 //
 // This API is experimental.
 type Bundle interface {
-	TransportCredentials() TransportCredentials
-	PerRPCCredentials() PerRPCCredentials
+	TransportCredentials() (TransportCredentials, error)
+	PerRPCCredentials() (PerRPCCredentials, error)
 	// SwitchMode should make a copy of Bundle, and switch mode. Modifying the
 	// existing Bundle may cause races.
 	//

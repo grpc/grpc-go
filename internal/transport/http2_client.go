@@ -173,8 +173,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	perRPCCreds := opts.PerRPCCredentials
 
 	if b := opts.CredsBundle; b != nil {
-		creds = b.TransportCredentials()
-		if t := b.PerRPCCredentials(); t != nil {
+		creds, err = b.TransportCredentials()
+		if err != nil {
+			return nil, err
+		}
+		t, err := b.PerRPCCredentials()
+		if err != nil {
 			perRPCCreds = append(perRPCCreds, t)
 		}
 	}
