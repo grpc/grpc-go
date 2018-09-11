@@ -411,15 +411,21 @@ func (c *channelMap) traceEvent(id int64, desc *TraceEventDesc) {
 	childTC.getChannelTrace().append(&TraceEvent{Desc: desc.Desc, Severity: desc.Severity, Timestamp: time.Now()})
 	if desc.Parent != nil {
 		parent := c.findEntry(child.getParentID())
-		_, isChannel := child.(*channel)
+		var chanType RefChannelType
+		switch child.(type) {
+		case *channel:
+			chanType = RefChannel
+		case *subChannel:
+			chanType = RefSubChannel
+		}
 		if parentTC, ok := parent.(tracedChannel); ok {
 			parentTC.getChannelTrace().append(&TraceEvent{
-				Desc:         desc.Parent.Desc,
-				Severity:     desc.Parent.Severity,
-				Timestamp:    time.Now(),
-				RefID:        id,
-				RefName:      childTC.getRefName(),
-				IsRefChannel: isChannel,
+				Desc:      desc.Parent.Desc,
+				Severity:  desc.Parent.Severity,
+				Timestamp: time.Now(),
+				RefID:     id,
+				RefName:   childTC.getRefName(),
+				RefType:   chanType,
 			})
 			childTC.incrTraceRefCount()
 		}

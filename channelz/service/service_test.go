@@ -471,6 +471,7 @@ func TestGetChannel(t *testing.T) {
 		{desc: fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready), severity: channelzpb.ChannelTraceEvent_CT_INFO},
 		{desc: "Resolver returns an empty address list", severity: channelzpb.ChannelTraceEvent_CT_WARNING},
 	}
+
 	for i, e := range trace.Events {
 		if e.GetDescription() != want[i].desc {
 			t.Fatalf("trace: GetDescription want %#v, got %#v", want[i].desc, e.GetDescription())
