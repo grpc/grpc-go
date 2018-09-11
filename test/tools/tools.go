@@ -18,12 +18,12 @@
  *
  */
 
-// This file exists to cause `go mod` and `go get` to believe these packages
-// are dependencies, even though they are not runtime dependencies.  This means
-// they will appear in our `go.mod` file, but will not be a part of the build
-// unless the "tools" build tag is specified.
+// This package exists to cause `go mod` and `go get` to believe these tools
+// are dependencies, even though they are not runtime dependencies of any grpc
+// package.  This means they will appear in our `go.mod` file, but will not be
+// a part of the build.
 
-package grpc
+package tools
 
 import (
 	_ "github.com/client9/misspell/cmd/misspell"
