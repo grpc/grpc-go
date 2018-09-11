@@ -177,8 +177,8 @@ type TraceEvent struct {
 	RefID int64
 	// RefName is the reference name for the entity that gets referenced in the event.
 	RefName string
-	// IsRefChannel indicates whether the referenced entity is a Channel or not.
-	IsRefChannel bool
+	// RefType indicates the referenced entity type, i.e Channel or SubChannel.
+	RefType RefChannelType
 }
 
 // Channel is the interface that should be satisfied in order to be tracked by
@@ -681,6 +681,16 @@ const (
 	CtWarning
 	// CtError indicates error level severity of a trace event.
 	CtError
+)
+
+// RefChannelType is the type of the entity being referenced in a trace event.
+type RefChannelType int
+
+const (
+	// RefChannel indicates the referenced entity is a Channel.
+	RefChannel RefChannelType = iota
+	// RefSubChannel indicates the referenced entity is a SubChannel.
+	RefSubChannel
 )
 
 func (c *channelTrace) dumpData() *ChannelTrace {
