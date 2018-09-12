@@ -1798,7 +1798,7 @@ public abstract class AbstractInteropTest {
 
   /**
    * Some tests run on memory constrained environments.  Rather than OOM, just give up.  64 is
-   * choosen as a maximum amount of memory a large test would need.
+   * chosen as a maximum amount of memory a large test would need.
    */
   private static void assumeEnoughMemory() {
     Runtime r = Runtime.getRuntime();
