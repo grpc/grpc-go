@@ -878,7 +878,7 @@ public final class BinlogHelperTest {
         any(Boolean.class),
         any(CallId.class));
     Duration timeout = callOptTimeoutCaptor.getValue();
-    assertThat(TimeUnit.SECONDS.toNanos(1) - timeout.getNanos())
+    assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
         .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
   }
 
@@ -932,7 +932,7 @@ public final class BinlogHelperTest {
         any(Boolean.class),
         any(CallId.class));
     Duration timeout = callOptTimeoutCaptor.getValue();
-    assertThat(TimeUnit.SECONDS.toNanos(1) - timeout.getNanos())
+    assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
         .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
   }
 
@@ -1005,7 +1005,7 @@ public final class BinlogHelperTest {
           same(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
       Duration timeout = timeoutCaptor.getValue();
-      assertThat(TimeUnit.SECONDS.toNanos(1) - timeout.getNanos())
+      assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
           .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
       assertSame(clientInitial, actualClientInitial.get());
     }
