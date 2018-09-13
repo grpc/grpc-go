@@ -270,6 +270,11 @@ func (s *Stream) Done() <-chan struct{} {
 // is available. It blocks until i) the metadata is ready or ii) there is no
 // header metadata or iii) the stream is canceled/expired.
 func (s *Stream) Header() (metadata.MD, error) {
+	if s.headerChan == nil && s.header != nil {
+		// On server side, return the header in stream. It will be the out
+		// header after t.WriteHeader is called.
+		return s.header.Copy(), nil
+	}
 	err := s.waitOnHeader()
 	// Even if the stream is closed, header is returned if available.
 	select {
