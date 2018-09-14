@@ -19,13 +19,17 @@
 package transport
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -135,6 +139,30 @@ func isTemporary(err error) bool {
 		return err.Timeout()
 	}
 	return true
+}
+
+func setTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
+	// requires Linux kernel version >= 2.6.37
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	tcpconn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return errors.New("error in casting *net.Conn to *net.TCPConn")
+	}
+	file, err := tcpconn.File()
+	if err != nil {
+		return fmt.Errorf("error getting file for connection: %v", err)
+	}
+	const TCP_USER_TIMEOUT = 0x12
+	err = syscall.SetsockoptInt(int(file.Fd()), syscall.IPPROTO_TCP, TCP_USER_TIMEOUT, int(timeout/time.Millisecond))
+	file.Close()
+	if err != nil {
+		return fmt.Errorf("error in setting priority option on socket: %v", err)
+	}
+
+	return nil
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -252,6 +280,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
 	if t.kp.Time != infinity {
+		if err = setTCPUserTimeout(t.conn, kp.Timeout); err != nil {
+			return nil, connectionErrorf(false, err, "transport: failed to set TCP_USER_TIMEOUT: %v", err)
+		}
 		t.keepaliveEnabled = true
 		go t.keepalive()
 	}
