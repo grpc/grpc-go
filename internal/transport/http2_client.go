@@ -149,7 +149,7 @@ func setTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
 
 	tcpconn, ok := conn.(*net.TCPConn)
 	if !ok {
-		return errors.New("error in casting *net.Conn to *net.TCPConn")
+		return errors.New("error casting *net.Conn to *net.TCPConn")
 	}
 	file, err := tcpconn.File()
 	if err != nil {
@@ -159,7 +159,7 @@ func setTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
 	err = syscall.SetsockoptInt(int(file.Fd()), syscall.IPPROTO_TCP, TCP_USER_TIMEOUT, int(timeout/time.Millisecond))
 	file.Close()
 	if err != nil {
-		return fmt.Errorf("error in setting priority option on socket: %v", err)
+		return fmt.Errorf("error setting option on socket: %v", err)
 	}
 
 	return nil
