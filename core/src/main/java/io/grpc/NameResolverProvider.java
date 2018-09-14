@@ -101,7 +101,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
     private final List<NameResolverProvider> providers;
 
     NameResolverFactory(List<NameResolverProvider> providers) {
-      this.providers = Collections.unmodifiableList(new ArrayList<NameResolverProvider>(providers));
+      this.providers = Collections.unmodifiableList(new ArrayList<>(providers));
     }
 
     @Override

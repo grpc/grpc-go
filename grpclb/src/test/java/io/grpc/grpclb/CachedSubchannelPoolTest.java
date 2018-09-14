@@ -70,7 +70,7 @@ public class CachedSubchannelPoolTest {
   private final Helper helper = mock(Helper.class);
   private final FakeClock clock = new FakeClock();
   private final CachedSubchannelPool pool = new CachedSubchannelPool();
-  private final ArrayList<Subchannel> mockSubchannels = new ArrayList<Subchannel>();
+  private final ArrayList<Subchannel> mockSubchannels = new ArrayList<>();
 
   @Before
   public void setUp() {

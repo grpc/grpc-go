@@ -73,7 +73,7 @@ final class InternalHandlerRegistry extends HandlerRegistry {
         }
       }
       return new InternalHandlerRegistry(
-          Collections.unmodifiableList(new ArrayList<ServerServiceDefinition>(services.values())),
+          Collections.unmodifiableList(new ArrayList<>(services.values())),
           Collections.unmodifiableMap(map));
     }
   }

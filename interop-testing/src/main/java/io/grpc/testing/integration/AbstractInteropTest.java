@@ -824,7 +824,7 @@ public abstract class AbstractInteropTest {
 
     final int numRequests = 10;
     List<StreamingOutputCallRequest> requests =
-        new ArrayList<StreamingOutputCallRequest>(numRequests);
+        new ArrayList<>(numRequests);
     for (int ix = numRequests; ix > 0; --ix) {
       requests.add(request);
       requestStream.onNext(request);
@@ -863,7 +863,7 @@ public abstract class AbstractInteropTest {
 
     final int numRequests = 10;
     List<StreamingOutputCallRequest> requests =
-        new ArrayList<StreamingOutputCallRequest>(numRequests);
+        new ArrayList<>(numRequests);
     for (int ix = numRequests; ix > 0; --ix) {
       requests.add(request);
       requestStream.onNext(request);
@@ -1030,7 +1030,7 @@ public abstract class AbstractInteropTest {
 
     final int numRequests = 10;
     List<StreamingOutputCallRequest> requests =
-        new ArrayList<StreamingOutputCallRequest>(numRequests);
+        new ArrayList<>(numRequests);
 
     for (int ix = numRequests; ix > 0; --ix) {
       requests.add(request);

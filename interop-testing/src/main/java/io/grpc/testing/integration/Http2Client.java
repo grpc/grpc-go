@@ -282,7 +282,7 @@ public final class Http2Client {
 
     private class RstStreamObserver implements StreamObserver<SimpleResponse> {
       private final CountDownLatch latch = new CountDownLatch(1);
-      private final List<SimpleResponse> responses = new ArrayList<SimpleResponse>();
+      private final List<SimpleResponse> responses = new ArrayList<>();
       private Throwable error;
 
       @Override

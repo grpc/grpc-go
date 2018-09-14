@@ -449,7 +449,7 @@ public class Platform {
     public void configureTlsExtensions(
         SSLSocket sslSocket, String hostname, List<Protocol> protocols) {
       SSLParameters parameters = sslSocket.getSSLParameters();
-      List<String> names = new ArrayList<String>(protocols.size());
+      List<String> names = new ArrayList<>(protocols.size());
       for (Protocol protocol : protocols) {
         if (protocol == Protocol.HTTP_1_0) continue; // No HTTP/1.0 for ALPN.
         names.add(protocol.toString());
@@ -505,7 +505,7 @@ public class Platform {
 
     @Override public void configureTlsExtensions(
         SSLSocket sslSocket, String hostname, List<Protocol> protocols) {
-      List<String> names = new ArrayList<String>(protocols.size());
+      List<String> names = new ArrayList<>(protocols.size());
       for (int i = 0, size = protocols.size(); i < size; i++) {
         Protocol protocol = protocols.get(i);
         if (protocol == Protocol.HTTP_1_0) continue; // No HTTP/1.0 for ALPN.

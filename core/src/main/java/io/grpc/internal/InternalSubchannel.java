@@ -125,8 +125,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
    * also be present.
    */
   @GuardedBy("lock")
-  private final Collection<ConnectionClientTransport> transports =
-      new ArrayList<ConnectionClientTransport>();
+  private final Collection<ConnectionClientTransport> transports = new ArrayList<>();
 
   // Must only be used from channelExecutor
   private final InUseStateAggregator<ConnectionClientTransport> inUseStateAggregator =
@@ -172,7 +171,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     Preconditions.checkArgument(!addressGroups.isEmpty(), "addressGroups is empty");
     checkListHasNoNulls(addressGroups, "addressGroups contains null entry");
     this.addressIndex = new Index(
-        Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(addressGroups)));
+        Collections.unmodifiableList(new ArrayList<>(addressGroups)));
     this.authority = authority;
     this.userAgent = userAgent;
     this.backoffPolicyProvider = backoffPolicyProvider;
@@ -352,7 +351,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     checkListHasNoNulls(newAddressGroups, "newAddressGroups contains null entry");
     Preconditions.checkArgument(!newAddressGroups.isEmpty(), "newAddressGroups is empty");
     newAddressGroups =
-        Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(newAddressGroups));
+        Collections.unmodifiableList(new ArrayList<>(newAddressGroups));
     ManagedClientTransport savedTransport = null;
     try {
       synchronized (lock) {

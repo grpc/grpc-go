@@ -87,8 +87,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements InternalWithLogId {
   public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> updatedServers, Attributes attributes) {
     // LB addresses and backend addresses are treated separately
-    List<LbAddressGroup> newLbAddressGroups = new ArrayList<LbAddressGroup>();
-    List<EquivalentAddressGroup> newBackendServers = new ArrayList<EquivalentAddressGroup>();
+    List<LbAddressGroup> newLbAddressGroups = new ArrayList<>();
+    List<EquivalentAddressGroup> newBackendServers = new ArrayList<>();
     for (EquivalentAddressGroup server : updatedServers) {
       String lbAddrAuthority = server.getAttributes().get(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY);
       if (lbAddrAuthority != null) {

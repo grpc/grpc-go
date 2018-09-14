@@ -97,7 +97,7 @@ public class StressTestClient {
 
   private List<InetSocketAddress> addresses =
       singletonList(new InetSocketAddress("localhost", 8080));
-  private List<TestCaseWeightPair> testCaseWeightPairs = new ArrayList<TestCaseWeightPair>();
+  private List<TestCaseWeightPair> testCaseWeightPairs = new ArrayList<>();
 
   private String serverHostOverride;
   private boolean useTls = false;
@@ -118,7 +118,7 @@ public class StressTestClient {
    */
   private final List<ListenableFuture<?>> workerFutures =
       new ArrayList<ListenableFuture<?>>();
-  private final List<ManagedChannel> channels = new ArrayList<ManagedChannel>();
+  private final List<ManagedChannel> channels = new ArrayList<>();
   private ListeningExecutorService threadpool;
 
   @VisibleForTesting
@@ -291,7 +291,7 @@ public class StressTestClient {
   }
 
   private List<InetSocketAddress> parseServerAddresses(String addressesStr) {
-    List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
+    List<InetSocketAddress> addresses = new ArrayList<>();
 
     for (List<String> namePort : parseCommaSeparatedTuples(addressesStr)) {
       InetAddress address;
@@ -313,7 +313,7 @@ public class StressTestClient {
   }
 
   private static List<TestCaseWeightPair> parseTestCases(String testCasesStr) {
-    List<TestCaseWeightPair> testCaseWeightPairs = new ArrayList<TestCaseWeightPair>();
+    List<TestCaseWeightPair> testCaseWeightPairs = new ArrayList<>();
 
     for (List<String> nameWeight : parseCommaSeparatedTuples(testCasesStr)) {
       TestCases testCase = TestCases.fromString(nameWeight.get(0));
@@ -355,7 +355,7 @@ public class StressTestClient {
   }
 
   private static String serverAddressesToString(List<InetSocketAddress> addresses) {
-    List<String> tmp = new ArrayList<String>();
+    List<String> tmp = new ArrayList<>();
     for (InetSocketAddress address : addresses) {
       URI uri;
       try {
@@ -541,7 +541,7 @@ public class StressTestClient {
         Preconditions.checkNotNull(testCaseWeightPairs, "testCaseWeightPairs");
         Preconditions.checkArgument(testCaseWeightPairs.size() > 0);
 
-        List<TestCases> testCases = new ArrayList<TestCases>();
+        List<TestCases> testCases = new ArrayList<>();
         for (TestCaseWeightPair testCaseWeightPair : testCaseWeightPairs) {
           for (int i = 0; i < testCaseWeightPair.weight; i++) {
             testCases.add(testCaseWeightPair.testCase);

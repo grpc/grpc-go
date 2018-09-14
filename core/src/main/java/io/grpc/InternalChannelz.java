@@ -186,7 +186,7 @@ public final class InternalChannelz {
     if (serverSockets == null) {
       return null;
     }
-    List<InternalWithLogId> socketList = new ArrayList<InternalWithLogId>(maxPageSize);
+    List<InternalWithLogId> socketList = new ArrayList<>(maxPageSize);
     Iterator<InternalInstrumented<SocketStats>> iterator
         = serverSockets.tailMap(fromId).values().iterator();
     while (socketList.size() < maxPageSize && iterator.hasNext()) {
@@ -504,7 +504,7 @@ public final class InternalChannelz {
       }
 
       public Builder setEvents(List<Event> events) {
-        this.events = Collections.unmodifiableList(new ArrayList<Event>(events));
+        this.events = Collections.unmodifiableList(new ArrayList<>(events));
         return this;
       }
 

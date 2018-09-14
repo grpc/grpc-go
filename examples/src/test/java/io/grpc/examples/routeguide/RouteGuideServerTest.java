@@ -68,7 +68,7 @@ public class RouteGuideServerTest {
   public void setUp() throws Exception {
     // Generate a unique in-process server name.
     String serverName = InProcessServerBuilder.generateName();
-    features = new ArrayList<Feature>();
+    features = new ArrayList<>();
     // Use directExecutor for both InProcessServerBuilder and InProcessChannelBuilder can reduce the
     // usage timeouts and latches in test. But we still add timeout and latches where they would be
     // needed if no directExecutor were used, just for demo purpose.

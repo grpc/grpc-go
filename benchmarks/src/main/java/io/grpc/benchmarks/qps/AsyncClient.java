@@ -74,7 +74,7 @@ public class AsyncClient {
 
     SimpleRequest req = newRequest();
 
-    List<ManagedChannel> channels = new ArrayList<ManagedChannel>(config.channels);
+    List<ManagedChannel> channels = new ArrayList<>(config.channels);
     for (int i = 0; i < config.channels; i++) {
       channels.add(config.newChannel());
     }
@@ -130,7 +130,7 @@ public class AsyncClient {
       }
     }
     // Wait for completion
-    List<Histogram> histograms = new ArrayList<Histogram>(futures.size());
+    List<Histogram> histograms = new ArrayList<>(futures.size());
     for (Future<Histogram> future : futures) {
       histograms.add(future.get());
     }

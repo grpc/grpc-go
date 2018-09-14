@@ -35,7 +35,7 @@ import org.junit.runners.JUnit4;
 public class SerializingExecutorTest {
   private SingleExecutor singleExecutor = new SingleExecutor();
   private SerializingExecutor executor = new SerializingExecutor(singleExecutor);
-  private List<Integer> runs = new ArrayList<Integer>();
+  private List<Integer> runs = new ArrayList<>();
 
   private class AddToRuns implements Runnable {
     private final int val;

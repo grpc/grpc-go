@@ -2188,7 +2188,7 @@ public class ManagedChannelImplTest {
   public void channelTracing_nameResolvedEvent_zeorAndNonzeroBackends() throws Exception {
     timer.forwardNanos(1234);
     channelBuilder.maxTraceEvents(10);
-    List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
+    List<EquivalentAddressGroup> servers = new ArrayList<>();
     servers.add(new EquivalentAddressGroup(socketAddress));
     FakeNameResolverFactory nameResolverFactory =
         new FakeNameResolverFactory.Builder(expectedUri).setServers(servers).build();
@@ -2222,7 +2222,7 @@ public class ManagedChannelImplTest {
   public void channelTracing_serviceConfigChange() throws Exception {
     timer.forwardNanos(1234);
     channelBuilder.maxTraceEvents(10);
-    List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
+    List<EquivalentAddressGroup> servers = new ArrayList<>();
     servers.add(new EquivalentAddressGroup(socketAddress));
     FakeNameResolverFactory nameResolverFactory =
         new FakeNameResolverFactory.Builder(expectedUri).setServers(servers).build();
@@ -2836,7 +2836,7 @@ public class ManagedChannelImplTest {
     final List<EquivalentAddressGroup> servers;
     final boolean resolvedAtStart;
     final Status error;
-    final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
+    final ArrayList<FakeNameResolver> resolvers = new ArrayList<>();
     // The Attributes argument of the next invocation of listener.onAddresses(servers, attrs)
     final AtomicReference<Attributes> nextResolvedAttributes =
         new AtomicReference<Attributes>(Attributes.EMPTY);

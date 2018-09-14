@@ -254,7 +254,7 @@ public class RouteGuideClientTest {
         Feature.newBuilder().setLocation(point3).build();
     final List<Feature> features = Arrays.asList(
         requestFeature1, requestFeature2, requestFeature3);
-    final List<Point> pointsDelivered = new ArrayList<Point>();
+    final List<Point> pointsDelivered = new ArrayList<>();
     final RouteSummary fakeResponse = RouteSummary
         .newBuilder()
         .setPointCount(7)
@@ -357,8 +357,8 @@ public class RouteGuideClientTest {
   public void routeChat_simpleResponse() throws Exception {
     RouteNote fakeResponse1 = RouteNote.newBuilder().setMessage("dummy msg1").build();
     RouteNote fakeResponse2 = RouteNote.newBuilder().setMessage("dummy msg2").build();
-    final List<String> messagesDelivered = new ArrayList<String>();
-    final List<Point> locationsDelivered = new ArrayList<Point>();
+    final List<String> messagesDelivered = new ArrayList<>();
+    final List<Point> locationsDelivered = new ArrayList<>();
     final AtomicReference<StreamObserver<RouteNote>> responseObserverRef =
         new AtomicReference<StreamObserver<RouteNote>>();
     final CountDownLatch allRequestsDelivered = new CountDownLatch(1);
@@ -428,7 +428,7 @@ public class RouteGuideClientTest {
    */
   @Test
   public void routeChat_echoResponse() throws Exception {
-    final List<RouteNote> notesDelivered = new ArrayList<RouteNote>();
+    final List<RouteNote> notesDelivered = new ArrayList<>();
 
     // implement the fake service
     RouteGuideImplBase routeChatImpl =
@@ -476,7 +476,7 @@ public class RouteGuideClientTest {
    */
   @Test
   public void routeChat_errorResponse() throws Exception {
-    final List<RouteNote> notesDelivered = new ArrayList<RouteNote>();
+    final List<RouteNote> notesDelivered = new ArrayList<>();
     final StatusRuntimeException fakeError = new StatusRuntimeException(Status.PERMISSION_DENIED);
 
     // implement the fake service

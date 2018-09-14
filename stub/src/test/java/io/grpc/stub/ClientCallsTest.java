@@ -244,7 +244,7 @@ public class ClientCallsTest {
       throws Exception {
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
-    final List<Integer> requests = new ArrayList<Integer>();
+    final List<Integer> requests = new ArrayList<>();
     NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
@@ -305,7 +305,7 @@ public class ClientCallsTest {
         };
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
-    final List<Integer> requests = new ArrayList<Integer>();
+    final List<Integer> requests = new ArrayList<>();
     NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
@@ -351,7 +351,7 @@ public class ClientCallsTest {
         };
     final AtomicReference<ClientCall.Listener<String>> listener =
             new AtomicReference<ClientCall.Listener<String>>();
-    final List<Integer> requests = new ArrayList<Integer>();
+    final List<Integer> requests = new ArrayList<>();
     NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
@@ -407,7 +407,7 @@ public class ClientCallsTest {
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
     final CountDownLatch latch = new CountDownLatch(1);
-    final List<Object> receivedMessages = new ArrayList<Object>(6);
+    final List<Object> receivedMessages = new ArrayList<>(6);
 
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
@@ -449,7 +449,7 @@ public class ClientCallsTest {
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
     final Semaphore semaphore = new Semaphore(0);
-    final List<Object> receivedMessages = new ArrayList<Object>(6);
+    final List<Object> receivedMessages = new ArrayList<>(6);
     final SettableFuture<ServerCallStreamObserver<Integer>> observerFuture
         = SettableFuture.create();
     ServerServiceDefinition service = ServerServiceDefinition.builder(

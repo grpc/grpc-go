@@ -589,7 +589,7 @@ public class ProtoReflectionServiceTest {
   private static class FlowControlClientResponseObserver
       implements ClientResponseObserver<ServerReflectionRequest, ServerReflectionResponse> {
     private final List<ServerReflectionResponse> responses =
-        new ArrayList<ServerReflectionResponse>();
+        new ArrayList<>();
     private boolean onCompleteCalled = false;
 
     @Override

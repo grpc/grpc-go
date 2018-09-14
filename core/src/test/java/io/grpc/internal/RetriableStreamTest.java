@@ -745,7 +745,7 @@ public class RetriableStreamTest {
   public void isReady_whileDraining() {
     final AtomicReference<ClientStreamListener> sublistenerCaptor1 =
         new AtomicReference<ClientStreamListener>();
-    final List<Boolean> readiness = new ArrayList<Boolean>();
+    final List<Boolean> readiness = new ArrayList<>();
     ClientStream mockStream1 =
         mock(
             ClientStream.class,

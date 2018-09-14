@@ -127,7 +127,7 @@ public class InteropInstrumentationTest {
     new InteropTask(
             listener,
             TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, useTls, testCa),
-            new ArrayList<ClientInterceptor>(),
+            new ArrayList<>(),
             testCase)
         .execute();
     String result = resultFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);

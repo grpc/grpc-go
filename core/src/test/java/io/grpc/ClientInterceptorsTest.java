@@ -130,7 +130,7 @@ public class ClientInterceptorsTest {
 
   @Test
   public void ordered() {
-    final List<String> order = new ArrayList<String>();
+    final List<String> order = new ArrayList<>();
     channel = new Channel() {
       @SuppressWarnings("unchecked")
       @Override
@@ -172,7 +172,7 @@ public class ClientInterceptorsTest {
 
   @Test
   public void orderedForward() {
-    final List<String> order = new ArrayList<String>();
+    final List<String> order = new ArrayList<>();
     channel = new Channel() {
       @SuppressWarnings("unchecked")
       @Override
@@ -267,7 +267,7 @@ public class ClientInterceptorsTest {
 
   @Test
   public void examineInboundHeaders() {
-    final List<Metadata> examinedHeaders = new ArrayList<Metadata>();
+    final List<Metadata> examinedHeaders = new ArrayList<>();
     ClientInterceptor interceptor = new ClientInterceptor() {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -423,8 +423,8 @@ public class ClientInterceptorsTest {
     private boolean done;
     private ClientCall.Listener<Integer> listener;
     private Metadata headers;
-    private List<Integer> requests = new ArrayList<Integer>();
-    private List<String> messages = new ArrayList<String>();
+    private List<Integer> requests = new ArrayList<>();
+    private List<String> messages = new ArrayList<>();
     private boolean halfClosed;
     private Throwable cancelCause;
     private String cancelMessage;

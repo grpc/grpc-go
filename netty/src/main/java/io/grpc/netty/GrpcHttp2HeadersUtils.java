@@ -132,7 +132,7 @@ class GrpcHttp2HeadersUtils {
     @Override
     public List<CharSequence> getAll(CharSequence csName) {
       AsciiString name = requireAsciiString(csName);
-      List<CharSequence> returnValues = new ArrayList<CharSequence>(4);
+      List<CharSequence> returnValues = new ArrayList<>(4);
       for (int i = 0; i < namesAndValuesIdx; i += 2) {
         if (equals(name, namesAndValues[i])) {
           returnValues.add(values[i / 2]);

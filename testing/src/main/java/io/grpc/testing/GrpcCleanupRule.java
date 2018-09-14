@@ -47,7 +47,7 @@ import org.junit.runners.model.Statement;
 @NotThreadSafe
 public final class GrpcCleanupRule implements TestRule {
 
-  private final List<Resource> resources = new ArrayList<Resource>();
+  private final List<Resource> resources = new ArrayList<>();
   private long timeoutNanos = TimeUnit.SECONDS.toNanos(10L);
   private Stopwatch stopwatch = Stopwatch.createUnstarted();
 

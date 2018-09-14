@@ -34,7 +34,7 @@ public class ReadBenchmark {
   @State(Scope.Benchmark)
   public static class ContextState {
     List<Context.Key<Object>> keys = new ArrayList<Context.Key<Object>>();
-    List<Context> contexts = new ArrayList<Context>();
+    List<Context> contexts = new ArrayList<>();
 
     @Setup
     public void setup() {

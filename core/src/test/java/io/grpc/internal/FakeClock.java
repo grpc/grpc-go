@@ -233,7 +233,7 @@ public final class FakeClock {
    * Return all due tasks.
    */
   public Collection<ScheduledTask> getDueTasks() {
-    ArrayList<ScheduledTask> result = new ArrayList<ScheduledTask>();
+    ArrayList<ScheduledTask> result = new ArrayList<>();
     for (ScheduledTask task : tasks) {
       if (task.dueTimeNanos > currentTimeNanos) {
         continue;
@@ -254,7 +254,7 @@ public final class FakeClock {
    * Return all unrun tasks accepted by the given filter.
    */
   public Collection<ScheduledTask> getPendingTasks(TaskFilter filter) {
-    ArrayList<ScheduledTask> result = new ArrayList<ScheduledTask>();
+    ArrayList<ScheduledTask> result = new ArrayList<>();
     for (ScheduledTask task : tasks) {
       if (filter.shouldAccept(task.command)) {
         result.add(task);

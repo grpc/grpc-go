@@ -58,7 +58,7 @@ class Headers {
     headers.discardAll(GrpcUtil.USER_AGENT_KEY);
 
     // 7 is the number of explicit add calls below.
-    List<Header> okhttpHeaders = new ArrayList<Header>(7 + InternalMetadata.headerCount(headers));
+    List<Header> okhttpHeaders = new ArrayList<>(7 + InternalMetadata.headerCount(headers));
 
     // Set GRPC-specific headers.
     okhttpHeaders.add(SCHEME_HEADER);

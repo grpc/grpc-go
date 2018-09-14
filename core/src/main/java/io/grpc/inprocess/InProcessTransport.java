@@ -207,7 +207,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       if (terminated) {
         return;
       }
-      streamsCopy = new ArrayList<InProcessStream>(streams);
+      streamsCopy = new ArrayList<>(streams);
     }
     for (InProcessStream stream : streamsCopy) {
       stream.clientStream.cancel(reason);

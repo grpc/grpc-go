@@ -78,7 +78,7 @@ public class TestUtils {
     } catch (NoSuchAlgorithmException ex) {
       throw new RuntimeException(ex);
     }
-    List<String> ciphersMinusGcm = new ArrayList<String>();
+    List<String> ciphersMinusGcm = new ArrayList<>();
     for (String cipher : ciphers) {
       // The GCM implementation in Java is _very_ slow (~1 MB/s)
       if (cipher.contains("_GCM_")) {

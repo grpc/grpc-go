@@ -82,7 +82,7 @@ final class ChannelTracer {
     int eventsLoggedSnapshot;
     synchronized (lock) {
       eventsLoggedSnapshot = eventsLogged;
-      eventsSnapshot = new ArrayList<Event>(events);
+      eventsSnapshot = new ArrayList<>(events);
     }
     builder.setChannelTrace(new ChannelTrace.Builder()
         .setNumEventsLogged(eventsLoggedSnapshot)

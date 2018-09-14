@@ -146,7 +146,7 @@ public class BinaryLogProviderTest {
     };
     Channel wChannel = binlogProvider.wrapChannel(channel);
     ClientCall<String, Integer> clientCall = wChannel.newCall(method, CallOptions.DEFAULT);
-    final List<Integer> observedResponse = new ArrayList<Integer>();
+    final List<Integer> observedResponse = new ArrayList<>();
     clientCall.start(
         new NoopClientCall.NoopClientCallListener<Integer>() {
           @Override
@@ -224,7 +224,7 @@ public class BinaryLogProviderTest {
   @Test
   public void wrapMethodDefinition_handler() throws Exception {
     // The request as seen by the user supplied server code
-    final List<String> observedRequest = new ArrayList<String>();
+    final List<String> observedRequest = new ArrayList<>();
     final AtomicReference<ServerCall<String, Integer>> serverCall =
         new AtomicReference<ServerCall<String, Integer>>();
     ServerMethodDefinition<String, Integer> methodDef =
@@ -244,7 +244,7 @@ public class BinaryLogProviderTest {
               }
             });
     ServerMethodDefinition<?, ?> wDef = binlogProvider.wrapMethodDefinition(methodDef);
-    List<Object> serializedResp = new ArrayList<Object>();
+    List<Object> serializedResp = new ArrayList<>();
     ServerCall.Listener<?> wListener = startServerCallHelper(wDef, serializedResp);
 
     String expectedRequest = "hello world";

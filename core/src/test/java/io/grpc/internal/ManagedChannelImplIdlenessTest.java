@@ -327,7 +327,7 @@ public class ManagedChannelImplIdlenessTest {
     MockClientTransportInfo t0 = newTransports.poll();
     t0.listener.transportReady();
 
-    List<SocketAddress> changedList = new ArrayList<SocketAddress>(servers.get(0).getAddresses());
+    List<SocketAddress> changedList = new ArrayList<>(servers.get(0).getAddresses());
     changedList.add(new FakeSocketAddress("aDifferentServer"));
     helper.updateSubchannelAddresses(subchannel, new EquivalentAddressGroup(changedList));
 
@@ -417,7 +417,7 @@ public class ManagedChannelImplIdlenessTest {
     MockClientTransportInfo t0 = newTransports.poll();
     t0.listener.transportReady();
 
-    List<SocketAddress> changedList = new ArrayList<SocketAddress>(servers.get(0).getAddresses());
+    List<SocketAddress> changedList = new ArrayList<>(servers.get(0).getAddresses());
     changedList.add(new FakeSocketAddress("aDifferentServer"));
     helper.updateOobChannelAddresses(oobChannel, new EquivalentAddressGroup(changedList));
 

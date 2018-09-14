@@ -212,7 +212,7 @@ public final class Util {
 
   /** Returns an immutable copy of {@code list}. */
   public static <T> List<T> immutableList(List<T> list) {
-    return Collections.unmodifiableList(new ArrayList<T>(list));
+    return Collections.unmodifiableList(new ArrayList<>(list));
   }
 
   /** Returns an immutable list containing {@code elements}. */
@@ -250,7 +250,7 @@ public final class Util {
    * {@code second}. The returned elements are in the same order as in {@code first}.
    */
   private static <T> List<T> intersect(T[] first, T[] second) {
-    List<T> result = new ArrayList<T>();
+    List<T> result = new ArrayList<>();
     for (T a : first) {
       for (T b : second) {
         if (a.equals(b)) {

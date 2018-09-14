@@ -244,7 +244,7 @@ final class DnsNameResolver extends NameResolver {
             return;
           }
           // Each address forms an EAG
-          List<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
+          List<EquivalentAddressGroup> servers = new ArrayList<>();
           for (InetAddress inetAddr : resolutionResults.addresses) {
             servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
           }

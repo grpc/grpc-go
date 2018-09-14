@@ -45,7 +45,7 @@ public class AltsTsiFrameProtectorTest {
   private static final int FRAME_MIN_SIZE =
       AltsTsiFrameProtector.getHeaderTypeFieldBytes() + FakeChannelCrypter.getTagBytes();
 
-  private final List<ReferenceCounted> references = new ArrayList<ReferenceCounted>();
+  private final List<ReferenceCounted> references = new ArrayList<>();
   private final RegisterRef ref =
       new RegisterRef() {
         @Override

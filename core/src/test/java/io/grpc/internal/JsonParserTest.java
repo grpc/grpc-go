@@ -45,7 +45,7 @@ public class JsonParserTest {
 
   @Test
   public void emptyArray() throws IOException {
-    assertEquals(new ArrayList<Object>(), JsonParser.parse("[]"));
+    assertEquals(new ArrayList<>(), JsonParser.parse("[]"));
   }
 
   @Test

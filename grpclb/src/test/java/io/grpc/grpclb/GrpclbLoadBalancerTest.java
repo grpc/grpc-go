@@ -150,9 +150,9 @@ public class GrpclbLoadBalancerTest {
       new LinkedList<StreamObserver<LoadBalanceRequest>>();
   private final LinkedList<Subchannel> mockSubchannels = new LinkedList<Subchannel>();
   private final LinkedList<ManagedChannel> fakeOobChannels = new LinkedList<ManagedChannel>();
-  private final ArrayList<Subchannel> subchannelTracker = new ArrayList<Subchannel>();
-  private final ArrayList<ManagedChannel> oobChannelTracker = new ArrayList<ManagedChannel>();
-  private final ArrayList<String> failingLbAuthorities = new ArrayList<String>();
+  private final ArrayList<Subchannel> subchannelTracker = new ArrayList<>();
+  private final ArrayList<ManagedChannel> oobChannelTracker = new ArrayList<>();
+  private final ArrayList<String> failingLbAuthorities = new ArrayList<>();
   private final TimeProvider timeProvider = new TimeProvider() {
       @Override
       public long currentTimeNanos() {
@@ -1305,8 +1305,8 @@ public class GrpclbLoadBalancerTest {
 
   private List<Subchannel> fallbackTestVerifyUseOfBalancerBackendLists(
       InOrder inOrder, List<ServerEntry> servers) {
-    ArrayList<EquivalentAddressGroup> addrs = new ArrayList<EquivalentAddressGroup>();
-    ArrayList<String> tokens = new ArrayList<String>();
+    ArrayList<EquivalentAddressGroup> addrs = new ArrayList<>();
+    ArrayList<String> tokens = new ArrayList<>();
     for (ServerEntry server : servers) {
       addrs.add(new EquivalentAddressGroup(server.addr, LB_BACKEND_ATTRS));
       tokens.add(server.token);
@@ -1327,7 +1327,7 @@ public class GrpclbLoadBalancerTest {
     assertThat(picker.dropList).containsExactlyElementsIn(Collections.nCopies(addrs.size(), null));
     assertThat(picker.pickList).containsExactly(GrpclbState.BUFFER_ENTRY);
     assertEquals(addrs.size(), mockSubchannels.size());
-    ArrayList<Subchannel> subchannels = new ArrayList<Subchannel>(mockSubchannels);
+    ArrayList<Subchannel> subchannels = new ArrayList<>(mockSubchannels);
     mockSubchannels.clear();
     for (Subchannel subchannel : subchannels) {
       deliverSubchannelState(subchannel, ConnectivityStateInfo.forNonError(CONNECTING));
@@ -1337,7 +1337,7 @@ public class GrpclbLoadBalancerTest {
     inOrder.verify(helper, never())
         .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
 
-    ArrayList<BackendEntry> pickList = new ArrayList<BackendEntry>();
+    ArrayList<BackendEntry> pickList = new ArrayList<>();
     for (int i = 0; i < addrs.size(); i++) {
       Subchannel subchannel = subchannels.get(i);
       BackendEntry backend;
@@ -1521,7 +1521,7 @@ public class GrpclbLoadBalancerTest {
   }
 
   private static List<EquivalentAddressGroup> createResolvedServerAddresses(boolean ... isLb) {
-    ArrayList<EquivalentAddressGroup> list = new ArrayList<EquivalentAddressGroup>();
+    ArrayList<EquivalentAddressGroup> list = new ArrayList<>();
     for (int i = 0; i < isLb.length; i++) {
       SocketAddress addr = new FakeSocketAddress("fake-address-" + i);
       EquivalentAddressGroup eag =

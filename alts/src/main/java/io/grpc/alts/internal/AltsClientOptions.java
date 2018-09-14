@@ -36,7 +36,7 @@ public final class AltsClientOptions extends AltsHandshakerOptions {
     super(builder.rpcProtocolVersions);
     targetName = builder.targetName;
     targetServiceAccounts =
-        Collections.unmodifiableList(new ArrayList<String>(builder.targetServiceAccounts));
+        Collections.unmodifiableList(new ArrayList<>(builder.targetServiceAccounts));
   }
 
   public String getTargetName() {
@@ -51,7 +51,7 @@ public final class AltsClientOptions extends AltsHandshakerOptions {
   public static final class Builder {
     @Nullable private String targetName;
     @Nullable private RpcProtocolVersions rpcProtocolVersions;
-    private ArrayList<String> targetServiceAccounts = new ArrayList<String>();
+    private ArrayList<String> targetServiceAccounts = new ArrayList<>();
 
     public Builder setTargetName(String targetName) {
       this.targetName = targetName;

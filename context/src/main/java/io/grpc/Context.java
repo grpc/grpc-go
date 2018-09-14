@@ -471,7 +471,7 @@ public class Context {
           if (listeners == null) {
             // Now that we have a listener we need to listen to our parent so
             // we can cascade listener notification.
-            listeners = new ArrayList<ExecutableListener>();
+            listeners = new ArrayList<>();
             listeners.add(executableListener);
             if (cancellableAncestor != null) {
               cancellableAncestor.addListener(parentListener, DirectExecutor.INSTANCE);

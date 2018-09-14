@@ -238,7 +238,7 @@ public final class Status {
             + replaced.getCode().name() + " & " + code.name());
       }
     }
-    return Collections.unmodifiableList(new ArrayList<Status>(canonicalizer.values()));
+    return Collections.unmodifiableList(new ArrayList<>(canonicalizer.values()));
   }
 
   // A pseudo-enum of Status instances mapped 1:1 with values in Code. This simplifies construction

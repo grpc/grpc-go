@@ -308,7 +308,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
           channelTracer.updateBuilder(builder);
         }
         builder.setTarget(target).setState(channelStateManager.getState());
-        List<InternalWithLogId> children = new ArrayList<InternalWithLogId>();
+        List<InternalWithLogId> children = new ArrayList<>();
         children.addAll(subchannels);
         children.addAll(oobChannels);
         builder.setSubchannels(children);
@@ -963,7 +963,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       Collection<ClientStream> streams;
 
       synchronized (lock) {
-        streams = new ArrayList<ClientStream>(uncommittedRetriableStreams);
+        streams = new ArrayList<>(uncommittedRetriableStreams);
       }
 
       for (ClientStream stream : streams) {

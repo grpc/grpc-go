@@ -220,7 +220,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
 
         int stop = Math.min(index + chunk, savedState.buffer.size());
         if (list == null) {
-          list = new ArrayList<BufferEntry>(savedState.buffer.subList(index, stop));
+          list = new ArrayList<>(savedState.buffer.subList(index, stop));
         } else {
           list.clear();
           list.addAll(savedState.buffer.subList(index, stop));
@@ -761,7 +761,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
         // optimize for 0-retry, which is most of the cases.
         drainedSubstreams = Collections.singletonList(substream);
       } else {
-        drainedSubstreams = new ArrayList<Substream>(this.drainedSubstreams);
+        drainedSubstreams = new ArrayList<>(this.drainedSubstreams);
         drainedSubstreams.add(substream);
         drainedSubstreams = Collections.unmodifiableCollection(drainedSubstreams);
       }
@@ -784,7 +784,7 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     State substreamClosed(Substream substream) {
       substream.closed = true;
       if (this.drainedSubstreams.contains(substream)) {
-        Collection<Substream> drainedSubstreams = new ArrayList<Substream>(this.drainedSubstreams);
+        Collection<Substream> drainedSubstreams = new ArrayList<>(this.drainedSubstreams);
         drainedSubstreams.remove(substream);
         drainedSubstreams = Collections.unmodifiableCollection(drainedSubstreams);
         return new State(buffer, drainedSubstreams, winningSubstream, cancelled, passThrough);

@@ -63,7 +63,7 @@ final class ServiceProviders {
     } else {
       candidates = getCandidatesViaServiceLoader(klass, cl);
     }
-    List<T> list = new ArrayList<T>();
+    List<T> list = new ArrayList<>();
     for (T current: candidates) {
       if (!priorityAccessor.isAvailable(current)) {
         continue;
@@ -115,7 +115,7 @@ final class ServiceProviders {
    */
   @VisibleForTesting
   static <T> Iterable<T> getCandidatesViaHardCoded(Class<T> klass, Iterable<Class<?>> hardcoded) {
-    List<T> list = new ArrayList<T>();
+    List<T> list = new ArrayList<>();
     for (Class<?> candidate : hardcoded) {
       list.add(create(klass, candidate));
     }

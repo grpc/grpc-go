@@ -129,7 +129,7 @@ public class TesterActivity extends AppCompatActivity
     ManagedChannel channel =
         TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, true, testCert);
 
-    List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
+    List<ClientInterceptor> interceptors = new ArrayList<>();
     if (getCheckBox.isChecked()) {
       interceptors.add(new SafeMethodChannelInterceptor());
     }

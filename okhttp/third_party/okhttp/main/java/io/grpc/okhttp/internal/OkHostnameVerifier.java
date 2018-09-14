@@ -123,14 +123,14 @@ public final class OkHostnameVerifier implements HostnameVerifier {
   public static List<String> allSubjectAltNames(X509Certificate certificate) {
     List<String> altIpaNames = getSubjectAltNames(certificate, ALT_IPA_NAME);
     List<String> altDnsNames = getSubjectAltNames(certificate, ALT_DNS_NAME);
-    List<String> result = new ArrayList<String>(altIpaNames.size() + altDnsNames.size());
+    List<String> result = new ArrayList<>(altIpaNames.size() + altDnsNames.size());
     result.addAll(altIpaNames);
     result.addAll(altDnsNames);
     return result;
   }
 
   private static List<String> getSubjectAltNames(X509Certificate certificate, int type) {
-    List<String> result = new ArrayList<String>();
+    List<String> result = new ArrayList<>();
     try {
       Collection<?> subjectAltNames = certificate.getSubjectAlternativeNames();
       if (subjectAltNames == null) {

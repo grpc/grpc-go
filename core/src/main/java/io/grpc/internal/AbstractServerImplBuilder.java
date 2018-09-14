@@ -82,12 +82,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       new InternalHandlerRegistry.Builder();
 
   final List<ServerTransportFilter> transportFilters =
-      new ArrayList<ServerTransportFilter>();
+      new ArrayList<>();
 
-  final List<ServerInterceptor> interceptors = new ArrayList<ServerInterceptor>();
+  final List<ServerInterceptor> interceptors = new ArrayList<>();
 
   private final List<InternalNotifyOnServerBuild> notifyOnBuildList =
-      new ArrayList<InternalNotifyOnServerBuild>();
+      new ArrayList<>();
 
   private final List<ServerStreamTracer.Factory> streamTracerFactories =
       new ArrayList<ServerStreamTracer.Factory>();

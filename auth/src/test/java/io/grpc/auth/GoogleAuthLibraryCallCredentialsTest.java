@@ -111,7 +111,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
       .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
       .build();
 
-  private ArrayList<Runnable> pendingRunnables = new ArrayList<Runnable>();
+  private ArrayList<Runnable> pendingRunnables = new ArrayList<>();
 
   @Before
   public void setUp() throws Exception {
@@ -424,7 +424,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
   private int runPendingRunnables() {
     ArrayList<Runnable> savedPendingRunnables = pendingRunnables;
-    pendingRunnables = new ArrayList<Runnable>();
+    pendingRunnables = new ArrayList<>();
     for (Runnable r : savedPendingRunnables) {
       r.run();
     }

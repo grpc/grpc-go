@@ -79,7 +79,7 @@ public class SafeMethodCachingInterceptorTest {
         }
       };
 
-  private final List<String> cacheControlDirectives = new ArrayList<String>();
+  private final List<String> cacheControlDirectives = new ArrayList<>();
   private ServerInterceptor injectCacheControlInterceptor =
       new ServerInterceptor() {
         @Override

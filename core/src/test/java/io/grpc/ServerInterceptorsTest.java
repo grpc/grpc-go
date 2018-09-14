@@ -184,7 +184,7 @@ public class ServerInterceptorsTest {
 
   @Test
   public void ordered() {
-    final List<String> order = new ArrayList<String>();
+    final List<String> order = new ArrayList<>();
     handler = new ServerCallHandler<String, Integer>() {
           @Override
           public ServerCall.Listener<String> startCall(
@@ -226,7 +226,7 @@ public class ServerInterceptorsTest {
 
   @Test
   public void orderedForward() {
-    final List<String> order = new ArrayList<String>();
+    final List<String> order = new ArrayList<>();
     handler = new ServerCallHandler<String, Integer>() {
       @Override
       public ServerCall.Listener<String> startCall(
@@ -296,7 +296,7 @@ public class ServerInterceptorsTest {
   @Test
   @SuppressWarnings("unchecked")
   public void typedMarshalledMessages() {
-    final List<String> order = new ArrayList<String>();
+    final List<String> order = new ArrayList<>();
     Marshaller<Holder> marshaller = new Marshaller<Holder>() {
       @Override
       public InputStream stream(Holder value) {

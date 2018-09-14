@@ -149,7 +149,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
   public final void printUsage() {
     System.out.println("Usage: [ARGS...]");
     int column1Width = 0;
-    List<Param> params = new ArrayList<Param>();
+    List<Param> params = new ArrayList<>();
     params.add(HELP);
     params.addAll(getParams());
 

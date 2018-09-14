@@ -139,7 +139,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     this.decompressorRegistry = builder.decompressorRegistry;
     this.compressorRegistry = builder.compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
-        new ArrayList<ServerTransportFilter>(builder.transportFilters));
+        new ArrayList<>(builder.transportFilters));
     this.interceptors =
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
     this.handshakeTimeoutMillis = builder.handshakeTimeoutMillis;
@@ -188,7 +188,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       List<ServerServiceDefinition> registryServices = registry.getServices();
       int servicesCount = registryServices.size() + fallbackServices.size();
       List<ServerServiceDefinition> services =
-          new ArrayList<ServerServiceDefinition>(servicesCount);
+          new ArrayList<>(servicesCount);
       services.addAll(registryServices);
       services.addAll(fallbackServices);
       return Collections.unmodifiableList(services);
@@ -241,7 +241,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         return this;
       }
       shutdownNowStatus = nowStatus;
-      transportsCopy = new ArrayList<ServerTransport>(transports);
+      transportsCopy = new ArrayList<>(transports);
       savedServerShutdownCallbackInvoked = serverShutdownCallbackInvoked;
     }
     // Short-circuiting not strictly necessary, but prevents transports from needing to handle
@@ -343,7 +343,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       synchronized (lock) {
         // transports collection can be modified during shutdown(), even if we hold the lock, due
         // to reentrancy.
-        copiedTransports = new ArrayList<ServerTransport>(transports);
+        copiedTransports = new ArrayList<>(transports);
         shutdownNowStatusCopy = shutdownNowStatus;
         serverShutdownCallbackInvoked = true;
       }

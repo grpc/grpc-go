@@ -104,7 +104,7 @@ public class NettyClientTransportTest {
   @Mock
   private ManagedClientTransport.Listener clientTransportListener;
 
-  private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
+  private final List<NettyClientTransport> transports = new ArrayList<>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private final EchoServerListener serverListener = new EchoServerListener();
   private final InternalChannelz channelz = new InternalChannelz();
@@ -236,7 +236,7 @@ public class NettyClientTransportTest {
     }
 
     // Send a single RPC on each transport.
-    final List<Rpc> rpcs = new ArrayList<Rpc>(transports.size());
+    final List<Rpc> rpcs = new ArrayList<>(transports.size());
     for (NettyClientTransport transport : transports) {
       rpcs.add(new Rpc(transport).halfClose());
     }
@@ -750,7 +750,7 @@ public class NettyClientTransportTest {
   }
 
   private static final class EchoServerListener implements ServerListener {
-    final List<NettyServerTransport> transports = new ArrayList<NettyServerTransport>();
+    final List<NettyServerTransport> transports = new ArrayList<>();
     final List<EchoServerStreamListener> streamListeners =
             Collections.synchronizedList(new ArrayList<EchoServerStreamListener>());
 

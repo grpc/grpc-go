@@ -64,7 +64,7 @@ public class HandlerRegistryBenchmark {
   @Setup(Level.Trial)
   public void setup() throws Exception {
     registry = new MutableHandlerRegistry();
-    fullMethodNames = new ArrayList<String>(serviceCount * methodCountPerService);
+    fullMethodNames = new ArrayList<>(serviceCount * methodCountPerService);
     for (int serviceIndex = 0; serviceIndex < serviceCount; ++serviceIndex) {
       String serviceName = randomString();
       ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(serviceName);

@@ -116,7 +116,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
             Level.FINER, "Found {0} TXT records", new Object[]{serviceConfigRawTxtRecords.size()});
       }
       List<String> serviceConfigTxtRecords =
-          new ArrayList<String>(serviceConfigRawTxtRecords.size());
+          new ArrayList<>(serviceConfigRawTxtRecords.size());
       for (String serviceConfigRawTxtRecord : serviceConfigRawTxtRecords) {
         serviceConfigTxtRecords.add(unquote(serviceConfigRawTxtRecord));
       }
@@ -138,7 +138,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
             Level.FINER, "Found {0} SRV records", new Object[]{grpclbSrvRecords.size()});
       }
       List<EquivalentAddressGroup> balancerAddresses =
-          new ArrayList<EquivalentAddressGroup>(grpclbSrvRecords.size());
+          new ArrayList<>(grpclbSrvRecords.size());
       Exception first = null;
       Level level = Level.WARNING;
       for (String srvRecord : grpclbSrvRecords) {
@@ -146,7 +146,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
           SrvRecord record = parseSrvRecord(srvRecord);
 
           List<? extends InetAddress> addrs = addressResolver.resolveAddress(record.host);
-          List<SocketAddress> sockaddrs = new ArrayList<SocketAddress>(addrs.size());
+          List<SocketAddress> sockaddrs = new ArrayList<>(addrs.size());
           for (InetAddress addr : addrs) {
             sockaddrs.add(new InetSocketAddress(addr, record.port));
           }
@@ -199,7 +199,7 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
     private static List<String> getAllRecords(String recordType, String name)
         throws NamingException {
       String[] rrType = new String[]{recordType};
-      List<String> records = new ArrayList<String>();
+      List<String> records = new ArrayList<>();
 
       @SuppressWarnings("JdkObsolete")
       Hashtable<String, String> env = new Hashtable<String, String>();

@@ -33,7 +33,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 final class ConnectivityStateManager {
-  private ArrayList<Listener> listeners = new ArrayList<Listener>();
+  private ArrayList<Listener> listeners = new ArrayList<>();
 
   private volatile ConnectivityState state = ConnectivityState.IDLE;
 
@@ -69,7 +69,7 @@ final class ConnectivityStateManager {
       // Swap out callback list before calling them, because a callback may register new callbacks,
       // if run in direct executor, can cause ConcurrentModificationException.
       ArrayList<Listener> savedListeners = listeners;
-      listeners = new ArrayList<Listener>();
+      listeners = new ArrayList<>();
       for (Listener listener : savedListeners) {
         listener.runInExecutor();
       }

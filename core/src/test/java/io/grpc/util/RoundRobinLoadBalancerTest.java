@@ -675,7 +675,7 @@ public class RoundRobinLoadBalancerTest {
     assertEquals(sc2, loadBalancer.getStickinessMapForTest().get("my-sticky-value").value);
 
     // shutdown channel via name resolver change
-    List<EquivalentAddressGroup> newServers = new ArrayList<EquivalentAddressGroup>(servers);
+    List<EquivalentAddressGroup> newServers = new ArrayList<>(servers);
     newServers.remove(sc2.getAddresses());
 
     loadBalancer.handleResolvedAddressGroups(newServers, attributes);

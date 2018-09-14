@@ -40,7 +40,7 @@ public class SerializeReentrantCallsDirectExecutorTest {
   }
 
   @Test public void reentrantCallsShouldBeSerialized() {
-    final List<Integer> callOrder = new ArrayList<Integer>(4);
+    final List<Integer> callOrder = new ArrayList<>(4);
     executor.execute(new Runnable() {
       @Override
       public void run() {
@@ -105,7 +105,7 @@ public class SerializeReentrantCallsDirectExecutorTest {
 
   @Test
   public void executeCanBeRepeated() {
-    final List<Integer> executes = new ArrayList<Integer>();
+    final List<Integer> executes = new ArrayList<>();
     executor.execute(new Runnable() {
       @Override
       public void run() {

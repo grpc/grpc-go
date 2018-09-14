@@ -55,7 +55,7 @@ public class ContextsTest {
   public void interceptCall_basic() {
     Context origContext = Context.current();
     final Object message = new Object();
-    final List<Integer> methodCalls = new ArrayList<Integer>();
+    final List<Integer> methodCalls = new ArrayList<>();
     final ServerCall.Listener<Object> listener = new ServerCall.Listener<Object>() {
       @Override public void onMessage(Object messageIn) {
         assertSame(message, messageIn);

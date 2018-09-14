@@ -504,7 +504,7 @@ class CronetClientStream extends AbstractClientStream {
 
     private void reportHeaders(List<Map.Entry<String, String>> headers, boolean endOfStream) {
       // TODO(ericgribkoff): create new utility methods to eliminate all these conversions
-      List<String> headerList = new ArrayList<String>();
+      List<String> headerList = new ArrayList<>();
       for (Map.Entry<String, String> entry : headers) {
         headerList.add(entry.getKey());
         headerList.add(entry.getValue());

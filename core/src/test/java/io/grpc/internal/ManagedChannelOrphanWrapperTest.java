@@ -57,7 +57,7 @@ public final class ManagedChannelOrphanWrapperTest {
 
     // Try to capture the log output but without causing terminal noise.  Adding the filter must
     // be done before clearing the ref or else it might be missed.
-    final List<LogRecord> records = new ArrayList<LogRecord>(1);
+    final List<LogRecord> records = new ArrayList<>(1);
     Logger orphanLogger = Logger.getLogger(ManagedChannelOrphanWrapper.class.getName());
     Filter oldFilter = orphanLogger.getFilter();
     orphanLogger.setFilter(new Filter() {

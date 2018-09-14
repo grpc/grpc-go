@@ -281,9 +281,9 @@ final class DelayedClientTransport implements ManagedClientTransport {
       if (picker == null || !hasPendingStreams()) {
         return;
       }
-      toProcess = new ArrayList<PendingStream>(pendingStreams);
+      toProcess = new ArrayList<>(pendingStreams);
     }
-    ArrayList<PendingStream> toRemove = new ArrayList<PendingStream>();
+    ArrayList<PendingStream> toRemove = new ArrayList<>();
 
     for (final PendingStream stream : toProcess) {
       PickResult pickResult = picker.pickSubchannel(stream.args);

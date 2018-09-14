@@ -85,7 +85,7 @@ public final class StatsTraceContext {
    */
   @VisibleForTesting
   public List<StreamTracer> getTracersForTest() {
-    return new ArrayList<StreamTracer>(Arrays.asList(tracers));
+    return new ArrayList<>(Arrays.asList(tracers));
   }
 
   /**

@@ -323,7 +323,7 @@ final class ChannelzProtoUtil {
 
   static List<SocketOption> toSocketOptionsList(InternalChannelz.SocketOptions options) {
     Preconditions.checkNotNull(options);
-    List<SocketOption> ret = new ArrayList<SocketOption>();
+    List<SocketOption> ret = new ArrayList<>();
     if (options.lingerSeconds != null) {
       ret.add(toSocketOptionLinger(options.lingerSeconds));
     }
@@ -379,7 +379,7 @@ final class ChannelzProtoUtil {
   }
 
   private static List<ChannelTraceEvent> toChannelTraceEvents(List<Event> events) {
-    List<ChannelTraceEvent> channelTraceEvents = new ArrayList<ChannelTraceEvent>();
+    List<ChannelTraceEvent> channelTraceEvents = new ArrayList<>();
     for (Event event : events) {
       ChannelTraceEvent.Builder builder = ChannelTraceEvent.newBuilder()
           .setDescription(event.description)

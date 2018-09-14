@@ -52,7 +52,7 @@ class DelayedStream implements ClientStream {
   @GuardedBy("this")
   private Status error;
   @GuardedBy("this")
-  private List<Runnable> pendingCalls = new ArrayList<Runnable>();
+  private List<Runnable> pendingCalls = new ArrayList<>();
   @GuardedBy("this")
   private DelayedStreamListener delayedListener;
 
@@ -120,7 +120,7 @@ class DelayedStream implements ClientStream {
   private void drainPendingCalls() {
     assert realStream != null;
     assert !passThrough;
-    List<Runnable> toRun = new ArrayList<Runnable>();
+    List<Runnable> toRun = new ArrayList<>();
     DelayedStreamListener delayedListener = null;
     while (true) {
       synchronized (this) {
@@ -367,7 +367,7 @@ class DelayedStream implements ClientStream {
     private final ClientStreamListener realListener;
     private volatile boolean passThrough;
     @GuardedBy("this")
-    private List<Runnable> pendingCallbacks = new ArrayList<Runnable>();
+    private List<Runnable> pendingCallbacks = new ArrayList<>();
 
     public DelayedStreamListener(ClientStreamListener listener) {
       this.realListener = listener;
@@ -445,7 +445,7 @@ class DelayedStream implements ClientStream {
 
     public void drainPendingCallbacks() {
       assert !passThrough;
-      List<Runnable> toRun = new ArrayList<Runnable>();
+      List<Runnable> toRun = new ArrayList<>();
       while (true) {
         synchronized (this) {
           if (pendingCallbacks.isEmpty()) {

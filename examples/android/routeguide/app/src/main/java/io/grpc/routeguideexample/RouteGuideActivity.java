@@ -261,7 +261,7 @@ public class RouteGuideActivity extends AppCompatActivity {
     @Override
     public String run(RouteGuideBlockingStub blockingStub, RouteGuideStub asyncStub)
         throws Exception {
-      List<Point> points = new ArrayList<Point>();
+      List<Point> points = new ArrayList<>();
       points.add(Point.newBuilder().setLatitude(407838351).setLongitude(-746143763).build());
       points.add(Point.newBuilder().setLatitude(408122808).setLongitude(-743999179).build());
       points.add(Point.newBuilder().setLatitude(413628156).setLongitude(-749015468).build());

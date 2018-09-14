@@ -238,8 +238,8 @@ final class GrpclbState {
     usingFallbackBackends = true;
     logger.log(Level.INFO, "[{0}] Using fallback: {1}", new Object[] {logId, fallbackBackendList});
 
-    List<DropEntry> newDropList = new ArrayList<DropEntry>();
-    List<BackendAddressGroup> newBackendAddrList = new ArrayList<BackendAddressGroup>();
+    List<DropEntry> newDropList = new ArrayList<>();
+    List<BackendAddressGroup> newBackendAddrList = new ArrayList<>();
     for (EquivalentAddressGroup eag : fallbackBackendList) {
       newDropList.add(null);
       newBackendAddrList.add(new BackendAddressGroup(eag, null));
@@ -348,7 +348,7 @@ final class GrpclbState {
          new Object[] {logId, newBackendAddrList, newDropList});
     HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
         new HashMap<EquivalentAddressGroup, Subchannel>();
-    List<BackendEntry> newBackendList = new ArrayList<BackendEntry>();
+    List<BackendEntry> newBackendList = new ArrayList<>();
 
     for (BackendAddressGroup backendAddr : newBackendAddrList) {
       EquivalentAddressGroup eag = backendAddr.getAddresses();
@@ -572,8 +572,8 @@ final class GrpclbState {
       balancerWorking = true;
       // TODO(zhangkun83): handle delegate from initialResponse
       ServerList serverList = response.getServerList();
-      List<DropEntry> newDropList = new ArrayList<DropEntry>();
-      List<BackendAddressGroup> newBackendAddrList = new ArrayList<BackendAddressGroup>();
+      List<DropEntry> newDropList = new ArrayList<>();
+      List<BackendAddressGroup> newBackendAddrList = new ArrayList<>();
       // Construct the new collections. Create new Subchannels when necessary.
       for (Server server : serverList.getServersList()) {
         String token = server.getLoadBalanceToken();
@@ -673,7 +673,7 @@ final class GrpclbState {
    * changed since the last picker created.
    */
   private void maybeUpdatePicker() {
-    List<RoundRobinEntry> pickList = new ArrayList<RoundRobinEntry>(backendList.size());
+    List<RoundRobinEntry> pickList = new ArrayList<>(backendList.size());
     Status error = null;
     boolean hasIdle = false;
     for (BackendEntry entry : backendList) {
@@ -728,7 +728,7 @@ final class GrpclbState {
 
   private LbAddressGroup flattenLbAddressGroups(List<LbAddressGroup> groupList) {
     assert !groupList.isEmpty();
-    List<EquivalentAddressGroup> eags = new ArrayList<EquivalentAddressGroup>(groupList.size());
+    List<EquivalentAddressGroup> eags = new ArrayList<>(groupList.size());
     String authority = groupList.get(0).getAuthority();
     for (LbAddressGroup group : groupList) {
       if (!authority.equals(group.getAuthority())) {
@@ -758,7 +758,7 @@ final class GrpclbState {
    */
   private static EquivalentAddressGroup flattenEquivalentAddressGroup(
       List<EquivalentAddressGroup> groupList, Attributes attrs) {
-    List<SocketAddress> addrs = new ArrayList<SocketAddress>();
+    List<SocketAddress> addrs = new ArrayList<>();
     for (EquivalentAddressGroup group : groupList) {
       addrs.addAll(group.getAddresses());
     }

@@ -97,7 +97,7 @@ public abstract class AbstractManagedChannelImplBuilder
 
   ObjectPool<? extends Executor> executorPool = DEFAULT_EXECUTOR_POOL;
 
-  private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
+  private final List<ClientInterceptor> interceptors = new ArrayList<>();
 
   // Access via getter, which may perform authority override as needed
   private NameResolver.Factory nameResolverFactory = DEFAULT_NAME_RESOLVER_FACTORY;
@@ -418,7 +418,7 @@ public abstract class AbstractManagedChannelImplBuilder
   @VisibleForTesting
   final List<ClientInterceptor> getEffectiveInterceptors() {
     List<ClientInterceptor> effectiveInterceptors =
-        new ArrayList<ClientInterceptor>(this.interceptors);
+        new ArrayList<>(this.interceptors);
     temporarilyDisableRetry = false;
     if (statsEnabled) {
       temporarilyDisableRetry = true;

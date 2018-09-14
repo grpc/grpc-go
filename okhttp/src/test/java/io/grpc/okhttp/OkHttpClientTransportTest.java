@@ -1938,7 +1938,7 @@ public class OkHttpClientTransportTest {
     Metadata trailers;
     RpcProgress rpcProgress;
     CountDownLatch closed = new CountDownLatch(1);
-    ArrayList<String> messages = new ArrayList<String>();
+    ArrayList<String> messages = new ArrayList<>();
     boolean onReadyCalled;
 
     MockStreamListener() {

@@ -92,7 +92,7 @@ public final class JsonParser {
 
   private static List<Object> parseJsonArray(JsonReader jr) throws IOException {
     jr.beginArray();
-    List<Object> array = new ArrayList<Object>();
+    List<Object> array = new ArrayList<>();
     while (jr.hasNext()) {
       Object value = parseRecursive(jr);
       array.add(value);

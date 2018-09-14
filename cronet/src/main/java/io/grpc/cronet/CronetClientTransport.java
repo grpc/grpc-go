@@ -188,7 +188,7 @@ class CronetClientTransport implements ConnectionClientTransport {
     synchronized (lock) {
       // A copy is always necessary since cancel() can call finishStream() which calls
       // streams.remove()
-      streamsCopy = new ArrayList<CronetClientStream>(streams);
+      streamsCopy = new ArrayList<>(streams);
     }
     for (int i = 0; i < streamsCopy.size(); i++) {
       // Avoid deadlock by calling into stream without lock held

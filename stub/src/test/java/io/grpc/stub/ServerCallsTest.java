@@ -461,8 +461,8 @@ public class ServerCallsTest {
 
   private static class ServerCallRecorder extends ServerCall<Integer, Integer> {
     private final MethodDescriptor<Integer, Integer> methodDescriptor;
-    private final List<Integer> requestCalls = new ArrayList<Integer>();
-    private final List<Integer> responses = new ArrayList<Integer>();
+    private final List<Integer> requestCalls = new ArrayList<>();
+    private final List<Integer> responses = new ArrayList<>();
     private Metadata headers;
     private Metadata trailers;
     private Status status;
