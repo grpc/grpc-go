@@ -23,7 +23,6 @@
 package syscall
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -74,7 +73,8 @@ func CPUTimeDiff(first *Rusage, latest *Rusage) (float64, float64) {
 func SetTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
 	tcpconn, ok := conn.(*net.TCPConn)
 	if !ok {
-		return errors.New("error casting *net.Conn to *net.TCPConn")
+		// not a TCP connection. exit early
+		return nil
 	}
 	file, err := tcpconn.File()
 	if err != nil {
