@@ -163,6 +163,21 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 			conn.Close()
 		}
 	}(conn)
+	kp := opts.KeepaliveParams
+	// Validate keepalive parameters.
+	if kp.Time == 0 {
+		kp.Time = defaultClientKeepaliveTime
+	}
+	if kp.Timeout == 0 {
+		kp.Timeout = defaultClientKeepaliveTimeout
+	}
+	keepaliveEnabled := false
+	if kp.Time != infinity {
+		if err = syscall.SetTCPUserTimeout(conn, kp.Timeout); err != nil {
+			return nil, connectionErrorf(false, err, "transport: failed to set TCP_USER_TIMEOUT: %v", err)
+		}
+		keepaliveEnabled = true
+	}
 	var (
 		isSecure bool
 		authInfo credentials.AuthInfo
@@ -174,14 +189,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
 		isSecure = true
-	}
-	kp := opts.KeepaliveParams
-	// Validate keepalive parameters.
-	if kp.Time == 0 {
-		kp.Time = defaultClientKeepaliveTime
-	}
-	if kp.Timeout == 0 {
-		kp.Timeout = defaultClientKeepaliveTimeout
 	}
 	dynamicWindow := true
 	icwz := int32(initialWindowSize)
@@ -224,6 +231,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		czData:                new(channelzData),
+		keepaliveEnabled:      keepaliveEnabled,
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -252,11 +260,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	if channelz.IsOn() {
 		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
 	}
-	if t.kp.Time != infinity {
-		if err = syscall.SetTCPUserTimeout(t.conn, kp.Timeout); err != nil {
-			return nil, connectionErrorf(false, err, "transport: failed to set TCP_USER_TIMEOUT: %v", err)
-		}
-		t.keepaliveEnabled = true
+	if t.keepaliveEnabled {
 		go t.keepalive()
 	}
 	// Start the reader goroutine for incoming message. Each transport has
