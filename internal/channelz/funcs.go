@@ -64,7 +64,7 @@ func SetMaxTraceEntry(i int32) {
 	atomic.StoreInt32(&maxTraceEntry, i)
 }
 
-// ResetMaxTraceEntryToDefault resets the the maximum number of trace entry per entity to default.
+// ResetMaxTraceEntryToDefault resets the maximum number of trace entry per entity to default.
 func ResetMaxTraceEntryToDefault() {
 	atomic.StoreInt32(&maxTraceEntry, defaultMaxTraceEntry)
 }
