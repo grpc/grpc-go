@@ -660,7 +660,14 @@ func (cs *clientStream) CloseSend() error {
 		return nil
 	}
 	cs.sentLast = true
-	op := func(a *csAttempt) error { return a.t.Write(a.s, nil, nil, &transport.Options{Last: true}) }
+	op := func(a *csAttempt) error {
+		a.t.Write(a.s, nil, nil, &transport.Options{Last: true})
+		// Always return nil; io.EOF is the only error that might make sense
+		// instead, but there is no need to signal the client to call RecvMsg
+		// as the only use left for the stream after CloseSend is to call
+		// RecvMsg.  This also matches historical behavior.
+		return nil
+	}
 	cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) })
 	// We never returned an error here for reasons.
 	return nil
