@@ -86,7 +86,7 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 	switch mode {
 	case internal.CredsBundleModeTLS:
 		newCreds.transportCreds = credentials.NewTLS(nil)
-	case internal.CredsBundleModeALTS:
+	case internal.CredsBundleModeALTS, internal.CredsBundleModeGRPCLB:
 		if !vmOnGCP {
 			return nil, errors.New("ALTS, as part of google default credentials, is only supported on GCP")
 		}
@@ -102,7 +102,7 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 	var err error
 	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx, c.scope...)
 	if err != nil {
-		return nil, err
+		grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
 	}
 
 	return newCreds, nil
