@@ -26,6 +26,7 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.InternalChannelz;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
@@ -271,7 +272,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       }
     };
 
-    Channelz.ChannelStats.Builder statsBuilder = new Channelz.ChannelStats.Builder();
+    InternalChannelz.ChannelStats.Builder statsBuilder
+        = new InternalChannelz.ChannelStats.Builder();
     channelTracer.updateBuilder(statsBuilder);
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(
