@@ -2761,7 +2761,7 @@ public class ManagedChannelImplTest {
 
     ManagedChannel mychannel = new CustomBuilder()
         .nameResolverFactory(factory)
-        .loadBalancerFactory(new AutoConfiguredLoadBalancerFactory()).build();
+        .loadBalancerFactory(new AutoConfiguredLoadBalancerFactory(null, null)).build();
 
     ClientCall<Void, Void> call1 =
         mychannel.newCall(TestMethodDescriptors.voidMethod(), CallOptions.DEFAULT);

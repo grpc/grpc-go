@@ -154,6 +154,11 @@ public abstract class LoadBalancer {
    */
   public abstract void shutdown();
 
+  @Override
+  public String toString() {
+    return getClass().getSimpleName();
+  }
+
   /**
    * The main balancing logic.  It <strong>must be thread-safe</strong>. Typically it should only
    * synchronize on its own state, and avoid synchronizing with the LoadBalancer's state.

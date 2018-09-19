@@ -19,6 +19,8 @@ package io.grpc.internal;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
 
 import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
@@ -52,7 +54,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class AutoConfiguredLoadBalancerFactoryTest {
-  private final AutoConfiguredLoadBalancerFactory lbf = new AutoConfiguredLoadBalancerFactory();
+  private final AutoConfiguredLoadBalancerFactory lbf =
+      new AutoConfiguredLoadBalancerFactory(null, null);
 
   @Test
   public void newLoadBalancer_isAuto() {
@@ -256,6 +259,79 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     } catch (IllegalArgumentException e) {
       // expected
     }
+  }
+
+  @Test
+  public void channelTracing_lbPolicyChanged() {
+    ChannelTracer channelTracer = new ChannelTracer(100, 1000, "dummy_type");
+    TimeProvider timeProvider = new TimeProvider() {
+      @Override
+      public long currentTimeNanos() {
+        return 101;
+      }
+    };
+
+    Channelz.ChannelStats.Builder statsBuilder = new Channelz.ChannelStats.Builder();
+    channelTracer.updateBuilder(statsBuilder);
+    List<EquivalentAddressGroup> servers =
+        Collections.singletonList(
+            new EquivalentAddressGroup(new SocketAddress(){}, Attributes.EMPTY));
+    Helper helper = new TestHelper() {
+      @Override
+      public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
+        return new TestSubchannel(addrs, attrs);
+      }
+
+      @Override
+      public ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority) {
+        return mock(ManagedChannel.class, RETURNS_DEEP_STUBS);
+      }
+
+      @Override
+      public String getAuthority() {
+        return "fake_authority";
+      }
+
+      @Override
+      public void updateBalancingState(ConnectivityState newState, SubchannelPicker newPicker) {
+        // noop
+      }
+    };
+    int prevNumOfEvents = statsBuilder.build().channelTrace.events.size();
+
+    LoadBalancer lb =
+        new AutoConfiguredLoadBalancerFactory(channelTracer, timeProvider).newLoadBalancer(helper);
+    lb.handleResolvedAddressGroups(servers, Attributes.EMPTY);
+    channelTracer.updateBuilder(statsBuilder);
+    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents);
+
+    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    serviceConfig.put("loadBalancingPolicy", "round_robin");
+    lb.handleResolvedAddressGroups(servers,
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build());
+    channelTracer.updateBuilder(statsBuilder);
+    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents + 1);
+    assertThat(statsBuilder.build().channelTrace.events.get(prevNumOfEvents).description)
+        .isEqualTo("Load balancer changed from PickFirstBalancer to RoundRobinLoadBalancer");
+    prevNumOfEvents = statsBuilder.build().channelTrace.events.size();
+
+    serviceConfig.put("loadBalancingPolicy", "round_robin");
+    lb.handleResolvedAddressGroups(servers,
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build());
+    channelTracer.updateBuilder(statsBuilder);
+    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents);
+
+    servers = Collections.singletonList(new EquivalentAddressGroup(
+        new SocketAddress(){},
+        Attributes.newBuilder().set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, "ok").build()));
+    lb.handleResolvedAddressGroups(servers, Attributes.EMPTY);
+
+    channelTracer.updateBuilder(statsBuilder);
+    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents + 1);
+    assertThat(statsBuilder.build().channelTrace.events.get(prevNumOfEvents).description)
+        .isEqualTo("Load balancer changed from RoundRobinLoadBalancer to GrpclbLoadBalancer");
   }
 
   public static class ForwardingLoadBalancer extends LoadBalancer {
