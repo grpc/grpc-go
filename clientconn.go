@@ -1014,21 +1014,12 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		}
 
 		if err := ac.createTransport(backoffIdx, addr, copts, connectDeadline); err != nil {
-			// errReadTimeOut indicates that the handshake was not received before
-			// the deadline. We exit here because the transport's reader goroutine will
-			// use onClose to reset the transport.
-			if err == errReadTimedOut {
-				return
-			}
-
 			continue
 		}
 
 		return
 	}
 }
-
-var errReadTimedOut = errors.New("read timed out")
 
 // createTransport creates a connection to one of the backends in addrs.
 func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
