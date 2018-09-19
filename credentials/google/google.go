@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 )
 
@@ -52,40 +53,69 @@ type creds struct {
 	mode string
 	// OAuth token scope.
 	scope []string
+	// The transport credentials associated with this bundle.
+	transportCreds credentials.TransportCredentials
+	// The per RPC credentials associated with this bundle.
+	perRPCCreds credentials.PerRPCCredentials
 }
 
-func (c *creds) TransportCredentials() (credentials.TransportCredentials, error) {
-	switch c.mode {
-	case internal.CredsBundleModeTLS:
-		return credentials.NewTLS(nil), nil
-	case internal.CredsBundleModeALTS:
-		if vmOnGCP {
-			return alts.NewClientCreds(alts.DefaultClientOptions()), nil
-
-		} else {
-			return nil, errors.New("ALTS, as part of google default credentials, is only supported on GCP")
-		}
+func (c *creds) TransportCredentials() credentials.TransportCredentials {
+	if c == nil {
+		return nil
 	}
-	return nil, fmt.Errorf("unsupported mode: %v", c.mode)
+	return c.transportCreds
 }
 
-func (c *creds) PerRPCCredentials() (credentials.PerRPCCredentials, error) {
-	// For the time being, we required per RPC credentials for both TLS and
-	// ALTS. In the future, this will only be required for TLS.
-	ctx, _ := context.WithTimeout(context.Background(), tokenRequestTimeout)
-	return oauth.NewApplicationDefault(ctx, c.scope...)
+func (c *creds) PerRPCCredentials() credentials.PerRPCCredentials {
+	if c == nil {
+		return nil
+	}
+	return c.perRPCCreds
 }
 
 // SwitchMode should make a copy of Bundle, and switch mode. Modifying the
 // existing Bundle may cause races.
-func (c *creds) SwitchMode(mode string) credentials.Bundle {
-	return &creds{mode: mode}
+func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
+	if c == nil {
+		return nil, nil
+	}
+
+	newCreds := &creds{mode: mode}
+
+	// Create transport credentials.
+	switch mode {
+	case internal.CredsBundleModeTLS:
+		newCreds.transportCreds = credentials.NewTLS(nil)
+	case internal.CredsBundleModeALTS:
+		if !vmOnGCP {
+			return nil, errors.New("ALTS, as part of google default credentials, is only supported on GCP")
+		}
+		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())
+	default:
+		return nil, fmt.Errorf("unsupported mode: %v", mode)
+	}
+
+	// Create per RPC credentials.
+	// For the time being, we required per RPC credentials for both TLS and
+	// ALTS. In the future, this will only be required for TLS.
+	ctx, _ := context.WithTimeout(context.Background(), tokenRequestTimeout)
+	var err error
+	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx, c.scope...)
+	if err != nil {
+		return nil, err
+	}
+
+	return newCreds, nil
 }
 
 // new creates a new instance of GoogleDefaultCreds.
 func new(tokenScope ...string) credentials.Bundle {
-	return &creds{
-		mode:  internal.CredsBundleModeTLS,
+	c := &creds{
 		scope: tokenScope,
 	}
+	bundle, err := c.SwitchMode(internal.CredsBundleModeTLS)
+	if err != nil {
+		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
+	}
+	return bundle
 }

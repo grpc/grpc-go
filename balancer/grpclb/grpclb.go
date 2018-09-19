@@ -168,9 +168,16 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		backoff:        defaultBackoffConfig, // TODO: make backoff configurable.
 	}
 
+	var err error
 	if opt.CredsBundle != nil {
-		lb.grpclbClientConnCreds = opt.CredsBundle.SwitchMode(internal.CredsBundleModeGRPCLB)
-		lb.grpclbBackendCreds = opt.CredsBundle.SwitchMode(internal.CredsBundleModeALTS)
+		lb.grpclbClientConnCreds, err = opt.CredsBundle.SwitchMode(internal.CredsBundleModeGRPCLB)
+		if err != nil {
+			grpclog.Warningf("lbBalancer: client connection creds SwitchMode failed: %v", err)
+		}
+		lb.grpclbBackendCreds, err = opt.CredsBundle.SwitchMode(internal.CredsBundleModeALTS)
+		if err != nil {
+			grpclog.Warningf("lbBalancer: backend creds SwitchMode failed: %v", err)
+		}
 	}
 
 	return lb

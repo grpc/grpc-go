@@ -118,13 +118,13 @@ type TransportCredentials interface {
 //
 // This API is experimental.
 type Bundle interface {
-	TransportCredentials() (TransportCredentials, error)
-	PerRPCCredentials() (PerRPCCredentials, error)
+	TransportCredentials() TransportCredentials
+	PerRPCCredentials() PerRPCCredentials
 	// SwitchMode should make a copy of Bundle, and switch mode. Modifying the
 	// existing Bundle may cause races.
 	//
 	// SwitchMode returns nil if the requested mode is not supported.
-	SwitchMode(mode string) Bundle
+	SwitchMode(mode string) (Bundle, error)
 }
 
 // TLSInfo contains the auth information for a TLS authenticated connection.
