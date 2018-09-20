@@ -733,7 +733,7 @@ func TestResetConnectBackoff(t *testing.T) {
 	dials := make(chan struct{})
 	defer func() { // If we fail, let the http2client break out of dialing.
 		select {
-		case <- dials:
+		case <-dials:
 		default:
 		}
 	}()
