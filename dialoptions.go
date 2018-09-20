@@ -302,12 +302,12 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 	})
 }
 
-// WithCreds returns a DialOption to set a credentials bundle for the
-// ClientConn.WithCreds. This should not be used together with
+// WithCredentialsBundle returns a DialOption to set a credentials bundle for
+// the ClientConn.WithCreds. This should not be used together with
 // WithTransportCredentials.
 //
 // This API is experimental.
-func WithCreds(b credentials.Bundle) DialOption {
+func WithCredentialsBundle(b credentials.Bundle) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.CredsBundle = b
 	})

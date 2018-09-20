@@ -272,7 +272,7 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 			dopts = append(dopts, grpc.WithInsecure())
 		}
 	} else if bundle := lb.grpclbClientConnCreds; bundle != nil {
-		dopts = append(dopts, grpc.WithCreds(bundle))
+		dopts = append(dopts, grpc.WithCredentialsBundle(bundle))
 	} else {
 		dopts = append(dopts, grpc.WithInsecure())
 	}

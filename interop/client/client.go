@@ -107,7 +107,7 @@ func main() {
 		altsTC := alts.NewClientCreds(altsOpts)
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
 	} else if *useGoogleDefaultCreds {
-		opts = append(opts, grpc.WithCreds(google.NewDefaultCredentials()))
+		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))
 	} else {
 		opts = append(opts, grpc.WithInsecure())
 	}

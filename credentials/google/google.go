@@ -86,11 +86,13 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 		newCreds.transportCreds = credentials.NewTLS(nil)
 	case internal.CredsBundleModeALTS, internal.CredsBundleModeGRPCLB:
 		if !vmOnGCP {
-			return nil, errors.New("ALTS, as part of google default credentials, is only supported on GCP")
+			return nil, errors.New("google default creds: ALTS, as part of google default credentials, is only supported on GCP")
 		}
+		// Only the clients can use google default credentials, so we only need
+		// to create new ALTS client creds here.
 		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())
 	default:
-		return nil, fmt.Errorf("unsupported mode: %v", mode)
+		return nil, fmt.Errorf("google default creds: unsupported mode: %v", mode)
 	}
 
 	// Create per RPC credentials.

@@ -70,7 +70,7 @@ func TestCredsBundleBoth(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithCreds(&testCredsBundle{t: t}),
+		grpc.WithCredentialsBundle(&testCredsBundle{t: t}),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
@@ -93,7 +93,7 @@ func TestCredsBundleTransportCredentials(t *testing.T) {
 	defer leakcheck.Check(t)
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithCreds(&testCredsBundle{t: t, mode: bundleTLSOnly}),
+		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
@@ -117,7 +117,7 @@ func TestCredsBundlePerRPCCredentials(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithCreds(&testCredsBundle{t: t, mode: bundlePerRPCOnly}),
+		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundlePerRPCOnly}),
 	}
 	te.startServer(&testServer{})
 	defer te.tearDown()

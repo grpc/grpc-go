@@ -169,21 +169,21 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		isSecure bool
 		authInfo credentials.AuthInfo
 	)
-	var creds credentials.TransportCredentials
+	var transportCreds credentials.TransportCredentials
 	perRPCCreds := opts.PerRPCCredentials
 
 	if b := opts.CredsBundle; b != nil {
-		creds = b.TransportCredentials()
+		transportCreds = b.TransportCredentials()
 		if t := b.PerRPCCredentials(); t != nil {
 			perRPCCreds = append(perRPCCreds, t)
 		}
 	}
-	if creds == nil {
-		creds = opts.TransportCredentials
+	if transportCreds == nil {
+		transportCreds = opts.TransportCredentials
 	}
-	if creds != nil {
+	if transportCreds != nil {
 		scheme = "https"
-		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Authority, conn)
+		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.Authority, conn)
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
