@@ -731,6 +731,12 @@ func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.M
 func TestResetConnectBackoff(t *testing.T) {
 	defer leakcheck.Check(t)
 	dials := make(chan struct{})
+	defer func() { // If we fail, let the http2client break out of dialing.
+		select {
+		case <-dials:
+		default:
+		}
+	}()
 	dialer := func(string, time.Duration) (net.Conn, error) {
 		dials <- struct{}{}
 		return nil, errors.New("failed to fake dial")
