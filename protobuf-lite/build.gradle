@@ -13,8 +13,15 @@ description = 'gRPC: Protobuf Lite'
 
 dependencies {
     compile project(':grpc-core'),
-            libraries.protobuf_lite,
-            libraries.guava
+            libraries.protobuf_lite
+    compile (libraries.guava) {
+        // prefer 2.2.0 from libraries instead of 2.1.3
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        // prefer 3.0.2 from libraries instead of 3.0.1
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        // prefer 1.17 from libraries instead of 1.14
+        exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
+    }
 
     testProtobuf libraries.protobuf
 
