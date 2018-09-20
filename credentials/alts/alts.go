@@ -190,6 +190,7 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 	}()
 
 	opts := handshaker.DefaultClientHandshakerOptions()
+	opts.TargetName = addr
 	opts.TargetServiceAccounts = g.accounts
 	opts.RPCVersions = &altspb.RpcProtocolVersions{
 		MaxRpcVersion: maxRPCVersion,
