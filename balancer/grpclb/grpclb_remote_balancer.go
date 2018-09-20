@@ -290,9 +290,12 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 		dopts = append(dopts, grpc.WithChannelzParentID(lb.opt.ChannelzParentID))
 	}
 
-	// DialContext using manualResolver.Scheme, which is a random scheme generated
-	// when init grpclb. The target name is not important.
-	cc, err := grpc.DialContext(context.Background(), "grpclb:///grpclb.server", dopts...)
+	// DialContext using manualResolver.Scheme, which is a random scheme
+	// generated when init grpclb. The target scheme here is not important.
+	//
+	// The grpc dial target will be used by the creds (ALTS) as the authority,
+	// so it has to be set to remoteLBName that comes from resolver.
+	cc, err := grpc.DialContext(context.Background(), remoteLBName, dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
