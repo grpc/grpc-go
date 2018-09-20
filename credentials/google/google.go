@@ -96,7 +96,8 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 	// Create per RPC credentials.
 	// For the time being, we required per RPC credentials for both TLS and
 	// ALTS. In the future, this will only be required for TLS.
-	ctx, _ := context.WithTimeout(context.Background(), tokenRequestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
+	defer cancel()
 	var err error
 	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx)
 	if err != nil {
