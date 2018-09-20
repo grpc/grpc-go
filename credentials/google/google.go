@@ -43,16 +43,14 @@ func init() {
 // with google services.
 //
 // This API is experimental.
-func NewDefaultCredentials(tokenScope ...string) credentials.Bundle {
-	return new(tokenScope...)
+func NewDefaultCredentials() credentials.Bundle {
+	return new()
 }
 
 // creds implements credentials.Bundle.
 type creds struct {
 	// Supported modes are defined in internal/internal.go.
 	mode string
-	// OAuth token scope.
-	scope []string
 	// The transport credentials associated with this bundle.
 	transportCreds credentials.TransportCredentials
 	// The per RPC credentials associated with this bundle.
@@ -100,7 +98,7 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 	// ALTS. In the future, this will only be required for TLS.
 	ctx, _ := context.WithTimeout(context.Background(), tokenRequestTimeout)
 	var err error
-	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx, c.scope...)
+	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx)
 	if err != nil {
 		grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
 	}
@@ -109,10 +107,8 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 }
 
 // new creates a new instance of GoogleDefaultCreds.
-func new(tokenScope ...string) credentials.Bundle {
-	c := &creds{
-		scope: tokenScope,
-	}
+func new() credentials.Bundle {
+	c := &creds{}
 	bundle, err := c.SwitchMode(internal.CredsBundleModeTLS)
 	if err != nil {
 		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
