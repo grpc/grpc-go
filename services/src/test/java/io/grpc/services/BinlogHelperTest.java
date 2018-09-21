@@ -25,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
@@ -219,18 +220,37 @@ public final class BinlogHelperTest {
         makeLog("{h:256;m}"));
   }
 
+  private void assertIllegalPatternDetected(String perSvcOrMethodConfig) {
+    try {
+      FactoryImpl.createBinaryLog(sink, perSvcOrMethodConfig);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected).hasMessageThat().startsWith("Illegal log config pattern");
+    }
+  }
+
+  @Test
+  public void badFactoryConfigStrDetected() throws Exception {
+    try {
+      new FactoryImpl(sink, "obviouslybad{");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected).hasMessageThat().startsWith("Illegal log config pattern");
+    }
+  }
+
   @Test
   public void createLogFromOptionString_malformed() throws Exception {
-    assertNull(makeLog("bad"));
-    assertNull(makeLog("{bad}"));
-    assertNull(makeLog("{x;y}"));
-    assertNull(makeLog("{h:abc}"));
-    assertNull(makeLog("{2}"));
-    assertNull(makeLog("{2;2}"));
+    assertIllegalPatternDetected("bad");
+    assertIllegalPatternDetected("{bad}");
+    assertIllegalPatternDetected("{x;y}");
+    assertIllegalPatternDetected("{h:abc}");
+    assertIllegalPatternDetected("{2}");
+    assertIllegalPatternDetected("{2;2}");
     // The grammar specifies that if both h and m are present, h comes before m
-    assertNull(makeLog("{m:123;h:123}"));
+    assertIllegalPatternDetected("{m:123;h:123}");
     // NumberFormatException
-    assertNull(makeLog("{h:99999999999999}"));
+    assertIllegalPatternDetected("{h:99999999999999}");
   }
 
   @Test
@@ -289,35 +309,32 @@ public final class BinlogHelperTest {
     assertNotNull(makeLog("-p.s/blacklisted,p.s/*", "p.s/allowed"));
   }
 
-  @Test
-  public void configBinLog_ignoreDuplicates_global() throws Exception {
-    String configStr = "*{h},p.s/m,*{h:256}";
-    // The duplicate
-    assertSameLimits(HEADER_FULL, makeLog(configStr, "p.other1/m"));
-    assertSameLimits(HEADER_FULL, makeLog(configStr, "p.other2/m"));
-    // Other
-    assertSameLimits(BOTH_FULL, makeLog(configStr, "p.s/m"));
+  private void assertDuplicatelPatternDetected(String factoryConfigStr) {
+    try {
+      new BinlogHelper.FactoryImpl(sink, factoryConfigStr);
+      fail();
+    } catch (IllegalStateException expected) {
+      assertThat(expected).hasMessageThat().startsWith("Duplicate entry");
+    }
   }
 
   @Test
-  public void configBinLog_ignoreDuplicates_service() throws Exception {
-    String configStr = "p.s/*,*{h:256},p.s/*{h}";
-    // The duplicate
-    assertSameLimits(BOTH_FULL, makeLog(configStr, "p.s/m1"));
-    assertSameLimits(BOTH_FULL, makeLog(configStr, "p.s/m2"));
-    // Other
-    assertSameLimits(HEADER_256, makeLog(configStr, "p.other1/m"));
-    assertSameLimits(HEADER_256, makeLog(configStr, "p.other2/m"));
+  public void configBinLog_duplicates_global() throws Exception {
+    assertDuplicatelPatternDetected("*{h},*{h:256}");
   }
 
   @Test
-  public void configBinLog_ignoreDuplicates_method() throws Exception {
-    String configStr = "p.s/m,*{h:256},p.s/m{h}";
-    // The duplicate
-    assertSameLimits(BOTH_FULL, makeLog(configStr, "p.s/m"));
-    // Other
-    assertSameLimits(HEADER_256, makeLog(configStr, "p.other1/m"));
-    assertSameLimits(HEADER_256, makeLog(configStr, "p.other2/m"));
+  public void configBinLog_duplicates_service() throws Exception {
+    assertDuplicatelPatternDetected("p.s/*,p.s/*{h}");
+
+  }
+
+  @Test
+  public void configBinLog_duplicates_method() throws Exception {
+    assertDuplicatelPatternDetected("p.s/*,p.s/*{h:1;m:2}");
+    assertDuplicatelPatternDetected("p.s/m,-p.s/m");
+    assertDuplicatelPatternDetected("-p.s/m,p.s/m");
+    assertDuplicatelPatternDetected("-p.s/m,-p.s/m");
   }
 
   @Test

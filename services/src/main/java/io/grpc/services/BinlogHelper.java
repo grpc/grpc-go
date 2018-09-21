@@ -18,6 +18,7 @@ package io.grpc.services;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -507,47 +508,50 @@ final class BinlogHelper {
         for (String configuration : Splitter.on(',').split(configurationString)) {
           Matcher configMatcher = configRe.matcher(configuration);
           if (!configMatcher.matches()) {
-            throw new IllegalArgumentException("Bad input: " + configuration);
+            throw new IllegalArgumentException("Illegal log config pattern: " + configuration);
           }
           String methodOrSvc = configMatcher.group(1);
           String binlogOptionStr = configMatcher.group(2);
-          BinlogHelper binLog = createBinaryLog(sink, binlogOptionStr);
-          if (binLog == null) {
-            continue;
-          }
           if (methodOrSvc.equals("*")) {
-            if (globalLog != null) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
-              continue;
-            }
-            globalLog = binLog;
+            // parse config for "*"
+            checkState(
+                globalLog == null,
+                "Duplicate entry, this is fatal: " + configuration);
+            globalLog = createBinaryLog(sink, binlogOptionStr);
             logger.log(Level.INFO, "Global binlog: {0}", binlogOptionStr);
           } else if (isServiceGlob(methodOrSvc)) {
+            // parse config for a service, e.g. "service/*"
             String service = MethodDescriptor.extractFullServiceName(methodOrSvc);
-            if (perServiceLogs.containsKey(service)) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
-              continue;
-            }
-            perServiceLogs.put(service, binLog);
+            checkState(
+                !perServiceLogs.containsKey(service),
+                "Duplicate entry, this is fatal: " + configuration);
+            perServiceLogs.put(service, createBinaryLog(sink, binlogOptionStr));
             logger.log(
                 Level.INFO,
                 "Service binlog: service={0} config={1}",
                 new Object[] {service, binlogOptionStr});
           } else if (methodOrSvc.startsWith("-")) {
+            // parse config for a method, e.g. "-service/method"
             String blacklistedMethod = methodOrSvc.substring(1);
             if (blacklistedMethod.length() == 0) {
               continue;
             }
-            if (!blacklistedMethods.add(blacklistedMethod)) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
-            }
+            checkState(
+                !blacklistedMethods.contains(blacklistedMethod),
+                "Duplicate entry, this is fatal: " + configuration);
+            checkState(
+                !perMethodLogs.containsKey(blacklistedMethod),
+                "Duplicate entry, this is fatal: " + configuration);
+            blacklistedMethods.add(blacklistedMethod);
           } else {
-            // assume fully qualified method name
-            if (perMethodLogs.containsKey(methodOrSvc)) {
-              logger.log(Level.SEVERE, "Ignoring duplicate entry: {0}", configuration);
-              continue;
-            }
-            perMethodLogs.put(methodOrSvc, binLog);
+            // parse config for a fully qualified method, e.g "serice/method"
+            checkState(
+                !perMethodLogs.containsKey(methodOrSvc),
+                "Duplicate entry, this is fatal: " + configuration);
+            checkState(
+                !blacklistedMethods.contains(methodOrSvc),
+                "Duplicate entry, this method was blacklisted: " + configuration);
+            perMethodLogs.put(methodOrSvc, createBinaryLog(sink, binlogOptionStr));
             logger.log(
                 Level.INFO,
                 "Method binlog: method={0} config={1}",
@@ -619,13 +623,11 @@ final class BinlogHelper {
               maxHeaderStr != null ? Integer.parseInt(maxHeaderStr) : Integer.MAX_VALUE;
           maxMsgBytes = maxMsgStr != null ? Integer.parseInt(maxMsgStr) : Integer.MAX_VALUE;
         } else {
-          logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
-          return null;
+          throw new IllegalArgumentException("Illegal log config pattern");
         }
         return new BinlogHelper(new SinkWriterImpl(sink, maxHeaderBytes, maxMsgBytes));
       } catch (NumberFormatException e) {
-        logger.log(Level.SEVERE, "Illegal log config pattern: " + logConfig);
-        return null;
+        throw new IllegalArgumentException("Illegal log config pattern");
       }
     }
 
