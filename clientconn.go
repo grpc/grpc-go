@@ -955,7 +955,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		}
 
 		if err := ac.nextAddr(); err != nil {
-			grpclog.Warningf("resetTransport: error from nextAddr: %v", err)
+			return
 		}
 
 		ac.mu.Lock()
@@ -1176,6 +1176,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 // nextAddr increments the addrIdx if there are more addresses to try. If
 // there are no more addrs to try it will re-resolve, set addrIdx to 0, and
 // increment the backoffIdx.
+//
+// nextAddr must be called without ac.mu being held.
 func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
 
@@ -1259,15 +1261,15 @@ func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 // tight loop.
 // tearDown doesn't remove ac from ac.cc.conns.
 func (ac *addrConn) tearDown(err error) {
-	ac.cancel()
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 		return
 	}
-	// We have to set the state to Shutdown before we call ac.transports.GracefulClose, because it signals to
-	// onClose not to try reconnecting the transport.
+	// We have to set the state to Shutdown before anything else to prevent races
+	// between setting the state and logic that waits on context cancelation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown)
+	ac.cancel()
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.curAddr = resolver.Address{}
