@@ -72,11 +72,13 @@ func TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 		"s/m,*{}",
 		"s/m,s/m{a}",
 
-		// Conflicting rules.
+		// Duplciate rules.
 		"s/m,-s/m",
 		"-s/m,s/m",
 		"s/m,s/m",
 		"s/m,s/m{h:1;m:1}",
+		"s/m{h:1;m:1},s/m",
+		"-s/m,-s/m",
 	}
 	for _, tc := range testCases {
 		l := newLoggerFromConfigString(tc)

@@ -92,6 +92,9 @@ func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) er
 
 // Set blacklist method for "-service/method".
 func (l *logger) setBlacklist(method string) error {
+	if _, ok := l.blacklist[method]; ok {
+		return fmt.Errorf("conflicting rules for %v found", method)
+	}
 	if _, ok := l.methods[method]; ok {
 		return fmt.Errorf("conflicting rules for %v found", method)
 	}
