@@ -80,7 +80,11 @@ golint ./... 2>&1 | (grep -vE "(_mock|\.pb)\.go:" || true) | tee /dev/stderr | (
 # TODO: Remove this mangling once "context" is imported directly (grpc/grpc-go#711).
 git ls-files "*.go" | xargs sed -i 's:"golang.org/x/net/context":"context":'
 set +o pipefail # vet exits with non-zero error if issues are found
+
+# TODO(deklerk) remove when we drop Go 1.6 support
 go tool vet -all . 2>&1 | grep -vE 'clientconn.go:.*cancel (function|var)' | tee /dev/stderr | (! read)
+go tool vet -all . 2>&1 | grep -vE 'transport_test.go:.*cancel (function|var)' | tee /dev/stderr | (! read)
+
 set -o pipefail
 git reset --hard HEAD
 
