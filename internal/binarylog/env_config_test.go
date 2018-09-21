@@ -42,7 +42,7 @@ func TestNewLoggerFromConfigString(t *testing.T) {
 
 	if ml, ok := l.services[s1]; ok {
 		if ml.hdr != maxUInt || ml.msg != 0 {
-			t.Errorf("want maxUInt header, maxUInt message, got header: %v, message: %v", ml.hdr, ml.msg)
+			t.Errorf("want maxUInt header, 0 message, got header: %v, message: %v", ml.hdr, ml.msg)
 		}
 	} else {
 		t.Errorf("service/* is not set")
@@ -50,7 +50,7 @@ func TestNewLoggerFromConfigString(t *testing.T) {
 
 	if ml, ok := l.methods[fullM1]; ok {
 		if ml.hdr != 0 || ml.msg != maxUInt {
-			t.Errorf("want maxUInt header, maxUInt message, got header: %v, message: %v", ml.hdr, ml.msg)
+			t.Errorf("want 0 header, maxUInt message, got header: %v, message: %v", ml.hdr, ml.msg)
 		}
 	} else {
 		t.Errorf("service/method{h} is not set")
@@ -71,6 +71,12 @@ func TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 		"*{}",
 		"s/m,*{}",
 		"s/m,s/m{a}",
+
+		// Conflicting rules.
+		"s/m,-s/m",
+		"-s/m,s/m",
+		"s/m,s/m",
+		"s/m,s/m{h:1;m:1}",
 	}
 	for _, tc := range testCases {
 		l := newLoggerFromConfigString(tc)
@@ -80,52 +86,52 @@ func TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 	}
 }
 
-func TestParseMethodConfigAndSurfix(t *testing.T) {
+func TestParseMethodConfigAndSuffix(t *testing.T) {
 	testCases := []struct {
-		in, service, method, surfix string
+		in, service, method, suffix string
 	}{
 		{
 			in:      "p.s/m",
-			service: "p.s", method: "m", surfix: "",
+			service: "p.s", method: "m", suffix: "",
 		},
 		{
 			in:      "p.s/m{h,m}",
-			service: "p.s", method: "m", surfix: "{h,m}",
+			service: "p.s", method: "m", suffix: "{h,m}",
 		},
 		{
 			in:      "p.s/*",
-			service: "p.s", method: "*", surfix: "",
+			service: "p.s", method: "*", suffix: "",
 		},
 		{
 			in:      "p.s/*{h,m}",
-			service: "p.s", method: "*", surfix: "{h,m}",
+			service: "p.s", method: "*", suffix: "{h,m}",
 		},
 
-		// invalid surfix will be detected by another runction.
+		// invalid suffix will be detected by another function.
 		{
-			in:      "p.s/m{invalidsurfix}",
-			service: "p.s", method: "m", surfix: "{invalidsurfix}",
+			in:      "p.s/m{invalidsuffix}",
+			service: "p.s", method: "m", suffix: "{invalidsuffix}",
 		},
 		{
-			in:      "p.s/*{invalidsurfix}",
-			service: "p.s", method: "*", surfix: "{invalidsurfix}",
+			in:      "p.s/*{invalidsuffix}",
+			service: "p.s", method: "*", suffix: "{invalidsuffix}",
 		},
 		{
 			in:      "s/m*",
-			service: "s", method: "m", surfix: "*",
+			service: "s", method: "m", suffix: "*",
 		},
 		{
 			in:      "s/*m",
-			service: "s", method: "*", surfix: "m",
+			service: "s", method: "*", suffix: "m",
 		},
 		{
 			in:      "s/**",
-			service: "s", method: "*", surfix: "*",
+			service: "s", method: "*", suffix: "*",
 		},
 	}
 	for _, tc := range testCases {
-		t.Logf("testing parseMethodConfigAndSurfix(%q)", tc.in)
-		s, m, surfix, err := parseMethodConfigAndSurfix(tc.in)
+		t.Logf("testing parseMethodConfigAndSuffix(%q)", tc.in)
+		s, m, suffix, err := parseMethodConfigAndSuffix(tc.in)
 		if err != nil {
 			t.Errorf("returned error %v, want nil", err)
 			continue
@@ -136,21 +142,21 @@ func TestParseMethodConfigAndSurfix(t *testing.T) {
 		if m != tc.method {
 			t.Errorf("method = %q, want %q", m, tc.method)
 		}
-		if surfix != tc.surfix {
-			t.Errorf("surfix = %q, want %q", surfix, tc.surfix)
+		if suffix != tc.suffix {
+			t.Errorf("suffix = %q, want %q", suffix, tc.suffix)
 		}
 	}
 }
 
-func TestParseMethodConfigAndSurfixInvalid(t *testing.T) {
+func TestParseMethodConfigAndSuffixInvalid(t *testing.T) {
 	testCases := []string{
 		"*/m",
 		"*/m{}",
 	}
 	for _, tc := range testCases {
-		s, m, surfix, err := parseMethodConfigAndSurfix(tc)
+		s, m, suffix, err := parseMethodConfigAndSuffix(tc)
 		if err == nil {
-			t.Errorf("Parsing %q got nil error with %q, %q, %q, want non-nil error", tc, s, m, surfix)
+			t.Errorf("Parsing %q got nil error with %q, %q, %q, want non-nil error", tc, s, m, suffix)
 		}
 	}
 }

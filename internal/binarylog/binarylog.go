@@ -16,9 +16,12 @@
  *
  */
 
+// Package binarylog implementation binary logging as defined in
+// https://github.com/grpc/proposal/blob/master/A16-binary-logging.md.
 package binarylog
 
 import (
+	"fmt"
 	"os"
 
 	"google.golang.org/grpc/grpclog"
@@ -73,19 +76,30 @@ func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) 
 // Set method logger for "service/method".
 //
 // New methodLogger with same method overrides the old one.
-func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) {
+func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) error {
+	if _, ok := l.blacklist[method]; ok {
+		return fmt.Errorf("conflicting rules for %v found", method)
+	}
+	if _, ok := l.methods[method]; ok {
+		return fmt.Errorf("conflicting rules for %v found", method)
+	}
 	if l.methods == nil {
 		l.methods = make(map[string]*methodLoggerConfig)
 	}
 	l.methods[method] = ml
+	return nil
 }
 
 // Set blacklist method for "-service/method".
-func (l *logger) setBlacklist(method string) {
+func (l *logger) setBlacklist(method string) error {
+	if _, ok := l.methods[method]; ok {
+		return fmt.Errorf("conflicting rules for %v found", method)
+	}
 	if l.blacklist == nil {
 		l.blacklist = make(map[string]struct{})
 	}
 	l.blacklist[method] = struct{}{}
+	return nil
 }
 
 // GetMethodLogger returns the methodLogger for the given methodName.

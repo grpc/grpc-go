@@ -29,13 +29,13 @@ import (
 // TODO: move to internal/grpcutil.
 func parseMethodName(methodName string) (service, method string, _ error) {
 	if !strings.HasPrefix(methodName, "/") {
-		return "", "", errors.New("Invalid method name: should start with /")
+		return "", "", errors.New("invalid method name: should start with /")
 	}
 	methodName = methodName[1:]
 
 	pos := strings.LastIndex(methodName, "/")
 	if pos < 0 {
-		return "", "", errors.New("Invalid method name: no / found")
+		return "", "", errors.New("invalid method name: suffix /method is missing")
 	}
 	return methodName[:pos], methodName[pos+1:], nil
 }

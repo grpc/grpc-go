@@ -76,13 +76,6 @@ func TestGetMethodLogger(t *testing.T) {
 			method: "/s/m",
 			hdr:    12, msg: 23,
 		},
-
-		// Duplicates.
-		{
-			in:     "s/m,s/m{h;m},s/m{h:12;m:23}",
-			method: "/s/m",
-			hdr:    12, msg: 23,
-		},
 	}
 	for _, tc := range testCases {
 		l := newLoggerFromConfigString(tc.in)
@@ -121,7 +114,6 @@ func TestGetMethodLoggerOff(t *testing.T) {
 			in:     "s1/*",
 			method: "/s/m",
 		},
-
 		{
 			in:     "s1/*,s/m1",
 			method: "/s/m",

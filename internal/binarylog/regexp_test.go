@@ -28,7 +28,6 @@ func TestLongMethodConfigRegexp(t *testing.T) {
 		in  string
 		out []string
 	}{
-
 		{in: "", out: nil},
 		{in: "*/m", out: nil},
 
@@ -93,7 +92,6 @@ func TestHeaderConfigRegexp(t *testing.T) {
 		in  string
 		out []string
 	}{
-
 		{in: "{}", out: nil},
 		{in: "{a:b}", out: nil},
 		{in: "{m:123}", out: nil},
@@ -121,7 +119,6 @@ func TestMessageConfigRegexp(t *testing.T) {
 		in  string
 		out []string
 	}{
-
 		{in: "{}", out: nil},
 		{in: "{a:b}", out: nil},
 		{in: "{h:123}", out: nil},
@@ -149,7 +146,6 @@ func TestHeaderMessageConfigRegexp(t *testing.T) {
 		in  string
 		out []string
 	}{
-
 		{in: "{}", out: nil},
 		{in: "{a:b}", out: nil},
 		{in: "{h}", out: nil},

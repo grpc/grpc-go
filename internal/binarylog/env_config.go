@@ -65,17 +65,19 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 
 	// "-service/method", blacklist, no * or {} allowed.
 	if config[0] == '-' {
-		s, m, surfix, err := parseMethodConfigAndSurfix(config[1:])
+		s, m, suffix, err := parseMethodConfigAndSuffix(config[1:])
 		if err != nil {
 			return fmt.Errorf("invalid config: %q, %v", config, err)
 		}
 		if m == "*" {
 			return fmt.Errorf("invalid config: %q, %v", config, "* not allowd in blacklist config")
 		}
-		if surfix != "" {
+		if suffix != "" {
 			return fmt.Errorf("invalid config: %q, %v", config, "header/message limit not allowed in blacklist config")
 		}
-		l.setBlacklist(s + "/" + m)
+		if err := l.setBlacklist(s + "/" + m); err != nil {
+			return fmt.Errorf("invalid config: %v", err)
+		}
 		return nil
 	}
 
@@ -89,18 +91,20 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 		return nil
 	}
 
-	s, m, surfix, err := parseMethodConfigAndSurfix(config)
+	s, m, suffix, err := parseMethodConfigAndSuffix(config)
 	if err != nil {
 		return fmt.Errorf("invalid config: %q, %v", config, err)
 	}
-	hdr, msg, err := parseHeaderMessageLengthConfig(surfix)
+	hdr, msg, err := parseHeaderMessageLengthConfig(suffix)
 	if err != nil {
-		return fmt.Errorf("invalid header/message length config: %q, %v", surfix, err)
+		return fmt.Errorf("invalid header/message length config: %q, %v", suffix, err)
 	}
 	if m == "*" {
 		l.setServiceMethodLogger(s, &methodLoggerConfig{hdr: hdr, msg: msg})
 	} else {
-		l.setMethodMethodLogger(s+"/"+m, &methodLoggerConfig{hdr: hdr, msg: msg})
+		if err := l.setMethodMethodLogger(s+"/"+m, &methodLoggerConfig{hdr: hdr, msg: msg}); err != nil {
+			return fmt.Errorf("invalid config: %v", err)
+		}
 	}
 	return nil
 }
@@ -110,13 +114,13 @@ const (
 	// other config. Move to binarylog.go if necessary.
 	maxUInt = ^uint64(0)
 
-	// For "p.s/m" plus any surfix. Surfix will be parsed again.
+	// For "p.s/m" plus any suffix. Suffix will be parsed again.
 	// See test for expected output.
 	//
 	// https://regex101.com/r/spLgpW/2
-	longMethodConfigRegexpStr = `^([\w+./]+)/((?:\w+)|[*])(.+)?$`
+	longMethodConfigRegexpStr = `^([\w./]+)/((?:\w+)|[*])(.+)?$`
 
-	// For surfix from above, "{h:123,m:123}".
+	// For suffix from above, "{h:123,m:123}".
 	// See test for expected output.
 	//
 	// https://regex101.com/r/0ZHrtu/3
@@ -133,8 +137,8 @@ var (
 	headerMessageConfigRegexp = regexp.MustCompile(headerMessageConfigRegexpStr)
 )
 
-// Turn "service/method{h,m}" into "service", "method", "{h,m}".
-func parseMethodConfigAndSurfix(c string) (service, method, surfix string, _ error) {
+// Turn "service/method{h;m}" into "service", "method", "{h;m}".
+func parseMethodConfigAndSuffix(c string) (service, method, suffix string, _ error) {
 	// Regexp result:
 	//
 	// in:  "p.s/m{h:123,m:123}",
@@ -145,11 +149,11 @@ func parseMethodConfigAndSurfix(c string) (service, method, surfix string, _ err
 	}
 	service = match[1]
 	method = match[2]
-	surfix = match[3]
+	suffix = match[3]
 	return
 }
 
-// Turn "{h:123,m:345}" into 123, 345.
+// Turn "{h:123;m:345}" into 123, 345.
 //
 // Return maxUInt if length is unspecified.
 func parseHeaderMessageLengthConfig(c string) (hdrLenStr, msgLenStr uint64, err error) {
@@ -161,7 +165,7 @@ func parseHeaderMessageLengthConfig(c string) (hdrLenStr, msgLenStr uint64, err 
 		if s := match[1]; s != "" {
 			hdrLenStr, err = strconv.ParseUint(s, 10, 64)
 			if err != nil {
-				return 0, 0, fmt.Errorf("Failed to convert %q to uint", s)
+				return 0, 0, fmt.Errorf("failed to convert %q to uint", s)
 			}
 			return hdrLenStr, 0, nil
 		}
