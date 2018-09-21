@@ -2029,7 +2029,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		err    error
 		lis    net.Listener
 		server *httpServer
-		client ClientTransport
+		client *http2Client
 	)
 	cleanUp = func() {
 		if lis != nil {
