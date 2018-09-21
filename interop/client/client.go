@@ -41,10 +41,9 @@ const (
 )
 
 var (
-	caFile  = flag.String("ca_file", "", "The file containning the CA root cert file")
-	useTLS  = flag.Bool("use_tls", false, "Connection uses TLS if true")
-	useALTS = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
-	// useGoogleDefaultCreds = flag.Bool("use_google_default_creds", false, "Uses google default creds if true")
+	caFile                = flag.String("ca_file", "", "The file containning the CA root cert file")
+	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true")
+	useALTS               = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
 	customCredentialsType = flag.String("custom_credentials_type", "", "Custom creds to use, excluding TLS or ALTS")
 	altsHSAddr            = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
@@ -77,15 +76,43 @@ var (
         unimplemented_service: client attempts to call unimplemented service.`)
 )
 
+type credsMode uint8
+
+const (
+	credsNone credsMode = iota
+	credsTLS
+	credsALTS
+	credsGoogleDefaultCreds
+)
+
 func main() {
 	flag.Parse()
-	resolver.SetDefaultScheme("dns")
-	if *useTLS && *useALTS && *customCredentialsType != googleDefaultCredsName {
-		grpclog.Fatalf("use_tls, use_alts and use_google_default_creds cannot be all set to true")
+	var useGDC bool // use google default creds
+	if *customCredentialsType != "" {
+		if *customCredentialsType != googleDefaultCredsName {
+			grpclog.Fatalf("custom_credentials_type can only be set to %v or not set", googleDefaultCredsName)
+		}
+		useGDC = true
 	}
+	if (*useTLS && *useALTS) || (*useTLS && useGDC) || (*useALTS && useGDC) {
+		grpclog.Fatalf("only one of TLS, ALTS and google default creds can be used")
+	}
+
+	var credsChosen credsMode
+	switch {
+	case *useTLS:
+		credsChosen = credsTLS
+	case *useALTS:
+		credsChosen = credsALTS
+	case useGDC:
+		credsChosen = credsGoogleDefaultCreds
+	}
+
+	resolver.SetDefaultScheme("dns")
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []grpc.DialOption
-	if *useTLS {
+	switch credsChosen {
+	case credsTLS:
 		var sn string
 		if *tlsServerName != "" {
 			sn = *tlsServerName
@@ -104,19 +131,19 @@ func main() {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
-	} else if *useALTS {
+	case credsALTS:
 		altsOpts := alts.DefaultClientOptions()
 		if *altsHSAddr != "" {
 			altsOpts.HandshakerServiceAddress = *altsHSAddr
 		}
 		altsTC := alts.NewClientCreds(altsOpts)
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
-	} else if *customCredentialsType == googleDefaultCredsName {
+	case credsGoogleDefaultCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))
-	} else {
+	default:
 		opts = append(opts, grpc.WithInsecure())
 	}
-	if *useTLS || *useALTS {
+	if credsChosen == credsTLS || credsChosen == credsALTS {
 		if *testCase == "compute_engine_creds" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
@@ -165,32 +192,32 @@ func main() {
 		interop.DoTimeoutOnSleepingServer(tc)
 		grpclog.Infoln("TimeoutOnSleepingServer done")
 	case "compute_engine_creds":
-		if !*useTLS && !*useALTS && *customCredentialsType != googleDefaultCredsName {
-			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute compute_engine_creds test case.")
+		if credsChosen == credsNone {
+			grpclog.Fatalf("Credentials (TLS, ALTS or google default creds) need to be set for compute_engine_creds test case.")
 		}
 		interop.DoComputeEngineCreds(tc, *defaultServiceAccount, *oauthScope)
 		grpclog.Infoln("ComputeEngineCreds done")
 	case "service_account_creds":
-		if !*useTLS && !*useALTS && *customCredentialsType != googleDefaultCredsName {
-			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute service_account_creds test case.")
+		if credsChosen == credsNone {
+			grpclog.Fatalf("Credentials (TLS, ALTS or google default creds) need to be set for service_account_creds test case.")
 		}
 		interop.DoServiceAccountCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("ServiceAccountCreds done")
 	case "jwt_token_creds":
-		if !*useTLS && !*useALTS && *customCredentialsType != googleDefaultCredsName {
-			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute jwt_token_creds test case.")
+		if credsChosen == credsNone {
+			grpclog.Fatalf("Credentials (TLS, ALTS or google default creds) need to be set for jwt_token_creds test case.")
 		}
 		interop.DoJWTTokenCreds(tc, *serviceAccountKeyFile)
 		grpclog.Infoln("JWTtokenCreds done")
 	case "per_rpc_creds":
-		if !*useTLS && !*useALTS && *customCredentialsType != googleDefaultCredsName {
-			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute per_rpc_creds test case.")
+		if credsChosen == credsNone {
+			grpclog.Fatalf("Credentials (TLS, ALTS or google default creds) need to be set for per_rpc_creds test case.")
 		}
 		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("PerRPCCreds done")
 	case "oauth2_auth_token":
-		if !*useTLS && !*useALTS && *customCredentialsType != googleDefaultCredsName {
-			grpclog.Fatalf("Neither TLS or ALTS are enabled. TLS or ALTS is required to execute oauth2_auth_token test case.")
+		if credsChosen == credsNone {
+			grpclog.Fatalf("Credentials (TLS, ALTS or google default creds) need to be set for oauth2_auth_token test case.")
 		}
 		interop.DoOauth2TokenCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Infoln("Oauth2TokenCreds done")
