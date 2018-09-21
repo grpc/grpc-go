@@ -98,7 +98,10 @@ func TestDialParseTargetUnknownScheme(t *testing.T) {
 	} {
 		dialStrCh := make(chan string, 1)
 		cc, err := Dial(test.targetStr, WithInsecure(), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
-			dialStrCh <- t
+			select {
+			case dialStrCh <- t:
+			default:
+			}
 			return nil, fmt.Errorf("test dialer, always error")
 		}))
 		if err != nil {
