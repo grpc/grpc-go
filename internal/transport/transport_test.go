@@ -2056,13 +2056,15 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		wh:         wh,
 	}
 	server.start(t, lis)
+	// TODO(deklerk): we can `defer cancel()` here after we drop Go 1.6 support. Until then,
+	// doing a `defer cancel()` could cause the dialer to become broken:
+	// https://github.com/golang/go/issues/15078, https://github.com/golang/go/issues/15035
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("Error creating client. Err: %v", err)
 	}
-	defer cancel()
 	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method"})
 	if err != nil {
 		t.Fatalf("Error creating stream at client-side. Err: %v", err)
