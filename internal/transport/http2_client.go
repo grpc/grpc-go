@@ -169,17 +169,16 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		isSecure bool
 		authInfo credentials.AuthInfo
 	)
-	var transportCreds credentials.TransportCredentials
+	transportCreds := opts.TransportCredentials
 	perRPCCreds := opts.PerRPCCredentials
 
 	if b := opts.CredsBundle; b != nil {
-		transportCreds = b.TransportCredentials()
+		if t := b.TransportCredentials(); t != nil {
+			transportCreds = t
+		}
 		if t := b.PerRPCCredentials(); t != nil {
 			perRPCCreds = append(perRPCCreds, t)
 		}
-	}
-	if transportCreds == nil {
-		transportCreds = opts.TransportCredentials
 	}
 	if transportCreds != nil {
 		scheme = "https"

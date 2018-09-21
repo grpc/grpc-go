@@ -95,15 +95,17 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 		return nil, fmt.Errorf("google default creds: unsupported mode: %v", mode)
 	}
 
-	// Create per RPC credentials.
-	// For the time being, we required per RPC credentials for both TLS and
-	// ALTS. In the future, this will only be required for TLS.
-	ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
-	defer cancel()
-	var err error
-	newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx)
-	if err != nil {
-		grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
+	if mode == internal.CredsBundleModeTLS || mode == internal.CredsBundleModeALTS {
+		// Create per RPC credentials.
+		// For the time being, we required per RPC credentials for both TLS and
+		// ALTS. In the future, this will only be required for TLS.
+		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
+		defer cancel()
+		var err error
+		newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx)
+		if err != nil {
+			grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
+		}
 	}
 
 	return newCreds, nil
