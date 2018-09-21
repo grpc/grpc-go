@@ -1971,7 +1971,12 @@ func writeTwoHeaders(framer *http2.Framer, sid uint32, httpStatus int) error {
 }
 
 type httpServer struct {
-	conn       net.Conn
+	// conn is not strictly race-y, but the race detector conservatively calls it a race
+	// when we start a server with in one thread and clean it up in another. This mutex
+	// makes the race detector happy.
+	mu   sync.Mutex
+	conn net.Conn
+
 	httpStatus int
 	wh         writeHeaders
 }
@@ -1980,7 +1985,9 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	// Launch an HTTP server to send back header with httpStatus.
 	go func() {
 		var err error
+		s.mu.Lock()
 		s.conn, err = lis.Accept()
+		s.mu.Unlock()
 		if err != nil {
 			t.Errorf("Error accepting connection: %v", err)
 			return
@@ -2019,9 +2026,11 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 }
 
 func (s *httpServer) cleanUp() {
+	s.mu.Lock()
 	if s.conn != nil {
 		s.conn.Close()
 	}
+	s.mu.Unlock()
 }
 
 func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream *Stream, cleanUp func()) {
