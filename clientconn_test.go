@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net"
 	"sync/atomic"
@@ -765,4 +766,19 @@ func TestResetConnectBackoff(t *testing.T) {
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Fatal("Failed to call dial within 10s after resetting backoff")
 	}
+}
+
+func TestBackoffCancel(t *testing.T) {
+	defer leakcheck.Check(t)
+	dialStrCh := make(chan string)
+	cc, err := Dial("any", WithInsecure(), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+		dialStrCh <- t
+		return nil, fmt.Errorf("test dialer, always error")
+	}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	<-dialStrCh
+	cc.Close()
+	// Should not leak. May need -count 5000 to exercise.
 }
