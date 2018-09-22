@@ -1971,7 +1971,6 @@ func writeTwoHeaders(framer *http2.Framer, sid uint32, httpStatus int) error {
 }
 
 type httpServer struct {
-	conn       net.Conn
 	httpStatus int
 	wh         writeHeaders
 }
@@ -1980,18 +1979,19 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	// Launch an HTTP server to send back header with httpStatus.
 	go func() {
 		var err error
-		s.conn, err = lis.Accept()
+		conn, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Error accepting connection: %v", err)
 			return
 		}
+		defer conn.Close()
 		// Read preface sent by client.
-		if _, err = io.ReadFull(s.conn, make([]byte, len(http2.ClientPreface))); err != nil {
+		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
 			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
 			return
 		}
-		reader := bufio.NewReaderSize(s.conn, defaultWriteBufSize)
-		writer := bufio.NewWriterSize(s.conn, defaultReadBufSize)
+		reader := bufio.NewReaderSize(conn, defaultWriteBufSize)
+		writer := bufio.NewWriterSize(conn, defaultReadBufSize)
 		framer := http2.NewFramer(writer, reader)
 		if err = framer.WriteSettingsAck(); err != nil {
 			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
@@ -2018,56 +2018,36 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-func (s *httpServer) cleanUp() {
-	if s.conn != nil {
-		s.conn.Close()
-	}
-}
-
-func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream *Stream, cleanUp func()) {
-	var (
-		err    error
-		lis    net.Listener
-		server *httpServer
-		client ClientTransport
-	)
-	cleanUp = func() {
-		if lis != nil {
-			lis.Close()
-		}
-		if server != nil {
-			server.cleanUp()
-		}
-		if client != nil {
-			client.Close()
-		}
-	}
-	defer func() {
-		if err != nil {
-			cleanUp()
-		}
-	}()
-	lis, err = net.Listen("tcp", "localhost:0")
+func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (*Stream, func()) {
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
 	}
-	server = &httpServer{
+	server := &httpServer{
 		httpStatus: httpStatus,
 		wh:         wh,
 	}
 	server.start(t, lis)
+	// TODO(deklerk): we can `defer cancel()` here after we drop Go 1.6 support. Until then,
+	// doing a `defer cancel()` could cause the dialer to become broken:
+	// https://github.com/golang/go/issues/15078, https://github.com/golang/go/issues/15035
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	client, err = newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
+	client, err := newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
+		lis.Close()
 		t.Fatalf("Error creating client. Err: %v", err)
 	}
-	defer cancel()
-	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method"})
+	stream, err := client.NewStream(context.Background(), &CallHdr{Method: "bogus/method"})
 	if err != nil {
+		client.Close()
+		lis.Close()
 		t.Fatalf("Error creating stream at client-side. Err: %v", err)
 	}
-	return
+	return stream, func() {
+		client.Close()
+		lis.Close()
+	}
 }
 
 func TestHTTPToGRPCStatusMapping(t *testing.T) {
