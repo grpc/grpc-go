@@ -63,6 +63,19 @@ public final class InternalNettyChannelBuilder {
     builder.setDynamicParamsFactory(factory);
   }
 
+  /** A class that provides a Netty handler to control protocol negotiation. */
+  public interface ProtocolNegotiatorFactory
+      extends NettyChannelBuilder.ProtocolNegotiatorFactory {}
+
+  /**
+   * Sets the {@link ProtocolNegotiatorFactory} to be used. Overrides any specified negotiation type
+   * and {@code SslContext}.
+   */
+  public static void setProtocolNegotiatorFactory(
+      NettyChannelBuilder builder, ProtocolNegotiatorFactory protocolNegotiator) {
+    builder.protocolNegotiatorFactory(protocolNegotiator);
+  }
+
   public static void setStatsEnabled(NettyChannelBuilder builder, boolean value) {
     builder.setStatsEnabled(value);
   }

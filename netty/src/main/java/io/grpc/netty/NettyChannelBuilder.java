@@ -81,6 +81,7 @@ public final class NettyChannelBuilder
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
   private boolean keepAliveWithoutCalls;
   private TransportCreationParamsFilterFactory dynamicParamsFactory;
+  private ProtocolNegotiatorFactory protocolNegotiatorFactory;
 
   /**
    * Creates a new builder with the given server address. This factory method is primarily intended
@@ -334,16 +335,20 @@ public final class NettyChannelBuilder
     TransportCreationParamsFilterFactory transportCreationParamsFilterFactory =
         dynamicParamsFactory;
     if (transportCreationParamsFilterFactory == null) {
-      SslContext localSslContext = sslContext;
-      if (negotiationType == NegotiationType.TLS && localSslContext == null) {
-        try {
-          localSslContext = GrpcSslContexts.forClient().build();
-        } catch (SSLException ex) {
-          throw new RuntimeException(ex);
+      ProtocolNegotiator negotiator;
+      if (protocolNegotiatorFactory != null) {
+        negotiator = protocolNegotiatorFactory.buildProtocolNegotiator();
+      } else {
+        SslContext localSslContext = sslContext;
+        if (negotiationType == NegotiationType.TLS && localSslContext == null) {
+          try {
+            localSslContext = GrpcSslContexts.forClient().build();
+          } catch (SSLException ex) {
+            throw new RuntimeException(ex);
+          }
         }
+        negotiator = createProtocolNegotiatorByType(negotiationType, localSslContext);
       }
-      ProtocolNegotiator negotiator =
-          createProtocolNegotiatorByType(negotiationType, localSslContext);
       transportCreationParamsFilterFactory =
           new DefaultNettyTransportCreationParamsFilterFactory(negotiator);
     }
@@ -413,6 +418,11 @@ public final class NettyChannelBuilder
     this.dynamicParamsFactory = checkNotNull(factory, "factory");
   }
 
+  void protocolNegotiatorFactory(ProtocolNegotiatorFactory protocolNegotiatorFactory) {
+    this.protocolNegotiatorFactory
+        = Preconditions.checkNotNull(protocolNegotiatorFactory, "protocolNegotiatorFactory");
+  }
+
   @Override
   protected void setTracingEnabled(boolean value) {
     super.setTracingEnabled(value);
@@ -452,6 +462,14 @@ public final class NettyChannelBuilder
     @Nullable String getUserAgent();
 
     ProtocolNegotiator getProtocolNegotiator();
+  }
+
+  interface ProtocolNegotiatorFactory {
+    /**
+     * Returns a ProtocolNegotatior instance configured for this Builder. This method is called
+     * during {@code ManagedChannelBuilder#build()}.
+     */
+    ProtocolNegotiator buildProtocolNegotiator();
   }
 
   /**
