@@ -17,7 +17,6 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIME_NANOS;
@@ -80,7 +79,6 @@ public final class NettyChannelBuilder
   private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
   private boolean keepAliveWithoutCalls;
-  private TransportCreationParamsFilterFactory dynamicParamsFactory;
   private ProtocolNegotiatorFactory protocolNegotiatorFactory;
 
   /**
@@ -332,28 +330,22 @@ public final class NettyChannelBuilder
   @CheckReturnValue
   @Internal
   protected ClientTransportFactory buildTransportFactory() {
-    TransportCreationParamsFilterFactory transportCreationParamsFilterFactory =
-        dynamicParamsFactory;
-    if (transportCreationParamsFilterFactory == null) {
-      ProtocolNegotiator negotiator;
-      if (protocolNegotiatorFactory != null) {
-        negotiator = protocolNegotiatorFactory.buildProtocolNegotiator();
-      } else {
-        SslContext localSslContext = sslContext;
-        if (negotiationType == NegotiationType.TLS && localSslContext == null) {
-          try {
-            localSslContext = GrpcSslContexts.forClient().build();
-          } catch (SSLException ex) {
-            throw new RuntimeException(ex);
-          }
+    ProtocolNegotiator negotiator;
+    if (protocolNegotiatorFactory != null) {
+      negotiator = protocolNegotiatorFactory.buildProtocolNegotiator();
+    } else {
+      SslContext localSslContext = sslContext;
+      if (negotiationType == NegotiationType.TLS && localSslContext == null) {
+        try {
+          localSslContext = GrpcSslContexts.forClient().build();
+        } catch (SSLException ex) {
+          throw new RuntimeException(ex);
         }
-        negotiator = createProtocolNegotiatorByType(negotiationType, localSslContext);
       }
-      transportCreationParamsFilterFactory =
-          new DefaultNettyTransportCreationParamsFilterFactory(negotiator);
+      negotiator = createProtocolNegotiatorByType(negotiationType, localSslContext);
     }
     return new NettyTransportFactory(
-        transportCreationParamsFilterFactory, channelType, channelOptions,
+        negotiator, channelType, channelOptions,
         eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
         maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls,
         transportTracerFactory.create());
@@ -414,10 +406,6 @@ public final class NettyChannelBuilder
     return super.checkAuthority(authority);
   }
 
-  void setDynamicParamsFactory(TransportCreationParamsFilterFactory factory) {
-    this.dynamicParamsFactory = checkNotNull(factory, "factory");
-  }
-
   void protocolNegotiatorFactory(ProtocolNegotiatorFactory protocolNegotiatorFactory) {
     this.protocolNegotiatorFactory
         = Preconditions.checkNotNull(protocolNegotiatorFactory, "protocolNegotiatorFactory");
@@ -444,26 +432,6 @@ public final class NettyChannelBuilder
     return this;
   }
 
-  interface TransportCreationParamsFilterFactory {
-    @CheckReturnValue
-    TransportCreationParamsFilter create(
-        SocketAddress targetServerAddress,
-        String authority,
-        @Nullable String userAgent,
-        @Nullable ProxyParameters proxy);
-  }
-
-  @CheckReturnValue
-  interface TransportCreationParamsFilter {
-    SocketAddress getTargetServerAddress();
-
-    String getAuthority();
-
-    @Nullable String getUserAgent();
-
-    ProtocolNegotiator getProtocolNegotiator();
-  }
-
   interface ProtocolNegotiatorFactory {
     /**
      * Returns a ProtocolNegotatior instance configured for this Builder. This method is called
@@ -477,7 +445,7 @@ public final class NettyChannelBuilder
    */
   @CheckReturnValue
   private static final class NettyTransportFactory implements ClientTransportFactory {
-    private final TransportCreationParamsFilterFactory transportCreationParamsFilterFactory;
+    private final ProtocolNegotiator protocolNegotiator;
     private final Class<? extends Channel> channelType;
     private final Map<ChannelOption<?>, ?> channelOptions;
     private final EventLoopGroup group;
@@ -492,12 +460,12 @@ public final class NettyChannelBuilder
 
     private boolean closed;
 
-    NettyTransportFactory(TransportCreationParamsFilterFactory transportCreationParamsFilterFactory,
+    NettyTransportFactory(ProtocolNegotiator protocolNegotiator,
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
         EventLoopGroup group, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
         long keepAliveTimeNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls,
         TransportTracer transportTracer) {
-      this.transportCreationParamsFilterFactory = transportCreationParamsFilterFactory;
+      this.protocolNegotiator = protocolNegotiator;
       this.channelType = channelType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
       this.flowControlWindow = flowControlWindow;
@@ -522,12 +490,13 @@ public final class NettyChannelBuilder
         SocketAddress serverAddress, ClientTransportOptions options) {
       checkState(!closed, "The transport factory is closed.");
 
-      TransportCreationParamsFilter dparams =
-          transportCreationParamsFilterFactory.create(
-              serverAddress,
-              options.getAuthority(),
-              options.getUserAgent(),
-              options.getProxyParameters());
+      ProtocolNegotiator localNegotiator = protocolNegotiator;
+      ProxyParameters proxyParams = options.getProxyParameters();
+      if (proxyParams != null) {
+        localNegotiator = ProtocolNegotiators.httpProxy(
+            proxyParams.proxyAddress, proxyParams.username, proxyParams.password,
+            protocolNegotiator);
+      }
 
       final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
       Runnable tooManyPingsRunnable = new Runnable() {
@@ -537,10 +506,10 @@ public final class NettyChannelBuilder
         }
       };
       NettyClientTransport transport = new NettyClientTransport(
-          dparams.getTargetServerAddress(), channelType, channelOptions, group,
-          dparams.getProtocolNegotiator(), flowControlWindow,
+          serverAddress, channelType, channelOptions, group,
+          localNegotiator, flowControlWindow,
           maxMessageSize, maxHeaderListSize, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos,
-          keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent(),
+          keepAliveWithoutCalls, options.getAuthority(), options.getUserAgent(),
           tooManyPingsRunnable, transportTracer, options.getEagAttributes());
       return transport;
     }
@@ -560,70 +529,6 @@ public final class NettyChannelBuilder
       if (usingSharedGroup) {
         SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
       }
-    }
-  }
-
-  private static final class DefaultNettyTransportCreationParamsFilterFactory
-      implements TransportCreationParamsFilterFactory {
-    final ProtocolNegotiator negotiator;
-
-    DefaultNettyTransportCreationParamsFilterFactory(ProtocolNegotiator negotiator) {
-      this.negotiator = negotiator;
-    }
-
-    @Override
-    public TransportCreationParamsFilter create(
-        SocketAddress targetServerAddress,
-        String authority,
-        String userAgent,
-        ProxyParameters proxyParams) {
-      ProtocolNegotiator localNegotiator = negotiator;
-      if (proxyParams != null) {
-        localNegotiator = ProtocolNegotiators.httpProxy(
-            proxyParams.proxyAddress, proxyParams.username, proxyParams.password, negotiator);
-      }
-      return new DynamicNettyTransportParams(
-          targetServerAddress, authority, userAgent, localNegotiator);
-    }
-  }
-
-  @CheckReturnValue
-  private static final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
-
-    private final SocketAddress targetServerAddress;
-    private final String authority;
-    @Nullable private final String userAgent;
-    private final ProtocolNegotiator protocolNegotiator;
-
-    private DynamicNettyTransportParams(
-        SocketAddress targetServerAddress,
-        String authority,
-        String userAgent,
-        ProtocolNegotiator protocolNegotiator) {
-      this.targetServerAddress = targetServerAddress;
-      this.authority = authority;
-      this.userAgent = userAgent;
-      this.protocolNegotiator = protocolNegotiator;
-    }
-
-    @Override
-    public SocketAddress getTargetServerAddress() {
-      return targetServerAddress;
-    }
-
-    @Override
-    public String getAuthority() {
-      return authority;
-    }
-
-    @Override
-    public String getUserAgent() {
-      return userAgent;
-    }
-
-    @Override
-    public ProtocolNegotiator getProtocolNegotiator() {
-      return protocolNegotiator;
     }
   }
 }
