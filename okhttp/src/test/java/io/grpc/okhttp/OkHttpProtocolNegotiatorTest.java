@@ -128,7 +128,7 @@ public class OkHttpProtocolNegotiatorTest {
     OkHttpProtocolNegotiator negotiator = new OkHttpProtocolNegotiator(platform);
 
     thrown.expect(RuntimeException.class);
-    thrown.expectMessage("protocol negotiation failed");
+    thrown.expectMessage("TLS ALPN negotiation failed");
 
     negotiator.negotiate(sock, "hostname", ImmutableList.of(Protocol.HTTP_2));
   }

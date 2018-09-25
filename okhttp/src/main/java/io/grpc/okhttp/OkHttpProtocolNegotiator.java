@@ -93,7 +93,7 @@ class OkHttpProtocolNegotiator {
 
       String negotiatedProtocol = getSelectedProtocol(sslSocket);
       if (negotiatedProtocol == null) {
-        throw new RuntimeException("protocol negotiation failed");
+        throw new RuntimeException("TLS ALPN negotiation failed with protocols: " + protocols);
       }
       return negotiatedProtocol;
     } finally {
@@ -185,6 +185,7 @@ class OkHttpProtocolNegotiator {
             return new String(alpnResult, Util.UTF_8);
           }
         } catch (Exception e) {
+          logger.log(Level.FINE, "Failed calling getAlpnSelectedProtocol()", e);
           // In some implementations, querying selected protocol before the handshake will fail with
           // exception.
         }
@@ -198,6 +199,7 @@ class OkHttpProtocolNegotiator {
             return new String(npnResult, Util.UTF_8);
           }
         } catch (Exception e) {
+          logger.log(Level.FINE, "Failed calling getNpnSelectedProtocol()", e);
           // In some implementations, querying selected protocol before the handshake will fail with
           // exception.
         }

@@ -43,7 +43,7 @@ final class OkHttpTlsUpgrader {
    */
   @VisibleForTesting
   static final List<Protocol> TLS_PROTOCOLS =
-      Collections.unmodifiableList(Arrays.<Protocol>asList(Protocol.GRPC_EXP, Protocol.HTTP_2));
+      Collections.unmodifiableList(Arrays.asList(Protocol.GRPC_EXP, Protocol.HTTP_2));
 
   /**
    * Upgrades given Socket to be a SSLSocket.
