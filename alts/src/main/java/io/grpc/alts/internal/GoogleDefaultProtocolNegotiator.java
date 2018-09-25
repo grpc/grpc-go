@@ -49,4 +49,10 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
       return tlsProtocolNegotiator.newHandler(grpcHandler);
     }
   }
+
+  @Override
+  public void close() {
+    altsProtocolNegotiator.close();
+    tlsProtocolNegotiator.close();
+  }
 }

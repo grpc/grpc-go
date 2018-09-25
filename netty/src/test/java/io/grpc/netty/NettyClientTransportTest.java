@@ -821,5 +821,8 @@ public class NettyClientTransportTest {
       this.grpcHandler = grpcHandler;
       return handler = new NoopHandler(grpcHandler);
     }
+
+    @Override
+    public void close() {}
   }
 }

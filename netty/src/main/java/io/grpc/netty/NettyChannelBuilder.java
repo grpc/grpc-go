@@ -526,6 +526,7 @@ public final class NettyChannelBuilder
       }
       closed = true;
 
+      protocolNegotiator.close();
       if (usingSharedGroup) {
         SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
       }

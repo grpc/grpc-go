@@ -43,4 +43,11 @@ public interface ProtocolNegotiator {
    * completed successfully.
    */
   Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler);
+
+  /**
+   * Releases resources held by this negotiator. Called when the Channel transitions to terminated.
+   * Is currently only supported on client-side; server-side protocol negotiators will not see this
+   * method called.
+   */
+  void close();
 }

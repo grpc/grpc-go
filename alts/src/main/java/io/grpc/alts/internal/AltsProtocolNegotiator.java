@@ -61,6 +61,11 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
                     handshakerFactory.newHandshaker(grpcHandler.getAuthority()))),
             new TsiFrameHandler());
       }
+
+      @Override
+      public void close() {
+        // TODO(jiangtaoli2016): release resources
+      }
     };
   }
 
@@ -74,6 +79,11 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
             grpcHandler,
             new TsiHandshakeHandler(new NettyTsiHandshaker(handshakerFactory.newHandshaker(null))),
             new TsiFrameHandler());
+      }
+
+      @Override
+      public void close() {
+        // TODO(jiangtaoli2016): release resources
       }
     };
   }

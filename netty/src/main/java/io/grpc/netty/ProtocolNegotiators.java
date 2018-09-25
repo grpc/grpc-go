@@ -104,6 +104,9 @@ public final class ProtocolNegotiators {
 
         return new PlaintextHandler();
       }
+
+      @Override
+      public void close() {}
     };
   }
 
@@ -117,6 +120,9 @@ public final class ProtocolNegotiators {
       public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
         return new ServerTlsHandler(sslContext, handler);
       }
+
+      @Override
+      public void close() {}
     };
   }
 
@@ -206,6 +212,13 @@ public final class ProtocolNegotiators {
         }
         return new BufferUntilProxyTunnelledHandler(
             proxyHandler, negotiator.newHandler(http2Handler));
+      }
+
+      // This method is not normally called, because we use httpProxy on a per-connection basis in
+      // NettyChannelBuilder. Instead, we expect `negotiator' to be closed by NettyTransportFactory.
+      @Override
+      public void close() {
+        negotiator.close();
       }
     }
 
@@ -310,6 +323,9 @@ public final class ProtocolNegotiators {
       };
       return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
     }
+
+    @Override
+    public void close() {}
   }
 
   /** A tuple of (host, port). */
@@ -341,6 +357,9 @@ public final class ProtocolNegotiators {
           new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
       return new BufferingHttp2UpgradeHandler(upgrader, handler);
     }
+
+    @Override
+    public void close() {}
   }
 
   /**
@@ -357,6 +376,9 @@ public final class ProtocolNegotiators {
     public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
       return new BufferUntilChannelActiveHandler(handler);
     }
+
+    @Override
+    public void close() {}
   }
 
   private static RuntimeException unavailableException(String msg) {
