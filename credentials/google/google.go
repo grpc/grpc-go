@@ -56,9 +56,6 @@ type creds struct {
 }
 
 func (c *creds) TransportCredentials() credentials.TransportCredentials {
-	if c == nil {
-		return nil
-	}
 	return c.transportCreds
 }
 
