@@ -19,7 +19,6 @@
 package google
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -32,12 +31,6 @@ import (
 )
 
 const tokenRequestTimeout = 30 * time.Second
-
-var vmOnGCP bool
-
-func init() {
-	vmOnGCP = alts.IsRunningOnGCP()
-}
 
 // NewDefaultCredentials returns a credentials bundle that is configured to work
 // with google services.
@@ -86,9 +79,6 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	case internal.CredsBundleModeFallback:
 		newCreds.transportCreds = credentials.NewTLS(nil)
 	case internal.CredsBundleModeBackendFromBalancer, internal.CredsBundleModeBalancer:
-		if !vmOnGCP {
-			return nil, errors.New("google default creds: ALTS, as part of google default credentials, is only supported on GCP")
-		}
 		// Only the clients can use google default credentials, so we only need
 		// to create new ALTS client creds here.
 		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())

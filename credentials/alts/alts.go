@@ -66,7 +66,7 @@ var (
 	// ErrUntrustedPlatform is returned from ClientHandshake and
 	// ServerHandshake is running on a platform where the trustworthiness of
 	// the handshaker service is not guaranteed.
-	ErrUntrustedPlatform = errors.New("untrusted platform")
+	ErrUntrustedPlatform = errors.New("ALTS: untrusted platform. ALTS is only supported on GCP")
 )
 
 // AuthInfo exposes security information from the ALTS handshake to the
@@ -148,7 +148,7 @@ func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
 
 func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
 	once.Do(func() {
-		vmOnGCP = IsRunningOnGCP()
+		vmOnGCP = isRunningOnGCP()
 	})
 
 	if hsAddress == "" {
