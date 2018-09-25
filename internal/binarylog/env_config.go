@@ -87,7 +87,9 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 		if err != nil {
 			return fmt.Errorf("invalid config: %q, %v", config, err)
 		}
-		l.setDefaultMethodLogger(&methodLoggerConfig{hdr: hdr, msg: msg})
+		if err := l.setDefaultMethodLogger(&methodLoggerConfig{hdr: hdr, msg: msg}); err != nil {
+			return fmt.Errorf("invalid config: %v", err)
+		}
 		return nil
 	}
 
@@ -100,7 +102,9 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 		return fmt.Errorf("invalid header/message length config: %q, %v", suffix, err)
 	}
 	if m == "*" {
-		l.setServiceMethodLogger(s, &methodLoggerConfig{hdr: hdr, msg: msg})
+		if err := l.setServiceMethodLogger(s, &methodLoggerConfig{hdr: hdr, msg: msg}); err != nil {
+			return fmt.Errorf("invalid config: %v", err)
+		}
 	} else {
 		if err := l.setMethodMethodLogger(s+"/"+m, &methodLoggerConfig{hdr: hdr, msg: msg}); err != nil {
 			return fmt.Errorf("invalid config: %v", err)

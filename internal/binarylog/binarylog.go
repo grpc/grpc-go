@@ -59,18 +59,26 @@ func newEmptyLogger() *logger {
 }
 
 // Set method logger for "*".
-func (l *logger) setDefaultMethodLogger(ml *methodLoggerConfig) {
+func (l *logger) setDefaultMethodLogger(ml *methodLoggerConfig) error {
+	if l.all != nil {
+		return fmt.Errorf("conflicting global rules found")
+	}
 	l.all = ml
+	return nil
 }
 
 // Set method logger for "service/*".
 //
 // New methodLogger with same service overrides the old one.
-func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) {
+func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) error {
+	if _, ok := l.services[service]; ok {
+		return fmt.Errorf("conflicting rules for service %v found", service)
+	}
 	if l.services == nil {
 		l.services = make(map[string]*methodLoggerConfig)
 	}
 	l.services[service] = ml
+	return nil
 }
 
 // Set method logger for "service/method".
@@ -78,10 +86,10 @@ func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) 
 // New methodLogger with same method overrides the old one.
 func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) error {
 	if _, ok := l.blacklist[method]; ok {
-		return fmt.Errorf("conflicting rules for %v found", method)
+		return fmt.Errorf("conflicting rules for method %v found", method)
 	}
 	if _, ok := l.methods[method]; ok {
-		return fmt.Errorf("conflicting rules for %v found", method)
+		return fmt.Errorf("conflicting rules for method %v found", method)
 	}
 	if l.methods == nil {
 		l.methods = make(map[string]*methodLoggerConfig)
@@ -93,10 +101,10 @@ func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) er
 // Set blacklist method for "-service/method".
 func (l *logger) setBlacklist(method string) error {
 	if _, ok := l.blacklist[method]; ok {
-		return fmt.Errorf("conflicting rules for %v found", method)
+		return fmt.Errorf("conflicting rules for method %v found", method)
 	}
 	if _, ok := l.methods[method]; ok {
-		return fmt.Errorf("conflicting rules for %v found", method)
+		return fmt.Errorf("conflicting rules for method %v found", method)
 	}
 	if l.blacklist == nil {
 		l.blacklist = make(map[string]struct{})
