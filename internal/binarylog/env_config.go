@@ -118,16 +118,11 @@ const (
 	// other config. Move to binarylog.go if necessary.
 	maxUInt = ^uint64(0)
 
-	// For "p.s/m" plus any suffix. Suffix will be parsed again.
-	// See test for expected output.
-	//
-	// https://regex101.com/r/spLgpW/2
+	// For "p.s/m" plus any suffix. Suffix will be parsed again. See test for
+	// expected output.
 	longMethodConfigRegexpStr = `^([\w./]+)/((?:\w+)|[*])(.+)?$`
 
-	// For suffix from above, "{h:123,m:123}".
-	// See test for expected output.
-	//
-	// https://regex101.com/r/0ZHrtu/3
+	// For suffix from above, "{h:123,m:123}". See test for expected output.
 	optionalLengthRegexpStr      = `(?::(\d+))?` // Optional ":123".
 	headerConfigRegexpStr        = `^{h` + optionalLengthRegexpStr + `}$`
 	messageConfigRegexpStr       = `^{m` + optionalLengthRegexpStr + `}$`
