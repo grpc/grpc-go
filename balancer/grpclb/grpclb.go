@@ -170,13 +170,13 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 
 	var err error
 	if opt.CredsBundle != nil {
-		lb.grpclbClientConnCreds, err = opt.CredsBundle.SwitchMode(internal.CredsBundleModeGRPCLB)
+		lb.grpclbClientConnCreds, err = opt.CredsBundle.NewWithMode(internal.CredsBundleModeBalancer)
 		if err != nil {
-			grpclog.Warningf("lbBalancer: client connection creds SwitchMode failed: %v", err)
+			grpclog.Warningf("lbBalancer: client connection creds NewWithMode failed: %v", err)
 		}
-		lb.grpclbBackendCreds, err = opt.CredsBundle.SwitchMode(internal.CredsBundleModeALTS)
+		lb.grpclbBackendCreds, err = opt.CredsBundle.NewWithMode(internal.CredsBundleModeBackendFromBalancer)
 		if err != nil {
-			grpclog.Warningf("lbBalancer: backend creds SwitchMode failed: %v", err)
+			grpclog.Warningf("lbBalancer: backend creds NewWithMode failed: %v", err)
 		}
 	}
 

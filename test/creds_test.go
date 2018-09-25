@@ -61,7 +61,7 @@ func (c *testCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 	return testPerRPCCredentials{}
 }
 
-func (c *testCredsBundle) SwitchMode(mode string) (credentials.Bundle, error) {
+func (c *testCredsBundle) NewWithMode(mode string) (credentials.Bundle, error) {
 	return &testCredsBundle{mode: mode}, nil
 }
 

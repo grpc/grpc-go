@@ -82,7 +82,7 @@ var (
 	errNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
 	// errTransportCredsAndBundle indicates that creds bundle is used together
 	// with other individual Transport Credentials.
-	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle shouldn't be used together with individual TransportCredentials")
+	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle may not be used with individual TransportCredentials")
 	// errTransportCredentialsMissing indicates that users want to transmit security
 	// information (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.

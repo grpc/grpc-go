@@ -44,7 +44,12 @@ func init() {
 //
 // This API is experimental.
 func NewDefaultCredentials() credentials.Bundle {
-	return new()
+	c := &creds{}
+	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
+	if err != nil {
+		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
+	}
+	return bundle
 }
 
 // creds implements credentials.Bundle.
@@ -71,20 +76,16 @@ func (c *creds) PerRPCCredentials() credentials.PerRPCCredentials {
 	return c.perRPCCreds
 }
 
-// SwitchMode should make a copy of Bundle, and switch mode. Modifying the
+// NewWithMode should make a copy of Bundle, and switch mode. Modifying the
 // existing Bundle may cause races.
-func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
-	if c == nil {
-		return nil, nil
-	}
-
+func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	newCreds := &creds{mode: mode}
 
 	// Create transport credentials.
 	switch mode {
-	case internal.CredsBundleModeTLS:
+	case internal.CredsBundleModeFallback:
 		newCreds.transportCreds = credentials.NewTLS(nil)
-	case internal.CredsBundleModeALTS, internal.CredsBundleModeGRPCLB:
+	case internal.CredsBundleModeBackendFromBalancer, internal.CredsBundleModeBalancer:
 		if !vmOnGCP {
 			return nil, errors.New("google default creds: ALTS, as part of google default credentials, is only supported on GCP")
 		}
@@ -95,7 +96,7 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 		return nil, fmt.Errorf("google default creds: unsupported mode: %v", mode)
 	}
 
-	if mode == internal.CredsBundleModeTLS || mode == internal.CredsBundleModeALTS {
+	if mode == internal.CredsBundleModeFallback || mode == internal.CredsBundleModeBackendFromBalancer {
 		// Create per RPC credentials.
 		// For the time being, we required per RPC credentials for both TLS and
 		// ALTS. In the future, this will only be required for TLS.
@@ -109,14 +110,4 @@ func (c *creds) SwitchMode(mode string) (credentials.Bundle, error) {
 	}
 
 	return newCreds, nil
-}
-
-// new creates a new instance of GoogleDefaultCreds.
-func new() credentials.Bundle {
-	c := &creds{}
-	bundle, err := c.SwitchMode(internal.CredsBundleModeTLS)
-	if err != nil {
-		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
-	}
-	return bundle
 }

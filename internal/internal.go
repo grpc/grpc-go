@@ -28,10 +28,12 @@ var (
 )
 
 const (
-	// CredsBundleModeGRPCLB switches GoogleDefaultCreds to grpclb CredsBundleMode.
-	CredsBundleModeGRPCLB = "grpclb"
-	// CredsBundleModeTLS switches GoogleDefaultCreds to TLS CredsBundleMode.
-	CredsBundleModeTLS = "tls"
-	// CredsBundleModeALTS switches GoogleDefaultCreds to ALTS CredsBundleMode.
-	CredsBundleModeALTS = "alts"
+	// CredsBundleModeFallback switches GoogleDefaultCreds to fallback mode.
+	CredsBundleModeFallback = "fallback"
+	// CredsBundleModeBalancer switches GoogleDefaultCreds to grpclb balancer
+	// mode.
+	CredsBundleModeBalancer = "balancer"
+	// CredsBundleModeBackendFromBalancer switches GoogleDefaultCreds to mode
+	// that supports backend returned by grpclb balancer.
+	CredsBundleModeBackendFromBalancer = "backend-from-balancer"
 )
