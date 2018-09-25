@@ -16,8 +16,6 @@
 
 package io.grpc.alts;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -38,14 +36,9 @@ import io.grpc.alts.internal.TsiHandshaker;
 import io.grpc.alts.internal.TsiHandshakerFactory;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ObjectPool;
-import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourcePool;
 import io.grpc.netty.InternalNettyChannelBuilder;
-import io.grpc.netty.InternalNettyChannelBuilder.TransportCreationParamsFilter;
-import io.grpc.netty.InternalNettyChannelBuilder.TransportCreationParamsFilterFactory;
 import io.grpc.netty.NettyChannelBuilder;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -64,8 +57,10 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
       new AltsClientOptions.Builder();
   private ObjectPool<ManagedChannel> handshakerChannelPool =
       SharedResourcePool.forResource(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
-  private TcpfFactory tcpfFactoryForTest;
   private boolean enableUntrustedAlts;
+
+  private AltsProtocolNegotiator negotiatorForTest;
+  private AltsClientOptions handshakerOptionsForTest;
 
   /** "Overrides" the static method in {@link ManagedChannelBuilder}. */
   public static final AltsChannelBuilder forTarget(String target) {
@@ -85,6 +80,8 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
             .keepAliveWithoutCalls(true);
     handshakerOptionsBuilder.setRpcProtocolVersions(
         RpcProtocolVersionsUtil.getRpcProtocolVersions());
+    InternalNettyChannelBuilder
+        .setProtocolNegotiatorFactory(delegate(), new ProtocolNegotiatorFactory());
   }
 
   /** The server service account name for secure name checking. */
@@ -140,84 +137,40 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
       }
     }
 
-    final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
-    TsiHandshakerFactory altsHandshakerFactory =
-        new TsiHandshakerFactory() {
-          @Override
-          public TsiHandshaker newHandshaker() {
-            // Used the shared grpc channel to connecting to the ALTS handshaker service.
-            // TODO: Release the channel if it is not used.
-            // https://github.com/grpc/grpc-java/issues/4755.
-            return AltsTsiHandshaker.newClient(
-                HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
-                handshakerOptions);
-          }
-        };
-    AltsProtocolNegotiator negotiator = AltsProtocolNegotiator.create(altsHandshakerFactory);
-
-    TcpfFactory tcpfFactory = new TcpfFactory(handshakerOptions, negotiator);
-    InternalNettyChannelBuilder.setDynamicTransportParamsFactory(delegate(), tcpfFactory);
-    tcpfFactoryForTest = tcpfFactory;
-
     return delegate().build();
   }
 
   @VisibleForTesting
   @Nullable
-  TransportCreationParamsFilterFactory getTcpfFactoryForTest() {
-    return tcpfFactoryForTest;
+  AltsProtocolNegotiator getProtocolNegotiatorForTest() {
+    return negotiatorForTest;
   }
 
   @VisibleForTesting
   @Nullable
   AltsClientOptions getAltsClientOptionsForTest() {
-    if (tcpfFactoryForTest == null) {
-      return null;
-    }
-    return tcpfFactoryForTest.handshakerOptions;
+    return handshakerOptionsForTest;
   }
 
-  private static final class TcpfFactory implements TransportCreationParamsFilterFactory {
-
-    final AltsClientOptions handshakerOptions;
-    private final AltsProtocolNegotiator negotiator;
-
-    public TcpfFactory(AltsClientOptions handshakerOptions, AltsProtocolNegotiator negotiator) {
-      this.handshakerOptions = handshakerOptions;
-      this.negotiator = negotiator;
-    }
-
+  private final class ProtocolNegotiatorFactory
+      implements InternalNettyChannelBuilder.ProtocolNegotiatorFactory {
     @Override
-    public TransportCreationParamsFilter create(
-        final SocketAddress serverAddress,
-        final String authority,
-        final String userAgent,
-        final ProxyParameters proxy) {
-      checkArgument(
-          serverAddress instanceof InetSocketAddress,
-          "%s must be a InetSocketAddress",
-          serverAddress);
-      return new TransportCreationParamsFilter() {
-        @Override
-        public SocketAddress getTargetServerAddress() {
-          return serverAddress;
-        }
-
-        @Override
-        public String getAuthority() {
-          return authority;
-        }
-
-        @Override
-        public String getUserAgent() {
-          return userAgent;
-        }
-
-        @Override
-        public AltsProtocolNegotiator getProtocolNegotiator() {
-          return negotiator;
-        }
-      };
+    public AltsProtocolNegotiator buildProtocolNegotiator() {
+      final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
+      TsiHandshakerFactory altsHandshakerFactory =
+          new TsiHandshakerFactory() {
+            @Override
+            public TsiHandshaker newHandshaker() {
+              // Used the shared grpc channel to connecting to the ALTS handshaker service.
+              // TODO: Release the channel if it is not used.
+              // https://github.com/grpc/grpc-java/issues/4755.
+              return AltsTsiHandshaker.newClient(
+                  HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
+                  handshakerOptions);
+            }
+          };
+      handshakerOptionsForTest = handshakerOptions;
+      return negotiatorForTest = AltsProtocolNegotiator.create(altsHandshakerFactory);
     }
   }
 

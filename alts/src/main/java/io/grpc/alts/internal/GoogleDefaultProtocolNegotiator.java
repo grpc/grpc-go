@@ -35,7 +35,8 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
 
   @VisibleForTesting
   GoogleDefaultProtocolNegotiator(
-      ProtocolNegotiator altsProtocolNegotiator, ProtocolNegotiator tlsProtocolNegotiator) {
+      ProtocolNegotiator altsProtocolNegotiator,
+      ProtocolNegotiator tlsProtocolNegotiator) {
     this.altsProtocolNegotiator = altsProtocolNegotiator;
     this.tlsProtocolNegotiator = tlsProtocolNegotiator;
   }

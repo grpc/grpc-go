@@ -21,9 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import io.grpc.alts.internal.AltsClientOptions;
 import io.grpc.alts.internal.AltsProtocolNegotiator;
 import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
-import io.grpc.netty.InternalNettyChannelBuilder.TransportCreationParamsFilterFactory;
 import io.grpc.netty.ProtocolNegotiator;
-import java.net.InetSocketAddress;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -36,22 +34,18 @@ public final class AltsChannelBuilderTest {
     AltsChannelBuilder builder =
         AltsChannelBuilder.forTarget("localhost:8080").enableUntrustedAltsForTesting();
 
-    TransportCreationParamsFilterFactory tcpfFactory = builder.getTcpfFactoryForTest();
+    ProtocolNegotiator protocolNegotiator = builder.getProtocolNegotiatorForTest();
     AltsClientOptions altsClientOptions = builder.getAltsClientOptionsForTest();
 
-    assertThat(tcpfFactory).isNull();
+    assertThat(protocolNegotiator).isNull();
     assertThat(altsClientOptions).isNull();
 
     builder.build();
 
-    tcpfFactory = builder.getTcpfFactoryForTest();
+    protocolNegotiator = builder.getProtocolNegotiatorForTest();
     altsClientOptions = builder.getAltsClientOptionsForTest();
 
-    assertThat(tcpfFactory).isNotNull();
-    ProtocolNegotiator protocolNegotiator =
-        tcpfFactory
-            .create(new InetSocketAddress(8080), "fakeAuthority", "fakeUserAgent", null)
-            .getProtocolNegotiator();
+    assertThat(protocolNegotiator).isNotNull();
     assertThat(protocolNegotiator).isInstanceOf(AltsProtocolNegotiator.class);
 
     assertThat(altsClientOptions).isNotNull();
