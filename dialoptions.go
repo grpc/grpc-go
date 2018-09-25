@@ -287,7 +287,7 @@ func WithInsecure() DialOption {
 
 // WithTransportCredentials returns a DialOption which configures a connection
 // level security credentials (e.g., TLS/SSL). This should not be used together
-// with WithCreds.
+// with WithCredentialsBundle.
 func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.TransportCredentials = creds

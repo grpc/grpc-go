@@ -18,7 +18,8 @@
 
 package test
 
-// TODO: move all creds releated tests to this file.
+// TODO(https://github.com/grpc/grpc-go/issues/2330): move all creds releated
+// tests to this file.
 
 import (
 	"testing"
