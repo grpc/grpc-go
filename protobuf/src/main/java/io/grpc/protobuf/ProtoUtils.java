@@ -16,6 +16,7 @@
 
 package io.grpc.protobuf;
 
+import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.Message;
 import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
@@ -26,6 +27,25 @@ import io.grpc.protobuf.lite.ProtoLiteUtils;
  * Utility methods for using protobuf with grpc.
  */
 public final class ProtoUtils {
+
+  /**
+   * Sets the global registry for proto marshalling shared across all servers and clients.
+   *
+   * <p>Warning:  This API will likely change over time.  It is not possible to have separate
+   * registries per Process, Server, Channel, Service, or Method.  This is intentional until there
+   * is a more appropriate API to set them.
+   *
+   * <p>Warning:  Do NOT modify the extension registry after setting it.  It is thread safe to call
+   * {@link #setExtensionRegistry}, but not to modify the underlying object.
+   *
+   * <p>If you need custom parsing behavior for protos, you will need to make your own
+   * {@code MethodDescriptor.Marshaller} for the time being.
+   *
+   * @since 1.16.0
+   */
+  public static void setExtensionRegistry(ExtensionRegistry registry) {
+    ProtoLiteUtils.setExtensionRegistry(registry);
+  }
 
   /**
    * Create a {@link Marshaller} for protos of the same type as {@code defaultInstance}.
