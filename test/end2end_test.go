@@ -477,6 +477,7 @@ type test struct {
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
+	customServerOptions         []grpc.ServerOption
 	resolverScheme              string
 	cliKeepAlive                *keepalive.ClientParameters
 	svrKeepAlive                *keepalive.ServerParameters
@@ -607,6 +608,7 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	if te.svrKeepAlive != nil {
 		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
 	}
+	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
 	te.srv = s
 	if te.healthServer != nil {
@@ -806,6 +808,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case "clientTimeoutCreds":
 		opts = append(opts, grpc.WithTransportCredentials(&clientTimeoutCreds{}))
+	case "empty":
+		// Don't add any transport creds option.
 	default:
 		opts = append(opts, grpc.WithInsecure())
 	}
