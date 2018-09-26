@@ -168,7 +168,6 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 	close(dialDone)
 	if err != nil {
-		cancel()
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
 	defer client.Close()
@@ -179,6 +178,48 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 	}
 	<-done
 
+}
+
+func TestDialWaitsForServerSettingsAndFails(t *testing.T) {
+	defer leakcheck.Check(t)
+	server, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	done := make(chan struct{})
+	dialDone := make(chan struct{})
+	numConns := 0
+	go func() { // Launch the server.
+		defer func() {
+			close(done)
+		}()
+		for {
+			conn, err := server.Accept()
+			if err != nil {
+				break
+			}
+			numConns++
+			defer conn.Close()
+		}
+		<-dialDone // Close conn only after dial returns.
+	}()
+	getMinConnectTimeout = func() time.Duration { return time.Second / 2 }
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
+	server.Close()
+	close(dialDone)
+	if err == nil {
+		client.Close()
+		t.Fatalf("Unexpected success (err=nil) while dialing")
+	}
+	if err != context.DeadlineExceeded {
+		t.Fatalf("DialContext(_) = %v; want context.DeadlineExceeded", err)
+	}
+	if numConns < 2 {
+		t.Fatalf("dial attempts: %v; want > 1", numConns)
+	}
+	<-done
 }
 
 func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
