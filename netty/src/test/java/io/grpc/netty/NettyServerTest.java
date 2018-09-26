@@ -24,11 +24,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.Attributes;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalInstrumented;
+import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.ServerListener;
+import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.TransportTracer;
@@ -75,7 +78,7 @@ public class NettyServerTest {
     ns.start(new ServerListener() {
       @Override
       public ServerTransportListener transportCreated(ServerTransport transport) {
-        return null;
+        return new NoopServerTransportListener();
       }
 
       @Override
@@ -159,7 +162,7 @@ public class NettyServerTest {
 
         countDownLatch.countDown();
 
-        return null;
+        return new NoopServerTransportListener();
       }
 
       @Override
@@ -202,7 +205,7 @@ public class NettyServerTest {
     ns.start(new ServerListener() {
       @Override
       public ServerTransportListener transportCreated(ServerTransport transport) {
-        return null;
+        return new NoopServerTransportListener();
       }
 
       @Override
@@ -230,5 +233,15 @@ public class NettyServerTest {
 
     // listen socket is removed
     assertNull(channelz.getSocket(id(listenSocket)));
+  }
+
+  private static class NoopServerTransportListener implements ServerTransportListener {
+    @Override public void streamCreated(ServerStream stream, String method, Metadata headers) {}
+
+    @Override public Attributes transportReady(Attributes attributes) {
+      return attributes;
+    }
+
+    @Override public void transportTerminated() {}
   }
 }
