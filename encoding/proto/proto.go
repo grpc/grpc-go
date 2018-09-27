@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/encoding"
 )
 
-// Name is the name registered for the proto compressor.
+// Name is the name registered for the proto codec.
 const Name = "proto"
 
 func init() {
