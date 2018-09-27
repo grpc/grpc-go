@@ -772,7 +772,7 @@ func (t *http2Client) Close() error {
 		}
 		t.statsHandler.HandleConn(t.ctx, connEnd)
 	}
-	t.onClose()
+	go t.onClose()
 	return err
 }
 

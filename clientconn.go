@@ -1053,8 +1053,11 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		}
 	}
 
+	prefaceTimer := time.NewTimer(connectDeadline.Sub(time.Now()))
+
 	onClose := func() {
 		close(onCloseCalled)
+		prefaceTimer.Stop()
 
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
@@ -1075,6 +1078,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 	onPrefaceReceipt := func() {
 		close(prefaceReceived)
+		prefaceTimer.Stop()
 
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
@@ -1095,40 +1099,34 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 
 	if err == nil {
-		prefaceTimer := time.AfterFunc(connectDeadline.Sub(time.Now()), func() {
-			ac.mu.Lock()
-			select {
-			case <-onCloseCalled:
-				// The transport has already closed - noop.
-				ac.mu.Unlock()
-			case <-prefaceReceived:
-				// We got the preface just in the nick of time - huzzah!
-				ac.mu.Unlock()
-			default:
-				// We didn't get the preface in time.
-				ac.mu.Unlock()
-				newTr.Close()
-			}
-		})
 		if ac.dopts.waitForHandshake {
 			select {
 			case <-prefaceTimer.C:
-				// We want to close but _not_ reset, because we're going into the transient-failure-and-return flow
-				// and go into the next cycle of the resetTransport loop.
-				close(skipReset)
+				// We didn't get the preface in time.
 				newTr.Close()
-				err = errors.New("timed out")
+				err = errors.New("timed out waiting for server handshake")
 			case <-prefaceReceived:
 				// We got the preface - huzzah! things are good.
 			case <-onCloseCalled:
 				// The transport has already closed - noop.
 			}
+		} else {
+			go func() {
+				select {
+				case <-prefaceTimer.C:
+					// We didn't get the preface in time.
+					newTr.Close()
+				case <-prefaceReceived:
+					// We got the preface just in the nick of time - huzzah!
+				case <-onCloseCalled:
+					// The transport has already closed - noop.
+				}
+			}()
 		}
 	}
 
 	if err != nil {
 		// newTr is either nil, or closed.
-
 		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
 		ac.mu.Lock()
