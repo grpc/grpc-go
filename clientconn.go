@@ -1040,6 +1040,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	allowedToReset := make(chan struct{})
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
+	newTransportError := make(chan error, 1)
 
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
@@ -1058,6 +1059,9 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	onClose := func() {
 		close(onCloseCalled)
 		prefaceTimer.Stop()
+		if err := <-newTransportError; err != nil {
+			return
+		}
 
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
@@ -1097,6 +1101,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
+	newTransportError <- err
+	close(newTransportError)
 
 	if err == nil {
 		if ac.dopts.waitForHandshake {
