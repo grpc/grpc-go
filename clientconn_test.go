@@ -187,7 +187,6 @@ func TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	done := make(chan struct{})
-	dialDone := make(chan struct{})
 	numConns := 0
 	go func() { // Launch the server.
 		defer func() {
@@ -201,14 +200,12 @@ func TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 			numConns++
 			defer conn.Close()
 		}
-		<-dialDone // Close conn only after dial returns.
 	}()
 	getMinConnectTimeout = func() time.Duration { return time.Second / 2 }
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 	server.Close()
-	close(dialDone)
 	if err == nil {
 		client.Close()
 		t.Fatalf("Unexpected success (err=nil) while dialing")
