@@ -22,15 +22,16 @@ import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.services.BinaryLogProvider.BYTEARRAY_MARSHALLER;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
+import com.google.protobuf.util.Timestamps;
 import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
 import io.grpc.Attributes;
-import io.grpc.BinaryLog.CallId;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -51,14 +52,12 @@ import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
-import io.grpc.binarylog.v1alpha.GrpcLogEntry;
-import io.grpc.binarylog.v1alpha.GrpcLogEntry.Type;
-import io.grpc.binarylog.v1alpha.Message;
-import io.grpc.binarylog.v1alpha.Metadata.Builder;
-import io.grpc.binarylog.v1alpha.Peer;
-import io.grpc.binarylog.v1alpha.Peer.PeerType;
-import io.grpc.binarylog.v1alpha.Uint128;
-import io.grpc.internal.GrpcUtil;
+import io.grpc.binarylog.v1.Address;
+import io.grpc.binarylog.v1.Address.Type;
+import io.grpc.binarylog.v1.GrpcLogEntry;
+import io.grpc.binarylog.v1.GrpcLogEntry.EventType;
+import io.grpc.binarylog.v1.Message;
+import io.grpc.binarylog.v1.Message.Builder;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -70,7 +69,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -82,8 +81,6 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 final class BinlogHelper {
   private static final Logger logger = Logger.getLogger(BinlogHelper.class.getName());
-  private static final boolean SERVER = true;
-  private static final boolean CLIENT = false;
   // Normally 'grpc-' metadata keys are set from within gRPC, and applications are not allowed
   // to set them. This key is a special well known key that set from the application layer, but
   // represents a com.google.rpc.Status and is given special first class treatment.
@@ -92,11 +89,6 @@ final class BinlogHelper {
       Metadata.Key.of(
           "grpc-status-details-bin",
           Metadata.BINARY_BYTE_MARSHALLER);
-
-  @VisibleForTesting
-  static final SocketAddress DUMMY_SOCKET = new DummySocketAddress();
-  @VisibleForTesting
-  static final boolean DUMMY_IS_COMPRESSED = false;
 
   @VisibleForTesting
   final SinkWriter writer;
@@ -109,134 +101,191 @@ final class BinlogHelper {
   // TODO(zpencer): move proto related static helpers into this class
   static final class SinkWriterImpl extends SinkWriter {
     private final BinaryLogSink sink;
+    private TimeProvider timeProvider;
     private final int maxHeaderBytes;
     private final int maxMessageBytes;
 
-    SinkWriterImpl(BinaryLogSink sink, int maxHeaderBytes, int maxMessageBytes) {
+    private static final long NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
+
+    SinkWriterImpl(
+        BinaryLogSink sink,
+        TimeProvider timeProvider,
+        int maxHeaderBytes,
+        int maxMessageBytes) {
       this.sink = sink;
+      this.timeProvider = timeProvider;
       this.maxHeaderBytes = maxHeaderBytes;
       this.maxMessageBytes = maxMessageBytes;
     }
 
+    GrpcLogEntry.Builder newTimestampedBuilder() {
+      long epochNanos = timeProvider.currentTimeNanos();
+      return GrpcLogEntry.newBuilder().setTimestamp(Timestamps.fromNanos(epochNanos));
+    }
+
     @Override
-    void logSendInitialMetadata(
-        int seq,
-        @Nullable String methodName, // null on server
-        @Nullable Duration timeout, // null on server
+    void logClientHeader(
+        long seq,
+        String methodName,
+        // not all transports have the concept of authority
+        @Nullable String authority,
+        @Nullable Duration timeout,
         Metadata metadata,
-        boolean isServer,
-        CallId callId) {
-      Preconditions.checkArgument(methodName == null || !isServer);
-      Preconditions.checkArgument(timeout == null || !isServer);
-      // Java does not include the leading '/'. To be consistent with the rest of gRPC we must
-      // include the '/' in the fully qualified name for binlogs.
-      Preconditions.checkArgument(methodName == null || !methodName.startsWith("/"));
-      GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
-          .setSequenceIdWithinCall(seq)
-          .setType(Type.SEND_INITIAL_METADATA)
-          .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId));
-      addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
-      if (methodName != null) {
-        entryBuilder.setMethodName("/" + methodName);
-      }
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on client side
+        @Nullable SocketAddress peerAddress) {
+      Preconditions.checkArgument(methodName != null, "methodName can not be null");
+      Preconditions.checkArgument(
+          !methodName.startsWith("/"),
+          "in grpc-java method names should not have a leading '/'. However this class will "
+              + "add one to be consistent with language agnostic conventions.");
+      Preconditions.checkArgument(
+          peerAddress == null || logger == GrpcLogEntry.Logger.LOGGER_SERVER,
+          "peerSocket can only be specified for server");
+
+      MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder> pair
+          = createMetadataProto(metadata, maxHeaderBytes);
+      io.grpc.binarylog.v1.ClientHeader.Builder clientHeaderBuilder
+          = io.grpc.binarylog.v1.ClientHeader.newBuilder()
+          .setMetadata(pair.proto)
+          .setMethodName("/" + methodName);
       if (timeout != null) {
-        entryBuilder.setTimeout(timeout);
+        clientHeaderBuilder.setTimeout(timeout);
+      }
+      if (authority != null) {
+        clientHeaderBuilder.setAuthority(authority);
+      }
+
+      GrpcLogEntry.Builder entryBuilder = newTimestampedBuilder()
+          .setSequenceIdWithinCall(seq)
+          .setType(EventType.EVENT_TYPE_CLIENT_HEADER)
+          .setClientHeader(clientHeaderBuilder)
+          .setPayloadTruncated(pair.truncated)
+          .setLogger(logger)
+          .setCallId(callId);
+      if (peerAddress != null) {
+        entryBuilder.setPeer(socketToProto(peerAddress));
       }
       sink.write(entryBuilder.build());
     }
 
     @Override
-    void logRecvInitialMetadata(
-        int seq,
-        @Nullable String methodName, // null on client
-        @Nullable Duration timeout,  // null on client
+    void logServerHeader(
+        long seq,
         Metadata metadata,
-        boolean isServer,
-        CallId callId,
-        SocketAddress peerSocket) {
-      Preconditions.checkArgument(methodName == null || isServer);
-      Preconditions.checkArgument(timeout == null || isServer);
-      // Java does not include the leading '/'. To be consistent with the rest of gRPC we must
-      // include the '/' in the fully qualified name for binlogs.
-      Preconditions.checkArgument(methodName == null || !methodName.startsWith("/"));
-      GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on server
+        @Nullable SocketAddress peerAddress) {
+      Preconditions.checkArgument(
+          peerAddress == null || logger == GrpcLogEntry.Logger.LOGGER_CLIENT,
+          "peerSocket can only be specified for client");
+      MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder> pair
+          = createMetadataProto(metadata, maxHeaderBytes);
+
+      GrpcLogEntry.Builder entryBuilder = newTimestampedBuilder()
           .setSequenceIdWithinCall(seq)
-          .setType(Type.RECV_INITIAL_METADATA)
-          .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId))
-          .setPeer(socketToProto(peerSocket));
-      addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
-      if (methodName != null) {
-        entryBuilder.setMethodName("/" + methodName);
-      }
-      if (timeout != null) {
-        entryBuilder.setTimeout(timeout);
+          .setType(EventType.EVENT_TYPE_SERVER_HEADER)
+          .setServerHeader(
+              io.grpc.binarylog.v1.ServerHeader.newBuilder()
+                  .setMetadata(pair.proto))
+          .setPayloadTruncated(pair.truncated)
+          .setLogger(logger)
+          .setCallId(callId);
+      if (peerAddress != null) {
+        entryBuilder.setPeer(socketToProto(peerAddress));
       }
       sink.write(entryBuilder.build());
     }
 
     @Override
-    void logTrailingMetadata(
-        int seq, Status status, Metadata metadata, boolean isServer, CallId callId) {
-      GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
-          .setSequenceIdWithinCall(seq)
-          .setType(isServer ? Type.SEND_TRAILING_METADATA : Type.RECV_TRAILING_METADATA)
-          .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId))
-          .setStatusCode(status.getCode().value());
+    void logTrailer(
+        long seq,
+        Status status,
+        Metadata metadata,
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on server, can be non null on client if this is a trailer-only response
+        @Nullable SocketAddress peerAddress) {
+      Preconditions.checkArgument(
+          peerAddress == null || logger == GrpcLogEntry.Logger.LOGGER_CLIENT,
+          "peerSocket can only be specified for client");
+      MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder> pair
+          = createMetadataProto(metadata, maxHeaderBytes);
+
+      io.grpc.binarylog.v1.Trailer.Builder trailerBuilder
+          = io.grpc.binarylog.v1.Trailer.newBuilder()
+          .setStatusCode(status.getCode().value())
+          .setMetadata(pair.proto);
       String statusDescription = status.getDescription();
       if (statusDescription != null) {
-        entryBuilder.setStatusMessage(statusDescription);
+        trailerBuilder.setStatusMessage(statusDescription);
       }
       byte[] statusDetailBytes = metadata.get(STATUS_DETAILS_KEY);
       if (statusDetailBytes != null) {
-        entryBuilder.setStatusDetails(ByteString.copyFrom(statusDetailBytes));
+        trailerBuilder.setStatusDetails(ByteString.copyFrom(statusDetailBytes));
       }
 
-      addMetadataToProto(entryBuilder, metadata, maxHeaderBytes);
+      GrpcLogEntry.Builder entryBuilder = newTimestampedBuilder()
+          .setSequenceIdWithinCall(seq)
+          .setType(EventType.EVENT_TYPE_SERVER_TRAILER)
+          .setTrailer(trailerBuilder)
+          .setPayloadTruncated(pair.truncated)
+          .setLogger(logger)
+          .setCallId(callId);
+      if (peerAddress != null) {
+        entryBuilder.setPeer(socketToProto(peerAddress));
+      }
       sink.write(entryBuilder.build());
     }
 
     @Override
-    <T> void logOutboundMessage(
-        int seq,
+    <T> void logRpcMessage(
+        long seq,
+        EventType eventType,
         Marshaller<T> marshaller,
         T message,
-        boolean compressed,
-        boolean isServer,
-        CallId callId) {
+        GrpcLogEntry.Logger logger,
+        long callId) {
+      Preconditions.checkArgument(
+          eventType == EventType.EVENT_TYPE_CLIENT_MESSAGE
+              || eventType == EventType.EVENT_TYPE_SERVER_MESSAGE,
+          "event type must correspond to client message or server message");
       if (marshaller != BYTEARRAY_MARSHALLER) {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
-      GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
+      MaybeTruncated<Builder> pair = createMessageProto((byte[]) message, maxMessageBytes);
+      GrpcLogEntry.Builder entryBuilder = newTimestampedBuilder()
           .setSequenceIdWithinCall(seq)
-          .setType(Type.SEND_MESSAGE)
-          .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId));
-      messageToProto(entryBuilder, (byte[]) message, compressed, maxMessageBytes);
+          .setType(eventType)
+          .setMessage(pair.proto)
+          .setPayloadTruncated(pair.truncated)
+          .setLogger(logger)
+          .setCallId(callId);
       sink.write(entryBuilder.build());
     }
 
     @Override
-    <T> void logInboundMessage(
-        int seq,
-        Marshaller<T> marshaller,
-        T message,
-        boolean compressed,
-        boolean isServer,
-        CallId callId) {
-      if (marshaller != BYTEARRAY_MARSHALLER) {
-        throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
-      }
-      GrpcLogEntry.Builder entryBuilder = GrpcLogEntry.newBuilder()
-          .setSequenceIdWithinCall(seq)
-          .setType(Type.RECV_MESSAGE)
-          .setLogger(isServer ? GrpcLogEntry.Logger.SERVER : GrpcLogEntry.Logger.CLIENT)
-          .setCallId(callIdToProto(callId));
+    void logHalfClose(long seq, GrpcLogEntry.Logger logger, long callId) {
+      sink.write(
+          newTimestampedBuilder()
+              .setSequenceIdWithinCall(seq)
+              .setType(EventType.EVENT_TYPE_CLIENT_HALF_CLOSE)
+              .setLogger(logger)
+              .setCallId(callId)
+              .build());
+    }
 
-      messageToProto(entryBuilder, (byte[]) message, compressed, maxMessageBytes);
-      sink.write(entryBuilder.build());
+    @Override
+    void logCancel(long seq, GrpcLogEntry.Logger logger, long callId) {
+      sink.write(
+          newTimestampedBuilder()
+              .setSequenceIdWithinCall(seq)
+              .setType(EventType.EVENT_TYPE_CANCEL)
+              .setLogger(logger)
+              .setCallId(callId)
+              .build());
     }
 
     @Override
@@ -252,56 +301,64 @@ final class BinlogHelper {
 
   abstract static class SinkWriter {
     /**
-     * Logs the sending of initial metadata. This method logs the appropriate number of bytes
+     * Logs the client header. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logSendInitialMetadata(
-        int seq,
+    abstract void logClientHeader(
+        long seq,
         String methodName,
-        Duration timeout,
+        // not all transports have the concept of authority
+        @Nullable String authority,
+        @Nullable Duration timeout,
         Metadata metadata,
-        boolean isServer,
-        CallId callId);
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on client side
+        @Nullable SocketAddress peerAddress);
 
     /**
-     * Logs the receiving of initial metadata. This method logs the appropriate number of bytes
+     * Logs the server header. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logRecvInitialMetadata(
-        int seq,
-        String methodName,
-        Duration timeout,
+    abstract void logServerHeader(
+        long seq,
         Metadata metadata,
-        boolean isServer,
-        CallId callId,
-        SocketAddress peerSocket);
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on server
+        @Nullable SocketAddress peerAddress);
 
     /**
-     * Logs the trailing metadata. This method logs the appropriate number of bytes
+     * Logs the server trailer. This method logs the appropriate number of bytes
      * as determined by the binary logging configuration.
      */
-    abstract void logTrailingMetadata(
-        int seq, Status status, Metadata metadata, boolean isServer, CallId callId);
+    abstract void logTrailer(
+        long seq,
+        Status status,
+        Metadata metadata,
+        GrpcLogEntry.Logger logger,
+        long callId,
+        // null on server, can be non null on client if this is a trailer-only response
+        @Nullable SocketAddress peerAddress);
 
     /**
-     * Logs the outbound message. This method logs the appropriate number of bytes from
-     * {@code message}, and returns a duplicate of the message.
-     * The number of bytes logged is determined by the binary logging configuration.
-     * This method takes ownership of {@code message}.
+     * Logs the message message. The number of bytes logged is determined by the binary
+     * logging configuration.
      */
-    abstract <T> void logOutboundMessage(
-        int seq, Marshaller<T> marshaller, T message, boolean compressed, boolean isServer,
-        CallId callId);
+    abstract <T> void logRpcMessage(
+        long seq,
+        EventType eventType,
+        Marshaller<T> marshaller,
+        T message,
+        GrpcLogEntry.Logger logger,
+        long callId);
+
+    abstract void logHalfClose(long seq, GrpcLogEntry.Logger logger, long callId);
 
     /**
-     * Logs the inbound message. This method logs the appropriate number of bytes from
-     * {@code message}, and returns a duplicate of the message.
-     * The number of bytes logged is determined by the binary logging configuration.
-     * This method takes ownership of {@code message}.
+     * Logs the cancellation.
      */
-    abstract <T> void logInboundMessage(
-        int seq, Marshaller<T> marshaller, T message, boolean compressed, boolean isServer,
-        CallId callId);
+    abstract void logCancel(long seq, GrpcLogEntry.Logger logger, long callId);
 
     /**
      * Returns the number bytes of the header this writer will log, according to configuration.
@@ -315,11 +372,7 @@ final class BinlogHelper {
   }
 
   static SocketAddress getPeerSocket(Attributes streamAttributes) {
-    SocketAddress peer = streamAttributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
-    if (peer == null) {
-      return DUMMY_SOCKET;
-    }
-    return peer;
+    return streamAttributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
   }
 
   private static Deadline min(@Nullable Deadline deadline0, @Nullable Deadline deadline1) {
@@ -332,56 +385,83 @@ final class BinlogHelper {
     return deadline0.minimum(deadline1);
   }
 
-  public ClientInterceptor getClientInterceptor(final CallId callId) {
+  interface TimeProvider {
+    /** Returns the current nano time. */
+    long currentTimeNanos();
+
+    TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
+      @Override
+      public long currentTimeNanos() {
+        return TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis());
+      }
+    };
+  }
+
+
+  public ClientInterceptor getClientInterceptor(final long callId) {
     return new ClientInterceptor() {
+      boolean trailersOnlyResponse = true;
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-        final AtomicInteger seq = new AtomicInteger(1);
+        final AtomicLong seq = new AtomicLong(1);
         final String methodName = method.getFullMethodName();
+        final String authority = next.authority();
         // The timeout should reflect the time remaining when the call is started, so do not
         // compute remaining time here.
         final Deadline deadline = min(callOptions.getDeadline(), Context.current().getDeadline());
 
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
-          public void start(Listener<RespT> responseListener, Metadata headers) {
+          public void start(final Listener<RespT> responseListener, Metadata headers) {
             final Duration timeout = deadline == null ? null
                 : Durations.fromNanos(deadline.timeRemaining(TimeUnit.NANOSECONDS));
-            writer.logSendInitialMetadata(
-                seq.getAndIncrement(), methodName, timeout, headers, CLIENT, callId);
+            writer.logClientHeader(
+                seq.getAndIncrement(),
+                methodName,
+                authority,
+                timeout,
+                headers,
+                GrpcLogEntry.Logger.LOGGER_CLIENT,
+                callId,
+                /*peerAddress=*/ null);
             ClientCall.Listener<RespT> wListener =
                 new SimpleForwardingClientCallListener<RespT>(responseListener) {
                   @Override
                   public void onMessage(RespT message) {
-                    writer.logInboundMessage(
+                    writer.logRpcMessage(
                         seq.getAndIncrement(),
+                        EventType.EVENT_TYPE_SERVER_MESSAGE,
                         method.getResponseMarshaller(),
                         message,
-                        DUMMY_IS_COMPRESSED,
-                        CLIENT,
+                        GrpcLogEntry.Logger.LOGGER_CLIENT,
                         callId);
                     super.onMessage(message);
                   }
 
                   @Override
                   public void onHeaders(Metadata headers) {
-                    SocketAddress peer = getPeerSocket(getAttributes());
-                    writer.logRecvInitialMetadata(
+                    trailersOnlyResponse = false;
+                    writer.logServerHeader(
                         seq.getAndIncrement(),
-                        /*methodName=*/ null,
-                        /*timeout=*/ null,
                         headers,
-                        CLIENT,
+                        GrpcLogEntry.Logger.LOGGER_CLIENT,
                         callId,
-                        peer);
+                        getPeerSocket(getAttributes()));
                     super.onHeaders(headers);
                   }
 
                   @Override
                   public void onClose(Status status, Metadata trailers) {
-                    writer.logTrailingMetadata(
-                        seq.getAndIncrement(), status, trailers, CLIENT, callId);
+                    SocketAddress peer = trailersOnlyResponse
+                        ? getPeerSocket(getAttributes()) : null;
+                    writer.logTrailer(
+                        seq.getAndIncrement(),
+                        status,
+                        trailers,
+                        GrpcLogEntry.Logger.LOGGER_CLIENT,
+                        callId,
+                        peer);
                     super.onClose(status, trailers);
                   }
                 };
@@ -390,64 +470,94 @@ final class BinlogHelper {
 
           @Override
           public void sendMessage(ReqT message) {
-            writer.logOutboundMessage(
+            writer.logRpcMessage(
                 seq.getAndIncrement(),
+                EventType.EVENT_TYPE_CLIENT_MESSAGE,
                 method.getRequestMarshaller(),
                 message,
-                DUMMY_IS_COMPRESSED,
-                CLIENT,
+                GrpcLogEntry.Logger.LOGGER_CLIENT,
                 callId);
             super.sendMessage(message);
+          }
+
+          @Override
+          public void halfClose() {
+            writer.logHalfClose(
+                seq.getAndIncrement(),
+                GrpcLogEntry.Logger.LOGGER_CLIENT,
+                callId);
+          }
+
+          @Override
+          public void cancel(String message, Throwable cause) {
+            writer.logCancel(
+                seq.getAndIncrement(),
+                GrpcLogEntry.Logger.LOGGER_CLIENT,
+                callId);
+            super.cancel(message, cause);
           }
         };
       }
     };
   }
 
-  public ServerInterceptor getServerInterceptor(final CallId callId) {
+  public ServerInterceptor getServerInterceptor(final long callId) {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> Listener<ReqT> interceptCall(
           final ServerCall<ReqT, RespT> call,
           Metadata headers,
           ServerCallHandler<ReqT, RespT> next) {
-        final AtomicInteger seq = new AtomicInteger(1);
+        final AtomicLong seq = new AtomicLong(1);
         SocketAddress peer = getPeerSocket(call.getAttributes());
         String methodName = call.getMethodDescriptor().getFullMethodName();
-        Long timeoutNanos = headers.get(GrpcUtil.TIMEOUT_KEY);
-        final Duration timeout =
-            timeoutNanos == null ? null : Durations.fromNanos(timeoutNanos);
+        String authority = call.getAuthority();
+        Deadline deadline = Context.current().getDeadline();
+        final Duration timeout = deadline == null ? null
+            : Durations.fromNanos(deadline.timeRemaining(TimeUnit.NANOSECONDS));
 
-        writer.logRecvInitialMetadata(
-            seq.getAndIncrement(), methodName, timeout, headers, SERVER, callId, peer);
+        writer.logClientHeader(
+            seq.getAndIncrement(),
+            methodName,
+            authority,
+            timeout,
+            headers,
+            GrpcLogEntry.Logger.LOGGER_SERVER,
+            callId,
+            peer);
         ServerCall<ReqT, RespT> wCall = new SimpleForwardingServerCall<ReqT, RespT>(call) {
           @Override
           public void sendMessage(RespT message) {
-            writer.logOutboundMessage(
+            writer.logRpcMessage(
                 seq.getAndIncrement(),
+                EventType.EVENT_TYPE_SERVER_MESSAGE,
                 call.getMethodDescriptor().getResponseMarshaller(),
                 message,
-                DUMMY_IS_COMPRESSED,
-                SERVER,
+                GrpcLogEntry.Logger.LOGGER_SERVER,
                 callId);
             super.sendMessage(message);
           }
 
           @Override
           public void sendHeaders(Metadata headers) {
-            writer.logSendInitialMetadata(
+            writer.logServerHeader(
                 seq.getAndIncrement(),
-                /*methodName=*/ null,
-                /*timeout=*/ null,
                 headers,
-                SERVER,
-                callId);
+                GrpcLogEntry.Logger.LOGGER_SERVER,
+                callId,
+                /*peerAddress=*/ null);
             super.sendHeaders(headers);
           }
 
           @Override
           public void close(Status status, Metadata trailers) {
-            writer.logTrailingMetadata(seq.getAndIncrement(), status, trailers, SERVER, callId);
+            writer.logTrailer(
+                seq.getAndIncrement(),
+                status,
+                trailers,
+                GrpcLogEntry.Logger.LOGGER_SERVER,
+                callId,
+                /*peerAddress=*/ null);
             super.close(status, trailers);
           }
         };
@@ -455,14 +565,31 @@ final class BinlogHelper {
         return new SimpleForwardingServerCallListener<ReqT>(next.startCall(wCall, headers)) {
           @Override
           public void onMessage(ReqT message) {
-            writer.logInboundMessage(
+            writer.logRpcMessage(
                 seq.getAndIncrement(),
+                EventType.EVENT_TYPE_CLIENT_MESSAGE,
                 call.getMethodDescriptor().getRequestMarshaller(),
                 message,
-                DUMMY_IS_COMPRESSED,
-                SERVER,
+                GrpcLogEntry.Logger.LOGGER_SERVER,
                 callId);
             super.onMessage(message);
+          }
+
+          @Override
+          public void onHalfClose() {
+            writer.logHalfClose(
+                seq.getAndIncrement(),
+                GrpcLogEntry.Logger.LOGGER_SERVER,
+                callId);
+            super.onHalfClose();
+          }
+
+          @Override
+          public void onCancel() {
+            writer.logCancel(
+                seq.getAndIncrement(),
+                GrpcLogEntry.Logger.LOGGER_SERVER,
+                callId);
           }
         };
       }
@@ -599,7 +726,8 @@ final class BinlogHelper {
     static BinlogHelper createBinaryLog(BinaryLogSink sink, @Nullable String logConfig) {
       if (logConfig == null) {
         return new BinlogHelper(
-            new SinkWriterImpl(sink, Integer.MAX_VALUE, Integer.MAX_VALUE));
+            new SinkWriterImpl(
+                sink, TimeProvider.SYSTEM_TIME_PROVIDER, Integer.MAX_VALUE, Integer.MAX_VALUE));
       }
       try {
         Matcher headerMatcher;
@@ -625,7 +753,9 @@ final class BinlogHelper {
         } else {
           throw new IllegalArgumentException("Illegal log config pattern");
         }
-        return new BinlogHelper(new SinkWriterImpl(sink, maxHeaderBytes, maxMsgBytes));
+        return new BinlogHelper(
+            new SinkWriterImpl(
+                sink, TimeProvider.SYSTEM_TIME_PROVIDER, maxHeaderBytes, maxMsgBytes));
       } catch (NumberFormatException e) {
         throw new IllegalArgumentException("Illegal log config pattern");
       }
@@ -639,30 +769,18 @@ final class BinlogHelper {
     }
   }
 
-  /**
-   * Returns a {@link Uint128} from a CallId.
-   */
-  static Uint128 callIdToProto(CallId callId) {
-    checkNotNull(callId, "callId");
-    return Uint128
-        .newBuilder()
-        .setHigh(callId.hi)
-        .setLow(callId.lo)
-        .build();
-  }
-
   @VisibleForTesting
-  static Peer socketToProto(SocketAddress address) {
+  static Address socketToProto(SocketAddress address) {
     checkNotNull(address, "address");
 
-    Peer.Builder builder = Peer.newBuilder();
+    Address.Builder builder = Address.newBuilder();
     if (address instanceof InetSocketAddress) {
       InetAddress inetAddress = ((InetSocketAddress) address).getAddress();
       if (inetAddress instanceof Inet4Address) {
-        builder.setPeerType(PeerType.PEER_IPV4)
+        builder.setType(Type.TYPE_IPV4)
             .setAddress(InetAddressUtil.toAddrString(inetAddress));
       } else if (inetAddress instanceof Inet6Address) {
-        builder.setPeerType(PeerType.PEER_IPV6)
+        builder.setType(Type.TYPE_IPV6)
             .setAddress(InetAddressUtil.toAddrString(inetAddress));
       } else {
         logger.log(Level.SEVERE, "unknown type of InetSocketAddress: {}", address);
@@ -671,69 +789,79 @@ final class BinlogHelper {
       builder.setIpPort(((InetSocketAddress) address).getPort());
     } else if (address.getClass().getName().equals("io.netty.channel.unix.DomainSocketAddress")) {
       // To avoid a compile time dependency on grpc-netty, we check against the runtime class name.
-      builder.setPeerType(PeerType.PEER_UNIX)
+      builder.setType(Type.TYPE_UNIX)
           .setAddress(address.toString());
     } else {
-      builder.setPeerType(PeerType.UNKNOWN_PEERTYPE).setAddress(address.toString());
+      builder.setType(Type.TYPE_UNKNOWN).setAddress(address.toString());
     }
     return builder.build();
   }
 
-  @VisibleForTesting
-  static void addMetadataToProto(
-      GrpcLogEntry.Builder entryBuilder, Metadata metadata, int maxHeaderBytes) {
-    checkNotNull(entryBuilder, "entryBuilder");
-    checkNotNull(metadata, "metadata");
-    checkArgument(maxHeaderBytes >= 0, "maxHeaderBytes must be non negative");
-    Builder metaBuilder = io.grpc.binarylog.v1alpha.Metadata.newBuilder();
-    // This code is tightly coupled with Metadata's implementation
-    byte[][] serialized = null;
-    if (maxHeaderBytes > 0 && (serialized = InternalMetadata.serialize(metadata)) != null) {
-      int written = 0;
-      for (int i = 0; i < serialized.length && written < maxHeaderBytes; i += 2) {
-        byte[] key = serialized[i];
-        byte[] value = serialized[i + 1];
-        if (written + key.length + value.length <= maxHeaderBytes) {
-          metaBuilder.addEntryBuilder()
-                  .setKey(ByteString.copyFrom(key))
-                  .setValue(ByteString.copyFrom(value));
-          written += key.length;
-          written += value.length;
-        }
-      }
+  private static final Set<String> NEVER_INCLUDED_METADATA = new HashSet<String>(
+      Collections.singletonList(
+          // grpc-status-details-bin is already logged in a field of the binlog proto
+          STATUS_DETAILS_KEY.name()));
+  private static final Set<String> ALWAYS_INCLUDED_METADATA = new HashSet<String>(
+      Collections.singletonList(
+          "grpc-trace-bin"));
+
+  static final class MaybeTruncated<T> {
+    T proto;
+    boolean truncated;
+
+    private MaybeTruncated(T proto, boolean truncated) {
+      this.proto = proto;
+      this.truncated = truncated;
     }
-    // This check must be updated when we add filtering
-    entryBuilder.setTruncated(maxHeaderBytes == 0
-        || (serialized != null && metaBuilder.getEntryCount() < (serialized.length / 2)));
-    entryBuilder.setMetadata(metaBuilder);
   }
 
   @VisibleForTesting
-  static void messageToProto(
-      GrpcLogEntry.Builder entryBuilder, byte[] message, boolean compressed, int maxMessageBytes) {
+  static MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder> createMetadataProto(
+      Metadata metadata, int maxHeaderBytes) {
+    checkNotNull(metadata, "metadata");
+    checkArgument(maxHeaderBytes >= 0, "maxHeaderBytes must be non negative");
+    io.grpc.binarylog.v1.Metadata.Builder metaBuilder = io.grpc.binarylog.v1.Metadata.newBuilder();
+    // This code is tightly coupled with Metadata's implementation
+    byte[][] serialized = InternalMetadata.serialize(metadata);
+    boolean truncated = false;
+    if (serialized != null) {
+      int curBytes = 0;
+      for (int i = 0; i < serialized.length; i += 2) {
+        String key = new String(serialized[i], Charsets.UTF_8);
+        byte[] value = serialized[i + 1];
+        if (NEVER_INCLUDED_METADATA.contains(key)) {
+          continue;
+        }
+        boolean forceInclude = ALWAYS_INCLUDED_METADATA.contains(key);
+        int bytesAfterAdd = curBytes + key.length() + value.length;
+        if (!forceInclude && bytesAfterAdd > maxHeaderBytes) {
+          truncated = true;
+          continue;
+        }
+        metaBuilder.addEntryBuilder()
+            .setKey(key)
+            .setValue(ByteString.copyFrom(value));
+        if (!forceInclude) {
+          // force included keys do not count towards the size limit
+          curBytes = bytesAfterAdd;
+        }
+      }
+    }
+    return new MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder>(metaBuilder, truncated);
+  }
+
+  @VisibleForTesting
+  static MaybeTruncated<Message.Builder> createMessageProto(
+      byte[] message, int maxMessageBytes) {
     checkNotNull(message, "message");
     checkArgument(maxMessageBytes >= 0, "maxMessageBytes must be non negative");
     Message.Builder msgBuilder = Message
         .newBuilder()
-        .setFlags(flagsForMessage(compressed))
         .setLength(message.length);
     if (maxMessageBytes > 0) {
       int desiredBytes = Math.min(maxMessageBytes, message.length);
       msgBuilder.setData(ByteString.copyFrom(message, 0, desiredBytes));
     }
-    entryBuilder.setMessage(msgBuilder);
-    entryBuilder.setTruncated(maxMessageBytes < message.length);
-  }
-
-  /**
-   * Returns a flag based on the arguments.
-   */
-  @VisibleForTesting
-  static int flagsForMessage(boolean compressed) {
-    return compressed ? 1 : 0;
-  }
-
-  private static class DummySocketAddress extends SocketAddress {
-    private static final long serialVersionUID = 0;
+    return new MaybeTruncated<Message.Builder>(msgBuilder, maxMessageBytes < message.length);
   }
 }

@@ -29,21 +29,4 @@ public abstract class BinaryLog implements Closeable {
       ServerMethodDefinition<ReqT, RespT> oMethodDef);
 
   public abstract Channel wrapChannel(Channel channel);
-
-  /**
-   * A CallId is two byte[] arrays both of size 8 that uniquely identifies the RPC. Users are
-   * free to use the byte arrays however they see fit.
-   */
-  public static final class CallId {
-    public final long hi;
-    public final long lo;
-
-    /**
-     * Creates an instance.
-     */
-    public CallId(long hi, long lo) {
-      this.hi = hi;
-      this.lo = lo;
-    }
-  }
 }

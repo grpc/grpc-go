@@ -28,9 +28,11 @@ import javax.annotation.Nullable;
  * The default implementation of a {@link BinaryLogProvider}.
  */
 class BinaryLogProviderImpl extends BinaryLogProvider {
+  // avoid using 0 because proto3 long fields default to 0 when unset
+  private static final AtomicLong counter = new AtomicLong(1);
+
   private final BinlogHelper.Factory factory;
   private final BinaryLogSink sink;
-  private final AtomicLong counter = new AtomicLong();
 
   public BinaryLogProviderImpl() throws IOException {
     this(new TempFileSink(), System.getenv("GRPC_BINARY_LOG_CONFIG"));
@@ -65,7 +67,7 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
     if (helperForMethod == null) {
       return null;
     }
-    return helperForMethod.getServerInterceptor(getServerCallId());
+    return helperForMethod.getServerInterceptor(counter.getAndIncrement());
   }
 
   @Nullable
@@ -76,19 +78,11 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
     if (helperForMethod == null) {
       return null;
     }
-    return helperForMethod.getClientInterceptor(getClientCallId(callOptions));
+    return helperForMethod.getClientInterceptor(counter.getAndIncrement());
   }
 
   @Override
   public void close() throws IOException {
     sink.close();
-  }
-
-  protected CallId getServerCallId() {
-    return new CallId(0, counter.getAndIncrement());
-  }
-
-  protected CallId getClientCallId(CallOptions options) {
-    return new CallId(0, counter.getAndIncrement());
   }
 }
