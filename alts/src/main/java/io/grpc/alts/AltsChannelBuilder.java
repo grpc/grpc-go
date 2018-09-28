@@ -17,6 +17,7 @@
 package io.grpc.alts;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -53,14 +54,13 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
 
   private static final Logger logger = Logger.getLogger(AltsChannelBuilder.class.getName());
   private final NettyChannelBuilder delegate;
-  private final AltsClientOptions.Builder handshakerOptionsBuilder =
-      new AltsClientOptions.Builder();
+  private final ImmutableList.Builder<String> targetServiceAccountsBuilder =
+      ImmutableList.builder();
   private ObjectPool<ManagedChannel> handshakerChannelPool =
       SharedResourcePool.forResource(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
   private boolean enableUntrustedAlts;
 
   private AltsProtocolNegotiator negotiatorForTest;
-  private AltsClientOptions handshakerOptionsForTest;
 
   /** "Overrides" the static method in {@link ManagedChannelBuilder}. */
   public static final AltsChannelBuilder forTarget(String target) {
@@ -78,16 +78,8 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
             .keepAliveTime(20, TimeUnit.SECONDS)
             .keepAliveTimeout(10, TimeUnit.SECONDS)
             .keepAliveWithoutCalls(true);
-    handshakerOptionsBuilder.setRpcProtocolVersions(
-        RpcProtocolVersionsUtil.getRpcProtocolVersions());
-    InternalNettyChannelBuilder
-        .setProtocolNegotiatorFactory(delegate(), new ProtocolNegotiatorFactory());
-  }
-
-  /** The server service account name for secure name checking. */
-  public AltsChannelBuilder withSecureNamingTarget(String targetName) {
-    handshakerOptionsBuilder.setTargetName(targetName);
-    return this;
+    InternalNettyChannelBuilder.setProtocolNegotiatorFactory(
+        delegate(), new ProtocolNegotiatorFactory());
   }
 
   /**
@@ -95,7 +87,7 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
    * service account in the handshaker result. Otherwise, the handshake fails.
    */
   public AltsChannelBuilder addTargetServiceAccount(String targetServiceAccount) {
-    handshakerOptionsBuilder.addTargetServiceAccount(targetServiceAccount);
+    targetServiceAccountsBuilder.add(targetServiceAccount);
     return this;
   }
 
@@ -146,31 +138,32 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
     return negotiatorForTest;
   }
 
-  @VisibleForTesting
-  @Nullable
-  AltsClientOptions getAltsClientOptionsForTest() {
-    return handshakerOptionsForTest;
-  }
-
   private final class ProtocolNegotiatorFactory
       implements InternalNettyChannelBuilder.ProtocolNegotiatorFactory {
+
     @Override
     public AltsProtocolNegotiator buildProtocolNegotiator() {
-      final AltsClientOptions handshakerOptions = handshakerOptionsBuilder.build();
+      final ImmutableList<String> targetServiceAccounts = targetServiceAccountsBuilder.build();
       TsiHandshakerFactory altsHandshakerFactory =
           new TsiHandshakerFactory() {
             @Override
-            public TsiHandshaker newHandshaker() {
+            public TsiHandshaker newHandshaker(String authority) {
               // Used the shared grpc channel to connecting to the ALTS handshaker service.
               // TODO: Release the channel if it is not used.
               // https://github.com/grpc/grpc-java/issues/4755.
+              AltsClientOptions handshakerOptions =
+                  new AltsClientOptions.Builder()
+                      .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
+                      .setTargetServiceAccounts(targetServiceAccounts)
+                      .setTargetName(authority)
+                      .build();
               return AltsTsiHandshaker.newClient(
                   HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
                   handshakerOptions);
             }
           };
-      handshakerOptionsForTest = handshakerOptions;
-      return negotiatorForTest = AltsProtocolNegotiator.create(altsHandshakerFactory);
+      return negotiatorForTest =
+          AltsProtocolNegotiator.createClientNegotiator(altsHandshakerFactory);
     }
   }
 

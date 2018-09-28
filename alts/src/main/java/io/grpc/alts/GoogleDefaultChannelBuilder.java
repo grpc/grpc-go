@@ -58,8 +58,8 @@ public final class GoogleDefaultChannelBuilder
 
   private GoogleDefaultChannelBuilder(String target) {
     delegate = NettyChannelBuilder.forTarget(target);
-    InternalNettyChannelBuilder
-        .setProtocolNegotiatorFactory(delegate(), new ProtocolNegotiatorFactory());
+    InternalNettyChannelBuilder.setProtocolNegotiatorFactory(
+        delegate(), new ProtocolNegotiatorFactory());
   }
 
   /** "Overrides" the static method in {@link ManagedChannelBuilder}. */
@@ -101,19 +101,20 @@ public final class GoogleDefaultChannelBuilder
       implements InternalNettyChannelBuilder.ProtocolNegotiatorFactory {
     @Override
     public GoogleDefaultProtocolNegotiator buildProtocolNegotiator() {
-      final AltsClientOptions handshakerOptions =
-          new AltsClientOptions.Builder()
-              .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
-              .build();
       TsiHandshakerFactory altsHandshakerFactory =
           new TsiHandshakerFactory() {
             @Override
-            public TsiHandshaker newHandshaker() {
+            public TsiHandshaker newHandshaker(String authority) {
               // Used the shared grpc channel to connecting to the ALTS handshaker service.
               // TODO: Release the channel if it is not used.
               // https://github.com/grpc/grpc-java/issues/4755.
               ManagedChannel channel =
                   SharedResourceHolder.get(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
+              AltsClientOptions handshakerOptions =
+                  new AltsClientOptions.Builder()
+                      .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
+                      .setTargetName(authority)
+                      .build();
               return AltsTsiHandshaker.newClient(
                   HandshakerServiceGrpc.newStub(channel), handshakerOptions);
             }

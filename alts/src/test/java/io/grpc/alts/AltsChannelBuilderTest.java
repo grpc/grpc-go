@@ -18,9 +18,7 @@ package io.grpc.alts;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import io.grpc.alts.internal.AltsClientOptions;
 import io.grpc.alts.internal.AltsProtocolNegotiator;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
 import io.grpc.netty.ProtocolNegotiator;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,27 +33,12 @@ public final class AltsChannelBuilderTest {
         AltsChannelBuilder.forTarget("localhost:8080").enableUntrustedAltsForTesting();
 
     ProtocolNegotiator protocolNegotiator = builder.getProtocolNegotiatorForTest();
-    AltsClientOptions altsClientOptions = builder.getAltsClientOptionsForTest();
-
     assertThat(protocolNegotiator).isNull();
-    assertThat(altsClientOptions).isNull();
 
     builder.build();
 
     protocolNegotiator = builder.getProtocolNegotiatorForTest();
-    altsClientOptions = builder.getAltsClientOptionsForTest();
-
     assertThat(protocolNegotiator).isNotNull();
     assertThat(protocolNegotiator).isInstanceOf(AltsProtocolNegotiator.class);
-
-    assertThat(altsClientOptions).isNotNull();
-    RpcProtocolVersions expectedVersions =
-        RpcProtocolVersions.newBuilder()
-            .setMaxRpcVersion(
-                RpcProtocolVersions.Version.newBuilder().setMajor(2).setMinor(1).build())
-            .setMinRpcVersion(
-                RpcProtocolVersions.Version.newBuilder().setMajor(2).setMinor(1).build())
-            .build();
-    assertThat(altsClientOptions.getRpcProtocolVersions()).isEqualTo(expectedVersions);
   }
 }

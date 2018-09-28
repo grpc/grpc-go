@@ -76,6 +76,7 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link AltsProtocolNegotiator}. */
 @RunWith(JUnit4.class)
 public class AltsProtocolNegotiatorTest {
+
   private final CapturingGrpcHttp2ConnectionHandler grpcHandler = capturingGrpcHandler();
 
   private final List<ReferenceCounted> references = new ArrayList<>();
@@ -133,8 +134,8 @@ public class AltsProtocolNegotiatorTest {
     TsiHandshakerFactory handshakerFactory =
         new DelegatingTsiHandshakerFactory(FakeTsiHandshaker.clientHandshakerFactory()) {
           @Override
-          public TsiHandshaker newHandshaker() {
-            return new DelegatingTsiHandshaker(super.newHandshaker()) {
+          public TsiHandshaker newHandshaker(String authority) {
+            return new DelegatingTsiHandshaker(super.newHandshaker(authority)) {
               @Override
               public TsiPeer extractPeer() throws GeneralSecurityException {
                 return mockedTsiPeer;
@@ -147,7 +148,8 @@ public class AltsProtocolNegotiatorTest {
             };
           }
         };
-    handler = AltsProtocolNegotiator.create(handshakerFactory).newHandler(grpcHandler);
+    handler =
+        AltsProtocolNegotiator.createServerNegotiator(handshakerFactory).newHandler(grpcHandler);
     channel = new EmbeddedChannel(uncaughtExceptionHandler, handler, userEventHandler);
   }
 
@@ -394,6 +396,7 @@ public class AltsProtocolNegotiatorTest {
   }
 
   private final class CapturingGrpcHttp2ConnectionHandler extends GrpcHttp2ConnectionHandler {
+
     private Attributes attrs;
 
     private CapturingGrpcHttp2ConnectionHandler(
@@ -421,8 +424,8 @@ public class AltsProtocolNegotiatorTest {
     }
 
     @Override
-    public TsiHandshaker newHandshaker() {
-      return delegate.newHandshaker();
+    public TsiHandshaker newHandshaker(String authority) {
+      return delegate.newHandshaker(authority);
     }
   }
 
@@ -477,6 +480,7 @@ public class AltsProtocolNegotiatorTest {
   }
 
   private static class InterceptingProtector implements TsiFrameProtector {
+
     private final TsiFrameProtector delegate;
     final AtomicInteger flushes = new AtomicInteger();
 

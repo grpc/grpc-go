@@ -27,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 import io.grpc.alts.internal.Handshaker.HandshakeProtocol;
 import io.grpc.alts.internal.Handshaker.HandshakerReq;
@@ -61,7 +62,7 @@ public class AltsHandshakerClientTest {
     clientOptions =
         new AltsClientOptions.Builder()
             .setTargetName(TEST_TARGET_NAME)
-            .addTargetServiceAccount(TEST_TARGET_SERVICE_ACCOUNT)
+            .setTargetServiceAccounts(ImmutableList.of(TEST_TARGET_SERVICE_ACCOUNT))
             .build();
     handshaker = new AltsHandshakerClient(mockStub, clientOptions);
   }
@@ -249,7 +250,7 @@ public class AltsHandshakerClientTest {
     clientOptions =
         new AltsClientOptions.Builder()
             .setTargetName(TEST_TARGET_NAME)
-            .addTargetServiceAccount(TEST_TARGET_SERVICE_ACCOUNT)
+            .setTargetServiceAccounts(ImmutableList.of(TEST_TARGET_SERVICE_ACCOUNT))
             .setRpcProtocolVersions(rpcVersions)
             .build();
     handshaker = new AltsHandshakerClient(mockStub, clientOptions);

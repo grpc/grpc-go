@@ -197,10 +197,10 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
     }
 
     delegate.protocolNegotiator(
-        AltsProtocolNegotiator.create(
+        AltsProtocolNegotiator.createServerNegotiator(
             new TsiHandshakerFactory() {
               @Override
-              public TsiHandshaker newHandshaker() {
+              public TsiHandshaker newHandshaker(String authority) {
                 // Used the shared grpc channel to connecting to the ALTS handshaker service.
                 // TODO: Release the channel if it is not used.
                 // https://github.com/grpc/grpc-java/issues/4755.

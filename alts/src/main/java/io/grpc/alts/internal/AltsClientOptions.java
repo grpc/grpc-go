@@ -16,42 +16,40 @@
 
 package io.grpc.alts.internal;
 
+import com.google.common.collect.ImmutableList;
 import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /** Handshaker options for creating ALTS client channel. */
 public final class AltsClientOptions extends AltsHandshakerOptions {
-  // targetName is the server service account name for secure name checking. This field is not yet
-  // supported.
+
+  // targetName is the server service account name for secure name checking.
   @Nullable private final String targetName;
   // targetServiceAccounts contains a list of expected target service accounts. One of these service
   // accounts should match peer service account in the handshaker result. Otherwise, the handshake
   // fails.
-  private final List<String> targetServiceAccounts;
+  private final ImmutableList<String> targetServiceAccounts;
 
   private AltsClientOptions(Builder builder) {
     super(builder.rpcProtocolVersions);
     targetName = builder.targetName;
-    targetServiceAccounts =
-        Collections.unmodifiableList(new ArrayList<>(builder.targetServiceAccounts));
+    targetServiceAccounts = builder.targetServiceAccounts;
   }
 
   public String getTargetName() {
     return targetName;
   }
 
-  public List<String> getTargetServiceAccounts() {
+  public ImmutableList<String> getTargetServiceAccounts() {
     return targetServiceAccounts;
   }
 
   /** Builder for AltsClientOptions. */
   public static final class Builder {
+
     @Nullable private String targetName;
     @Nullable private RpcProtocolVersions rpcProtocolVersions;
-    private ArrayList<String> targetServiceAccounts = new ArrayList<>();
+    private ImmutableList<String> targetServiceAccounts = ImmutableList.of();
 
     public Builder setTargetName(String targetName) {
       this.targetName = targetName;
@@ -63,8 +61,8 @@ public final class AltsClientOptions extends AltsHandshakerOptions {
       return this;
     }
 
-    public Builder addTargetServiceAccount(String targetServiceAccount) {
-      targetServiceAccounts.add(targetServiceAccount);
+    public Builder setTargetServiceAccounts(ImmutableList<String> targetServiceAccounts) {
+      this.targetServiceAccounts = targetServiceAccounts;
       return this;
     }
 

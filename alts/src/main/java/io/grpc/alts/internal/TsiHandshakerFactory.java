@@ -16,9 +16,11 @@
 
 package io.grpc.alts.internal;
 
+import javax.annotation.Nullable;
+
 /** Factory that manufactures instances of {@link TsiHandshaker}. */
 public interface TsiHandshakerFactory {
 
   /** Creates a new handshaker. */
-  TsiHandshaker newHandshaker();
+  TsiHandshaker newHandshaker(@Nullable String authority);
 }

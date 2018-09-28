@@ -37,7 +37,7 @@ public class FakeTsiHandshaker implements TsiHandshaker {
   private static final TsiHandshakerFactory clientHandshakerFactory =
       new TsiHandshakerFactory() {
         @Override
-        public TsiHandshaker newHandshaker() {
+        public TsiHandshaker newHandshaker(String authority) {
           return new FakeTsiHandshaker(true);
         }
       };
@@ -45,7 +45,7 @@ public class FakeTsiHandshaker implements TsiHandshaker {
   private static final TsiHandshakerFactory serverHandshakerFactory =
       new TsiHandshakerFactory() {
         @Override
-        public TsiHandshaker newHandshaker() {
+        public TsiHandshaker newHandshaker(String authority) {
           return new FakeTsiHandshaker(false);
         }
       };
@@ -83,11 +83,11 @@ public class FakeTsiHandshaker implements TsiHandshaker {
   }
 
   public static TsiHandshaker newFakeHandshakerClient() {
-    return clientHandshakerFactory.newHandshaker();
+    return clientHandshakerFactory.newHandshaker(null);
   }
 
   public static TsiHandshaker newFakeHandshakerServer() {
-    return serverHandshakerFactory.newHandshaker();
+    return serverHandshakerFactory.newHandshaker(null);
   }
 
   protected FakeTsiHandshaker(boolean isClient) {
