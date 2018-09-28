@@ -576,7 +576,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     this.retryEnabled = builder.retryEnabled && !builder.temporarilyDisableRetry;
     serviceConfigInterceptor = new ServiceConfigInterceptor(
         retryEnabled, builder.maxRetryAttempts, builder.maxHedgedAttempts);
-    Channel channel = new RealChannel();
+    Channel channel = new RealChannel(nameResolver.getServiceAuthority());
     channel = ClientInterceptors.intercept(channel, serviceConfigInterceptor);
     if (builder.binlog != null) {
       channel = builder.binlog.wrapChannel(channel);
@@ -810,6 +810,14 @@ final class ManagedChannelImpl extends ManagedChannel implements
   }
 
   private class RealChannel extends Channel {
+    // Set when the NameResolver is initially created. When we create a new NameResolver for the
+    // same target, the new instance must have the same value.
+    private final String authority;
+
+    private RealChannel(String authority) {
+      this.authority =  checkNotNull(authority, "authority");
+    }
+
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
@@ -828,8 +836,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     @Override
     public String authority() {
-      String authority = nameResolver.getServiceAuthority();
-      return checkNotNull(authority, "authority");
+      return authority;
     }
   }
 
