@@ -6715,3 +6715,66 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 		t.Fatalf("stream.Recv() = _, %v, want _, error code: %v", err, codes.Internal)
 	}
 }
+
+type pipeAddr struct{}
+
+func (p pipeAddr) Network() string { return "pipe" }
+func (p pipeAddr) String() string  { return "pipe" }
+
+type pipeListener struct {
+	c chan chan<- net.Conn
+}
+
+func (p *pipeListener) Accept() (net.Conn, error) {
+	connChan, ok := <-p.c
+	if !ok {
+		return nil, errors.New("closed")
+	}
+	c1, c2 := net.Pipe()
+	connChan <- c1
+	close(connChan)
+	return c2, nil
+}
+
+func (p *pipeListener) Close() error {
+	close(p.c)
+	return nil
+}
+
+func (p *pipeListener) Addr() net.Addr {
+	return pipeAddr{}
+}
+
+func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
+	return func(string, time.Duration) (net.Conn, error) {
+		connChan := make(chan net.Conn)
+		p.c <- connChan
+		conn := <-connChan
+		return conn, nil
+	}
+}
+
+func TestNetPipeConn(t *testing.T) {
+	// This test will block indefinitely if grpc writes both client and server
+	// prefaces without either reading from the Conn.
+	defer leakcheck.Check(t)
+	pl := &pipeListener{c: make(chan chan<- net.Conn)}
+	s := grpc.NewServer()
+	defer s.Stop()
+	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		return &testpb.SimpleResponse{}, nil
+	}}
+	testpb.RegisterTestServiceServer(s, ts)
+	go s.Serve(pl)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithDialer(pl.Dialer()))
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+	}
+}
