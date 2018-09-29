@@ -279,7 +279,7 @@ public abstract class AbstractTransportTest {
     serverStreamCreation.stream.writeHeaders(new Metadata());
     serverStreamCreation.stream.flush();
 
-    verify(mockClientStreamListener2, timeout(250)).headersRead(any(Metadata.class));
+    verify(mockClientStreamListener2, timeout(TIMEOUT_MS)).headersRead(any(Metadata.class));
   }
 
   @Test
@@ -1812,7 +1812,7 @@ public abstract class AbstractTransportTest {
       ManagedClientTransport clientTransport,
       ManagedClientTransport.Listener listener) {
     runIfNotNull(clientTransport.start(listener));
-    verify(listener, timeout(100)).transportReady();
+    verify(listener, timeout(TIMEOUT_MS)).transportReady();
   }
 
   private static class MockServerListener implements ServerListener {
