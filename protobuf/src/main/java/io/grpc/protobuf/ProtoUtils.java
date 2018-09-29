@@ -43,6 +43,7 @@ public final class ProtoUtils {
    *
    * @since 1.16.0
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1787")
   public static void setExtensionRegistry(ExtensionRegistry registry) {
     ProtoLiteUtils.setExtensionRegistry(registry);
   }
