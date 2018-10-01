@@ -27,7 +27,7 @@ connection during this period (a ping ack is an activity).
 
 ## What about server side?
 
-Server has similiar `Time` and `Timeout` settings as client. Server can also
+Server has similar `Time` and `Timeout` settings as client. Server can also
 configure connection max-age. See [server
 parameters](https://godoc.org/google.golang.org/grpc/keepalive#ServerParameters)
 for details.
