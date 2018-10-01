@@ -41,18 +41,12 @@ import io.netty.util.AsciiString;
  */
 public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
 
-  private static final Attributes.Key<TsiPeer> TSI_PEER_KEY = Attributes.Key.create("TSI_PEER");
-  private static final Attributes.Key<AltsAuthContext> ALTS_CONTEXT_KEY =
+  @Grpc.TransportAttr
+  public static final Attributes.Key<TsiPeer> TSI_PEER_KEY = Attributes.Key.create("TSI_PEER");
+  @Grpc.TransportAttr
+  public static final Attributes.Key<AltsAuthContext> ALTS_CONTEXT_KEY =
       Attributes.Key.create("ALTS_CONTEXT_KEY");
   private static final AsciiString scheme = AsciiString.of("https");
-
-  public static Attributes.Key<TsiPeer> getTsiPeerAttributeKey() {
-    return TSI_PEER_KEY;
-  }
-
-  public static Attributes.Key<AltsAuthContext> getAltsAuthContextAttributeKey() {
-    return ALTS_CONTEXT_KEY;
-  }
 
   /** Creates a negotiator used for ALTS client. */
   public static AltsProtocolNegotiator createClientNegotiator(

@@ -262,12 +262,11 @@ public abstract class ClientCall<ReqT, RespT> {
    * or {@link Listener#onClose}. If called prematurely, the implementation may throw {@code
    * IllegalStateException} or return arbitrary {@code Attributes}.
    *
-   * <p>{@link Grpc} defines commonly used attributes, but they are not guaranteed to be present.
-   *
    * @return non-{@code null} attributes
    * @throws IllegalStateException (optional) if called before permitted
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2607")
+  @Grpc.TransportAttr
   public Attributes getAttributes() {
     return Attributes.EMPTY;
   }

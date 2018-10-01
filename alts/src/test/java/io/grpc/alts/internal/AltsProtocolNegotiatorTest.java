@@ -341,9 +341,9 @@ public class AltsProtocolNegotiatorTest {
   public void peerPropagated() throws Exception {
     doHandshake();
 
-    assertThat(grpcHandler.attrs.get(AltsProtocolNegotiator.getTsiPeerAttributeKey()))
+    assertThat(grpcHandler.attrs.get(AltsProtocolNegotiator.TSI_PEER_KEY))
         .isEqualTo(mockedTsiPeer);
-    assertThat(grpcHandler.attrs.get(AltsProtocolNegotiator.getAltsAuthContextAttributeKey()))
+    assertThat(grpcHandler.attrs.get(AltsProtocolNegotiator.ALTS_CONTEXT_KEY))
         .isEqualTo(mockedAltsContext);
     assertThat(grpcHandler.attrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString())
         .isEqualTo("embedded");

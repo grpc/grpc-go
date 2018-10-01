@@ -42,6 +42,7 @@ public interface CallCredentials {
    * overridden by the transport.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  @Grpc.TransportAttr
   public static final Key<SecurityLevel> ATTR_SECURITY_LEVEL =
       Key.create("io.grpc.CallCredentials.securityLevel");
 
@@ -52,6 +53,7 @@ public interface CallCredentials {
    * io.grpc.CallOptions} with increasing precedence.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  @Grpc.TransportAttr
   public static final Key<String> ATTR_AUTHORITY = Key.create("io.grpc.CallCredentials.authority");
 
   /**

@@ -29,6 +29,18 @@ import javax.annotation.concurrent.Immutable;
 
 /**
  * An immutable type-safe container of attributes.
+ *
+ * <h3>Annotation semantics</h3>
+ *
+ * <p>As a convention, annotations such as {@link Grpc.TransportAttr} is defined to associate
+ * attribute {@link Key}s and their propagation paths.  The annotation may be applied to a {@code
+ * Key} definition field, a method that returns {@link Attributes}, or a variable of type {@link
+ * Attributes}, to indicate that the annotated {@link Attributes} objects may contain the annotated
+ * {@code Key}.
+ *
+ * <p>Javadoc users may click "USE" on the navigation bars of the annotation's javadoc page to view
+ * references of such annotation.
+ *
  * @since 1.13.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1764")

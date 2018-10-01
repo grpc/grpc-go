@@ -17,6 +17,9 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,7 +53,7 @@ public final class EquivalentAddressGroup {
   /**
    * List constructor with {@link Attributes}.
    */
-  public EquivalentAddressGroup(List<SocketAddress> addrs, Attributes attrs) {
+  public EquivalentAddressGroup(List<SocketAddress> addrs, @Attr Attributes attrs) {
     Preconditions.checkArgument(!addrs.isEmpty(), "addrs is empty");
     this.addrs = Collections.unmodifiableList(new ArrayList<>(addrs));
     this.attrs = Preconditions.checkNotNull(attrs, "attrs");
@@ -69,7 +72,7 @@ public final class EquivalentAddressGroup {
   /**
    * Singleton constructor with Attributes.
    */
-  public EquivalentAddressGroup(SocketAddress addr, Attributes attrs) {
+  public EquivalentAddressGroup(SocketAddress addr, @Attr Attributes attrs) {
     this(Collections.singletonList(addr), attrs);
   }
 
@@ -83,6 +86,7 @@ public final class EquivalentAddressGroup {
   /**
    * Returns the attributes.
    */
+  @Attr
   public Attributes getAttributes() {
     return attrs;
   }
@@ -127,4 +131,12 @@ public final class EquivalentAddressGroup {
     }
     return true;
   }
+
+  /**
+   * Annotation for {@link EquivalentAddressGroup}'s attributes. It follows the annotation semantics
+   * defined by {@link Attributes}.
+   */
+  @Retention(RetentionPolicy.SOURCE)
+  @Documented
+  public @interface Attr {}
 }
