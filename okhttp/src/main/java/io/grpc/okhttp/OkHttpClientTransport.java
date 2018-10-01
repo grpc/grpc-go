@@ -192,6 +192,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private long keepAliveTimeoutNanos;
   private boolean keepAliveWithoutCalls;
   private final Runnable tooManyPingsRunnable;
+  private final int maxInboundMetadataSize;
   @GuardedBy("lock")
   private final TransportTracer transportTracer;
   @GuardedBy("lock")
@@ -223,7 +224,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
       Executor executor, @Nullable SSLSocketFactory sslSocketFactory,
       @Nullable HostnameVerifier hostnameVerifier, ConnectionSpec connectionSpec,
       int maxMessageSize, int initialWindowSize, @Nullable ProxyParameters proxy,
-      Runnable tooManyPingsRunnable, TransportTracer transportTracer) {
+      Runnable tooManyPingsRunnable, int maxInboundMetadataSize, TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
@@ -241,6 +242,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     this.proxy = proxy;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    this.maxInboundMetadataSize = maxInboundMetadataSize;
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
     initTransportTracer();
   }
@@ -281,6 +283,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     this.proxy = null;
     this.tooManyPingsRunnable =
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
+    this.maxInboundMetadataSize = Integer.MAX_VALUE;
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
     initTransportTracer();
   }
@@ -1067,6 +1070,18 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         List<Header> headerBlock,
         HeadersMode headersMode) {
       boolean unknownStream = false;
+      Status failedStatus = null;
+      if (maxInboundMetadataSize != Integer.MAX_VALUE) {
+        int metadataSize = headerBlockSize(headerBlock);
+        if (metadataSize > maxInboundMetadataSize) {
+          failedStatus = Status.RESOURCE_EXHAUSTED.withDescription(
+              String.format(
+                  "Response %s metadata larger than %d: %d",
+                  inFinished ? "trailer" : "header",
+                  maxInboundMetadataSize,
+                  metadataSize));
+        }
+      }
       synchronized (lock) {
         OkHttpClientStream stream = streams.get(streamId);
         if (stream == null) {
@@ -1076,13 +1091,31 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
             unknownStream = true;
           }
         } else {
-          stream.transportState().transportHeadersReceived(headerBlock, inFinished);
+          if (failedStatus == null) {
+            stream.transportState().transportHeadersReceived(headerBlock, inFinished);
+          } else {
+            if (!inFinished) {
+              frameWriter.rstStream(streamId, ErrorCode.CANCEL);
+            }
+            stream.transportState().transportReportStatus(failedStatus, false, new Metadata());
+          }
         }
       }
       if (unknownStream) {
         // We don't expect any server-initiated streams.
         onError(ErrorCode.PROTOCOL_ERROR, "Received header for unknown stream: " + streamId);
       }
+    }
+
+    private int headerBlockSize(List<Header> headerBlock) {
+      // Calculate as defined for SETTINGS_MAX_HEADER_LIST_SIZE in RFC 7540 §6.5.2.
+      long size = 0;
+      for (int i = 0; i < headerBlock.size(); i++) {
+        Header header = headerBlock.get(i);
+        size += 32 + header.name.size() + header.value.size();
+      }
+      size = Math.min(size, Integer.MAX_VALUE);
+      return (int) size;
     }
 
     @Override

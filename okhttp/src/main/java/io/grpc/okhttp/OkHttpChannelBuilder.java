@@ -161,6 +161,7 @@ public class OkHttpChannelBuilder extends
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private boolean keepAliveWithoutCalls;
+  private int maxInboundMetadataSize = Integer.MAX_VALUE;
 
   protected OkHttpChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
@@ -405,6 +406,25 @@ public class OkHttpChannelBuilder extends
     return this;
   }
 
+  /**
+   * Sets the maximum size of metadata allowed to be received. {@code Integer.MAX_VALUE} disables
+   * the enforcement. Defaults to no limit ({@code Integer.MAX_VALUE}).
+   *
+   * <p>The implementation does not currently limit memory usage; this value is checked only after
+   * the metadata is decoded from the wire. It does prevent large metadata from being passed to the
+   * application.
+   *
+   * @param bytes the maximum size of received metadata
+   * @return this
+   * @throws IllegalArgumentException if bytes is non-positive
+   * @since 1.17.0
+   */
+  public OkHttpChannelBuilder maxInboundMetadataSize(int bytes) {
+    Preconditions.checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
+    this.maxInboundMetadataSize = bytes;
+    return this;
+  }
+
   @Override
   @Internal
   protected final ClientTransportFactory buildTransportFactory() {
@@ -412,7 +432,7 @@ public class OkHttpChannelBuilder extends
     return new OkHttpTransportFactory(transportExecutor, scheduledExecutorService,
         createSocketFactory(), hostnameVerifier, connectionSpec, maxInboundMessageSize(),
         enableKeepAlive, keepAliveTimeNanos, keepAliveTimeoutNanos, flowControlWindow,
-        keepAliveWithoutCalls, transportTracerFactory);
+        keepAliveWithoutCalls, maxInboundMetadataSize, transportTracerFactory);
   }
 
   @Override
@@ -491,6 +511,7 @@ public class OkHttpChannelBuilder extends
     private final long keepAliveTimeoutNanos;
     private final int flowControlWindow;
     private final boolean keepAliveWithoutCalls;
+    private final int maxInboundMetadataSize;
     private final ScheduledExecutorService timeoutService;
     private boolean closed;
 
@@ -505,6 +526,7 @@ public class OkHttpChannelBuilder extends
         long keepAliveTimeoutNanos,
         int flowControlWindow,
         boolean keepAliveWithoutCalls,
+        int maxInboundMetadataSize,
         TransportTracer.Factory transportTracerFactory) {
       usingSharedScheduler = timeoutService == null;
       this.timeoutService = usingSharedScheduler
@@ -518,6 +540,7 @@ public class OkHttpChannelBuilder extends
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.flowControlWindow = flowControlWindow;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
+      this.maxInboundMetadataSize = maxInboundMetadataSize;
 
       usingSharedExecutor = executor == null;
       this.transportTracerFactory =
@@ -556,6 +579,7 @@ public class OkHttpChannelBuilder extends
           flowControlWindow,
           options.getProxyParameters(),
           tooManyPingsRunnable,
+          maxInboundMetadataSize,
           transportTracerFactory.create());
       if (enableKeepAlive) {
         transport.enableKeepAlive(

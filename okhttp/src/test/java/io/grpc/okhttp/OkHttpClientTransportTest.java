@@ -135,6 +135,7 @@ public class OkHttpClientTransportTest {
   private static final String NO_USER = null;
   private static final String NO_PW = null;
   private static final int DEFAULT_START_STREAM_ID = 3;
+  private static final int DEFAULT_MAX_INBOUND_METADATA_SIZE = Integer.MAX_VALUE;
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
@@ -245,6 +246,7 @@ public class OkHttpClientTransportTest {
         INITIAL_WINDOW_SIZE,
         NO_PROXY,
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
     String s = clientTransport.toString();
     assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
@@ -1518,6 +1520,7 @@ public class OkHttpClientTransportTest {
         INITIAL_WINDOW_SIZE,
         NO_PROXY,
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
 
     String host = clientTransport.getOverridenHost();
@@ -1541,6 +1544,7 @@ public class OkHttpClientTransportTest {
         INITIAL_WINDOW_SIZE,
         NO_PROXY,
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         new TransportTracer());
 
     ManagedClientTransport.Listener listener = mock(ManagedClientTransport.Listener.class);
@@ -1573,6 +1577,7 @@ public class OkHttpClientTransportTest {
         new ProxyParameters(
             (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
     clientTransport.start(transportListener);
 
@@ -1624,6 +1629,7 @@ public class OkHttpClientTransportTest {
         new ProxyParameters(
             (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
     clientTransport.start(transportListener);
 
@@ -1674,6 +1680,7 @@ public class OkHttpClientTransportTest {
         new ProxyParameters(
             (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
         tooManyPingsRunnable,
+        DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
     clientTransport.start(transportListener);
 
