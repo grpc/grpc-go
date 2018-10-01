@@ -38,8 +38,9 @@ type ClientParameters struct {
 	// of Timeout and if no activity is seen even after that the connection is
 	// closed.
 	Timeout time.Duration // The current default value is 20 seconds.
-	// If set to false, client doesn't run keepalive checks when there's no
-	// active RPCs.
+	// If true, client runs keepalive checks even with no active RPCs. If false,
+	// when there are no active RPCs, Time and Timeout will be ignored and no
+	// keepalive pings will be sent.
 	PermitWithoutStream bool // false by default.
 }
 
@@ -75,8 +76,8 @@ type EnforcementPolicy struct {
 	// MinTime is the minimum amount of time a client should wait before sending
 	// a keepalive ping.
 	MinTime time.Duration // The current default value is 5 minutes.
-	// If true, server expects keepalive pings even when there are no active
-	// streams(RPCs). If set to false, and client sends ping when there's no
-	// active streams, server will send GOAWAY and close the connection.
+	// If true, server allows keepalive pings even when there are no active
+	// streams(RPCs). If false, and client sends ping when there are no active
+	// streams, server will send GOAWAY and close the connection.
 	PermitWithoutStream bool // false by default.
 }
