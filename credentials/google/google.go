@@ -16,6 +16,7 @@
  *
  */
 
+// Package google defines credentials for google cloud services.
 package google
 
 import (
