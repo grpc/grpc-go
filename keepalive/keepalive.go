@@ -38,7 +38,7 @@ type ClientParameters struct {
 	// of Timeout and if no activity is seen even after that the connection is
 	// closed.
 	Timeout time.Duration // The current default value is 20 seconds.
-	// If true, client runs keepalive checks even with no active RPCs. If false,
+	// If true, client sends keepalive pings even with no active RPCs. If false,
 	// when there are no active RPCs, Time and Timeout will be ignored and no
 	// keepalive pings will be sent.
 	PermitWithoutStream bool // false by default.
