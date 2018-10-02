@@ -20,6 +20,7 @@ package binarylog
 
 import (
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -106,6 +107,11 @@ func (ml *MethodLogger) truncateMetadata(mdPb *pb.Metadata) (truncated bool) {
 	// len(entry[:index]) <= ml.hdr && len(entry[:index+1]) > ml.hdr.
 	for ; index < len(mdPb.Entry); index++ {
 		entry := mdPb.Entry[index]
+		if entry.Key == "grpc-trace-bin" {
+			// "grpc-trace-bin" is a special key. It's kept in the log entry,
+			// but not counted towards the size limit.
+			continue
+		}
 		currentEntryLen := uint64(len(entry.Value))
 		if currentEntryLen > bytesLimit {
 			break
@@ -353,9 +359,27 @@ func (c *Cancel) toProto() *pb.GrpcLogEntry {
 	return ret
 }
 
+// metadataKeyOmit returns whether the metadata entry with this key should be
+// omitted.
+func metadataKeyOmit(key string) bool {
+	switch key {
+	case "lb-token", ":path", ":authority", "content-encoding", "user-agent", "te":
+		return true
+	case "grpc-trace-bin": // grpc-trace-bin is special because it's visiable to users.
+		return false
+	}
+	if strings.HasPrefix(key, "grpc-") {
+		return true
+	}
+	return false
+}
+
 func mdToMetadataProto(md metadata.MD) *pb.Metadata {
 	ret := &pb.Metadata{}
 	for k, vv := range md {
+		if metadataKeyOmit(k) {
+			continue
+		}
 		for _, v := range vv {
 			ret.Entry = append(ret.Entry,
 				&pb.MetadataEntry{
