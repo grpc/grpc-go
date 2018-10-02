@@ -215,13 +215,19 @@ type ClientMessage struct {
 }
 
 func (c *ClientMessage) toProto() *pb.GrpcLogEntry {
-	m, ok := c.Message.(proto.Message)
-	if !ok {
-		grpclog.Infof("binarylogging: message to log is not a proto message")
-	}
-	data, err := proto.Marshal(m)
-	if err != nil {
-		grpclog.Infof("binarylogging: failed to marshal proto message: %v", err)
+	var (
+		data []byte
+		err  error
+	)
+	if m, ok := c.Message.(proto.Message); ok {
+		data, err = proto.Marshal(m)
+		if err != nil {
+			grpclog.Infof("binarylogging: failed to marshal proto message: %v", err)
+		}
+	} else if b, ok := c.Message.([]byte); ok {
+		data = b
+	} else {
+		grpclog.Infof("binarylogging: message to log is neither proto.message nor []byte")
 	}
 	ret := &pb.GrpcLogEntry{
 		Type: pb.GrpcLogEntry_EVENT_TYPE_CLIENT_MESSAGE,
@@ -249,13 +255,19 @@ type ServerMessage struct {
 }
 
 func (c *ServerMessage) toProto() *pb.GrpcLogEntry {
-	m, ok := c.Message.(proto.Message)
-	if !ok {
-		grpclog.Infof("binarylogging: message to log is not a proto message")
-	}
-	data, err := proto.Marshal(m)
-	if err != nil {
-		grpclog.Infof("binarylogging: failed to marshal proto message: %v", err)
+	var (
+		data []byte
+		err  error
+	)
+	if m, ok := c.Message.(proto.Message); ok {
+		data, err = proto.Marshal(m)
+		if err != nil {
+			grpclog.Infof("binarylogging: failed to marshal proto message: %v", err)
+		}
+	} else if b, ok := c.Message.([]byte); ok {
+		data = b
+	} else {
+		grpclog.Infof("binarylogging: message to log is neither proto.message nor []byte")
 	}
 	ret := &pb.GrpcLogEntry{
 		Type: pb.GrpcLogEntry_EVENT_TYPE_SERVER_MESSAGE,
