@@ -419,6 +419,7 @@ public class OkHttpChannelBuilder extends
    * @throws IllegalArgumentException if bytes is non-positive
    * @since 1.17.0
    */
+  @Override
   public OkHttpChannelBuilder maxInboundMetadataSize(int bytes) {
     Preconditions.checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
     this.maxInboundMetadataSize = bytes;

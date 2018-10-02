@@ -160,6 +160,7 @@ public final class InProcessChannelBuilder extends
    * @throws IllegalArgumentException if bytes is non-positive
    * @since 1.17.0
    */
+  @Override
   public InProcessChannelBuilder maxInboundMetadataSize(int bytes) {
     checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
     this.maxInboundMetadataSize = bytes;

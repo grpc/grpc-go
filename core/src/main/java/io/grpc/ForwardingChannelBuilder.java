@@ -158,6 +158,12 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
   }
 
   @Override
+  public T maxInboundMetadataSize(int max) {
+    delegate().maxInboundMetadataSize(max);
+    return thisT();
+  }
+
+  @Override
   public T keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
     delegate().keepAliveTime(keepAliveTime, timeUnit);
     return thisT();

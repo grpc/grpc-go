@@ -53,7 +53,7 @@ public final class ForwardingTestUtil {
         delegateClass, mockDelegate, forwarder, skippedMethods,
         new ArgumentProvider() {
           @Override
-          public Object get(Class<?> clazz) {
+          public Object get(Method method, int argPos, Class<?> clazz) {
             return null;
           }
         });
@@ -89,7 +89,7 @@ public final class ForwardingTestUtil {
       Class<?>[] argTypes = method.getParameterTypes();
       Object[] args = new Object[argTypes.length];
       for (int i = 0; i < argTypes.length; i++) {
-        if ((args[i] = argProvider.get(argTypes[i])) == null) {
+        if ((args[i] = argProvider.get(method, i, argTypes[i])) == null) {
           args[i] = Defaults.defaultValue(argTypes[i]);
         }
       }
@@ -129,6 +129,6 @@ public final class ForwardingTestUtil {
      * @return a value to be passed as an argument.  If {@code null}, {@link Default#defaultValue}
      *         will be used.
      */
-    @Nullable Object get(Class<?> clazz);
+    @Nullable Object get(Method method, int argPos, Class<?> clazz);
   }
 }

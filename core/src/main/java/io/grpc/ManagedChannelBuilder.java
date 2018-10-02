@@ -306,6 +306,28 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the maximum size of metadata allowed to be received. {@code Integer.MAX_VALUE} disables
+   * the enforcement. The default is implementation-dependent, but is not generally less than 8 KiB
+   * and may be unlimited.
+   *
+   * <p>This is cumulative size of the metadata. The precise calculation is
+   * implementation-dependent, but implementations are encouraged to follow the calculation used for
+   * <a href="http://httpwg.org/specs/rfc7540.html#rfc.section.6.5.2">
+   * HTTP/2's SETTINGS_MAX_HEADER_LIST_SIZE</a>. It sums the bytes from each entry's key and value,
+   * plus 32 bytes of overhead per entry.
+   *
+   * @param bytes the maximum size of received metadata
+   * @return this
+   * @throws IllegalArgumentException if bytes is non-positive
+   * @since 1.17.0
+   */
+  public T maxInboundMetadataSize(int bytes) {
+    Preconditions.checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
+    // intentional noop rather than throw, this method is only advisory.
+    return thisT();
+  }
+
+  /**
    * Sets the time without read activity before sending a keepalive ping. An unreasonably small
    * value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably large
    * value will disable keepalive. Defaults to infinite.

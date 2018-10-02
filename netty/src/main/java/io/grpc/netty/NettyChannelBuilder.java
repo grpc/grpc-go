@@ -217,10 +217,29 @@ public final class NettyChannelBuilder
    * headers with some overhead, as defined for
    * <a href="http://httpwg.org/specs/rfc7540.html#rfc.section.6.5.2">
    * HTTP/2's SETTINGS_MAX_HEADER_LIST_SIZE</a>. The default is 8 KiB.
+   *
+   * @deprecated Use {@link #maxInboundMetadataSize} instead
    */
+  @Deprecated
   public NettyChannelBuilder maxHeaderListSize(int maxHeaderListSize) {
-    checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be > 0");
-    this.maxHeaderListSize = maxHeaderListSize;
+    return maxInboundMetadataSize(maxHeaderListSize);
+  }
+
+  /**
+   * Sets the maximum size of metadata allowed to be received. This is cumulative size of the
+   * entries with some overhead, as defined for
+   * <a href="http://httpwg.org/specs/rfc7540.html#rfc.section.6.5.2">
+   * HTTP/2's SETTINGS_MAX_HEADER_LIST_SIZE</a>. The default is 8 KiB.
+   *
+   * @param bytes the maximum size of received metadata
+   * @return this
+   * @throws IllegalArgumentException if bytes is non-positive
+   * @since 1.17.0
+   */
+  @Override
+  public NettyChannelBuilder maxInboundMetadataSize(int bytes) {
+    checkArgument(bytes > 0, "maxInboundMetadataSize must be > 0");
+    this.maxHeaderListSize = bytes;
     return this;
   }
 

@@ -78,11 +78,11 @@ public class NettyServerBuilderTest {
   }
 
   @Test
-  public void failIfMaxHeaderListSizeNegative() {
+  public void failIfMaxInboundMetadataSizeNonPositive() {
     thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("maxHeaderListSize must be > 0");
+    thrown.expectMessage("maxInboundMetadataSize must be > 0");
 
-    builder.maxHeaderListSize(0);
+    builder.maxInboundMetadataSize(0);
   }
 
   @Test

@@ -50,7 +50,17 @@ public class ForwardingChannelBuilderTest {
         ManagedChannelBuilder.class,
         mockDelegate,
         testChannelBuilder,
-        Collections.<Method>emptyList());
+        Collections.<Method>emptyList(),
+        new ForwardingTestUtil.ArgumentProvider() {
+          @Override
+          public Object get(Method method, int argPos, Class<?> clazz) {
+            if (method.getName().equals("maxInboundMetadataSize")) {
+              assertThat(argPos).isEqualTo(0);
+              return 1; // an arbitrary positive number
+            }
+            return null;
+          }
+        });
   }
 
   @Test
@@ -66,6 +76,9 @@ public class ForwardingChannelBuilderTest {
       Object[] args = new Object[argTypes.length];
       for (int i = 0; i < argTypes.length; i++) {
         args[i] = Defaults.defaultValue(argTypes[i]);
+      }
+      if (method.getName().equals("maxInboundMetadataSize")) {
+        args[0] = 1; // an arbitrary positive number
       }
 
       Object returnedValue = method.invoke(testChannelBuilder, args);
