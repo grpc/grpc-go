@@ -273,6 +273,64 @@ func TestLog(t *testing.T) {
 				Peer:                 nil,
 			},
 		},
+
+		// gRPC headers should be omitted.
+		{
+			config: &ClientHeader{
+				OnClientSide: false,
+				Header: map[string][]string{
+					"grpc-reserved": {"to be omitted"},
+					":authority":    {"to be omitted"},
+					"a":             {"b", "bb"},
+				},
+			},
+			want: &pb.GrpcLogEntry{
+				Timestamp:            nil,
+				CallId:               1,
+				SequenceIdWithinCall: 0,
+				Type:                 pb.GrpcLogEntry_EVENT_TYPE_CLIENT_HEADER,
+				Logger:               pb.GrpcLogEntry_LOGGER_SERVER,
+				Payload: &pb.GrpcLogEntry_ClientHeader{
+					ClientHeader: &pb.ClientHeader{
+						Metadata: &pb.Metadata{
+							Entry: []*pb.MetadataEntry{
+								{Key: "a", Value: []byte{'b'}},
+								{Key: "a", Value: []byte{'b', 'b'}},
+							},
+						},
+					},
+				},
+				PayloadTruncated: false,
+			},
+		},
+		{
+			config: &ServerHeader{
+				OnClientSide: true,
+				Header: map[string][]string{
+					"grpc-reserved": {"to be omitted"},
+					":authority":    {"to be omitted"},
+					"a":             {"b", "bb"},
+				},
+			},
+			want: &pb.GrpcLogEntry{
+				Timestamp:            nil,
+				CallId:               1,
+				SequenceIdWithinCall: 0,
+				Type:                 pb.GrpcLogEntry_EVENT_TYPE_SERVER_HEADER,
+				Logger:               pb.GrpcLogEntry_LOGGER_CLIENT,
+				Payload: &pb.GrpcLogEntry_ServerHeader{
+					ServerHeader: &pb.ServerHeader{
+						Metadata: &pb.Metadata{
+							Entry: []*pb.MetadataEntry{
+								{Key: "a", Value: []byte{'b'}},
+								{Key: "a", Value: []byte{'b', 'b'}},
+							},
+						},
+					},
+				},
+				PayloadTruncated: false,
+			},
+		},
 	}
 	for i, tc := range testCases {
 		buf.Reset()
@@ -333,6 +391,17 @@ func TestTruncateMetadataNotTruncated(t *testing.T) {
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
 					{Key: "", Value: []byte{1}},
+				},
+			},
+		},
+		// "grpc-trace-bin" is kept in log but not counted towards the size
+		// limit.
+		{
+			ml: newMethodLogger(1, maxUInt),
+			mpPb: &pb.Metadata{
+				Entry: []*pb.MetadataEntry{
+					{Key: "", Value: []byte{1}},
+					{Key: "grpc-trace-bin", Value: []byte("some.trace.key")},
 				},
 			},
 		},
