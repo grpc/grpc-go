@@ -347,6 +347,8 @@ public class AltsProtocolNegotiatorTest {
         .isEqualTo(mockedAltsContext);
     assertThat(grpcHandler.attrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString())
         .isEqualTo("embedded");
+    assertThat(grpcHandler.attrs.get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR).toString())
+        .isEqualTo("embedded");
     assertThat(grpcHandler.attrs.get(CallCredentials.ATTR_SECURITY_LEVEL))
         .isEqualTo(SecurityLevel.PRIVACY_AND_INTEGRITY);
   }

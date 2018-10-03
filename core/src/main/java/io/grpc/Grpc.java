@@ -36,7 +36,15 @@ public final class Grpc {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   @TransportAttr
   public static final Attributes.Key<SocketAddress> TRANSPORT_ATTR_REMOTE_ADDR =
-          Attributes.Key.create("remote-addr");
+      Attributes.Key.create("remote-addr");
+
+  /**
+   * Attribute key for the local address of a transport.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
+  @TransportAttr
+  public static final Attributes.Key<SocketAddress> TRANSPORT_ATTR_LOCAL_ADDR =
+      Attributes.Key.create("local-addr");
 
   /**
    * Attribute key for SSL session of a transport.
@@ -44,7 +52,7 @@ public final class Grpc {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   @TransportAttr
   public static final Attributes.Key<SSLSession> TRANSPORT_ATTR_SSL_SESSION =
-          Attributes.Key.create("ssl-session");
+      Attributes.Key.create("ssl-session");
 
   /**
    * Annotation for transport attributes. It follows the annotation semantics defined

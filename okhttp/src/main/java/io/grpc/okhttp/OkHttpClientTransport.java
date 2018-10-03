@@ -484,6 +484,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
           attributes = Attributes
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, sock.getRemoteSocketAddress())
+              .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, sock.getLocalSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
               .set(CallCredentials.ATTR_SECURITY_LEVEL,
                   sslSession == null ? SecurityLevel.NONE : SecurityLevel.PRIVACY_AND_INTEGRITY)

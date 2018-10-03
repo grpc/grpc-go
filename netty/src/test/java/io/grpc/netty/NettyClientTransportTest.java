@@ -77,12 +77,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javax.net.ssl.SSLHandshakeException;
@@ -105,6 +107,8 @@ public class NettyClientTransportTest {
   private ManagedClientTransport.Listener clientTransportListener;
 
   private final List<NettyClientTransport> transports = new ArrayList<>();
+  private final LinkedBlockingQueue<Attributes> serverTransportAttributesList =
+      new LinkedBlockingQueue<>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private final EchoServerListener serverListener = new EchoServerListener();
   private final InternalChannelz channelz = new InternalChannelz();
@@ -536,6 +540,11 @@ public class NettyClientTransportTest {
 
     assertNotNull(rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION));
     assertEquals(address, rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
+    Attributes serverTransportAttrs = serverTransportAttributesList.poll(1, TimeUnit.SECONDS);
+    assertNotNull(serverTransportAttrs);
+    SocketAddress clientAddr = serverTransportAttrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
+    assertNotNull(clientAddr);
+    assertEquals(clientAddr, rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR));
   }
 
   @Test
@@ -749,7 +758,7 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static final class EchoServerListener implements ServerListener {
+  private final class EchoServerListener implements ServerListener {
     final List<NettyServerTransport> transports = new ArrayList<>();
     final List<EchoServerStreamListener> streamListeners =
             Collections.synchronizedList(new ArrayList<EchoServerStreamListener>());
@@ -769,6 +778,7 @@ public class NettyClientTransportTest {
 
         @Override
         public Attributes transportReady(Attributes transportAttrs) {
+          serverTransportAttributesList.add(transportAttrs);
           return transportAttrs;
         }
 

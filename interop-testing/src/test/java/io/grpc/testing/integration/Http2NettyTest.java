@@ -88,6 +88,13 @@ public class Http2NettyTest extends AbstractInteropTest {
   }
 
   @Test
+  public void localAddr() throws Exception {
+    InetSocketAddress isa = (InetSocketAddress) obtainLocalClientAddr();
+    assertEquals(InetAddress.getLoopbackAddress(), isa.getAddress());
+    assertEquals(getPort(), isa.getPort());
+  }
+
+  @Test
   public void tlsInfo() {
     assertX500SubjectDn("CN=testclient, O=Internet Widgits Pty Ltd, ST=Some-State, C=AU");
   }

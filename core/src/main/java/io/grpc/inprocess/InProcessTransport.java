@@ -132,6 +132,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         synchronized (InProcessTransport.this) {
           Attributes serverTransportAttrs = Attributes.newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, new InProcessSocketAddress(name))
+              .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, new InProcessSocketAddress(name))
               .build();
           serverStreamAttributes = serverTransportListener.transportReady(serverTransportAttrs);
           clientTransportListener.transportReady();

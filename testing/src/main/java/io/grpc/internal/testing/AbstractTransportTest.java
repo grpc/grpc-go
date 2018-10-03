@@ -707,6 +707,7 @@ public abstract class AbstractTransportTest {
     assertEquals("additional attribute value",
         serverStream.getAttributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
     assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
+    assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR));
 
     serverStream.request(1);
     assertTrue(clientStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));

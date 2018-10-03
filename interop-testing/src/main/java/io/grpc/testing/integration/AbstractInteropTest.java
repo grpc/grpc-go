@@ -1759,7 +1759,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  /** Helper for getting remote address {@link io.grpc.ServerCall#getAttributes()} */
+  /** Helper for getting remote address from {@link io.grpc.ServerCall#getAttributes()} */
   protected SocketAddress obtainRemoteClientAddr() {
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS);
@@ -1767,6 +1767,16 @@ public abstract class AbstractInteropTest {
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
     return serverCallCapture.get().getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
+  }
+
+  /** Helper for getting local address from {@link io.grpc.ServerCall#getAttributes()} */
+  protected SocketAddress obtainLocalClientAddr() {
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS);
+
+    stub.unaryCall(SimpleRequest.getDefaultInstance());
+
+    return serverCallCapture.get().getAttributes().get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR);
   }
 
   /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#getAttributes()} */

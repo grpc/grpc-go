@@ -90,6 +90,7 @@ public final class ProtocolNegotiators {
             // Set sttributes before replace to be sure we pass it before accepting any requests.
             handler.handleProtocolNegotiationCompleted(Attributes.newBuilder()
                 .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+                .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
                 .build(),
                 /*securityInfo=*/ null);
             // Just replace this handler with the gRPC handler.
@@ -163,6 +164,7 @@ public final class ProtocolNegotiators {
                 Attributes.newBuilder()
                     .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+                    .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
                     .build(),
                 new InternalChannelz.Security(new InternalChannelz.Tls(session)));
             // Replace this handler with the GRPC handler.
@@ -673,6 +675,7 @@ public final class ProtocolNegotiators {
                 Attributes.newBuilder()
                     .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+                    .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
                     .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
                     .build(),
                 new InternalChannelz.Security(new InternalChannelz.Tls(session)));
@@ -721,6 +724,7 @@ public final class ProtocolNegotiators {
           Attributes
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+              .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
               .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
               .build(),
           /*securityInfo=*/ null);
@@ -764,6 +768,7 @@ public final class ProtocolNegotiators {
             Attributes
                 .newBuilder()
                 .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+                .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
                 .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
                 .build(),
             /*securityInfo=*/ null);

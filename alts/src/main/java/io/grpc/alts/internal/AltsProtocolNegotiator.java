@@ -145,6 +145,7 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
                     .set(TSI_PEER_KEY, altsEvt.peer())
                     .set(ALTS_CONTEXT_KEY, altsContext)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+                    .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
                     .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
                     .build(),
                 new Security(new OtherSecurity("alts", Any.pack(altsContext.context))));
