@@ -35,14 +35,18 @@ public final class HealthProto {
     java.lang.String[] descriptorData = {
       "\n\033grpc/health/v1/health.proto\022\016grpc.heal" +
       "th.v1\"%\n\022HealthCheckRequest\022\017\n\007service\030\001" +
-      " \001(\t\"\224\001\n\023HealthCheckResponse\022A\n\006status\030\001" +
+      " \001(\t\"\251\001\n\023HealthCheckResponse\022A\n\006status\030\001" +
       " \001(\01621.grpc.health.v1.HealthCheckRespons" +
-      "e.ServingStatus\":\n\rServingStatus\022\013\n\007UNKN" +
-      "OWN\020\000\022\013\n\007SERVING\020\001\022\017\n\013NOT_SERVING\020\0022Z\n\006H" +
-      "ealth\022P\n\005Check\022\".grpc.health.v1.HealthCh" +
-      "eckRequest\032#.grpc.health.v1.HealthCheckR" +
-      "esponseB3\n\021io.grpc.health.v1B\013HealthProt" +
-      "oP\001\252\002\016Grpc.Health.V1b\006proto3"
+      "e.ServingStatus\"O\n\rServingStatus\022\013\n\007UNKN" +
+      "OWN\020\000\022\013\n\007SERVING\020\001\022\017\n\013NOT_SERVING\020\002\022\023\n\017S" +
+      "ERVICE_UNKNOWN\020\0032\256\001\n\006Health\022P\n\005Check\022\".g" +
+      "rpc.health.v1.HealthCheckRequest\032#.grpc." +
+      "health.v1.HealthCheckResponse\022R\n\005Watch\022\"" +
+      ".grpc.health.v1.HealthCheckRequest\032#.grp" +
+      "c.health.v1.HealthCheckResponse0\001Ba\n\021io." +
+      "grpc.health.v1B\013HealthProtoP\001Z,google.go" +
+      "lang.org/grpc/health/grpc_health_v1\252\002\016Gr" +
+      "pc.Health.V1b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

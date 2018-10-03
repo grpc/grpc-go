@@ -97,6 +97,14 @@ private static final long serialVersionUID = 0L;
      * <code>NOT_SERVING = 2;</code>
      */
     NOT_SERVING(2),
+    /**
+     * <pre>
+     * Used only by the Watch method.
+     * </pre>
+     *
+     * <code>SERVICE_UNKNOWN = 3;</code>
+     */
+    SERVICE_UNKNOWN(3),
     UNRECOGNIZED(-1),
     ;
 
@@ -112,6 +120,14 @@ private static final long serialVersionUID = 0L;
      * <code>NOT_SERVING = 2;</code>
      */
     public static final int NOT_SERVING_VALUE = 2;
+    /**
+     * <pre>
+     * Used only by the Watch method.
+     * </pre>
+     *
+     * <code>SERVICE_UNKNOWN = 3;</code>
+     */
+    public static final int SERVICE_UNKNOWN_VALUE = 3;
 
 
     public final int getNumber() {
@@ -135,6 +151,7 @@ private static final long serialVersionUID = 0L;
         case 0: return UNKNOWN;
         case 1: return SERVING;
         case 2: return NOT_SERVING;
+        case 3: return SERVICE_UNKNOWN;
         default: return null;
       }
     }
