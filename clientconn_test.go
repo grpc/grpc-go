@@ -706,7 +706,7 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	defer s.Stop()
 	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                50 * time.Millisecond,
-		Timeout:             200 * time.Millisecond,
+		Timeout:             300 * time.Millisecond,
 		PermitWithoutStream: true,
 	}))
 	if err != nil {
