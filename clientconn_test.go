@@ -706,14 +706,14 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	defer s.Stop()
 	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                50 * time.Millisecond,
-		Timeout:             100 * time.Millisecond,
+		Timeout:             200 * time.Millisecond,
 		PermitWithoutStream: true,
 	}))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	v := cc.mkp.Time
