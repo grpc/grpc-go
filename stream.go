@@ -973,7 +973,9 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
+	// transport.Options is never check on server side, so there's no need to
+	// set it.
+	if err := ss.t.Write(ss.s, hdr, payload, nil); err != nil {
 		return toRPCErr(err)
 	}
 	if ss.statsHandler != nil {

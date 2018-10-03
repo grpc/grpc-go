@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -33,11 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"io/ioutil"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
@@ -801,29 +797,6 @@ func (s *Server) incrCallsFailed() {
 	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
-	if err != nil {
-		grpclog.Errorln("grpc: server failed to encode response: ", err)
-		return err
-	}
-	compData, err := compress(data, cp, comp)
-	if err != nil {
-		grpclog.Errorln("grpc: server failed to compress response: ", err)
-		return err
-	}
-	hdr, payload := msgHeader(data, compData)
-	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
-	}
-	err = t.Write(stream, hdr, payload, opts)
-	if err == nil && s.opts.statsHandler != nil {
-		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
-	}
-	return err
-}
-
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
 		s.incrCallsStarted()
@@ -865,23 +838,28 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}()
 	}
 
-	// comp and cp are used for compression.  decomp and dc are used for
-	// decompression.  If comp and decomp are both set, they are the same;
-	// however they are kept separate to ensure that at most one of the
-	// compressor/decompressor variable pairs are set for use later.
-	var comp, decomp encoding.Compressor
-	var cp Compressor
-	var dc Decompressor
+	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
+	ss := &serverStream{
+		ctx:                   ctx,
+		t:                     t,
+		s:                     stream,
+		p:                     &parser{r: stream},
+		codec:                 s.getCodec(stream.ContentSubtype()),
+		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
+		maxSendMessageSize:    s.opts.maxSendMessageSize,
+		trInfo:                trInfo,
+		statsHandler:          sh,
+	}
 
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
 	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
-		dc = s.opts.dc
+		ss.dc = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
-		decomp = encoding.GetCompressor(rc)
-		if decomp == nil {
+		ss.decomp = encoding.GetCompressor(rc)
+		if ss.decomp == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			t.WriteStatus(stream, st)
+			t.WriteStatus(ss.s, st)
 			return st.Err()
 		}
 	}
@@ -891,95 +869,17 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	//
 	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 	if s.opts.cp != nil {
-		cp = s.opts.cp
-		stream.SetSendCompress(cp.Type())
+		ss.cp = s.opts.cp
+		stream.SetSendCompress(s.opts.cp.Type())
 	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
-		comp = encoding.GetCompressor(rc)
-		if comp != nil {
+		ss.comp = encoding.GetCompressor(rc)
+		if ss.comp != nil {
 			stream.SetSendCompress(rc)
 		}
 	}
 
-	p := &parser{r: stream}
-	pf, req, err := p.recvMsg(s.opts.maxReceiveMessageSize)
-	if err == io.EOF {
-		// The entire stream is done (for unary RPC only).
-		return err
-	}
-	if err == io.ErrUnexpectedEOF {
-		err = status.Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
-	}
-	if err != nil {
-		if st, ok := status.FromError(err); ok {
-			if e := t.WriteStatus(stream, st); e != nil {
-				grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-			}
-		} else {
-			switch st := err.(type) {
-			case transport.ConnectionError:
-				// Nothing to do here.
-			default:
-				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
-			}
-		}
-		return err
-	}
-	if channelz.IsOn() {
-		t.IncrMsgRecv()
-	}
-	if st := checkRecvPayload(pf, stream.RecvCompress(), dc != nil || decomp != nil); st != nil {
-		if e := t.WriteStatus(stream, st); e != nil {
-			grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-		}
-		return st.Err()
-	}
-	var inPayload *stats.InPayload
-	if sh != nil {
-		inPayload = &stats.InPayload{
-			RecvTime: time.Now(),
-		}
-	}
-	df := func(v interface{}) error {
-		if inPayload != nil {
-			inPayload.WireLength = len(req)
-		}
-		if pf == compressionMade {
-			var err error
-			if dc != nil {
-				req, err = dc.Do(bytes.NewReader(req))
-				if err != nil {
-					return status.Errorf(codes.Internal, err.Error())
-				}
-			} else {
-				tmp, _ := decomp.Decompress(bytes.NewReader(req))
-				req, err = ioutil.ReadAll(tmp)
-				if err != nil {
-					return status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
-				}
-			}
-		}
-		if len(req) > s.opts.maxReceiveMessageSize {
-			// TODO: Revisit the error code. Currently keep it consistent with
-			// java implementation.
-			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
-		}
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
-			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
-		}
-		if inPayload != nil {
-			inPayload.Payload = v
-			inPayload.Data = req
-			inPayload.Length = len(req)
-			sh.HandleRPC(stream.Context(), inPayload)
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
-		}
-		return nil
-	}
-	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
-	reply, appErr := md.Handler(srv.server, ctx, df, s.opts.unaryInt)
+	reply, appErr := md.Handler(srv.server, ctx, ss.RecvMsg, s.opts.unaryInt)
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
 		if !ok {
@@ -999,9 +899,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.Options{Last: true}
 
-	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
+	if err := ss.SendMsg(reply); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -1019,9 +918,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}
 		return err
-	}
-	if channelz.IsOn() {
-		t.IncrMsgSent()
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
