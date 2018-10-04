@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -33,11 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"io/ioutil"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
@@ -801,238 +797,14 @@ func (s *Server) incrCallsFailed() {
 	atomic.AddInt64(&s.czData.callsFailed, 1)
 }
 
-func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
-	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
-	if err != nil {
-		grpclog.Errorln("grpc: server failed to encode response: ", err)
-		return err
-	}
-	compData, err := compress(data, cp, comp)
-	if err != nil {
-		grpclog.Errorln("grpc: server failed to compress response: ", err)
-		return err
-	}
-	hdr, payload := msgHeader(data, compData)
-	// TODO(dfawley): should we be checking len(data) instead?
-	if len(payload) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
-	}
-	err = t.Write(stream, hdr, payload, opts)
-	if err == nil && s.opts.statsHandler != nil {
-		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
-	}
-	return err
-}
-
-func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
-	if channelz.IsOn() {
-		s.incrCallsStarted()
-		defer func() {
-			if err != nil && err != io.EOF {
-				s.incrCallsFailed()
-			} else {
-				s.incrCallsSucceeded()
-			}
-		}()
-	}
-	sh := s.opts.statsHandler
-	if sh != nil {
-		beginTime := time.Now()
-		begin := &stats.Begin{
-			BeginTime: beginTime,
-		}
-		sh.HandleRPC(stream.Context(), begin)
-		defer func() {
-			end := &stats.End{
-				BeginTime: beginTime,
-				EndTime:   time.Now(),
-			}
-			if err != nil && err != io.EOF {
-				end.Error = toRPCErr(err)
-			}
-			sh.HandleRPC(stream.Context(), end)
-		}()
-	}
-	if trInfo != nil {
-		defer trInfo.tr.Finish()
-		trInfo.firstLine.client = false
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-		defer func() {
-			if err != nil && err != io.EOF {
-				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				trInfo.tr.SetError()
-			}
-		}()
-	}
-
-	// comp and cp are used for compression.  decomp and dc are used for
-	// decompression.  If comp and decomp are both set, they are the same;
-	// however they are kept separate to ensure that at most one of the
-	// compressor/decompressor variable pairs are set for use later.
-	var comp, decomp encoding.Compressor
-	var cp Compressor
-	var dc Decompressor
-
-	// If dc is set and matches the stream's compression, use it.  Otherwise, try
-	// to find a matching registered compressor for decomp.
-	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
-		dc = s.opts.dc
-	} else if rc != "" && rc != encoding.Identity {
-		decomp = encoding.GetCompressor(rc)
-		if decomp == nil {
-			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			t.WriteStatus(stream, st)
-			return st.Err()
-		}
-	}
-
-	// If cp is set, use it.  Otherwise, attempt to compress the response using
-	// the incoming message compression method.
-	//
-	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
-	if s.opts.cp != nil {
-		cp = s.opts.cp
-		stream.SetSendCompress(cp.Type())
-	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
-		// Legacy compressor not specified; attempt to respond with same encoding.
-		comp = encoding.GetCompressor(rc)
-		if comp != nil {
-			stream.SetSendCompress(rc)
-		}
-	}
-
-	p := &parser{r: stream}
-	pf, req, err := p.recvMsg(s.opts.maxReceiveMessageSize)
-	if err == io.EOF {
-		// The entire stream is done (for unary RPC only).
-		return err
-	}
-	if err == io.ErrUnexpectedEOF {
-		err = status.Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
-	}
-	if err != nil {
-		if st, ok := status.FromError(err); ok {
-			if e := t.WriteStatus(stream, st); e != nil {
-				grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-			}
-		} else {
-			switch st := err.(type) {
-			case transport.ConnectionError:
-				// Nothing to do here.
-			default:
-				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
-			}
-		}
-		return err
-	}
-	if channelz.IsOn() {
-		t.IncrMsgRecv()
-	}
-	if st := checkRecvPayload(pf, stream.RecvCompress(), dc != nil || decomp != nil); st != nil {
-		if e := t.WriteStatus(stream, st); e != nil {
-			grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status %v", e)
-		}
-		return st.Err()
-	}
-	var inPayload *stats.InPayload
-	if sh != nil {
-		inPayload = &stats.InPayload{
-			RecvTime: time.Now(),
-		}
-	}
-	df := func(v interface{}) error {
-		if inPayload != nil {
-			inPayload.WireLength = len(req)
-		}
-		if pf == compressionMade {
-			var err error
-			if dc != nil {
-				req, err = dc.Do(bytes.NewReader(req))
-				if err != nil {
-					return status.Errorf(codes.Internal, err.Error())
-				}
-			} else {
-				tmp, _ := decomp.Decompress(bytes.NewReader(req))
-				req, err = ioutil.ReadAll(tmp)
-				if err != nil {
-					return status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
-				}
-			}
-		}
-		if len(req) > s.opts.maxReceiveMessageSize {
-			// TODO: Revisit the error code. Currently keep it consistent with
-			// java implementation.
-			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
-		}
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
-			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
-		}
-		if inPayload != nil {
-			inPayload.Payload = v
-			inPayload.Data = req
-			inPayload.Length = len(req)
-			sh.HandleRPC(stream.Context(), inPayload)
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
-		}
-		return nil
-	}
-	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
-	reply, appErr := md.Handler(srv.server, ctx, df, s.opts.unaryInt)
-	if appErr != nil {
-		appStatus, ok := status.FromError(appErr)
-		if !ok {
-			// Convert appErr if it is not a grpc status error.
-			appErr = status.Error(codes.Unknown, appErr.Error())
-			appStatus, _ = status.FromError(appErr)
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
-			trInfo.tr.SetError()
-		}
-		if e := t.WriteStatus(stream, appStatus); e != nil {
-			grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status: %v", e)
-		}
-		return appErr
-	}
-	if trInfo != nil {
-		trInfo.tr.LazyLog(stringer("OK"), false)
-	}
-	opts := &transport.Options{Last: true}
-
-	if err := s.sendResponse(t, stream, reply, cp, opts, comp); err != nil {
-		if err == io.EOF {
-			// The entire stream is done (for unary RPC only).
-			return err
-		}
-		if s, ok := status.FromError(err); ok {
-			if e := t.WriteStatus(stream, s); e != nil {
-				grpclog.Warningf("grpc: Server.processUnaryRPC failed to write status: %v", e)
-			}
-		} else {
-			switch st := err.(type) {
-			case transport.ConnectionError:
-				// Nothing to do here.
-			default:
-				panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
-			}
-		}
-		return err
-	}
-	if channelz.IsOn() {
-		t.IncrMsgSent()
-	}
-	if trInfo != nil {
-		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
-	}
-	// TODO: Should we be logging if writing status failed here, like above?
-	// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
-	// error or allow the stats handler to see it?
-	return t.WriteStatus(stream, status.New(codes.OK, ""))
-}
-
-func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+// processRPC handles the common work for unary and streaming RPCs, including
+// picking compressor/encoder and setting up stats.
+//
+// callHandler is a closure wraps around user's service handler. For unary RPCs,
+// it calls service handler, and sends the response out. For streaming RPCs, it
+// calls interceptor if there is one (unary interceptor is called by the
+// generated), otherwise it calls user's service handler.
+func (s *Server) processRPC(t transport.ServerTransport, stream *transport.Stream, callHandler func(*serverStream) error, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 		defer func() {
@@ -1115,22 +887,8 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.mu.Unlock()
 		}()
 	}
-	var appErr error
-	var server interface{}
-	if srv != nil {
-		server = srv.server
-	}
-	if s.opts.streamInt == nil {
-		appErr = sd.Handler(server, ss)
-	} else {
-		info := &StreamServerInfo{
-			FullMethod:     stream.Method(),
-			IsClientStream: sd.ClientStreams,
-			IsServerStream: sd.ServerStreams,
-		}
-		appErr = s.opts.streamInt(server, ss, info, sd.Handler)
-	}
-	if appErr != nil {
+
+	if appErr := callHandler(ss); appErr != nil {
 		appStatus, ok := status.FromError(appErr)
 		if !ok {
 			appStatus = status.New(codes.Unknown, appErr.Error())
@@ -1152,6 +910,34 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.mu.Unlock()
 	}
 	return t.WriteStatus(ss.s, status.New(codes.OK, ""))
+}
+
+func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) error {
+	return s.processRPC(t, stream, func(ss *serverStream) error {
+		reply, err := md.Handler(srv.server, ss.ctx, ss.RecvMsg, s.opts.unaryInt)
+		if err != nil {
+			return err
+		}
+		return ss.SendMsg(reply)
+	}, trInfo)
+}
+
+func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+	return s.processRPC(t, stream, func(ss *serverStream) error {
+		var server interface{}
+		if srv != nil {
+			server = srv.server
+		}
+		if s.opts.streamInt == nil {
+			return sd.Handler(server, ss)
+		}
+		info := &StreamServerInfo{
+			FullMethod:     stream.Method(),
+			IsClientStream: sd.ClientStreams,
+			IsServerStream: sd.ServerStreams,
+		}
+		return s.opts.streamInt(server, ss, info, sd.Handler)
+	}, trInfo)
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream, trInfo *traceInfo) {
@@ -1180,47 +966,27 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 	service := sm[:pos]
 	method := sm[pos+1:]
-	srv, ok := s.m[service]
-	if !ok {
-		if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
-			s.processStreamingRPC(t, stream, nil, unknownDesc, trInfo)
+
+	if srv, ok := s.m[service]; ok {
+		if md, ok := srv.md[method]; ok {
+			s.processUnaryRPC(t, stream, srv, md, trInfo)
 			return
 		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&fmtStringer{"Unknown service %v", []interface{}{service}}, true)
-			trInfo.tr.SetError()
+		if sd, ok := srv.sd[method]; ok {
+			s.processStreamingRPC(t, stream, srv, sd, trInfo)
+			return
 		}
-		errDesc := fmt.Sprintf("unknown service %v", service)
-		if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
-			if trInfo != nil {
-				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				trInfo.tr.SetError()
-			}
-			grpclog.Warningf("grpc: Server.handleStream failed to write status: %v", err)
-		}
-		if trInfo != nil {
-			trInfo.tr.Finish()
-		}
-		return
 	}
-	// Unary RPC or Streaming RPC?
-	if md, ok := srv.md[method]; ok {
-		s.processUnaryRPC(t, stream, srv, md, trInfo)
-		return
-	}
-	if sd, ok := srv.sd[method]; ok {
-		s.processStreamingRPC(t, stream, srv, sd, trInfo)
-		return
-	}
-	if trInfo != nil {
-		trInfo.tr.LazyLog(&fmtStringer{"Unknown method %v", []interface{}{method}}, true)
-		trInfo.tr.SetError()
-	}
+	// Unknown service, or known server unknown method.
 	if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
 		s.processStreamingRPC(t, stream, nil, unknownDesc, trInfo)
 		return
 	}
-	errDesc := fmt.Sprintf("unknown method %v", method)
+	if trInfo != nil {
+		trInfo.tr.LazyLog(&fmtStringer{"Unknown service %v", []interface{}{service}}, true)
+		trInfo.tr.SetError()
+	}
+	errDesc := fmt.Sprintf("unknown service %v", service)
 	if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
