@@ -912,39 +912,31 @@ func (s *Server) processRPC(t transport.ServerTransport, stream *transport.Strea
 	return t.WriteStatus(ss.s, status.New(codes.OK, ""))
 }
 
-func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) error {
 	return s.processRPC(t, stream, func(ss *serverStream) error {
 		reply, err := md.Handler(srv.server, ss.ctx, ss.RecvMsg, s.opts.unaryInt)
 		if err != nil {
 			return err
 		}
-		if err := ss.SendMsg(reply); err != nil {
-			return err
-		}
-		return nil
+		return ss.SendMsg(reply)
 	}, trInfo)
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	return s.processRPC(t, stream, func(ss *serverStream) error {
-		var (
-			err    error
-			server interface{}
-		)
+		var server interface{}
 		if srv != nil {
 			server = srv.server
 		}
 		if s.opts.streamInt == nil {
-			err = sd.Handler(server, ss)
-		} else {
-			info := &StreamServerInfo{
-				FullMethod:     stream.Method(),
-				IsClientStream: sd.ClientStreams,
-				IsServerStream: sd.ServerStreams,
-			}
-			err = s.opts.streamInt(server, ss, info, sd.Handler)
+			return sd.Handler(server, ss)
 		}
-		return err
+		info := &StreamServerInfo{
+			FullMethod:     stream.Method(),
+			IsClientStream: sd.ClientStreams,
+			IsServerStream: sd.ServerStreams,
+		}
+		return s.opts.streamInt(server, ss, info, sd.Handler)
 	}, trInfo)
 }
 
