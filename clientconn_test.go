@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	_ "google.golang.org/grpc/resolver/passthrough"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -695,10 +696,7 @@ func TestResolverEmptyUpdateNotPanic(t *testing.T) {
 
 func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	defer leakcheck.Check(t)
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen. Err: %v", err)
-	}
+	lis := bufconn.Listen(256 * 1024)
 	defer lis.Close()
 	addr := lis.Addr().String()
 	s := NewServer()
@@ -706,14 +704,17 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	defer s.Stop()
 	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                50 * time.Millisecond,
-		Timeout:             300 * time.Millisecond,
+		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
-	}))
+	}), WithDialer(func(string, time.Duration) (net.Conn, error) {
+		return lis.Dial()
+	}),
+	)
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	v := cc.mkp.Time
