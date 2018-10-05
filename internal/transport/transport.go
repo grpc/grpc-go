@@ -156,10 +156,10 @@ func (r *recvBufferReader) read(p []byte) (n int, err error) {
 type streamState uint32
 
 const (
-	streamActive    streamState = iota
-	streamWriteDone             // EndStream sent
-	streamReadDone              // EndStream received
-	streamDone                  // the entire stream is finished.
+	streamActive    streamState = 0
+	streamWriteDone streamState = 1 << iota                        // EndStream sent
+	streamReadDone                                                 // EndStream received
+	streamDone      streamState = streamWriteDone | streamReadDone // the entire stream is finished.
 )
 
 // Stream represents an RPC in the transport layer.
@@ -195,7 +195,9 @@ type Stream struct {
 	// On the server-side, headerSent is atomically set to 1 when the headers are sent out.
 	headerSent uint32
 
-	state streamState
+	// stateMu protects stream state transitions
+	stateMu sync.Mutex
+	state   streamState
 
 	// On client-side it is the status error received from the server.
 	// On server-side it is unused.
@@ -220,16 +222,34 @@ func (s *Stream) updateHeaderSent() bool {
 	return atomic.SwapUint32(&s.headerSent, 1) == 1
 }
 
-func (s *Stream) swapState(st streamState) streamState {
-	return streamState(atomic.SwapUint32((*uint32)(&s.state), uint32(st)))
+func (s *Stream) setStreamWriteDone() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	s.state |= streamWriteDone
 }
 
-func (s *Stream) compareAndSwapState(oldState, newState streamState) bool {
-	return atomic.CompareAndSwapUint32((*uint32)(&s.state), uint32(oldState), uint32(newState))
+func (s *Stream) setStreamReadDone() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	s.state |= streamReadDone
 }
 
-func (s *Stream) getState() streamState {
-	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
+func (s *Stream) setStreamDone() bool {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	old := s.state
+	s.state = streamDone
+	return old != streamDone
+}
+
+func (s *Stream) isStreamWriteDone() bool {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	return s.state&streamWriteDone != 0
 }
 
 func (s *Stream) waitOnHeader() error {
@@ -339,7 +359,7 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	if s.isHeaderSent() || s.getState() == streamDone {
+	if s.isHeaderSent() || s.isStreamWriteDone() {
 		return ErrIllegalHeaderWrite
 	}
 	s.hdrMu.Lock()
@@ -362,7 +382,7 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	if s.getState() == streamDone {
+	if s.isStreamWriteDone() {
 		return ErrIllegalHeaderWrite
 	}
 	s.hdrMu.Lock()

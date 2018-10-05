@@ -526,7 +526,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	s := t.newStream(ctx, callHdr)
 	cleanup := func(err error) {
-		if s.swapState(streamDone) == streamDone {
+		if !s.setStreamDone() {
 			// If it was already done, return.
 			return
 		}
@@ -680,8 +680,13 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 }
 
 func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
+	if !s.isStreamWriteDone() {
+		// send END_STREAM
+		t.Write(s, nil, nil, &Options{Last: true})
+	}
+
 	// Set stream status to done.
-	if s.swapState(streamDone) == streamDone {
+	if !s.setStreamDone() {
 		// If it was already done, return.
 		return
 	}
@@ -798,13 +803,13 @@ func (t *http2Client) GracefulClose() error {
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
 func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+	if s.isStreamWriteDone() {
+		return errStreamDone
+	}
+
 	if opts.Last {
 		// If it's the last message, update stream state.
-		if !s.compareAndSwapState(streamActive, streamWriteDone) {
-			return errStreamDone
-		}
-	} else if s.getState() != streamActive {
-		return errStreamDone
+		s.setStreamWriteDone()
 	}
 	df := &dataFrame{
 		streamID:  s.id,
