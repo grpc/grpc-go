@@ -28,6 +28,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
+import javax.annotation.Nullable;
 
 /**
  * A util class to help test forwarding classes.
@@ -35,9 +36,8 @@ import java.util.Collection;
 public final class ForwardingTestUtil {
   /**
    * Use reflection to perform a basic sanity test. The forwarding class should forward all public
-   * methods to the delegate, except for those in skippedMethods.
-   * This does NOT verify that arguments or return values are forwarded properly. It only alerts
-   * the developer if a forward method is missing.
+   * methods to the delegate, except for those in skippedMethods.  This does NOT verify that
+   * arguments or return values are forwarded properly.
    *
    * @param delegateClass The class whose methods should be forwarded.
    * @param mockDelegate The mockito mock of the delegate class.
@@ -49,6 +49,34 @@ public final class ForwardingTestUtil {
       T mockDelegate,
       T forwarder,
       Collection<Method> skippedMethods) throws Exception {
+    testMethodsForwarded(
+        delegateClass, mockDelegate, forwarder, skippedMethods,
+        new ArgumentProvider() {
+          @Override
+          public Object get(Class<?> clazz) {
+            return null;
+          }
+        });
+  }
+
+  /**
+   * Use reflection to perform a basic sanity test. The forwarding class should forward all public
+   * methods to the delegate, except for those in skippedMethods.  This does NOT verify that return
+   * values are forwarded properly, and can only verify the propagation of arguments for which
+   * {@code argProvider} returns distinctive non-null values.
+   *
+   * @param delegateClass The class whose methods should be forwarded.
+   * @param mockDelegate The mockito mock of the delegate class.
+   * @param forwarder The forwarder object that forwards to the mockDelegate.
+   * @param skippedMethods A collection of methods that are skipped by the test.
+   * @param argProvider provides argument to be passed to tested forwarding methods.
+   */
+  public static <T> void testMethodsForwarded(
+      Class<T> delegateClass,
+      T mockDelegate,
+      T forwarder,
+      Collection<Method> skippedMethods,
+      ArgumentProvider argProvider) throws Exception {
     assertTrue(mockingDetails(mockDelegate).isMock());
     assertFalse(mockingDetails(forwarder).isMock());
 
@@ -61,7 +89,9 @@ public final class ForwardingTestUtil {
       Class<?>[] argTypes = method.getParameterTypes();
       Object[] args = new Object[argTypes.length];
       for (int i = 0; i < argTypes.length; i++) {
-        args[i] = Defaults.defaultValue(argTypes[i]);
+        if ((args[i] = argProvider.get(argTypes[i])) == null) {
+          args[i] = Defaults.defaultValue(argTypes[i]);
+        }
       }
       method.invoke(forwarder, args);
       try {
@@ -84,5 +114,21 @@ public final class ForwardingTestUtil {
           MoreObjects.toStringHelper(forwarder).add("delegate", mockDelegate).toString();
       assertEquals("Method toString() was not forwarded properly", expected, actual);
     }
+  }
+
+  /**
+   * Provides arguments for forwarded methods tested in {@link #testMethodsForwarded}.
+   */
+  public interface ArgumentProvider {
+    /**
+     * Return an instance of the given class to be used as an argument passed to one method call.
+     * If one method has multiple arguments with the same type, each occurrence will call this
+     * method once.  It is recommended that each invocation returns a distinctive object for the
+     * same type, in order to verify that arguments are passed by the tested class correctly.
+     *
+     * @return a value to be passed as an argument.  If {@code null}, {@link Default#defaultValue}
+     *         will be used.
+     */
+    @Nullable Object get(Class<?> clazz);
   }
 }
