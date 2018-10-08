@@ -38,6 +38,10 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
     this(new TempFileSink(), System.getenv("GRPC_BINARY_LOG_CONFIG"));
   }
 
+  /**
+   * Deprecated and will be removed in a future version of gRPC.
+   */
+  @Deprecated
   public BinaryLogProviderImpl(BinaryLogSink sink) throws IOException {
     this(sink, System.getenv("GRPC_BINARY_LOG_CONFIG"));
   }
@@ -48,7 +52,7 @@ class BinaryLogProviderImpl extends BinaryLogProvider {
    * @param configStr config string to parse to determine logged methods and msg size limits.
    * @throws IOException if initialization failed.
    */
-  BinaryLogProviderImpl(BinaryLogSink sink, String configStr) throws IOException {
+  public BinaryLogProviderImpl(BinaryLogSink sink, String configStr) throws IOException {
     this.sink = Preconditions.checkNotNull(sink);
     try {
       factory = new BinlogHelper.FactoryImpl(sink, configStr);

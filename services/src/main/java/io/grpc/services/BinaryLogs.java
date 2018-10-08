@@ -32,10 +32,21 @@ public final class BinaryLogs {
   }
 
   /**
-   * Creates a binary log with a custom {@link BinaryLogSink} for receiving the logged data.
+   * Deprecated and will be removed in a future version of gRPC.
    */
+  @Deprecated
   public static BinaryLog createBinaryLog(BinaryLogSink sink) throws IOException {
     return new BinaryLogProviderImpl(sink);
+  }
+
+  /**
+   * Creates a binary log with a custom {@link BinaryLogSink} for receiving the logged data,
+   * and a config string as defined by
+   * <a href="https://github.com/grpc/proposal/blob/master/A16-binary-logging.md">
+   *   A16-binary-logging</a>.
+   */
+  public static BinaryLog createBinaryLog(BinaryLogSink sink, String configStr) throws IOException {
+    return new BinaryLogProviderImpl(sink, configStr);
   }
 
   private BinaryLogs() {}
