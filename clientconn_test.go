@@ -833,8 +833,7 @@ func TestDialCloseStateTransition(t *testing.T) {
 	}
 	defer lis.Close()
 	testFinished := make(chan struct{})
-	backoffCaseReady := make(chan struct{}, 1)
-	defer close(backoffCaseReady)
+	backoffCaseReady := make(chan struct{})
 	killFirstConnection := make(chan struct{})
 	killSecondConnection := make(chan struct{})
 
@@ -880,7 +879,7 @@ func TestDialCloseStateTransition(t *testing.T) {
 		}
 
 		// The client should now be headed towards backoff.
-		backoffCaseReady <- struct{}{}
+		close(backoffCaseReady)
 
 		// Re-connect (without server preface).
 		conn, err = lis.Accept()
@@ -923,9 +922,6 @@ func TestDialCloseStateTransition(t *testing.T) {
 		t.Fatal("expected WaitForStateChange to change state, but it timed out")
 	}
 	if !client.WaitForStateChange(ctx, connectivity.TransientFailure) {
-		t.Fatal("expected WaitForStateChange to change state, but it timed out")
-	}
-	if !client.WaitForStateChange(ctx, connectivity.Connecting) {
 		t.Fatal("expected WaitForStateChange to change state, but it timed out")
 	}
 	<-backoffCaseReady
