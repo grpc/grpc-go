@@ -822,6 +822,8 @@ func TestBackoffCancel(t *testing.T) {
 }
 
 // CONNECTING -> READY -> TRANSIENT FAILURE -> CONNECTING -> TRANSIENT FAILURE -> CONNECTING -> TRANSIENT FAILURE
+// Note: csmgr (which drives GetState and WaitForStateChange) lags behind reality a bit. So, we are
+// somewhat overaggressive in using WaitForStateChange in this test in order to force it to keep up.
 func TestDialCloseStateTransition(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -912,12 +914,15 @@ func TestDialCloseStateTransition(t *testing.T) {
 	}
 
 	// Once the connection is killed, it should go:
-	// READY -> CONNECTING -> TRANSIENT FAILURE (no backoff) -> CONNECTING -> TRANSIENT FAILURE (infinite backoff)
+	// READY -> TRANSIENT FAILURE -> CONNECTING -> TRANSIENT FAILURE (no backoff) -> CONNECTING -> TRANSIENT FAILURE (infinite backoff)
 	// The first TRANSIENT FAILURE is triggered by closing a channel. Then, we wait for the server to let us know
 	// when the client has progressed past the first failure (which does not get backoff, because handshake was
 	// successful).
 	close(killFirstConnection)
 	if !client.WaitForStateChange(ctx, connectivity.Ready) {
+		t.Fatal("expected WaitForStateChange to change state, but it timed out")
+	}
+	if !client.WaitForStateChange(ctx, connectivity.TransientFailure) {
 		t.Fatal("expected WaitForStateChange to change state, but it timed out")
 	}
 	if !client.WaitForStateChange(ctx, connectivity.Connecting) {

@@ -967,10 +967,12 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			return
 		}
 
-		// If we're at the beginning of the address list
-		// And we didn't just see a successful handshake
-		// And it's not the very first addr to try (covered by the above if)
-		if ac.addrIdx == len(ac.addrs)-1 && !ac.successfulHandshake {
+		// If the connection is READY, we must have failed to get here
+		// Otherwise, we'll consider this is a transient failure when:
+		//   We've exhausted all addresses
+		//   We're in CONNECTING
+		//   And it's not the very first addr to try TODO(deklerk) find a better way to do this than checking ac.successfulHandshake
+		if ac.state == connectivity.Ready || (ac.addrIdx == len(ac.addrs)-1 && ac.state == connectivity.Connecting && !ac.successfulHandshake) {
 			ac.updateConnectivityState(connectivity.TransientFailure)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
