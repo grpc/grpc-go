@@ -967,7 +967,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			return
 		}
 
-		// If the connection is READY, we must have failed to get here
+		// If the connection is READY, a failure must have occurred.
 		// Otherwise, we'll consider this is a transient failure when:
 		//   We've exhausted all addresses
 		//   We're in CONNECTING
