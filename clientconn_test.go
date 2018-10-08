@@ -917,10 +917,16 @@ func TestDialCloseStateTransition(t *testing.T) {
 	// when the client has progressed past the first failure (which does not get backoff, because handshake was
 	// successful).
 	close(killFirstConnection)
-	client.WaitForStateChange(ctx, connectivity.Ready)
-	client.WaitForStateChange(ctx, connectivity.Connecting)
+	if !client.WaitForStateChange(ctx, connectivity.Ready) {
+		t.Fatal("expected WaitForStateChange to change state, but it timed out")
+	}
+	if !client.WaitForStateChange(ctx, connectivity.Connecting) {
+		t.Fatal("expected WaitForStateChange to change state, but it timed out")
+	}
 	<-backoffCaseReady
-	client.WaitForStateChange(ctx, connectivity.Connecting)
+	if !client.WaitForStateChange(ctx, connectivity.Connecting) {
+		t.Fatal("expected WaitForStateChange to change state, but it timed out")
+	}
 	if got, want := client.GetState(), connectivity.TransientFailure; got != want {
 		t.Fatalf("expected addrconn state to be %v, was %v", want, got)
 	}
@@ -947,7 +953,9 @@ func TestDialCloseStateTransition(t *testing.T) {
 	// The connection should be killed shortly by the above goroutine, and here we watch for the first new connectivity
 	// state and make sure it's TRANSIENT FAILURE. This is racy, but fairly accurate - expect it to catch failures
 	// 90% of the time or so.
-	client.WaitForStateChange(ctx, connectivity.Connecting)
+	if !client.WaitForStateChange(ctx, connectivity.Connecting) {
+		t.Fatal("expected WaitForStateChange to change state, but it timed out")
+	}
 	if got, want := client.GetState(), connectivity.TransientFailure; got != want {
 		t.Fatalf("expected addrconn state to be %v, was %v", want, got)
 	}
