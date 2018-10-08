@@ -643,11 +643,9 @@ func (cc *ClientConn) incrCallsFailed() {
 	atomic.AddInt64(&cc.czData.callsFailed, 1)
 }
 
-// connect starts to creating transport and also starts the transport monitor
-// goroutine for this ac.
+// connect starts creating a transport.
 // It does nothing if the ac is not IDLE.
 // TODO(bar) Move this to the addrConn section.
-// This was part of resetAddrConn, keep it here to make the diff look clean.
 func (ac *addrConn) connect() error {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
@@ -963,6 +961,23 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.mu.Unlock()
 		}
 
+		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			return
+		}
+
+		// If the connection is READY, a failure must have occurred.
+		// Otherwise, we'll consider this is a transient failure when:
+		//   We've exhausted all addresses
+		//   We're in CONNECTING
+		//   And it's not the very first addr to try TODO(deklerk) find a better way to do this than checking ac.successfulHandshake
+		if ac.state == connectivity.Ready || (ac.addrIdx == len(ac.addrs)-1 && ac.state == connectivity.Connecting && !ac.successfulHandshake) {
+			ac.updateConnectivityState(connectivity.TransientFailure)
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		}
+		ac.mu.Unlock()
+
 		if err := ac.nextAddr(); err != nil {
 			return
 		}
@@ -1109,6 +1124,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				// We got the preface - huzzah! things are good.
 			case <-onCloseCalled:
 				// The transport has already closed - noop.
+				close(allowedToReset)
+				return nil
 			}
 		} else {
 			go func() {
@@ -1213,8 +1230,6 @@ func (ac *addrConn) nextAddr() error {
 		ac.mu.Unlock()
 		return errConnClosing
 	}
-	ac.updateConnectivityState(connectivity.TransientFailure)
-	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.cc.resolveNow(resolver.ResolveNowOption{})
 	if ac.ready != nil {
 		close(ac.ready)

@@ -1342,8 +1342,8 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		if len(scm.Trace.Events) == 0 {
 			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
-		if scm.Trace.Events[len(scm.Trace.Events)-1].Desc != "Subchannel Deleted" {
-			return false, fmt.Errorf("the first trace event should be \"Subchannel Deleted\", not %q", scm.Trace.Events[0].Desc)
+		if got, want := scm.Trace.Events[len(scm.Trace.Events)-1].Desc, "Subchannel Deleted"; got != want {
+			return false, fmt.Errorf("the last trace event should be %q, not %q", want, got)
 		}
 
 		return true, nil
