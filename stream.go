@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -292,6 +293,106 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
+	return cs, nil
+}
+
+func (ac *addrConn) newStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (_ ClientStream, err error) {
+	if channelz.IsOn() {
+		ac.incrCallsStarted()
+		defer func() {
+			if err != nil {
+				ac.incrCallsFailed()
+			}
+		}()
+	}
+	c := &callInfo{
+		failFast: true,
+		codec:    encoding.GetCodec(proto.Name),
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
+	callHdr := &transport.CallHdr{
+		Host:   ac.cc.authority,
+		Method: method,
+	}
+
+	// Set our outgoing compression according to the UseCompressor CallOption, if
+	// set.  In that case, also find the compressor from the encoding package.
+	// Otherwise, use the compressor configured by the WithCompressor DialOption,
+	// if set.
+	var cp Compressor
+	if ac.cc.dopts.cp != nil {
+		callHdr.SendCompress = ac.cc.dopts.cp.Type()
+		cp = ac.cc.dopts.cp
+	}
+
+	var trInfo traceInfo
+	if EnableTracing {
+		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
+		trInfo.firstLine.client = true
+		if deadline, ok := ctx.Deadline(); ok {
+			trInfo.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		trInfo.tr.LazyLog(&trInfo.firstLine, false)
+		ctx = trace.NewContext(ctx, trInfo.tr)
+	}
+	ctx = newContextWithRPCInfo(ctx, c.failFast)
+	sh := ac.cc.dopts.copts.StatsHandler
+	var beginTime time.Time
+	if sh != nil {
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
+		beginTime = time.Now()
+		begin := &stats.Begin{
+			Client:    true,
+			BeginTime: beginTime,
+			FailFast:  c.failFast,
+		}
+		sh.HandleRPC(ctx, begin)
+	}
+
+	cs := &clientStream{
+		callHdr:      callHdr,
+		ctx:          ctx,
+		opts:         opts,
+		callInfo:     c,
+		cc:           ac.cc,
+		desc:         desc,
+		codec:        c.codec,
+		cp:           cp,
+		cancel:       cancel,
+		beginTime:    beginTime,
+		firstAttempt: true,
+	}
+
+	cs.callInfo.stream = cs
+
+	t, ok := ac.getReadyTransport() //but we cannot change let transport change to READY before our RPC succeed.
+	if !ok {
+		return nil, errors.New("not ready")
+	}
+	cs.attempt.t = t
+	cs.attempt.done = func() func(balancer.DoneInfo) {
+		ac.incrCallsStarted()
+		return func(b balancer.DoneInfo) {
+			if b.Err != nil && b.Err != io.EOF {
+				ac.incrCallsFailed()
+			} else {
+				ac.incrCallsSucceeded()
+			}
+		}
+	}()
+	op := func(a *csAttempt) error { return a.newStream() }
+	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
+		cs.finish(err)
+		return nil, err
+	}
+
 	return cs, nil
 }
 

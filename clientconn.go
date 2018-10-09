@@ -29,6 +29,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -577,6 +580,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		czData:              new(channelzData),
 		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
 		resetBackoff:        make(chan struct{}),
+		healthCheckEnabled:  opts.HealthCheckEnabled,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -714,6 +718,12 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 		m = cc.sc.Methods[method[:i+1]]
 	}
 	return m
+}
+
+func (cc *ClientConn) getHealthCheckConfig() *healthCheckConfig {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.sc.healthCheckConfig
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
@@ -905,6 +915,8 @@ type addrConn struct {
 	czData     *channelzData
 
 	successfulHandshake bool
+
+	healthCheckEnabled bool
 }
 
 // Note: this requires a lock on ac.mu.
@@ -1172,6 +1184,50 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return err
 	}
 
+	healthCheckConfig := ac.cc.getHealthCheckConfig()
+	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
+		//set up the health check stream
+		newStream := func() (ClientStream, error) {
+			return ac.newStream(ac.ctx, &StreamDesc{ServerStreams: true}, ac, "/grpc.health.v1.Health/Watch")
+		}
+		readyChan := make(chan struct{})
+		updateState := func(ok bool, err error) {
+			select {
+			case <-onCloseCalled:
+				// transport will be reset, therefore the health check for this transport has no more usage.
+				return
+			default:
+			}
+			ac.mu.Lock()
+			if ac.state == connectivity.Shutdown {
+				// health check should have no effect after the addrConn is shutdown.
+				ac.mu.Unlock()
+				return
+			}
+			if ok {
+				if readyChan != nil {
+					close(readyChan)
+					readyChan = nil
+				} else {
+					ac.updateConnectivityState(connectivity.Ready)
+					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+				}
+			} else {
+				// TODO: do we want to check whether the channel is already in transient failure state?
+				ac.updateConnectivityState(connectivity.TransientFailure)
+				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			}
+			ac.mu.Unlock()
+		}
+		internal.HealthCheckFunc.(func(func() (grpc.ClientStream, error), func(bool, error), string))(newStream, updateState, healthCheckConfig.serviceName)
+
+		select {
+		case <-readyChan:
+		case <-onCloseCalled:
+			close(allowedToReset)
+			return nil
+		}
+	}
 	ac.mu.Lock()
 
 	if ac.state == connectivity.Shutdown {
