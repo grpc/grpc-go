@@ -2432,14 +2432,14 @@ func testHealthCheckOff(t *testing.T, e env) {
 	}
 }
 
-func TestHealthWatchOnSuccess(t *testing.T) {
+func TestHealthWatch(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		testHealthWatchOnSuccess(t, e)
+		testHealthWatch(t, e)
 	}
 }
 
-func testHealthWatchOnSuccess(t *testing.T, e env) {
+func testHealthWatch(t *testing.T, e env) {
 	te := newTest(t, e)
 	hs := health.NewServer()
 
