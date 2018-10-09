@@ -61,7 +61,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
     this.maxPageSize = maxPageSize;
   }
 
-  /** Returns top level channel aka {@link io.grpc.internal.ManagedChannelImpl}. */
+  /** Returns top level channel aka {@link io.grpc.ManagedChannel}. */
   @Override
   public void getTopChannels(
       GetTopChannelsRequest request, StreamObserver<GetTopChannelsResponse> responseObserver) {
@@ -72,7 +72,7 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
     responseObserver.onCompleted();
   }
 
-  /** Returns a top level channel aka {@link io.grpc.internal.ManagedChannelImpl}. */
+  /** Returns a top level channel aka {@link io.grpc.ManagedChannel}. */
   @Override
   public void getChannel(
       GetChannelRequest request, StreamObserver<GetChannelResponse> responseObserver) {
