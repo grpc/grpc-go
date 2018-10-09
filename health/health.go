@@ -80,9 +80,9 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 }
 
 func (s *Server) sendUpdate(service string, stream healthpb.Health_WatchServer, listenerPtr *chan struct{}) {
-	stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
 	*listenerPtr = make(chan struct{}, 1)
 	s.mu.Lock()
+	stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
 	s.listenersMap[service] = append(s.listenersMap[service], *listenerPtr)
 	s.mu.Unlock()
 }
