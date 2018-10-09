@@ -94,6 +94,9 @@ type NewSubConnOptions struct {
 	// SubConn. If it's nil, the original creds from grpc DialOptions will be
 	// used.
 	CredsBundle credentials.Bundle
+	// HealthCheckEnabled indicates whether health check service should be
+	// enabled on this SubConn
+	HealthCheckEnabled bool
 }
 
 // ClientConn represents a gRPC ClientConn.
