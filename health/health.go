@@ -74,7 +74,7 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 		case <-listener:
 			s.sendUpdate(in.Service, stream, &listener)
 		case <-stream.Context().Done():
-			return status.Error(codes.Unimplemented, "Watching is not supported")
+			return status.Error(codes.Canceled, "Stream has ended.")
 		}
 	}
 }
