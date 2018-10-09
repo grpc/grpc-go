@@ -1,4 +1,4 @@
-description = "gRpc: Auth"
+description = "gRPC: Auth"
 dependencies {
     compile project(':grpc-core'),
             libraries.google_auth_credentials
