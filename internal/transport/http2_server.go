@@ -596,7 +596,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	}
 	if f.Header().Flags.Has(http2.FlagDataEndStream) {
 		// Received the end of stream from the client.
-		s.setStreamReadDone()
+		s.compareAndSwapState(streamActive, streamReadDone)
 		s.write(recvMsg{err: io.EOF})
 	}
 }
@@ -729,7 +729,7 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 
 // WriteHeader sends the header metedata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
-	if s.updateHeaderSent() || s.isStreamWriteDone() {
+	if s.updateHeaderSent() || s.getState() == streamDone {
 		return ErrIllegalHeaderWrite
 	}
 	s.hdrMu.Lock()
@@ -787,7 +787,7 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
-	if s.isStreamWriteDone() {
+	if s.getState() == streamDone {
 		return nil
 	}
 	s.hdrMu.Lock()
@@ -854,7 +854,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		}
 	} else {
 		// Writing headers checks for this condition.
-		if s.isStreamWriteDone() {
+		if s.getState() == streamDone {
 			// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
 			s.cancel()
 			select {
@@ -1007,7 +1007,7 @@ func (t *http2Server) Close() error {
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
-	if !s.setStreamDone() {
+	if s.swapState(streamDone) == streamDone {
 		// If the stream was already done, return.
 		return
 	}
