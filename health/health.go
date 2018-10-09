@@ -35,13 +35,15 @@ import (
 type Server struct {
 	mu sync.Mutex
 	// statusMap stores the serving status of the services this Server monitors.
-	statusMap map[string]healthpb.HealthCheckResponse_ServingStatus
+	statusMap    map[string]healthpb.HealthCheckResponse_ServingStatus
+	listenersMap map[string][]chan struct{}
 }
 
 // NewServer returns a new Server.
 func NewServer() *Server {
 	return &Server{
-		statusMap: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+		statusMap:    make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+		listenersMap: make(map[string][]chan struct{}),
 	}
 }
 
@@ -65,7 +67,24 @@ func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*h
 
 // Watch implements `service Health`.
 func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
-	return status.Error(codes.Unimplemented, "Watching is not supported")
+	var listener chan struct{}
+	s.sendUpdate(in.Service, stream, &listener)
+	for {
+		select {
+		case <-listener:
+			s.sendUpdate(in.Service, stream, &listener)
+		case <-stream.Context().Done():
+			return status.Error(codes.Canceled, "Stream has ended.")
+		}
+	}
+}
+
+func (s *Server) sendUpdate(service string, stream healthpb.Health_WatchServer, listenerPtr *chan struct{}) {
+	stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
+	*listenerPtr = make(chan struct{}, 1)
+	s.mu.Lock()
+	s.listenersMap[service] = append(s.listenersMap[service], *listenerPtr)
+	s.mu.Unlock()
 }
 
 // SetServingStatus is called when need to reset the serving status of a service
@@ -73,5 +92,13 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 func (s *Server) SetServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
 	s.statusMap[service] = status
+	listeners := s.listenersMap[service]
+	s.listenersMap[service] = make([]chan struct{}, 0)
 	s.mu.Unlock()
+	for _, listener := range listeners {
+		select {
+		case listener <- struct{}{}:
+		default:
+		}
+	}
 }
