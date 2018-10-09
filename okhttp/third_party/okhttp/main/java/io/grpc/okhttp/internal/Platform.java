@@ -89,7 +89,8 @@ public class Platform {
         "com.google.android.gms.org.conscrypt.OpenSSLProvider",
         "org.conscrypt.OpenSSLProvider",
         "com.android.org.conscrypt.OpenSSLProvider",
-        "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider"
+        "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider",
+        "com.google.android.libraries.stitch.sslguard.SslGuardProvider"
       };
 
   private static final Platform PLATFORM = findPlatform();
@@ -185,7 +186,8 @@ public class Platform {
       if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
       } else if (androidOrAppEngineProvider.getName().equals("GmsCore_OpenSSL")
-          || androidOrAppEngineProvider.getName().equals("Conscrypt")) {
+          || androidOrAppEngineProvider.getName().equals("Conscrypt")
+          || androidOrAppEngineProvider.getName().equals("Ssl_Guard")) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
       } else if (isAtLeastAndroid5()) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
