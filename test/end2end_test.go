@@ -2432,6 +2432,85 @@ func testHealthCheckOff(t *testing.T, e env) {
 	}
 }
 
+func TestHealthWatchOnSuccess(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchOnSuccess(t, e)
+	}
+}
+
+func testHealthWatchOnSuccess(t *testing.T, e env) {
+	te := newTest(t, e)
+	hs := health.NewServer()
+
+	service1 := "grpc.health.v1.Health1"
+	service2 := "grpc.health.v1.Health2"
+	te.healthServer = hs
+
+	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_SERVING)
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	ctx11, cancel11 := context.WithCancel(context.Background())
+	defer cancel11()
+	ctx12, cancel12 := context.WithCancel(context.Background())
+	defer cancel12()
+	ctx21, cancel21 := context.WithCancel(context.Background())
+	defer cancel21()
+
+	hc11 := healthgrpc.NewHealthClient(cc)
+	hc12 := healthgrpc.NewHealthClient(cc)
+	req1 := &healthpb.HealthCheckRequest{
+		Service: service1,
+	}
+
+	hc21 := healthgrpc.NewHealthClient(cc)
+	req2 := &healthpb.HealthCheckRequest{
+		Service: service2,
+	}
+
+	stream11, err := hc11.Watch(ctx11, req1)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream11, healthpb.HealthCheckResponse_SERVING)
+
+	stream21, err := hc21.Watch(ctx21, req2)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	hs.SetServingStatus(service2, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	stream12, err := hc12.Watch(ctx12, req1)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream12, healthpb.HealthCheckResponse_SERVING)
+
+	hs.SetServingStatus(service2, healthpb.HealthCheckResponse_SERVING)
+	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream11, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_SERVING)
+
+	fmt.Printf("OK\n")
+}
+
+func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
+	response, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("error on %v.Recv(): %v", stream, err)
+	}
+	if response.Status != expectedServingStatus {
+		t.Fatalf("status.Status is %v (%v expected)", response.Status, expectedServingStatus)
+	}
+}
 func TestUnknownHandler(t *testing.T) {
 	defer leakcheck.Check(t)
 	// An example unknownHandler that returns a different code and a different method, making sure that we do not
