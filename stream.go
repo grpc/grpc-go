@@ -819,6 +819,7 @@ func (a *csAttempt) finish(err error) {
 		var tr metadata.MD
 		if a.s != nil {
 			br = a.s.BytesReceived()
+			<-a.s.Done() // block until Trailers are accessible.
 			tr = a.s.Trailer()
 		}
 		a.done(balancer.DoneInfo{
