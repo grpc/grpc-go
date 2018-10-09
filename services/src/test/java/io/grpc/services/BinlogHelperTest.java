@@ -1082,6 +1082,8 @@ public final class BinlogHelperTest {
     final AtomicReference<Metadata> actualClientInitial = new AtomicReference<Metadata>();
     final AtomicReference<Object> actualRequest = new AtomicReference<Object>();
 
+    final SettableFuture<Void> halfCloseCalled = SettableFuture.create();
+    final SettableFuture<Void> cancelCalled = SettableFuture.create();
     Channel channel = new Channel() {
       @Override
       public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
@@ -1096,6 +1098,16 @@ public final class BinlogHelperTest {
           @Override
           public void sendMessage(RequestT message) {
             actualRequest.set(message);
+          }
+
+          @Override
+          public void cancel(String message, Throwable cause) {
+            cancelCalled.set(null);
+          }
+
+          @Override
+          public void halfClose() {
+            halfCloseCalled.set(null);
           }
 
           @Override
@@ -1181,6 +1193,7 @@ public final class BinlogHelperTest {
           /*seq=*/ eq(4L),
           eq(Logger.LOGGER_CLIENT),
           eq(CALL_ID));
+      halfCloseCalled.get(1, TimeUnit.SECONDS);
       verifyNoMoreInteractions(mockSinkWriter);
     }
 
@@ -1223,6 +1236,7 @@ public final class BinlogHelperTest {
           /*seq=*/ eq(7L),
           eq(Logger.LOGGER_CLIENT),
           eq(CALL_ID));
+      cancelCalled.get(1, TimeUnit.SECONDS);
     }
   }
 
@@ -1432,6 +1446,7 @@ public final class BinlogHelperTest {
           eq(Logger.LOGGER_SERVER),
           eq(CALL_ID));
       verifyNoMoreInteractions(mockSinkWriter);
+      verify(mockListener).onHalfClose();
     }
 
     // send server msg
@@ -1473,6 +1488,7 @@ public final class BinlogHelperTest {
           /*seq=*/ eq(7L),
           eq(Logger.LOGGER_SERVER),
           eq(CALL_ID));
+      verify(mockListener).onCancel();
     }
   }
 

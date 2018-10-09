@@ -486,6 +486,7 @@ final class BinlogHelper {
                 seq.getAndIncrement(),
                 GrpcLogEntry.Logger.LOGGER_CLIENT,
                 callId);
+            super.halfClose();
           }
 
           @Override
@@ -590,6 +591,7 @@ final class BinlogHelper {
                 seq.getAndIncrement(),
                 GrpcLogEntry.Logger.LOGGER_SERVER,
                 callId);
+            super.onCancel();
           }
         };
       }
