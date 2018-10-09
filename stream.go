@@ -914,6 +914,7 @@ type serverStream struct {
 	statsHandler stats.Handler
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
+	mw sync.Mutex // Prevents concurrent writes to the outbound streams
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -973,6 +974,8 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
 	}
+	ss.mw.Lock()
+	defer ss.mw.Unlock()
 	if err := ss.t.Write(ss.s, hdr, payload, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
