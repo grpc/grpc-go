@@ -35,15 +35,15 @@ import (
 type Server struct {
 	mu sync.Mutex
 	// statusMap stores the serving status of the services this Server monitors.
-	statusMap    map[string]healthpb.HealthCheckResponse_ServingStatus
-	listenersMap map[string][]chan struct{}
+	statusMap map[string]healthpb.HealthCheckResponse_ServingStatus
+	listeners map[string]map[healthpb.Health_WatchServer]chan struct{}
 }
 
 // NewServer returns a new Server.
 func NewServer() *Server {
 	return &Server{
-		statusMap:    make(map[string]healthpb.HealthCheckResponse_ServingStatus),
-		listenersMap: make(map[string][]chan struct{}),
+		statusMap: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+		listeners: make(map[string]map[healthpb.Health_WatchServer]chan struct{}),
 	}
 }
 
@@ -67,24 +67,27 @@ func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*h
 
 // Watch implements `service Health`.
 func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
-	var listener chan struct{}
-	s.sendUpdate(in.Service, stream, &listener)
+	service := in.Service
+	listener := make(chan struct{})
+	s.mu.Lock()
+	if _, ok := s.listeners[service]; !ok {
+		s.listeners[service] = make(map[healthpb.Health_WatchServer]chan struct{})
+	}
+	s.listeners[service][stream] = listener
+	s.mu.Unlock()
 	for {
+		s.mu.Lock()
+		stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
+		s.mu.Unlock()
 		select {
 		case <-listener:
-			s.sendUpdate(in.Service, stream, &listener)
 		case <-stream.Context().Done():
+			s.mu.Lock()
+			delete(s.listeners[service], stream)
+			s.mu.Unlock()
 			return status.Error(codes.Canceled, "Stream has ended.")
 		}
 	}
-}
-
-func (s *Server) sendUpdate(service string, stream healthpb.Health_WatchServer, listenerPtr *chan struct{}) {
-	*listenerPtr = make(chan struct{}, 1)
-	s.mu.Lock()
-	stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
-	s.listenersMap[service] = append(s.listenersMap[service], *listenerPtr)
-	s.mu.Unlock()
 }
 
 // SetServingStatus is called when need to reset the serving status of a service
@@ -92,13 +95,11 @@ func (s *Server) sendUpdate(service string, stream healthpb.Health_WatchServer, 
 func (s *Server) SetServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
 	s.statusMap[service] = status
-	listeners := s.listenersMap[service]
-	s.listenersMap[service] = make([]chan struct{}, 0)
-	s.mu.Unlock()
-	for _, listener := range listeners {
+	for _, listener := range s.listeners[service] {
 		select {
 		case listener <- struct{}{}:
 		default:
 		}
 	}
+	s.mu.Unlock()
 }
