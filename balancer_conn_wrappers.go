@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/unboundch"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -32,54 +33,6 @@ import (
 type scStateUpdate struct {
 	sc    balancer.SubConn
 	state connectivity.State
-}
-
-// scStateUpdateBuffer is an unbounded channel for scStateChangeTuple.
-// TODO make a general purpose buffer that uses interface{}.
-type scStateUpdateBuffer struct {
-	c       chan *scStateUpdate
-	mu      sync.Mutex
-	backlog []*scStateUpdate
-}
-
-func newSCStateUpdateBuffer() *scStateUpdateBuffer {
-	return &scStateUpdateBuffer{
-		c: make(chan *scStateUpdate, 1),
-	}
-}
-
-func (b *scStateUpdateBuffer) put(t *scStateUpdate) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.backlog) == 0 {
-		select {
-		case b.c <- t:
-			return
-		default:
-		}
-	}
-	b.backlog = append(b.backlog, t)
-}
-
-func (b *scStateUpdateBuffer) load() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.backlog) > 0 {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog[0] = nil
-			b.backlog = b.backlog[1:]
-		default:
-		}
-	}
-}
-
-// get returns the channel that the scStateUpdate will be sent to.
-//
-// Upon receiving, the caller should call load to send another
-// scStateChangeTuple onto the channel if there is any.
-func (b *scStateUpdateBuffer) get() <-chan *scStateUpdate {
-	return b.c
 }
 
 // resolverUpdate contains the new resolved addresses or error if there's
@@ -94,7 +47,7 @@ type resolverUpdate struct {
 type ccBalancerWrapper struct {
 	cc               *ClientConn
 	balancer         balancer.Balancer
-	stateChangeQueue *scStateUpdateBuffer
+	stateChangeQueue *unboundch.UnboundChannel
 	resolverUpdateCh chan *resolverUpdate
 	done             chan struct{}
 
@@ -105,7 +58,7 @@ type ccBalancerWrapper struct {
 func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc:               cc,
-		stateChangeQueue: newSCStateUpdateBuffer(),
+		stateChangeQueue: unboundch.NewUnboundChannel(0),
 		resolverUpdateCh: make(chan *resolverUpdate, 1),
 		done:             make(chan struct{}),
 		subConns:         make(map[*acBalancerWrapper]struct{}),
@@ -120,15 +73,16 @@ func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.Bui
 func (ccb *ccBalancerWrapper) watcher() {
 	for {
 		select {
-		case t := <-ccb.stateChangeQueue.get():
-			ccb.stateChangeQueue.load()
+		case t := <-ccb.stateChangeQueue.Get():
+			s := t.(*scStateUpdate)
+			ccb.stateChangeQueue.Load()
 			select {
 			case <-ccb.done:
 				ccb.balancer.Close()
 				return
 			default:
 			}
-			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
+			ccb.balancer.HandleSubConnStateChange(s.sc, s.state)
 		case t := <-ccb.resolverUpdateCh:
 			select {
 			case <-ccb.done:
@@ -171,7 +125,7 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 	if sc == nil {
 		return
 	}
-	ccb.stateChangeQueue.put(&scStateUpdate{
+	ccb.stateChangeQueue.Put(&scStateUpdate{
 		sc:    sc,
 		state: s,
 	})
