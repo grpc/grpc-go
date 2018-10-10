@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -160,6 +161,8 @@ type PickOptions struct {
 type DoneInfo struct {
 	// Err is the rpc error the RPC finished with. It could be nil.
 	Err error
+	// Trailer contains the metadata from the RPC's trailer, if present.
+	Trailer metadata.MD
 	// BytesSent indicates if any bytes have been sent to the server.
 	BytesSent bool
 	// BytesReceived indicates if any byte has been received from the server.
