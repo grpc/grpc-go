@@ -36,14 +36,14 @@ type Server struct {
 	mu sync.Mutex
 	// statusMap stores the serving status of the services this Server monitors.
 	statusMap map[string]healthpb.HealthCheckResponse_ServingStatus
-	listeners map[string]map[healthpb.Health_WatchServer]chan struct{}
+	updates   map[string]map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus
 }
 
 // NewServer returns a new Server.
 func NewServer() *Server {
 	return &Server{
 		statusMap: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
-		listeners: make(map[string]map[healthpb.Health_WatchServer]chan struct{}),
+		updates:   make(map[string]map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus),
 	}
 }
 
@@ -68,22 +68,26 @@ func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*h
 // Watch implements `service Health`.
 func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
 	service := in.Service
-	listener := make(chan struct{})
+	// update channel is used for getting service status updates.
+	update := make(chan healthpb.HealthCheckResponse_ServingStatus, 1)
 	s.mu.Lock()
-	if _, ok := s.listeners[service]; !ok {
-		s.listeners[service] = make(map[healthpb.Health_WatchServer]chan struct{})
+	// Puts the initial status to the channel.
+	update <- s.statusMap[service]
+	// Registers the update channel to the correct place in the updates map.
+	if _, ok := s.updates[service]; !ok {
+		s.updates[service] = make(map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus)
 	}
-	s.listeners[service][stream] = listener
+	s.updates[service][stream] = update
 	s.mu.Unlock()
 	for {
-		s.mu.Lock()
-		stream.Send(&healthpb.HealthCheckResponse{Status: s.statusMap[service]})
-		s.mu.Unlock()
 		select {
-		case <-listener:
+		// Status updated. Sends the up-to-date status to the client.
+		case status := <-update:
+			stream.Send(&healthpb.HealthCheckResponse{Status: status})
+		// Context done. Removes the update channel from the updates map.
 		case <-stream.Context().Done():
 			s.mu.Lock()
-			delete(s.listeners[service], stream)
+			delete(s.updates[service], stream)
 			s.mu.Unlock()
 			return status.Error(codes.Canceled, "Stream has ended.")
 		}
@@ -95,9 +99,15 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 func (s *Server) SetServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
 	s.statusMap[service] = status
-	for _, listener := range s.listeners[service] {
+	for _, update := range s.updates[service] {
+		// Clears previous updates, that are not sent to the client, from the channel.
 		select {
-		case listener <- struct{}{}:
+		case <-update:
+		default:
+		}
+		// Puts the most recent update to the channel.
+		select {
+		case update <- status:
 		default:
 		}
 	}
