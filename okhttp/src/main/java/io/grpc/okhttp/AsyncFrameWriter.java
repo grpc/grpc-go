@@ -16,6 +16,7 @@
 
 package io.grpc.okhttp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -24,7 +25,11 @@ import io.grpc.okhttp.internal.framed.Header;
 import io.grpc.okhttp.internal.framed.Settings;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,6 +44,9 @@ class AsyncFrameWriter implements FrameWriter {
   private final SerializingExecutor executor;
   private final TransportExceptionHandler transportExceptionHandler;
   private final AtomicLong flushCounter = new AtomicLong();
+  // Some exceptions are not very useful and add too much noise to the log
+  private static final Set<String> QUIET_ERRORS =
+      Collections.unmodifiableSet(new HashSet<>(Arrays.asList("Socket closed")));
 
   public AsyncFrameWriter(
       TransportExceptionHandler transportExceptionHandler, SerializingExecutor executor) {
@@ -213,11 +221,26 @@ class AsyncFrameWriter implements FrameWriter {
             frameWriter.close();
             socket.close();
           } catch (IOException e) {
-            log.log(Level.WARNING, "Failed closing connection", e);
+            log.log(getLogLevel(e), "Failed closing connection", e);
           }
         }
       }
     });
+  }
+
+  /**
+   * Accepts a throwable and returns the appropriate logging level. Uninteresting exceptions
+   * should not clutter the log.
+   */
+  @VisibleForTesting
+  static Level getLogLevel(Throwable t) {
+    if (t instanceof IOException
+        && t.getMessage() != null
+        && QUIET_ERRORS.contains(t.getMessage())) {
+      return Level.FINE;
+
+    }
+    return Level.INFO;
   }
 
   private abstract class WriteRunnable implements Runnable {

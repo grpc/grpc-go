@@ -16,6 +16,8 @@
 
 package io.grpc.okhttp;
 
+import static com.google.common.truth.Truth.assertThat;
+import static io.grpc.okhttp.AsyncFrameWriter.getLogLevel;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.inOrder;
@@ -30,6 +32,7 @@ import java.net.Socket;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -90,6 +93,28 @@ public class AsyncFrameWriterTest {
     InOrder inOrder = inOrder(frameWriter);
     inOrder.verify(frameWriter, times(2)).ping(anyBoolean(), anyInt(), anyInt());
     inOrder.verify(frameWriter).flush();
+  }
+
+  @Test
+  public void unknownException() {
+    assertThat(getLogLevel(new Exception())).isEqualTo(Level.INFO);
+  }
+
+  @Test
+  public void quiet() {
+    assertThat(getLogLevel(new IOException("Socket closed"))).isEqualTo(Level.FINE);
+  }
+
+  @Test
+  public void nonquiet() {
+    assertThat(getLogLevel(new IOException("foo"))).isEqualTo(Level.INFO);
+  }
+
+  @Test
+  public void nullMessage() {
+    IOException e = new IOException();
+    assertThat(e.getMessage()).isNull();
+    assertThat(getLogLevel(e)).isEqualTo(Level.INFO);
   }
 
   /**
