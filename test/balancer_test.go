@@ -152,7 +152,7 @@ func testDoneInfo(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 	}
 	te.userAgent = failAppUA
-	te.startServer(&testServer{security: e.security, unaryCallSleepTime: time.Second})
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -164,7 +164,14 @@ func testDoneInfo(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, wantErr)
 	}
-	if len(b.doneInfo) != 1 || !reflect.DeepEqual(b.doneInfo[0].Err, wantErr) {
+	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
+	}
+
+	if len(b.doneInfo) < 1 || !reflect.DeepEqual(b.doneInfo[0].Err, wantErr) {
 		t.Fatalf("b.doneInfo = %v; want b.doneInfo[0].Err = %v", b.doneInfo, wantErr)
+	}
+	if len(b.doneInfo) < 2 || !reflect.DeepEqual(b.doneInfo[1].Trailer, testTrailerMetadata) {
+		t.Fatalf("b.doneInfo = %v; want b.doneInfo[1].Trailer = %v", b.doneInfo, testTrailerMetadata)
 	}
 }
