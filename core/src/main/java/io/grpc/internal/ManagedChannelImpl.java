@@ -1252,7 +1252,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
     @Override
     public void onAddresses(final List<EquivalentAddressGroup> servers, final Attributes config) {
       if (servers.isEmpty()) {
-        onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
+        onError(Status.UNAVAILABLE.withDescription(
+            "Name resolver " + helper.nr + " returned an empty list"));
         return;
       }
       if (logger.isLoggable(Level.FINE)) {
