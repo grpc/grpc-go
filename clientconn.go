@@ -767,6 +767,7 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 	cc.scRaw = js
 	cc.sc = sc
+
 	if sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{
 			tokens: sc.retryThrottling.MaxTokens,
@@ -1182,10 +1183,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	healthCheckConfig := ac.cc.getHealthCheckConfig()
-	fmt.Println(internal.HealthCheckFunc, healthCheckConfig, ac.healthCheckEnabled)
+	// LB channel health checking is only enabled when the internal.HealthCheckFunc is set, and a
+	// service config with non-empty healthCheckConfig field is provided, and the current load balancer
+	// allows it.
 	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
-		fmt.Println("start health check stream")
-		// TODO: will it cause any problem?
+		// TODO(yuxuanli): double check whether it will cause any problem by set the ac.Transport here.
+		//
 		ac.mu.Lock()
 		ac.transport = newTr
 		ac.mu.Unlock()

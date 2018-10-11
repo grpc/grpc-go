@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -296,105 +295,105 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cs, nil
 }
 
-func (ac *addrConn) newStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (_ ClientStream, err error) {
-	if channelz.IsOn() {
-		ac.incrCallsStarted()
-		defer func() {
-			if err != nil {
-				ac.incrCallsFailed()
-			}
-		}()
-	}
-	c := &callInfo{
-		failFast: true,
-		codec:    encoding.GetCodec(proto.Name),
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	callHdr := &transport.CallHdr{
-		Host:   ac.cc.authority,
-		Method: method,
-	}
-
-	// Set our outgoing compression according to the UseCompressor CallOption, if
-	// set.  In that case, also find the compressor from the encoding package.
-	// Otherwise, use the compressor configured by the WithCompressor DialOption,
-	// if set.
-	var cp Compressor
-	if ac.cc.dopts.cp != nil {
-		callHdr.SendCompress = ac.cc.dopts.cp.Type()
-		cp = ac.cc.dopts.cp
-	}
-
-	var trInfo traceInfo
-	if EnableTracing {
-		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
-		trInfo.firstLine.client = true
-		if deadline, ok := ctx.Deadline(); ok {
-			trInfo.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-		ctx = trace.NewContext(ctx, trInfo.tr)
-	}
-	ctx = newContextWithRPCInfo(ctx, c.failFast)
-	sh := ac.cc.dopts.copts.StatsHandler
-	var beginTime time.Time
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
-		beginTime = time.Now()
-		begin := &stats.Begin{
-			Client:    true,
-			BeginTime: beginTime,
-			FailFast:  c.failFast,
-		}
-		sh.HandleRPC(ctx, begin)
-	}
-
-	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		opts:         opts,
-		callInfo:     c,
-		cc:           ac.cc,
-		desc:         desc,
-		codec:        c.codec,
-		cp:           cp,
-		cancel:       cancel,
-		beginTime:    beginTime,
-		firstAttempt: true,
-	}
-
-	cs.callInfo.stream = cs
-
-	t, ok := ac.getReadyTransport() //but we cannot change let transport change to READY before our RPC succeed.
-	if !ok {
-		return nil, errors.New("not ready")
-	}
-	cs.attempt.t = t
-	cs.attempt.done = func() func(balancer.DoneInfo) {
-		ac.incrCallsStarted()
-		return func(b balancer.DoneInfo) {
-			if b.Err != nil && b.Err != io.EOF {
-				ac.incrCallsFailed()
-			} else {
-				ac.incrCallsSucceeded()
-			}
-		}
-	}()
-	op := func(a *csAttempt) error { return a.newStream() }
-	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
-		cs.finish(err)
-		return nil, err
-	}
-
-	return cs, nil
-}
+//func (ac *addrConn) newStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (_ ClientStream, err error) {
+//	if channelz.IsOn() {
+//		ac.incrCallsStarted()
+//		defer func() {
+//			if err != nil {
+//				ac.incrCallsFailed()
+//			}
+//		}()
+//	}
+//	c := &callInfo{
+//		failFast: true,
+//		codec:    encoding.GetCodec(proto.Name),
+//	}
+//
+//	ctx, cancel := context.WithCancel(ctx)
+//	defer func() {
+//		if err != nil {
+//			cancel()
+//		}
+//	}()
+//
+//	callHdr := &transport.CallHdr{
+//		Host:   ac.cc.authority,
+//		Method: method,
+//	}
+//
+//	// Set our outgoing compression according to the UseCompressor CallOption, if
+//	// set.  In that case, also find the compressor from the encoding package.
+//	// Otherwise, use the compressor configured by the WithCompressor DialOption,
+//	// if set.
+//	var cp Compressor
+//	if ac.cc.dopts.cp != nil {
+//		callHdr.SendCompress = ac.cc.dopts.cp.Type()
+//		cp = ac.cc.dopts.cp
+//	}
+//
+//	var trInfo traceInfo
+//	if EnableTracing {
+//		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
+//		trInfo.firstLine.client = true
+//		if deadline, ok := ctx.Deadline(); ok {
+//			trInfo.firstLine.deadline = deadline.Sub(time.Now())
+//		}
+//		trInfo.tr.LazyLog(&trInfo.firstLine, false)
+//		ctx = trace.NewContext(ctx, trInfo.tr)
+//	}
+//	ctx = newContextWithRPCInfo(ctx, c.failFast)
+//	sh := ac.cc.dopts.copts.StatsHandler
+//	var beginTime time.Time
+//	if sh != nil {
+//		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
+//		beginTime = time.Now()
+//		begin := &stats.Begin{
+//			Client:    true,
+//			BeginTime: beginTime,
+//			FailFast:  c.failFast,
+//		}
+//		sh.HandleRPC(ctx, begin)
+//	}
+//
+//	cs := &clientStream{
+//		callHdr:      callHdr,
+//		ctx:          ctx,
+//		opts:         opts,
+//		callInfo:     c,
+//		cc:           ac.cc,
+//		desc:         desc,
+//		codec:        c.codec,
+//		cp:           cp,
+//		cancel:       cancel,
+//		beginTime:    beginTime,
+//		firstAttempt: true,
+//	}
+//
+//	cs.callInfo.stream = cs
+//
+//	t, ok := ac.getReadyTransport() //but we cannot change let transport change to READY before our RPC succeed.
+//	if !ok {
+//		return nil, errors.New("not ready")
+//	}
+//	cs.attempt.t = t
+//	cs.attempt.done = func() func(balancer.DoneInfo) {
+//		ac.incrCallsStarted()
+//		return func(b balancer.DoneInfo) {
+//			if b.Err != nil && b.Err != io.EOF {
+//				ac.incrCallsFailed()
+//			} else {
+//				ac.incrCallsSucceeded()
+//			}
+//		}
+//	}()
+//	op := func(a *csAttempt) error { return a.newStream() }
+//	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
+//		cs.finish(err)
+//		return nil, err
+//	}
+//
+//	return cs, nil
+//}
 
 func (cs *clientStream) newAttemptLocked(sh stats.Handler, trInfo traceInfo) error {
 	cs.attempt = &csAttempt{
@@ -952,20 +951,23 @@ func (a *csAttempt) finish(err error) {
 }
 
 func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (_ ClientStream, err error) {
-	c := defaultCallInfo()
-	c.maxReceiveMessageSize = getMaxSize(nil, nil, defaultClientMaxReceiveMessageSize)
-	c.maxSendMessageSize = getMaxSize(nil, nil, defaultServerMaxSendMessageSize)
+	// defaultCallInfo contains unnecessary info(i.e. failfast, maxRetryRPCBufferSize), so we just initialize an empty struct.
+	c := &callInfo{}
+
 	for _, o := range opts {
 		if err := o.before(c); err != nil {
 			return nil, toRPCErr(err)
 		}
 	}
+	c.maxReceiveMessageSize = getMaxSize(nil, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	c.maxSendMessageSize = getMaxSize(nil, c.maxSendMessageSize, defaultServerMaxSendMessageSize)
+
 	if err := setCallInfoCodec(c); err != nil {
 		return nil, err
 	}
 
 	callHdr := &transport.CallHdr{
-		Host:           ac.cc.authority, // TODO:
+		Host:           ac.cc.authority,
 		Method:         method,
 		ContentSubtype: c.contentSubtype,
 	}
@@ -991,48 +993,27 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 	if c.creds != nil {
 		callHdr.Creds = c.creds
 	}
-	var trInfo traceInfo
-	if EnableTracing {
-		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
-		trInfo.firstLine.client = true
-		if deadline, ok := ctx.Deadline(); ok {
-			trInfo.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-		ctx = trace.NewContext(ctx, trInfo.tr)
-	}
-	ctx = newContextWithRPCInfo(ctx, c.failFast)
-	sh := ac.cc.dopts.copts.StatsHandler
-	var beginTime time.Time
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
-		beginTime = time.Now()
-		begin := &stats.Begin{
-			Client:    true,
-			BeginTime: beginTime,
-			FailFast:  c.failFast,
-		}
-		sh.HandleRPC(ctx, begin)
-	}
 
 	as := &addrConnStream{
-		callHdr:   callHdr,
-		ctx:       ctx,
-		opts:      opts,
-		callInfo:  c,
-		desc:      desc,
-		codec:     c.codec,
-		cp:        cp,
-		comp:      comp,
-		beginTime: beginTime,
+		callHdr:  callHdr,
+		ctx:      ctx,
+		opts:     opts,
+		callInfo: c,
+		desc:     desc,
+		codec:    c.codec,
+		cp:       cp,
+		comp:     comp,
 	}
+
 	ac.mu.Lock()
 	if ac.transport == nil {
 		ac.mu.Unlock()
+		// TODO: better error to return here
 		return nil, errors.New("transport closed")
 	}
 	as.t = ac.transport
 	ac.mu.Unlock()
+
 	as.callInfo.stream = as
 	s, err := as.t.NewStream(as.ctx, as.callHdr)
 	if err != nil {
@@ -1045,27 +1026,24 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 }
 
 type addrConnStream struct {
-	s            *transport.Stream
-	callHdr      *transport.CallHdr
-	opts         []CallOption
-	callInfo     *callInfo
-	t            transport.ClientTransport
-	ctx          context.Context
-	sentLast     bool
-	desc         *StreamDesc
-	codec        baseCodec
-	cp           Compressor
-	comp         encoding.Compressor
-	decompSet    bool
-	dc           Decompressor
-	decomp       encoding.Compressor
-	p            *parser
-	done         func(balancer.DoneInfo)
-	finished     bool
-	beginTime    time.Time
-	mu           sync.Mutex
-	trInfo       traceInfo
-	statsHandler stats.Handler
+	s         *transport.Stream
+	callHdr   *transport.CallHdr
+	opts      []CallOption
+	callInfo  *callInfo
+	t         transport.ClientTransport
+	ctx       context.Context
+	sentLast  bool
+	desc      *StreamDesc
+	codec     baseCodec
+	cp        Compressor
+	comp      encoding.Compressor
+	decompSet bool
+	dc        Decompressor
+	decomp    encoding.Compressor
+	p         *parser
+	done      func(balancer.DoneInfo)
+	mu        sync.Mutex
+	finished  bool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1125,17 +1103,11 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 	hdr, payld := msgHeader(data, compData)
-	//// TODO(dfawley): should we be checking len(data) instead?
-	//if len(payload) > *cs.callInfo.maxSendMessageSize {
-	//	return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.callInfo.maxSendMessageSize)
-	//}
-	if EnableTracing {
-		as.mu.Lock()
-		if as.trInfo.tr != nil {
-			as.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
-		}
-		as.mu.Unlock()
+	// TODO(dfawley): should we be checking len(data) instead?
+	if len(payld) > *as.callInfo.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
 	}
+
 	if err := as.t.Write(as.s, hdr, payld, &transport.Options{Last: !as.desc.ClientStreams}); err != nil {
 		if !as.desc.ClientStreams {
 			// For non-client-streaming RPCs, we return nil instead of EOF on error
@@ -1145,9 +1117,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		}
 		return io.EOF
 	}
-	if as.statsHandler != nil {
-		as.statsHandler.HandleRPC(as.ctx, outPayload(true, m, data, payld, time.Now()))
-	}
+
 	if channelz.IsOn() {
 		as.t.IncrMsgSent()
 	}
@@ -1161,12 +1131,7 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 			as.finish(err)
 		}
 	}()
-	var inPayload *stats.InPayload
-	if as.statsHandler != nil {
-		inPayload = &stats.InPayload{
-			Client: true,
-		}
-	}
+
 	if !as.decompSet {
 		// Block until we receive headers containing received message encoding.
 		if ct := as.s.RecvCompress(); ct != "" && ct != encoding.Identity {
@@ -1183,7 +1148,7 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 		// Only initialize this state once per stream.
 		as.decompSet = true
 	}
-	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, inPayload, as.decomp)
+	err = recv(as.p, as.codec, as.s, as.dc, m, *as.callInfo.maxReceiveMessageSize, nil, as.decomp)
 	if err != nil {
 		if err == io.EOF {
 			if statusErr := as.s.Status().Err(); statusErr != nil {
@@ -1193,16 +1158,7 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 		}
 		return toRPCErr(err)
 	}
-	if EnableTracing {
-		as.mu.Lock()
-		if as.trInfo.tr != nil {
-			as.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
-		}
-		as.mu.Unlock()
-	}
-	if inPayload != nil {
-		as.statsHandler.HandleRPC(as.ctx, inPayload)
-	}
+
 	if channelz.IsOn() {
 		as.t.IncrMsgRecv()
 	}
@@ -1248,25 +1204,6 @@ func (as *addrConnStream) finish(err error) {
 			BytesSent:     as.s != nil,
 			BytesReceived: br,
 		})
-	}
-	if as.statsHandler != nil {
-		end := &stats.End{
-			Client:    true,
-			BeginTime: as.beginTime,
-			EndTime:   time.Now(),
-			Error:     err,
-		}
-		as.statsHandler.HandleRPC(as.ctx, end)
-	}
-	if as.trInfo.tr != nil {
-		if err == nil {
-			as.trInfo.tr.LazyPrintf("RPC: [OK]")
-		} else {
-			as.trInfo.tr.LazyPrintf("RPC: [%v]", err)
-			as.trInfo.tr.SetError()
-		}
-		as.trInfo.tr.Finish()
-		as.trInfo.tr = nil
 	}
 	as.mu.Unlock()
 }
