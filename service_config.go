@@ -104,7 +104,7 @@ type ServiceConfig struct {
 // healthCheckConfig defines the go-native version of the LB channel health check config.
 type healthCheckConfig struct {
 	// serviceName is the service name to use in the health-checking request.
-	serviceName string
+	ServiceName string
 }
 
 // retryPolicy defines the go-native version of the retry policy defined by the

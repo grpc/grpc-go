@@ -29,9 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -40,6 +37,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/transport"
@@ -769,7 +767,6 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 	}
 	cc.scRaw = js
 	cc.sc = sc
-
 	if sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{
 			tokens: sc.retryThrottling.MaxTokens,
@@ -1185,12 +1182,19 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	healthCheckConfig := ac.cc.getHealthCheckConfig()
+	fmt.Println(internal.HealthCheckFunc, healthCheckConfig, ac.healthCheckEnabled)
 	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
+		fmt.Println("start health check stream")
+		// TODO: will it cause any problem?
+		ac.mu.Lock()
+		ac.transport = newTr
+		ac.mu.Unlock()
 		//set up the health check stream
 		newStream := func() (ClientStream, error) {
-			return ac.newStream(ac.ctx, &StreamDesc{ServerStreams: true}, ac, "/grpc.health.v1.Health/Watch")
+			return ac.newClientStream(ac.ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch")
 		}
 		readyChan := make(chan struct{})
+		firstReady := true
 		updateState := func(ok bool, err error) {
 			select {
 			case <-onCloseCalled:
@@ -1205,9 +1209,9 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				return
 			}
 			if ok {
-				if readyChan != nil {
+				if firstReady {
 					close(readyChan)
-					readyChan = nil
+					firstReady = false
 				} else {
 					ac.updateConnectivityState(connectivity.Ready)
 					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
@@ -1219,7 +1223,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			}
 			ac.mu.Unlock()
 		}
-		internal.HealthCheckFunc.(func(func() (grpc.ClientStream, error), func(bool, error), string))(newStream, updateState, healthCheckConfig.serviceName)
+		internal.HealthCheckFunc.(func(func() (ClientStream, error), func(bool, error), string))(newStream, updateState, healthCheckConfig.ServiceName)
 
 		select {
 		case <-readyChan:
@@ -1228,6 +1232,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			return nil
 		}
 	}
+	fmt.Println("return from healthcheck func")
+
 	ac.mu.Lock()
 
 	if ac.state == connectivity.Shutdown {
@@ -1241,6 +1247,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return errConnClosing
 	}
 
+	fmt.Println("haha become ready")
 	ac.printf("ready")
 	ac.updateConnectivityState(connectivity.Ready)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)

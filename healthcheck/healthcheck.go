@@ -20,8 +20,10 @@ package healthcheck
 
 import (
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -41,7 +43,7 @@ func NewClientHealthCheck(newStream func() (grpc.ClientStream, error), update fu
 			}
 			if err := cs.SendMsg(req); err != nil {
 				//TODO: check ac current state? ctx cancelled?
-				if err == Unimplemented {
+				if status.Code(err) == codes.Unimplemented {
 					update(true, err)
 					return
 				}
