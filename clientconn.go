@@ -308,7 +308,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 				break
 			} else if cc.dopts.copts.FailOnNonTempDialError && s == connectivity.TransientFailure {
 				if err = cc.blockingpicker.connectionError(); err != nil {
-					terr, ok := err.(interface{ Temporary() bool })
+					terr, ok := err.(interface {
+						Temporary() bool
+					})
 					if ok && !terr.Temporary() {
 						return nil, err
 					}
@@ -1194,7 +1196,18 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		ac.mu.Unlock()
 		//set up the health check stream
 		newStream := func() (ClientStream, error) {
-			return ac.newClientStream(ac.ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch")
+			select {
+			case <-onCloseCalled:
+				return nil, status.Error(codes.Canceled, "underlying transport has been closed")
+			default:
+				ac.mu.Lock()
+				if ac.state == connectivity.Shutdown {
+					ac.mu.Unlock()
+					return nil, status.Error(codes.Canceled, "the SubConn has been shutdown")
+				}
+				ac.mu.Unlock()
+				return ac.newClientStream(ac.ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", &subConnStreamOpts{})
+			}
 		}
 		readyChan := make(chan struct{})
 		firstReady := true
