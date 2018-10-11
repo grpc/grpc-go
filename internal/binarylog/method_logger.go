@@ -80,14 +80,11 @@ func (ml *MethodLogger) Log(c LogEntryConfig) {
 
 	switch pay := m.Payload.(type) {
 	case *pb.GrpcLogEntry_ClientHeader:
-		mdPb := pay.ClientHeader.GetMetadata()
-		m.PayloadTruncated = ml.truncateMetadata(mdPb)
+		m.PayloadTruncated = ml.truncateMetadata(pay.ClientHeader.GetMetadata())
 	case *pb.GrpcLogEntry_ServerHeader:
-		mdPb := pay.ServerHeader.GetMetadata()
-		m.PayloadTruncated = ml.truncateMetadata(mdPb)
+		m.PayloadTruncated = ml.truncateMetadata(pay.ServerHeader.GetMetadata())
 	case *pb.GrpcLogEntry_Message:
-		msgPb := pay.Message
-		m.PayloadTruncated = ml.truncateMessage(msgPb)
+		m.PayloadTruncated = ml.truncateMessage(pay.Message)
 	}
 
 	ml.sink.Write(m)
