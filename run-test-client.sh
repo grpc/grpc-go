@@ -1,9 +1,11 @@
 #!/bin/bash -e
 cd "$(dirname "$0")"
-cat >&2 <<EOF
-Gradle is no longer run automatically. Make sure to run
-'./gradlew installDist -PskipCodegen=true' or
-'./gradlew :grpc-interop-testing:installDist -PskipCodegen=true' after any
-changes. -PskipCodegen=true is optional, but requires less setup.
+BIN="./interop-testing/build/install/grpc-interop-testing/bin/test-client"
+if [[ ! -e "$BIN" ]]; then
+  cat >&2 <<EOF
+Could not find binary. It can be built with:
+./gradlew :grpc-interop-testing:installDist -PskipCodegen=true
 EOF
-exec ./interop-testing/build/install/grpc-interop-testing/bin/test-client "$@"
+  exit 1
+fi
+exec "$BIN" "$@"
