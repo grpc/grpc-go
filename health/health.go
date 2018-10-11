@@ -42,7 +42,7 @@ type Server struct {
 // NewServer returns a new Server.
 func NewServer() *Server {
 	return &Server{
-		statusMap: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+		statusMap: map[string]healthpb.HealthCheckResponse_ServingStatus{"": healthpb.HealthCheckResponse_SERVING},
 		updates:   make(map[string]map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus),
 	}
 }
@@ -51,12 +51,6 @@ func NewServer() *Server {
 func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if in.Service == "" {
-		// check the server overall health status.
-		return &healthpb.HealthCheckResponse{
-			Status: healthpb.HealthCheckResponse_SERVING,
-		}, nil
-	}
 	if status, ok := s.statusMap[in.Service]; ok {
 		return &healthpb.HealthCheckResponse{
 			Status: status,
@@ -72,7 +66,12 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 	update := make(chan healthpb.HealthCheckResponse_ServingStatus, 1)
 	s.mu.Lock()
 	// Puts the initial status to the channel.
-	update <- s.statusMap[service]
+	if status, ok := s.statusMap[service]; ok {
+		update <- status
+	} else {
+		update <- healthpb.HealthCheckResponse_SERVICE_UNKNOWN
+	}
+
 	// Registers the update channel to the correct place in the updates map.
 	if _, ok := s.updates[service]; !ok {
 		s.updates[service] = make(map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus)
