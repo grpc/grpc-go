@@ -51,9 +51,9 @@ func NewServer() *Server {
 func (s *Server) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if status, ok := s.statusMap[in.Service]; ok {
+	if servingStatus, ok := s.statusMap[in.Service]; ok {
 		return &healthpb.HealthCheckResponse{
-			Status: status,
+			Status: servingStatus,
 		}, nil
 	}
 	return nil, status.Error(codes.NotFound, "unknown service")
