@@ -293,6 +293,101 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	}
 }
 
+// When there are multiple addresses, and we enter READY on one of them, a later closure should cause
+// the client to enter TRANSIENT FAILURE before it re-enters CONNECTING.
+func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+		connectivity.TransientFailure,
+		connectivity.Connecting,
+	}
+
+	stateNotifications := make(chan connectivity.State, len(want))
+	testBalancer.ResetNotifier(stateNotifications)
+	defer close(stateNotifications)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis1.Close()
+
+	// Never actually gets used; we just want it to be alive so that the resolver has two addresses to target.
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis2.Close()
+
+	server1Done := make(chan struct{})
+	sawReady := make(chan struct{})
+
+	// Launch server 1.
+	go func() {
+		conn, err := lis1.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		framer := http2.NewFramer(conn, conn)
+		if err := framer.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("Error while writing settings frame. %v", err)
+			return
+		}
+
+		<-sawReady
+
+		conn.Close()
+
+		_, err = lis1.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		close(server1Done)
+	}()
+
+	rb := manual.NewBuilderWithScheme("whatever")
+	rb.InitialAddrs([]resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+	})
+	client, err := DialContext(ctx, "this-gets-overwritten", WithInsecure(), WithWaitForHandshake(), WithBalancerName(stateRecordingBalancerName), withResolverBuilder(rb))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	timeout := time.After(2 * time.Second)
+
+	for i := 0; i < len(want); i++ {
+		select {
+		case <-timeout:
+			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
+		case seen := <-stateNotifications:
+			if seen == connectivity.Ready {
+				close(sawReady)
+			}
+			if seen != want[i] {
+				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
+			}
+		}
+	}
+	select {
+	case <-timeout:
+		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
+	case <-server1Done:
+	}
+}
+
 type stateRecordingBalancer struct {
 	mu       sync.Mutex
 	notifier chan<- connectivity.State
