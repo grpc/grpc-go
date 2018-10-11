@@ -18,7 +18,9 @@ package io.grpc.internal;
 
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Grpc;
 import io.grpc.NameResolver;
+import io.grpc.SecurityLevel;
 import java.util.Map;
 
 /**
@@ -47,6 +49,15 @@ public final class GrpcAttributes {
   @EquivalentAddressGroup.Attr
   public static final Attributes.Key<Boolean> ATTR_LB_PROVIDED_BACKEND =
       Attributes.Key.create("io.grpc.grpclb.lbProvidedBackend");
+
+  /**
+   * The security level of the transport.  If it's not present, {@link SecurityLevel#NONE} should be
+   * assumed.
+   */
+  @SuppressWarnings("deprecation")
+  @Grpc.TransportAttr
+  public static final Attributes.Key<SecurityLevel> ATTR_SECURITY_LEVEL =
+      io.grpc.CallCredentials.ATTR_SECURITY_LEVEL;
 
   private GrpcAttributes() {}
 }

@@ -22,8 +22,7 @@ import com.google.auth.Credentials;
 import com.google.auth.RequestMetadataCallback;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.BaseEncoding;
-import io.grpc.Attributes;
-import io.grpc.CallCredentials;
+import io.grpc.CallCredentials2;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
@@ -47,7 +46,7 @@ import javax.annotation.Nullable;
 /**
  * Wraps {@link Credentials} as a {@link CallCredentials}.
  */
-final class GoogleAuthLibraryCallCredentials implements CallCredentials {
+final class GoogleAuthLibraryCallCredentials extends CallCredentials2 {
   private static final Logger log
       = Logger.getLogger(GoogleAuthLibraryCallCredentials.class.getName());
   private static final JwtHelper jwtHelper
@@ -88,15 +87,9 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   public void thisUsesUnstableApi() {}
 
   @Override
-  public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs,
-      Executor appExecutor, final MetadataApplier applier) {
-    SecurityLevel security = attrs.get(ATTR_SECURITY_LEVEL);
-    if (security == null) {
-      // Although the API says ATTR_SECURITY_LEVEL is required, no one was really looking at it thus
-      // there may be transports that got away without setting it.  Now we start to check it, it'd
-      // be less disruptive to tolerate nulls.
-      security = SecurityLevel.NONE;
-    }
+  public void applyRequestMetadata(
+      RequestInfo info, Executor appExecutor, final MetadataApplier applier) {
+    SecurityLevel security = info.getSecurityLevel();
     if (requirePrivacy && security != SecurityLevel.PRIVACY_AND_INTEGRITY) {
       applier.fail(Status.UNAUTHENTICATED
           .withDescription("Credentials require channel with PRIVACY_AND_INTEGRITY security level. "
@@ -104,10 +97,10 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
       return;
     }
 
-    String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");
+    String authority = checkNotNull(info.getAuthority(), "authority");
     final URI uri;
     try {
-      uri = serviceUri(authority, method);
+      uri = serviceUri(authority, info.getMethodDescriptor());
     } catch (StatusException e) {
       applier.fail(e.getStatus());
       return;

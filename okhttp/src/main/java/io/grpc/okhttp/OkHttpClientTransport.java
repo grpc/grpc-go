@@ -31,7 +31,6 @@ import com.squareup.okhttp.HttpUrl;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.internal.http.StatusLine;
 import io.grpc.Attributes;
-import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
@@ -46,6 +45,7 @@ import io.grpc.Status.Code;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.ConnectionClientTransport;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
@@ -486,7 +486,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, sock.getRemoteSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, sock.getLocalSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
-              .set(CallCredentials.ATTR_SECURITY_LEVEL,
+              .set(GrpcAttributes.ATTR_SECURITY_LEVEL,
                   sslSession == null ? SecurityLevel.NONE : SecurityLevel.PRIVACY_AND_INTEGRITY)
               .build();
         } catch (StatusException e) {

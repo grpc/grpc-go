@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalLogId;
@@ -31,6 +30,7 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.ConnectionClientTransport;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
@@ -95,8 +95,7 @@ class CronetClientTransport implements ConnectionClientTransport {
     this.streamFactory = Preconditions.checkNotNull(streamFactory, "streamFactory");
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
     this.attrs = Attributes.newBuilder()
-        .set(CallCredentials.ATTR_AUTHORITY, authority)
-        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+        .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
         .build();
   }
 

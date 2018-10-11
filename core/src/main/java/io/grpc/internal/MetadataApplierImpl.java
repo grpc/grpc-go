@@ -29,7 +29,7 @@ import io.grpc.Status;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
-final class MetadataApplierImpl implements MetadataApplier {
+final class MetadataApplierImpl extends MetadataApplier {
   private final ClientTransport transport;
   private final MethodDescriptor<?, ?> method;
   private final Metadata origHeaders;

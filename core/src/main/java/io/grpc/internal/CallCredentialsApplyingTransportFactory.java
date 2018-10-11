@@ -72,6 +72,7 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public ClientStream newStream(
         MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
       CallCredentials creds = callOptions.getCredentials();

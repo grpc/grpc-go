@@ -33,6 +33,7 @@ import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.TransportTracer;
 import io.grpc.testing.TestMethodDescriptors;
@@ -82,9 +83,8 @@ public final class CronetClientTransportTest {
   @Test
   public void transportAttributes() {
     Attributes attrs = transport.getAttributes();
-    assertEquals(AUTHORITY, attrs.get(CallCredentials.ATTR_AUTHORITY));
     assertEquals(
-        SecurityLevel.PRIVACY_AND_INTEGRITY, attrs.get(CallCredentials.ATTR_SECURITY_LEVEL));
+        SecurityLevel.PRIVACY_AND_INTEGRITY, attrs.get(GrpcAttributes.ATTR_SECURITY_LEVEL));
   }
 
   @Test

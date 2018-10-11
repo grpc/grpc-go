@@ -39,8 +39,8 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import io.grpc.Attributes;
-import io.grpc.CallCredentials;
 import io.grpc.CallCredentials.MetadataApplier;
+import io.grpc.CallCredentials2;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
@@ -105,11 +105,8 @@ public class GoogleAuthLibraryCallCredentialsTest {
       .build();
   private URI expectedUri = URI.create("https://testauthority/a.service");
 
-  private final String authority = "testauthority";
-  private final Attributes attrs = Attributes.newBuilder()
-      .set(CallCredentials.ATTR_AUTHORITY, authority)
-      .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
-      .build();
+  private static final String AUTHORITY = "testauthority";
+  private static final SecurityLevel SECURITY_LEVEL = SecurityLevel.PRIVACY_AND_INTEGRITY;
 
   private ArrayList<Runnable> pendingRunnables = new ArrayList<>();
 
@@ -155,7 +152,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).apply(headersCaptor.capture());
@@ -177,7 +174,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -193,7 +190,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -209,7 +206,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).fail(statusCaptor.capture());
@@ -229,7 +226,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
     for (int i = 0; i < 3; i++) {
-      callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+      callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
     }
 
     verify(credentials, times(3)).getRequestMetadata(eq(expectedUri));
@@ -255,14 +252,11 @@ public class GoogleAuthLibraryCallCredentialsTest {
         return token;
       }
     };
-    // Security level should not impact non-GoogleCredentials
-    Attributes securityNone = attrs.toBuilder()
-        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
-        .build();
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, securityNone, executor, applier);
+    callCredentials.applyRequestMetadata(
+        new RequestInfoImpl(SecurityLevel.NONE), executor, applier);
     assertEquals(1, runPendingRunnables());
 
     verify(applier).apply(headersCaptor.capture());
@@ -276,13 +270,11 @@ public class GoogleAuthLibraryCallCredentialsTest {
   public void googleCredential_privacyAndIntegrityAllowed() {
     final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
     final Credentials credentials = GoogleCredentials.create(token);
-    Attributes privacy = attrs.toBuilder()
-        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
-        .build();
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, privacy, executor, applier);
+    callCredentials.applyRequestMetadata(
+        new RequestInfoImpl(SecurityLevel.PRIVACY_AND_INTEGRITY), executor, applier);
     runPendingRunnables();
 
     verify(applier).apply(headersCaptor.capture());
@@ -297,33 +289,11 @@ public class GoogleAuthLibraryCallCredentialsTest {
     final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
     final Credentials credentials = GoogleCredentials.create(token);
     // Anything less than PRIVACY_AND_INTEGRITY should fail
-    Attributes integrity = attrs.toBuilder()
-        .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.INTEGRITY)
-        .build();
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, integrity, executor, applier);
-    runPendingRunnables();
-
-    verify(applier).fail(statusCaptor.capture());
-    Status status = statusCaptor.getValue();
-    assertEquals(Status.Code.UNAUTHENTICATED, status.getCode());
-  }
-
-  @Test
-  public void googleCredential_nullSecurityDenied() {
-    final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
-    final Credentials credentials = GoogleCredentials.create(token);
-    // Null should not (for the moment) crash in horrible ways. In the future this could be changed,
-    // since it technically isn't allowed per the API.
-    Attributes integrity = attrs.toBuilder()
-        .set(CallCredentials.ATTR_SECURITY_LEVEL, null)
-        .build();
-
-    GoogleAuthLibraryCallCredentials callCredentials =
-        new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, integrity, executor, applier);
+    callCredentials.applyRequestMetadata(
+        new RequestInfoImpl(SecurityLevel.INTEGRITY), executor, applier);
     runPendingRunnables();
 
     verify(applier).fail(statusCaptor.capture());
@@ -335,20 +305,12 @@ public class GoogleAuthLibraryCallCredentialsTest {
   public void serviceUri() throws Exception {
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method,
-        Attributes.newBuilder()
-            .setAll(attrs)
-            .set(CallCredentials.ATTR_AUTHORITY, "example.com:443")
-            .build(),
-        executor, applier);
+    callCredentials.applyRequestMetadata(
+        new RequestInfoImpl("example.com:443"), executor, applier);
     verify(credentials).getRequestMetadata(eq(new URI("https://example.com/a.service")));
 
-    callCredentials.applyRequestMetadata(method,
-        Attributes.newBuilder()
-            .setAll(attrs)
-            .set(CallCredentials.ATTR_AUTHORITY, "example.com:123")
-            .build(),
-        executor, applier);
+    callCredentials.applyRequestMetadata(
+        new RequestInfoImpl("example.com:123"), executor, applier);
     verify(credentials).getRequestMetadata(eq(new URI("https://example.com:123/a.service")));
   }
 
@@ -366,7 +328,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
     assertEquals(0, runPendingRunnables());
 
     verify(applier).apply(headersCaptor.capture());
@@ -393,7 +355,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
     assertEquals(1, runPendingRunnables());
 
     verify(applier).apply(headersCaptor.capture());
@@ -412,7 +374,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
     assertNull(GoogleAuthLibraryCallCredentials.createJwtHelperOrNull(null));
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials, null);
-    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    callCredentials.applyRequestMetadata(new RequestInfoImpl(), executor, applier);
 
     verify(credentials).getRequestMetadata(eq(expectedUri));
     verify(applier).apply(headersCaptor.capture());
@@ -429,5 +391,47 @@ public class GoogleAuthLibraryCallCredentialsTest {
       r.run();
     }
     return savedPendingRunnables.size();
+  }
+
+  private final class RequestInfoImpl extends CallCredentials2.RequestInfo {
+    final String authority;
+    final SecurityLevel securityLevel;
+
+    RequestInfoImpl() {
+      this(AUTHORITY, SECURITY_LEVEL);
+    }
+
+    RequestInfoImpl(SecurityLevel securityLevel) {
+      this(AUTHORITY, securityLevel);
+    }
+
+    RequestInfoImpl(String authority) {
+      this(authority, SECURITY_LEVEL);
+    }
+
+    RequestInfoImpl(String authority, SecurityLevel securityLevel) {
+      this.authority = authority;
+      this.securityLevel = securityLevel;
+    }
+
+    @Override
+    public MethodDescriptor<?, ?> getMethodDescriptor() {
+      return method;
+    }
+
+    @Override
+    public SecurityLevel getSecurityLevel() {
+      return securityLevel;
+    }
+
+    @Override
+    public String getAuthority() {
+      return authority;
+    }
+
+    @Override
+    public Attributes getTransportAttrs() {
+      return Attributes.EMPTY;
+    }
   }
 }

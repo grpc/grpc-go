@@ -22,12 +22,12 @@ import static io.grpc.netty.GrpcSslContexts.NEXT_PROTOCOL_VERSIONS;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
-import io.grpc.CallCredentials;
 import io.grpc.Grpc;
 import io.grpc.Internal;
 import io.grpc.InternalChannelz;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
@@ -676,7 +676,7 @@ public final class ProtocolNegotiators {
                     .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
                     .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
                     .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-                    .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+                    .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
                     .build(),
                 new InternalChannelz.Security(new InternalChannelz.Tls(session)));
             writeBufferedAndRemove(ctx);
@@ -725,7 +725,7 @@ public final class ProtocolNegotiators {
               .newBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
               .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-              .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
+              .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
               .build(),
           /*securityInfo=*/ null);
       super.channelActive(ctx);
@@ -769,7 +769,7 @@ public final class ProtocolNegotiators {
                 .newBuilder()
                 .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
                 .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-                .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
+                .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
                 .build(),
             /*securityInfo=*/ null);
       } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {

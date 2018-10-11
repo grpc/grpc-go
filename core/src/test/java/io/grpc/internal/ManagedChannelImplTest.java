@@ -1388,6 +1388,7 @@ public class ManagedChannelImplTest {
    * propagated to newStream() and applyRequestMetadata().
    */
   @Test
+  @SuppressWarnings("deprecation")
   public void informationPropagatedToNewStreamAndCallCredentials() {
     createChannel();
     CallOptions callOptions = CallOptions.DEFAULT.withCallCredentials(creds);
@@ -1401,7 +1402,7 @@ public class ManagedChannelImplTest {
           credsApplyContexts.add(Context.current());
           return null;
         }
-      }).when(creds).applyRequestMetadata(
+      }).when(creds).applyRequestMetadata(  // TODO(zhangkun83): remove suppression of deprecations
           any(MethodDescriptor.class), any(Attributes.class), any(Executor.class),
           any(MetadataApplier.class));
 
