@@ -747,6 +747,13 @@ func (cc *ClientConn) handleServiceConfig(js string) error {
 		return err
 	}
 	cc.mu.Lock()
+	// Check if the ClientConn is already closed. Some fields (e.g.
+	// balancerWrapper) are set to nil when closing the ClientConn, and could
+	// cause nil pointer panic if we don't have this check.
+	if cc.conns == nil {
+		cc.mu.Unlock()
+		return nil
+	}
 	cc.scRaw = js
 	cc.sc = sc
 
