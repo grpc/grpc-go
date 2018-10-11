@@ -2478,6 +2478,10 @@ func testHealthWatch(t *testing.T, e env) {
 	}
 
 	stream10, err := hc11.Watch(ctx10, req0)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
 	healthWatchChecker(t, stream10, healthpb.HealthCheckResponse_SERVING)
 
 	stream11, err := hc11.Watch(ctx11, req1)
