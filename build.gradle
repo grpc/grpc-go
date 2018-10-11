@@ -110,7 +110,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
-        nettyVersion = '4.1.27.Final'
+        nettyVersion = '4.1.30.Final'
         guavaVersion = '26.0-android'
         protobufVersion = '3.5.1'
         protocVersion = '3.5.1-1'
@@ -224,7 +224,7 @@ subprojects {
             netty: "io.netty:netty-codec-http2:[${nettyVersion}]",
             netty_epoll: "io.netty:netty-transport-native-epoll:${nettyVersion}" + epoll_suffix,
             netty_proxy_handler: "io.netty:netty-handler-proxy:${nettyVersion}",
-            netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.12.Final',
+            netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.17.Final',
 
             conscrypt: 'org.conscrypt:conscrypt-openjdk-uber:1.0.1',
             re2j: 'com.google.re2j:re2j:1.2',
