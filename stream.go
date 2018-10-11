@@ -950,11 +950,11 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
-type subConnStreamOpts struct {
-	waitForStateReady bool
-}
-
-func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, sopts *subConnStreamOpts, opts ...CallOption) (_ ClientStream, err error) {
+func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, t transport.ClientTransport, opts ...CallOption) (_ ClientStream, err error) {
+	if t == nil {
+		// TODO: return RPC error here?
+		return nil, errors.New("transport provided is nil")
+	}
 	// defaultCallInfo contains unnecessary info(i.e. failfast, maxRetryRPCBufferSize), so we just initialize an empty struct.
 	c := &callInfo{}
 
@@ -1007,24 +1007,7 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 		codec:    c.codec,
 		cp:       cp,
 		comp:     comp,
-	}
-
-	if sopts.waitForStateReady {
-		t, ok := ac.getReadyTransport()
-		if !ok {
-			// TODO: return RPC error here?
-			return nil, errors.New("no ready transport")
-		}
-		as.t = t
-	} else {
-		ac.mu.Lock()
-		if ac.transport == nil {
-			ac.mu.Unlock()
-			// TODO: return RPC error here?
-			return nil, errors.New("no transport available")
-		}
-		as.t = ac.transport
-		ac.mu.Unlock()
+		t:        t,
 	}
 
 	as.callInfo.stream = as

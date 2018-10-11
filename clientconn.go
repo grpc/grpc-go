@@ -1189,11 +1189,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// service config with non-empty healthCheckConfig field is provided, and the current load balancer
 	// allows it.
 	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
-		// TODO(yuxuanli): double check whether it will cause any problem by set the ac.Transport here.
-		//
-		ac.mu.Lock()
-		ac.transport = newTr
-		ac.mu.Unlock()
 		//set up the health check stream
 		newStream := func() (ClientStream, error) {
 			select {
@@ -1206,7 +1201,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 					return nil, status.Error(codes.Canceled, "the SubConn has been shutdown")
 				}
 				ac.mu.Unlock()
-				return ac.newClientStream(ac.ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", &subConnStreamOpts{})
+				return ac.newClientStream(ac.ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 			}
 		}
 		readyChan := make(chan struct{})
