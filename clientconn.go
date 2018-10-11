@@ -885,9 +885,6 @@ type addrConn struct {
 
 	// Use updateConnectivityState for updating addrConn's connectivity state.
 	state connectivity.State
-	// ready is closed and becomes nil when a new transport is up or failed
-	// due to timeout.
-	ready chan struct{}
 
 	tearDownErr error // The reason this addrConn is torn down.
 
@@ -993,10 +990,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
 			return
-		}
-		if ac.ready != nil {
-			close(ac.ready)
-			ac.ready = nil
 		}
 		ac.transport = nil
 
@@ -1194,10 +1187,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.transport = newTr
 	ac.curAddr = addr
-	if ac.ready != nil {
-		close(ac.ready)
-		ac.ready = nil
-	}
 
 	ac.mu.Unlock()
 
@@ -1238,10 +1227,6 @@ func (ac *addrConn) nextAddr() error {
 		return errConnClosing
 	}
 	ac.cc.resolveNow(resolver.ResolveNowOption{})
-	if ac.ready != nil {
-		close(ac.ready)
-		ac.ready = nil
-	}
 	backoffDeadline := ac.backoffDeadline
 	b := ac.resetBackoff
 	ac.mu.Unlock()
@@ -1318,10 +1303,6 @@ func (ac *addrConn) tearDown(err error) {
 	if ac.events != nil {
 		ac.events.Finish()
 		ac.events = nil
-	}
-	if ac.ready != nil {
-		close(ac.ready)
-		ac.ready = nil
 	}
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
