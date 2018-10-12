@@ -131,7 +131,6 @@ public class CallCredentials2ApplyingTest {
         infoCaptor.capture(), same(mockExecutor), any(MetadataApplier.class));
     RequestInfo info = infoCaptor.getValue();
     assertSame(method, info.getMethodDescriptor());
-    Attributes attrs = info.getTransportAttrs();
     assertSame(ATTR_VALUE, info.getTransportAttrs().get(ATTR_KEY));
     assertSame(AUTHORITY, info.getAuthority());
     assertSame(SecurityLevel.NONE, info.getSecurityLevel());
