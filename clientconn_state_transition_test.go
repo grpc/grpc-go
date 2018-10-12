@@ -269,7 +269,7 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	}
 	defer client.Close()
 
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(5 * time.Second)
 
 	for i := 0; i < len(want); i++ {
 		select {
