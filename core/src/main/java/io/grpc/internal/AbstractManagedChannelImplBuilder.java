@@ -330,6 +330,8 @@ public abstract class AbstractManagedChannelImplBuilder
   @Override
   public final T enableRetry() {
     retryEnabled = true;
+    statsEnabled = false;
+    tracingEnabled = false;
     return thisT();
   }
 
@@ -356,7 +358,10 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
-   * Disable or enable stats features.  Enabled by default.
+   * Disable or enable stats features. Enabled by default.
+   *
+   * <p>For the current release, calling {@code setStatsEnabled(true)} may have a side effect that
+   * disables retry.
    */
   protected void setStatsEnabled(boolean value) {
     statsEnabled = value;
@@ -380,6 +385,9 @@ public abstract class AbstractManagedChannelImplBuilder
 
   /**
    * Disable or enable tracing features.  Enabled by default.
+   *
+   * <p>For the current release, calling {@code setTracingEnabled(true)} may have a side effect that
+   * disables retry.
    */
   protected void setTracingEnabled(boolean value) {
     tracingEnabled = value;

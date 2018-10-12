@@ -439,8 +439,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Enables the retry and hedging mechanism provided by the gRPC library.
    *
-   * <p>This method may not work as expected for the current release because retry is not fully
-   * implemented yet.
+   * <p>For the current release, this method may have a side effect that disables Census stats and
+   * tracing. Hedging support is not implemented yet.
    *
    * @return this
    * @since 1.11.0
