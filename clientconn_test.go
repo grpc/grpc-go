@@ -676,6 +676,22 @@ func TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
 
+func TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
+	defer leakcheck.Check(t)
+	for i := 0; i < 10; i++ { // Run this multiple times to make sure it doesn't panic.
+		r, rcleanup := manual.GenerateAndRegisterManualResolver()
+		defer rcleanup()
+
+		cc, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+		if err != nil {
+			t.Fatalf("failed to dial: %v", err)
+		}
+		// Send a new service config while closing the ClientConn.
+		go cc.Close()
+		go r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`) // This should not panic.
+	}
+}
+
 func TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
