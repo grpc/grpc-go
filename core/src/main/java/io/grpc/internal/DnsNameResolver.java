@@ -95,13 +95,16 @@ final class DnsNameResolver extends NameResolver {
    *
    * <p>Default value is -1 (cache forever) if security manager is installed. If security manager is
    * not installed, the ttl value is {@code null} which falls back to {@link
-   * #DEFAULT_NETWORK_CACHE_TTL_SECONDS gRPC default value}.
+   * #DEFAULT_NETWORK_CACHE_TTL_SECONDS gRPC default value} or {@link
+   * #DEFAULT_ANDROID_NETWORK_CACHE_TTL_SECONDS android default value}.
    */
   @VisibleForTesting
   static final String NETWORKADDRESS_CACHE_TTL_PROPERTY = "networkaddress.cache.ttl";
   /** Default DNS cache duration if network cache ttl value is not specified ({@code null}). */
   @VisibleForTesting
   static final long DEFAULT_NETWORK_CACHE_TTL_SECONDS = 30;
+  @VisibleForTesting
+  static final long DEFAULT_ANDROID_NETWORK_CACHE_TTL_SECONDS = 2;
 
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
@@ -144,7 +147,7 @@ final class DnsNameResolver extends NameResolver {
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
       Resource<ExecutorService> executorResource, ProxyDetector proxyDetector,
-      Stopwatch stopwatch) {
+      Stopwatch stopwatch, boolean isAndroid) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
     this.executorResource = executorResource;
@@ -168,7 +171,7 @@ final class DnsNameResolver extends NameResolver {
     }
     this.proxyDetector = proxyDetector;
     this.stopwatch = Preconditions.checkNotNull(stopwatch, "stopwatch");
-    this.networkAddressCacheTtlNanos = getNetworkAddressCacheTtlNanos();
+    this.networkAddressCacheTtlNanos = getNetworkAddressCacheTtlNanos(isAndroid);
   }
 
   @Override
@@ -285,9 +288,10 @@ final class DnsNameResolver extends NameResolver {
     };
 
   /** Returns value of network address cache ttl property. */
-  private static long getNetworkAddressCacheTtlNanos() {
+  private static long getNetworkAddressCacheTtlNanos(boolean isAndroid) {
     String cacheTtlPropertyValue = System.getProperty(NETWORKADDRESS_CACHE_TTL_PROPERTY);
-    long cacheTtl = DEFAULT_NETWORK_CACHE_TTL_SECONDS;
+    long cacheTtl =
+        isAndroid ? DEFAULT_ANDROID_NETWORK_CACHE_TTL_SECONDS : DEFAULT_NETWORK_CACHE_TTL_SECONDS;
     if (cacheTtlPropertyValue != null) {
       try {
         cacheTtl = Long.parseLong(cacheTtlPropertyValue);

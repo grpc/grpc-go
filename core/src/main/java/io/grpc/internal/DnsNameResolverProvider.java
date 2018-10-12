@@ -19,6 +19,7 @@ package io.grpc.internal;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import io.grpc.Attributes;
+import io.grpc.InternalServiceProviders;
 import io.grpc.NameResolverProvider;
 import java.net.URI;
 
@@ -54,7 +55,8 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
           params,
           GrpcUtil.SHARED_CHANNEL_EXECUTOR,
           GrpcUtil.getDefaultProxyDetector(),
-          Stopwatch.createUnstarted());
+          Stopwatch.createUnstarted(),
+          InternalServiceProviders.isAndroid(getClass().getClassLoader()));
     } else {
       return null;
     }
