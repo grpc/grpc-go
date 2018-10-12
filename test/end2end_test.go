@@ -2514,9 +2514,8 @@ func testHealthWatch(t *testing.T, e env) {
 	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_NOT_SERVING)
 
 	healthWatchChecker(t, stream11, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream12, healthpb.HealthCheckResponse_NOT_SERVING)
 	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_SERVING)
-
-	fmt.Printf("OK\n")
 }
 
 func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {

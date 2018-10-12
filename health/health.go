@@ -66,8 +66,8 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 	update := make(chan healthpb.HealthCheckResponse_ServingStatus, 1)
 	s.mu.Lock()
 	// Puts the initial status to the channel.
-	if status, ok := s.statusMap[service]; ok {
-		update <- status
+	if servingStatus, ok := s.statusMap[service]; ok {
+		update <- servingStatus
 	} else {
 		update <- healthpb.HealthCheckResponse_SERVICE_UNKNOWN
 	}
@@ -77,17 +77,22 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 		s.updates[service] = make(map[healthpb.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus)
 	}
 	s.updates[service][stream] = update
+	defer func() {
+		s.mu.Lock()
+		delete(s.updates[service], stream)
+		s.mu.Unlock()
+	}()
 	s.mu.Unlock()
 	for {
 		select {
 		// Status updated. Sends the up-to-date status to the client.
-		case status := <-update:
-			stream.Send(&healthpb.HealthCheckResponse{Status: status})
+		case servingStatus := <-update:
+			err := stream.Send(&healthpb.HealthCheckResponse{Status: servingStatus})
+			if err != nil {
+				return status.Error(codes.Canceled, "Stream has ended.")
+			}
 		// Context done. Removes the update channel from the updates map.
 		case <-stream.Context().Done():
-			s.mu.Lock()
-			delete(s.updates[service], stream)
-			s.mu.Unlock()
 			return status.Error(codes.Canceled, "Stream has ended.")
 		}
 	}
@@ -95,9 +100,9 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 
 // SetServingStatus is called when need to reset the serving status of a service
 // or insert a new service entry into the statusMap.
-func (s *Server) SetServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
+func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
-	s.statusMap[service] = status
+	s.statusMap[service] = servingStatus
 	for _, update := range s.updates[service] {
 		// Clears previous updates, that are not sent to the client, from the channel.
 		select {
@@ -106,7 +111,7 @@ func (s *Server) SetServingStatus(service string, status healthpb.HealthCheckRes
 		}
 		// Puts the most recent update to the channel.
 		select {
-		case update <- status:
+		case update <- servingStatus:
 		default:
 		}
 	}
