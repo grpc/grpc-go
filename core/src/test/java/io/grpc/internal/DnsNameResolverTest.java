@@ -112,13 +112,7 @@ public class DnsNameResolverTest {
   private String networkaddressCacheTtlPropertyValue;
 
   private DnsNameResolver newResolver(String name, int port) {
-    return
-        newResolver(name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(), false);
-  }
-
-  private DnsNameResolver newResolver(String name, int port, boolean isAndroid) {
-    return newResolver(
-        name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(), isAndroid);
+    return newResolver(name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted());
   }
 
   private DnsNameResolver newResolver(
@@ -126,23 +120,13 @@ public class DnsNameResolverTest {
       int port,
       ProxyDetector proxyDetector,
       Stopwatch stopwatch) {
-    return newResolver(name, port, proxyDetector, stopwatch, false);
-  }
-
-  private DnsNameResolver newResolver(
-      String name,
-      int port,
-      ProxyDetector proxyDetector,
-      Stopwatch stopwatch,
-      boolean isAndroid) {
     DnsNameResolver dnsResolver = new DnsNameResolver(
         null,
         name,
         Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, port).build(),
         fakeExecutorResource,
         proxyDetector,
-        stopwatch,
-        isAndroid);
+        stopwatch);
     return dnsResolver;
   }
 
@@ -215,16 +199,12 @@ public class DnsNameResolverTest {
 
   @Test
   public void resolve_neverCache() throws Exception {
-    resolve_neverCache(false);
-  }
-
-  private void resolve_neverCache(boolean isAndroid) throws Exception {
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, "0");
     final List<InetAddress> answer1 = createAddressList(2);
     final List<InetAddress> answer2 = createAddressList(1);
     String name = "foo.googleapis.com";
 
-    DnsNameResolver resolver = newResolver(name, 81, isAndroid);
+    DnsNameResolver resolver = newResolver(name, 81);
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString())).thenReturn(answer1).thenReturn(answer2);
     resolver.setAddressResolver(mockResolver);
@@ -247,28 +227,14 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void resolve_androidNeverCache() throws Exception {
-    resolve_neverCache(true);
-  }
-
-  @Test
   public void resolve_cacheForever() throws Exception {
-    resolve_cacheForever(false);
-  }
-
-  private void resolve_cacheForever(boolean isAndroid) throws Exception {
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, "-1");
     final List<InetAddress> answer1 = createAddressList(2);
     String name = "foo.googleapis.com";
     FakeTicker fakeTicker = new FakeTicker();
 
     DnsNameResolver resolver =
-        newResolver(
-            name,
-            81,
-            GrpcUtil.NOOP_PROXY_DETECTOR,
-            Stopwatch.createUnstarted(fakeTicker),
-            isAndroid);
+        newResolver(name, 81, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(fakeTicker));
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString()))
         .thenReturn(answer1)
@@ -294,16 +260,7 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void resolve_androidCacheForever() throws Exception {
-    resolve_cacheForever(true);
-  }
-
-  @Test
   public void resolve_usingCache() throws Exception {
-    resolve_usingCache(false);
-  }
-
-  private void resolve_usingCache(boolean isAndroid) throws Exception {
     long ttl = 60;
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, Long.toString(ttl));
     final List<InetAddress> answer = createAddressList(2);
@@ -311,12 +268,7 @@ public class DnsNameResolverTest {
     FakeTicker fakeTicker = new FakeTicker();
 
     DnsNameResolver resolver =
-        newResolver(
-            name,
-            81,
-            GrpcUtil.NOOP_PROXY_DETECTOR,
-            Stopwatch.createUnstarted(fakeTicker),
-            isAndroid);
+        newResolver(name, 81, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(fakeTicker));
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString()))
         .thenReturn(answer)
@@ -343,16 +295,7 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void resolve_androidUsingCache() throws Exception {
-    resolve_usingCache(true);
-  }
-
-  @Test
   public void resolve_cacheExpired() throws Exception {
-    resolve_cacheExpired(false);
-  }
-
-  private void resolve_cacheExpired(boolean isAndroid) throws Exception {
     long ttl = 60;
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, Long.toString(ttl));
     final List<InetAddress> answer1 = createAddressList(2);
@@ -361,12 +304,7 @@ public class DnsNameResolverTest {
     FakeTicker fakeTicker = new FakeTicker();
 
     DnsNameResolver resolver =
-        newResolver(
-            name,
-            81,
-            GrpcUtil.NOOP_PROXY_DETECTOR,
-            Stopwatch.createUnstarted(fakeTicker),
-            isAndroid);
+        newResolver(name, 81, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(fakeTicker));
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString())).thenReturn(answer1).thenReturn(answer2);
     resolver.setAddressResolver(mockResolver);
@@ -390,47 +328,25 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void resolve_androidCacheExpired() throws Exception {
-    resolve_cacheExpired(true);
-  }
-
-  @Test
   public void resolve_invalidTtlPropertyValue() throws Exception {
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, "not_a_number");
-    resolveDefaultValue(false);
-  }
-
-  @Test
-  public void resolve_androidInvalidTtlPropertyValue() throws Exception {
-    System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, "not_a_number");
-    resolveDefaultValue(true);
+    resolveDefaultValue();
   }
 
   @Test
   public void resolve_noPropertyValue() throws Exception {
     System.clearProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY);
-    resolveDefaultValue(false);
+    resolveDefaultValue();
   }
 
-  @Test
-  public void resolve_androidNoPropertyValue() throws Exception {
-    System.clearProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY);
-    resolveDefaultValue(true);
-  }
-
-  private void resolveDefaultValue(boolean isAndroid) throws Exception {
+  private void resolveDefaultValue() throws Exception {
     final List<InetAddress> answer1 = createAddressList(2);
     final List<InetAddress> answer2 = createAddressList(1);
     String name = "foo.googleapis.com";
     FakeTicker fakeTicker = new FakeTicker();
 
     DnsNameResolver resolver =
-        newResolver(
-            name,
-            81,
-            GrpcUtil.NOOP_PROXY_DETECTOR,
-            Stopwatch.createUnstarted(fakeTicker),
-            isAndroid);
+        newResolver(name, 81, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(fakeTicker));
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString())).thenReturn(answer1).thenReturn(answer2);
     resolver.setAddressResolver(mockResolver);
@@ -441,11 +357,7 @@ public class DnsNameResolverTest {
     assertAnswerMatches(answer1, 81, resultCaptor.getValue());
     assertEquals(0, fakeClock.numPendingTasks());
 
-    long defaultTtl =
-        isAndroid
-            ? DnsNameResolver.DEFAULT_ANDROID_NETWORK_CACHE_TTL_SECONDS
-            : DnsNameResolver.DEFAULT_NETWORK_CACHE_TTL_SECONDS;
-    fakeTicker.advance(defaultTtl, TimeUnit.SECONDS);
+    fakeTicker.advance(DnsNameResolver.DEFAULT_NETWORK_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
     resolver.refresh();
     assertEquals(1, fakeExecutor.runDueTasks());
     verifyNoMoreInteractions(mockListener);
