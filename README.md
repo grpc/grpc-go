@@ -46,7 +46,8 @@ Please update proto package, gRPC package and rebuild the proto files:
 
 #### How to turn on logging
 
-The default logger is controlled by environment variables. Turn everything on by setting:
+The default logger is controlled by the environment variables. Turn everything
+on by setting:
 
 ```
 GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info
@@ -57,8 +58,10 @@ GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info
 This error means the connection the RPC is using was closed, and there are many
 possible reasons, including:
  1. mis-configured transport credentials, connection failed on handshaking
- 1. bytes disrupted on the connection, possibly by a proxy in between
+ 1. bytes disrupted, possibly by a proxy in between
+ 1. server shutdown
 
 It can be tricky to debug this because the error happens on the client side but
 the root cause of the connection being closed is on the server side. Turn on
-logging on __both client and server__, and see if there's any transport errors.
+logging on __both client and server__, and see if there are any transport
+errors.
