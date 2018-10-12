@@ -184,6 +184,7 @@ public final class ProtocolNegotiators {
       return pipeline.get(SslHandler.class);
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     private void fail(ChannelHandlerContext ctx, Throwable exception) {
       logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
       ctx.close();
@@ -525,6 +526,7 @@ public final class ProtocolNegotiators {
      * will fail immediately.
      */
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
         throws Exception {
       /**
@@ -582,6 +584,7 @@ public final class ProtocolNegotiators {
     /**
      * Propagate failures to all buffered writes.
      */
+    @SuppressWarnings("FutureReturnValueIgnored")
     protected final void fail(ChannelHandlerContext ctx, Throwable cause) {
       if (failCause == null) {
         failCause = cause;
@@ -595,13 +598,12 @@ public final class ProtocolNegotiators {
         bufferedWrites = null;
       }
 
-      /**
-       * In case something goes wrong ensure that the channel gets closed as the
-       * NettyClientTransport relies on the channel's close future to get completed.
-       */
+      // In case something goes wrong ensure that the channel gets closed as the
+      // NettyClientTransport relies on the channel's close future to get completed.
       ctx.close();
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     protected final void writeBufferedAndRemove(ChannelHandlerContext ctx) {
       if (!ctx.channel().isActive() || writing) {
         return;
@@ -751,6 +753,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
       // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
       // which causes the upgrade headers to be added
