@@ -26,3 +26,14 @@ var (
 	// WithResolverBuilder is exported by clientconn.go
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 )
+
+const (
+	// CredsBundleModeFallback switches GoogleDefaultCreds to fallback mode.
+	CredsBundleModeFallback = "fallback"
+	// CredsBundleModeBalancer switches GoogleDefaultCreds to grpclb balancer
+	// mode.
+	CredsBundleModeBalancer = "balancer"
+	// CredsBundleModeBackendFromBalancer switches GoogleDefaultCreds to mode
+	// that supports backend returned by grpclb balancer.
+	CredsBundleModeBackendFromBalancer = "backend-from-balancer"
+)

@@ -1,8 +1,6 @@
-// +build go1.6, !go1.8
-
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +16,24 @@
  *
  */
 
-package dns
+package binarylog
 
 import (
-	"net"
-
-	"golang.org/x/net/context"
+	"io"
 )
 
-var (
-	lookupHost = func(ctx context.Context, host string) ([]string, error) { return net.LookupHost(host) }
-	lookupSRV  = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
-		return net.LookupSRV(service, proto, name)
+// MethodLogger is the sub-logger for each method.
+type MethodLogger struct {
+	headerMaxLen, messageMaxLen uint64
+
+	sink io.Writer // TODO(blog): make this plugable.
+}
+
+func newMethodLogger(h, m uint64) *MethodLogger {
+	return &MethodLogger{
+		headerMaxLen:  h,
+		messageMaxLen: m,
+
+		sink: nil, // TODO(blog): make it plugable.
 	}
-	lookupTXT = func(ctx context.Context, name string) ([]string, error) { return net.LookupTXT(name) }
-)
+}

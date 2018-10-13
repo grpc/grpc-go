@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 )
@@ -76,6 +77,30 @@ func (t *testClientConn) getSc() (string, int) {
 	t.m2.Lock()
 	defer t.m2.Unlock()
 	return t.sc, t.s
+}
+
+type testResolver struct {
+}
+
+func (*testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return hostLookup(host)
+}
+
+func (*testResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+	return srvLookup(service, proto, name)
+}
+
+func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
+	return txtLookup(host)
+}
+
+func replaceNetFunc() func() {
+	oldResolver := defaultResolver
+	defaultResolver = &testResolver{}
+
+	return func() {
+		defaultResolver = oldResolver
+	}
 }
 
 var hostLookupTbl = struct {

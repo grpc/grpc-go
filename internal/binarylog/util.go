@@ -1,5 +1,3 @@
-// +build go1.8
-
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -18,10 +16,26 @@
  *
  */
 
-package dns
+package binarylog
 
 import (
-	"fmt"
+	"errors"
+	"strings"
 )
 
-var errForInvalidTarget = fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")
+// parseMethodName splits service and method from the input. It expects format
+// "/service/method".
+//
+// TODO: move to internal/grpcutil.
+func parseMethodName(methodName string) (service, method string, _ error) {
+	if !strings.HasPrefix(methodName, "/") {
+		return "", "", errors.New("invalid method name: should start with /")
+	}
+	methodName = methodName[1:]
+
+	pos := strings.LastIndex(methodName, "/")
+	if pos < 0 {
+		return "", "", errors.New("invalid method name: suffix /method is missing")
+	}
+	return methodName[:pos], methodName[pos+1:], nil
+}
