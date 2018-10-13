@@ -27,6 +27,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Iterables;
@@ -34,6 +35,8 @@ import com.google.common.net.InetAddresses;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
+import io.grpc.Status;
+import io.grpc.Status.Code;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
 import io.grpc.internal.DnsNameResolver.ResolutionResults;
 import io.grpc.internal.DnsNameResolver.ResourceResolver;
@@ -201,6 +204,27 @@ public class DnsNameResolverTest {
     resolver.shutdown();
 
     verify(mockResolver, times(2)).resolveAddress(Matchers.anyString());
+  }
+
+  @Test
+  public void resolveAll_failsOnEmptyResult() throws Exception {
+    String hostname = "dns:///addr.fake:1234";
+    DnsNameResolver nrf =
+        new DnsNameResolverProvider().newNameResolver(new URI(hostname), Attributes.EMPTY);
+    nrf.setAddressResolver(new AddressResolver() {
+      @Override
+      public List<InetAddress> resolveAddress(String host) throws Exception {
+        return Collections.emptyList();
+      }
+    });
+
+    new DnsNameResolver.Resolve(nrf).resolveInternal(mockListener);
+
+    ArgumentCaptor<Status> ac = ArgumentCaptor.forClass(Status.class);
+    verify(mockListener).onError(ac.capture());
+    verifyNoMoreInteractions(mockListener);
+    assertThat(ac.getValue().getCode()).isEqualTo(Code.UNAVAILABLE);
+    assertThat(ac.getValue().getDescription()).contains("No DNS backend or balancer addresses");
   }
 
   @Test

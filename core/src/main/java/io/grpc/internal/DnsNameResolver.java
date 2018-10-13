@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import io.grpc.Attributes;
@@ -69,7 +70,7 @@ final class DnsNameResolver extends NameResolver {
   static final String SERVICE_CONFIG_PREFIX = "_grpc_config=";
   private static final Set<String> SERVICE_CONFIG_CHOICE_KEYS =
       Collections.unmodifiableSet(
-          new HashSet<String>(
+          new HashSet<>(
               Arrays.asList(
                   SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY,
                   SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY,
@@ -95,7 +96,6 @@ final class DnsNameResolver extends NameResolver {
   @VisibleForTesting
   static boolean enableTxt = Boolean.parseBoolean(JNDI_TXT_PROPERTY);
 
-
   private static final ResourceResolverFactory resourceResolverFactory =
       getResourceResolverFactory(DnsNameResolver.class.getClassLoader());
 
@@ -108,8 +108,7 @@ final class DnsNameResolver extends NameResolver {
   private final Random random = new Random();
 
   private volatile AddressResolver addressResolver = JdkAddressResolver.INSTANCE;
-  private final AtomicReference<ResourceResolver> resourceResolver =
-      new AtomicReference<ResourceResolver>();
+  private final AtomicReference<ResourceResolver> resourceResolver = new AtomicReference<>();
 
   private final String authority;
   private final String host;
@@ -123,6 +122,8 @@ final class DnsNameResolver extends NameResolver {
   private boolean resolving;
   @GuardedBy("this")
   private Listener listener;
+
+  private final Runnable resolveRunnable = new Resolve(this);
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
       Resource<ExecutorService> executorResource,
@@ -170,95 +171,129 @@ final class DnsNameResolver extends NameResolver {
     resolve();
   }
 
-  private final Runnable resolutionRunnable = new Runnable() {
-      @Override
-      public void run() {
-        Listener savedListener;
-        synchronized (DnsNameResolver.this) {
-          if (shutdown) {
-            return;
-          }
-          savedListener = listener;
-          resolving = true;
+  @VisibleForTesting
+  static final class Resolve implements Runnable {
+
+    private final DnsNameResolver resolver;
+
+    Resolve(DnsNameResolver resolver) {
+      this.resolver = resolver;
+    }
+
+    @Override
+    public void run() {
+      if (logger.isLoggable(Level.FINER)) {
+        logger.finer("Attempting DNS resolution of " + resolver.host);
+      }
+      Listener savedListener;
+      synchronized (resolver) {
+        if (resolver.shutdown) {
+          return;
         }
-        try {
-          InetSocketAddress destination = InetSocketAddress.createUnresolved(host, port);
-          ProxyParameters proxy;
-          try {
-            proxy = proxyDetector.proxyFor(destination);
-          } catch (IOException e) {
-            savedListener.onError(
-                Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
-            return;
-          }
-          if (proxy != null) {
-            EquivalentAddressGroup server =
-                new EquivalentAddressGroup(
-                    new ProxySocketAddress(destination, proxy));
-            savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
-            return;
-          }
-
-          ResolutionResults resolutionResults;
-          try {
-            ResourceResolver resourceResolver = null;
-            if (enableJndi) {
-              resourceResolver = getResourceResolver();
-            }
-            resolutionResults =
-                resolveAll(addressResolver, resourceResolver, enableSrv, enableTxt, host);
-          } catch (Exception e) {
-            savedListener.onError(
-                Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
-            return;
-          }
-          // Each address forms an EAG
-          List<EquivalentAddressGroup> servers = new ArrayList<>();
-          for (InetAddress inetAddr : resolutionResults.addresses) {
-            servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
-          }
-          servers.addAll(resolutionResults.balancerAddresses);
-
-          Attributes.Builder attrs = Attributes.newBuilder();
-          if (!resolutionResults.txtRecords.isEmpty()) {
-            Map<String, Object> serviceConfig = null;
-            try {
-              for (Map<String, Object> possibleConfig :
-                  parseTxtResults(resolutionResults.txtRecords)) {
-                try {
-                  serviceConfig =
-                      maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
-                } catch (RuntimeException e) {
-                  logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
-                }
-                if (serviceConfig != null) {
-                  break;
-                }
-              }
-            } catch (RuntimeException e) {
-              logger.log(Level.WARNING, "Can't parse service Configs", e);
-            }
-            if (serviceConfig != null) {
-              attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig);
-            }
-          } else {
-            logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
-          }
-          savedListener.onAddresses(servers, attrs.build());
-        } finally {
-          synchronized (DnsNameResolver.this) {
-            resolving = false;
-          }
+        savedListener = resolver.listener;
+        resolver.resolving = true;
+      }
+      try {
+        resolveInternal(savedListener);
+      } finally {
+        synchronized (resolver) {
+          resolver.resolving = false;
         }
       }
-    };
+    }
+
+    @VisibleForTesting
+    void resolveInternal(Listener savedListener) {
+      InetSocketAddress destination =
+          InetSocketAddress.createUnresolved(resolver.host, resolver.port);
+      ProxyParameters proxy;
+      try {
+        proxy = resolver.proxyDetector.proxyFor(destination);
+      } catch (IOException e) {
+        savedListener.onError(
+            Status.UNAVAILABLE.withDescription("Unable to resolve host " + resolver.host)
+                .withCause(e));
+        return;
+      }
+      if (proxy != null) {
+        if (logger.isLoggable(Level.FINER)) {
+          logger.finer("Using proxy " + proxy.proxyAddress + " for " + resolver.host);
+        }
+        EquivalentAddressGroup server =
+            new EquivalentAddressGroup(
+                new ProxySocketAddress(destination, proxy));
+        savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
+        return;
+      }
+
+      ResolutionResults resolutionResults;
+      try {
+        ResourceResolver resourceResolver = null;
+        if (enableJndi) {
+          resourceResolver = resolver.getResourceResolver();
+        }
+        resolutionResults = resolveAll(
+            resolver.addressResolver,
+            resourceResolver,
+            enableSrv,
+            enableTxt,
+            resolver.host);
+        if (logger.isLoggable(Level.FINER)) {
+          logger.finer("Found DNS results " + resolutionResults + " for " + resolver.host);
+        }
+      } catch (Exception e) {
+        savedListener.onError(
+            Status.UNAVAILABLE.withDescription("Unable to resolve host " + resolver.host)
+                .withCause(e));
+        return;
+      }
+      // Each address forms an EAG
+      List<EquivalentAddressGroup> servers = new ArrayList<>();
+      for (InetAddress inetAddr : resolutionResults.addresses) {
+        servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, resolver.port)));
+      }
+      servers.addAll(resolutionResults.balancerAddresses);
+      if (servers.isEmpty()) {
+        savedListener.onError(Status.UNAVAILABLE.withDescription(
+            "No DNS backend or balancer addresses found for " + resolver.host));
+        return;
+      }
+
+      Attributes.Builder attrs = Attributes.newBuilder();
+      if (!resolutionResults.txtRecords.isEmpty()) {
+        Map<String, Object> serviceConfig = null;
+        try {
+          for (Map<String, Object> possibleConfig :
+              parseTxtResults(resolutionResults.txtRecords)) {
+            try {
+              serviceConfig =
+                  maybeChooseServiceConfig(possibleConfig, resolver.random, getLocalHostname());
+            } catch (RuntimeException e) {
+              logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
+            }
+            if (serviceConfig != null) {
+              break;
+            }
+          }
+        } catch (RuntimeException e) {
+          logger.log(Level.WARNING, "Can't parse service Configs", e);
+        }
+        if (serviceConfig != null) {
+          attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig);
+        }
+      } else {
+        logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{resolver.host});
+      }
+      savedListener.onAddresses(servers, attrs.build());
+    }
+  }
 
   @GuardedBy("this")
   private void resolve() {
     if (resolving || shutdown) {
       return;
     }
-    executor.execute(resolutionRunnable);
+    executor.execute(resolveRunnable);
   }
 
   @Override
@@ -468,6 +503,15 @@ final class DnsNameResolver extends NameResolver {
       this.txtRecords = Collections.unmodifiableList(checkNotNull(txtRecords, "txtRecords"));
       this.balancerAddresses =
           Collections.unmodifiableList(checkNotNull(balancerAddresses, "balancerAddresses"));
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("addresses", addresses)
+          .add("txtRecords", txtRecords)
+          .add("balancerAddresses", balancerAddresses)
+          .toString();
     }
   }
 
