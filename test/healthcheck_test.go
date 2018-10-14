@@ -19,25 +19,22 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/internal/leakcheck"
-
-	"google.golang.org/grpc/resolver"
-
-	"google.golang.org/grpc/resolver/manual"
-
-	"google.golang.org/grpc/connectivity"
-
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 )
 
@@ -50,39 +47,42 @@ func replaceHealthCheckFunc(f interface{}) func() {
 	}
 }
 
-func testHealthCheckFunc(newStream func() (grpc.ClientStream, error), update func(bool, error), service string) {
-	go func() {
-		for {
-			s, err := newStream()
-			if err != nil {
-				fmt.Println("err 54", err)
-				return
-			}
-			if err = s.SendMsg(&healthpb.HealthCheckRequest{
-				Service: service,
-			}); err != nil {
-				fmt.Println("err 60")
-				return
-			}
-			s.CloseSend()
-			for {
-				resp := new(healthpb.HealthCheckResponse)
-				if err = s.RecvMsg(resp); err != nil {
-					fmt.Println("err 65", err)
-					break
-				}
-				switch resp.Status {
-				case healthpb.HealthCheckResponse_SERVING:
-					fmt.Println("serving!")
-					update(true, nil)
-				case healthpb.HealthCheckResponse_SERVICE_UNKNOWN, healthpb.HealthCheckResponse_UNKNOWN, healthpb.HealthCheckResponse_NOT_SERVING:
-					fmt.Println("not serving")
-					update(false, nil)
-				}
-			}
-			time.Sleep(100 * time.Millisecond)
+func testHealthCheckFunc(ctx context.Context, newStream func() (grpc.ClientStream, error), update func(bool), service string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.New("exit")
+		default:
 		}
-	}()
+		s, err := newStream()
+		if err != nil {
+			fmt.Println("err 54", err)
+			continue
+		}
+		if err = s.SendMsg(&healthpb.HealthCheckRequest{
+			Service: service,
+		}); err != nil {
+			fmt.Println("err 60")
+			continue
+		}
+		s.CloseSend()
+		for {
+			resp := new(healthpb.HealthCheckResponse)
+			if err = s.RecvMsg(resp); err != nil {
+				fmt.Println("err 65", err)
+				break
+			}
+			switch resp.Status {
+			case healthpb.HealthCheckResponse_SERVING:
+				fmt.Println("serving!")
+				update(true)
+			case healthpb.HealthCheckResponse_SERVICE_UNKNOWN, healthpb.HealthCheckResponse_UNKNOWN, healthpb.HealthCheckResponse_NOT_SERVING:
+				fmt.Println("not serving")
+				update(false)
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func newTestHealthServer() *testHealthServer {

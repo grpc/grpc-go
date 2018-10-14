@@ -850,6 +850,7 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
+// newClientStream cannot take ac.mu lock inside.
 func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, t transport.ClientTransport, opts ...CallOption) (_ ClientStream, err error) {
 	if t == nil {
 		// TODO: return RPC error here?

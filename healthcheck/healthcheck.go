@@ -27,10 +27,10 @@ import (
 )
 
 func init() {
-	internal.HealthCheckFunc = NewClientHealthCheck
+	internal.HealthCheckFunc = newClientHealthCheck
 }
 
-func NewClientHealthCheck(newStream func() (grpc.ClientStream, error), update func(bool, error), service string) {
+func newClientHealthCheck(newStream func() (grpc.ClientStream, error), update func(bool, error), service string) {
 	for {
 		cs, err := newStream()
 		if err != nil {

@@ -889,6 +889,10 @@ type addrConn struct {
 	acbw   balancer.SubConn
 	scopts balancer.NewSubConnOptions
 
+	// transport is set when there's a viable transport(note: ac state may not be READY as LB channel
+	// health checking may require server to report healthy to set ac to READY), and is reset
+	// to nil when the current transport should not longer be used to create a stream(e.g. after GoAway
+	// is received, transport is closed, ac has been torn down).
 	transport transport.ClientTransport // The current transport.
 
 	mu      sync.Mutex
@@ -1006,6 +1010,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.mu.Unlock()
 			return
 		}
+
+		// TODO(yuxuanli): is this still necessary to set ac.transport to nil?
 		ac.transport = nil
 
 		backoffIdx := ac.backoffIdx
@@ -1078,6 +1084,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		goAwayCancel()
 		ac.mu.Lock()
 		ac.adjustParams(r)
+		// make sure no RPC picks this transport after goaway having been received.
+		ac.transport = nil
 		ac.mu.Unlock()
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
@@ -1094,13 +1102,14 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		close(onCloseCalled)
 		prefaceTimer.Stop()
 
+		ac.mu.Lock()
+		ac.transport = nil
+		ac.mu.Unlock()
+
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
 			return
 		case <-allowedToReset: // We're in the clear to reset.
-			ac.mu.Lock()
-			ac.transport = nil
-			ac.mu.Unlock()
 			oneReset.Do(func() { ac.resetTransport(false) })
 		}
 	}
@@ -1161,7 +1170,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			}()
 		}
 	}
-
 	if err != nil {
 		// newTr is either nil, or closed.
 		cancel()
@@ -1170,6 +1178,9 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		if ac.state == connectivity.Shutdown {
 			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
+
+			// TODO: if ac has been shutdown, there's no more reconnecting, a fix is needed for the comments
+			// below.
 
 			// We don't want to reset during this close because we prefer to kick out of this function and let the loop
 			// in resetTransport take care of reconnecting.
@@ -1189,6 +1200,11 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return err
 	}
 
+	// Now there is a viable transport to be use, so set ac.transport to be the new viable transport.
+	ac.mu.Lock()
+	ac.transport = newTr
+	ac.mu.Unlock()
+
 	healthCheckConfig := ac.cc.getHealthCheckConfig()
 	// LB channel health checking is only enabled when the internal.HealthCheckFunc is set, and a
 	// service config with non-empty healthCheckConfig field is provided, and the current load balancer
@@ -1196,100 +1212,45 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
 		//set up the health check stream
 		newStream := func() (ClientStream, error) {
-			select {
-			case <-hcCtx.Done():
-				return nil, status.Error(codes.Canceled, "bla")
-			default:
-				return ac.newClientStream(hcCtx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
+			ac.mu.Lock()
+			defer ac.mu.Unlock()
+			if ac.transport != newTr {
+				return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 			}
+			return ac.newClientStream(hcCtx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 		}
 		firstReady := true
 		updateState := func(ok bool) {
-			select {
-			case <-hcCtx.Done():
+			ac.mu.Lock()
+			defer ac.mu.Unlock()
+			if ac.transport != newTr {
 				return
-			default:
 			}
 			if ok {
 				if firstReady {
 					firstReady = false
-
-					ac.mu.Lock()
-
-					if ac.state == connectivity.Shutdown {
-						ac.mu.Unlock()
-
-						// We don't want to reset during this close because we prefer to kick out of this function and let the loop
-						// in resetTransport take care of reconnecting.
-						close(skipReset)
-
-						newTr.Close()
-						return
-					}
-
-					ac.printf("ready")
-					ac.updateConnectivityState(connectivity.Ready)
-					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-					ac.transport = newTr
 					ac.curAddr = addr
-
-					ac.mu.Unlock()
-
-					// Ok, _now_ we will finally let the transport reset if it encounters a closable error. Without this, the reader
-					// goroutine failing races with all the code in this method that sets the connection to "ready".
 					close(allowedToReset)
-				} else {
-					ac.mu.Lock()
-
-					if ac.state == connectivity.Shutdown {
-						ac.mu.Unlock()
-						close(skipReset)
-						newTr.Close()
-						return
-					}
-					if ac.state == connectivity.TransientFailure {
-						select {
-						case <-onCloseCalled:
-							ac.mu.Unlock()
-							return
-						default:
-						}
-					}
-					ac.updateConnectivityState(connectivity.Ready)
-					ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-					ac.mu.Unlock()
 				}
+				ac.printf("ready")
+				ac.updateConnectivityState(connectivity.Ready)
+				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 			} else {
-				// TODO: do we want to check whether the channel is already in transient failure state?
-				ac.mu.Lock()
-				if ac.state == connectivity.Shutdown {
-					ac.mu.Unlock()
-					close(skipReset)
-					newTr.Close()
-					return
-				}
-				if ac.state == connectivity.TransientFailure {
-					select {
-					case <-onCloseCalled:
-						ac.mu.Unlock()
-						return
-					default:
-					}
-				}
 				ac.updateConnectivityState(connectivity.TransientFailure)
 				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-				ac.mu.Unlock()
 			}
-			ac.mu.Unlock()
 		}
 
 		go func() {
 			err := internal.HealthCheckFunc.(func(context.Context, func() (ClientStream, error), func(bool), string) error)(hcCtx, newStream, updateState, healthCheckConfig.ServiceName)
 			if err != nil {
-				//TODO: record channel trace here
+				channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+					Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
+					Severity: channelz.CtINFO,
+				})
 			}
 			// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
-			// allowedToReset now to unblock the onGoAway or onClose callback.
+			// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				ac.mu.Unlock()
@@ -1309,34 +1270,30 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		}()
 
 		return nil
-	} else {
+	}
 
-		ac.mu.Lock()
+	ac.mu.Lock()
 
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
-
-			// We don't want to reset during this close because we prefer to kick out of this function and let the loop
-			// in resetTransport take care of reconnecting.
-			close(skipReset)
-
-			newTr.Close()
-			return errConnClosing
-		}
-
-		ac.printf("ready")
-		ac.updateConnectivityState(connectivity.Ready)
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-		ac.transport = newTr
-		ac.curAddr = addr
-
+	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 
-		// Ok, _now_ we will finally let the transport reset if it encounters a closable error. Without this, the reader
-		// goroutine failing races with all the code in this method that sets the connection to "ready".
-		close(allowedToReset)
-		return nil
+		// We don't want to reset during this close because we prefer to kick out of this function and let the loop
+		// in resetTransport take care of reconnecting.
+		close(skipReset)
+		return errConnClosing
 	}
+
+	ac.printf("ready")
+	ac.updateConnectivityState(connectivity.Ready)
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+	ac.curAddr = addr
+
+	ac.mu.Unlock()
+
+	// Ok, _now_ we will finally let the transport reset if it encounters a closable error. Without this, the reader
+	// goroutine failing races with all the code in this method that sets the connection to "ready".
+	close(allowedToReset)
+	return nil
 }
 
 // nextAddr increments the addrIdx if there are more addresses to try. If
@@ -1426,6 +1383,8 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Unlock()
 		return
 	}
+	curTr := ac.transport
+	ac.transport = nil
 	// We have to set the state to Shutdown before anything else to prevent races
 	// between setting the state and logic that waits on context cancelation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown)
@@ -1433,14 +1392,14 @@ func (ac *addrConn) tearDown(err error) {
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.curAddr = resolver.Address{}
-	if err == errConnDrain && ac.transport != nil {
+	if err == errConnDrain && curTr != nil {
 		// GracefulClose(...) may be executed multiple times when
 		// i) receiving multiple GoAway frames from the server; or
 		// ii) there are concurrent name resolver/Balancer triggered
 		// address removal and GoAway.
 		// We have to unlock and re-lock here because GracefulClose => Close => onClose, which requires locking ac.mu.
 		ac.mu.Unlock()
-		ac.transport.GracefulClose()
+		curTr.GracefulClose()
 		ac.mu.Lock()
 	}
 	if ac.events != nil {
