@@ -31,46 +31,44 @@ func init() {
 }
 
 func NewClientHealthCheck(newStream func() (grpc.ClientStream, error), update func(bool, error), service string) {
-	go func() {
+	for {
+		cs, err := newStream()
+		if err != nil {
+			//TODO: check ac current state? ctx cancelled?
+			continue
+		}
+		req := &healthpb.HealthCheckRequest{
+			Service: service,
+		}
+		if err := cs.SendMsg(req); err != nil {
+			//TODO: check ac current state? ctx cancelled?
+			if status.Code(err) == codes.Unimplemented {
+				update(true, err)
+				return
+			}
+			continue
+		}
+		if err := cs.CloseSend(); err != nil {
+			//TODO: check ac current state? ctx cancelled?
+			continue
+		}
 		for {
-			cs, err := newStream()
+			resp := new(healthpb.HealthCheckResponse)
+			err := cs.RecvMsg(resp)
 			if err != nil {
-				//TODO: check ac current state? ctx cancelled?
-				continue
+				//transition to transient failure
+				break
 			}
-			req := &healthpb.HealthCheckRequest{
-				Service: service,
-			}
-			if err := cs.SendMsg(req); err != nil {
-				//TODO: check ac current state? ctx cancelled?
-				if status.Code(err) == codes.Unimplemented {
-					update(true, err)
-					return
-				}
-				continue
-			}
-			if err := cs.CloseSend(); err != nil {
-				//TODO: check ac current state? ctx cancelled?
-				continue
-			}
-			for {
-				resp := new(healthpb.HealthCheckResponse)
-				err := cs.RecvMsg(resp)
-				if err != nil {
-					//transition to transient failure
-					break
-				}
-				switch resp.GetStatus() {
-				case healthpb.HealthCheckResponse_UNKNOWN:
-					update(false, nil)
-				case healthpb.HealthCheckResponse_SERVING:
-					update(true, nil)
-				case healthpb.HealthCheckResponse_NOT_SERVING:
-					update(false, nil)
-				case healthpb.HealthCheckResponse_SERVICE_UNKNOWN:
-					update(false, nil)
-				}
+			switch resp.GetStatus() {
+			case healthpb.HealthCheckResponse_UNKNOWN:
+				update(false, nil)
+			case healthpb.HealthCheckResponse_SERVING:
+				update(true, nil)
+			case healthpb.HealthCheckResponse_NOT_SERVING:
+				update(false, nil)
+			case healthpb.HealthCheckResponse_SERVICE_UNKNOWN:
+				update(false, nil)
 			}
 		}
-	}()
+	}
 }
