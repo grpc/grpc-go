@@ -42,6 +42,7 @@ import io.grpc.internal.DnsNameResolver.ResolutionResults;
 import io.grpc.internal.DnsNameResolver.ResourceResolver;
 import io.grpc.internal.DnsNameResolver.ResourceResolverFactory;
 import io.grpc.internal.SharedResourceHolder.Resource;
+import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -245,6 +246,23 @@ public class DnsNameResolverTest {
     assertThat(res.balancerAddresses).isEmpty();
     assertThat(res.txtRecords).isEmpty();
     verify(mockResolver).resolveAddress(hostname);
+  }
+
+  @Test
+  public void resolveAll_nullResourceResolver_addressFailure() throws Exception {
+    final String hostname = "addr.fake";
+
+    AddressResolver mockResolver = mock(AddressResolver.class);
+    when(mockResolver.resolveAddress(Matchers.anyString()))
+        .thenThrow(new IOException("no addr"));
+    ResourceResolver resourceResolver = null;
+    boolean resovleSrv = true;
+    boolean resolveTxt = true;
+
+    thrown.expect(RuntimeException.class);
+    thrown.expectMessage("no addr");
+
+    DnsNameResolver.resolveAll(mockResolver, resourceResolver, resovleSrv, resolveTxt, hostname);
   }
 
   @Test

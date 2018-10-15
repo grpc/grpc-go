@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.base.Verify;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
@@ -355,7 +356,9 @@ final class DnsNameResolver extends NameResolver {
       }
     }
     try {
-      if (addressesException != null && balancerAddressesException != null) {
+      if (addressesException != null
+          && (balancerAddressesException != null || balancerAddresses.isEmpty())) {
+        Throwables.throwIfUnchecked(addressesException);
         throw new RuntimeException(addressesException);
       }
     } finally {
