@@ -2432,90 +2432,200 @@ func testHealthCheckOff(t *testing.T, e env) {
 	}
 }
 
-func TestHealthWatch(t *testing.T) {
+func TestHealthWatchMultipleClients(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		testHealthWatch(t, e)
+		testHealthWatchMultipleClients(t, e)
 	}
 }
 
-func testHealthWatch(t *testing.T, e env) {
+func testHealthWatchMultipleClients(t *testing.T, e env) {
 	te := newTest(t, e)
 	hs := health.NewServer()
 
-	service0 := ""
 	service1 := "grpc.health.v1.Health1"
-	service2 := "grpc.health.v1.Health2"
 	te.healthServer = hs
-
-	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_SERVING)
 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	ctx10, cancel10 := context.WithCancel(context.Background())
-	defer cancel10()
-	ctx11, cancel11 := context.WithCancel(context.Background())
-	defer cancel11()
-	ctx12, cancel12 := context.WithCancel(context.Background())
-	defer cancel12()
-	ctx21, cancel21 := context.WithCancel(context.Background())
-	defer cancel21()
+	hc := healthgrpc.NewHealthClient(cc)
 
-	hc11 := healthgrpc.NewHealthClient(cc)
-	req0 := &healthpb.HealthCheckRequest{
-		Service: service0,
-	}
-	hc12 := healthgrpc.NewHealthClient(cc)
-	req1 := &healthpb.HealthCheckRequest{
+	req := &healthpb.HealthCheckRequest{
 		Service: service1,
 	}
+	ctx1, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx2, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	hc21 := healthgrpc.NewHealthClient(cc)
-	req2 := &healthpb.HealthCheckRequest{
-		Service: service2,
-	}
-
-	stream10, err := hc11.Watch(ctx10, req0)
+	stream1, err := hc.Watch(ctx1, req)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
-	healthWatchChecker(t, stream10, healthpb.HealthCheckResponse_SERVING)
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	stream11, err := hc11.Watch(ctx11, req1)
+	stream2, err := hc.Watch(ctx2, req)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
-	healthWatchChecker(t, stream11, healthpb.HealthCheckResponse_SERVING)
+	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	hs.SetServingStatus(service0, healthpb.HealthCheckResponse_NOT_SERVING)
-	healthWatchChecker(t, stream10, healthpb.HealthCheckResponse_NOT_SERVING)
-
-	stream21, err := hc21.Watch(ctx21, req2)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
-	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	hs.SetServingStatus(service2, healthpb.HealthCheckResponse_NOT_SERVING)
-	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_NOT_SERVING)
-
-	stream12, err := hc12.Watch(ctx12, req1)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-
-	healthWatchChecker(t, stream12, healthpb.HealthCheckResponse_SERVING)
-
-	hs.SetServingStatus(service2, healthpb.HealthCheckResponse_SERVING)
 	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_NOT_SERVING)
 
-	healthWatchChecker(t, stream11, healthpb.HealthCheckResponse_NOT_SERVING)
-	healthWatchChecker(t, stream12, healthpb.HealthCheckResponse_NOT_SERVING)
-	healthWatchChecker(t, stream21, healthpb.HealthCheckResponse_SERVING)
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSetServiceStatusBeforeStartingServer(t, e)
+	}
+}
+
+func testHealthWatchSetServiceStatusBeforeStartingServer(t *testing.T, e env) {
+	te := newTest(t, e)
+	hs := health.NewServer()
+	te.healthServer = hs
+
+	service := "grpc.health.v1.Health1"
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hc := healthgrpc.NewHealthClient(cc)
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchDefaultStatusChange(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchDefaultStatusChange(t, e)
+	}
+}
+
+func testHealthWatchDefaultStatusChange(t *testing.T, e env) {
+	te := newTest(t, e)
+	hs := health.NewServer()
+	te.healthServer = hs
+
+	service := "grpc.health.v1.Health1"
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hc := healthgrpc.NewHealthClient(cc)
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSetServiceStatusBeforeClientCallsWatch(t, e)
+	}
+}
+
+func testHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T, e env) {
+	te := newTest(t, e)
+	hs := health.NewServer()
+	te.healthServer = hs
+
+	service := "grpc.health.v1.Health1"
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hc := healthgrpc.NewHealthClient(cc)
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchOverallServerHealthChange(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchOverallServerHealthChange(t, e)
+	}
+}
+
+func testHealthWatchOverallServerHealthChange(t *testing.T, e env) {
+	te := newTest(t, e)
+	hs := health.NewServer()
+	te.healthServer = hs
+
+	service := ""
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hc := healthgrpc.NewHealthClient(cc)
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
 func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
