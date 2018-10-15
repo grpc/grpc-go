@@ -21,11 +21,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Attributes;
 import io.grpc.CallCredentials;
+import io.grpc.CallCredentials.RequestInfo;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
+import io.grpc.internal.GrpcAttributes;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -72,23 +74,38 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public ClientStream newStream(
-        MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
+        final MethodDescriptor<?, ?> method, Metadata headers, final CallOptions callOptions) {
       CallCredentials creds = callOptions.getCredentials();
       if (creds != null) {
+        final Attributes attrs = delegate.getAttributes();
         MetadataApplierImpl applier = new MetadataApplierImpl(
             delegate, method, headers, callOptions);
-        Attributes.Builder effectiveAttrsBuilder = Attributes.newBuilder()
-            .set(CallCredentials.ATTR_AUTHORITY, authority)
-            .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
-            .setAll(delegate.getAttributes());
-        if (callOptions.getAuthority() != null) {
-          effectiveAttrsBuilder.set(CallCredentials.ATTR_AUTHORITY, callOptions.getAuthority());
-        }
+        RequestInfo requestInfo = new RequestInfo() {
+            @Override
+            public MethodDescriptor<?, ?> getMethodDescriptor() {
+              return method;
+            }
+
+            @Override
+            public SecurityLevel getSecurityLevel() {
+              return firstNonNull(
+                  attrs.get(GrpcAttributes.ATTR_SECURITY_LEVEL), SecurityLevel.NONE);
+            }
+
+            @Override
+            public String getAuthority() {
+              return firstNonNull(callOptions.getAuthority(), authority);
+            }
+
+            @Override
+            public Attributes getTransportAttrs() {
+              return attrs;
+            }
+          };
         try {
-          creds.applyRequestMetadata(method, effectiveAttrsBuilder.build(),
-              firstNonNull(callOptions.getExecutor(), appExecutor), applier);
+          creds.applyRequestMetadata(
+              requestInfo, firstNonNull(callOptions.getExecutor(), appExecutor), applier);
         } catch (Throwable t) {
           applier.fail(Status.UNAUTHENTICATED
               .withDescription("Credentials should use fail() instead of throwing exceptions")
