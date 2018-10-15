@@ -18,11 +18,21 @@ package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import io.grpc.Attributes;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
+import io.grpc.internal.GrpcAttributes;
+import io.grpc.internal.JndiResourceResolverFactory.JndiRecordFetcher;
 import io.grpc.internal.JndiResourceResolverFactory.JndiResourceResolver;
-import io.grpc.internal.JndiResourceResolverFactory.JndiResourceResolver.SrvRecord;
+import io.grpc.internal.JndiResourceResolverFactory.RecordFetcher;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.Assume;
 import org.junit.Test;
@@ -50,15 +60,9 @@ public class JndiResourceResolverTest {
   public void jndiResolverWorks() throws Exception {
     Assume.assumeNoException(new JndiResourceResolverFactory().unavailabilityCause());
 
-    AddressResolver addressResolver = new AddressResolver() {
-      @Override
-      public List<InetAddress> resolveAddress(String host) throws Exception {
-        return null;
-      }
-    };
-    JndiResourceResolver resolver = new JndiResourceResolver();
+    RecordFetcher recordFetcher = new JndiRecordFetcher();
     try {
-      resolver.resolveSrv(addressResolver, "localhost");
+      recordFetcher.getAllRecords("SRV", "dns:///localhost");
     } catch (javax.naming.CommunicationException e) {
       Assume.assumeNoException(e);
     } catch (javax.naming.NameNotFoundException e) {
@@ -67,9 +71,45 @@ public class JndiResourceResolverTest {
   }
 
   @Test
-  public void parseSrvRecord() {
-    SrvRecord record = JndiResourceResolver.parseSrvRecord("0 0 1234 foo.bar.com");
-    assertThat(record.host).isEqualTo("foo.bar.com");
-    assertThat(record.port).isEqualTo(1234);
+  public void txtRecordLookup() throws Exception {
+    RecordFetcher recordFetcher = mock(RecordFetcher.class);
+    when(recordFetcher.getAllRecords("TXT", "dns:///service.example.com"))
+        .thenReturn(Arrays.asList("foo", "\"bar\""));
+
+    List<String> golden = Arrays.asList("foo", "bar");
+    JndiResourceResolver resolver = new JndiResourceResolver(recordFetcher);
+    assertThat(resolver.resolveTxt("service.example.com")).isEqualTo(golden);
+  }
+
+  @Test
+  public void srvRecordLookup() throws Exception {
+    AddressResolver addressResolver = mock(AddressResolver.class);
+    when(addressResolver.resolveAddress("foo.example.com."))
+        .thenReturn(Arrays.asList(InetAddress.getByName("127.1.2.3")));
+    when(addressResolver.resolveAddress("bar.example.com."))
+        .thenReturn(Arrays.asList(
+            InetAddress.getByName("127.3.2.1"), InetAddress.getByName("::1")));
+    when(addressResolver.resolveAddress("unknown.example.com."))
+        .thenThrow(new UnknownHostException("unknown.example.com."));
+    RecordFetcher recordFetcher = mock(RecordFetcher.class);
+    when(recordFetcher.getAllRecords("SRV", "dns:///service.example.com"))
+        .thenReturn(Arrays.asList(
+            "0 0 314 foo.example.com.", "0 0 42 bar.example.com.", "0 0 1 unknown.example.com."));
+
+    List<EquivalentAddressGroup> golden = Arrays.asList(
+        new EquivalentAddressGroup(
+            Arrays.<SocketAddress>asList(new InetSocketAddress("127.1.2.3", 314)),
+            Attributes.newBuilder()
+              .set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, "foo.example.com")
+              .build()),
+        new EquivalentAddressGroup(
+            Arrays.<SocketAddress>asList(
+                new InetSocketAddress("127.3.2.1", 42),
+                new InetSocketAddress("::1", 42)),
+            Attributes.newBuilder()
+              .set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, "bar.example.com")
+              .build()));
+    JndiResourceResolver resolver = new JndiResourceResolver(recordFetcher);
+    assertThat(resolver.resolveSrv(addressResolver, "service.example.com")).isEqualTo(golden);
   }
 }
