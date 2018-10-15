@@ -20,7 +20,7 @@
 // symbols to avoid circular dependencies.
 package internal
 
-import "golang.org/x/net/context"
+import "context"
 
 var (
 	// WithContextDialer is exported by clientconn.go
@@ -28,7 +28,7 @@ var (
 	// WithResolverBuilder is exported by clientconn.go
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
-	HealthCheckFunc func(context.Context, func() (interface{}, error), func(bool), string) error
+	HealthCheckFunc func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
 )
 
 const (
