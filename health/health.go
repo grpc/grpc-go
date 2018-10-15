@@ -105,15 +105,13 @@ func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthC
 	s.statusMap[service] = servingStatus
 	for _, update := range s.updates[service] {
 		// Clears previous updates, that are not sent to the client, from the channel.
+		// This can happen if the client is not reading and the server gets flow control limited.
 		select {
 		case <-update:
 		default:
 		}
 		// Puts the most recent update to the channel.
-		select {
-		case update <- servingStatus:
-		default:
-		}
+		update <- servingStatus
 	}
 	s.mu.Unlock()
 }
