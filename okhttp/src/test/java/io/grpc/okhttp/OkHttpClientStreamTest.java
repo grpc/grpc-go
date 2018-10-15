@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.io.BaseEncoding;
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -90,7 +91,8 @@ public class OkHttpClientStreamTest {
         "localhost",
         "userAgent",
         StatsTraceContext.NOOP,
-        transportTracer);
+        transportTracer,
+        CallOptions.DEFAULT);
   }
 
   @Test
@@ -149,7 +151,7 @@ public class OkHttpClientStreamTest {
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer);
+        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -164,7 +166,7 @@ public class OkHttpClientStreamTest {
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer);
+        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -192,7 +194,7 @@ public class OkHttpClientStreamTest {
         .build();
     stream = new OkHttpClientStream(getMethod, new Metadata(), frameWriter, transport,
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer);
+        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
 
     // GET streams send headers after halfClose is called.

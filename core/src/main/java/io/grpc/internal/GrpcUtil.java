@@ -249,6 +249,22 @@ public final class GrpcUtil {
   };
 
   /**
+   * RPCs created on the Channel returned by {@link io.grpc.LoadBalancer.Subchannel#asChannel}
+   * will have this option with value {@code true}.  They will be treated differently from
+   * the ones created by application.
+   */
+  public static final CallOptions.Key<Boolean> CALL_OPTIONS_RPC_OWNED_BY_BALANCER =
+      CallOptions.Key.create("io.grpc.internal.CALL_OPTIONS_RPC_OWNED_BY_BALANCER");
+
+  /**
+   * Returns true if an RPC with the given properties should be counted when calculating the
+   * in-use state of a transport.
+   */
+  public static boolean shouldBeCountedForInUse(CallOptions callOptions) {
+    return !(Boolean.TRUE.equals(callOptions.getOption(CALL_OPTIONS_RPC_OWNED_BY_BALANCER)));
+  }
+
+  /**
    * Returns a proxy detector appropriate for the current environment.
    */
   public static ProxyDetector getDefaultProxyDetector() {

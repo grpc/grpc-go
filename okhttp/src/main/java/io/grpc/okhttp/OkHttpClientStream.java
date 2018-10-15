@@ -22,6 +22,7 @@ import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 
 import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -73,12 +74,14 @@ class OkHttpClientStream extends AbstractClientStream {
       String authority,
       String userAgent,
       StatsTraceContext statsTraceCtx,
-      TransportTracer transportTracer) {
+      TransportTracer transportTracer,
+      CallOptions callOptions) {
     super(
         new OkHttpWritableBufferAllocator(),
         statsTraceCtx,
         transportTracer,
         headers,
+        callOptions,
         method.isSafe());
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.method = method;

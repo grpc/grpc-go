@@ -59,6 +59,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcAttributes;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.IoUtils;
 import io.grpc.internal.ManagedClientTransport;
@@ -610,6 +611,46 @@ public abstract class AbstractTransportTest {
     assertSame(shutdownReason, clientStreamTracer1.getStatus());
     // Assert no interactions
     assertNull(serverStreamTracer1.getServerCallInfo());
+  }
+
+  @Test
+  public void transportInUse_balancerRpcsNotCounted() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    startTransport(client, mockClientTransportListener);
+
+    // stream1 is created by balancer through Subchannel.asChannel(), which is marked by
+    // CALL_OPTIONS_RPC_OWNED_BY_BALANCER in CallOptions.  It won't be counted for in-use signal.
+    ClientStream stream1 = client.newStream(
+        methodDescriptor, new Metadata(),
+        callOptions.withOption(GrpcUtil.CALL_OPTIONS_RPC_OWNED_BY_BALANCER, Boolean.TRUE));
+    ClientStreamListenerBase clientStreamListener1 = new ClientStreamListenerBase();
+    stream1.start(clientStreamListener1);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    StreamCreation serverStreamCreation1
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    // stream2 is the normal RPC, and will be counted for in-use
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
+    ClientStreamListenerBase clientStreamListener2 = new ClientStreamListenerBase();
+    stream2.start(clientStreamListener2);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
+    StreamCreation serverStreamCreation2
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    stream2.halfClose();
+    verify(mockClientTransportListener, never()).transportInUse(false);
+    serverStreamCreation2.stream.close(Status.OK, new Metadata());
+    // As soon as stream2 is closed, even though stream1 is still open, the transport will report
+    // in-use == false.
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
+
+    stream1.halfClose();
+    serverStreamCreation1.stream.close(Status.OK, new Metadata());
+    // Verify that the callback has been called only once for true and false respectively
+    verify(mockClientTransportListener).transportInUse(true);
+    verify(mockClientTransportListener).transportInUse(false);
   }
 
   @Test

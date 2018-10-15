@@ -23,7 +23,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Aggregates the in-use state of a set of objects.
  */
 @NotThreadSafe
-abstract class InUseStateAggregator<T> {
+public abstract class InUseStateAggregator<T> {
 
   private final HashSet<T> inUseObjects = new HashSet<T>();
 
@@ -32,7 +32,7 @@ abstract class InUseStateAggregator<T> {
    *
    * <p>This may call into {@link #handleInUse} or {@link #handleNotInUse} when appropriate.
    */
-  final void updateObjectInUse(T object, boolean inUse) {
+  public final void updateObjectInUse(T object, boolean inUse) {
     int origSize = inUseObjects.size();
     if (inUse) {
       inUseObjects.add(object);
@@ -47,7 +47,7 @@ abstract class InUseStateAggregator<T> {
     }
   }
 
-  final boolean isInUse() {
+  public final boolean isInUse() {
     return !inUseObjects.isEmpty();
   }
 
@@ -55,10 +55,10 @@ abstract class InUseStateAggregator<T> {
    * Called when the aggregated in-use state has changed to true, which means at least one object is
    * in use.
    */
-  abstract void handleInUse();
+  protected abstract void handleInUse();
 
   /**
    * Called when the aggregated in-use state has changed to false, which means no object is in use.
    */
-  abstract void handleNotInUse();
+  protected abstract void handleNotInUse();
 }

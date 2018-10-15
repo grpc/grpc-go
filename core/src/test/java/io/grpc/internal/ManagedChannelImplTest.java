@@ -160,7 +160,7 @@ public class ManagedChannelImplTest {
   private final EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(socketAddress);
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
-  private final FakeClock oobExecutor = new FakeClock();
+  private final FakeClock balancerRpcExecutor = new FakeClock();
   private static final FakeClock.TaskFilter NAME_RESOLVER_REFRESH_TASK_FILTER =
       new FakeClock.TaskFilter() {
         @Override
@@ -203,7 +203,7 @@ public class ManagedChannelImplTest {
   @Mock
   private ObjectPool<Executor> executorPool;
   @Mock
-  private ObjectPool<Executor> oobExecutorPool;
+  private ObjectPool<Executor> balancerRpcExecutorPool;
   @Mock
   private CallCredentials creds;
   private ChannelBuilder channelBuilder;
@@ -224,7 +224,7 @@ public class ManagedChannelImplTest {
 
     channel = new ManagedChannelImpl(
         channelBuilder, mockTransportFactory, new FakeBackoffPolicyProvider(),
-        oobExecutorPool, timer.getStopwatchSupplier(), Arrays.asList(interceptors),
+        balancerRpcExecutorPool, timer.getStopwatchSupplier(), Arrays.asList(interceptors),
         fakeClockTimeProvider);
 
     if (requestConnection) {
@@ -257,7 +257,8 @@ public class ManagedChannelImplTest {
     when(mockTransportFactory.getScheduledExecutorService())
         .thenReturn(timer.getScheduledExecutorService());
     when(executorPool.getObject()).thenReturn(executor.getScheduledExecutorService());
-    when(oobExecutorPool.getObject()).thenReturn(oobExecutor.getScheduledExecutorService());
+    when(balancerRpcExecutorPool.getObject())
+        .thenReturn(balancerRpcExecutor.getScheduledExecutorService());
 
     channelBuilder = new ChannelBuilder()
         .nameResolverFactory(new FakeNameResolverFactory.Builder(expectedUri).build())
@@ -546,7 +547,7 @@ public class ManagedChannelImplTest {
     transportListener.transportTerminated();
     assertTrue(channel.isTerminated());
     verify(executorPool).returnObject(executor.getScheduledExecutorService());
-    verifyNoMoreInteractions(oobExecutorPool);
+    verifyNoMoreInteractions(balancerRpcExecutorPool);
 
     verify(mockTransportFactory)
         .newClientTransport(any(SocketAddress.class), any(ClientTransportOptions.class));
@@ -1171,7 +1172,7 @@ public class ManagedChannelImplTest {
 
     ManagedChannel oob1 = helper.createOobChannel(addressGroup, "oob1authority");
     ManagedChannel oob2 = helper.createOobChannel(addressGroup, "oob2authority");
-    verify(oobExecutorPool, times(2)).getObject();
+    verify(balancerRpcExecutorPool, times(2)).getObject();
 
     assertEquals("oob1authority", oob1.authority());
     assertEquals("oob2authority", oob2.authority());
@@ -1187,9 +1188,9 @@ public class ManagedChannelImplTest {
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
 
-    assertEquals(0, oobExecutor.numPendingTasks());
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
     transportInfo.listener.transportReady();
-    assertEquals(1, oobExecutor.runDueTasks());
+    assertEquals(1, balancerRpcExecutor.runDueTasks());
     verify(transportInfo.transport).newStream(same(method), same(headers),
         same(CallOptions.DEFAULT));
 
@@ -1211,9 +1212,9 @@ public class ManagedChannelImplTest {
 
     // This transport fails
     Status transportError = Status.UNAVAILABLE.withDescription("Connection refused");
-    assertEquals(0, oobExecutor.numPendingTasks());
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
     transportInfo.listener.transportShutdown(transportError);
-    assertTrue(oobExecutor.runDueTasks() > 0);
+    assertTrue(balancerRpcExecutor.runDueTasks() > 0);
 
     // Fail-fast RPC will fail, while wait-for-ready RPC will still be pending
     verify(mockCallListener2).onClose(same(transportError), any(Metadata.class));
@@ -1223,20 +1224,19 @@ public class ManagedChannelImplTest {
     assertFalse(oob1.isShutdown());
     assertFalse(oob2.isShutdown());
     oob1.shutdown();
-    verify(oobExecutorPool, never()).returnObject(anyObject());
     oob2.shutdownNow();
     assertTrue(oob1.isShutdown());
     assertTrue(oob2.isShutdown());
     assertTrue(oob2.isTerminated());
-    verify(oobExecutorPool).returnObject(oobExecutor.getScheduledExecutorService());
+    verify(balancerRpcExecutorPool).returnObject(balancerRpcExecutor.getScheduledExecutorService());
 
     // New RPCs will be rejected.
-    assertEquals(0, oobExecutor.numPendingTasks());
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
     ClientCall<String, Integer> call4 = oob1.newCall(method, CallOptions.DEFAULT);
     ClientCall<String, Integer> call5 = oob2.newCall(method, CallOptions.DEFAULT);
     call4.start(mockCallListener4, headers);
     call5.start(mockCallListener5, headers);
-    assertTrue(oobExecutor.runDueTasks() > 0);
+    assertTrue(balancerRpcExecutor.runDueTasks() > 0);
     verify(mockCallListener4).onClose(statusCaptor.capture(), any(Metadata.class));
     Status status4 = statusCaptor.getValue();
     assertEquals(Status.Code.UNAVAILABLE, status4.getCode());
@@ -1248,9 +1248,9 @@ public class ManagedChannelImplTest {
     verify(mockCallListener3, never()).onClose(any(Status.class), any(Metadata.class));
 
     // This will shutdownNow() the delayed transport, terminating the pending RPC
-    assertEquals(0, oobExecutor.numPendingTasks());
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
     oob1.shutdownNow();
-    assertTrue(oobExecutor.runDueTasks() > 0);
+    assertTrue(balancerRpcExecutor.runDueTasks() > 0);
     verify(mockCallListener3).onClose(any(Status.class), any(Metadata.class));
 
     // Shut down the channel, and it will not terminated because OOB channel has not.
@@ -1259,11 +1259,12 @@ public class ManagedChannelImplTest {
     // Delayed transport has already terminated.  Terminating the transport terminates the
     // subchannel, which in turn terimates the OOB channel, which terminates the channel.
     assertFalse(oob1.isTerminated());
-    verify(oobExecutorPool).returnObject(oobExecutor.getScheduledExecutorService());
+    verify(balancerRpcExecutorPool).returnObject(balancerRpcExecutor.getScheduledExecutorService());
     transportInfo.listener.transportTerminated();
     assertTrue(oob1.isTerminated());
     assertTrue(channel.isTerminated());
-    verify(oobExecutorPool, times(2)).returnObject(oobExecutor.getScheduledExecutorService());
+    verify(balancerRpcExecutorPool, times(2))
+        .returnObject(balancerRpcExecutor.getScheduledExecutorService());
   }
 
   @Test
@@ -1326,6 +1327,93 @@ public class ManagedChannelImplTest {
     // Therefore, channel is terminated without relying on LoadBalancer to shutdown oobchannels.
     verify(mockTransportFactory, never())
         .newClientTransport(any(SocketAddress.class), any(ClientTransportOptions.class));
+  }
+
+  @Test
+  public void subchannelChannel_normalUsage() {
+    createChannel();
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    verify(balancerRpcExecutorPool, never()).getObject();
+
+    Channel sChannel = subchannel.asChannel();
+    verify(balancerRpcExecutorPool).getObject();
+
+    Metadata headers = new Metadata();
+    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(5, TimeUnit.SECONDS);
+
+    // Subchannel must be READY when creating the RPC.
+    subchannel.requestConnection();
+    verify(mockTransportFactory)
+        .newClientTransport(any(SocketAddress.class), any(ClientTransportOptions.class));
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    transportListener.transportReady();
+
+    ClientCall<String, Integer> call = sChannel.newCall(method, callOptions);
+    call.start(mockCallListener, headers);
+    verify(mockTransport).newStream(same(method), same(headers), callOptionsCaptor.capture());
+
+    CallOptions capturedCallOption = callOptionsCaptor.getValue();
+    assertThat(capturedCallOption.getDeadline()).isSameAs(callOptions.getDeadline());
+    assertThat(capturedCallOption.getOption(GrpcUtil.CALL_OPTIONS_RPC_OWNED_BY_BALANCER)).isTrue();
+  }
+
+  @Test
+  public void subchannelChannel_failWhenNotReady() {
+    createChannel();
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    Channel sChannel = subchannel.asChannel();
+    Metadata headers = new Metadata();
+
+    subchannel.requestConnection();
+    verify(mockTransportFactory)
+        .newClientTransport(any(SocketAddress.class), any(ClientTransportOptions.class));
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
+
+    // Subchannel is still CONNECTING, but not READY yet
+    ClientCall<String, Integer> call = sChannel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, headers);
+    verify(mockTransport, never()).newStream(
+        any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
+
+    verifyZeroInteractions(mockCallListener);
+    assertEquals(1, balancerRpcExecutor.runDueTasks());
+    verify(mockCallListener).onClose(
+        same(SubchannelChannel.NOT_READY_ERROR), any(Metadata.class));
+  }
+
+  @Test
+  public void subchannelChannel_failWaitForReady() {
+    createChannel();
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    Channel sChannel = subchannel.asChannel();
+    Metadata headers = new Metadata();
+
+    // Subchannel must be READY when creating the RPC.
+    subchannel.requestConnection();
+    verify(mockTransportFactory)
+        .newClientTransport(any(SocketAddress.class), any(ClientTransportOptions.class));
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ManagedClientTransport.Listener transportListener = transportInfo.listener;
+    transportListener.transportReady();
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
+
+    // Wait-for-ready RPC is not allowed
+    ClientCall<String, Integer> call =
+        sChannel.newCall(method, CallOptions.DEFAULT.withWaitForReady());
+    call.start(mockCallListener, headers);
+    verify(mockTransport, never()).newStream(
+        any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
+
+    verifyZeroInteractions(mockCallListener);
+    assertEquals(1, balancerRpcExecutor.runDueTasks());
+    verify(mockCallListener).onClose(
+        same(SubchannelChannel.WAIT_FOR_READY_ERROR), any(Metadata.class));
   }
 
   @Test
@@ -1818,7 +1906,7 @@ public class ManagedChannelImplTest {
     // Channel is dead.  No more pending task to possibly revive it.
     assertEquals(0, timer.numPendingTasks());
     assertEquals(0, executor.numPendingTasks());
-    assertEquals(0, oobExecutor.numPendingTasks());
+    assertEquals(0, balancerRpcExecutor.numPendingTasks());
   }
 
   private void verifyCallListenerClosed(

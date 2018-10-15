@@ -42,6 +42,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.InUseStateAggregator;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ObjectPool;
@@ -93,6 +94,19 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   private final Attributes attributes = Attributes.newBuilder()
       .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
       .build();
+  @GuardedBy("this")
+  private final InUseStateAggregator<InProcessStream> inUseState =
+      new InUseStateAggregator<InProcessStream>() {
+        @Override
+        protected void handleInUse() {
+          clientTransportListener.transportInUse(true);
+        }
+
+        @Override
+        protected void handleNotInUse() {
+          clientTransportListener.transportInUse(false);
+        }
+      };
 
   public InProcessTransport(String name, String authority, String userAgent) {
     this.name = name;
@@ -270,6 +284,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   private class InProcessStream {
     private final InProcessClientStream clientStream;
     private final InProcessServerStream serverStream;
+    private final CallOptions callOptions;
     private final Metadata headers;
     private final MethodDescriptor<?, ?> method;
     private volatile String authority;
@@ -279,6 +294,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         String authority) {
       this.method = checkNotNull(method, "method");
       this.headers = checkNotNull(headers, "headers");
+      this.callOptions = checkNotNull(callOptions, "callOptions");
       this.authority = authority;
       this.clientStream = new InProcessClientStream(callOptions, headers);
       this.serverStream = new InProcessServerStream(method, headers);
@@ -288,8 +304,10 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     private void streamClosed() {
       synchronized (InProcessTransport.this) {
         boolean justRemovedAnElement = streams.remove(this);
+        if (GrpcUtil.shouldBeCountedForInUse(callOptions)) {
+          inUseState.updateObjectInUse(this, false);
+        }
         if (streams.isEmpty() && justRemovedAnElement) {
-          clientTransportListener.transportInUse(false);
           if (shutdown) {
             notifyTerminated();
           }
@@ -498,6 +516,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
     private class InProcessClientStream implements ClientStream {
       final StatsTraceContext statsTraceCtx;
+      final CallOptions callOptions;
       @GuardedBy("this")
       private ServerStreamListener serverStreamListener;
       @GuardedBy("this")
@@ -514,6 +533,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       private int outboundSeqNo;
 
       InProcessClientStream(CallOptions callOptions, Metadata headers) {
+        this.callOptions = callOptions;
         statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
       }
 
@@ -652,8 +672,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         synchronized (InProcessTransport.this) {
           statsTraceCtx.clientOutboundHeaders();
           streams.add(InProcessTransport.InProcessStream.this);
-          if (streams.size() == 1) {
-            clientTransportListener.transportInUse(true);
+          if (GrpcUtil.shouldBeCountedForInUse(callOptions)) {
+            inUseState.updateObjectInUse(InProcessTransport.InProcessStream.this, true);
           }
           serverTransportListener.streamCreated(serverStream, method.getFullMethodName(), headers);
         }

@@ -193,7 +193,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     receiveMaxConcurrentStreams(0);
     // Create a new stream with id 3.
     ChannelFuture createFuture = enqueue(
-        new CreateStreamCommand(grpcHeaders, streamTransportState));
+        newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
     // Cancel the stream.
     cancelStream(Status.CANCELLED);
@@ -328,7 +328,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void receivedGoAwayShouldCancelBufferedStream() throws Exception {
     // Force the stream to be buffered.
     receiveMaxConcurrentStreams(0);
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     channelRead(goAwayFrame(0));
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
@@ -339,7 +339,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void receivedGoAwayShouldRefuseLaterStreamId() throws Exception {
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     channelRead(goAwayFrame(streamId - 1));
     verify(streamListener).closed(any(Status.class), eq(REFUSED), any(Metadata.class));
     assertTrue(future.isDone());
@@ -347,7 +347,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void receivedGoAwayShouldNotAffectEarlyStreamId() throws Exception {
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     channelRead(goAwayFrame(streamId));
     verify(streamListener, never())
         .closed(any(Status.class), any(Metadata.class));
@@ -358,7 +358,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void receivedResetWithRefuseCode() throws Exception {
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     channelRead(rstStreamFrame(streamId, (int) Http2Error.REFUSED_STREAM.code() ));
     verify(streamListener).closed(any(Status.class), eq(REFUSED), any(Metadata.class));
     assertTrue(future.isDone());
@@ -366,7 +366,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void receivedResetWithCanceCode() throws Exception {
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     channelRead(rstStreamFrame(streamId, (int) Http2Error.CANCEL.code()));
     verify(streamListener).closed(any(Status.class), eq(PROCESSED), any(Metadata.class));
     assertTrue(future.isDone());
@@ -374,7 +374,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void receivedGoAwayShouldFailUnknownStreams() throws Exception {
-    enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
@@ -389,7 +389,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void receivedGoAwayShouldFailUnknownBufferedStreams() throws Exception {
     receiveMaxConcurrentStreams(0);
 
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
@@ -407,7 +407,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
 
     // Now try to create a stream.
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
     Status status = Status.fromThrowable(future.cause());
@@ -461,7 +461,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Test
   public void cancelStreamShouldCreateAndThenFailBufferedStream() throws Exception {
     receiveMaxConcurrentStreams(0);
-    enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
     cancelStream(Status.CANCELLED);
     verify(streamListener).closed(eq(Status.CANCELLED), same(PROCESSED), any(Metadata.class));
@@ -471,7 +471,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void channelShutdownShouldCancelBufferedStreams() throws Exception {
     // Force a stream to get added to the pending queue.
     receiveMaxConcurrentStreams(0);
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
 
     handler().channelInactive(ctx());
     assertTrue(future.isDone());
@@ -507,7 +507,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Test
   public void createIncrementsIdsForActualAndBufferdStreams() throws Exception {
     receiveMaxConcurrentStreams(2);
-    enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
 
     streamTransportState = new TransportStateImpl(
@@ -516,7 +516,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
         DEFAULT_MAX_MESSAGE_SIZE,
         transportTracer);
     streamTransportState.setListener(streamListener);
-    enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(5, streamTransportState.id());
 
     streamTransportState = new TransportStateImpl(
@@ -525,7 +525,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
         DEFAULT_MAX_MESSAGE_SIZE,
         transportTracer);
     streamTransportState.setListener(streamListener);
-    enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(7, streamTransportState.id());
 
     verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
@@ -682,7 +682,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @CanIgnoreReturnValue
   private ChannelFuture createStream() throws Exception {
-    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
+    ChannelFuture future = enqueue(newCreateStreamCommand(grpcHeaders, streamTransportState));
     return future;
   }
 
@@ -734,6 +734,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   private AsciiString as(String string) {
     return new AsciiString(string);
+  }
+
+  private static CreateStreamCommand newCreateStreamCommand(
+      Http2Headers headers, NettyClientStream.TransportState stream) {
+    return new CreateStreamCommand(headers, stream, true, false);
   }
 
   private static class PingCallbackImpl implements ClientTransport.PingCallback {

@@ -43,6 +43,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.io.BaseEncoding;
+import io.grpc.CallOptions;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -417,7 +418,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("http"),
         AsciiString.of("agent"),
         StatsTraceContext.NOOP,
-        transportTracer);
+        transportTracer,
+        CallOptions.DEFAULT);
     stream.start(listener);
     stream().transportState().setId(STREAM_ID);
     verify(listener, never()).onReady();
@@ -447,7 +449,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("http"),
         AsciiString.of("good agent"),
         StatsTraceContext.NOOP,
-        transportTracer);
+        transportTracer,
+        CallOptions.DEFAULT);
     stream.start(listener);
 
     ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
@@ -476,7 +479,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("http"),
         AsciiString.of("agent"),
         StatsTraceContext.NOOP,
-        transportTracer);
+        transportTracer,
+        CallOptions.DEFAULT);
     stream.start(listener);
     stream.transportState().setId(STREAM_ID);
     stream.transportState().setHttp2Stream(http2Stream);
@@ -508,7 +512,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("http"),
         AsciiString.of("agent"),
         StatsTraceContext.NOOP,
-        transportTracer);
+        transportTracer,
+        CallOptions.DEFAULT);
     stream.start(listener);
     stream.transportState().setId(STREAM_ID);
     stream.transportState().setHttp2Stream(http2Stream);

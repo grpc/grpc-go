@@ -34,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.Codec;
 import io.grpc.Deadline;
 import io.grpc.Metadata;
@@ -479,7 +480,7 @@ public class AbstractClientStreamTest {
         StatsTraceContext statsTraceCtx,
         TransportTracer transportTracer,
         boolean useGet) {
-      super(allocator, statsTraceCtx, transportTracer, new Metadata(), useGet);
+      super(allocator, statsTraceCtx, transportTracer, new Metadata(), CallOptions.DEFAULT, useGet);
       this.state = state;
       this.sink = sink;
     }

@@ -178,7 +178,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         negotiationHandler.scheme(),
         userAgent,
         statsTraceCtx,
-        transportTracer);
+        transportTracer,
+        callOptions);
   }
 
   @SuppressWarnings("unchecked")

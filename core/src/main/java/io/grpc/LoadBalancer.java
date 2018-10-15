@@ -655,6 +655,35 @@ public abstract class LoadBalancer {
      * @since 1.2.0
      */
     public abstract Attributes getAttributes();
+
+    /**
+     * (Internal use only) returns a {@link Channel} that is backed by this Subchannel.  This allows
+     * a LoadBalancer to issue its own RPCs for auxiliary purposes, such as health-checking, on
+     * already-established connections.  This channel has certain restrictions:
+     * <ol>
+     *   <li>It can issue RPCs only if the Subchannel is {@code READY}. If {@link
+     *   Channel#newCall} is called when the Subchannel is not {@code READY}, the RPC will fail
+     *   immediately.</li>
+     *   <li>It doesn't support {@link CallOptions#withWaitForReady wait-for-ready} RPCs. Such RPCs
+     *   will fail immediately.</li>
+     * </ol>
+     *
+     * <p>RPCs made on this Channel is not counted when determining ManagedChannel's {@link
+     * ManagedChannelBuilder#idleTimeout idle mode}.  In other words, they won't prevent
+     * ManagedChannel from entering idle mode.
+     *
+     * <p>Warning: RPCs made on this channel will prevent a shut-down transport from terminating. If
+     * you make long-running RPCs, you need to make sure they will finish in time after the
+     * Subchannel has transitioned away from {@code READY} state
+     * (notified through {@link #handleSubchannelState}).
+     *
+     * <p>Warning: this is INTERNAL API, is not supposed to be used by external users, and may
+     * change without notice. If you think you must use it, please file an issue.
+     */
+    @Internal
+    public Channel asChannel() {
+      throw new UnsupportedOperationException();
+    }
   }
 
   /**

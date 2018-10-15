@@ -26,17 +26,16 @@ import io.netty.handler.codec.http2.Http2Headers;
 class CreateStreamCommand extends WriteQueue.AbstractQueuedCommand {
   private final Http2Headers headers;
   private final NettyClientStream.TransportState stream;
+  private final boolean shouldBeCountedForInUse;
   private final boolean get;
 
-  CreateStreamCommand(Http2Headers headers,
-                      NettyClientStream.TransportState stream) {
-    this(headers, stream, false);
-  }
-
-  CreateStreamCommand(Http2Headers headers,
-                      NettyClientStream.TransportState stream, boolean get) {
+  CreateStreamCommand(
+      Http2Headers headers,
+      NettyClientStream.TransportState stream,
+      boolean shouldBeCountedForInUse, boolean get) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
     this.headers = Preconditions.checkNotNull(headers, "headers");
+    this.shouldBeCountedForInUse = shouldBeCountedForInUse;
     this.get = get;
   }
 
@@ -46,6 +45,10 @@ class CreateStreamCommand extends WriteQueue.AbstractQueuedCommand {
 
   Http2Headers headers() {
     return headers;
+  }
+
+  boolean shouldBeCountedForInUse() {
+    return shouldBeCountedForInUse;
   }
 
   boolean isGet() {

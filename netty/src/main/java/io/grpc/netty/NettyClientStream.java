@@ -24,6 +24,7 @@ import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.InternalKnownTransport;
 import io.grpc.InternalMethodDescriptor;
 import io.grpc.Metadata;
@@ -70,12 +71,14 @@ class NettyClientStream extends AbstractClientStream {
       AsciiString scheme,
       AsciiString userAgent,
       StatsTraceContext statsTraceCtx,
-      TransportTracer transportTracer) {
+      TransportTracer transportTracer,
+      CallOptions callOptions) {
     super(
         new NettyWritableBufferAllocator(channel.alloc()),
         statsTraceCtx,
         transportTracer,
         headers,
+        callOptions,
         useGet(method));
     this.state = checkNotNull(state, "transportState");
     this.writeQueue = state.handler.getWriteQueue();
@@ -152,7 +155,8 @@ class NettyClientStream extends AbstractClientStream {
       };
 
       // Write the command requesting the creation of the stream.
-      writeQueue.enqueue(new CreateStreamCommand(http2Headers, transportState(), get),
+      writeQueue.enqueue(
+          new CreateStreamCommand(http2Headers, transportState(), shouldBeCountedForInUse(), get),
           !method.getType().clientSendsOneMessage() || get).addListener(failureListener);
     }
 

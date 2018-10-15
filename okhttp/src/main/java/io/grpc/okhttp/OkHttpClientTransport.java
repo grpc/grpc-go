@@ -48,6 +48,7 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.InUseStateAggregator;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.ProxyParameters;
@@ -171,7 +172,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   @GuardedBy("lock")
   private boolean stopped;
   @GuardedBy("lock")
-  private boolean inUse;
+  private boolean hasStream;
   private SSLSocketFactory sslSocketFactory;
   private HostnameVerifier hostnameVerifier;
   private Socket socket;
@@ -191,6 +192,19 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private final Runnable tooManyPingsRunnable;
   @GuardedBy("lock")
   private final TransportTracer transportTracer;
+  @GuardedBy("lock")
+  private final InUseStateAggregator<OkHttpClientStream> inUseState =
+      new InUseStateAggregator<OkHttpClientStream>() {
+        @Override
+        protected void handleInUse() {
+          listener.transportInUse(true);
+        }
+
+        @Override
+        protected void handleNotInUse() {
+          listener.transportInUse(false);
+        }
+      };
   @GuardedBy("lock")
   private InternalChannelz.Security securityInfo;
 
@@ -347,7 +361,8 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         defaultAuthority,
         userAgent,
         statsTraceCtx,
-        transportTracer);
+        transportTracer,
+        callOptions);
   }
 
   @GuardedBy("lock")
@@ -357,7 +372,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
           goAwayStatus, RpcProgress.REFUSED, true, new Metadata());
     } else if (streams.size() >= maxConcurrentStreams) {
       pendingStreams.add(clientStream);
-      setInUse();
+      setInUse(clientStream);
     } else {
       startStream(clientStream);
     }
@@ -368,7 +383,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     Preconditions.checkState(
         stream.id() == OkHttpClientStream.ABSENT_ID, "StreamId already assigned");
     streams.put(nextStreamId, stream);
-    setInUse();
+    setInUse(stream);
     stream.transportState().start(nextStreamId);
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
     if ((stream.getType() != MethodType.UNARY && stream.getType() != MethodType.SERVER_STREAMING)
@@ -406,7 +421,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   @GuardedBy("lock")
   void removePendingStream(OkHttpClientStream pendingStream) {
     pendingStreams.remove(pendingStream);
-    maybeClearInUse();
+    maybeClearInUse(pendingStream);
   }
 
   @Override
@@ -689,13 +704,14 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         Map.Entry<Integer, OkHttpClientStream> entry = it.next();
         it.remove();
         entry.getValue().transportState().transportReportStatus(reason, false, new Metadata());
+        maybeClearInUse(entry.getValue());
       }
 
       for (OkHttpClientStream stream : pendingStreams) {
         stream.transportState().transportReportStatus(reason, true, new Metadata());
+        maybeClearInUse(stream);
       }
       pendingStreams.clear();
-      maybeClearInUse();
 
       stopIfNecessary();
     }
@@ -764,15 +780,16 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
           it.remove();
           entry.getValue().transportState().transportReportStatus(
               status, RpcProgress.REFUSED, false, new Metadata());
+          maybeClearInUse(entry.getValue());
         }
       }
 
       for (OkHttpClientStream stream : pendingStreams) {
         stream.transportState().transportReportStatus(
             status, RpcProgress.REFUSED, true, new Metadata());
+        maybeClearInUse(stream);
       }
       pendingStreams.clear();
-      maybeClearInUse();
 
       stopIfNecessary();
     }
@@ -817,7 +834,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         }
         if (!startPendingStreams()) {
           stopIfNecessary();
-          maybeClearInUse();
+          maybeClearInUse(stream);
         }
       }
     }
@@ -860,11 +877,10 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   }
 
   @GuardedBy("lock")
-  private void maybeClearInUse() {
-    if (inUse) {
+  private void maybeClearInUse(OkHttpClientStream stream) {
+    if (hasStream) {
       if (pendingStreams.isEmpty() && streams.isEmpty()) {
-        inUse = false;
-        listener.transportInUse(false);
+        hasStream = false;
         if (keepAliveManager != null) {
           // We don't have any active streams. No need to do keepalives any more.
           // Again, we have to call this inside the lock to avoid the race between onTransportIdle
@@ -873,13 +889,15 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         }
       }
     }
+    if (stream.shouldBeCountedForInUse()) {
+      inUseState.updateObjectInUse(stream, false);
+    }
   }
 
   @GuardedBy("lock")
-  private void setInUse() {
-    if (!inUse) {
-      inUse = true;
-      listener.transportInUse(true);
+  private void setInUse(OkHttpClientStream stream) {
+    if (!hasStream) {
+      hasStream = true;
       if (keepAliveManager != null) {
         // We have a new stream. We might need to do keepalives now.
         // Note that we have to do this inside the lock to avoid calling
@@ -887,6 +905,9 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         // order.
         keepAliveManager.onTransportActive();
       }
+    }
+    if (stream.shouldBeCountedForInUse()) {
+      inUseState.updateObjectInUse(stream, true);
     }
   }
 
