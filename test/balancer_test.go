@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
@@ -46,6 +47,7 @@ type testBalancer struct {
 	sc balancer.SubConn
 
 	newSubConnOptions balancer.NewSubConnOptions
+	pickOptions       []balancer.PickOptions
 	doneInfo          []balancer.DoneInfo
 }
 
@@ -102,6 +104,7 @@ type picker struct {
 }
 
 func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
+	p.bal.pickOptions = append(p.bal.pickOptions, opts)
 	if p.err != nil {
 		return nil, nil, p.err
 	}
@@ -137,14 +140,14 @@ func TestCredsBundleFromBalancer(t *testing.T) {
 	}
 }
 
-func TestDoneInfo(t *testing.T) {
+func TestPickAndDone(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
-		testDoneInfo(t, e)
+		testPickAndDone(t, e)
 	}
 }
 
-func testDoneInfo(t *testing.T, e env) {
+func testPickAndDone(t *testing.T, e env) {
 	te := newTest(t, e)
 	b := &testBalancer{}
 	balancer.Register(b)
@@ -164,8 +167,18 @@ func testDoneInfo(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, wantErr)
 	}
+	md := metadata.Pairs("testMDKey", "testMDVal")
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
+	}
+
+	poWant := []balancer.PickOptions{
+		{FullMethodName: "/grpc.testing.TestService/EmptyCall"},
+		{FullMethodName: "/grpc.testing.TestService/UnaryCall", Header: md},
+	}
+	if !reflect.DeepEqual(b.pickOptions, poWant) {
+		t.Fatalf("b.pickOptions = %v; want %v", b.pickOptions, poWant)
 	}
 
 	if len(b.doneInfo) < 1 || !reflect.DeepEqual(b.doneInfo[0].Err, wantErr) {

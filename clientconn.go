@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/resolver/passthrough" // To register passthrough resolver.
@@ -716,8 +717,10 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+	hdr, _ := metadata.FromOutgoingContext(ctx)
 	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{
 		FullMethodName: method,
+		Header:         hdr,
 	})
 	if err != nil {
 		return nil, nil, toRPCErr(err)
