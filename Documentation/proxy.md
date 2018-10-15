@@ -1,6 +1,6 @@
 # Proxy
 
-HTTP CONNECT proxies are support by default in gRPC. The proxy address can be
+HTTP CONNECT proxies are supported by default in gRPC. The proxy address can be
 specified by the environment variables HTTP_PROXY, HTTPS_PROXY and NO_PROXY (or
 the lowercase versions thereof).
 
