@@ -1133,47 +1133,27 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 	service := sm[:pos]
 	method := sm[pos+1:]
-	srv, ok := s.m[service]
-	if !ok {
-		if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
-			s.processStreamingRPC(t, stream, nil, unknownDesc, trInfo)
+
+	if srv, ok := s.m[service]; ok {
+		if md, ok := srv.md[method]; ok {
+			s.processUnaryRPC(t, stream, srv, md, trInfo)
 			return
 		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&fmtStringer{"Unknown service %v", []interface{}{service}}, true)
-			trInfo.tr.SetError()
+		if sd, ok := srv.sd[method]; ok {
+			s.processStreamingRPC(t, stream, srv, sd, trInfo)
+			return
 		}
-		errDesc := fmt.Sprintf("unknown service %v", service)
-		if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
-			if trInfo != nil {
-				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				trInfo.tr.SetError()
-			}
-			grpclog.Warningf("grpc: Server.handleStream failed to write status: %v", err)
-		}
-		if trInfo != nil {
-			trInfo.tr.Finish()
-		}
-		return
 	}
-	// Unary RPC or Streaming RPC?
-	if md, ok := srv.md[method]; ok {
-		s.processUnaryRPC(t, stream, srv, md, trInfo)
-		return
-	}
-	if sd, ok := srv.sd[method]; ok {
-		s.processStreamingRPC(t, stream, srv, sd, trInfo)
-		return
-	}
-	if trInfo != nil {
-		trInfo.tr.LazyLog(&fmtStringer{"Unknown method %v", []interface{}{method}}, true)
-		trInfo.tr.SetError()
-	}
+	// Unknown service, or known server unknown method.
 	if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
 		s.processStreamingRPC(t, stream, nil, unknownDesc, trInfo)
 		return
 	}
-	errDesc := fmt.Sprintf("unknown method %v", method)
+	if trInfo != nil {
+		trInfo.tr.LazyLog(&fmtStringer{"Unknown service %v", []interface{}{service}}, true)
+		trInfo.tr.SetError()
+	}
+	errDesc := fmt.Sprintf("unknown service %v", service)
 	if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
