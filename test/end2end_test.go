@@ -2440,41 +2440,40 @@ func TestHealthWatchMultipleClients(t *testing.T) {
 }
 
 func testHealthWatchMultipleClients(t *testing.T, e env) {
-	te := newTest(t, e)
+	const service = "grpc.health.v1.Health1"
+
 	hs := health.NewServer()
 
-	service1 := "grpc.health.v1.Health1"
+	te := newTest(t, e)
 	te.healthServer = hs
-
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
 	hc := healthgrpc.NewHealthClient(cc)
 
-	req := &healthpb.HealthCheckRequest{
-		Service: service1,
-	}
-	ctx1, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx2, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stream1, err := hc.Watch(ctx1, req)
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream1, err := hc.Watch(ctx, req)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
 	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	stream2, err := hc.Watch(ctx2, req)
+	stream2, err := hc.Watch(ctx, req)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 
-	hs.SetServingStatus(service1, healthpb.HealthCheckResponse_NOT_SERVING)
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
 
 	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
@@ -2488,11 +2487,12 @@ func TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
 }
 
 func testHealthWatchSetServiceStatusBeforeStartingServer(t *testing.T, e env) {
-	te := newTest(t, e)
-	hs := health.NewServer()
-	te.healthServer = hs
+	const service = "grpc.health.v1.Health1"
 
-	service := "grpc.health.v1.Health1"
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
 
 	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
 
@@ -2500,10 +2500,11 @@ func testHealthWatchSetServiceStatusBeforeStartingServer(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	hc := healthgrpc.NewHealthClient(cc)
 	req := &healthpb.HealthCheckRequest{
 		Service: service,
 	}
@@ -2524,20 +2525,21 @@ func TestHealthWatchDefaultStatusChange(t *testing.T) {
 }
 
 func testHealthWatchDefaultStatusChange(t *testing.T, e env) {
-	te := newTest(t, e)
+	const service = "grpc.health.v1.Health1"
+
 	hs := health.NewServer()
+
+	te := newTest(t, e)
 	te.healthServer = hs
-
-	service := "grpc.health.v1.Health1"
-
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	hc := healthgrpc.NewHealthClient(cc)
 	req := &healthpb.HealthCheckRequest{
 		Service: service,
 	}
@@ -2562,20 +2564,21 @@ func TestHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T) {
 }
 
 func testHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T, e env) {
-	te := newTest(t, e)
+	const service = "grpc.health.v1.Health1"
+
 	hs := health.NewServer()
+
+	te := newTest(t, e)
 	te.healthServer = hs
-
-	service := "grpc.health.v1.Health1"
-
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	hc := healthgrpc.NewHealthClient(cc)
 	req := &healthpb.HealthCheckRequest{
 		Service: service,
 	}
@@ -2598,20 +2601,21 @@ func TestHealthWatchOverallServerHealthChange(t *testing.T) {
 }
 
 func testHealthWatchOverallServerHealthChange(t *testing.T, e env) {
-	te := newTest(t, e)
+	const service = ""
+
 	hs := health.NewServer()
+
+	te := newTest(t, e)
 	te.healthServer = hs
-
-	service := ""
-
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	hc := healthgrpc.NewHealthClient(cc)
 	req := &healthpb.HealthCheckRequest{
 		Service: service,
 	}
@@ -2637,6 +2641,7 @@ func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expect
 		t.Fatalf("response.Status is %v (%v expected)", response.Status, expectedServingStatus)
 	}
 }
+
 func TestUnknownHandler(t *testing.T) {
 	defer leakcheck.Check(t)
 	// An example unknownHandler that returns a different code and a different method, making sure that we do not
