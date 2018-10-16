@@ -61,6 +61,8 @@ func TestStateTransitions_SingleAddress(t *testing.T) {
 					return
 				}
 
+				go keepReading(conn)
+
 				framer := http2.NewFramer(conn, conn)
 				if err := framer.WriteSettings(http2.Setting{}); err != nil {
 					t.Errorf("Error while writing settings frame. %v", err)
@@ -164,6 +166,8 @@ func TestStateTransition_ReadyToTransientFailure(t *testing.T) {
 			return
 		}
 
+		go keepReading(conn)
+
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(http2.Setting{}); err != nil {
 			t.Errorf("Error while writing settings frame. %v", err)
@@ -250,11 +254,14 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 			return
 		}
 
+		go keepReading(conn)
+
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(http2.Setting{}); err != nil {
 			t.Errorf("Error while writing settings frame. %v", err)
 			return
 		}
+
 		close(server2Done)
 	}()
 
@@ -336,6 +343,8 @@ func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 			return
 		}
 
+		go keepReading(conn)
+
 		framer := http2.NewFramer(conn, conn)
 		if err := framer.WriteSettings(http2.Setting{}); err != nil {
 			t.Errorf("Error while writing settings frame. %v", err)
@@ -385,6 +394,19 @@ func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	case <-timeout:
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
 	case <-server1Done:
+	}
+}
+
+// Keep reading until something causes the connection to die (EOF, server closed, etc). Useful
+// as a tool for mindlessly keeping the connection healthy, since the client will error if
+// things like client prefaces are not accepted in a timely fashion.
+func keepReading(conn net.Conn) {
+	buf := make([]byte, 1024)
+	for {
+		_, err := conn.Read(buf)
+		if err != nil {
+			return
+		}
 	}
 }
 
