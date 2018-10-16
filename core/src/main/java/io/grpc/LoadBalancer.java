@@ -454,20 +454,12 @@ public abstract class LoadBalancer {
   @ThreadSafe
   public abstract static class Helper {
     /**
-     * Creates a Subchannel, which is a logical connection to the given group of addresses which are
-     * considered equivalent.  The {@code attrs} are custom attributes associated with this
-     * Subchannel, and can be accessed later through {@link Subchannel#getAttributes
-     * Subchannel.getAttributes()}.
-     *
-     * <p>The LoadBalancer is responsible for closing unused Subchannels, and closing all
-     * Subchannels within {@link #shutdown}.
-     *
-     * <p>The default implementation calls {@link #createSubchannel(List, Attributes)}.
-     * Implementations should not override this method.
+     * Equivalent to {@link #createSubchannel(List, Attributes)} with the given single {@code
+     * EquivalentAddressGroup}.
      *
      * @since 1.2.0
      */
-    public Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
+    public final Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
       Preconditions.checkNotNull(addrs, "addrs");
       return createSubchannel(Collections.singletonList(addrs), attrs);
     }
@@ -489,18 +481,12 @@ public abstract class LoadBalancer {
     }
 
     /**
-     * Replaces the existing addresses used with {@code subchannel}. This method is superior to
-     * {@link #createSubchannel} when the new and old addresses overlap, since the subchannel can
-     * continue using an existing connection.
+     * Equivalent to {@link #updateSubchannelAddresses(io.grpc.LoadBalancer.Subchannel, List)} with
+     * the given single {@code EquivalentAddressGroup}.
      *
-     * <p>The default implementation calls {@link #updateSubchannelAddresses(
-     * LoadBalancer.Subchannel, List)}. Implementations should not override this method.
-     *
-     * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
-     *     #createSubchannel}
      * @since 1.4.0
      */
-    public void updateSubchannelAddresses(
+    public final void updateSubchannelAddresses(
         Subchannel subchannel, EquivalentAddressGroup addrs) {
       Preconditions.checkNotNull(addrs, "addrs");
       updateSubchannelAddresses(subchannel, Collections.singletonList(addrs));
@@ -622,17 +608,15 @@ public abstract class LoadBalancer {
     public abstract void requestConnection();
 
     /**
-     * Returns the addresses that this Subchannel is bound to. The default implementation calls
-     * getAllAddresses().
-     *
-     * <p>The default implementation calls {@link #getAllAddresses()}. Implementations should not
-     * override this method.
+     * Returns the addresses that this Subchannel is bound to.  This can be called only if
+     * the Subchannel has only one {@link EquivalentAddressGroup}.  Under the hood it calls
+     * {@link #getAllAddresses}.
      *
      * @throws IllegalStateException if this subchannel has more than one EquivalentAddressGroup.
-     *     Use getAllAddresses() instead
+     *         Use {@link #getAllAddresses} instead
      * @since 1.2.0
      */
-    public EquivalentAddressGroup getAddresses() {
+    public final EquivalentAddressGroup getAddresses() {
       List<EquivalentAddressGroup> groups = getAllAddresses();
       Preconditions.checkState(groups.size() == 1, "Does not have exactly one group");
       return groups.get(0);

@@ -84,7 +84,7 @@ public class PickFirstLoadBalancerTest {
       socketAddresses.add(addr);
     }
 
-    when(mockSubchannel.getAddresses()).thenThrow(new UnsupportedOperationException());
+    when(mockSubchannel.getAllAddresses()).thenThrow(new UnsupportedOperationException());
     when(mockHelper.createSubchannel(
         anyListOf(EquivalentAddressGroup.class), any(Attributes.class)))
         .thenReturn(mockSubchannel);

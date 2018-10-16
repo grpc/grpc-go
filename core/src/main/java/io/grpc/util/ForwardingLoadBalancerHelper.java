@@ -36,19 +36,8 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   protected abstract LoadBalancer.Helper delegate();
 
   @Override
-  public Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
-    return delegate().createSubchannel(addrs, attrs);
-  }
-
-  @Override
   public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
     return delegate().createSubchannel(addrs, attrs);
-  }
-
-  @Override
-  public void updateSubchannelAddresses(
-      Subchannel subchannel, EquivalentAddressGroup addrs) {
-    delegate().updateSubchannelAddresses(subchannel, addrs);
   }
 
   @Override

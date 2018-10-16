@@ -19,6 +19,7 @@ package io.grpc.grpclb;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.grpclb.CachedSubchannelPool.SHUTDOWN_TIMEOUT_MS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
@@ -39,6 +40,8 @@ import io.grpc.grpclb.CachedSubchannelPool.ShutdownSubchannelTask;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.SerializingExecutor;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -73,19 +76,21 @@ public class CachedSubchannelPoolTest {
   private final ArrayList<Subchannel> mockSubchannels = new ArrayList<>();
 
   @Before
+  @SuppressWarnings("unchecked")
   public void setUp() {
     doAnswer(new Answer<Subchannel>() {
         @Override
         public Subchannel answer(InvocationOnMock invocation) throws Throwable {
           Subchannel subchannel = mock(Subchannel.class);
-          EquivalentAddressGroup eag = (EquivalentAddressGroup) invocation.getArguments()[0];
+          List<EquivalentAddressGroup> eagList =
+              (List<EquivalentAddressGroup>) invocation.getArguments()[0];
           Attributes attrs = (Attributes) invocation.getArguments()[1];
-          when(subchannel.getAddresses()).thenReturn(eag);
+          when(subchannel.getAllAddresses()).thenReturn(eagList);
           when(subchannel.getAttributes()).thenReturn(attrs);
           mockSubchannels.add(subchannel);
           return subchannel;
         }
-      }).when(helper).createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
+      }).when(helper).createSubchannel(any(List.class), any(Attributes.class));
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock invocation) throws Throwable {
@@ -109,12 +114,12 @@ public class CachedSubchannelPoolTest {
   public void subchannelExpireAfterReturned() {
     Subchannel subchannel1 = pool.takeOrCreateSubchannel(EAG1, ATTRS1);
     assertThat(subchannel1).isNotNull();
-    verify(helper).createSubchannel(same(EAG1), same(ATTRS1));
+    verify(helper).createSubchannel(eq(Arrays.asList(EAG1)), same(ATTRS1));
 
     Subchannel subchannel2 = pool.takeOrCreateSubchannel(EAG2, ATTRS2);
     assertThat(subchannel2).isNotNull();
     assertThat(subchannel2).isNotSameAs(subchannel1);
-    verify(helper).createSubchannel(same(EAG2), same(ATTRS2));
+    verify(helper).createSubchannel(eq(Arrays.asList(EAG2)), same(ATTRS2));
 
     pool.returnSubchannel(subchannel1);
 
@@ -140,12 +145,12 @@ public class CachedSubchannelPoolTest {
   public void subchannelReused() {
     Subchannel subchannel1 = pool.takeOrCreateSubchannel(EAG1, ATTRS1);
     assertThat(subchannel1).isNotNull();
-    verify(helper).createSubchannel(same(EAG1), same(ATTRS1));
+    verify(helper).createSubchannel(eq(Arrays.asList(EAG1)), same(ATTRS1));
 
     Subchannel subchannel2 = pool.takeOrCreateSubchannel(EAG2, ATTRS2);
     assertThat(subchannel2).isNotNull();
     assertThat(subchannel2).isNotSameAs(subchannel1);
-    verify(helper).createSubchannel(same(EAG2), same(ATTRS2));
+    verify(helper).createSubchannel(eq(Arrays.asList(EAG2)), same(ATTRS2));
 
     pool.returnSubchannel(subchannel1);
 
@@ -167,7 +172,7 @@ public class CachedSubchannelPoolTest {
     // pool will create a new channel for EAG2 when requested
     Subchannel subchannel2a = pool.takeOrCreateSubchannel(EAG2, ATTRS2);
     assertThat(subchannel2a).isNotSameAs(subchannel2);
-    verify(helper, times(2)).createSubchannel(same(EAG2), same(ATTRS2));
+    verify(helper, times(2)).createSubchannel(eq(Arrays.asList(EAG2)), same(ATTRS2));
 
     // subchannel1 expires SHUTDOWN_TIMEOUT_MS after being returned
     pool.returnSubchannel(subchannel1a);

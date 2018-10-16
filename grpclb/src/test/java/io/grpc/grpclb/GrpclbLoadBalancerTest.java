@@ -222,7 +222,7 @@ public class GrpclbLoadBalancerTest {
           Subchannel subchannel = mock(Subchannel.class);
           EquivalentAddressGroup eag = (EquivalentAddressGroup) invocation.getArguments()[0];
           Attributes attrs = (Attributes) invocation.getArguments()[1];
-          when(subchannel.getAddresses()).thenReturn(eag);
+          when(subchannel.getAllAddresses()).thenReturn(Arrays.asList(eag));
           when(subchannel.getAttributes()).thenReturn(attrs);
           mockSubchannels.add(subchannel);
           subchannelTracker.add(subchannel);
@@ -262,6 +262,7 @@ public class GrpclbLoadBalancerTest {
   }
 
   @After
+  @SuppressWarnings("unchecked")
   public void tearDown() {
     try {
       if (balancer != null) {
@@ -285,7 +286,7 @@ public class GrpclbLoadBalancerTest {
         verify(subchannel, never()).shutdown();
       }
       verify(helper, never())
-          .createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
+          .createSubchannel(any(List.class), any(Attributes.class));
       // No timer should linger after shutdown
       assertThat(fakeClock.getPendingTasks()).isEmpty();
     } finally {
