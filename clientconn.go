@@ -29,6 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"runtime"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -925,6 +927,9 @@ type addrConn struct {
 
 // Note: this requires a lock on ac.mu.
 func (ac *addrConn) updateConnectivityState(s connectivity.State) {
+	_, file, line, _ := runtime.Caller(1)
+	fmt.Println("udpatestate", file, line)
+	fmt.Println("transition from", ac.state, "to", s)
 	ac.state = s
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
@@ -975,6 +980,8 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 //
 // If the DialOption WithWaitForHandshake was set, resetTransport returns successfully only after handshake is received.
 func (ac *addrConn) resetTransport(resolveNow bool) {
+	_, file, line, _ := runtime.Caller(1)
+	fmt.Println("reset trasnport", file, line)
 	for {
 		// If this is the first in a line of resets, we want to resolve immediately. The only other time we
 		// want to reset is if we have tried all the addresses handed to us.
@@ -1218,6 +1225,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			if ac.transport != newTr {
 				return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 			}
+			ac.updateConnectivityState(connectivity.Connecting)
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 			return ac.newClientStream(hcCtx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 		}
 		firstReady := true
