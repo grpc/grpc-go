@@ -118,18 +118,34 @@ public class DnsNameResolverTest {
     return newResolver(name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted());
   }
 
+  private DnsNameResolver newResolver(String name, int port, boolean isAndroid) {
+    return
+        newResolver(
+            name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(), isAndroid);
+  }
+
   private DnsNameResolver newResolver(
       String name,
       int port,
       ProxyDetector proxyDetector,
       Stopwatch stopwatch) {
+    return newResolver(name, port, proxyDetector, stopwatch, false);
+  }
+
+  private DnsNameResolver newResolver(
+      String name,
+      int port,
+      ProxyDetector proxyDetector,
+      Stopwatch stopwatch,
+      boolean isAndroid) {
     DnsNameResolver dnsResolver = new DnsNameResolver(
         null,
         name,
         Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, port).build(),
         fakeExecutorResource,
         proxyDetector,
-        stopwatch);
+        stopwatch,
+        isAndroid);
     return dnsResolver;
   }
 
@@ -201,13 +217,29 @@ public class DnsNameResolverTest {
   }
 
   @Test
+  public void resolve_androidIgnoresPropertyValue() throws Exception {
+    System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, Long.toString(2));
+    resolveNeverCache(true);
+  }
+
+  @Test
+  public void resolve_androidIgnoresPropertyValueCacheForever() throws Exception {
+    System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, Long.toString(-1));
+    resolveNeverCache(true);
+  }
+
+  @Test
   public void resolve_neverCache() throws Exception {
     System.setProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY, "0");
+    resolveNeverCache(false);
+  }
+
+  private void resolveNeverCache(boolean isAndroid) throws Exception {
     final List<InetAddress> answer1 = createAddressList(2);
     final List<InetAddress> answer2 = createAddressList(1);
     String name = "foo.googleapis.com";
 
-    DnsNameResolver resolver = newResolver(name, 81);
+    DnsNameResolver resolver = newResolver(name, 81, isAndroid);
     AddressResolver mockResolver = mock(AddressResolver.class);
     when(mockResolver.resolveAddress(Matchers.anyString())).thenReturn(answer1).thenReturn(answer2);
     resolver.setAddressResolver(mockResolver);
@@ -241,7 +273,7 @@ public class DnsNameResolverTest {
       }
     });
 
-    new DnsNameResolver.Resolve(nrf, Stopwatch.createUnstarted()).resolveInternal(mockListener);
+    new DnsNameResolver.Resolve(nrf, Stopwatch.createUnstarted(), 0).resolveInternal(mockListener);
 
     ArgumentCaptor<Status> ac = ArgumentCaptor.forClass(Status.class);
     verify(mockListener).onError(ac.capture());

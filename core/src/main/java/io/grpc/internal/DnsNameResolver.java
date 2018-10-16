@@ -98,6 +98,8 @@ final class DnsNameResolver extends NameResolver {
    * <p>Default value is -1 (cache forever) if security manager is installed. If security manager is
    * not installed, the ttl value is {@code null} which falls back to {@link
    * #DEFAULT_NETWORK_CACHE_TTL_SECONDS gRPC default value}.
+   *
+   * <p>For android, gRPC doesn't attempt to cache; this property value will be ignored.
    */
   @VisibleForTesting
   static final String NETWORKADDRESS_CACHE_TTL_PROPERTY = "networkaddress.cache.ttl";
@@ -143,7 +145,7 @@ final class DnsNameResolver extends NameResolver {
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
       Resource<ExecutorService> executorResource, ProxyDetector proxyDetector,
-      Stopwatch stopwatch) {
+      Stopwatch stopwatch, boolean isAndroid) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
     this.executorResource = executorResource;
@@ -166,7 +168,7 @@ final class DnsNameResolver extends NameResolver {
       port = nameUri.getPort();
     }
     this.proxyDetector = proxyDetector;
-    this.resolveRunnable = new Resolve(this, stopwatch);
+    this.resolveRunnable = new Resolve(this, stopwatch, getNetworkAddressCacheTtlNanos(isAndroid));
   }
 
   @Override
@@ -196,10 +198,10 @@ final class DnsNameResolver extends NameResolver {
     private final long cacheTtlNanos;
     private ResolutionResults cachedResolutionResults = null;
 
-    Resolve(DnsNameResolver resolver, Stopwatch stopwatch) {
+    Resolve(DnsNameResolver resolver, Stopwatch stopwatch, long cacheTtlNanos) {
       this.resolver = resolver;
       this.stopwatch = Preconditions.checkNotNull(stopwatch, "stopwatch");
-      this.cacheTtlNanos = getNetworkAddressCacheTtlNanos();
+      this.cacheTtlNanos = cacheTtlNanos;
     }
 
     @Override
@@ -228,23 +230,6 @@ final class DnsNameResolver extends NameResolver {
       return cachedResolutionResults == null
           || cacheTtlNanos == 0
           || (cacheTtlNanos > 0 && stopwatch.elapsed(TimeUnit.NANOSECONDS) > cacheTtlNanos);
-    }
-
-    /** Returns value of network address cache ttl property. */
-    private static long getNetworkAddressCacheTtlNanos() {
-      String cacheTtlPropertyValue = System.getProperty(NETWORKADDRESS_CACHE_TTL_PROPERTY);
-      long cacheTtl = DEFAULT_NETWORK_CACHE_TTL_SECONDS;
-      if (cacheTtlPropertyValue != null) {
-        try {
-          cacheTtl = Long.parseLong(cacheTtlPropertyValue);
-        } catch (NumberFormatException e) {
-          logger.log(
-              Level.WARNING,
-              "Property({0}) valid is not valid number format({1}), fall back to default({2})",
-              new Object[] {NETWORKADDRESS_CACHE_TTL_PROPERTY, cacheTtlPropertyValue, cacheTtl});
-        }
-      }
-      return cacheTtl > 0 ? TimeUnit.SECONDS.toNanos(cacheTtl) : cacheTtl;
     }
 
     @VisibleForTesting
@@ -481,6 +466,31 @@ final class DnsNameResolver extends NameResolver {
     }
     return ServiceConfigUtil.checkStringList(
         ServiceConfigUtil.getList(serviceConfigChoice, SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY));
+  }
+
+  /**
+   * Returns value of network address cache ttl property if not Android environment. For android,
+   * DnsNameResolver does not cache the dns lookup result.
+   */
+  private static long getNetworkAddressCacheTtlNanos(boolean isAndroid) {
+    if (isAndroid) {
+      // on Android, ignore dns cache.
+      return 0;
+    }
+
+    String cacheTtlPropertyValue = System.getProperty(NETWORKADDRESS_CACHE_TTL_PROPERTY);
+    long cacheTtl = DEFAULT_NETWORK_CACHE_TTL_SECONDS;
+    if (cacheTtlPropertyValue != null) {
+      try {
+        cacheTtl = Long.parseLong(cacheTtlPropertyValue);
+      } catch (NumberFormatException e) {
+        logger.log(
+            Level.WARNING,
+            "Property({0}) valid is not valid number format({1}), fall back to default({2})",
+            new Object[] {NETWORKADDRESS_CACHE_TTL_PROPERTY, cacheTtlPropertyValue, cacheTtl});
+      }
+    }
+    return cacheTtl > 0 ? TimeUnit.SECONDS.toNanos(cacheTtl) : cacheTtl;
   }
 
   /**
