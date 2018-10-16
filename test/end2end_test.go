@@ -6778,3 +6778,46 @@ func TestNetPipeConn(t *testing.T) {
 		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 	}
 }
+
+func TestLargeTimeout(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testLargeTimeout(t, e)
+	}
+}
+
+func testLargeTimeout(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.declareLogNoise("Server.processUnaryRPC failed to write status")
+
+	ts := &funcServer{}
+	te.startServer(ts)
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	timeouts := []time.Duration{
+		time.Duration(math.MaxInt64), // will be (correctly) converted to
+		// 2562048 hours, which overflows upon converting back to an int64
+		2562047 * time.Hour, // the largest timeout that does not overflow
+	}
+
+	for i, maxTimeout := range timeouts {
+		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			deadline, ok := ctx.Deadline()
+			timeout := deadline.Sub(time.Now())
+			minTimeout := maxTimeout - 5*time.Second
+			if !ok || timeout < minTimeout || timeout > maxTimeout {
+				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
+				return nil, status.Error(codes.OutOfRange, "deadline error")
+			}
+			return &testpb.SimpleResponse{}, nil
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+		defer cancel()
+
+		if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
+		}
+	}
+}
