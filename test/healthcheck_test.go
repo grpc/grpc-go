@@ -21,6 +21,7 @@ package test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -38,31 +39,37 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func replaceHealthCheckFunc(f interface{}) func() {
+func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error), func(bool), string) error) func() {
 	oldHcFunc := internal.HealthCheckFunc
 	internal.HealthCheckFunc = f
-	fmt.Println("set hc func", internal.HealthCheckFunc)
+	fmt.Println("set hc func", internal.HealthCheckFunc != nil)
 	return func() {
 		internal.HealthCheckFunc = oldHcFunc
 	}
 }
 
-func testHealthCheckFunc(ctx context.Context, newStream func() (grpc.ClientStream, error), update func(bool), service string) error {
+func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return errors.New("exit")
+			return nil
 		default:
 		}
-		s, err := newStream()
+		rawS, err := newStream()
 		if err != nil {
-			fmt.Println("err 54", err)
+			fmt.Println("newStream failed with err:", err)
 			continue
+		}
+		s, ok := rawS.(grpc.ClientStream)
+		if !ok {
+			return errors.New("type assertion to grpc.ClientStream failed")
 		}
 		if err = s.SendMsg(&healthpb.HealthCheckRequest{
 			Service: service,
-		}); err != nil {
-			fmt.Println("err 60")
+		}); err != nil && err != io.EOF {
+			fmt.Println("SendMsg failed with err", err)
+
+			//stream should have been closed, so we can create a new stream.
 			continue
 		}
 		s.CloseSend()

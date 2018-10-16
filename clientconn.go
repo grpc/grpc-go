@@ -1212,7 +1212,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// 4. the current load balancer allows it.
 	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
 		//set up the health check stream
-		newStream := func() (ClientStream, error) {
+		newStream := func() (interface{}, error) {
 			ac.mu.Lock()
 			defer ac.mu.Unlock()
 			if ac.transport != newTr {
@@ -1243,7 +1243,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		}
 
 		go func() {
-			err := internal.HealthCheckFunc.(func(context.Context, func() (ClientStream, error), func(bool), string) error)(hcCtx, newStream, updateState, healthCheckConfig.ServiceName)
+			err := internal.HealthCheckFunc(hcCtx, newStream, updateState, healthCheckConfig.ServiceName)
 			if err != nil {
 				if e, ok := status.FromError(err); ok && e.Code() == codes.Unimplemented {
 					if channelz.IsOn() {
