@@ -86,7 +86,7 @@ final class DnsNameResolver extends NameResolver {
   private static final String JNDI_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "true");
   private static final String JNDI_SRV_PROPERTY =
-      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_grpclb", "false");
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_grpclb", "true");
   private static final String JNDI_TXT_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_service_config", "false");
 
