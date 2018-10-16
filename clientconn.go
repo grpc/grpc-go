@@ -1077,11 +1077,10 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
 
-	tempCtx, goAwayCancel := context.WithCancel(ac.ctx)
-	hcCtx, closeCancel := context.WithCancel(tempCtx)
+	hcCtx, hcCancel := context.WithCancel(ac.ctx)
 
 	onGoAway := func(r transport.GoAwayReason) {
-		goAwayCancel()
+		hcCancel()
 		ac.mu.Lock()
 		ac.adjustParams(r)
 		// make sure no RPC picks this transport after goaway having been received.
@@ -1098,7 +1097,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	prefaceTimer := time.NewTimer(connectDeadline.Sub(time.Now()))
 
 	onClose := func() {
-		closeCancel()
+		hcCancel()
 		close(onCloseCalled)
 		prefaceTimer.Stop()
 
@@ -1206,10 +1205,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	ac.mu.Unlock()
 
 	healthCheckConfig := ac.cc.getHealthCheckConfig()
-	// LB channel health checking is only enabled when the internal.HealthCheckFunc is set, and a
-	// service config with non-empty healthCheckConfig field is provided, and the current load balancer
-	// allows it.
-	if internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
+	// LB channel health checking is only enabled when all the four requirements below are met:
+	// 1. it is not disabled by the user with the WithDisableHealthCheck DialOption,
+	// 2. the internal.HealthCheckFunc is set by importing the grpc/healthcheck package,
+	// 3. a service config with non-empty healthCheckConfig field is provided,
+	// 4. the current load balancer allows it.
+	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
 		//set up the health check stream
 		newStream := func() (ClientStream, error) {
 			ac.mu.Lock()
@@ -1244,21 +1245,25 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		go func() {
 			err := internal.HealthCheckFunc.(func(context.Context, func() (ClientStream, error), func(bool), string) error)(hcCtx, newStream, updateState, healthCheckConfig.ServiceName)
 			if err != nil {
-				channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-					Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
-					Severity: channelz.CtINFO,
-				})
+				if e, ok := status.FromError(err); ok && e.Code() == codes.Unimplemented {
+					if channelz.IsOn() {
+						channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+							Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
+							Severity: channelz.CtError,
+						})
+					}
+					grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
+				}
+				grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
 			}
 			// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
 			// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				ac.mu.Unlock()
-				select {
-				case <-skipReset:
-				default:
-					close(skipReset)
-				}
+				// we can safely close skipReset here, because skipReset must have not been closed when we
+				// reach here.
+				close(skipReset)
 				return
 			}
 			ac.mu.Unlock()

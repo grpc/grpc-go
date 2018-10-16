@@ -59,6 +59,7 @@ type dialOptions struct {
 	channelzParentID     int64
 	disableServiceConfig bool
 	disableRetry         bool
+	disableHealthCheck   bool
 }
 
 // DialOption configures how we set up the connection.
@@ -454,6 +455,11 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 	})
 }
 
+func WithDisableHealthCheck() DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.disableHealthCheck = true
+	})
+}
 func defaultDialOptions() dialOptions {
 	return dialOptions{
 		disableRetry: !envconfig.Retry,
