@@ -49,7 +49,6 @@ func TestStateTransitions_SingleAddress(t *testing.T) {
 	defer leakcheck.Check(t)
 
 	mctBkp := getMinConnectTimeout()
-	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
 		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
 	}()

@@ -225,7 +225,6 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	// 3. The new server sends its preface.
 	// 4. Client doesn't kill the connection this time.
 	mctBkp := getMinConnectTimeout()
-	// Call this only after transportMonitor goroutine has ended.
 	defer func() {
 		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
 	}()
