@@ -350,7 +350,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	if lb.ccRemoteLB == nil {
 		if len(remoteBalancerAddrs) <= 0 {
-			grpclog.Warningf("grpclb: no remote balancer address is available, should never happen")
+			grpclog.Errorf("grpclb: no remote balancer address is available, should never happen")
 			return
 		}
 		// First time receiving resolved addresses, create a cc to remote
