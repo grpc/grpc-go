@@ -402,11 +402,7 @@ func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 // things like client prefaces are not accepted in a timely fashion.
 func keepReading(conn net.Conn) {
 	buf := make([]byte, 1024)
-	for {
-		_, err := conn.Read(buf)
-		if err != nil {
-			return
-		}
+	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
 	}
 }
 
