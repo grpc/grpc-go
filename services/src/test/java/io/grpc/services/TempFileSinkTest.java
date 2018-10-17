@@ -18,8 +18,7 @@ package io.grpc.services;
 
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.binarylog.v1alpha.GrpcLogEntry;
-import io.grpc.binarylog.v1alpha.Uint128;
+import io.grpc.binarylog.v1.GrpcLogEntry;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -36,10 +35,10 @@ public class TempFileSinkTest {
   public void readMyWrite() throws Exception {
     TempFileSink sink = new TempFileSink();
     GrpcLogEntry e1 = GrpcLogEntry.newBuilder()
-        .setCallId(Uint128.newBuilder().setLow(1234))
+        .setCallId(1234)
         .build();
     GrpcLogEntry e2 = GrpcLogEntry.newBuilder()
-        .setCallId(Uint128.newBuilder().setLow(5678))
+        .setCallId(5678)
         .build();
     sink.write(e1);
     sink.write(e2);
@@ -63,7 +62,7 @@ public class TempFileSinkTest {
     TempFileSink sink = new TempFileSink();
     sink.close();
     sink.write(GrpcLogEntry.newBuilder()
-        .setCallId(Uint128.newBuilder().setLow(1234))
+        .setCallId(1234)
         .build());
   }
 }
