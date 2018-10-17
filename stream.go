@@ -26,9 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"fmt"
-	"runtime"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -1109,8 +1106,6 @@ func (as *addrConnStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (as *addrConnStream) finish(err error) {
-	_, file, line, _ := runtime.Caller(1)
-	fmt.Println("finishi", file, line)
 	as.mu.Lock()
 	if as.finished {
 		as.mu.Unlock()
