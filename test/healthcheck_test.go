@@ -57,7 +57,6 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 		}
 		rawS, err := newStream()
 		if err != nil {
-			fmt.Println("newStream failed with err:", err)
 			continue
 		}
 		s, ok := rawS.(grpc.ClientStream)
@@ -68,7 +67,6 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 		if err = s.SendMsg(&healthpb.HealthCheckRequest{
 			Service: service,
 		}); err != nil && err != io.EOF {
-			fmt.Println("SendMsg failed with err", err)
 			//stream should have been closed, so we can safely continue to create a new stream.
 			continue
 		}
@@ -76,7 +74,6 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 		for {
 			resp := new(healthpb.HealthCheckResponse)
 			if err = s.RecvMsg(resp); err != nil {
-				fmt.Println("RecvMsg failed with err:", err)
 				if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
 					update(true)
 					return err
@@ -86,13 +83,10 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 				// we can safely break here and continue to create a new stream, since a non-nil error has been received.
 				break
 			}
-			fmt.Println("status", resp.Status)
 			switch resp.Status {
 			case healthpb.HealthCheckResponse_SERVING:
-				fmt.Println("serving!")
 				update(true)
 			case healthpb.HealthCheckResponse_SERVICE_UNKNOWN, healthpb.HealthCheckResponse_UNKNOWN, healthpb.HealthCheckResponse_NOT_SERVING:
-				fmt.Println("not serving")
 				update(false)
 			}
 		}
@@ -147,11 +141,9 @@ func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthp
 		// called inside HealthCheckFunc before the func returns.
 		select {
 		case <-stream.Context().Done():
-		case <-time.After(3 * time.Second):
+		case <-time.After(5 * time.Second):
 		}
 		return nil
-	case "recreate":
-		return status.Error(codes.Unavailable, "force health check stream to be recreated")
 	default:
 		return nil
 	}

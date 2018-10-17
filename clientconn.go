@@ -1211,76 +1211,11 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// 3. a service config with non-empty healthCheckConfig field is provided,
 	// 4. the current load balancer allows it.
 	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
-		//set up the health check stream
-		newStream := func() (interface{}, error) {
-			ac.mu.Lock()
-			defer ac.mu.Unlock()
-			if ac.transport != newTr {
-				return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
-			}
-			if ac.state != connectivity.Connecting {
-				ac.updateConnectivityState(connectivity.Connecting)
-				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-			}
-			return ac.newClientStream(hcCtx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
-		}
-		firstReady := true
-		updateState := func(ok bool) {
-			ac.mu.Lock()
-			defer ac.mu.Unlock()
-			if ac.transport != newTr {
-				return
-			}
-			if ok {
-				if firstReady {
-					firstReady = false
-					ac.curAddr = addr
-					close(allowedToReset)
-				}
-				ac.printf("ready")
-				ac.updateConnectivityState(connectivity.Ready)
-				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-			} else {
-				ac.updateConnectivityState(connectivity.TransientFailure)
-				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-			}
-		}
-
-		go func() {
-			err := internal.HealthCheckFunc(hcCtx, newStream, updateState, healthCheckConfig.ServiceName)
-			if err != nil {
-				if e, ok := status.FromError(err); ok && e.Code() == codes.Unimplemented {
-					if channelz.IsOn() {
-						channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-							Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
-							Severity: channelz.CtError,
-						})
-					}
-					grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
-				}
-				grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
-			}
-			// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
-			// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.
-			ac.mu.Lock()
-			if ac.state == connectivity.Shutdown {
-				ac.mu.Unlock()
-				// we can safely close skipReset here, because skipReset must have not been closed when we
-				// reach here.
-				close(skipReset)
-				return
-			}
-			ac.mu.Unlock()
-			select {
-			case <-allowedToReset:
-			default:
-				close(allowedToReset)
-			}
-		}()
-
+		ac.startHealthCheck(hcCtx, newTr, addr, allowedToReset, skipReset, healthCheckConfig.ServiceName)
 		return nil
 	}
 
+	// No health check case
 	ac.mu.Lock()
 
 	if ac.state == connectivity.Shutdown {
@@ -1303,6 +1238,85 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// goroutine failing races with all the code in this method that sets the connection to "ready".
 	close(allowedToReset)
 	return nil
+}
+
+func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.ClientTransport, addr resolver.Address, allowedToReset chan struct{}, skipReset chan struct{}, serviceName string) {
+	//set up the health check helper functions
+	newStream := func() (interface{}, error) {
+		ac.mu.Lock()
+		defer ac.mu.Unlock()
+		if ac.transport != newTr {
+			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
+		}
+		// transition to CONNECTING state when an attempt starts
+		if ac.state != connectivity.Connecting {
+			ac.updateConnectivityState(connectivity.Connecting)
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		}
+		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
+	}
+	firstReady := true
+	reportHealth := func(ok bool) {
+		ac.mu.Lock()
+		defer ac.mu.Unlock()
+		if ac.transport != newTr {
+			return
+		}
+		if ok {
+			if firstReady {
+				firstReady = false
+				ac.curAddr = addr
+				close(allowedToReset)
+			}
+			ac.printf("ready")
+			// This is the only place where we set state to READY in case of health check enabled.
+			// Therefore we don't need to check whether ac is already in READY state.
+			ac.updateConnectivityState(connectivity.Ready)
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		} else {
+			// It is possible that server alternates between "UNKNOWN", "SERVING", and "NOT_SERVING" when
+			// returning the status for health. And all these status leads to transition to TRANSIENT
+			// FAILURE. Therefore we need to check whether ac is already in TRANSIENT FAILURE state, to
+			// avoid unnecessary setting.
+			if ac.state != connectivity.TransientFailure {
+				ac.updateConnectivityState(connectivity.TransientFailure)
+				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			}
+		}
+	}
+
+	// start a goroutine for health checking of this transport.
+	go func() {
+		err := internal.HealthCheckFunc(ctx, newStream, reportHealth, serviceName)
+		if err != nil {
+			if e, ok := status.FromError(err); ok && e.Code() == codes.Unimplemented {
+				if channelz.IsOn() {
+					channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+						Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
+						Severity: channelz.CtError,
+					})
+				}
+				grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
+			}
+			grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
+		}
+		// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
+		// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.
+		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			// we can safely close skipReset here, because skipReset must have not been closed when we
+			// reach here.
+			close(skipReset)
+			return
+		}
+		ac.mu.Unlock()
+		select {
+		case <-allowedToReset:
+		default:
+			close(allowedToReset)
+		}
+	}()
 }
 
 // nextAddr increments the addrIdx if there are more addresses to try. If
