@@ -21,6 +21,7 @@ package grpc
 import (
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -41,24 +43,34 @@ func init() {
 	balancer.Register(testBalancer)
 }
 
+// These tests use a PipeListener. This listener is similar to net.Listener except that it is unbuffered, so each read
+// and write will wait for the other side's corresponding write or read.
 func TestStateTransitions_SingleAddress(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	mctBkp := getMinConnectTimeout()
+	// Call this only after transportMonitor goroutine has ended.
+	defer func() {
+		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
+	}()
+	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(time.Millisecond)*100)
+
 	for _, test := range []struct {
-		name   string
+		desc   string
 		want   []connectivity.State
-		server func(net.Listener)
+		server func(net.Listener) net.Conn
 	}{
-		// When the server returns server preface, the client enters READY.
 		{
-			name: "ServerEntersReadyOnPrefaceReceipt",
+			desc: "When the server returns server preface, the client enters READY.",
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.Ready,
 			},
-			server: func(lis net.Listener) {
+			server: func(lis net.Listener) net.Conn {
 				conn, err := lis.Accept()
 				if err != nil {
 					t.Error(err)
-					return
+					return nil
 				}
 
 				go keepReading(conn)
@@ -66,53 +78,101 @@ func TestStateTransitions_SingleAddress(t *testing.T) {
 				framer := http2.NewFramer(conn, conn)
 				if err := framer.WriteSettings(http2.Setting{}); err != nil {
 					t.Errorf("Error while writing settings frame. %v", err)
-					return
+					return nil
 				}
+
+				return conn
 			},
 		},
-		// When the connection is closed, the client enters TRANSIENT FAILURE.
 		{
-			name: "ServerEntersTransientFailureOnClose",
+			desc: "When the connection is closed, the client enters TRANSIENT FAILURE.",
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
 			},
-			server: func(lis net.Listener) {
+			server: func(lis net.Listener) net.Conn {
 				conn, err := lis.Accept()
 				if err != nil {
 					t.Error(err)
-					return
+					return nil
 				}
 
 				conn.Close()
+				return nil
+			},
+		},
+		{
+			desc: `When the server sends its connection preface, but the connection dies before the client can write its 
+connection preface, the client enters TRANSIENT FAILURE.`,
+			want: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.TransientFailure,
+			},
+			server: func(lis net.Listener) net.Conn {
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Error(err)
+					return nil
+				}
+
+				framer := http2.NewFramer(conn, conn)
+				if err := framer.WriteSettings(http2.Setting{}); err != nil {
+					t.Errorf("Error while writing settings frame. %v", err)
+					return nil
+				}
+
+				conn.Close()
+				return nil
+			},
+		},
+		{
+			desc: `When the server reads the client connection preface but does not send its connection preface, the
+client enters TRANSIENT FAILURE.`,
+			want: []connectivity.State{
+				connectivity.Connecting,
+				connectivity.TransientFailure,
+			},
+			server: func(lis net.Listener) net.Conn {
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Error(err)
+					return nil
+				}
+
+				go keepReading(conn)
+
+				return conn
 			},
 		},
 	} {
-		t.Logf("Test %s", test.name)
+		t.Log(test.desc)
 		testStateTransitionSingleAddress(t, test.want, test.server)
 	}
 }
 
-func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener)) {
+func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn) {
 	defer leakcheck.Check(t)
 
 	stateNotifications := make(chan connectivity.State, len(want))
 	testBalancer.ResetNotifier(stateNotifications)
-	defer close(stateNotifications)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	defer lis.Close()
+	pl := testutils.NewPipeListener()
+	defer pl.Close()
 
 	// Launch the server.
-	go server(lis)
+	var conn net.Conn
+	var connMu sync.Mutex
+	go func() {
+		connMu.Lock()
+		conn = server(pl)
+		connMu.Unlock()
+	}()
 
-	client, err := DialContext(ctx, lis.Addr().String(), WithWaitForHandshake(), WithInsecure(), WithBalancerName(stateRecordingBalancerName))
+	client, err := DialContext(ctx, pl.Addr().String(), WithWaitForHandshake(), WithInsecure(),
+		WithBalancerName(stateRecordingBalancerName), WithDialer(pl.Dialer()), withBackoff(noBackoff{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +190,15 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 			}
 		}
 	}
+
+	connMu.Lock()
+	defer connMu.Unlock()
+	if conn != nil {
+		err = conn.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // When a READY connection is closed, the client enters TRANSIENT FAILURE before CONNECTING.
@@ -145,7 +214,6 @@ func TestStateTransition_ReadyToTransientFailure(t *testing.T) {
 
 	stateNotifications := make(chan connectivity.State, len(want))
 	testBalancer.ResetNotifier(stateNotifications)
-	defer close(stateNotifications)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -215,7 +283,6 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 
 	stateNotifications := make(chan connectivity.State, len(want))
 	testBalancer.ResetNotifier(stateNotifications)
-	defer close(stateNotifications)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -314,7 +381,6 @@ func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 
 	stateNotifications := make(chan connectivity.State, len(want))
 	testBalancer.ResetNotifier(stateNotifications)
-	defer close(stateNotifications)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -397,15 +463,6 @@ func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	}
 }
 
-// Keep reading until something causes the connection to die (EOF, server closed, etc). Useful
-// as a tool for mindlessly keeping the connection healthy, since the client will error if
-// things like client prefaces are not accepted in a timely fashion.
-func keepReading(conn net.Conn) {
-	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
-}
-
 type stateRecordingBalancer struct {
 	mu       sync.Mutex
 	notifier chan<- connectivity.State
@@ -443,4 +500,17 @@ func (b *stateRecordingBalancer) Build(cc balancer.ClientConn, opts balancer.Bui
 	b.Balancer = balancer.Get(PickFirstBalancerName).Build(cc, opts)
 	b.mu.Unlock()
 	return b
+}
+
+type noBackoff struct{}
+
+func (b noBackoff) Backoff(int) time.Duration { return time.Duration(0) }
+
+// Keep reading until something causes the connection to die (EOF, server closed, etc). Useful
+// as a tool for mindlessly keeping the connection healthy, since the client will error if
+// things like client prefaces are not accepted in a timely fashion.
+func keepReading(conn net.Conn) {
+	buf := make([]byte, 1024)
+	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
+	}
 }

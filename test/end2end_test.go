@@ -58,6 +58,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -6716,49 +6717,11 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	}
 }
 
-type pipeAddr struct{}
-
-func (p pipeAddr) Network() string { return "pipe" }
-func (p pipeAddr) String() string  { return "pipe" }
-
-type pipeListener struct {
-	c chan chan<- net.Conn
-}
-
-func (p *pipeListener) Accept() (net.Conn, error) {
-	connChan, ok := <-p.c
-	if !ok {
-		return nil, errors.New("closed")
-	}
-	c1, c2 := net.Pipe()
-	connChan <- c1
-	close(connChan)
-	return c2, nil
-}
-
-func (p *pipeListener) Close() error {
-	close(p.c)
-	return nil
-}
-
-func (p *pipeListener) Addr() net.Addr {
-	return pipeAddr{}
-}
-
-func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
-	return func(string, time.Duration) (net.Conn, error) {
-		connChan := make(chan net.Conn)
-		p.c <- connChan
-		conn := <-connChan
-		return conn, nil
-	}
-}
-
 func TestNetPipeConn(t *testing.T) {
 	// This test will block indefinitely if grpc writes both client and server
 	// prefaces without either reading from the Conn.
 	defer leakcheck.Check(t)
-	pl := &pipeListener{c: make(chan chan<- net.Conn)}
+	pl := testutils.NewPipeListener()
 	s := grpc.NewServer()
 	defer s.Stop()
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
