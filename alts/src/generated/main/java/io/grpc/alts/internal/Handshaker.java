@@ -1073,6 +1073,60 @@ public final class Handshaker {
     com.google.protobuf.ByteString
         getHostnameBytes();
 
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+    int getAttributesCount();
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+    boolean containsAttributes(
+        java.lang.String key);
+    /**
+     * Use {@link #getAttributesMap()} instead.
+     */
+    @java.lang.Deprecated
+    java.util.Map<java.lang.String, java.lang.String>
+    getAttributes();
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+    java.util.Map<java.lang.String, java.lang.String>
+    getAttributesMap();
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    java.lang.String getAttributesOrDefault(
+        java.lang.String key,
+        java.lang.String defaultValue);
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    java.lang.String getAttributesOrThrow(
+        java.lang.String key);
+
     public io.grpc.alts.internal.Handshaker.Identity.IdentityOneofCase getIdentityOneofCase();
   }
   /**
@@ -1133,6 +1187,19 @@ public final class Handshaker {
               identityOneof_ = s;
               break;
             }
+            case 26: {
+              if (!((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+                attributes_ = com.google.protobuf.MapField.newMapField(
+                    AttributesDefaultEntryHolder.defaultEntry);
+                mutable_bitField0_ |= 0x00000004;
+              }
+              com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
+              attributes__ = input.readMessage(
+                  AttributesDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+              attributes_.getMutableMap().put(
+                  attributes__.getKey(), attributes__.getValue());
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -1150,6 +1217,17 @@ public final class Handshaker {
       return io.grpc.alts.internal.Handshaker.internal_static_grpc_gcp_Identity_descriptor;
     }
 
+    @SuppressWarnings({"rawtypes"})
+    protected com.google.protobuf.MapField internalGetMapField(
+        int number) {
+      switch (number) {
+        case 3:
+          return internalGetAttributes();
+        default:
+          throw new RuntimeException(
+              "Invalid map field number: " + number);
+      }
+    }
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.alts.internal.Handshaker.internal_static_grpc_gcp_Identity_fieldAccessorTable
@@ -1157,6 +1235,7 @@ public final class Handshaker {
               io.grpc.alts.internal.Handshaker.Identity.class, io.grpc.alts.internal.Handshaker.Identity.Builder.class);
     }
 
+    private int bitField0_;
     private int identityOneofCase_ = 0;
     private java.lang.Object identityOneof_;
     public enum IdentityOneofCase
@@ -1297,6 +1376,98 @@ public final class Handshaker {
       }
     }
 
+    public static final int ATTRIBUTES_FIELD_NUMBER = 3;
+    private static final class AttributesDefaultEntryHolder {
+      static final com.google.protobuf.MapEntry<
+          java.lang.String, java.lang.String> defaultEntry =
+              com.google.protobuf.MapEntry
+              .<java.lang.String, java.lang.String>newDefaultInstance(
+                  io.grpc.alts.internal.Handshaker.internal_static_grpc_gcp_Identity_AttributesEntry_descriptor, 
+                  com.google.protobuf.WireFormat.FieldType.STRING,
+                  "",
+                  com.google.protobuf.WireFormat.FieldType.STRING,
+                  "");
+    }
+    private com.google.protobuf.MapField<
+        java.lang.String, java.lang.String> attributes_;
+    private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+    internalGetAttributes() {
+      if (attributes_ == null) {
+        return com.google.protobuf.MapField.emptyMapField(
+            AttributesDefaultEntryHolder.defaultEntry);
+      }
+      return attributes_;
+    }
+
+    public int getAttributesCount() {
+      return internalGetAttributes().getMap().size();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    public boolean containsAttributes(
+        java.lang.String key) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      return internalGetAttributes().getMap().containsKey(key);
+    }
+    /**
+     * Use {@link #getAttributesMap()} instead.
+     */
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, java.lang.String> getAttributes() {
+      return getAttributesMap();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    public java.util.Map<java.lang.String, java.lang.String> getAttributesMap() {
+      return internalGetAttributes().getMap();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    public java.lang.String getAttributesOrDefault(
+        java.lang.String key,
+        java.lang.String defaultValue) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      java.util.Map<java.lang.String, java.lang.String> map =
+          internalGetAttributes().getMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <pre>
+     * Additional attributes of the identity.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; attributes = 3;</code>
+     */
+
+    public java.lang.String getAttributesOrThrow(
+        java.lang.String key) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      java.util.Map<java.lang.String, java.lang.String> map =
+          internalGetAttributes().getMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -1315,6 +1486,12 @@ public final class Handshaker {
       if (identityOneofCase_ == 2) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, identityOneof_);
       }
+      com.google.protobuf.GeneratedMessageV3
+        .serializeStringMapTo(
+          output,
+          internalGetAttributes(),
+          AttributesDefaultEntryHolder.defaultEntry,
+          3);
       unknownFields.writeTo(output);
     }
 
@@ -1328,6 +1505,16 @@ public final class Handshaker {
       }
       if (identityOneofCase_ == 2) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, identityOneof_);
+      }
+      for (java.util.Map.Entry<java.lang.String, java.lang.String> entry
+           : internalGetAttributes().getMap().entrySet()) {
+        com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
+        attributes__ = AttributesDefaultEntryHolder.defaultEntry.newBuilderForType()
+            .setKey(entry.getKey())
+            .setValue(entry.getValue())
+            .build();
+        size += com.google.protobuf.CodedOutputStream
+            .computeMessageSize(3, attributes__);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -1345,6 +1532,8 @@ public final class Handshaker {
       io.grpc.alts.internal.Handshaker.Identity other = (io.grpc.alts.internal.Handshaker.Identity) obj;
 
       boolean result = true;
+      result = result && internalGetAttributes().equals(
+          other.internalGetAttributes());
       result = result && getIdentityOneofCase().equals(
           other.getIdentityOneofCase());
       if (!result) return false;
@@ -1371,6 +1560,10 @@ public final class Handshaker {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
+      if (!internalGetAttributes().getMap().isEmpty()) {
+        hash = (37 * hash) + ATTRIBUTES_FIELD_NUMBER;
+        hash = (53 * hash) + internalGetAttributes().hashCode();
+      }
       switch (identityOneofCase_) {
         case 1:
           hash = (37 * hash) + SERVICE_ACCOUNT_FIELD_NUMBER;
@@ -1488,6 +1681,28 @@ public final class Handshaker {
         return io.grpc.alts.internal.Handshaker.internal_static_grpc_gcp_Identity_descriptor;
       }
 
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapField internalGetMapField(
+          int number) {
+        switch (number) {
+          case 3:
+            return internalGetAttributes();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapField internalGetMutableMapField(
+          int number) {
+        switch (number) {
+          case 3:
+            return internalGetMutableAttributes();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.alts.internal.Handshaker.internal_static_grpc_gcp_Identity_fieldAccessorTable
@@ -1512,6 +1727,7 @@ public final class Handshaker {
       }
       public Builder clear() {
         super.clear();
+        internalGetMutableAttributes().clear();
         identityOneofCase_ = 0;
         identityOneof_ = null;
         return this;
@@ -1536,12 +1752,17 @@ public final class Handshaker {
 
       public io.grpc.alts.internal.Handshaker.Identity buildPartial() {
         io.grpc.alts.internal.Handshaker.Identity result = new io.grpc.alts.internal.Handshaker.Identity(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
         if (identityOneofCase_ == 1) {
           result.identityOneof_ = identityOneof_;
         }
         if (identityOneofCase_ == 2) {
           result.identityOneof_ = identityOneof_;
         }
+        result.attributes_ = internalGetAttributes();
+        result.attributes_.makeImmutable();
+        result.bitField0_ = to_bitField0_;
         result.identityOneofCase_ = identityOneofCase_;
         onBuilt();
         return result;
@@ -1584,6 +1805,8 @@ public final class Handshaker {
 
       public Builder mergeFrom(io.grpc.alts.internal.Handshaker.Identity other) {
         if (other == io.grpc.alts.internal.Handshaker.Identity.getDefaultInstance()) return this;
+        internalGetMutableAttributes().mergeFrom(
+            other.internalGetAttributes());
         switch (other.getIdentityOneofCase()) {
           case SERVICE_ACCOUNT: {
             identityOneofCase_ = 1;
@@ -1642,6 +1865,7 @@ public final class Handshaker {
         return this;
       }
 
+      private int bitField0_;
 
       /**
        * <pre>
@@ -1840,6 +2064,157 @@ public final class Handshaker {
         identityOneofCase_ = 2;
         identityOneof_ = value;
         onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.MapField<
+          java.lang.String, java.lang.String> attributes_;
+      private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+      internalGetAttributes() {
+        if (attributes_ == null) {
+          return com.google.protobuf.MapField.emptyMapField(
+              AttributesDefaultEntryHolder.defaultEntry);
+        }
+        return attributes_;
+      }
+      private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+      internalGetMutableAttributes() {
+        onChanged();;
+        if (attributes_ == null) {
+          attributes_ = com.google.protobuf.MapField.newMapField(
+              AttributesDefaultEntryHolder.defaultEntry);
+        }
+        if (!attributes_.isMutable()) {
+          attributes_ = attributes_.copy();
+        }
+        return attributes_;
+      }
+
+      public int getAttributesCount() {
+        return internalGetAttributes().getMap().size();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public boolean containsAttributes(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        return internalGetAttributes().getMap().containsKey(key);
+      }
+      /**
+       * Use {@link #getAttributesMap()} instead.
+       */
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, java.lang.String> getAttributes() {
+        return getAttributesMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public java.util.Map<java.lang.String, java.lang.String> getAttributesMap() {
+        return internalGetAttributes().getMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public java.lang.String getAttributesOrDefault(
+          java.lang.String key,
+          java.lang.String defaultValue) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        java.util.Map<java.lang.String, java.lang.String> map =
+            internalGetAttributes().getMap();
+        return map.containsKey(key) ? map.get(key) : defaultValue;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public java.lang.String getAttributesOrThrow(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        java.util.Map<java.lang.String, java.lang.String> map =
+            internalGetAttributes().getMap();
+        if (!map.containsKey(key)) {
+          throw new java.lang.IllegalArgumentException();
+        }
+        return map.get(key);
+      }
+
+      public Builder clearAttributes() {
+        internalGetMutableAttributes().getMutableMap()
+            .clear();
+        return this;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public Builder removeAttributes(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        internalGetMutableAttributes().getMutableMap()
+            .remove(key);
+        return this;
+      }
+      /**
+       * Use alternate mutation accessors instead.
+       */
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, java.lang.String>
+      getMutableAttributes() {
+        return internalGetMutableAttributes().getMutableMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+      public Builder putAttributes(
+          java.lang.String key,
+          java.lang.String value) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (value == null) { throw new java.lang.NullPointerException(); }
+        internalGetMutableAttributes().getMutableMap()
+            .put(key, value);
+        return this;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the identity.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; attributes = 3;</code>
+       */
+
+      public Builder putAllAttributes(
+          java.util.Map<java.lang.String, java.lang.String> values) {
+        internalGetMutableAttributes().getMutableMap()
+            .putAll(values);
         return this;
       }
       public final Builder setUnknownFields(
@@ -13126,6 +13501,11 @@ public final class Handshaker {
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_gcp_Identity_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_gcp_Identity_AttributesEntry_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_gcp_Identity_AttributesEntry_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_gcp_StartClientHandshakeReq_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
@@ -13183,56 +13563,59 @@ public final class Handshaker {
       "rpc/gcp/transport_security_common.proto\"" +
       "Y\n\010Endpoint\022\022\n\nip_address\030\001 \001(\t\022\014\n\004port\030" +
       "\002 \001(\005\022+\n\010protocol\030\003 \001(\0162\031.grpc.gcp.Netwo" +
-      "rkProtocol\"K\n\010Identity\022\031\n\017service_accoun" +
-      "t\030\001 \001(\tH\000\022\022\n\010hostname\030\002 \001(\tH\000B\020\n\016identit" +
-      "y_oneof\"\222\003\n\027StartClientHandshakeReq\022@\n\033h" +
-      "andshake_security_protocol\030\001 \001(\0162\033.grpc." +
-      "gcp.HandshakeProtocol\022\035\n\025application_pro" +
-      "tocols\030\002 \003(\t\022\030\n\020record_protocols\030\003 \003(\t\022-" +
-      "\n\021target_identities\030\004 \003(\0132\022.grpc.gcp.Ide" +
-      "ntity\022*\n\016local_identity\030\005 \001(\0132\022.grpc.gcp" +
-      ".Identity\022*\n\016local_endpoint\030\006 \001(\0132\022.grpc" +
-      ".gcp.Endpoint\022+\n\017remote_endpoint\030\007 \001(\0132\022" +
-      ".grpc.gcp.Endpoint\022\023\n\013target_name\030\010 \001(\t\022" +
-      "3\n\014rpc_versions\030\t \001(\0132\035.grpc.gcp.RpcProt" +
-      "ocolVersions\"c\n\031ServerHandshakeParameter" +
-      "s\022\030\n\020record_protocols\030\001 \003(\t\022,\n\020local_ide" +
-      "ntities\030\002 \003(\0132\022.grpc.gcp.Identity\"\223\003\n\027St" +
-      "artServerHandshakeReq\022\035\n\025application_pro" +
-      "tocols\030\001 \003(\t\022X\n\024handshake_parameters\030\002 \003" +
-      "(\0132:.grpc.gcp.StartServerHandshakeReq.Ha" +
-      "ndshakeParametersEntry\022\020\n\010in_bytes\030\003 \001(\014" +
-      "\022*\n\016local_endpoint\030\004 \001(\0132\022.grpc.gcp.Endp" +
-      "oint\022+\n\017remote_endpoint\030\005 \001(\0132\022.grpc.gcp" +
-      ".Endpoint\0223\n\014rpc_versions\030\006 \001(\0132\035.grpc.g" +
-      "cp.RpcProtocolVersions\032_\n\030HandshakeParam" +
-      "etersEntry\022\013\n\003key\030\001 \001(\005\0222\n\005value\030\002 \001(\0132#" +
-      ".grpc.gcp.ServerHandshakeParameters:\0028\001\"" +
-      "+\n\027NextHandshakeMessageReq\022\020\n\010in_bytes\030\001" +
-      " \001(\014\"\305\001\n\rHandshakerReq\0229\n\014client_start\030\001" +
-      " \001(\0132!.grpc.gcp.StartClientHandshakeReqH" +
-      "\000\0229\n\014server_start\030\002 \001(\0132!.grpc.gcp.Start" +
-      "ServerHandshakeReqH\000\0221\n\004next\030\003 \001(\0132!.grp" +
-      "c.gcp.NextHandshakeMessageReqH\000B\013\n\treq_o" +
-      "neof\"\207\002\n\020HandshakerResult\022\034\n\024application" +
-      "_protocol\030\001 \001(\t\022\027\n\017record_protocol\030\002 \001(\t" +
-      "\022\020\n\010key_data\030\003 \001(\014\022)\n\rpeer_identity\030\004 \001(" +
-      "\0132\022.grpc.gcp.Identity\022*\n\016local_identity\030" +
-      "\005 \001(\0132\022.grpc.gcp.Identity\022\031\n\021keep_channe" +
-      "l_open\030\006 \001(\010\0228\n\021peer_rpc_versions\030\007 \001(\0132" +
-      "\035.grpc.gcp.RpcProtocolVersions\"1\n\020Handsh" +
-      "akerStatus\022\014\n\004code\030\001 \001(\r\022\017\n\007details\030\002 \001(" +
-      "\t\"\224\001\n\016HandshakerResp\022\022\n\nout_frames\030\001 \001(\014" +
-      "\022\026\n\016bytes_consumed\030\002 \001(\r\022*\n\006result\030\003 \001(\013" +
-      "2\032.grpc.gcp.HandshakerResult\022*\n\006status\030\004" +
-      " \001(\0132\032.grpc.gcp.HandshakerStatus*J\n\021Hand" +
-      "shakeProtocol\022\"\n\036HANDSHAKE_PROTOCOL_UNSP" +
-      "ECIFIED\020\000\022\007\n\003TLS\020\001\022\010\n\004ALTS\020\002*E\n\017NetworkP" +
-      "rotocol\022 \n\034NETWORK_PROTOCOL_UNSPECIFIED\020" +
-      "\000\022\007\n\003TCP\020\001\022\007\n\003UDP\020\0022[\n\021HandshakerService" +
-      "\022F\n\013DoHandshake\022\027.grpc.gcp.HandshakerReq" +
-      "\032\030.grpc.gcp.HandshakerResp\"\000(\0010\001B\027\n\025io.g" +
-      "rpc.alts.internalb\006proto3"
+      "rkProtocol\"\266\001\n\010Identity\022\031\n\017service_accou" +
+      "nt\030\001 \001(\tH\000\022\022\n\010hostname\030\002 \001(\tH\000\0226\n\nattrib" +
+      "utes\030\003 \003(\0132\".grpc.gcp.Identity.Attribute" +
+      "sEntry\0321\n\017AttributesEntry\022\013\n\003key\030\001 \001(\t\022\r" +
+      "\n\005value\030\002 \001(\t:\0028\001B\020\n\016identity_oneof\"\222\003\n\027" +
+      "StartClientHandshakeReq\022@\n\033handshake_sec" +
+      "urity_protocol\030\001 \001(\0162\033.grpc.gcp.Handshak" +
+      "eProtocol\022\035\n\025application_protocols\030\002 \003(\t" +
+      "\022\030\n\020record_protocols\030\003 \003(\t\022-\n\021target_ide" +
+      "ntities\030\004 \003(\0132\022.grpc.gcp.Identity\022*\n\016loc" +
+      "al_identity\030\005 \001(\0132\022.grpc.gcp.Identity\022*\n" +
+      "\016local_endpoint\030\006 \001(\0132\022.grpc.gcp.Endpoin" +
+      "t\022+\n\017remote_endpoint\030\007 \001(\0132\022.grpc.gcp.En" +
+      "dpoint\022\023\n\013target_name\030\010 \001(\t\0223\n\014rpc_versi" +
+      "ons\030\t \001(\0132\035.grpc.gcp.RpcProtocolVersions" +
+      "\"c\n\031ServerHandshakeParameters\022\030\n\020record_" +
+      "protocols\030\001 \003(\t\022,\n\020local_identities\030\002 \003(" +
+      "\0132\022.grpc.gcp.Identity\"\223\003\n\027StartServerHan" +
+      "dshakeReq\022\035\n\025application_protocols\030\001 \003(\t" +
+      "\022X\n\024handshake_parameters\030\002 \003(\0132:.grpc.gc" +
+      "p.StartServerHandshakeReq.HandshakeParam" +
+      "etersEntry\022\020\n\010in_bytes\030\003 \001(\014\022*\n\016local_en" +
+      "dpoint\030\004 \001(\0132\022.grpc.gcp.Endpoint\022+\n\017remo" +
+      "te_endpoint\030\005 \001(\0132\022.grpc.gcp.Endpoint\0223\n" +
+      "\014rpc_versions\030\006 \001(\0132\035.grpc.gcp.RpcProtoc" +
+      "olVersions\032_\n\030HandshakeParametersEntry\022\013" +
+      "\n\003key\030\001 \001(\005\0222\n\005value\030\002 \001(\0132#.grpc.gcp.Se" +
+      "rverHandshakeParameters:\0028\001\"+\n\027NextHands" +
+      "hakeMessageReq\022\020\n\010in_bytes\030\001 \001(\014\"\305\001\n\rHan" +
+      "dshakerReq\0229\n\014client_start\030\001 \001(\0132!.grpc." +
+      "gcp.StartClientHandshakeReqH\000\0229\n\014server_" +
+      "start\030\002 \001(\0132!.grpc.gcp.StartServerHandsh" +
+      "akeReqH\000\0221\n\004next\030\003 \001(\0132!.grpc.gcp.NextHa" +
+      "ndshakeMessageReqH\000B\013\n\treq_oneof\"\207\002\n\020Han" +
+      "dshakerResult\022\034\n\024application_protocol\030\001 " +
+      "\001(\t\022\027\n\017record_protocol\030\002 \001(\t\022\020\n\010key_data" +
+      "\030\003 \001(\014\022)\n\rpeer_identity\030\004 \001(\0132\022.grpc.gcp" +
+      ".Identity\022*\n\016local_identity\030\005 \001(\0132\022.grpc" +
+      ".gcp.Identity\022\031\n\021keep_channel_open\030\006 \001(\010" +
+      "\0228\n\021peer_rpc_versions\030\007 \001(\0132\035.grpc.gcp.R" +
+      "pcProtocolVersions\"1\n\020HandshakerStatus\022\014" +
+      "\n\004code\030\001 \001(\r\022\017\n\007details\030\002 \001(\t\"\224\001\n\016Handsh" +
+      "akerResp\022\022\n\nout_frames\030\001 \001(\014\022\026\n\016bytes_co" +
+      "nsumed\030\002 \001(\r\022*\n\006result\030\003 \001(\0132\032.grpc.gcp." +
+      "HandshakerResult\022*\n\006status\030\004 \001(\0132\032.grpc." +
+      "gcp.HandshakerStatus*J\n\021HandshakeProtoco" +
+      "l\022\"\n\036HANDSHAKE_PROTOCOL_UNSPECIFIED\020\000\022\007\n" +
+      "\003TLS\020\001\022\010\n\004ALTS\020\002*E\n\017NetworkProtocol\022 \n\034N" +
+      "ETWORK_PROTOCOL_UNSPECIFIED\020\000\022\007\n\003TCP\020\001\022\007" +
+      "\n\003UDP\020\0022[\n\021HandshakerService\022F\n\013DoHandsh" +
+      "ake\022\027.grpc.gcp.HandshakerReq\032\030.grpc.gcp." +
+      "HandshakerResp\"\000(\0010\001B\027\n\025io.grpc.alts.int" +
+      "ernalb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -13258,7 +13641,13 @@ public final class Handshaker {
     internal_static_grpc_gcp_Identity_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_gcp_Identity_descriptor,
-        new java.lang.String[] { "ServiceAccount", "Hostname", "IdentityOneof", });
+        new java.lang.String[] { "ServiceAccount", "Hostname", "Attributes", "IdentityOneof", });
+    internal_static_grpc_gcp_Identity_AttributesEntry_descriptor =
+      internal_static_grpc_gcp_Identity_descriptor.getNestedTypes().get(0);
+    internal_static_grpc_gcp_Identity_AttributesEntry_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_gcp_Identity_AttributesEntry_descriptor,
+        new java.lang.String[] { "Key", "Value", });
     internal_static_grpc_gcp_StartClientHandshakeReq_descriptor =
       getDescriptor().getMessageTypes().get(2);
     internal_static_grpc_gcp_StartClientHandshakeReq_fieldAccessorTable = new

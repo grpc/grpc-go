@@ -131,6 +131,60 @@ public final class Altscontext {
      * <code>.grpc.gcp.RpcProtocolVersions peer_rpc_versions = 6;</code>
      */
     io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersionsOrBuilder getPeerRpcVersionsOrBuilder();
+
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+    int getPeerAttributesCount();
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+    boolean containsPeerAttributes(
+        java.lang.String key);
+    /**
+     * Use {@link #getPeerAttributesMap()} instead.
+     */
+    @java.lang.Deprecated
+    java.util.Map<java.lang.String, java.lang.String>
+    getPeerAttributes();
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+    java.util.Map<java.lang.String, java.lang.String>
+    getPeerAttributesMap();
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    java.lang.String getPeerAttributesOrDefault(
+        java.lang.String key,
+        java.lang.String defaultValue);
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    java.lang.String getPeerAttributesOrThrow(
+        java.lang.String key);
   }
   /**
    * Protobuf type {@code grpc.gcp.AltsContext}
@@ -226,6 +280,19 @@ public final class Altscontext {
 
               break;
             }
+            case 58: {
+              if (!((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
+                peerAttributes_ = com.google.protobuf.MapField.newMapField(
+                    PeerAttributesDefaultEntryHolder.defaultEntry);
+                mutable_bitField0_ |= 0x00000040;
+              }
+              com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
+              peerAttributes__ = input.readMessage(
+                  PeerAttributesDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+              peerAttributes_.getMutableMap().put(
+                  peerAttributes__.getKey(), peerAttributes__.getValue());
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -243,6 +310,17 @@ public final class Altscontext {
       return io.grpc.alts.internal.Altscontext.internal_static_grpc_gcp_AltsContext_descriptor;
     }
 
+    @SuppressWarnings({"rawtypes"})
+    protected com.google.protobuf.MapField internalGetMapField(
+        int number) {
+      switch (number) {
+        case 7:
+          return internalGetPeerAttributes();
+        default:
+          throw new RuntimeException(
+              "Invalid map field number: " + number);
+      }
+    }
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.alts.internal.Altscontext.internal_static_grpc_gcp_AltsContext_fieldAccessorTable
@@ -250,6 +328,7 @@ public final class Altscontext {
               io.grpc.alts.internal.Altscontext.AltsContext.class, io.grpc.alts.internal.Altscontext.AltsContext.Builder.class);
     }
 
+    private int bitField0_;
     public static final int APPLICATION_PROTOCOL_FIELD_NUMBER = 1;
     private volatile java.lang.Object applicationProtocol_;
     /**
@@ -475,6 +554,98 @@ public final class Altscontext {
       return getPeerRpcVersions();
     }
 
+    public static final int PEER_ATTRIBUTES_FIELD_NUMBER = 7;
+    private static final class PeerAttributesDefaultEntryHolder {
+      static final com.google.protobuf.MapEntry<
+          java.lang.String, java.lang.String> defaultEntry =
+              com.google.protobuf.MapEntry
+              .<java.lang.String, java.lang.String>newDefaultInstance(
+                  io.grpc.alts.internal.Altscontext.internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_descriptor, 
+                  com.google.protobuf.WireFormat.FieldType.STRING,
+                  "",
+                  com.google.protobuf.WireFormat.FieldType.STRING,
+                  "");
+    }
+    private com.google.protobuf.MapField<
+        java.lang.String, java.lang.String> peerAttributes_;
+    private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+    internalGetPeerAttributes() {
+      if (peerAttributes_ == null) {
+        return com.google.protobuf.MapField.emptyMapField(
+            PeerAttributesDefaultEntryHolder.defaultEntry);
+      }
+      return peerAttributes_;
+    }
+
+    public int getPeerAttributesCount() {
+      return internalGetPeerAttributes().getMap().size();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    public boolean containsPeerAttributes(
+        java.lang.String key) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      return internalGetPeerAttributes().getMap().containsKey(key);
+    }
+    /**
+     * Use {@link #getPeerAttributesMap()} instead.
+     */
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, java.lang.String> getPeerAttributes() {
+      return getPeerAttributesMap();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    public java.util.Map<java.lang.String, java.lang.String> getPeerAttributesMap() {
+      return internalGetPeerAttributes().getMap();
+    }
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    public java.lang.String getPeerAttributesOrDefault(
+        java.lang.String key,
+        java.lang.String defaultValue) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      java.util.Map<java.lang.String, java.lang.String> map =
+          internalGetPeerAttributes().getMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <pre>
+     * Additional attributes of the peer.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+     */
+
+    public java.lang.String getPeerAttributesOrThrow(
+        java.lang.String key) {
+      if (key == null) { throw new java.lang.NullPointerException(); }
+      java.util.Map<java.lang.String, java.lang.String> map =
+          internalGetPeerAttributes().getMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -505,6 +676,12 @@ public final class Altscontext {
       if (peerRpcVersions_ != null) {
         output.writeMessage(6, getPeerRpcVersions());
       }
+      com.google.protobuf.GeneratedMessageV3
+        .serializeStringMapTo(
+          output,
+          internalGetPeerAttributes(),
+          PeerAttributesDefaultEntryHolder.defaultEntry,
+          7);
       unknownFields.writeTo(output);
     }
 
@@ -532,6 +709,16 @@ public final class Altscontext {
       if (peerRpcVersions_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(6, getPeerRpcVersions());
+      }
+      for (java.util.Map.Entry<java.lang.String, java.lang.String> entry
+           : internalGetPeerAttributes().getMap().entrySet()) {
+        com.google.protobuf.MapEntry<java.lang.String, java.lang.String>
+        peerAttributes__ = PeerAttributesDefaultEntryHolder.defaultEntry.newBuilderForType()
+            .setKey(entry.getKey())
+            .setValue(entry.getValue())
+            .build();
+        size += com.google.protobuf.CodedOutputStream
+            .computeMessageSize(7, peerAttributes__);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -563,6 +750,8 @@ public final class Altscontext {
         result = result && getPeerRpcVersions()
             .equals(other.getPeerRpcVersions());
       }
+      result = result && internalGetPeerAttributes().equals(
+          other.internalGetPeerAttributes());
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -587,6 +776,10 @@ public final class Altscontext {
       if (hasPeerRpcVersions()) {
         hash = (37 * hash) + PEER_RPC_VERSIONS_FIELD_NUMBER;
         hash = (53 * hash) + getPeerRpcVersions().hashCode();
+      }
+      if (!internalGetPeerAttributes().getMap().isEmpty()) {
+        hash = (37 * hash) + PEER_ATTRIBUTES_FIELD_NUMBER;
+        hash = (53 * hash) + internalGetPeerAttributes().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -693,6 +886,28 @@ public final class Altscontext {
         return io.grpc.alts.internal.Altscontext.internal_static_grpc_gcp_AltsContext_descriptor;
       }
 
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapField internalGetMapField(
+          int number) {
+        switch (number) {
+          case 7:
+            return internalGetPeerAttributes();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
+      @SuppressWarnings({"rawtypes"})
+      protected com.google.protobuf.MapField internalGetMutableMapField(
+          int number) {
+        switch (number) {
+          case 7:
+            return internalGetMutablePeerAttributes();
+          default:
+            throw new RuntimeException(
+                "Invalid map field number: " + number);
+        }
+      }
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.alts.internal.Altscontext.internal_static_grpc_gcp_AltsContext_fieldAccessorTable
@@ -733,6 +948,7 @@ public final class Altscontext {
           peerRpcVersions_ = null;
           peerRpcVersionsBuilder_ = null;
         }
+        internalGetMutablePeerAttributes().clear();
         return this;
       }
 
@@ -755,6 +971,8 @@ public final class Altscontext {
 
       public io.grpc.alts.internal.Altscontext.AltsContext buildPartial() {
         io.grpc.alts.internal.Altscontext.AltsContext result = new io.grpc.alts.internal.Altscontext.AltsContext(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
         result.applicationProtocol_ = applicationProtocol_;
         result.recordProtocol_ = recordProtocol_;
         result.securityLevel_ = securityLevel_;
@@ -765,6 +983,9 @@ public final class Altscontext {
         } else {
           result.peerRpcVersions_ = peerRpcVersionsBuilder_.build();
         }
+        result.peerAttributes_ = internalGetPeerAttributes();
+        result.peerAttributes_.makeImmutable();
+        result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
       }
@@ -828,6 +1049,8 @@ public final class Altscontext {
         if (other.hasPeerRpcVersions()) {
           mergePeerRpcVersions(other.getPeerRpcVersions());
         }
+        internalGetMutablePeerAttributes().mergeFrom(
+            other.internalGetPeerAttributes());
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
@@ -854,6 +1077,7 @@ public final class Altscontext {
         }
         return this;
       }
+      private int bitField0_;
 
       private java.lang.Object applicationProtocol_ = "";
       /**
@@ -1427,6 +1651,157 @@ public final class Altscontext {
         }
         return peerRpcVersionsBuilder_;
       }
+
+      private com.google.protobuf.MapField<
+          java.lang.String, java.lang.String> peerAttributes_;
+      private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+      internalGetPeerAttributes() {
+        if (peerAttributes_ == null) {
+          return com.google.protobuf.MapField.emptyMapField(
+              PeerAttributesDefaultEntryHolder.defaultEntry);
+        }
+        return peerAttributes_;
+      }
+      private com.google.protobuf.MapField<java.lang.String, java.lang.String>
+      internalGetMutablePeerAttributes() {
+        onChanged();;
+        if (peerAttributes_ == null) {
+          peerAttributes_ = com.google.protobuf.MapField.newMapField(
+              PeerAttributesDefaultEntryHolder.defaultEntry);
+        }
+        if (!peerAttributes_.isMutable()) {
+          peerAttributes_ = peerAttributes_.copy();
+        }
+        return peerAttributes_;
+      }
+
+      public int getPeerAttributesCount() {
+        return internalGetPeerAttributes().getMap().size();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public boolean containsPeerAttributes(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        return internalGetPeerAttributes().getMap().containsKey(key);
+      }
+      /**
+       * Use {@link #getPeerAttributesMap()} instead.
+       */
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, java.lang.String> getPeerAttributes() {
+        return getPeerAttributesMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public java.util.Map<java.lang.String, java.lang.String> getPeerAttributesMap() {
+        return internalGetPeerAttributes().getMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public java.lang.String getPeerAttributesOrDefault(
+          java.lang.String key,
+          java.lang.String defaultValue) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        java.util.Map<java.lang.String, java.lang.String> map =
+            internalGetPeerAttributes().getMap();
+        return map.containsKey(key) ? map.get(key) : defaultValue;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public java.lang.String getPeerAttributesOrThrow(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        java.util.Map<java.lang.String, java.lang.String> map =
+            internalGetPeerAttributes().getMap();
+        if (!map.containsKey(key)) {
+          throw new java.lang.IllegalArgumentException();
+        }
+        return map.get(key);
+      }
+
+      public Builder clearPeerAttributes() {
+        internalGetMutablePeerAttributes().getMutableMap()
+            .clear();
+        return this;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public Builder removePeerAttributes(
+          java.lang.String key) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        internalGetMutablePeerAttributes().getMutableMap()
+            .remove(key);
+        return this;
+      }
+      /**
+       * Use alternate mutation accessors instead.
+       */
+      @java.lang.Deprecated
+      public java.util.Map<java.lang.String, java.lang.String>
+      getMutablePeerAttributes() {
+        return internalGetMutablePeerAttributes().getMutableMap();
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+      public Builder putPeerAttributes(
+          java.lang.String key,
+          java.lang.String value) {
+        if (key == null) { throw new java.lang.NullPointerException(); }
+        if (value == null) { throw new java.lang.NullPointerException(); }
+        internalGetMutablePeerAttributes().getMutableMap()
+            .put(key, value);
+        return this;
+      }
+      /**
+       * <pre>
+       * Additional attributes of the peer.
+       * </pre>
+       *
+       * <code>map&lt;string, string&gt; peer_attributes = 7;</code>
+       */
+
+      public Builder putAllPeerAttributes(
+          java.util.Map<java.lang.String, java.lang.String> values) {
+        internalGetMutablePeerAttributes().getMutableMap()
+            .putAll(values);
+        return this;
+      }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
@@ -1481,6 +1856,11 @@ public final class Altscontext {
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_gcp_AltsContext_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1492,13 +1872,16 @@ public final class Altscontext {
     java.lang.String[] descriptorData = {
       "\n\032grpc/gcp/altscontext.proto\022\010grpc.gcp\032(" +
       "grpc/gcp/transport_security_common.proto" +
-      "\"\354\001\n\013AltsContext\022\034\n\024application_protocol" +
+      "\"\347\002\n\013AltsContext\022\034\n\024application_protocol" +
       "\030\001 \001(\t\022\027\n\017record_protocol\030\002 \001(\t\022/\n\016secur" +
       "ity_level\030\003 \001(\0162\027.grpc.gcp.SecurityLevel" +
       "\022\034\n\024peer_service_account\030\004 \001(\t\022\035\n\025local_" +
       "service_account\030\005 \001(\t\0228\n\021peer_rpc_versio" +
-      "ns\030\006 \001(\0132\035.grpc.gcp.RpcProtocolVersionsB" +
-      "\027\n\025io.grpc.alts.internalb\006proto3"
+      "ns\030\006 \001(\0132\035.grpc.gcp.RpcProtocolVersions\022" +
+      "B\n\017peer_attributes\030\007 \003(\0132).grpc.gcp.Alts" +
+      "Context.PeerAttributesEntry\0325\n\023PeerAttri" +
+      "butesEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\002" +
+      "8\001B\027\n\025io.grpc.alts.internalb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -1518,7 +1901,13 @@ public final class Altscontext {
     internal_static_grpc_gcp_AltsContext_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_gcp_AltsContext_descriptor,
-        new java.lang.String[] { "ApplicationProtocol", "RecordProtocol", "SecurityLevel", "PeerServiceAccount", "LocalServiceAccount", "PeerRpcVersions", });
+        new java.lang.String[] { "ApplicationProtocol", "RecordProtocol", "SecurityLevel", "PeerServiceAccount", "LocalServiceAccount", "PeerRpcVersions", "PeerAttributes", });
+    internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_descriptor =
+      internal_static_grpc_gcp_AltsContext_descriptor.getNestedTypes().get(0);
+    internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_gcp_AltsContext_PeerAttributesEntry_descriptor,
+        new java.lang.String[] { "Key", "Value", });
     io.grpc.alts.internal.TransportSecurityCommon.getDescriptor();
   }
 

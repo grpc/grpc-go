@@ -57,6 +57,9 @@ message Identity {
     // Hostname of a connection endpoint.
     string hostname = 2;
   }
+
+  // Additional attributes of the identity.
+  map<string, string> attributes = 3;
 }
 
 message StartClientHandshakeReq {
