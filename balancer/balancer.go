@@ -95,7 +95,7 @@ type NewSubConnOptions struct {
 	// used.
 	CredsBundle credentials.Bundle
 	// HealthCheckEnabled indicates whether health check service should be
-	// enabled on this SubCOnn
+	// enabled on this SubConn
 	HealthCheckEnabled bool
 }
 

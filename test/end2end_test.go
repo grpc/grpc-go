@@ -308,7 +308,6 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	}
 	for {
 		in, err := stream.Recv()
-		fmt.Println("recived")
 		if err == io.EOF {
 			// read done.
 			return nil

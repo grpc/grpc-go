@@ -43,7 +43,6 @@ import (
 func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error), func(bool), string) error) func() {
 	oldHcFunc := internal.HealthCheckFunc
 	internal.HealthCheckFunc = f
-	fmt.Println("set hc func", internal.HealthCheckFunc != nil)
 	return func() {
 		internal.HealthCheckFunc = oldHcFunc
 	}
@@ -70,7 +69,7 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 			Service: service,
 		}); err != nil && err != io.EOF {
 			fmt.Println("SendMsg failed with err", err)
-			//stream should have been closed, so we can create safely continue to create a new stream.
+			//stream should have been closed, so we can safely continue to create a new stream.
 			continue
 		}
 		s.CloseSend()
@@ -78,9 +77,14 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 			resp := new(healthpb.HealthCheckResponse)
 			if err = s.RecvMsg(resp); err != nil {
 				fmt.Println("RecvMsg failed with err:", err)
+				if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+					update(true)
+					return err
+				}
 				// we can safely break here and continue to create a new stream, since a non-nil error has been received.
 				break
 			}
+			fmt.Println("status", resp.Status)
 			switch resp.Status {
 			case healthpb.HealthCheckResponse_SERVING:
 				fmt.Println("serving!")
@@ -97,27 +101,27 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 func newTestHealthServer() *testHealthServer {
 	return &testHealthServer{
 		update: make(chan struct{}, 1),
+		status: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
 	}
 }
 
 type testHealthServer struct {
 	mu     sync.Mutex
-	status healthpb.HealthCheckResponse_ServingStatus
+	status map[string]healthpb.HealthCheckResponse_ServingStatus
 	update chan struct{}
 }
 
-// Check implements `service Health`.
 func (s *testHealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
 	return &healthpb.HealthCheckResponse{
 		Status: healthpb.HealthCheckResponse_SERVING,
 	}, nil
 }
 
-// Watch implements `service Health`.
 func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
-	fmt.Println("enter watch")
+	// service string is used here to switch between the behaviors of Watch.
 	switch in.Service {
 	case "foo":
+		fmt.Println("inside foo")
 		var done bool
 		for {
 			fmt.Println("enter for")
@@ -131,14 +135,21 @@ func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthp
 			}
 			s.mu.Lock()
 			resp := &healthpb.HealthCheckResponse{
-				Status: s.status,
+				Status: s.status[in.Service],
 			}
 			s.mu.Unlock()
 			stream.SendMsg(resp)
 		}
 		return nil
+	case "delay":
+		// do nothing to mock a delay of health check response from server side.
+		select {
+		case <-stream.Context().Done():
+		case <-time.After(3 * time.Second):
+		}
+		return nil
 	default:
-		return status.Error(codes.Unimplemented, "the provided service name is not supported")
+		return nil
 	}
 }
 
@@ -146,19 +157,16 @@ func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthp
 // or insert a new service entry into the statusMap.
 func (s *testHealthServer) SetServingStatus(service string, status healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
-	s.status = status
-	fmt.Println("lallalallalallal")
+	s.status[service] = status
 	select {
 	case <-s.update:
 	default:
 	}
 	s.update <- struct{}{}
-	fmt.Println("hh1")
-
 	s.mu.Unlock()
 }
 
-func TestHealthCheckWatch(t *testing.T) {
+func TestHealthCheckWatchStateChange(t *testing.T) {
 	defer leakcheck.Check(t)
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -169,7 +177,7 @@ func TestHealthCheckWatch(t *testing.T) {
 	healthpb.RegisterHealthServer(s, ts)
 	go s.Serve(lis)
 	defer s.Stop()
-	ts.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_NOT_SERVING)
 	replace := replaceHealthCheckFunc(testHealthCheckFunc)
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -179,19 +187,23 @@ func TestHealthCheckWatch(t *testing.T) {
 		t.Fatal("dial failed")
 	}
 	defer cc.Close()
+
 	r.NewServiceConfig(`{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	}
 }`)
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	// TODO: better way to make sure cc state is not in ready?
 	for i := 0; i < 10; i++ {
 		if state := cc.GetState(); state == connectivity.Ready {
-			t.Fatal("should not be ready")
+			t.Fatal("ClientConn should not be in READY state")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	ts.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 
 	var i int
 	for i = 0; i < 100; i++ {
@@ -201,10 +213,10 @@ func TestHealthCheckWatch(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if i == 100 {
-		t.Fatal("should be ready")
+		t.Fatal("ClientConn should be in READY state")
 	}
 
-	ts.SetServingStatus("", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
 	for i = 0; i < 100; i++ {
 		if state := cc.GetState(); state == connectivity.TransientFailure || state == connectivity.Connecting {
 			break
@@ -212,11 +224,11 @@ func TestHealthCheckWatch(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if i == 100 {
-		t.Fatal("should be transient failure or connecting")
+		t.Fatal("ClientConn should be in TRANSIENT FAILURE or CONNECTING state")
 	}
 }
 
-// Goal: In the case of a goaway happens health check stream should be ended and health check func exited.
+// In the case of a goaway happens, health check stream should be ended and health check func should exit.
 func TestHealthCheckWithGoAway(t *testing.T) {
 	defer leakcheck.Check(t)
 	s := grpc.NewServer()
@@ -229,10 +241,325 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
-	ts.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	tc := testpb.NewTestServiceClient(cc)
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	// make some rpcs to make sure connection is working.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// the stream rpc will persist through goaway event.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam := []*testpb.ResponseParameters{{Size: 1}}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+
+	select {
+	case <-hcExitChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+
+	// server sends GoAway
+	go s.GracefulStop()
+
+	select {
+	case <-hcExitChan:
+	case <-time.After(time.Second):
+		t.Fatal("Health check function has not exited after 1s.")
+	}
+
+	// The existing RPC should be still good to proceed.
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+	// The RPC will run until canceled.
+	cancel()
+}
+
+func TestHealthCheckWithConnClose(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+	tc := testpb.NewTestServiceClient(cc)
+
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	// make some rpcs to make sure connection is working.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-hcExitChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+	// server closes the connection
+	s.Stop()
+
+	select {
+	case <-hcExitChan:
+	case <-time.After(time.Second):
+		t.Fatal("Health check function has not exited after 1s.")
+	}
+}
+
+func TestHealthCheckWithAddrConnTearDown(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	tc := testpb.NewTestServiceClient(cc)
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	// make some rpcs to make sure connection is working.
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// the stream rpc will persist through goaway event.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam := []*testpb.ResponseParameters{{Size: 1}}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+
+	select {
+	case <-hcExitChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+	// trigger teardown of the ac
+	r.NewAddress([]resolver.Address{})
+
+	select {
+	case <-hcExitChan:
+	case <-time.After(time.Second):
+		t.Fatal("Health check function has not exited after 1s.")
+	}
+
+	// The existing RPC should be still good to proceed.
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+	// The RPC will run until canceled.
+	cancel()
+}
+
+func TestHealthCheckWithoutUpdateBeingCalled(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
+	hcEnterChan := make(chan struct{})
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "delay"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	select {
+	case <-hcExitChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+
+	select {
+	case <-hcEnterChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Health check function has not been invoked after 2s.")
+	}
+	// trigger teardown of the ac
+	r.NewAddress([]resolver.Address{})
+
+	select {
+	case <-hcExitChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 1s.")
+	}
+}
+
+func TestHealthCheckWithUnimplementedServerSide(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	hcExitChan := make(chan struct{})
+	errChan := make(chan error, 1)
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		errChan <- err
 		close(hcExitChan)
 		return err
 	}
@@ -262,54 +589,223 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	respParam := []*testpb.ResponseParameters{{Size: 1}}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-	}
-
-	select {
-	case <-hcExitChan:
-		t.Fatal("Health check function has exited, which is not expected.")
-	default:
-	}
-	go s.GracefulStop()
-
 	select {
 	case <-hcExitChan:
 	case <-time.After(time.Second):
 		t.Fatal("Health check function has not exited after 1s.")
 	}
-
-	// The existing RPC should be still good to proceed.
-	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
+	select {
+	case err := <-errChan:
+		if s, ok := status.FromError(err); !ok || s.Code() != codes.Unimplemented {
+			t.Fatalf("Health check service should have received error with code Unimplemented, received err : %v ", err)
+		}
+	default:
+		t.Fatal("no err in the errChan")
 	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-	}
-	// The RPC will run until canceled.
-	cancel()
 }
 
-func TestHealthCheckWithClose(t *testing.T) {
+func TestHealthCheckDisableWithDialOption(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
+	hcEnterChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		return err
+	}
 
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"), grpc.WithDisableHealthCheck())
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	tc := testpb.NewTestServiceClient(cc)
+	defer cc.Close()
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-hcEnterChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+}
+
+func TestHealthCheckDisableWithBalancer(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
+	hcEnterChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("pick_first"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	tc := testpb.NewTestServiceClient(cc)
+	defer cc.Close()
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-hcEnterChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+}
+
+func TestHealthCheckDisableWithServiceConfig(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
+	hcEnterChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	tc := testpb.NewTestServiceClient(cc)
+	defer cc.Close()
+
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-hcEnterChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
+}
+
+func TestHealthCheckDisableWithServiceConfig(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
+	hcEnterChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	tc := testpb.NewTestServiceClient(cc)
+	defer cc.Close()
+
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-hcEnterChan:
+		t.Fatal("Health check function has exited, which is not expected.")
+	default:
+	}
 }
 
 // TODO: all tests

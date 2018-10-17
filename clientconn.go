@@ -1225,8 +1225,10 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			if ac.transport != newTr {
 				return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 			}
-			ac.updateConnectivityState(connectivity.Connecting)
-			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			if ac.state != connectivity.Connecting {
+				ac.updateConnectivityState(connectivity.Connecting)
+				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			}
 			return ac.newClientStream(hcCtx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 		}
 		firstReady := true
