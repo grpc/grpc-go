@@ -21,11 +21,14 @@
 package syscall
 
 import (
+	"errors"
 	"net"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
 )
+
+var GetTCPUserTimeoutNoopError = errors.New("GetTCPUserTimeout is a no-op on non-linux or appengine environments")
 
 func init() {
 	grpclog.Info("CPU time info is unavailable on non-linux or appengine environment.")
@@ -54,4 +57,9 @@ func CPUTimeDiff(first *Rusage, latest *Rusage) (float64, float64) {
 // SetTCPUserTimeout is a no-op function under non-linux or appengine environments
 func SetTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
 	return nil
+}
+
+// GetTCPUserTimeout is a no-op function under non-linux or appengine environments
+func GetTCPUserTimeout(conn net.Conn) (int, error) {
+	return 0, GetTCPUserTimeoutNoopError
 }

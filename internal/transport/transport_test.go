@@ -41,6 +41,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
@@ -2315,5 +2316,55 @@ func TestHeaderTblSize(t *testing.T) {
 	}
 	if i == 1000 {
 		t.Fatalf("expected len(limits) = 2 within 10s, got != 2")
+	}
+}
+
+func TestTCPUserTimeout(t *testing.T) {
+	tests := []struct {
+		time    time.Duration
+		timeout time.Duration
+	}{
+		{
+			10 * time.Second,
+			10 * time.Second,
+		},
+		{
+			0,
+			0,
+		},
+	}
+	for _, tt := range tests {
+		lis, err := net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("Failed to listen. Err: %v", err)
+		}
+		defer lis.Close()
+		// TODO(deklerk): we can `defer cancel()` here after we drop Go 1.6 support. Until then,
+		// doing a `defer cancel()` could cause the dialer to become broken:
+		// https://github.com/golang/go/issues/15078, https://github.com/golang/go/issues/15035
+		connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+		client, err := newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{
+			KeepaliveParams: keepalive.ClientParameters{
+				Time:    tt.time,
+				Timeout: tt.timeout,
+			},
+		}, func() {}, func(GoAwayReason) {}, func() {})
+		if err != nil {
+			cancel() // Do not cancel in success path.
+			t.Fatalf("error creating client: %v", err)
+		}
+		defer client.Close()
+
+		opt, err := syscall.GetTCPUserTimeout(client.conn)
+		if err != nil {
+			if err == syscall.GetTCPUserTimeoutNoopError {
+				t.Skipf("skipping test on unsupported environment: %v", err)
+			}
+			t.Fatalf("GetTCPUserTimeout error: %v", err)
+		}
+		if timeoutMS := int(tt.timeout / time.Millisecond); timeoutMS != opt {
+			t.Fatalf("wrong TCP_USER_TIMEOUT set on conn. expected %d. got %d",
+				timeoutMS, opt)
+		}
 	}
 }
