@@ -32,6 +32,7 @@ dependencies {
         // prefer 20.0 from libraries instead of 19.0
         exclude group: 'com.google.guava', module: 'guava'
     }
+    compileOnly libraries.javax_annotation
     runtime project(':grpc-grpclb')
     testCompile libraries.guava,
             libraries.guava_testlib,

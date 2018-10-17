@@ -297,6 +297,10 @@ subprojects {
         }
     }
 
+    jacoco {
+        toolVersion = "0.8.2"
+    }
+
     checkstyle {
         configDir = file("$rootDir/buildscripts")
         toolVersion = "6.17"

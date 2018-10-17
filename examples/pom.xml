@@ -41,6 +41,12 @@
       <version>${grpc.version}</version>
     </dependency>
     <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>javax.annotation-api</artifactId>
+      <version>1.2</version>
+      <scope>provided</scope> <!-- not needed at runtime -->
+    </dependency>
+    <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-testing</artifactId>
       <version>${grpc.version}</version>

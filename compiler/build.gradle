@@ -130,11 +130,14 @@ configurations {
 
 dependencies {
     testCompile project(':grpc-protobuf'),
-            project(':grpc-stub')
+            project(':grpc-stub'),
+            libraries.javax_annotation
     testLiteCompile project(':grpc-protobuf-lite'),
-            project(':grpc-stub')
+            project(':grpc-stub'),
+            libraries.javax_annotation
     testNanoCompile project(':grpc-protobuf-nano'),
-            project(':grpc-stub')
+            project(':grpc-stub'),
+            libraries.javax_annotation
 }
 
 sourceSets {

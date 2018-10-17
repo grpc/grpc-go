@@ -49,6 +49,7 @@ jdk:
   # processor based plugin.
   - oraclejdk8  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
   - oraclejdk9  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
+  - openjdk11
 
 notifications:
   email: false

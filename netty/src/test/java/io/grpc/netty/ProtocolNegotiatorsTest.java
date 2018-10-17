@@ -96,6 +96,7 @@ public class ProtocolNegotiatorsTest {
     sslContext = GrpcSslContexts.forServer(serverCert, key)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     engine = SSLContext.getDefault().createSSLEngine();
+    engine.setUseClientMode(true);
   }
 
   @Test
