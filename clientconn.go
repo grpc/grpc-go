@@ -907,6 +907,7 @@ type addrConn struct {
 
 // Note: this requires a lock on ac.mu.
 func (ac *addrConn) updateConnectivityState(s connectivity.State) {
+	ac.logInfo(fmt.Sprintf("handle SubConn state change: %v", s))
 	ac.state = s
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
@@ -1045,6 +1046,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	var clientPrefaceWrote bool
 
 	onGoAway := func(r transport.GoAwayReason) {
+		ac.logInfo("onGoAway received")
+
 		ac.mu.Lock()
 		ac.adjustParams(r)
 		ac.mu.Unlock()
@@ -1059,6 +1062,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	prefaceTimer := time.NewTimer(connectDeadline.Sub(time.Now()))
 
 	onClose := func() {
+		ac.logInfo("onClose received")
 		close(onCloseCalled)
 		prefaceTimer.Stop()
 
@@ -1080,6 +1084,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	}
 
 	onPrefaceReceipt := func() {
+		ac.logInfo("server preface received")
+
 		close(prefaceReceived)
 		prefaceTimer.Stop()
 
@@ -1346,6 +1352,11 @@ func (ac *addrConn) incrCallsSucceeded() {
 
 func (ac *addrConn) incrCallsFailed() {
 	atomic.AddInt64(&ac.czData.callsFailed, 1)
+}
+
+// Must be called with lock held.
+func (ac *addrConn) logInfo(s string) {
+	grpclog.Infof("%v: %s", ac.addrs, s)
 }
 
 type retryThrottler struct {

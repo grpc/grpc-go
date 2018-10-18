@@ -274,7 +274,6 @@ func (lb *lbBalancer) regeneratePicker() {
 }
 
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("lbBalancer: handle SubConn state change: %p, %v", sc, s)
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
