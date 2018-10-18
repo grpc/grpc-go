@@ -13,10 +13,15 @@
 // limitations under the License.
 // Service exported by server reflection
 
+
+// Warning: this entire file is deprecated. Use this instead:
+// https://github.com/grpc/grpc-proto/blob/master/grpc/reflection/v1/reflection.proto
+
 syntax = "proto3";
 
 package grpc.reflection.v1alpha;
 
+option deprecated = true;
 option java_multiple_files = true;
 option java_package = "io.grpc.reflection.v1alpha";
 option java_outer_classname = "ServerReflectionProto";

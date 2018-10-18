@@ -9,6 +9,14 @@ buildscript {
 
 description = "gRPC: Services"
 
+[compileJava].each() {
+    // v1alpha of reflection.proto is deprecated at the file level.
+    // Without this workaround, the project can not compile.
+    it.options.compilerArgs += [
+        "-Xlint:-deprecation",
+    ]
+}
+
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')

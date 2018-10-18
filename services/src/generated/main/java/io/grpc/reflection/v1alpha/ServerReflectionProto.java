@@ -3,7 +3,7 @@
 
 package io.grpc.reflection.v1alpha;
 
-public final class ServerReflectionProto {
+@java.lang.Deprecated public final class ServerReflectionProto {
   private ServerReflectionProto() {}
   public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistryLite registry) {
@@ -96,8 +96,9 @@ public final class ServerReflectionProto {
       "flection\022\177\n\024ServerReflectionInfo\0220.grpc." +
       "reflection.v1alpha.ServerReflectionReque" +
       "st\0321.grpc.reflection.v1alpha.ServerRefle" +
-      "ctionResponse(\0010\001B5\n\032io.grpc.reflection." +
-      "v1alphaB\025ServerReflectionProtoP\001b\006proto3"
+      "ctionResponse(\0010\001B8\n\032io.grpc.reflection." +
+      "v1alphaB\025ServerReflectionProtoP\001\270\001\001b\006pro" +
+      "to3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
