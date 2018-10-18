@@ -1059,6 +1059,10 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
 
+	var prefaceMu sync.Mutex
+	var serverPrefaceReceived bool
+	var clientPrefaceWrote bool
+
 	onGoAway := func(r transport.GoAwayReason) {
 		ac.mu.Lock()
 		ac.adjustParams(r)
@@ -1100,11 +1104,18 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
-		ac.successfulHandshake = true
-		ac.backoffDeadline = time.Time{}
-		ac.connectDeadline = time.Time{}
-		ac.addrIdx = 0
-		ac.backoffIdx = 0
+
+		prefaceMu.Lock()
+		serverPrefaceReceived = true
+		if clientPrefaceWrote {
+			ac.successfulHandshake = true
+			ac.backoffDeadline = time.Time{}
+			ac.connectDeadline = time.Time{}
+			ac.addrIdx = 0
+			ac.backoffIdx = 0
+		}
+		prefaceMu.Unlock()
+
 		ac.mu.Unlock()
 	}
 
@@ -1117,6 +1128,13 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 
 	if err == nil {
+		prefaceMu.Lock()
+		clientPrefaceWrote = true
+		if serverPrefaceReceived {
+			ac.successfulHandshake = true
+		}
+		prefaceMu.Unlock()
+
 		if ac.dopts.waitForHandshake {
 			select {
 			case <-prefaceTimer.C:
@@ -1160,8 +1178,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 			return errConnClosing
 		}
-		ac.updateConnectivityState(connectivity.TransientFailure)
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 
