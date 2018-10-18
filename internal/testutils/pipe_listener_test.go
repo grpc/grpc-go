@@ -28,7 +28,7 @@ import (
 func TestPipeListener(t *testing.T) {
 	pl := testutils.NewPipeListener()
 	recvdBytes := make(chan []byte)
-	want := "hello world"
+	const want = "hello world"
 
 	go func() {
 		c, err := pl.Accept()
@@ -61,21 +61,88 @@ func TestPipeListener(t *testing.T) {
 		if got != want {
 			t.Fatalf("expected to get %s, got %s", got, want)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(100 * time.Millisecond):
 		t.Fatal("timed out waiting for server to receive bytes")
 	}
 }
 
-func TestAcceptUnblocksDial(t *testing.T) {
+func TestUnblocking(t *testing.T) {
+	for _, test := range []struct {
+		desc                 string
+		blockFuncShouldError bool
+		blockFunc            func(*testutils.PipeListener, chan struct{}) error
+		unblockFunc          func(*testutils.PipeListener) error
+	}{
+		{
+			desc: "Accept unblocks Dial",
+			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
+				dl := pl.Dialer()
+				_, err := dl("", time.Duration(0))
+				close(done)
+				return err
+			},
+			unblockFunc: func(pl *testutils.PipeListener) error {
+				_, err := pl.Accept()
+				return err
+			},
+		},
+		{
+			desc:                 "Close unblocks Dial",
+			blockFuncShouldError: true, // because pl.Close will be called
+			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
+				dl := pl.Dialer()
+				_, err := dl("", time.Duration(0))
+				close(done)
+				return err
+			},
+			unblockFunc: func(pl *testutils.PipeListener) error {
+				return pl.Close()
+			},
+		},
+		{
+			desc: "Dial unblocks Accept",
+			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
+				_, err := pl.Accept()
+				close(done)
+				return err
+			},
+			unblockFunc: func(pl *testutils.PipeListener) error {
+				dl := pl.Dialer()
+				_, err := dl("", time.Duration(0))
+				return err
+			},
+		},
+		{
+			desc:                 "Close unblocks Accept",
+			blockFuncShouldError: true, // because pl.Close will be called
+			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
+				_, err := pl.Accept()
+				close(done)
+				return err
+			},
+			unblockFunc: func(pl *testutils.PipeListener) error {
+				return pl.Close()
+			},
+		},
+	} {
+		t.Log(test.desc)
+		testUnblocking(t, test.blockFunc, test.unblockFunc, test.blockFuncShouldError)
+	}
+}
+
+func testUnblocking(t *testing.T, blockFunc func(*testutils.PipeListener, chan struct{}) error, unblockFunc func(*testutils.PipeListener) error, blockFuncShouldError bool) {
 	pl := testutils.NewPipeListener()
 	dialFinished := make(chan struct{})
 
 	go func() {
-		dl := pl.Dialer()
-		if _, err := dl("", time.Duration(0)); err != nil {
+		err := blockFunc(pl, dialFinished)
+		if blockFuncShouldError && err == nil {
+			t.Error("expected blocking func to return error because pl.Close was called, but got nil")
+		}
+
+		if !blockFuncShouldError && err != nil {
 			t.Error(err)
 		}
-		close(dialFinished)
 	}()
 
 	select {
@@ -84,99 +151,13 @@ func TestAcceptUnblocksDial(t *testing.T) {
 	default:
 	}
 
-	if _, err := pl.Accept(); err != nil {
+	if err := unblockFunc(pl); err != nil {
 		t.Fatal(err)
 	}
 
 	select {
 	case <-dialFinished:
-	case <-time.After(5 * time.Second):
+	case <-time.After(100 * time.Millisecond):
 		t.Fatal("expected Accept to unblock after pl.Accept was called")
-	}
-}
-
-func TestCloseUnblocksDial(t *testing.T) {
-	pl := testutils.NewPipeListener()
-	acceptFinished := make(chan struct{})
-
-	go func() {
-		dl := pl.Dialer()
-		if _, err := dl("", time.Duration(0)); err == nil {
-			t.Error("expected to receive a 'conn closed' error from dial, got nil")
-		}
-		close(acceptFinished)
-	}()
-
-	select {
-	case <-acceptFinished:
-		t.Fatal("expected Accept to block until pl.Close or a dial occurred")
-	default:
-	}
-
-	if err := pl.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-acceptFinished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected Accept to unblock after pl.Close was called")
-	}
-}
-
-func TestDialUnblocksAccept(t *testing.T) {
-	pl := testutils.NewPipeListener()
-	acceptFinished := make(chan struct{})
-
-	go func() {
-		if _, err := pl.Accept(); err != nil {
-			t.Error(err)
-		}
-		close(acceptFinished)
-	}()
-
-	select {
-	case <-acceptFinished:
-		t.Fatal("expected Accept to block until pl.Close or a dial occurred")
-	default:
-	}
-
-	dl := pl.Dialer()
-	if _, err := dl("", time.Duration(0)); err != nil {
-		panic(err)
-	}
-
-	select {
-	case <-acceptFinished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected Accept to unblock after Dial was called")
-	}
-}
-
-func TestCloseUnblocksAccept(t *testing.T) {
-	pl := testutils.NewPipeListener()
-	acceptFinished := make(chan struct{})
-
-	go func() {
-		if _, err := pl.Accept(); err == nil {
-			t.Error("expected to received a 'conn closed' error from dial, got nil")
-		}
-		close(acceptFinished)
-	}()
-
-	select {
-	case <-acceptFinished:
-		t.Fatal("expected Accept to block until pl.Close or a dial occurred")
-	default:
-	}
-
-	if err := pl.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-acceptFinished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected Accept to unblock after pl.Close was called")
 	}
 }
