@@ -32,41 +32,31 @@ func (p pipeAddr) String() string  { return "pipe" }
 // pipeListener is a listener with an unbuffered pipe. Each write will complete only once the other side reads. It
 // should only be created using NewPipeListener.
 type pipeListener struct {
-	C    chan chan<- net.Conn
-	done chan struct{}
+	C chan chan<- net.Conn
 }
 
 // NewPipeListener creates a new pipe listener.
 func NewPipeListener() *pipeListener {
 	return &pipeListener{
-		C:    make(chan chan<- net.Conn),
-		done: make(chan struct{}),
+		C: make(chan chan<- net.Conn),
 	}
 }
 
 // Accept accepts a connection.
 func (p *pipeListener) Accept() (net.Conn, error) {
-	var connChan chan<- net.Conn
-	select {
-	case <-p.done:
-		return nil, errors.New("done")
-	case connChan = <-p.C:
+	connChan, ok := <-p.C
+	if !ok {
+		return nil, errors.New("closed")
 	}
 	c1, c2 := net.Pipe()
-	select {
-	case <-p.done:
-		return nil, errors.New("done")
-	case connChan <- c1:
-	}
+	connChan <- c1
 	close(connChan)
 	return c2, nil
 }
 
 // Close closes the listener.
 func (p *pipeListener) Close() error {
-	close(p.done)
-	// We don't close p.C, because it races with p.done and may be redundant.
-	// TODO(deklerk) Should we figure out how to synchronize these so that we can close p.C?
+	// We don't close p.C, because it races with the client reconnect.
 	return nil
 }
 
@@ -80,15 +70,11 @@ func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
 	return func(string, time.Duration) (net.Conn, error) {
 		connChan := make(chan net.Conn)
 		select {
-		case <-p.done:
-			return nil, errors.New("done")
 		case p.C <- connChan:
+		default:
+			return nil, errors.New("no listening Accept")
 		}
-		select {
-		case <-p.done:
-			return nil, errors.New("done")
-		case conn := <-connChan:
-			return conn, nil
-		}
+		conn := <-connChan
+		return conn, nil
 	}
 }
