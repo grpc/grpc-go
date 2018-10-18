@@ -90,7 +90,6 @@ func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, err
 				update(false)
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 

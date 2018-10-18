@@ -1169,6 +1169,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			}()
 		}
 	}
+
 	if err != nil {
 		// newTr is either nil, or closed.
 		cancel()
@@ -1177,9 +1178,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		if ac.state == connectivity.Shutdown {
 			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
-
-			// TODO: if ac has been shutdown, there's no more reconnecting, a fix is needed for the comments
-			// below.
 
 			// We don't want to reset during this close because we prefer to kick out of this function and let the loop
 			// in resetTransport take care of reconnecting.
@@ -1199,7 +1197,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return err
 	}
 
-	// Now there is a viable transport to be use, so set ac.transport to be the new viable transport.
+	// Now there is a viable transport to be use, so set ac.transport to reflect the new viable transport.
 	ac.mu.Lock()
 	ac.transport = newTr
 	ac.mu.Unlock()
@@ -1215,7 +1213,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return nil
 	}
 
-	// No health check case
+	// No LB channel health check case
 	ac.mu.Lock()
 
 	if ac.state == connectivity.Shutdown {
@@ -1297,8 +1295,9 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 					})
 				}
 				grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
+			} else {
+				grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
 			}
-			grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
 		}
 		// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
 		// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.

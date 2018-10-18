@@ -455,7 +455,7 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 	})
 }
 
-// WithDisableHealthCheck disables all SubConn's health checking for this ClientConn.
+// WithDisableHealthCheck disables the LB channel health checking for all SubConns of this ClientConn.
 //
 // This API is EXPERIMENTAL.
 func WithDisableHealthCheck() DialOption {
