@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+var closedErr = errors.New("closed")
+
 type pipeAddr struct{}
 
 func (p pipeAddr) Network() string { return "pipe" }
@@ -33,20 +35,30 @@ func (p pipeAddr) String() string  { return "pipe" }
 // should only be created using NewPipeListener.
 type pipeListener struct {
 	C chan chan<- net.Conn
+	done chan struct{}
 }
 
 // NewPipeListener creates a new pipe listener.
 func NewPipeListener() *pipeListener {
 	return &pipeListener{
 		C: make(chan chan<- net.Conn),
+		done: make(chan struct{}),
 	}
 }
 
 // Accept accepts a connection.
 func (p *pipeListener) Accept() (net.Conn, error) {
-	connChan, ok := <-p.C
-	if !ok {
-		return nil, errors.New("closed")
+	var connChan chan<- net.Conn
+	select {
+	case <-p.done:
+		return nil, closedErr
+	case connChan = <-p.C:
+		select {
+		case <-p.done:
+			close(connChan)
+			return nil, closedErr
+		default:
+		}
 	}
 	c1, c2 := net.Pipe()
 	connChan <- c1
@@ -56,7 +68,7 @@ func (p *pipeListener) Accept() (net.Conn, error) {
 
 // Close closes the listener.
 func (p *pipeListener) Close() error {
-	// We don't close p.C, because it races with the client reconnect.
+	close(p.done)
 	return nil
 }
 
@@ -71,10 +83,13 @@ func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
 		connChan := make(chan net.Conn)
 		select {
 		case p.C <- connChan:
-		default:
-			return nil, errors.New("no listening Accept")
+		case <-p.done:
+			return nil, closedErr
 		}
-		conn := <-connChan
+		conn, ok := <-connChan
+		if !ok {
+			return nil, closedErr
+		}
 		return conn, nil
 	}
 }
