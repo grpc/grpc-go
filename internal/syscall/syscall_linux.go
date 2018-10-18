@@ -23,7 +23,6 @@
 package syscall
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -32,8 +31,6 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/grpclog"
 )
-
-var GetTCPUserTimeoutNoopError = errors.New("placeholder error")
 
 // GetCPUTime returns the how much CPU time has passed since the start of this process.
 func GetCPUTime() int64 {

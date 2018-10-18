@@ -2357,10 +2357,10 @@ func TestTCPUserTimeout(t *testing.T) {
 
 		opt, err := syscall.GetTCPUserTimeout(client.conn)
 		if err != nil {
-			if err == syscall.GetTCPUserTimeoutNoopError {
-				t.Skipf("skipping test on unsupported environment: %v", err)
-			}
 			t.Fatalf("GetTCPUserTimeout error: %v", err)
+		}
+		if opt < 0 {
+			t.Skipf("skipping test on unsupported environment")
 		}
 		if timeoutMS := int(tt.timeout / time.Millisecond); timeoutMS != opt {
 			t.Fatalf("wrong TCP_USER_TIMEOUT set on conn. expected %d. got %d",
