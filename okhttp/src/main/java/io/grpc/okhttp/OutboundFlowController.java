@@ -17,7 +17,6 @@
 package io.grpc.okhttp;
 
 import static io.grpc.okhttp.Utils.CONNECTION_STREAM_ID;
-import static io.grpc.okhttp.Utils.DEFAULT_WINDOW_SIZE;
 import static java.lang.Math.ceil;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -37,12 +36,15 @@ import okio.Buffer;
 class OutboundFlowController {
   private final OkHttpClientTransport transport;
   private final FrameWriter frameWriter;
-  private int initialWindowSize = DEFAULT_WINDOW_SIZE;
-  private final OutboundFlowState connectionState = new OutboundFlowState(CONNECTION_STREAM_ID);
+  private int initialWindowSize;
+  private final OutboundFlowState connectionState;
 
-  OutboundFlowController(OkHttpClientTransport transport, FrameWriter frameWriter) {
+  OutboundFlowController(
+      OkHttpClientTransport transport, FrameWriter frameWriter, int initialWindowSize) {
     this.transport = Preconditions.checkNotNull(transport, "transport");
     this.frameWriter = Preconditions.checkNotNull(frameWriter, "frameWriter");
+    this.initialWindowSize = initialWindowSize;
+    connectionState = new OutboundFlowState(CONNECTION_STREAM_ID, initialWindowSize);
   }
 
   /**
@@ -65,7 +67,7 @@ class OutboundFlowController {
       OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
       if (state == null) {
         // Create the OutboundFlowState with the new window size.
-        state = new OutboundFlowState(stream);
+        state = new OutboundFlowState(stream, initialWindowSize);
         stream.setOutboundFlowState(state);
       } else {
         state.incrementStreamWindow(delta);
@@ -158,7 +160,7 @@ class OutboundFlowController {
   private OutboundFlowState state(OkHttpClientStream stream) {
     OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
     if (state == null) {
-      state = new OutboundFlowState(stream);
+      state = new OutboundFlowState(stream, initialWindowSize);
       stream.setOutboundFlowState(state);
     }
     return state;
@@ -229,17 +231,18 @@ class OutboundFlowController {
     final Queue<Frame> pendingWriteQueue;
     final int streamId;
     int queuedBytes;
-    int window = initialWindowSize;
+    int window;
     int allocatedBytes;
     OkHttpClientStream stream;
 
-    OutboundFlowState(int streamId) {
+    OutboundFlowState(int streamId, int initialWindowSize) {
       this.streamId = streamId;
-      pendingWriteQueue = new ArrayDeque<Frame>(2);
+      window = initialWindowSize;
+      pendingWriteQueue = new ArrayDeque<>(2);
     }
 
-    OutboundFlowState(OkHttpClientStream stream) {
-      this(stream.id());
+    OutboundFlowState(OkHttpClientStream stream, int initialWindowSize) {
+      this(stream.id(), initialWindowSize);
       this.stream = stream;
     }
 

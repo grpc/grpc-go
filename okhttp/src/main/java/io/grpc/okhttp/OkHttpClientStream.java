@@ -44,8 +44,6 @@ import okio.Buffer;
  */
 class OkHttpClientStream extends AbstractClientStream {
 
-  private static final int WINDOW_UPDATE_THRESHOLD = Utils.DEFAULT_WINDOW_SIZE / 2;
-
   private static final Buffer EMPTY_BUFFER = new Buffer();
 
   public static final int ABSENT_ID = -1;
@@ -71,6 +69,7 @@ class OkHttpClientStream extends AbstractClientStream {
       OutboundFlowController outboundFlow,
       Object lock,
       int maxMessageSize,
+      int initialWindowSize,
       String authority,
       String userAgent,
       StatsTraceContext statsTraceCtx,
@@ -91,8 +90,15 @@ class OkHttpClientStream extends AbstractClientStream {
     // so it is safe to read the transport attributes.
     // We make a copy here for convenience, even though we can ask the transport.
     this.attributes = transport.getAttributes();
-    this.state = new TransportState(maxMessageSize, statsTraceCtx, lock, frameWriter, outboundFlow,
-        transport);
+    this.state =
+        new TransportState(
+            maxMessageSize,
+            statsTraceCtx,
+            lock,
+            frameWriter,
+            outboundFlow,
+            transport,
+            initialWindowSize);
   }
 
   @Override
@@ -184,6 +190,7 @@ class OkHttpClientStream extends AbstractClientStream {
   }
 
   class TransportState extends Http2ClientStreamTransportState {
+    private final int initialWindowSize;
     private final Object lock;
     @GuardedBy("lock")
     private List<Header> requestHeaders;
@@ -196,9 +203,9 @@ class OkHttpClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     private boolean cancelSent = false;
     @GuardedBy("lock")
-    private int window = Utils.DEFAULT_WINDOW_SIZE;
+    private int window;
     @GuardedBy("lock")
-    private int processedWindow = Utils.DEFAULT_WINDOW_SIZE;
+    private int processedWindow;
     @GuardedBy("lock")
     private final AsyncFrameWriter frameWriter;
     @GuardedBy("lock")
@@ -212,12 +219,16 @@ class OkHttpClientStream extends AbstractClientStream {
         Object lock,
         AsyncFrameWriter frameWriter,
         OutboundFlowController outboundFlow,
-        OkHttpClientTransport transport) {
+        OkHttpClientTransport transport,
+        int initialWindowSize) {
       super(maxMessageSize, statsTraceCtx, OkHttpClientStream.this.getTransportTracer());
       this.lock = checkNotNull(lock, "lock");
       this.frameWriter = frameWriter;
       this.outboundFlow = outboundFlow;
       this.transport = transport;
+      this.window = initialWindowSize;
+      this.processedWindow = initialWindowSize;
+      this.initialWindowSize = initialWindowSize;
     }
 
     @GuardedBy("lock")
@@ -270,8 +281,8 @@ class OkHttpClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     public void bytesRead(int processedBytes) {
       processedWindow -= processedBytes;
-      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
+      if (processedWindow <= initialWindowSize * Utils.DEFAULT_WINDOW_UPDATE_RATIO) {
+        int delta = initialWindowSize - processedWindow;
         window += delta;
         processedWindow += delta;
         frameWriter.windowUpdate(id(), delta);

@@ -18,6 +18,7 @@ package io.grpc.okhttp;
 
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
+import static io.grpc.okhttp.Utils.DEFAULT_WINDOW_UPDATE_RATIO;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
@@ -140,6 +141,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private final Random random = new Random();
   // Returns new unstarted stopwatches
   private final Supplier<Stopwatch> stopwatchFactory;
+  private final int initialWindowSize;
   private Listener listener;
   private FrameReader testFrameReader;
   private AsyncFrameWriter frameWriter;
@@ -220,11 +222,12 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   OkHttpClientTransport(InetSocketAddress address, String authority, @Nullable String userAgent,
       Executor executor, @Nullable SSLSocketFactory sslSocketFactory,
       @Nullable HostnameVerifier hostnameVerifier, ConnectionSpec connectionSpec,
-      int maxMessageSize, @Nullable ProxyParameters proxy, Runnable tooManyPingsRunnable,
-      TransportTracer transportTracer) {
+      int maxMessageSize, int initialWindowSize, @Nullable ProxyParameters proxy,
+      Runnable tooManyPingsRunnable, TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
+    this.initialWindowSize = initialWindowSize;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     serializingExecutor = new SerializingExecutor(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
@@ -257,10 +260,12 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
       @Nullable Runnable connectingCallback,
       SettableFuture<Void> connectedFuture,
       int maxMessageSize,
+      int initialWindowSize,
       Runnable tooManyPingsRunnable,
       TransportTracer transportTracer) {
     address = null;
     this.maxMessageSize = maxMessageSize;
+    this.initialWindowSize = initialWindowSize;
     defaultAuthority = "notarealauthority:80";
     this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
     this.executor = Preconditions.checkNotNull(executor, "executor");
@@ -358,6 +363,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         outboundFlow,
         lock,
         maxMessageSize,
+        initialWindowSize,
         defaultAuthority,
         userAgent,
         statsTraceCtx,
@@ -437,7 +443,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     }
 
     frameWriter = new AsyncFrameWriter(this, serializingExecutor);
-    outboundFlow = new OutboundFlowController(this, frameWriter);
+    outboundFlow = new OutboundFlowController(this, frameWriter, initialWindowSize);
     // Connecting in the serializingExecutor, so that some stream operations like synStream
     // will be executed after connected.
     serializingExecutor.execute(new Runnable() {
@@ -1044,7 +1050,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
 
       // connection window update
       connectionUnacknowledgedBytesRead += length;
-      if (connectionUnacknowledgedBytesRead >= Utils.DEFAULT_WINDOW_SIZE / 2) {
+      if (connectionUnacknowledgedBytesRead >= initialWindowSize * DEFAULT_WINDOW_UPDATE_RATIO) {
         frameWriter.windowUpdate(0, connectionUnacknowledgedBytesRead);
         connectionUnacknowledgedBytesRead = 0;
       }

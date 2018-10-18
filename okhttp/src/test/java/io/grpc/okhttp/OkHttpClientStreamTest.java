@@ -57,6 +57,7 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class OkHttpClientStreamTest {
   private static final int MAX_MESSAGE_SIZE = 100;
+  private static final int INITIAL_WINDOW_SIZE = 65535;
 
   @Mock private MethodDescriptor.Marshaller<Void> marshaller;
   @Mock private AsyncFrameWriter frameWriter;
@@ -88,6 +89,7 @@ public class OkHttpClientStreamTest {
         flowController,
         lock,
         MAX_MESSAGE_SIZE,
+        INITIAL_WINDOW_SIZE,
         "localhost",
         "userAgent",
         StatsTraceContext.NOOP,
@@ -150,8 +152,8 @@ public class OkHttpClientStreamTest {
     Metadata metaData = new Metadata();
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
+        flowController, lock, MAX_MESSAGE_SIZE, INITIAL_WINDOW_SIZE, "localhost",
+        "good-application", StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -165,8 +167,8 @@ public class OkHttpClientStreamTest {
     Metadata metaData = new Metadata();
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
+        flowController, lock, MAX_MESSAGE_SIZE, INITIAL_WINDOW_SIZE, "localhost",
+        "good-application", StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
     stream.transportState().start(3);
 
@@ -193,8 +195,8 @@ public class OkHttpClientStreamTest {
         .setResponseMarshaller(marshaller)
         .build();
     stream = new OkHttpClientStream(getMethod, new Metadata(), frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
-        StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
+        flowController, lock, MAX_MESSAGE_SIZE, INITIAL_WINDOW_SIZE, "localhost",
+        "good-application", StatsTraceContext.NOOP, transportTracer, CallOptions.DEFAULT);
     stream.start(new BaseClientStreamListener());
 
     // GET streams send headers after halfClose is called.
