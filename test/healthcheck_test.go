@@ -290,8 +290,8 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 
 	// The existing RPC should be still good to proceed.
@@ -363,8 +363,8 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 }
 
@@ -450,8 +450,8 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 
 	// The existing RPC should be still good to proceed.
@@ -525,8 +525,8 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 }
 
@@ -584,8 +584,8 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 
 	select {
 	case <-hcEnterChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Health check function has not been invoked after 2s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger teardown of the ac, ac in SHUTDOWN state
 	r.NewAddress([]resolver.Address{})
@@ -595,7 +595,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	select {
 	case <-hcExitChan:
 	case <-time.After(5 * time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 	// The deferred leakcheck will check whether there's leaked goroutine, which is an indication
 	// whether we closes the skipReset channel to unblock onGoAway/onClose goroutine.
@@ -655,8 +655,8 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 	select {
 	case <-hcEnterChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Health check function has not been invoked after 2s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger transport being closed
 	s.Stop()
@@ -666,7 +666,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	select {
 	case <-hcExitChan:
 	case <-time.After(5 * time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 	// The deferred leakcheck will check whether there's leaked goroutine, which is an indication
 	// whether we closes the allowedToReset channel to unblock onGoAway/onClose goroutine.
