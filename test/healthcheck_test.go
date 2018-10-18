@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	_ "google.golang.org/grpc/healthcheck"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
@@ -186,8 +187,8 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	//| UNKNOWN                      | ->TRANSIENT FAILURE                       |
 	//		+------------------------------+-------------------------------------------+
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_NOT_SERVING)
-	replace := replaceHealthCheckFunc(testHealthCheckFunc)
-	defer replace()
+	// replace := replaceHealthCheckFunc(testHealthCheckFunc)
+	// defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
@@ -202,6 +203,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	}
 }`)
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
 		t.Fatal("ClientConn is still in IDLE state after 5s.")
@@ -210,6 +212,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 		t.Fatal("ClientConn is still in CONNECTING state after 5s.")
 	}
 	cancel()
+
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -271,8 +274,9 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -367,8 +371,9 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -432,8 +437,9 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -528,8 +534,9 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -597,9 +604,10 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 
 	hcEnterChan := make(chan struct{})
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -668,9 +676,10 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 	hcEnterChan := make(chan struct{})
 	hcExitChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -722,9 +731,10 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		return err
 	}
 
@@ -764,9 +774,10 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 
 func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		return err
 	}
 
@@ -806,9 +817,10 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 
 func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
+	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
+		err := ogHealthCheckFunc(ctx, newStream, update, service)
 		return err
 	}
 

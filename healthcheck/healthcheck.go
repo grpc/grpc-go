@@ -22,6 +22,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
+
+	"google.golang.org/grpc/internal/backoff"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,7 +38,25 @@ func init() {
 }
 
 func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+	retryCnt := 0
+	doBackoff := false
+	bo := backoff.Exponential{MaxDelay: 5 * time.Second}
+retryConnection:
 	for {
+		if !doBackoff {
+			retryCnt = 0
+		} else {
+			timer := time.NewTimer(bo.Backoff(retryCnt))
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return nil
+			}
+			retryCnt++
+		}
+		doBackoff = false
+
 		select {
 		case <-ctx.Done():
 			return nil
@@ -43,7 +64,8 @@ func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, er
 		}
 		rawS, err := newStream()
 		if err != nil {
-			continue
+			doBackoff = true
+			continue retryConnection
 		}
 		s, ok := rawS.(grpc.ClientStream)
 		if !ok {
@@ -54,7 +76,7 @@ func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, er
 			Service: service,
 		}); err != nil && err != io.EOF {
 			//stream should have been closed, so we can safely continue to create a new stream.
-			continue
+			continue retryConnection
 		}
 		s.CloseSend()
 		for {
@@ -67,7 +89,7 @@ func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, er
 				// transition to TRANSIENT FAILURE when Watch() fails with status other than UNIMPLEMENTED
 				update(false)
 				// we can safely break here and continue to create a new stream, since a non-nil error has been received.
-				break
+				continue retryConnection
 			}
 			switch resp.Status {
 			case healthpb.HealthCheckResponse_SERVING:
