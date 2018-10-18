@@ -467,7 +467,7 @@ func TestTruncateMetadataTruncated(t *testing.T) {
 	for i, tc := range testCases {
 		truncated := tc.ml.truncateMetadata(tc.mpPb)
 		if !truncated {
-			t.Errorf("test case %v, returned truncated, want not truncated", i)
+			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
 		}
 		if len(tc.mpPb.Entry) != tc.entryLen {
@@ -529,7 +529,7 @@ func TestTruncateMessageTruncated(t *testing.T) {
 	for i, tc := range testCases {
 		truncated := tc.ml.truncateMessage(tc.msgPb)
 		if !truncated {
-			t.Errorf("test case %v, returned truncated, want not truncated", i)
+			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
 		}
 		if len(tc.msgPb.Data) != int(tc.ml.messageMaxLen) {
