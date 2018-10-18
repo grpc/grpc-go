@@ -19,9 +19,7 @@
 package test
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"testing"
@@ -29,7 +27,6 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	_ "google.golang.org/grpc/healthcheck"
@@ -37,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -46,51 +42,6 @@ func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error),
 	internal.HealthCheckFunc = f
 	return func() {
 		internal.HealthCheckFunc = oldHcFunc
-	}
-}
-
-func testHealthCheckFunc(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-		rawS, err := newStream()
-		if err != nil {
-			continue
-		}
-		s, ok := rawS.(grpc.ClientStream)
-		if !ok {
-			// exit the health check function
-			return errors.New("type assertion to grpc.ClientStream failed")
-		}
-		if err = s.SendMsg(&healthpb.HealthCheckRequest{
-			Service: service,
-		}); err != nil && err != io.EOF {
-			//stream should have been closed, so we can safely continue to create a new stream.
-			continue
-		}
-		s.CloseSend()
-		for {
-			resp := new(healthpb.HealthCheckResponse)
-			if err = s.RecvMsg(resp); err != nil {
-				if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
-					update(true)
-					return err
-				}
-				// transition to TRANSIENT FAILURE when Watch() fails with status other than UNIMPLEMENTED
-				update(false)
-				// we can safely break here and continue to create a new stream, since a non-nil error has been received.
-				break
-			}
-			switch resp.Status {
-			case healthpb.HealthCheckResponse_SERVING:
-				update(true)
-			case healthpb.HealthCheckResponse_SERVICE_UNKNOWN, healthpb.HealthCheckResponse_UNKNOWN, healthpb.HealthCheckResponse_NOT_SERVING:
-				update(false)
-			}
-		}
 	}
 }
 
@@ -187,8 +138,6 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	//| UNKNOWN                      | ->TRANSIENT FAILURE                       |
 	//		+------------------------------+-------------------------------------------+
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_NOT_SERVING)
-	// replace := replaceHealthCheckFunc(testHealthCheckFunc)
-	// defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
