@@ -37,6 +37,8 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
+var testHealthCheckFunc = internal.HealthCheckFunc
+
 func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error), func(bool), string) error) func() {
 	oldHcFunc := internal.HealthCheckFunc
 	internal.HealthCheckFunc = f
@@ -152,7 +154,6 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	}
 }`)
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
 		t.Fatal("ClientConn is still in IDLE state after 5s.")
@@ -161,7 +162,6 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 		t.Fatal("ClientConn is still in CONNECTING state after 5s.")
 	}
 	cancel()
-
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
@@ -223,9 +223,8 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -291,8 +290,8 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 
 	// The existing RPC should be still good to proceed.
@@ -320,9 +319,8 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -365,8 +363,8 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 }
 
@@ -386,9 +384,8 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -453,8 +450,8 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 
 	// The existing RPC should be still good to proceed.
@@ -483,9 +480,8 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -529,8 +525,8 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 
 	select {
 	case <-hcExitChan:
-	case <-time.After(time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 }
 
@@ -553,10 +549,9 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 
 	hcEnterChan := make(chan struct{})
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -589,8 +584,8 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 
 	select {
 	case <-hcEnterChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Health check function has not been invoked after 2s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger teardown of the ac, ac in SHUTDOWN state
 	r.NewAddress([]resolver.Address{})
@@ -600,7 +595,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	select {
 	case <-hcExitChan:
 	case <-time.After(5 * time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 	// The deferred leakcheck will check whether there's leaked goroutine, which is an indication
 	// whether we closes the skipReset channel to unblock onGoAway/onClose goroutine.
@@ -625,10 +620,9 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 	hcEnterChan := make(chan struct{})
 	hcExitChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
 	}
@@ -661,8 +655,8 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 	select {
 	case <-hcEnterChan:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Health check function has not been invoked after 2s.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Health check function has not been invoked after 5s.")
 	}
 	// trigger transport being closed
 	s.Stop()
@@ -672,7 +666,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	select {
 	case <-hcExitChan:
 	case <-time.After(5 * time.Second):
-		t.Fatal("Health check function has not exited after 1s.")
+		t.Fatal("Health check function has not exited after 5s.")
 	}
 	// The deferred leakcheck will check whether there's leaked goroutine, which is an indication
 	// whether we closes the allowedToReset channel to unblock onGoAway/onClose goroutine.
@@ -680,11 +674,9 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 
 func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
-		return err
+		return nil
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
@@ -723,11 +715,9 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 
 func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
-		return err
+		return nil
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
@@ -766,11 +756,9 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 
 func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	hcEnterChan := make(chan struct{})
-	ogHealthCheckFunc := internal.HealthCheckFunc
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := ogHealthCheckFunc(ctx, newStream, update, service)
-		return err
+		return nil
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)

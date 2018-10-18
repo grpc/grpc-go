@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
@@ -885,7 +884,6 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	events trace.EventLog
 	acbw   balancer.SubConn
 	scopts balancer.NewSubConnOptions
 
@@ -945,22 +943,6 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 			ac.cc.mkp.Time = v
 		}
 		ac.cc.mu.Unlock()
-	}
-}
-
-// printf records an event in ac's event log, unless ac has been closed.
-// REQUIRES ac.mu is held.
-func (ac *addrConn) printf(format string, a ...interface{}) {
-	if ac.events != nil {
-		ac.events.Printf(format, a...)
-	}
-}
-
-// errorf records an error in ac's event log, unless ac has been closed.
-// REQUIRES ac.mu is held.
-func (ac *addrConn) errorf(format string, a ...interface{}) {
-	if ac.events != nil {
-		ac.events.Errorf(format, a...)
 	}
 }
 
@@ -1041,7 +1023,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			return
 		}
 
-		ac.printf("connecting")
 		if ac.state != connectivity.Connecting {
 			ac.updateConnectivityState(connectivity.Connecting)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
@@ -1076,6 +1057,10 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	allowedToReset := make(chan struct{})
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
+
+	var prefaceMu sync.Mutex
+	var serverPrefaceReceived bool
+	var clientPrefaceWrote bool
 
 	hcCtx, hcCancel := context.WithCancel(ac.ctx)
 
@@ -1125,11 +1110,18 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 		// TODO(deklerk): optimization; does anyone else actually use this lock? maybe we can just remove it for this scope
 		ac.mu.Lock()
-		ac.successfulHandshake = true
-		ac.backoffDeadline = time.Time{}
-		ac.connectDeadline = time.Time{}
-		ac.addrIdx = 0
-		ac.backoffIdx = 0
+
+		prefaceMu.Lock()
+		serverPrefaceReceived = true
+		if clientPrefaceWrote {
+			ac.successfulHandshake = true
+			ac.backoffDeadline = time.Time{}
+			ac.connectDeadline = time.Time{}
+			ac.addrIdx = 0
+			ac.backoffIdx = 0
+		}
+		prefaceMu.Unlock()
+
 		ac.mu.Unlock()
 	}
 
@@ -1142,6 +1134,13 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 
 	if err == nil {
+		prefaceMu.Lock()
+		clientPrefaceWrote = true
+		if serverPrefaceReceived {
+			ac.successfulHandshake = true
+		}
+		prefaceMu.Unlock()
+
 		if ac.dopts.waitForHandshake {
 			select {
 			case <-prefaceTimer.C:
@@ -1185,8 +1184,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 			return errConnClosing
 		}
-		ac.updateConnectivityState(connectivity.TransientFailure)
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.mu.Unlock()
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
 
@@ -1225,7 +1222,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return errConnClosing
 	}
 
-	ac.printf("ready")
 	ac.updateConnectivityState(connectivity.Ready)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.curAddr = addr
@@ -1266,7 +1262,6 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 				ac.curAddr = addr
 				close(allowedToReset)
 			}
-			ac.printf("ready")
 			// This is the only place where we set state to READY in case of health check enabled.
 			// Therefore we don't need to check whether ac is already in READY state.
 			ac.updateConnectivityState(connectivity.Ready)
@@ -1423,10 +1418,6 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Unlock()
 		curTr.GracefulClose()
 		ac.mu.Lock()
-	}
-	if ac.events != nil {
-		ac.events.Finish()
-		ac.events = nil
 	}
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
