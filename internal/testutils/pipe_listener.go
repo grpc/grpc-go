@@ -29,22 +29,23 @@ type pipeAddr struct{}
 func (p pipeAddr) Network() string { return "pipe" }
 func (p pipeAddr) String() string  { return "pipe" }
 
-// PipeListener is a listener with an unbuffered pipe. Each write will complete only once the other side reads.
-type PipeListener struct {
+// pipeListener is a listener with an unbuffered pipe. Each write will complete only once the other side reads. It
+// should only be created using NewPipeListener.
+type pipeListener struct {
 	C    chan chan<- net.Conn
 	done chan struct{}
 }
 
 // NewPipeListener creates a new pipe listener.
-func NewPipeListener() *PipeListener {
-	return &PipeListener{
+func NewPipeListener() *pipeListener {
+	return &pipeListener{
 		C:    make(chan chan<- net.Conn),
 		done: make(chan struct{}),
 	}
 }
 
 // Accept accepts a connection.
-func (p *PipeListener) Accept() (net.Conn, error) {
+func (p *pipeListener) Accept() (net.Conn, error) {
 	var connChan chan<- net.Conn
 	select {
 	case <-p.done:
@@ -62,7 +63,7 @@ func (p *PipeListener) Accept() (net.Conn, error) {
 }
 
 // Close closes the listener.
-func (p *PipeListener) Close() error {
+func (p *pipeListener) Close() error {
 	close(p.done)
 	// We don't close p.C, because it races with p.done and may be redundant.
 	// TODO(deklerk) Should we figure out how to synchronize these so that we can close p.C?
@@ -70,12 +71,12 @@ func (p *PipeListener) Close() error {
 }
 
 // Addr returns a pipe addr.
-func (p *PipeListener) Addr() net.Addr {
+func (p *pipeListener) Addr() net.Addr {
 	return pipeAddr{}
 }
 
 // Dialer dials a connection.
-func (p *PipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
+func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
 	return func(string, time.Duration) (net.Conn, error) {
 		connChan := make(chan net.Conn)
 		select {

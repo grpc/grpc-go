@@ -43,7 +43,7 @@ func init() {
 	balancer.Register(testBalancer)
 }
 
-// These tests use a PipeListener. This listener is similar to net.Listener except that it is unbuffered, so each read
+// These tests use a pipeListener. This listener is similar to net.Listener except that it is unbuffered, so each read
 // and write will wait for the other side's corresponding write or read.
 func TestStateTransitions_SingleAddress(t *testing.T) {
 	defer leakcheck.Check(t)
@@ -101,7 +101,7 @@ func TestStateTransitions_SingleAddress(t *testing.T) {
 			},
 		},
 		{
-			desc: `When the server sends its connection preface, but the connection dies before the client can write its 
+			desc: `When the server sends its connection preface, but the connection dies before the client can write its
 connection preface, the client enters TRANSIENT FAILURE.`,
 			want: []connectivity.State{
 				connectivity.Connecting,
@@ -170,7 +170,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := DialContext(ctx, pl.Addr().String(), WithWaitForHandshake(), WithInsecure(),
+	client, err := DialContext(ctx, "", WithWaitForHandshake(), WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName), WithDialer(pl.Dialer()), withBackoff(noBackoff{}))
 	if err != nil {
 		t.Fatal(err)
