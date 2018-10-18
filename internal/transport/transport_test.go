@@ -2319,6 +2319,8 @@ func TestHeaderTblSize(t *testing.T) {
 	}
 }
 
+// TestTCPUserTimeout tests that the TCP_USER_TIMEOUT socket option is set to the
+// keepalive timeout, as detailed in proposal A18
 func TestTCPUserTimeout(t *testing.T) {
 	tests := []struct {
 		time    time.Duration
@@ -2334,26 +2336,32 @@ func TestTCPUserTimeout(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		lis, err := net.Listen("tcp", "localhost:0")
-		if err != nil {
-			t.Fatalf("Failed to listen. Err: %v", err)
-		}
-		defer lis.Close()
-		// TODO(deklerk): we can `defer cancel()` here after we drop Go 1.6 support. Until then,
-		// doing a `defer cancel()` could cause the dialer to become broken:
-		// https://github.com/golang/go/issues/15078, https://github.com/golang/go/issues/15035
-		connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-		client, err := newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{
-			KeepaliveParams: keepalive.ClientParameters{
-				Time:    tt.time,
-				Timeout: tt.timeout,
+		server, client, cancel := setUpWithOptions(
+			t,
+			0,
+			&ServerConfig{
+				KeepaliveParams: keepalive.ServerParameters{
+					Time:    tt.timeout,
+					Timeout: tt.timeout,
+				},
 			},
-		}, func() {}, func(GoAwayReason) {}, func() {})
-		if err != nil {
-			cancel() // Do not cancel in success path.
-			t.Fatalf("error creating client: %v", err)
-		}
+			normal,
+			ConnectOptions{
+				KeepaliveParams: keepalive.ClientParameters{
+					Time:    tt.time,
+					Timeout: tt.timeout,
+				},
+			},
+		)
+		defer cancel()
+		defer server.stop()
 		defer client.Close()
+
+		stream, err := client.NewStream(context.Background(), &CallHdr{})
+		if err != nil {
+			t.Fatalf("Client failed to create RPC request: %v", err)
+		}
+		client.closeStream(stream, io.EOF, true, http2.ErrCodeCancel, nil, nil, false)
 
 		opt, err := syscall.GetTCPUserTimeout(client.conn)
 		if err != nil {
