@@ -1260,7 +1260,6 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 				ac.curAddr = addr
 				close(allowedToReset)
 			}
-			ac.printf("ready")
 			// This is the only place where we set state to READY in case of health check enabled.
 			// Therefore we don't need to check whether ac is already in READY state.
 			ac.updateConnectivityState(connectivity.Ready)
