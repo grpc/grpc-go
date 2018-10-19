@@ -107,6 +107,7 @@ public class UtilsTest {
   }
 
   @Test
+  @SuppressWarnings("UndefinedEquals") // AsciiString.equals
   public void convertServerHeaders_sanitizes() {
     Metadata metaData = new Metadata();
 

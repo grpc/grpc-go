@@ -479,6 +479,7 @@ public class DelayedClientTransportTest {
 
     doAnswer(new Answer<PickResult>() {
         @Override
+        @SuppressWarnings("CatchAndPrintStackTrace")
         public PickResult answer(InvocationOnMock invocation) throws Throwable {
           if (nextPickShouldWait.compareAndSet(true, false)) {
             try {

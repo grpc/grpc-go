@@ -55,6 +55,7 @@ public class TestServiceClient {
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
+      @SuppressWarnings("CatchAndPrintStackTrace")
       public void run() {
         System.out.println("Shutting down");
         try {

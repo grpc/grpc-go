@@ -48,6 +48,7 @@ public class TestServiceServer {
         .addShutdownHook(
             new Thread() {
               @Override
+              @SuppressWarnings("CatchAndPrintStackTrace")
               public void run() {
                 try {
                   System.out.println("Shutting down");

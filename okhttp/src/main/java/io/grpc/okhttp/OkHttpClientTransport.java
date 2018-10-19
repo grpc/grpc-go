@@ -358,20 +358,23 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
-    return new OkHttpClientStream(
-        method,
-        headers,
-        frameWriter,
-        OkHttpClientTransport.this,
-        outboundFlow,
-        lock,
-        maxMessageSize,
-        initialWindowSize,
-        defaultAuthority,
-        userAgent,
-        statsTraceCtx,
-        transportTracer,
-        callOptions);
+    // FIXME: it is likely wrong to pass the transportTracer here as it'll exit the lock's scope
+    synchronized (lock) { // to make @GuardedBy linter happy
+      return new OkHttpClientStream(
+          method,
+          headers,
+          frameWriter,
+          OkHttpClientTransport.this,
+          outboundFlow,
+          lock,
+          maxMessageSize,
+          initialWindowSize,
+          defaultAuthority,
+          userAgent,
+          statsTraceCtx,
+          transportTracer,
+          callOptions);
+    }
   }
 
   @GuardedBy("lock")

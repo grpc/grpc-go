@@ -245,6 +245,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     private Throwable failure;
     private Runnable dispatchTask = new Runnable() {
       @Override
+      @SuppressWarnings("CatchAndPrintStackTrace")
       public void run() {
         try {
 

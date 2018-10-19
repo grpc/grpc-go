@@ -667,8 +667,9 @@ public final class Metadata {
     /**
      * Returns true if the two objects are both Keys, and their names match (case insensitive).
      */
+    @SuppressWarnings("EqualsGetClass")
     @Override
-    public boolean equals(Object o) {
+    public final boolean equals(Object o) {
       if (this == o) {
         return true;
       }
@@ -680,7 +681,7 @@ public final class Metadata {
     }
 
     @Override
-    public int hashCode() {
+    public final int hashCode() {
       return name.hashCode();
     }
 

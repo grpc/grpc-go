@@ -66,9 +66,9 @@ public class ProtoReflectionServiceTest {
   private MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
   private BindableService reflectionService;
   private ServerServiceDefinition dynamicService =
-      (new DynamicServiceGrpc.DynamicServiceImplBase() {}).bindService();
+      new DynamicServiceGrpc.DynamicServiceImplBase() {}.bindService();
   private ServerServiceDefinition anotherDynamicService =
-      (new AnotherDynamicServiceGrpc.AnotherDynamicServiceImplBase() {}).bindService();
+      new AnotherDynamicServiceGrpc.AnotherDynamicServiceImplBase() {}.bindService();
   private Server server;
   private ManagedChannel channel;
   private ServerReflectionGrpc.ServerReflectionStub stub;

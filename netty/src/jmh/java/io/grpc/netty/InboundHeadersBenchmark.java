@@ -18,7 +18,6 @@ package io.grpc.netty;
 
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
-import static io.netty.util.AsciiString.of;
 
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2RequestHeaders;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ResponseHeaders;
@@ -53,33 +52,33 @@ public class InboundHeadersBenchmark {
   private static void setupRequestHeaders() {
     requestHeaders = new AsciiString[18];
     int i = 0;
-    requestHeaders[i++] = of(":method");
-    requestHeaders[i++] = of("POST");
-    requestHeaders[i++] = of(":scheme");
-    requestHeaders[i++] = of("http");
-    requestHeaders[i++] = of(":path");
-    requestHeaders[i++] = of("/google.pubsub.v2.PublisherService/CreateTopic");
-    requestHeaders[i++] = of(":authority");
-    requestHeaders[i++] = of("pubsub.googleapis.com");
-    requestHeaders[i++] = of("te");
-    requestHeaders[i++] = of("trailers");
-    requestHeaders[i++] = of("grpc-timeout");
-    requestHeaders[i++] = of("1S");
-    requestHeaders[i++] = of("content-type");
-    requestHeaders[i++] = of("application/grpc+proto");
-    requestHeaders[i++] = of("grpc-encoding");
-    requestHeaders[i++] = of("gzip");
-    requestHeaders[i++] = of("authorization");
-    requestHeaders[i] = of("Bearer y235.wef315yfh138vh31hv93hv8h3v");
+    requestHeaders[i++] = AsciiString.of(":method");
+    requestHeaders[i++] = AsciiString.of("POST");
+    requestHeaders[i++] = AsciiString.of(":scheme");
+    requestHeaders[i++] = AsciiString.of("http");
+    requestHeaders[i++] = AsciiString.of(":path");
+    requestHeaders[i++] = AsciiString.of("/google.pubsub.v2.PublisherService/CreateTopic");
+    requestHeaders[i++] = AsciiString.of(":authority");
+    requestHeaders[i++] = AsciiString.of("pubsub.googleapis.com");
+    requestHeaders[i++] = AsciiString.of("te");
+    requestHeaders[i++] = AsciiString.of("trailers");
+    requestHeaders[i++] = AsciiString.of("grpc-timeout");
+    requestHeaders[i++] = AsciiString.of("1S");
+    requestHeaders[i++] = AsciiString.of("content-type");
+    requestHeaders[i++] = AsciiString.of("application/grpc+proto");
+    requestHeaders[i++] = AsciiString.of("grpc-encoding");
+    requestHeaders[i++] = AsciiString.of("gzip");
+    requestHeaders[i++] = AsciiString.of("authorization");
+    requestHeaders[i] = AsciiString.of("Bearer y235.wef315yfh138vh31hv93hv8h3v");
   }
 
   private static void setupResponseHeaders() {
     responseHeaders = new AsciiString[4];
     int i = 0;
-    responseHeaders[i++] = of(":status");
-    responseHeaders[i++] = of("200");
-    responseHeaders[i++] = of("grpc-encoding");
-    responseHeaders[i] = of("gzip");
+    responseHeaders[i++] = AsciiString.of(":status");
+    responseHeaders[i++] = AsciiString.of("200");
+    responseHeaders[i++] = AsciiString.of("grpc-encoding");
+    responseHeaders[i] = AsciiString.of("gzip");
   }
 
   /**

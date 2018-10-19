@@ -58,7 +58,6 @@ import io.grpc.channelz.v1.Server;
 import io.grpc.channelz.v1.ServerData;
 import io.grpc.channelz.v1.ServerRef;
 import io.grpc.channelz.v1.Socket;
-import io.grpc.channelz.v1.Socket.Builder;
 import io.grpc.channelz.v1.SocketData;
 import io.grpc.channelz.v1.SocketOption;
 import io.grpc.channelz.v1.SocketOptionLinger;
@@ -174,7 +173,7 @@ final class ChannelzProtoUtil {
 
   static Socket toSocket(InternalInstrumented<SocketStats> obj) {
     SocketStats socketStats = getFuture(obj.getStats());
-    Builder builder = Socket.newBuilder()
+    Socket.Builder builder = Socket.newBuilder()
         .setRef(toSocketRef(obj))
         .setLocal(toAddress(socketStats.local));
     if (socketStats.security != null) {

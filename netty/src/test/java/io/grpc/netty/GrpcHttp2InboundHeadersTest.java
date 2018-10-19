@@ -36,6 +36,7 @@ import org.junit.runners.JUnit4;
  * Tests for {@link GrpcHttp2RequestHeaders} and {@link GrpcHttp2ResponseHeaders}.
  */
 @RunWith(JUnit4.class)
+@SuppressWarnings({ "BadImport", "UndefinedEquals" }) // AsciiString.of and AsciiString.equals
 public class GrpcHttp2InboundHeadersTest {
 
   @Test

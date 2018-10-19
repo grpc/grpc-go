@@ -131,7 +131,7 @@ public class NettyFlowControlTest {
   private void doTest(int bandwidth, int latency) throws InterruptedException {
 
     int streamSize = 1 * 1024 * 1024;
-    long expectedWindow = (latency * (bandwidth / TimeUnit.SECONDS.toMillis(1)));
+    long expectedWindow = latency * (bandwidth / TimeUnit.SECONDS.toMillis(1));
 
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
     StreamingOutputCallRequest.Builder builder = StreamingOutputCallRequest.newBuilder()
@@ -147,7 +147,7 @@ public class NettyFlowControlTest {
     int lastWindow = observer.waitFor();
 
     // deal with cases that either don't cause a window update or hit max window
-    expectedWindow = Math.min(MAX_WINDOW, (Math.max(expectedWindow, REGULAR_WINDOW)));
+    expectedWindow = Math.min(MAX_WINDOW, Math.max(expectedWindow, REGULAR_WINDOW));
 
     // Range looks large, but this allows for only one extra/missed window update
     // (one extra update causes a 2x difference and one missed update causes a .5x difference)

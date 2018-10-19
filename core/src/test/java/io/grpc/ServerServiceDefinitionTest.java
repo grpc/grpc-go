@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import org.junit.Rule;
@@ -44,9 +45,9 @@ public class ServerServiceDefinitionTest {
       .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, "method2"))
       .build();
   private ServerCallHandler<String, Integer> methodHandler1
-      = new NoopServerCallHandler<String, Integer>();
+      = new NoopServerCallHandler<>();
   private ServerCallHandler<String, Integer> methodHandler2
-      = new NoopServerCallHandler<String, Integer>();
+      = new NoopServerCallHandler<>();
   private ServerMethodDefinition<String, Integer> methodDef1
         = ServerMethodDefinition.create(method1, methodHandler1);
   private ServerMethodDefinition<String, Integer> methodDef2
@@ -61,7 +62,7 @@ public class ServerServiceDefinitionTest {
         .build();
     assertSame(sd, ssd.getServiceDescriptor());
     assertEquals(Collections.<MethodDescriptor<?, ?>>emptyList(),
-        ssd.getServiceDescriptor().getMethods());
+        new ArrayList<>(ssd.getServiceDescriptor().getMethods()));
   }
 
   @Test
@@ -128,17 +129,17 @@ public class ServerServiceDefinitionTest {
         .build();
     assertEquals(serviceName, ssd.getServiceDescriptor().getName());
 
-    HashSet<MethodDescriptor<?, ?>> goldenMethods = new HashSet<MethodDescriptor<?, ?>>();
+    HashSet<MethodDescriptor<?, ?>> goldenMethods = new HashSet<>();
     goldenMethods.add(method1);
     goldenMethods.add(method2);
     assertEquals(goldenMethods,
-        new HashSet<MethodDescriptor<?, ?>>(ssd.getServiceDescriptor().getMethods()));
+        new HashSet<>(ssd.getServiceDescriptor().getMethods()));
 
     HashSet<ServerMethodDefinition<?, ?>> goldenMethodDefs
-        = new HashSet<ServerMethodDefinition<?, ?>>();
+        = new HashSet<>();
     goldenMethodDefs.add(methodDef1);
     goldenMethodDefs.add(methodDef2);
-    assertEquals(goldenMethodDefs, new HashSet<ServerMethodDefinition<?, ?>>(ssd.getMethods()));
+    assertEquals(goldenMethodDefs, new HashSet<>(ssd.getMethods()));
   }
 
   @Test
@@ -146,9 +147,9 @@ public class ServerServiceDefinitionTest {
     ServerServiceDefinition ssd = ServerServiceDefinition.builder(serviceName)
         .build();
     assertEquals(Collections.<MethodDescriptor<?, ?>>emptyList(),
-        ssd.getServiceDescriptor().getMethods());
+        new ArrayList<>(ssd.getServiceDescriptor().getMethods()));
     assertEquals(Collections.<ServerMethodDefinition<?, ?>>emptySet(),
-        new HashSet<ServerMethodDefinition<?, ?>>(ssd.getMethods()));
+        new HashSet<>(ssd.getMethods()));
   }
 
   private static class NoopServerCallHandler<ReqT, RespT>

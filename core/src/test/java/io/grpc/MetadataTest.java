@@ -77,7 +77,7 @@ public class MetadataTest {
     Fish cat = new Fish("cat");
     Metadata metadata = new Metadata();
 
-    assertEquals(null, metadata.get(KEY));
+    assertNull(metadata.get(KEY));
     metadata.put(KEY, lance);
     assertEquals(Arrays.asList(lance), Lists.newArrayList(metadata.getAll(KEY)));
     assertEquals(lance, metadata.get(KEY));
@@ -99,8 +99,8 @@ public class MetadataTest {
     assertEquals(Arrays.asList(lance, lance), Lists.newArrayList(metadata.getAll(KEY)));
 
     assertEquals(Arrays.asList(lance, lance), Lists.newArrayList(metadata.removeAll(KEY)));
-    assertEquals(null, metadata.getAll(KEY));
-    assertEquals(null, metadata.get(KEY));
+    assertNull(metadata.getAll(KEY));
+    assertNull(metadata.get(KEY));
   }
 
   @Test
@@ -110,16 +110,16 @@ public class MetadataTest {
 
     metadata.put(KEY, lance);
     metadata.discardAll(KEY);
-    assertEquals(null, metadata.getAll(KEY));
-    assertEquals(null, metadata.get(KEY));
+    assertNull(metadata.getAll(KEY));
+    assertNull(metadata.get(KEY));
   }
 
   @Test
   public void discardAll_empty() {
     Metadata metadata = new Metadata();
     metadata.discardAll(KEY);
-    assertEquals(null, metadata.getAll(KEY));
-    assertEquals(null, metadata.get(KEY));
+    assertNull(metadata.getAll(KEY));
+    assertNull(metadata.get(KEY));
   }
 
   @Test
@@ -334,7 +334,7 @@ public class MetadataTest {
     }
   }
 
-  private static class Fish {
+  private static final class Fish {
     private String name;
 
     private Fish(String name) {

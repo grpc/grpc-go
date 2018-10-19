@@ -862,10 +862,7 @@ public abstract class AbstractInteropTest {
     StreamObserver<StreamingOutputCallRequest> requestStream = asyncStub.halfDuplexCall(recorder);
 
     final int numRequests = 10;
-    List<StreamingOutputCallRequest> requests =
-        new ArrayList<>(numRequests);
     for (int ix = numRequests; ix > 0; --ix) {
-      requests.add(request);
       requestStream.onNext(request);
     }
     requestStream.onCompleted();
@@ -1029,11 +1026,7 @@ public abstract class AbstractInteropTest {
         stub.fullDuplexCall(recorder);
 
     final int numRequests = 10;
-    List<StreamingOutputCallRequest> requests =
-        new ArrayList<>(numRequests);
-
     for (int ix = numRequests; ix > 0; --ix) {
-      requests.add(request);
       requestStream.onNext(request);
     }
     requestStream.onCompleted();

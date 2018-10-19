@@ -261,7 +261,7 @@ public final class GrpcUtil {
    * in-use state of a transport.
    */
   public static boolean shouldBeCountedForInUse(CallOptions callOptions) {
-    return !(Boolean.TRUE.equals(callOptions.getOption(CALL_OPTIONS_RPC_OWNED_BY_BALANCER)));
+    return !Boolean.TRUE.equals(callOptions.getOption(CALL_OPTIONS_RPC_OWNED_BY_BALANCER));
   }
 
   /**

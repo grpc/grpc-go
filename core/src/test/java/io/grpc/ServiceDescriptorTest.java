@@ -60,7 +60,7 @@ public class ServiceDescriptorTest {
     thrown.expect(NullPointerException.class);
     thrown.expectMessage("method");
 
-    new ServiceDescriptor("name", (Collections.<MethodDescriptor<?, ?>>singletonList(null)));
+    new ServiceDescriptor("name", Collections.<MethodDescriptor<?, ?>>singletonList(null));
   }
 
   @Test

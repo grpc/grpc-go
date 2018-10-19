@@ -25,7 +25,7 @@ import io.netty.channel.ChannelPromise;
 /**
  * Command sent from the transport to the Netty channel to send a GRPC frame to the remote endpoint.
  */
-class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.QueuedCommand {
+final class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.QueuedCommand {
   private final StreamIdHolder stream;
   private final boolean endStream;
 

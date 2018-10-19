@@ -365,7 +365,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
       throws Http2Exception {
-    if (!teWarningLogged && !TE_TRAILERS.equals(headers.get(TE_HEADER))) {
+    if (!teWarningLogged && !TE_TRAILERS.contentEquals(headers.get(TE_HEADER))) {
       logger.warning(String.format("Expected header TE: %s, but %s is received. This means "
               + "some intermediate proxy may not support trailers",
           TE_TRAILERS, headers.get(TE_HEADER)));
@@ -405,7 +405,7 @@ class NettyServerHandler extends AbstractNettyHandler {
         return;
       }
 
-      if (!HTTP_METHOD.equals(headers.method())) {
+      if (!HTTP_METHOD.contentEquals(headers.method())) {
         respondWithHttpError(ctx, streamId, 405, Status.Code.INTERNAL,
             String.format("Method '%s' is not supported", headers.method()));
         return;

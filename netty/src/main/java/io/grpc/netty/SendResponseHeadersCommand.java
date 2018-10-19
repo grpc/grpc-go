@@ -24,7 +24,7 @@ import io.netty.handler.codec.http2.Http2Headers;
 /**
  * Command sent from the transport to the Netty channel to send response headers to the client.
  */
-class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
+final class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
   private final StreamIdHolder stream;
   private final Http2Headers headers;
   private final Status status;

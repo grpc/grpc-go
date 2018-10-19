@@ -35,7 +35,6 @@ import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.InternalChannelz.ServerStats;
-import io.grpc.InternalChannelz.ServerStats.Builder;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -106,7 +105,7 @@ public class ServerCallImplTest {
 
   private void callTracer0(Status status) {
     CallTracer tracer = CallTracer.getDefaultFactory().create();
-    Builder beforeBuilder = new Builder();
+    ServerStats.Builder beforeBuilder = new ServerStats.Builder();
     tracer.updateBuilder(beforeBuilder);
     ServerStats before = beforeBuilder.build();
     assertEquals(0, before.callsStarted);
@@ -122,7 +121,7 @@ public class ServerCallImplTest {
     // end: required boilerplate
 
     call.close(status, new Metadata());
-    Builder afterBuilder = new Builder();
+    ServerStats.Builder afterBuilder = new ServerStats.Builder();
     tracer.updateBuilder(afterBuilder);
     ServerStats after = afterBuilder.build();
     assertEquals(1, after.callsStarted);

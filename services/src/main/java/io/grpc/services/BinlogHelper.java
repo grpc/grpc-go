@@ -57,7 +57,6 @@ import io.grpc.binarylog.v1.Address.Type;
 import io.grpc.binarylog.v1.GrpcLogEntry;
 import io.grpc.binarylog.v1.GrpcLogEntry.EventType;
 import io.grpc.binarylog.v1.Message;
-import io.grpc.binarylog.v1.Message.Builder;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -255,7 +254,7 @@ final class BinlogHelper {
       if (marshaller != BYTEARRAY_MARSHALLER) {
         throw new IllegalStateException("Expected the BinaryLog's ByteArrayMarshaller");
       }
-      MaybeTruncated<Builder> pair = createMessageProto((byte[]) message, maxMessageBytes);
+      MaybeTruncated<Message.Builder> pair = createMessageProto((byte[]) message, maxMessageBytes);
       GrpcLogEntry.Builder entryBuilder = newTimestampedBuilder()
           .setSequenceIdWithinCall(seq)
           .setType(eventType)

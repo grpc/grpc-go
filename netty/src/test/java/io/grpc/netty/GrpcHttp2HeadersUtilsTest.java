@@ -42,6 +42,7 @@ import org.junit.runners.JUnit4;
  * Tests for {@link GrpcHttp2HeadersUtils}.
  */
 @RunWith(JUnit4.class)
+@SuppressWarnings({ "BadImport", "UndefinedEquals" }) // AsciiString.of and AsciiString.equals
 public class GrpcHttp2HeadersUtilsTest {
 
   private static final SensitivityDetector NEVER_SENSITIVE = new SensitivityDetector() {

@@ -172,6 +172,7 @@ public class FakeTsiHandshaker implements TsiHandshaker {
       ByteBuffer messageBytes = frameParser.getRawFrame();
       int offset = AltsFraming.getFramingOverhead();
       int length = messageBytes.limit() - offset;
+      @SuppressWarnings("ByteBufferBackingArray") // ByteBuffer is created using allocate()
       String message = new String(messageBytes.array(), offset, length, UTF_8);
       logger.log(Level.FINE, "Read message: {0}", message);
 

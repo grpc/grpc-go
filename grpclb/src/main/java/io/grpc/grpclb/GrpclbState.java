@@ -163,7 +163,7 @@ final class GrpclbState {
   }
 
   void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newState) {
-    if (newState.getState() == SHUTDOWN || !(subchannels.values().contains(subchannel))) {
+    if (newState.getState() == SHUTDOWN || !subchannels.values().contains(subchannel)) {
       return;
     }
     if (newState.getState() == IDLE) {

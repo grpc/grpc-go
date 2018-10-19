@@ -76,6 +76,7 @@ public class AsyncServer {
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
+      @SuppressWarnings("CatchAndPrintStackTrace")
       public void run() {
         try {
           System.out.println("QPS Server shutting down");
@@ -110,14 +111,14 @@ public class AsyncServer {
               Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
           boss =
               (EventLoopGroup)
-                  (groupClass
+                  groupClass
                       .getConstructor(int.class, ThreadFactory.class)
-                      .newInstance(1, tf));
+                      .newInstance(1, tf);
           worker =
               (EventLoopGroup)
-                  (groupClass
+                  groupClass
                       .getConstructor(int.class, ThreadFactory.class)
-                      .newInstance(0, tf));
+                      .newInstance(0, tf);
           channelType = channelClass;
           break;
         } catch (Exception e) {
@@ -133,14 +134,14 @@ public class AsyncServer {
               Class.forName("io.netty.channel.epoll.EpollServerDomainSocketChannel");
           boss =
               (EventLoopGroup)
-                  (groupClass
+                  groupClass
                       .getConstructor(int.class, ThreadFactory.class)
-                      .newInstance(1, tf));
+                      .newInstance(1, tf);
           worker =
               (EventLoopGroup)
-                  (groupClass
+                  groupClass
                       .getConstructor(int.class, ThreadFactory.class)
-                      .newInstance(0, tf));
+                      .newInstance(0, tf);
           channelType = channelClass;
           break;
         } catch (Exception e) {
