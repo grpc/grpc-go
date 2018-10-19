@@ -58,6 +58,7 @@ public final class Grpc {
    * Annotation for transport attributes. It follows the annotation semantics defined
    * by {@link Attributes}.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4972")
   @Retention(RetentionPolicy.SOURCE)
   @Documented
   public @interface TransportAttr {}

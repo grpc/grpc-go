@@ -129,6 +129,7 @@ public abstract class NameResolver {
    *
    * @since 1.0.0
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
   @ThreadSafe
   public interface Listener {
     /**
@@ -157,6 +158,7 @@ public abstract class NameResolver {
    * Annotation for name resolution result attributes. It follows the annotation semantics defined
    * by {@link Attributes}.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4972")
   @Retention(RetentionPolicy.SOURCE)
   @Documented
   public @interface ResolutionResultAttr {}
