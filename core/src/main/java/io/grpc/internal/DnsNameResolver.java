@@ -87,6 +87,8 @@ final class DnsNameResolver extends NameResolver {
 
   private static final String JNDI_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi", "true");
+  private static final String JNDI_LOCALHOST_PROPERTY =
+      System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_jndi_localhost", "false");
   private static final String JNDI_SRV_PROPERTY =
       System.getProperty("io.grpc.internal.DnsNameResolverProvider.enable_grpclb", "true");
   private static final String JNDI_TXT_PROPERTY =
@@ -109,6 +111,8 @@ final class DnsNameResolver extends NameResolver {
 
   @VisibleForTesting
   static boolean enableJndi = Boolean.parseBoolean(JNDI_PROPERTY);
+  @VisibleForTesting
+  static boolean enableJndiLocalhost = Boolean.parseBoolean(JNDI_LOCALHOST_PROPERTY);
   @VisibleForTesting
   static boolean enableSrv = Boolean.parseBoolean(JNDI_SRV_PROPERTY);
   @VisibleForTesting
@@ -259,7 +263,7 @@ final class DnsNameResolver extends NameResolver {
       ResolutionResults resolutionResults;
       try {
         ResourceResolver resourceResolver = null;
-        if (enableJndi) {
+        if (shouldUseJndi(enableJndi, enableJndiLocalhost, resolver.host)) {
           resourceResolver = resolver.getResourceResolver();
         }
         resolutionResults = resolveAll(
@@ -682,5 +686,29 @@ final class DnsNameResolver extends NameResolver {
       }
     }
     return localHostname;
+  }
+
+  @VisibleForTesting
+  static boolean shouldUseJndi(boolean jndiEnabled, boolean jndiLocalhostEnabled, String target) {
+    if (!jndiEnabled) {
+      return false;
+    }
+    if ("localhost".equalsIgnoreCase(target)) {
+      return jndiLocalhostEnabled;
+    }
+    // Check if this name looks like IPv6
+    if (target.contains(":")) {
+      return false;
+    }
+    // Check if this might be IPv4.  Such addresses have no alphabetic characters.  This also
+    // checks the target is empty.
+    boolean alldigits = true;
+    for (int i = 0; i < target.length(); i++) {
+      char c = target.charAt(i);
+      if (c != '.') {
+        alldigits &= (c >= '0' && c <= '9');
+      }
+    }
+    return !alldigits;
   }
 }

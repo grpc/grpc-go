@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -825,6 +826,82 @@ public class DnsNameResolverTest {
     choice.put("serviceConfig", serviceConfig);
 
     assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
+  }
+
+  @Test
+  public void shouldUseJndi_alwaysFalseIfDisabled() {
+    boolean enableJndi = false;
+    boolean enableJndiLocalhost = true;
+    String host = "seemingly.valid.host";
+
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, host));
+  }
+
+  @Test
+  public void shouldUseJndi_falseIfDisabledForLocalhost() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = false;
+    
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "localhost"));
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "LOCALHOST"));
+  }
+
+  @Test
+  public void shouldUseJndi_trueIfLocalhostOverriden() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = true;
+    String host = "localhost";
+
+    assertTrue(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, host));
+  }
+
+  @Test
+  public void shouldUseJndi_falseForIpv6() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = false;
+
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "::"));
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "::1"));
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "2001:db8:1234::"));
+    assertFalse(DnsNameResolver.shouldUseJndi(
+        enableJndi, enableJndiLocalhost, "[2001:db8:1234::]"));
+    assertFalse(DnsNameResolver.shouldUseJndi(
+        enableJndi, enableJndiLocalhost, "2001:db8:1234::%3"));
+  }
+
+  @Test
+  public void shouldUseJndi_falseForIpv4() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = false;
+
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "127.0.0.1"));
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "192.168.0.1"));
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "134744072"));
+  }
+
+  @Test
+  public void shouldUseJndi_falseForEmpty() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = false;
+
+    assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, ""));
+  }
+
+  @Test
+  public void shouldUseJndi_trueIfItMightPossiblyBeValid() {
+    boolean enableJndi = true;
+    boolean enableJndiLocalhost = false;
+
+    assertTrue(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "remotehost"));
+    assertTrue(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "remotehost.gov"));
+    assertTrue(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "f.q.d.n."));
+    assertTrue(DnsNameResolver.shouldUseJndi(
+        enableJndi, enableJndiLocalhost, "8.8.8.8.in-addr.arpa."));
+    assertTrue(DnsNameResolver.shouldUseJndi(
+        enableJndi, enableJndiLocalhost, "2001-db8-1234--as3.ipv6-literal.net"));
+
+
+
   }
 
   private void testInvalidUri(URI uri) {
