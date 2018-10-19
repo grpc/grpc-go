@@ -1066,9 +1066,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
 			return
 		case <-allowedToReset: // We're in the clear to reset.
-			ac.mu.Lock()
-			ac.transport = nil
-			ac.mu.Unlock()
 			oneReset.Do(func() { ac.resetTransport(false) })
 		}
 	}
