@@ -972,6 +972,8 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			return
 		}
 
+		// The transport that was used before is no longer viable.
+		ac.transport = nil
 		// If the connection is READY, a failure must have occurred.
 		// Otherwise, we'll consider this is a transient failure when:
 		//   We've exhausted all addresses
@@ -1066,8 +1068,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		hcCancel()
 		ac.mu.Lock()
 		ac.adjustParams(r)
-		// make sure no RPC picks this transport after goaway having been received.
-		ac.transport = nil
 		ac.mu.Unlock()
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
@@ -1083,10 +1083,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		hcCancel()
 		close(onCloseCalled)
 		prefaceTimer.Stop()
-
-		ac.mu.Lock()
-		ac.transport = nil
-		ac.mu.Unlock()
 
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
