@@ -19,9 +19,35 @@
 package healthcheck
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
+
+	"google.golang.org/grpc/internal/backoff"
 )
 
-func TestNewClientHealthCheck(t *testing.T) {
+func TestNewClientHealthCheckBackoff(t *testing.T) {
+	retried := false
+	var fstTry time.Time
+	var sndTry time.Time
+	newStream := func() (interface{}, error) {
+		callTime := time.Now()
+		if retried {
+			sndTry = callTime
+			return nil, nil
+		}
+		fstTry = callTime
+		retried = true
+		return nil, errors.New("Backoff")
 
+	}
+	newClientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+	actualDelta := sndTry.Sub(fstTry)
+	bo := backoff.Exponential{MaxDelay: maxDelay}
+	expectedDelta := bo.Backoff(0)
+
+	if float64(actualDelta.Nanoseconds()) <= float64(expectedDelta)*.8 {
+		t.Fatalf("Duration between two calls of newStream is %v (expected: %v)\n", actualDelta, expectedDelta)
+	}
 }
