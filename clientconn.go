@@ -946,6 +946,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		// If this is the first in a line of resets, we want to resolve immediately. The only other time we
 		// want to reset is if we have tried all the addresses handed to us.
 		if resolveNow {
+			ac.logInfo("resolving")
 			ac.mu.Lock()
 			ac.cc.resolveNow(resolver.ResolveNowOption{})
 			ac.mu.Unlock()
@@ -953,9 +954,12 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
+			ac.logInfo("shutdown")
 			ac.mu.Unlock()
 			return
 		}
+
+		ac.logInfo(fmt.Sprintf("transient failure? %v, %v, %v, %v", ac.state == connectivity.Ready, ac.addrIdx == len(ac.addrs)-1, ac.state == connectivity.Connecting, !ac.successfulHandshake))
 
 		// If the connection is READY, a failure must have occurred.
 		// Otherwise, we'll consider this is a transient failure when:
@@ -963,10 +967,12 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 		//   We're in CONNECTING
 		//   And it's not the very first addr to try TODO(deklerk) find a better way to do this than checking ac.successfulHandshake
 		if ac.state == connectivity.Ready || (ac.addrIdx == len(ac.addrs)-1 && ac.state == connectivity.Connecting && !ac.successfulHandshake) {
+			ac.logInfo("entering transient failure")
 			ac.updateConnectivityState(connectivity.TransientFailure)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
 		ac.mu.Unlock()
+		ac.logInfo("continuing the connect")
 
 		if err := ac.nextAddr(); err != nil {
 			return
@@ -1064,16 +1070,25 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	onClose := func() {
 		ac.logInfo("onClose received")
 		close(onCloseCalled)
+		ac.logInfo("prefaceTimer.Stop()")
 		prefaceTimer.Stop()
 
+		ac.logInfo("select {}")
 		select {
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
+			ac.logInfo("skip reset!")
 			return
 		case <-allowedToReset: // We're in the clear to reset.
+			ac.logInfo("allowed to reset! locking..")
 			ac.mu.Lock()
+			ac.logInfo("acquired lock")
 			ac.transport = nil
 			ac.mu.Unlock()
-			oneReset.Do(func() { ac.resetTransport(false) })
+			ac.logInfo("released lock")
+			oneReset.Do(func() {
+				ac.logInfo("resetting")
+				ac.resetTransport(false)
+			})
 		}
 	}
 
@@ -1283,6 +1298,7 @@ func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 // tight loop.
 // tearDown doesn't remove ac from ac.cc.conns.
 func (ac *addrConn) tearDown(err error) {
+	ac.logInfo(fmt.Sprintf("tearDown()", err))
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
