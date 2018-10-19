@@ -21,9 +21,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.protobuf.ByteString;
-import io.grpc.alts.internal.Handshaker.HandshakerReq;
-import io.grpc.alts.internal.Handshaker.HandshakerResp;
-import io.grpc.alts.internal.Handshaker.NextHandshakeMessageReq;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import org.junit.Before;

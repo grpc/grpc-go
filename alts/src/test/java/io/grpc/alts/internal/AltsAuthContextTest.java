@@ -18,10 +18,6 @@ package io.grpc.alts.internal;
 
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.alts.internal.Handshaker.HandshakerResult;
-import io.grpc.alts.internal.Handshaker.Identity;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
-import io.grpc.alts.internal.TransportSecurityCommon.SecurityLevel;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

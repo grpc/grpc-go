@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The canonical version of this proto can be found at
+// https://github.com/grpc/grpc-proto/blob/master/grpc/gcp/altscontext.proto
+
 syntax = "proto3";
 
 package grpc.gcp;
 
 import "grpc/gcp/transport_security_common.proto";
 
+option go_package = "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp";
+option java_multiple_files = true;
+option java_outer_classname = "AltsContextProto";
 option java_package = "io.grpc.alts.internal";
 
 message AltsContext {
@@ -42,3 +48,4 @@ message AltsContext {
   // Additional attributes of the peer.
   map<string, string> peer_attributes = 7;
 }
+

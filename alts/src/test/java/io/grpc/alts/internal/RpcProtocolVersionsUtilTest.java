@@ -20,9 +20,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import io.grpc.alts.internal.RpcProtocolVersions.Version;
 import io.grpc.alts.internal.RpcProtocolVersionsUtil.RpcVersionsCheckResult;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions.Version;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

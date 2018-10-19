@@ -29,11 +29,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
-import io.grpc.alts.internal.Handshaker.HandshakeProtocol;
-import io.grpc.alts.internal.Handshaker.HandshakerReq;
-import io.grpc.alts.internal.Handshaker.Identity;
-import io.grpc.alts.internal.Handshaker.StartClientHandshakeReq;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import org.junit.Before;

@@ -17,8 +17,7 @@
 package io.grpc.alts.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions.Version;
+import io.grpc.alts.internal.RpcProtocolVersions.Version;
 import javax.annotation.Nullable;
 
 /** Utility class for Rpc Protocol Versions. */

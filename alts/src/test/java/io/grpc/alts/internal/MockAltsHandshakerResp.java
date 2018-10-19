@@ -20,10 +20,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
-import io.grpc.alts.internal.Handshaker.HandshakerResp;
-import io.grpc.alts.internal.Handshaker.HandshakerResult;
-import io.grpc.alts.internal.Handshaker.HandshakerStatus;
-import io.grpc.alts.internal.Handshaker.Identity;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.security.SecureRandom;

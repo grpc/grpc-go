@@ -27,7 +27,6 @@ import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.SecurityLevel;
-import io.grpc.alts.internal.Handshaker.HandshakerResult;
 import io.grpc.alts.internal.TsiFrameProtector.Consumer;
 import io.grpc.alts.internal.TsiPeer.Property;
 import io.grpc.internal.GrpcAttributes;

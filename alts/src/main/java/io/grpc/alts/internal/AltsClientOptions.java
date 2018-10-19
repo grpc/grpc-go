@@ -17,7 +17,6 @@
 package io.grpc.alts.internal;
 
 import com.google.common.collect.ImmutableList;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
 import javax.annotation.Nullable;
 
 /** Handshaker options for creating ALTS client channel. */

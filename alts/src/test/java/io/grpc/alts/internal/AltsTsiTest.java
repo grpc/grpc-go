@@ -20,9 +20,6 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.common.testing.GcFinalization;
 import io.grpc.alts.internal.ByteBufTestUtils.RegisterRef;
-import io.grpc.alts.internal.Handshaker.HandshakeProtocol;
-import io.grpc.alts.internal.Handshaker.HandshakerReq;
-import io.grpc.alts.internal.Handshaker.HandshakerResp;
 import io.grpc.alts.internal.TsiTest.Handshakers;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.ReferenceCounted;

@@ -18,8 +18,6 @@ package io.grpc.alts.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
-import io.grpc.alts.internal.Handshaker.HandshakerReq;
-import io.grpc.alts.internal.Handshaker.HandshakerResp;
 import io.grpc.alts.internal.HandshakerServiceGrpc.HandshakerServiceStub;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;

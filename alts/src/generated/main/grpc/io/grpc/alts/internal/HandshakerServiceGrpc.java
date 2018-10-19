@@ -27,30 +27,30 @@ public final class HandshakerServiceGrpc {
   public static final String SERVICE_NAME = "grpc.gcp.HandshakerService";
 
   // Static method descriptors that strictly reflect the proto.
-  private static volatile io.grpc.MethodDescriptor<io.grpc.alts.internal.Handshaker.HandshakerReq,
-      io.grpc.alts.internal.Handshaker.HandshakerResp> getDoHandshakeMethod;
+  private static volatile io.grpc.MethodDescriptor<io.grpc.alts.internal.HandshakerReq,
+      io.grpc.alts.internal.HandshakerResp> getDoHandshakeMethod;
 
   @io.grpc.stub.annotations.RpcMethod(
       fullMethodName = SERVICE_NAME + '/' + "DoHandshake",
-      requestType = io.grpc.alts.internal.Handshaker.HandshakerReq.class,
-      responseType = io.grpc.alts.internal.Handshaker.HandshakerResp.class,
+      requestType = io.grpc.alts.internal.HandshakerReq.class,
+      responseType = io.grpc.alts.internal.HandshakerResp.class,
       methodType = io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
-  public static io.grpc.MethodDescriptor<io.grpc.alts.internal.Handshaker.HandshakerReq,
-      io.grpc.alts.internal.Handshaker.HandshakerResp> getDoHandshakeMethod() {
-    io.grpc.MethodDescriptor<io.grpc.alts.internal.Handshaker.HandshakerReq, io.grpc.alts.internal.Handshaker.HandshakerResp> getDoHandshakeMethod;
+  public static io.grpc.MethodDescriptor<io.grpc.alts.internal.HandshakerReq,
+      io.grpc.alts.internal.HandshakerResp> getDoHandshakeMethod() {
+    io.grpc.MethodDescriptor<io.grpc.alts.internal.HandshakerReq, io.grpc.alts.internal.HandshakerResp> getDoHandshakeMethod;
     if ((getDoHandshakeMethod = HandshakerServiceGrpc.getDoHandshakeMethod) == null) {
       synchronized (HandshakerServiceGrpc.class) {
         if ((getDoHandshakeMethod = HandshakerServiceGrpc.getDoHandshakeMethod) == null) {
           HandshakerServiceGrpc.getDoHandshakeMethod = getDoHandshakeMethod = 
-              io.grpc.MethodDescriptor.<io.grpc.alts.internal.Handshaker.HandshakerReq, io.grpc.alts.internal.Handshaker.HandshakerResp>newBuilder()
+              io.grpc.MethodDescriptor.<io.grpc.alts.internal.HandshakerReq, io.grpc.alts.internal.HandshakerResp>newBuilder()
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(
                   "grpc.gcp.HandshakerService", "DoHandshake"))
               .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.grpc.alts.internal.Handshaker.HandshakerReq.getDefaultInstance()))
+                  io.grpc.alts.internal.HandshakerReq.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-                  io.grpc.alts.internal.Handshaker.HandshakerResp.getDefaultInstance()))
+                  io.grpc.alts.internal.HandshakerResp.getDefaultInstance()))
                   .setSchemaDescriptor(new HandshakerServiceMethodDescriptorSupplier("DoHandshake"))
                   .build();
           }
@@ -96,8 +96,8 @@ public final class HandshakerServiceGrpc {
      * response before sending next request.
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerReq> doHandshake(
-        io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerResp> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.alts.internal.HandshakerReq> doHandshake(
+        io.grpc.stub.StreamObserver<io.grpc.alts.internal.HandshakerResp> responseObserver) {
       return asyncUnimplementedStreamingCall(getDoHandshakeMethod(), responseObserver);
     }
 
@@ -107,8 +107,8 @@ public final class HandshakerServiceGrpc {
             getDoHandshakeMethod(),
             asyncBidiStreamingCall(
               new MethodHandlers<
-                io.grpc.alts.internal.Handshaker.HandshakerReq,
-                io.grpc.alts.internal.Handshaker.HandshakerResp>(
+                io.grpc.alts.internal.HandshakerReq,
+                io.grpc.alts.internal.HandshakerResp>(
                   this, METHODID_DO_HANDSHAKE)))
           .build();
     }
@@ -142,8 +142,8 @@ public final class HandshakerServiceGrpc {
      * response before sending next request.
      * </pre>
      */
-    public io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerReq> doHandshake(
-        io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerResp> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.alts.internal.HandshakerReq> doHandshake(
+        io.grpc.stub.StreamObserver<io.grpc.alts.internal.HandshakerResp> responseObserver) {
       return asyncBidiStreamingCall(
           getChannel().newCall(getDoHandshakeMethod(), getCallOptions()), responseObserver);
     }
@@ -218,7 +218,7 @@ public final class HandshakerServiceGrpc {
       switch (methodId) {
         case METHODID_DO_HANDSHAKE:
           return (io.grpc.stub.StreamObserver<Req>) serviceImpl.doHandshake(
-              (io.grpc.stub.StreamObserver<io.grpc.alts.internal.Handshaker.HandshakerResp>) responseObserver);
+              (io.grpc.stub.StreamObserver<io.grpc.alts.internal.HandshakerResp>) responseObserver);
         default:
           throw new AssertionError();
       }
@@ -231,7 +231,7 @@ public final class HandshakerServiceGrpc {
 
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
-      return io.grpc.alts.internal.Handshaker.getDescriptor();
+      return io.grpc.alts.internal.HandshakerProto.getDescriptor();
     }
 
     @java.lang.Override

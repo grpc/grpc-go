@@ -26,9 +26,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
-import io.grpc.alts.internal.Handshaker.HandshakerResult;
-import io.grpc.alts.internal.Handshaker.Identity;
-import io.grpc.alts.internal.TransportSecurityCommon.RpcProtocolVersions;
 import java.nio.ByteBuffer;
 import org.junit.Before;
 import org.junit.Test;
