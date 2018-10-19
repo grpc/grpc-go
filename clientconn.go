@@ -1190,6 +1190,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 	// Now there is a viable transport to be use, so set ac.transport to reflect the new viable transport.
 	ac.mu.Lock()
+	if ac.state == connectivity.Shutdown {
+		ac.mu.Unlock()
+		close(skipReset)
+		newTr.Close()
+		return nil
+	}
 	ac.transport = newTr
 	ac.mu.Unlock()
 
