@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
@@ -875,7 +874,6 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	events trace.EventLog
 	acbw   balancer.SubConn
 	scopts balancer.NewSubConnOptions
 
@@ -929,22 +927,6 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 			ac.cc.mkp.Time = v
 		}
 		ac.cc.mu.Unlock()
-	}
-}
-
-// printf records an event in ac's event log, unless ac has been closed.
-// REQUIRES ac.mu is held.
-func (ac *addrConn) printf(format string, a ...interface{}) {
-	if ac.events != nil {
-		ac.events.Printf(format, a...)
-	}
-}
-
-// errorf records an error in ac's event log, unless ac has been closed.
-// REQUIRES ac.mu is held.
-func (ac *addrConn) errorf(format string, a ...interface{}) {
-	if ac.events != nil {
-		ac.events.Errorf(format, a...)
 	}
 }
 
@@ -1023,7 +1005,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			return
 		}
 
-		ac.printf("connecting")
 		if ac.state != connectivity.Connecting {
 			ac.updateConnectivityState(connectivity.Connecting)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
@@ -1201,7 +1182,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		return errConnClosing
 	}
 
-	ac.printf("ready")
 	ac.updateConnectivityState(connectivity.Ready)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.transport = newTr
@@ -1318,10 +1298,6 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Unlock()
 		ac.transport.GracefulClose()
 		ac.mu.Lock()
-	}
-	if ac.events != nil {
-		ac.events.Finish()
-		ac.events = nil
 	}
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
