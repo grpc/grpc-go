@@ -19,11 +19,12 @@
 package healthcheck
 
 import (
-	"context"
 	"errors"
 	"io"
 	"runtime/debug"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/internal/backoff"
 
@@ -80,6 +81,7 @@ retryConnection:
 			Service: service,
 		}); err != nil && err != io.EOF {
 			//stream should have been closed, so we can safely continue to create a new stream.
+			doBackoff = true
 			continue retryConnection
 		}
 		s.CloseSend()
@@ -93,8 +95,10 @@ retryConnection:
 				// transition to TRANSIENT FAILURE when Watch() fails with status other than UNIMPLEMENTED
 				update(false)
 				// we can safely break here and continue to create a new stream, since a non-nil error has been received.
+				doBackoff = true
 				continue retryConnection
 			}
+			retryCnt = 0
 			switch resp.Status {
 			case healthpb.HealthCheckResponse_SERVING:
 				update(true)

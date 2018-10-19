@@ -19,10 +19,11 @@
 package healthcheck
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/internal/backoff"
 )
