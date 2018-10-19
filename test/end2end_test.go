@@ -7027,7 +7027,8 @@ func TestGoAwayThenClose(t *testing.T) {
 	testpb.RegisterTestServiceServer(s1, ts1)
 	go s1.Serve(lis1)
 
-	lis2, err := net.Listen("tcp", "localhost:0")
+	conn2Established := grpcsync.NewEvent()
+	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
@@ -7055,29 +7056,18 @@ func TestGoAwayThenClose(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 
-	// Should go on connection 1.
+	// Should go on connection 1. We use a long-lived RPC because it will cause GracefulStop to send GO_AWAY, but the
+	// connection doesn't get closed until the server stops and the client receives.
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
 	}
 
 	// Send GO_AWAY to connection 1.
 	go s1.GracefulStop()
 
-	timeout := time.After(5 * time.Second)
 	// Wait for connection 2 to be established.
-	for done := false; !done; {
-		select {
-		case <-conn2Ready.Done():
-			done = true
-		case <-timeout:
-			t.Fatal("timed out waiting for connection to server 2 to be established")
-		default:
-			// Might fail because conn is draining, or not because race condition between this and GracefulStop being
-			// called.
-			client.UnaryCall(ctx, &testpb.SimpleRequest{})
-		}
-	}
+	<-conn2Established.Done()
 
 	// Close connection 1.
 	s1.Stop()
@@ -7094,4 +7084,22 @@ func TestGoAwayThenClose(t *testing.T) {
 			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 		}
 	}
+}
+
+func listenWithNotifyingListener(network, address string, event *grpcsync.Event) (net.Listener, error) {
+	lis, err := net.Listen(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return notifyingListener{connEstablished: event, Listener: lis}, nil
+}
+
+type notifyingListener struct {
+	connEstablished *grpcsync.Event
+	net.Listener
+}
+
+func (lis notifyingListener) Accept() (net.Conn, error) {
+	defer lis.connEstablished.Fire()
+	return lis.Listener.Accept()
 }
