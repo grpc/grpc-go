@@ -57,6 +57,7 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
@@ -6991,6 +6992,106 @@ func testLargeTimeout(t *testing.T, e env) {
 
 		if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 			t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
+		}
+	}
+}
+
+// Proxies typically send GO_AWAY followed by connection closure a minute or so later. This
+// test ensures that the connection is re-created after GO_AWAY and not affected by the
+// subsequent (old) connection closure.
+func TestGoAwayThenClose(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s1 := grpc.NewServer()
+	defer s1.Stop()
+	ts1 := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Wait forever.
+			_, err := stream.Recv()
+			if err == nil {
+				t.Error("expected to never receive any message")
+			}
+			return err
+		},
+	}
+	testpb.RegisterTestServiceServer(s1, ts1)
+	go s1.Serve(lis1)
+
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s2 := grpc.NewServer()
+	defer s2.Stop()
+	conn2Ready := grpcsync.NewEvent()
+	ts2 := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		conn2Ready.Fire()
+		return &testpb.SimpleResponse{}, nil
+	}}
+	testpb.RegisterTestServiceServer(s2, ts2)
+	go s2.Serve(lis2)
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	r.InitialAddrs([]resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+	})
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	// Should go on connection 1.
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+	}
+
+	// Send GO_AWAY to connection 1.
+	go s1.GracefulStop()
+
+	timeout := time.After(5 * time.Second)
+	// Wait for connection 2 to be established.
+	for done := false; !done; {
+		select {
+		case <-conn2Ready.Done():
+			done = true
+		case <-timeout:
+			t.Fatal("timed out waiting for connection to server 2 to be established")
+		default:
+			// Might fail because conn is draining, or not because race condition between this and GracefulStop being
+			// called.
+			client.UnaryCall(ctx, &testpb.SimpleRequest{})
+		}
+	}
+
+	// Close connection 1.
+	s1.Stop()
+
+	// Wait for client to close.
+	_, err = stream.Recv()
+	if err == nil {
+		t.Fatal("expected the stream to die, but got a successful Recv")
+	}
+
+	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
+	for i := 0; i < 10; i++ {
+		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 		}
 	}
 }
