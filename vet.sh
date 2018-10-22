@@ -39,7 +39,7 @@ if [[ "$1" = "-install" ]]; then
   # Check for module support
   if go help mod >& /dev/null; then
     go install \
-      github.com/golang/lint/golint \
+      golang.org/x/lint/golint \
       golang.org/x/tools/cmd/goimports \
       honnef.co/go/tools/cmd/staticcheck \
       github.com/client9/misspell/cmd/misspell \
@@ -49,7 +49,7 @@ if [[ "$1" = "-install" ]]; then
     # Note: this gets the latest version of all tools (vs. the pinned versions
     # with Go modules).
     go get -u \
-      github.com/golang/lint/golint \
+      golang.org/x/lint/golint \
       golang.org/x/tools/cmd/goimports \
       honnef.co/go/tools/cmd/staticcheck \
       github.com/client9/misspell/cmd/misspell \
