@@ -965,6 +965,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.updateConnectivityState(connectivity.TransientFailure)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
+		ac.transport = nil
 		ac.mu.Unlock()
 
 		if err := ac.nextAddr(); err != nil {
@@ -976,7 +977,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.mu.Unlock()
 			return
 		}
-		ac.transport = nil
 
 		backoffIdx := ac.backoffIdx
 		backoffFor := ac.dopts.bs.Backoff(backoffIdx)
