@@ -71,6 +71,8 @@ fi
 
 git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | tee /dev/stderr | (! read)
 git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand') | tee /dev/stderr | (! read)
+# Any import of a ptypes proto package must be renamed.
+git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/")
 git ls-files | xargs dirname | sort | uniq | xargs go run test/go_vet/vet.go | tee /dev/stderr | (! read)
 gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)
 goimports -l . 2>&1 | tee /dev/stderr | (! read)
