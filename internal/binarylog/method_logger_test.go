@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/duration"
+	dpb "github.com/golang/protobuf/ptypes/duration"
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -83,7 +83,7 @@ func TestLog(t *testing.T) {
 						},
 						MethodName: "testservice/testmethod",
 						Authority:  "test.service.io",
-						Timeout: &duration.Duration{
+						Timeout: &dpb.Duration{
 							Seconds: 2,
 							Nanos:   3,
 						},
