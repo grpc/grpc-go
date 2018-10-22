@@ -54,9 +54,10 @@ public final class GrpcAttributes {
    * The security level of the transport.  If it's not present, {@link SecurityLevel#NONE} should be
    * assumed.
    */
+  @SuppressWarnings("deprecation")
   @Grpc.TransportAttr
   public static final Attributes.Key<SecurityLevel> ATTR_SECURITY_LEVEL =
-      Attributes.Key.create("io.grpc.internal.GrpcAttributes.securityLevel");
+      io.grpc.CallCredentials.ATTR_SECURITY_LEVEL;
 
   private GrpcAttributes() {}
 }

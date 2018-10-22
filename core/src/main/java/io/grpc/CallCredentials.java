@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import io.grpc.Attributes.Key;
 import java.util.concurrent.Executor;
 
 /**
@@ -34,10 +35,35 @@ import java.util.concurrent.Executor;
  * pass that reference to gRPC for usage. However, code may not call or implement the {@code
  * CallCredentials} itself if it wishes to only use stable APIs.
  */
-public abstract class CallCredentials {
+public interface CallCredentials {
   /**
-   * Pass the credential data to the given {@link CallCredentials.MetadataApplier}, which will
-   * propagate it to the request metadata.
+   * The security level of the transport. It is guaranteed to be present in the {@code attrs} passed
+   * to {@link #applyRequestMetadata}. It is by default {@link SecurityLevel#NONE} but can be
+   * overridden by the transport.
+   *
+   * @deprecated transport implementations should use {@code
+   * io.grpc.internal.GrpcAttributes.ATTR_SECURITY_LEVEL} instead.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  @Grpc.TransportAttr
+  @Deprecated
+  public static final Key<SecurityLevel> ATTR_SECURITY_LEVEL =
+      Key.create("io.grpc.internal.GrpcAttributes.securityLevel");
+
+  /**
+   * The authority string used to authenticate the server. Usually it's the server's host name. It
+   * is guaranteed to be present in the {@code attrs} passed to {@link #applyRequestMetadata}. It is
+   * by default from the channel, but can be overridden by the transport and {@link
+   * io.grpc.CallOptions} with increasing precedence.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  @Grpc.TransportAttr
+  @Deprecated
+  public static final Key<String> ATTR_AUTHORITY = Key.create("io.grpc.CallCredentials.authority");
+
+  /**
+   * Pass the credential data to the given {@link MetadataApplier}, which will propagate it to
+   * the request metadata.
    *
    * <p>It is called for each individual RPC, within the {@link Context} of the call, before the
    * stream is about to be created on a transport. Implementations should not block in this
@@ -45,22 +71,28 @@ public abstract class CallCredentials {
    * implementation may give the {@code applier} to an asynchronous task which will eventually call
    * the {@code applier}. The RPC proceeds only after the {@code applier} is called.
    *
-   * @param requestInfo request-related information
+   * @param method The method descriptor of this RPC
+   * @param attrs Additional attributes from the transport, along with the keys defined in this
+   *        interface (i.e. the {@code ATTR_*} fields) which are guaranteed to be present.
    * @param appExecutor The application thread-pool. It is provided to the implementation in case it
    *        needs to perform blocking operations.
    * @param applier The outlet of the produced headers. It can be called either before or after this
    *        method returns.
+   *
+   * @deprecated implement {@link CallCredentials2} instead.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
-  public abstract void applyRequestMetadata(
-      RequestInfo requestInfo, Executor appExecutor, MetadataApplier applier);
+  @Deprecated
+  void applyRequestMetadata(
+      MethodDescriptor<?, ?> method, Attributes attrs,
+      Executor appExecutor, MetadataApplier applier);
 
   /**
    * Should be a noop but never called; tries to make it clearer to implementors that they may break
    * in the future.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
-  public abstract void thisUsesUnstableApi();
+  void thisUsesUnstableApi();
 
   /**
    * The outlet of the produced headers. Not thread-safe.

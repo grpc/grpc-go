@@ -24,12 +24,12 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import io.grpc.Attributes;
+import io.grpc.CallCredentials;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.SecurityLevel;
 import io.grpc.alts.internal.TsiFrameProtector.Consumer;
 import io.grpc.alts.internal.TsiPeer.Property;
-import io.grpc.internal.GrpcAttributes;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -348,7 +348,7 @@ public class AltsProtocolNegotiatorTest {
         .isEqualTo("embedded");
     assertThat(grpcHandler.attrs.get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR).toString())
         .isEqualTo("embedded");
-    assertThat(grpcHandler.attrs.get(GrpcAttributes.ATTR_SECURITY_LEVEL))
+    assertThat(grpcHandler.attrs.get(CallCredentials.ATTR_SECURITY_LEVEL))
         .isEqualTo(SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 

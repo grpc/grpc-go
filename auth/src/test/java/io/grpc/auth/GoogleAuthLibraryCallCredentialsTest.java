@@ -39,8 +39,8 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import io.grpc.Attributes;
-import io.grpc.CallCredentials;
 import io.grpc.CallCredentials.MetadataApplier;
+import io.grpc.CallCredentials2;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
@@ -393,7 +393,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
     return savedPendingRunnables.size();
   }
 
-  private final class RequestInfoImpl extends CallCredentials.RequestInfo {
+  private final class RequestInfoImpl extends CallCredentials2.RequestInfo {
     final String authority;
     final SecurityLevel securityLevel;
 
