@@ -1080,7 +1080,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			//
 			// This is not handled specifically now. User will return a final
 			// status from the service handler, we will log that error instead.
-			// This behavior is similiar to an interceptor.
+			// This behavior is similar to an interceptor.
 		}
 		if channelz.IsOn() && err == nil {
 			ss.t.IncrMsgSent()
@@ -1142,7 +1142,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			//
 			// This is not handled specifically now. User will return a final
 			// status from the service handler, we will log that error instead.
-			// This behavior is similiar to an interceptor.
+			// This behavior is similar to an interceptor.
 		}
 		if channelz.IsOn() && err == nil {
 			ss.t.IncrMsgRecv()
