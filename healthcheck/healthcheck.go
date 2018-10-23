@@ -94,11 +94,7 @@ retryConnection:
 
 			// As a message has been received, removes the need for backoff for the next retry by reseting the try count.
 			tryCnt = 0
-			if resp.Status == healthpb.HealthCheckResponse_SERVING {
-				reportHealth(true)
-			} else {
-				reportHealth(false)
-			}
+			reportHealth(resp.Status == healthpb.HealthCheckResponse_SERVING)
 		}
 	}
 }
