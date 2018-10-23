@@ -983,6 +983,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.updateConnectivityState(connectivity.TransientFailure)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
+		ac.transport = nil
 		ac.mu.Unlock()
 
 		if err := ac.nextAddr(); err != nil {
