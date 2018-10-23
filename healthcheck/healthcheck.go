@@ -36,7 +36,7 @@ func init() {
 	internal.HealthCheckFunc = newClientHealthCheck
 }
 
-const maxDelay time.Duration = 5 * time.Second
+const maxDelay = 5 * time.Second
 
 func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
 	tryCnt := 0
