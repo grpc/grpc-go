@@ -44,4 +44,3 @@ message RpcProtocolVersions {
   // Minimum supported RPC version.
   Version min_rpc_version = 2;
 }
-
