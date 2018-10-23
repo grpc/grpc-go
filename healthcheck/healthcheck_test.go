@@ -24,11 +24,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"google.golang.org/grpc/internal/backoff"
 )
 
-func TestNewClientHealthCheckBackoff(t *testing.T) {
+func TestClientHealthCheckBackoff(t *testing.T) {
 	retried := false
 	var fstTry time.Time
 	var sndTry time.Time
@@ -43,7 +42,7 @@ func TestNewClientHealthCheckBackoff(t *testing.T) {
 		return nil, errors.New("Backoff")
 
 	}
-	newClientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
 	actualDelta := sndTry.Sub(fstTry)
 	bo := backoff.Exponential{MaxDelay: maxDelay}
 	expectedDelta := bo.Backoff(0)

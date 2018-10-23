@@ -33,12 +33,12 @@ import (
 )
 
 func init() {
-	internal.HealthCheckFunc = newClientHealthCheck
+	internal.HealthCheckFunc = clientHealthCheck
 }
 
 const maxDelay = 5 * time.Second
 
-func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
+func clientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
 	tryCnt := 0
 	bo := backoff.Exponential{MaxDelay: maxDelay}
 
