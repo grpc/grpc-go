@@ -24,9 +24,8 @@ import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.SynchronizationContext.ScheduledHandle;
 import java.util.HashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,15 +37,13 @@ final class CachedSubchannelPool implements SubchannelPool {
       new HashMap<EquivalentAddressGroup, CacheEntry>();
 
   private Helper helper;
-  private ScheduledExecutorService timerService;
 
   @VisibleForTesting
   static final long SHUTDOWN_TIMEOUT_MS = 10000;
 
   @Override
-  public void init(Helper helper, ScheduledExecutorService timerService) {
+  public void init(Helper helper) {
     this.helper = checkNotNull(helper, "helper");
-    this.timerService = checkNotNull(timerService, "timerService");
   }
 
   @Override
@@ -58,7 +55,7 @@ final class CachedSubchannelPool implements SubchannelPool {
       subchannel = helper.createSubchannel(eag, defaultAttributes);
     } else {
       subchannel = entry.subchannel;
-      entry.shutdownTimer.cancel(false);
+      entry.shutdownTimer.cancel();
     }
     return subchannel;
   }
@@ -76,11 +73,10 @@ final class CachedSubchannelPool implements SubchannelPool {
       return;
     }
     final ShutdownSubchannelTask shutdownTask = new ShutdownSubchannelTask(subchannel);
-    ScheduledFuture<?> shutdownTimer =
-        timerService.schedule(
-            new ShutdownSubchannelScheduledTask(shutdownTask),
-            SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    shutdownTask.timer = shutdownTimer;
+    ScheduledHandle shutdownTimer =
+        helper.getSynchronizationContext().schedule(
+            shutdownTask, SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS,
+            helper.getScheduledExecutorService());
     CacheEntry entry = new CacheEntry(subchannel, shutdownTimer);
     cache.put(subchannel.getAddresses(), entry);
   }
@@ -88,30 +84,15 @@ final class CachedSubchannelPool implements SubchannelPool {
   @Override
   public void clear() {
     for (CacheEntry entry : cache.values()) {
-      entry.shutdownTimer.cancel(false);
+      entry.shutdownTimer.cancel();
       entry.subchannel.shutdown();
     }
     cache.clear();
   }
 
   @VisibleForTesting
-  final class ShutdownSubchannelScheduledTask implements Runnable {
-    private final ShutdownSubchannelTask task;
-
-    ShutdownSubchannelScheduledTask(ShutdownSubchannelTask task) {
-      this.task = checkNotNull(task, "task");
-    }
-
-    @Override
-    public void run() {
-      helper.runSerialized(task);
-    }
-  }
-
-  @VisibleForTesting
   final class ShutdownSubchannelTask implements Runnable {
     private final Subchannel subchannel;
-    private ScheduledFuture<?> timer;
 
     private ShutdownSubchannelTask(Subchannel subchannel) {
       this.subchannel = checkNotNull(subchannel, "subchannel");
@@ -120,21 +101,17 @@ final class CachedSubchannelPool implements SubchannelPool {
     // This runs in channelExecutor
     @Override
     public void run() {
-      // getSubchannel() may have cancelled the timer after the timer has expired but before this
-      // task is actually run in the channelExecutor.
-      if (!timer.isCancelled()) {
-        CacheEntry entry = cache.remove(subchannel.getAddresses());
-        checkState(entry.subchannel == subchannel, "Inconsistent state");
-        subchannel.shutdown();
-      }
+      CacheEntry entry = cache.remove(subchannel.getAddresses());
+      checkState(entry.subchannel == subchannel, "Inconsistent state");
+      subchannel.shutdown();
     }
   }
 
   private static class CacheEntry {
     final Subchannel subchannel;
-    final ScheduledFuture<?> shutdownTimer;
+    final ScheduledHandle shutdownTimer;
 
-    CacheEntry(Subchannel subchannel, ScheduledFuture<?> shutdownTimer) {
+    CacheEntry(Subchannel subchannel, ScheduledHandle shutdownTimer) {
       this.subchannel = checkNotNull(subchannel, "subchannel");
       this.shutdownTimer = checkNotNull(shutdownTimer, "shutdownTimer");
     }

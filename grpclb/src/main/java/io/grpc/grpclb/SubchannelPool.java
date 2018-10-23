@@ -20,7 +20,6 @@ import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
-import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -33,7 +32,7 @@ interface SubchannelPool {
   /**
    * Pass essential utilities.
    */
-  void init(Helper helper, ScheduledExecutorService timerService);
+  void init(Helper helper);
 
   /**
    * Takes a {@link Subchannel} from the pool for the given {@code eag} if there is one available.

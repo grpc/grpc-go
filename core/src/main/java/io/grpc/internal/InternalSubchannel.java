@@ -44,6 +44,7 @@ import io.grpc.InternalWithLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -90,7 +91,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   // 2. drain() MUST NOT be called under "lock".
   //
   // 3. Every synchronized("lock") must be inside a try-finally which calls drain() in "finally".
-  private final ChannelExecutor channelExecutor;
+  private final SynchronizationContext syncContext;
 
   /**
    * The index of the address corresponding to pendingTransport/activeTransport, or at beginning if
@@ -127,7 +128,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   @GuardedBy("lock")
   private final Collection<ConnectionClientTransport> transports = new ArrayList<>();
 
-  // Must only be used from channelExecutor
+  // Must only be used from syncContext
   private final InUseStateAggregator<ConnectionClientTransport> inUseStateAggregator =
       new InUseStateAggregator<ConnectionClientTransport>() {
         @Override
@@ -164,7 +165,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   InternalSubchannel(List<EquivalentAddressGroup> addressGroups, String authority, String userAgent,
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
+      Supplier<Stopwatch> stopwatchSupplier, SynchronizationContext syncContext, Callback callback,
       InternalChannelz channelz, CallTracer callsTracer, @Nullable ChannelTracer channelTracer,
       TimeProvider timeProvider) {
     Preconditions.checkNotNull(addressGroups, "addressGroups");
@@ -178,7 +179,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     this.transportFactory = transportFactory;
     this.scheduledExecutor = scheduledExecutor;
     this.connectingTimer = stopwatchSupplier.get();
-    this.channelExecutor = channelExecutor;
+    this.syncContext = syncContext;
     this.callback = callback;
     this.channelz = channelz;
     this.callsTracer = callsTracer;
@@ -210,7 +211,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         }
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
     return null;
   }
@@ -263,7 +264,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     transports.add(transport);
     Runnable runnable = transport.start(new TransportListener(transport, address));
     if (runnable != null) {
-      channelExecutor.executeLater(runnable);
+      syncContext.executeLater(runnable);
     }
   }
 
@@ -291,7 +292,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         } catch (Throwable t) {
           log.log(Level.WARNING, "Exception handling end of backoff", t);
         } finally {
-          channelExecutor.drain();
+          syncContext.drain();
         }
       }
     }
@@ -328,7 +329,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         startNewTransport();
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
   }
 
@@ -351,7 +352,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
                 .setTimestampNanos(timeProvider.currentTimeNanos())
                 .build());
       }
-      channelExecutor.executeLater(new Runnable() {
+      syncContext.executeLater(new Runnable() {
           @Override
           public void run() {
             callback.onStateChange(InternalSubchannel.this, newState);
@@ -390,7 +391,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         }
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
     if (savedTransport != null) {
       savedTransport.shutdown(
@@ -423,7 +424,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         cancelReconnectTask();
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
     if (savedActiveTransport != null) {
       savedActiveTransport.shutdown(reason);
@@ -449,7 +450,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
 
   @GuardedBy("lock")
   private void handleTermination() {
-    channelExecutor.executeLater(new Runnable() {
+    syncContext.executeLater(new Runnable() {
         @Override
         public void run() {
           callback.onTerminated(InternalSubchannel.this);
@@ -459,12 +460,12 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
 
   private void handleTransportInUseState(
       final ConnectionClientTransport transport, final boolean inUse) {
-    channelExecutor.executeLater(new Runnable() {
+    syncContext.execute(new Runnable() {
         @Override
         public void run() {
           inUseStateAggregator.updateObjectInUse(transport, inUse);
         }
-      }).drain();
+      });
   }
 
   void shutdownNow(Status reason) {
@@ -475,7 +476,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         transportsCopy = new ArrayList<ManagedClientTransport>(transports);
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
     for (ManagedClientTransport transport : transportsCopy) {
       transport.shutdownNow(reason);
@@ -488,7 +489,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         return addressIndex.getGroups();
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
   }
 
@@ -537,7 +538,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
         return state.getState();
       }
     } finally {
-      channelExecutor.drain();
+      syncContext.drain();
     }
   }
 
@@ -579,7 +580,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           }
         }
       } finally {
-        channelExecutor.drain();
+        syncContext.drain();
       }
       if (savedShutdownReason != null) {
         transport.shutdown(savedShutdownReason);
@@ -623,7 +624,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           }
         }
       } finally {
-        channelExecutor.drain();
+        syncContext.drain();
       }
     }
 
@@ -646,7 +647,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           }
         }
       } finally {
-        channelExecutor.drain();
+        syncContext.drain();
       }
       Preconditions.checkState(activeTransport != transport,
           "activeTransport still points to this transport. "
@@ -654,7 +655,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     }
   }
 
-  // All methods are called in channelExecutor, which is a serializing executor.
+  // All methods are called in syncContext
   abstract static class Callback {
     /**
      * Called when the subchannel is terminated, which means it's shut down and all transports

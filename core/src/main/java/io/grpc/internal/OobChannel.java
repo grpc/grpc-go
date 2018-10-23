@@ -45,6 +45,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import java.util.Collections;
 import java.util.List;
@@ -102,7 +103,7 @@ final class OobChannel extends ManagedChannel implements InternalInstrumented<Ch
 
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
-      ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor,
+      ScheduledExecutorService deadlineCancellationExecutor, SynchronizationContext syncContext,
       CallTracer callsTracer, @Nullable  ChannelTracer channelTracer, InternalChannelz channelz,
       TimeProvider timeProvider) {
     this.authority = checkNotNull(authority, "authority");
@@ -110,7 +111,7 @@ final class OobChannel extends ManagedChannel implements InternalInstrumented<Ch
     this.executor = checkNotNull(executorPool.getObject(), "executor");
     this.deadlineCancellationExecutor = checkNotNull(
         deadlineCancellationExecutor, "deadlineCancellationExecutor");
-    this.delayedTransport = new DelayedClientTransport(executor, channelExecutor);
+    this.delayedTransport = new DelayedClientTransport(executor, syncContext);
     this.channelz = Preconditions.checkNotNull(channelz);
     this.delayedTransport.start(new ManagedClientTransport.Listener() {
         @Override

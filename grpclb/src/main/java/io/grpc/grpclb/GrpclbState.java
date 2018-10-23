@@ -42,6 +42,8 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
+import io.grpc.SynchronizationContext.ScheduledHandle;
 import io.grpc.internal.BackoffPolicy;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.TimeProvider;
@@ -67,7 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
@@ -108,6 +109,7 @@ final class GrpclbState {
   private final InternalLogId logId;
   private final String serviceName;
   private final Helper helper;
+  private final SynchronizationContext syncContext;
   private final SubchannelPool subchannelPool;
   private final TimeProvider time;
   private final ScheduledExecutorService timerService;
@@ -118,7 +120,7 @@ final class GrpclbState {
 
   // Scheduled only once.  Never reset.
   @Nullable
-  private FallbackModeTask fallbackTimer;
+  private ScheduledHandle fallbackTimer;
   private List<EquivalentAddressGroup> fallbackBackendList = Collections.emptyList();
   private boolean usingFallbackBackends;
   // True if the current balancer has returned a serverlist.  Will be reset to false when lost
@@ -127,7 +129,7 @@ final class GrpclbState {
   @Nullable
   private BackoffPolicy lbRpcRetryPolicy;
   @Nullable
-  private LbRpcRetryTask lbRpcRetryTimer;
+  private ScheduledHandle lbRpcRetryTimer;
   private long prevLbRpcStartNanos;
 
   @Nullable
@@ -150,13 +152,13 @@ final class GrpclbState {
       Helper helper,
       SubchannelPool subchannelPool,
       TimeProvider time,
-      ScheduledExecutorService timerService,
       BackoffPolicy.Provider backoffPolicyProvider,
       InternalLogId logId) {
     this.helper = checkNotNull(helper, "helper");
+    this.syncContext = checkNotNull(helper.getSynchronizationContext(), "syncContext");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.time = checkNotNull(time, "time provider");
-    this.timerService = checkNotNull(timerService, "timerService");
+    this.timerService = checkNotNull(helper.getScheduledExecutorService(), "timerService");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
     this.logId = checkNotNull(logId, "logId");
@@ -198,8 +200,8 @@ final class GrpclbState {
     // Start the fallback timer if it's never started
     if (fallbackTimer == null) {
       logger.log(Level.FINE, "[{0}] Starting fallback timer.", new Object[] {logId});
-      fallbackTimer = new FallbackModeTask();
-      fallbackTimer.schedule();
+      fallbackTimer = syncContext.schedule(
+          new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS, timerService);
     }
     if (usingFallbackBackends) {
       // Populate the new fallback backends to round-robin list.
@@ -215,7 +217,7 @@ final class GrpclbState {
     if (usingFallbackBackends) {
       return;
     }
-    if (fallbackTimer != null && !fallbackTimer.discarded) {
+    if (fallbackTimer != null && fallbackTimer.isPending()) {
       return;
     }
     int numReadySubchannels = 0;
@@ -391,61 +393,23 @@ final class GrpclbState {
 
   @VisibleForTesting
   class FallbackModeTask implements Runnable {
-    private ScheduledFuture<?> scheduledFuture;
-    private boolean discarded;
-
     @Override
     public void run() {
-      helper.runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            checkState(fallbackTimer == FallbackModeTask.this, "fallback timer mismatch");
-            discarded = true;
-            maybeUseFallbackBackends();
-            maybeUpdatePicker();
-          }
-        });
-    }
-
-    void cancel() {
-      discarded = true;
-      scheduledFuture.cancel(false);
-    }
-
-    void schedule() {
-      checkState(scheduledFuture == null, "FallbackModeTask already scheduled");
-      scheduledFuture = timerService.schedule(this, FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+      maybeUseFallbackBackends();
+      maybeUpdatePicker();
     }
   }
 
   @VisibleForTesting
   class LbRpcRetryTask implements Runnable {
-    private ScheduledFuture<?> scheduledFuture;
-
     @Override
     public void run() {
-      helper.runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            checkState(
-                lbRpcRetryTimer == LbRpcRetryTask.this, "LbRpc retry timer mismatch");
-            startLbRpc();
-          }
-        });
-    }
-
-    void cancel() {
-      scheduledFuture.cancel(false);
-    }
-
-    void schedule(long delayNanos) {
-      checkState(scheduledFuture == null, "LbRpcRetryTask already scheduled");
-      scheduledFuture = timerService.schedule(this, delayNanos, TimeUnit.NANOSECONDS);
+      startLbRpc();
     }
   }
 
   @VisibleForTesting
-  class LoadReportingTask implements Runnable {
+  static class LoadReportingTask implements Runnable {
     private final LbStream stream;
 
     LoadReportingTask(LbStream stream) {
@@ -454,13 +418,8 @@ final class GrpclbState {
 
     @Override
     public void run() {
-      helper.runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            stream.loadReportFuture = null;
-            stream.sendLoadReport();
-          }
-        });
+      stream.loadReportTimer = null;
+      stream.sendLoadReport();
     }
   }
 
@@ -473,7 +432,7 @@ final class GrpclbState {
     boolean initialResponseReceived;
     boolean closed;
     long loadReportIntervalMillis = -1;
-    ScheduledFuture<?> loadReportFuture;
+    ScheduledHandle loadReportTimer;
 
     LbStream(LoadBalancerGrpc.LoadBalancerStub stub) {
       this.stub = checkNotNull(stub, "stub");
@@ -487,7 +446,7 @@ final class GrpclbState {
     }
 
     @Override public void onNext(final LoadBalanceResponse response) {
-      helper.runSerialized(new Runnable() {
+      syncContext.execute(new Runnable() {
           @Override
           public void run() {
             handleResponse(response);
@@ -496,7 +455,7 @@ final class GrpclbState {
     }
 
     @Override public void onError(final Throwable error) {
-      helper.runSerialized(new Runnable() {
+      syncContext.execute(new Runnable() {
           @Override
           public void run() {
             handleStreamClosed(Status.fromThrowable(error)
@@ -506,7 +465,7 @@ final class GrpclbState {
     }
 
     @Override public void onCompleted() {
-      helper.runSerialized(new Runnable() {
+      syncContext.execute(new Runnable() {
           @Override
           public void run() {
             handleStreamClosed(
@@ -533,8 +492,9 @@ final class GrpclbState {
 
     private void scheduleNextLoadReport() {
       if (loadReportIntervalMillis > 0) {
-        loadReportFuture = timerService.schedule(
-            new LoadReportingTask(this), loadReportIntervalMillis, TimeUnit.MILLISECONDS);
+        loadReportTimer = syncContext.schedule(
+            new LoadReportingTask(this), loadReportIntervalMillis, TimeUnit.MILLISECONDS,
+            timerService);
       }
     }
 
@@ -635,8 +595,9 @@ final class GrpclbState {
       if (delayNanos <= 0) {
         startLbRpc();
       } else {
-        lbRpcRetryTimer = new LbRpcRetryTask();
-        lbRpcRetryTimer.schedule(delayNanos);
+        lbRpcRetryTimer =
+            syncContext.schedule(new LbRpcRetryTask(), delayNanos, TimeUnit.NANOSECONDS,
+                timerService);
       }
     }
 
@@ -658,9 +619,9 @@ final class GrpclbState {
     }
 
     private void cleanUp() {
-      if (loadReportFuture != null) {
-        loadReportFuture.cancel(false);
-        loadReportFuture = null;
+      if (loadReportTimer != null) {
+        loadReportTimer.cancel();
+        loadReportTimer = null;
       }
       if (lbStream == this) {
         lbStream = null;

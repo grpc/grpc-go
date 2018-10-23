@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -50,8 +51,8 @@ public final class FakeClock {
 
   private final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
 
-  private final PriorityBlockingQueue<ScheduledTask> tasks =
-      new PriorityBlockingQueue<ScheduledTask>();
+  private final PriorityBlockingQueue<ScheduledTask> scheduledTasks = new PriorityBlockingQueue<>();
+  private final LinkedBlockingQueue<ScheduledTask> dueTasks = new LinkedBlockingQueue<>();
 
   private final Ticker ticker =
       new Ticker() {
@@ -67,11 +68,20 @@ public final class FakeClock {
         }
       };
 
+  private final TimeProvider timeProvider =
+      new TimeProvider() {
+        @Override
+        public long currentTimeNanos() {
+          return currentTimeNanos;
+        }
+      };
+
   private long currentTimeNanos;
 
   public class ScheduledTask extends AbstractFuture<Void> implements ScheduledFuture<Void> {
     public final Runnable command;
     public final long dueTimeNanos;
+    private boolean hasRun;
 
     ScheduledTask(long dueTimeNanos, Runnable command) {
       this.dueTimeNanos = dueTimeNanos;
@@ -79,7 +89,8 @@ public final class FakeClock {
     }
 
     @Override public boolean cancel(boolean mayInterruptIfRunning) {
-      tasks.remove(this);
+      scheduledTasks.remove(this);
+      dueTasks.remove(this);
       return super.cancel(mayInterruptIfRunning);
     }
 
@@ -116,7 +127,11 @@ public final class FakeClock {
 
     @Override public ScheduledFuture<?> schedule(Runnable cmd, long delay, TimeUnit unit) {
       ScheduledTask task = new ScheduledTask(currentTimeNanos + unit.toNanos(delay), cmd);
-      tasks.add(task);
+      if (delay > 0) {
+        scheduledTasks.add(task);
+      } else {
+        dueTasks.add(task);
+      }
       return task;
     }
 
@@ -195,6 +210,13 @@ public final class FakeClock {
   }
 
   /**
+   * Provides a {@link TimeProvider} that is backed by this FakeClock.
+   */
+  public TimeProvider getTimeProvider() {
+    return timeProvider;
+  }
+
+  /**
    * Provides a stopwatch instance that uses the fake clock ticker.
    */
   public Supplier<Stopwatch> getStopwatchSupplier() {
@@ -209,18 +231,20 @@ public final class FakeClock {
   }
 
   /**
-   * Run all due tasks.
+   * Run all due tasks. Immediately due tasks that are queued during the process also get executed.
    *
    * @return the number of tasks run by this call
    */
   public int runDueTasks() {
     int count = 0;
     while (true) {
-      ScheduledTask task = tasks.peek();
-      if (task == null || task.dueTimeNanos > currentTimeNanos) {
+      checkDueTasks();
+      if (dueTasks.isEmpty()) {
         break;
       }
-      if (tasks.remove(task)) {
+      ScheduledTask task;
+      while ((task = dueTasks.poll()) != null) {
+        task.hasRun = true;
         task.command.run();
         task.complete();
         count++;
@@ -229,18 +253,24 @@ public final class FakeClock {
     return count;
   }
 
+  private void checkDueTasks() {
+    while (true) {
+      ScheduledTask task = scheduledTasks.peek();
+      if (task == null || task.dueTimeNanos > currentTimeNanos) {
+        break;
+      }
+      if (scheduledTasks.remove(task)) {
+        dueTasks.add(task);
+      }
+    }
+  }
+
   /**
    * Return all due tasks.
    */
   public Collection<ScheduledTask> getDueTasks() {
-    ArrayList<ScheduledTask> result = new ArrayList<>();
-    for (ScheduledTask task : tasks) {
-      if (task.dueTimeNanos > currentTimeNanos) {
-        continue;
-      }
-      result.add(task);
-    }
-    return result;
+    checkDueTasks();
+    return new ArrayList<ScheduledTask>(dueTasks);
   }
 
   /**
@@ -255,7 +285,12 @@ public final class FakeClock {
    */
   public Collection<ScheduledTask> getPendingTasks(TaskFilter filter) {
     ArrayList<ScheduledTask> result = new ArrayList<>();
-    for (ScheduledTask task : tasks) {
+    for (ScheduledTask task : dueTasks) {
+      if (filter.shouldAccept(task.command)) {
+        result.add(task);
+      }
+    }
+    for (ScheduledTask task : scheduledTasks) {
       if (filter.shouldAccept(task.command)) {
         result.add(task);
       }
@@ -286,7 +321,7 @@ public final class FakeClock {
    * Return the number of queued tasks.
    */
   public int numPendingTasks() {
-    return tasks.size();
+    return dueTasks.size() + scheduledTasks.size();
   }
 
   /**
@@ -294,7 +329,12 @@ public final class FakeClock {
    */
   public int numPendingTasks(TaskFilter filter) {
     int count = 0;
-    for (ScheduledTask task : tasks) {
+    for (ScheduledTask task : dueTasks) {
+      if (filter.shouldAccept(task.command)) {
+        count++;
+      }
+    }
+    for (ScheduledTask task : scheduledTasks) {
       if (filter.shouldAccept(task.command)) {
         count++;
       }

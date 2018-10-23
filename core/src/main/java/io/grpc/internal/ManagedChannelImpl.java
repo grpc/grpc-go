@@ -59,6 +59,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.Throttle;
@@ -71,10 +72,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -119,6 +125,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   private final Attributes nameResolverParams;
   private final LoadBalancer.Factory loadBalancerFactory;
   private final ClientTransportFactory transportFactory;
+  private final ScheduledExecutorForBalancer scheduledExecutorForBalancer;
   private final Executor executor;
   private final ObjectPool<? extends Executor> executorPool;
   private final ObjectPool<? extends Executor> balancerRpcExecutorPool;
@@ -126,7 +133,17 @@ final class ManagedChannelImpl extends ManagedChannel implements
   private final TimeProvider timeProvider;
   private final int maxTraceEvents;
 
-  private final ChannelExecutor channelExecutor = new PanicChannelExecutor();
+  private final SynchronizationContext syncContext = new SynchronizationContext(
+      new Thread.UncaughtExceptionHandler() {
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+          logger.log(
+              Level.SEVERE,
+              "[" + getLogId() + "] Uncaught exception in the SynchronizationContext. Panic!",
+              e);
+          panic(e);
+        }
+      });
 
   private boolean fullStreamDecompression;
 
@@ -151,33 +168,33 @@ final class ManagedChannelImpl extends ManagedChannel implements
   private final Channel interceptorChannel;
   @Nullable private final String userAgent;
 
-  // Only null after channel is terminated. Must be assigned from the channelExecutor.
+  // Only null after channel is terminated. Must be assigned from the syncContext.
   private NameResolver nameResolver;
 
-  // Must be accessed from the channelExecutor.
+  // Must be accessed from the syncContext.
   private boolean nameResolverStarted;
 
-  // null when channel is in idle mode.  Must be assigned from channelExecutor.
+  // null when channel is in idle mode.  Must be assigned from syncContext.
   @Nullable
   private LbHelperImpl lbHelper;
 
-  // Must ONLY be assigned from updateSubchannelPicker(), which is called from channelExecutor.
+  // Must ONLY be assigned from updateSubchannelPicker(), which is called from syncContext.
   // null if channel is in idle mode.
   @Nullable
   private volatile SubchannelPicker subchannelPicker;
 
-  // Must be accessed from the channelExecutor
+  // Must be accessed from the syncContext
   private boolean panicMode;
 
-  // Must be mutated from channelExecutor
+  // Must be mutated from syncContext
   // If any monitoring hook to be added later needs to get a snapshot of this Set, we could
   // switch to a ConcurrentHashMap.
   private final Set<InternalSubchannel> subchannels = new HashSet<InternalSubchannel>(16, .75f);
 
-  // Must be mutated from channelExecutor
+  // Must be mutated from syncContext
   private final Set<OobChannel> oobChannels = new HashSet<OobChannel>(1, .75f);
 
-  // reprocess() must be run from channelExecutor
+  // reprocess() must be run from syncContext
   private final DelayedClientTransport delayedTransport;
   private final UncommittedRetriableStreamsRegistry uncommittedRetriableStreamsRegistry
       = new UncommittedRetriableStreamsRegistry();
@@ -199,11 +216,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
   // 3. All subchannels and OOB channels terminated: Channel considered terminated
 
   private final AtomicBoolean shutdown = new AtomicBoolean(false);
-  // Must only be mutated and read from channelExecutor
+  // Must only be mutated and read from syncContext
   private boolean shutdownNowed;
-  // Must be mutated from channelExecutor
+  // Must be mutated from syncContext
   private volatile boolean terminating;
-  // Must be mutated from channelExecutor
+  // Must be mutated from syncContext
   private volatile boolean terminated;
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
 
@@ -229,11 +246,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
   // Temporary false flag that can skip the retry code path.
   private final boolean retryEnabled;
 
-  // Called from channelExecutor
+  // Called from syncContext
   private final ManagedClientTransport.Listener delayedTransportListener =
       new DelayedTransportListener();
 
-  // Must be called from channelExecutor
+  // Must be called from syncContext
   private void maybeShutdownNowSubchannels() {
     if (shutdownNowed) {
       for (InternalSubchannel subchannel : subchannels) {
@@ -245,7 +262,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
   }
 
-  // Must be accessed from channelExecutor
+  // Must be accessed from syncContext
   @VisibleForTesting
   final InUseStateAggregator<Object> inUseStateAggregator = new IdleModeStateAggregator();
 
@@ -269,8 +286,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    // subchannels and oobchannels can only be accessed from channelExecutor
-    channelExecutor.executeLater(new StatsFetcher()).drain();
+    // subchannels and oobchannels can only be accessed from syncContext
+    syncContext.execute(new StatsFetcher());
     return ret;
   }
 
@@ -279,7 +296,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     return logId;
   }
 
-  // Run from channelExecutor
+  // Run from syncContext
   private class IdleModeTimer implements Runnable {
 
     @Override
@@ -288,7 +305,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
   }
 
-  // Must be called from channelExecutor
+  // Must be called from syncContext
   private void shutdownNameResolverAndLoadBalancer(boolean verifyActive) {
     if (verifyActive) {
       checkState(nameResolver != null, "nameResolver is null");
@@ -310,7 +327,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   /**
    * Make the channel exit idle mode, if it's in it.
    *
-   * <p>Must be called from channelExecutor
+   * <p>Must be called from syncContext
    */
   @VisibleForTesting
   void exitIdleMode() {
@@ -342,7 +359,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
   }
 
-  // Must be run from channelExecutor
+  // Must be run from syncContext
   private void enterIdleMode() {
     logger.log(Level.FINE, "[{0}] Entering idle mode", getLogId());
     // nameResolver and loadBalancer are guaranteed to be non-null.  If any of them were null,
@@ -366,12 +383,12 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
   }
 
-  // Must be run from channelExecutor
+  // Must be run from syncContext
   private void cancelIdleTimer(boolean permanent) {
     idleTimer.cancel(permanent);
   }
 
-  // Always run from channelExecutor
+  // Always run from syncContext
   private void rescheduleIdleTimer() {
     if (idleTimeoutMillis == IDLE_TIMEOUT_MILLIS_DISABLE) {
       return;
@@ -379,16 +396,16 @@ final class ManagedChannelImpl extends ManagedChannel implements
     idleTimer.reschedule(idleTimeoutMillis, TimeUnit.MILLISECONDS);
   }
 
-  // Run from channelExecutor
+  // Run from syncContext
   @VisibleForTesting
   class NameResolverRefresh implements Runnable {
-    // Only mutated from channelExecutor
+    // Only mutated from syncContext
     boolean cancelled;
 
     @Override
     public void run() {
       if (cancelled) {
-        // Race detected: this task was scheduled on channelExecutor before
+        // Race detected: this task was scheduled on syncContext before
         // cancelNameResolverBackoff() could cancel the timer.
         return;
       }
@@ -400,15 +417,15 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
   }
 
-  // Must be used from channelExecutor
+  // Must be used from syncContext
   @Nullable private ScheduledFuture<?> nameResolverRefreshFuture;
-  // Must be used from channelExecutor
+  // Must be used from syncContext
   @Nullable private NameResolverRefresh nameResolverRefresh;
   // The policy to control backoff between name resolution attempts. Non-null when an attempt is
-  // scheduled. Must be used from channelExecutor
+  // scheduled. Must be used from syncContext
   @Nullable private BackoffPolicy nameResolverBackoffPolicy;
 
-  // Must be run from channelExecutor
+  // Must be run from syncContext
   private void cancelNameResolverBackoff() {
     if (nameResolverRefreshFuture != null) {
       nameResolverRefreshFuture.cancel(false);
@@ -436,7 +453,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
           }
         }
 
-        channelExecutor.executeLater(new ExitIdleModeForTransport()).drain();
+        syncContext.execute(new ExitIdleModeForTransport());
         return delayedTransport;
       }
       // There is no need to reschedule the idle timer here.
@@ -541,11 +558,13 @@ final class ManagedChannelImpl extends ManagedChannel implements
     this.balancerRpcExecutorPool = checkNotNull(balancerRpcExecutorPool, "balancerRpcExecutorPool");
     this.balancerRpcExecutorHolder = new ExecutorHolder(balancerRpcExecutorPool);
     this.executor = checkNotNull(executorPool.getObject(), "executor");
-    this.delayedTransport = new DelayedClientTransport(this.executor, this.channelExecutor);
+    this.delayedTransport = new DelayedClientTransport(this.executor, this.syncContext);
     this.delayedTransport.start(delayedTransportListener);
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory =
         new CallCredentialsApplyingTransportFactory(clientTransportFactory, this.executor);
+    this.scheduledExecutorForBalancer =
+        new ScheduledExecutorForBalancer(transportFactory.getScheduledExecutorService());
     this.retryEnabled = builder.retryEnabled && !builder.temporarilyDisableRetry;
     serviceConfigInterceptor = new ServiceConfigInterceptor(
         retryEnabled, builder.maxRetryAttempts, builder.maxHedgedAttempts);
@@ -566,18 +585,9 @@ final class ManagedChannelImpl extends ManagedChannel implements
       this.idleTimeoutMillis = builder.idleTimeoutMillis;
     }
 
-    final class AutoDrainChannelExecutor implements Executor {
-
-      @Override
-      public void execute(Runnable command) {
-        channelExecutor.executeLater(command);
-        channelExecutor.drain();
-      }
-    }
-
     idleTimer = new Rescheduler(
         new IdleModeTimer(),
-        new AutoDrainChannelExecutor(),
+        syncContext,
         transportFactory.getScheduledExecutorService(),
         stopwatchSupplier.get());
     this.fullStreamDecompression = builder.fullStreamDecompression;
@@ -658,10 +668,10 @@ final class ManagedChannelImpl extends ManagedChannel implements
       return this;
     }
 
-    // Put gotoState(SHUTDOWN) as early into the channelExecutor's queue as possible.
+    // Put gotoState(SHUTDOWN) as early into the syncContext's queue as possible.
     // delayedTransport.shutdown() may also add some tasks into the queue. But some things inside
     // delayedTransport.shutdown() like setting delayedTransport.shutdown = true are not run in the
-    // channelExecutor's queue and should not be blocked, so we do not drain() immediately here.
+    // syncContext's queue and should not be blocked, so we do not drain() immediately here.
     final class Shutdown implements Runnable {
       @Override
       public void run() {
@@ -676,7 +686,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new Shutdown());
+    syncContext.executeLater(new Shutdown());
 
     uncommittedRetriableStreamsRegistry.onShutdown(SHUTDOWN_STATUS);
     final class CancelIdleTimer implements Runnable {
@@ -686,7 +696,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new CancelIdleTimer()).drain();
+    syncContext.execute(new CancelIdleTimer());
     logger.log(Level.FINE, "[{0}] Shutting down", getLogId());
     return this;
   }
@@ -712,11 +722,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new ShutdownNow()).drain();
+    syncContext.execute(new ShutdownNow());
     return this;
   }
 
-  // Called from channelExecutor
+  // Called from syncContext
   @VisibleForTesting
   void panic(final Throwable t) {
     if (panicMode) {
@@ -749,7 +759,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     channelStateManager.gotoState(TRANSIENT_FAILURE);
   }
 
-  // Called from channelExecutor
+  // Called from syncContext
   private void updateSubchannelPicker(SubchannelPicker newPicker) {
     subchannelPicker = newPicker;
     delayedTransport.reprocess(newPicker);
@@ -826,7 +836,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   /**
    * Terminate the channel if termination conditions are met.
    */
-  // Must be run from channelExecutor
+  // Must be run from syncContext
   private void maybeTerminateChannel() {
     if (terminated) {
       return;
@@ -857,7 +867,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      channelExecutor.executeLater(new RequestConnection()).drain();
+      syncContext.execute(new RequestConnection());
     }
     return savedChannelState;
   }
@@ -871,7 +881,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new NotifyStateChanged()).drain();
+    syncContext.execute(new NotifyStateChanged());
   }
 
   @Override
@@ -896,7 +906,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new ResetConnectBackoff()).drain();
+    syncContext.execute(new ResetConnectBackoff());
   }
 
   @Override
@@ -912,7 +922,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
     }
 
-    channelExecutor.executeLater(new PrepareToLoseNetworkRunnable()).drain();
+    syncContext.execute(new PrepareToLoseNetworkRunnable());
   }
 
   /**
@@ -1006,7 +1016,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       this.nr = checkNotNull(nr, "NameResolver");
     }
 
-    // Must be called from channelExecutor
+    // Must be called from syncContext
     private void handleInternalSubchannelState(ConnectivityStateInfo newState) {
       if (newState.getState() == TRANSIENT_FAILURE || newState.getState() == IDLE) {
         nr.refresh();
@@ -1028,7 +1038,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
 
       final class ManagedInternalSubchannelCallback extends InternalSubchannel.Callback {
-        // All callbacks are run in channelExecutor
+        // All callbacks are run in syncContext
         @Override
         void onTerminated(InternalSubchannel is) {
           subchannels.remove(is);
@@ -1064,7 +1074,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
           transportFactory,
           transportFactory.getScheduledExecutorService(),
           stopwatchSupplier,
-          channelExecutor,
+          syncContext,
           new ManagedInternalSubchannelCallback(),
           channelz,
           callTracerFactory.create(),
@@ -1102,7 +1112,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      runSerialized(new AddSubchannel());
+      syncContext.execute(new AddSubchannel());
       return subchannel;
     }
 
@@ -1134,7 +1144,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      runSerialized(new UpdateBalancingState());
+      syncContext.execute(new UpdateBalancingState());
     }
 
     @Override
@@ -1157,7 +1167,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       }
       final OobChannel oobChannel = new OobChannel(
           authority, balancerRpcExecutorPool, transportFactory.getScheduledExecutorService(),
-          channelExecutor, callTracerFactory.create(), oobChannelTracer, channelz, timeProvider);
+          syncContext, callTracerFactory.create(), oobChannelTracer, channelz, timeProvider);
       if (channelTracer != null) {
         channelTracer.reportEvent(new ChannelTrace.Event.Builder()
             .setDescription("Child channel created")
@@ -1186,8 +1196,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           Collections.singletonList(addressGroup),
           authority, userAgent, backoffPolicyProvider, transportFactory,
-          transportFactory.getScheduledExecutorService(), stopwatchSupplier, channelExecutor,
-          // All callback methods are run from channelExecutor
+          transportFactory.getScheduledExecutorService(), stopwatchSupplier, syncContext,
+          // All callback methods are run from syncContext
           new ManagedOobChannelCallback(),
           channelz,
           callTracerFactory.create(),
@@ -1218,7 +1228,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      runSerialized(new AddOobChannel());
+      syncContext.execute(new AddOobChannel());
       return oobChannel;
     }
 
@@ -1240,8 +1250,13 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
 
     @Override
-    public void runSerialized(Runnable task) {
-      channelExecutor.executeLater(task).drain();
+    public SynchronizationContext getSynchronizationContext() {
+      return syncContext;
+    }
+
+    @Override
+    public ScheduledExecutorService getScheduledExecutorService() {
+      return scheduledExecutorForBalancer;
     }
   }
 
@@ -1312,7 +1327,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      helper.runSerialized(new NamesResolved());
+      syncContext.execute(new NamesResolved());
     }
 
     @Override
@@ -1361,7 +1376,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         }
       }
 
-      channelExecutor.executeLater(new NameResolverErrorHandler()).drain();
+      syncContext.execute(new NameResolverErrorHandler());
     }
   }
 
@@ -1476,16 +1491,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
         .toString();
   }
 
-  private final class PanicChannelExecutor extends ChannelExecutor {
-    @Override
-    void handleUncaughtThrowable(Throwable t) {
-      super.handleUncaughtThrowable(t);
-      panic(t);
-    }
-  }
-
   /**
-   * Called from channelExecutor.
+   * Called from syncContext.
    */
   private final class DelayedTransportListener implements ManagedClientTransport.Listener {
     @Override
@@ -1517,7 +1524,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   }
 
   /**
-   * Must be accessed from channelExecutor.
+   * Must be accessed from syncContext.
    */
   private final class IdleModeStateAggregator extends InUseStateAggregator<Object> {
     @Override
@@ -1556,6 +1563,107 @@ final class ManagedChannelImpl extends ManagedChannel implements
       if (executor != null) {
         executor = pool.returnObject(executor);
       }
+    }
+  }
+
+  private static final class ScheduledExecutorForBalancer implements ScheduledExecutorService {
+    final ScheduledExecutorService delegate;
+
+    private ScheduledExecutorForBalancer(ScheduledExecutorService delegate) {
+      this.delegate = checkNotNull(delegate, "delegate");
+    }
+
+    @Override
+    public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+      return delegate.schedule(callable, delay, unit);
+    }
+
+    @Override
+    public ScheduledFuture<?> schedule(Runnable cmd, long delay, TimeUnit unit) {
+      return delegate.schedule(cmd, delay, unit);
+    }
+
+    @Override
+    public ScheduledFuture<?> scheduleAtFixedRate(
+        Runnable command, long initialDelay, long period, TimeUnit unit) {
+      return delegate.scheduleAtFixedRate(command, initialDelay, period, unit);
+    }
+
+    @Override
+    public ScheduledFuture<?> scheduleWithFixedDelay(
+        Runnable command, long initialDelay, long delay, TimeUnit unit) {
+      return delegate.scheduleWithFixedDelay(command, initialDelay, delay, unit);
+    }
+
+    @Override
+    public boolean awaitTermination(long timeout, TimeUnit unit)
+        throws InterruptedException {
+      return delegate.awaitTermination(timeout, unit);
+    }
+
+    @Override
+    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks)
+        throws InterruptedException {
+      return delegate.invokeAll(tasks);
+    }
+
+    @Override
+    public <T> List<Future<T>> invokeAll(
+        Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+        throws InterruptedException {
+      return delegate.invokeAll(tasks, timeout, unit);
+    }
+
+    @Override
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks)
+        throws InterruptedException, ExecutionException {
+      return delegate.invokeAny(tasks);
+    }
+
+    @Override
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+      throws InterruptedException, ExecutionException, TimeoutException {
+      return delegate.invokeAny(tasks, timeout, unit);
+    }
+
+    @Override
+    public boolean isShutdown() {
+      return delegate.isShutdown();
+    }
+
+    @Override
+    public boolean isTerminated() {
+      return delegate.isTerminated();
+    }
+
+    @Override
+    public void shutdown() {
+      throw new UnsupportedOperationException("Restricted: shutdown() is not allowed");
+    }
+
+    @Override
+    public List<Runnable> shutdownNow() {
+      throw new UnsupportedOperationException("Restricted: shutdownNow() is not allowed");
+    }
+
+    @Override
+    public <T> Future<T> submit(Callable<T> task) {
+      return delegate.submit(task);
+    }
+
+    @Override
+    public Future<?> submit(Runnable task) {
+      return delegate.submit(task);
+    }
+
+    @Override
+    public <T> Future<T> submit(Runnable task, T result) {
+      return delegate.submit(task, result);
+    }
+
+    @Override
+    public void execute(Runnable command) {
+      delegate.execute(command);
     }
   }
 }

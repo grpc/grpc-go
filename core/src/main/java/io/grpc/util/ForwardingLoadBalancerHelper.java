@@ -26,7 +26,9 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.NameResolver;
+import io.grpc.SynchronizationContext;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
@@ -63,6 +65,7 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   }
 
   @Override
+  @Deprecated
   public void runSerialized(Runnable task) {
     delegate().runSerialized(task);
   }
@@ -75,6 +78,16 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   @Override
   public String getAuthority() {
     return delegate().getAuthority();
+  }
+
+  @Override
+  public SynchronizationContext getSynchronizationContext() {
+    return delegate().getSynchronizationContext();
+  }
+
+  @Override
+  public ScheduledExecutorService getScheduledExecutorService() {
+    return delegate().getScheduledExecutorService();
   }
 
   @Override

@@ -209,7 +209,9 @@ public class LoadBalancerTest {
     public void updateBalancingState(
         ConnectivityState newState, LoadBalancer.SubchannelPicker newPicker) {}
 
-    @Override public void runSerialized(Runnable task) {}
+    @Override public SynchronizationContext getSynchronizationContext() {
+      return null;
+    }
 
     @Override public NameResolver.Factory getNameResolverFactory() {
       return null;

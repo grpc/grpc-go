@@ -43,6 +43,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.SynchronizationContext;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
@@ -101,7 +102,14 @@ public class DelayedClientTransportTest {
   private final FakeClock fakeExecutor = new FakeClock();
 
   private final DelayedClientTransport delayedTransport = new DelayedClientTransport(
-      fakeExecutor.getScheduledExecutorService(), new ChannelExecutor());
+      fakeExecutor.getScheduledExecutorService(),
+      new SynchronizationContext(
+          new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+              throw new AssertionError(e);
+            }
+          }));
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);

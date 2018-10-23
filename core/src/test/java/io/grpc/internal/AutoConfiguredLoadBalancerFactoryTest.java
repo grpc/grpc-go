@@ -32,20 +32,21 @@ import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
-import io.grpc.NameResolver.Factory;
 import io.grpc.PickFirstBalancerFactory;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import io.grpc.grpclb.GrpclbLoadBalancerFactory;
 import io.grpc.internal.AutoConfiguredLoadBalancerFactory.AutoConfiguredLoadBalancer;
+import io.grpc.util.ForwardingLoadBalancerHelper;
 import io.grpc.util.RoundRobinLoadBalancerFactory;
 import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nonnull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -265,13 +266,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   @Test
   public void channelTracing_lbPolicyChanged() {
     ChannelTracer channelTracer = new ChannelTracer(100, 1000, "dummy_type");
-    TimeProvider timeProvider = new TimeProvider() {
-      @Override
-      public long currentTimeNanos() {
-        return 101;
-      }
-    };
-
+    final FakeClock clock = new FakeClock();
     InternalChannelz.ChannelStats.Builder statsBuilder
         = new InternalChannelz.ChannelStats.Builder();
     channelTracer.updateBuilder(statsBuilder);
@@ -298,11 +293,28 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       public void updateBalancingState(ConnectivityState newState, SubchannelPicker newPicker) {
         // noop
       }
+
+      @Override
+      public SynchronizationContext getSynchronizationContext() {
+        return new SynchronizationContext(
+            new Thread.UncaughtExceptionHandler() {
+              @Override
+              public void uncaughtException(Thread t, Throwable e) {
+                throw new AssertionError(e);
+              }
+            });
+      }
+
+      @Override
+      public ScheduledExecutorService getScheduledExecutorService() {
+        return clock.getScheduledExecutorService();
+      }
     };
     int prevNumOfEvents = statsBuilder.build().channelTrace.events.size();
 
     LoadBalancer lb =
-        new AutoConfiguredLoadBalancerFactory(channelTracer, timeProvider).newLoadBalancer(helper);
+        new AutoConfiguredLoadBalancerFactory(channelTracer, clock.getTimeProvider())
+        .newLoadBalancer(helper);
     lb.handleResolvedAddressGroups(servers, Attributes.EMPTY);
     channelTracer.updateBuilder(statsBuilder);
     assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents);
@@ -369,50 +381,6 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     }
   }
 
-  public static class ForwardingLoadBalancerHelper extends Helper {
-
-    private final Helper delegate;
-
-    public ForwardingLoadBalancerHelper(Helper delegate) {
-      this.delegate = delegate;
-    }
-
-    protected Helper delegate() {
-      return delegate;
-    }
-
-    @Override
-    public Subchannel createSubchannel(List<EquivalentAddressGroup> addrs, Attributes attrs) {
-      return delegate().createSubchannel(addrs, attrs);
-    }
-
-    @Override
-    public ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority) {
-      return delegate().createOobChannel(eag, authority);
-    }
-
-    @Override
-    public void updateBalancingState(
-        @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker) {
-      delegate().updateBalancingState(newState, newPicker);
-    }
-
-    @Override
-    public void runSerialized(Runnable task) {
-      delegate().runSerialized(task);
-    }
-
-    @Override
-    public Factory getNameResolverFactory() {
-      return delegate().getNameResolverFactory();
-    }
-
-    @Override
-    public String getAuthority() {
-      return delegate().getAuthority();
-    }
-  }
-
   private static class TestLoadBalancer extends ForwardingLoadBalancer {
     TestLoadBalancer() {
       super(null);
@@ -420,8 +388,9 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   }
 
   private static class TestHelper extends ForwardingLoadBalancerHelper {
-    TestHelper() {
-      super(null);
+    @Override
+    protected Helper delegate() {
+      return null;
     }
   }
 

@@ -21,6 +21,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -36,9 +37,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>A LoadBalancer typically implements three interfaces:
  * <ol>
  *   <li>{@link LoadBalancer} is the main interface.  All methods on it are invoked sequentially
- *       from the Channel Executor.  It receives the results from the {@link NameResolver}, updates
- *       of subchannels' connectivity states, and the channel's request for the LoadBalancer to
- *       shutdown.</li>
+ *       in the same <strong>synchronization context</strong> (see next section) as returned by
+ *       {@link io.grpc.LoadBalancer.Helper#getSynchronizationContext}.  It receives the results
+ *       from the {@link NameResolver}, updates of subchannels' connectivity states, and the
+ *       channel's request for the LoadBalancer to shutdown.</li>
  *   <li>{@link SubchannelPicker SubchannelPicker} does the actual load-balancing work.  It selects
  *       a {@link Subchannel Subchannel} for each new RPC.</li>
  *   <li>{@link Factory Factory} creates a new {@link LoadBalancer} instance.
@@ -48,30 +50,31 @@ import javax.annotation.concurrent.ThreadSafe;
  * Factory}. It provides functionalities that a {@code LoadBalancer} implementation would typically
  * need.
  *
- * <h3>Channel Executor</h3>
+ * <h3>The Synchronization Context</h3>
  *
- * <p>Channel Executor is an internal executor of the channel, which is used to serialize all the
- * callback methods on the {@link LoadBalancer} interface, thus the balancer implementation doesn't
- * need to worry about synchronization among them.  However, the actual thread of the Channel
- * Executor is typically the network thread, thus the following rules must be followed to prevent
- * blocking or even dead-locking in a network
+ * <p>All methods on the {@link LoadBalancer} interface are called from a Synchronization Context,
+ * meaning they are serialized, thus the balancer implementation doesn't need to worry about
+ * synchronization among them.  {@link io.grpc.LoadBalancer.Helper#getSynchronizationContext}
+ * allows implementations to schedule tasks to be run in the same Synchronization Context, with or
+ * without a delay, thus those tasks don't need to worry about synchronizing with the balancer
+ * methods.
+ * 
+ * <p>However, the actual running thread may be the network thread, thus the following rules must be
+ * followed to prevent blocking or even dead-locking in a network:
  *
  * <ol>
  *
- *   <li><strong>Never block in Channel Executor</strong>.  The callback methods must return
- *   quickly.  Examples or work that must be avoided: CPU-intensive calculation, waiting on
+ *   <li><strong>Never block in the Synchronization Context</strong>.  The callback methods must
+ *   return quickly.  Examples or work that must be avoided: CPU-intensive calculation, waiting on
  *   synchronization primitives, blocking I/O, blocking RPCs, etc.</li>
  *
- *   <li><strong>Avoid calling into other components with lock held</strong>.  Channel Executor may
- *   run callbacks under a lock, e.g., the transport lock of OkHttp.  If your LoadBalancer has a
+ *   <li><strong>Avoid calling into other components with lock held</strong>.  The Synchronization
+ *   Context may be under a lock, e.g., the transport lock of OkHttp.  If your LoadBalancer has a
  *   lock, holds the lock in a callback method (e.g., {@link #handleSubchannelState
  *   handleSubchannelState()}) while calling into another class that may involve locks, be cautious
  *   of deadlock.  Generally you wouldn't need any locking in the LoadBalancer.</li>
  *
  * </ol>
- *
- * <p>{@link Helper#runSerialized Helper.runSerialized()} allows you to schedule a task to be run in
- * the Channel Executor.
  *
  * <h3>The canonical implementation pattern</h3>
  *
@@ -554,12 +557,46 @@ public abstract class LoadBalancer {
         @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker);
 
     /**
-     * Schedule a task to be run in the Channel Executor, which serializes the task with the
+     * Schedule a task to be run in the Synchronization Context, which serializes the task with the
      * callback methods on the {@link LoadBalancer} interface.
      *
      * @since 1.2.0
+     * @deprecated use/implement {@code getSynchronizationContext()} instead
      */
-    public abstract void runSerialized(Runnable task);
+    @Deprecated
+    public void runSerialized(Runnable task) {
+      getSynchronizationContext().execute(task);
+    }
+
+    /**
+     * Returns a {@link SynchronizationContext} that runs tasks in the same Synchronization Context
+     * as that the callback methods on the {@link LoadBalancer} interface are run in.
+     *
+     * <p>Pro-tip: in order to call {@link SynchronizationContext#schedule}, you need to provide a
+     * {@link ScheduledExecutorService}.  {@link #getScheduledExecutorService} is provided for your
+     * convenience.
+     *
+     * @since 1.17.0
+     */
+    public SynchronizationContext getSynchronizationContext() {
+      // TODO(zhangkun): make getSynchronizationContext() abstract after runSerialized() is deleted
+      throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Returns a {@link ScheduledExecutorService} for scheduling delayed tasks.
+     *
+     * <p>This service is a shared resource and is only meant for quick tasks.  DO NOT block or run
+     * time-consuming tasks.
+     *
+     * <p>The returned service doesn't support {@link ScheduledExecutorService#shutdown shutdown()}
+     * and {@link ScheduledExecutorService#shutdownNow shutdownNow()}.  They will throw if called.
+     *
+     * @since 1.17.0
+     */
+    public ScheduledExecutorService getScheduledExecutorService() {
+      throw new UnsupportedOperationException();
+    }
 
     /**
      * Returns the NameResolver of the channel.
