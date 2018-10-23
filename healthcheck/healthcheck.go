@@ -81,7 +81,7 @@ retryConnection:
 			err = s.RecvMsg(resp)
 
 			// Reports healthy for the LBing purposes if health check is not implemented in the server.
-			if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			if status.Code(err) == codes.Unimplemented {
 				reportHealth(true)
 				return err
 			}
