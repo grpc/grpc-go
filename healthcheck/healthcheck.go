@@ -38,7 +38,7 @@ func init() {
 
 const maxDelay time.Duration = 5 * time.Second
 
-func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
 	retryCnt := 0
 	needsBackoff := false
 	bo := backoff.Exponential{MaxDelay: maxDelay}
@@ -92,13 +92,13 @@ retryConnection:
 
 			// Reports healthy for the LBing purposes if health check is not implemented in the server.
 			if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
-				update(true)
+				reportHealth(true)
 				return err
 			}
 
 			// Reports unhealthy if server's Watch method gives an error other than UNIMPLEMENTED.
 			if err != nil {
-				update(false)
+				reportHealth(false)
 				continue retryConnection
 			}
 
@@ -106,9 +106,9 @@ retryConnection:
 			retryCnt = 0
 			needsBackoff = false
 			if resp.Status == healthpb.HealthCheckResponse_SERVING {
-				update(true)
+				reportHealth(true)
 			} else {
-				update(false)
+				reportHealth(false)
 			}
 		}
 	}
