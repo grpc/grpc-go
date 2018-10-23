@@ -56,10 +56,8 @@ retryConnection:
 		}
 		tryCnt++
 
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return nil
-		default:
 		}
 		rawS, err := newStream()
 		if err != nil {
