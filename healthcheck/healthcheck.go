@@ -70,10 +70,7 @@ retryConnection:
 			return errors.New("type assertion to grpc.ClientStream failed")
 		}
 
-		req := healthpb.HealthCheckRequest{
-			Service: service,
-		}
-		if err = s.SendMsg(&req); err != nil && err != io.EOF {
+		if err = s.SendMsg(&healthpb.HealthCheckRequest{Service: service}); err != nil && err != io.EOF {
 			//stream should have been closed, so we can safely continue to create a new stream.
 			continue retryConnection
 		}
