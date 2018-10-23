@@ -39,27 +39,22 @@ func init() {
 const maxDelay time.Duration = 5 * time.Second
 
 func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
-	retryCnt := 0
-	needsBackoff := false
+	tryCnt := 0
 	bo := backoff.Exponential{MaxDelay: maxDelay}
 
 retryConnection:
 	for {
 		// Backs off if the connection has failed in some way without receiving a message in the previous retry.
-		if needsBackoff {
-			timer := time.NewTimer(bo.Backoff(retryCnt))
+		if tryCnt > 0 {
+			timer := time.NewTimer(bo.Backoff(tryCnt - 1))
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
 				timer.Stop()
 				return nil
 			}
-			retryCnt++
 		}
-
-		// Assumes that the connection will fail without receiving a message and we will need a backoff before the next retry.
-		// If everything goes alright and we receive a message before connection fails, then this is set to false below.
-		needsBackoff = true
+		tryCnt++
 
 		select {
 		case <-ctx.Done():
@@ -102,9 +97,8 @@ retryConnection:
 				continue retryConnection
 			}
 
-			// As a message has been received, removes the need for backoff for the next retry and resets the retry count.
-			retryCnt = 0
-			needsBackoff = false
+			// As a message has been received, removes the need for backoff for the next retry by reseting the try count.
+			tryCnt = 0
 			if resp.Status == healthpb.HealthCheckResponse_SERVING {
 				reportHealth(true)
 			} else {
