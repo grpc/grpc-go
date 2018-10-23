@@ -38,6 +38,17 @@ func init() {
 
 const maxDelay = 5 * time.Second
 
+var backoffFunc = func(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		timer.Stop()
+		return false
+	}
+}
+
 func clientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
 	tryCnt := 0
 	bo := backoff.Exponential{MaxDelay: maxDelay}
@@ -45,14 +56,8 @@ func clientHealthCheck(ctx context.Context, newStream func() (interface{}, error
 retryConnection:
 	for {
 		// Backs off if the connection has failed in some way without receiving a message in the previous retry.
-		if tryCnt > 0 {
-			timer := time.NewTimer(bo.Backoff(tryCnt - 1))
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				timer.Stop()
-				return nil
-			}
+		if tryCnt > 0 && !backoffFunc(ctx, bo.Backoff(tryCnt-1)) {
+			return nil
 		}
 		tryCnt++
 

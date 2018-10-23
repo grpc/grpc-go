@@ -51,3 +51,32 @@ func TestClientHealthCheckBackoff(t *testing.T) {
 		t.Fatalf("Duration between two calls of newStream is %v (expected: %v)\n", actualDelta, expectedDelta)
 	}
 }
+
+func TestClientHealthCheckMultipleBackoffs(t *testing.T) {
+	var backoffDurations []time.Duration
+	newStream := func() (interface{}, error) {
+		if len(backoffDurations) < 5 {
+			return nil, errors.New("backoff")
+		}
+		return nil, nil
+	}
+
+	oldBackoffFunc := backoffFunc
+	backoffFunc = func(ctx context.Context, d time.Duration) bool {
+		backoffDurations = append(backoffDurations, d)
+		return true
+	}
+	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+	backoffFunc = oldBackoffFunc
+
+	bo := backoff.Exponential{MaxDelay: maxDelay}
+	for i, d := range backoffDurations {
+		actual := float64(d.Nanoseconds())
+		expected := float64(bo.Backoff(i).Nanoseconds())
+		lower := .5 * expected
+		upper := 1.5 * expected
+		if lower > actual || actual > upper {
+			t.Fatalf("Duration for retry #%v is %v (expected: %v)\n", i, actual, expected)
+		}
+	}
+}
