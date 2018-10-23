@@ -104,8 +104,6 @@ final class BinlogHelper {
     private final int maxHeaderBytes;
     private final int maxMessageBytes;
 
-    private static final long NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
-
     SinkWriterImpl(
         BinaryLogSink sink,
         TimeProvider timeProvider,
