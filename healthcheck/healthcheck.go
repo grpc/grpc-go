@@ -76,8 +76,8 @@ retryConnection:
 		}
 		s.CloseSend()
 
+		resp := new(healthpb.HealthCheckResponse)
 		for {
-			resp := new(healthpb.HealthCheckResponse)
 			err = s.RecvMsg(resp)
 
 			// Reports healthy for the LBing purposes if health check is not implemented in the server.
