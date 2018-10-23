@@ -20,6 +20,7 @@ package healthcheck
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -52,31 +53,32 @@ func TestClientHealthCheckBackoff(t *testing.T) {
 	}
 }
 
-func TestClientHealthCheckMultipleBackoffs(t *testing.T) {
-	var backoffDurations []time.Duration
+func TestClientHealthCheckMultipleBackoffDurations(t *testing.T) {
+	const maxRetries = 5
+
+	var want []time.Duration
+	for i := 0; i < maxRetries; i++ {
+		want = append(want, time.Duration(i+1)*time.Second)
+	}
+
+	var got []time.Duration
 	newStream := func() (interface{}, error) {
-		if len(backoffDurations) < 5 {
+		if len(got) < maxRetries {
 			return nil, errors.New("backoff")
 		}
 		return nil, nil
 	}
 
 	oldBackoffFunc := backoffFunc
-	backoffFunc = func(ctx context.Context, d time.Duration) bool {
-		backoffDurations = append(backoffDurations, d)
+	backoffFunc = func(ctx context.Context, retries int) bool {
+		got = append(got, time.Duration(retries+1)*time.Second)
 		return true
 	}
-	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
-	backoffFunc = oldBackoffFunc
+	defer func() { backoffFunc = oldBackoffFunc }()
 
-	bo := backoff.Exponential{MaxDelay: maxDelay}
-	for i, d := range backoffDurations {
-		actual := float64(d.Nanoseconds())
-		expected := float64(bo.Backoff(i).Nanoseconds())
-		lower := .5 * expected
-		upper := 1.5 * expected
-		if lower > actual || actual > upper {
-			t.Fatalf("Duration for retry #%v is %v (expected: %v)\n", i, actual, expected)
-		}
+	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Backoff durations for %v retries are %v. (expected: %v)", maxRetries, got, want)
 	}
 }

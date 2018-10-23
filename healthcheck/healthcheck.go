@@ -32,13 +32,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func init() {
-	internal.HealthCheckFunc = clientHealthCheck
-}
+const maxDelay = 120 * time.Second
 
-const maxDelay = 5 * time.Second
-
-var backoffFunc = func(ctx context.Context, d time.Duration) bool {
+var backoffStrategy = backoff.Exponential{MaxDelay: maxDelay}
+var backoffFunc = func(ctx context.Context, retries int) bool {
+	d := backoffStrategy.Backoff(retries)
 	timer := time.NewTimer(d)
 	select {
 	case <-timer.C:
@@ -49,14 +47,17 @@ var backoffFunc = func(ctx context.Context, d time.Duration) bool {
 	}
 }
 
+func init() {
+	internal.HealthCheckFunc = clientHealthCheck
+}
+
 func clientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
 	tryCnt := 0
-	bo := backoff.Exponential{MaxDelay: maxDelay}
 
 retryConnection:
 	for {
 		// Backs off if the connection has failed in some way without receiving a message in the previous retry.
-		if tryCnt > 0 && !backoffFunc(ctx, bo.Backoff(tryCnt-1)) {
+		if tryCnt > 0 && !backoffFunc(ctx, tryCnt-1) {
 			return nil
 		}
 		tryCnt++
