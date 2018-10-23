@@ -965,6 +965,7 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.updateConnectivityState(connectivity.TransientFailure)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
+		ac.transport = nil
 		ac.mu.Unlock()
 
 		if err := ac.nextAddr(); err != nil {
@@ -976,7 +977,6 @@ func (ac *addrConn) resetTransport(resolveNow bool) {
 			ac.mu.Unlock()
 			return
 		}
-		ac.transport = nil
 
 		backoffIdx := ac.backoffIdx
 		backoffFor := ac.dopts.bs.Backoff(backoffIdx)
@@ -1066,9 +1066,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		case <-skipReset: // The outer resetTransport loop will handle reconnection.
 			return
 		case <-allowedToReset: // We're in the clear to reset.
-			ac.mu.Lock()
-			ac.transport = nil
-			ac.mu.Unlock()
 			oneReset.Do(func() { ac.resetTransport(false) })
 		}
 	}
