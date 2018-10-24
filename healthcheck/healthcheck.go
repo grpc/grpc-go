@@ -19,7 +19,7 @@
 package healthcheck
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -73,7 +73,7 @@ retryConnection:
 		s, ok := rawS.(grpc.ClientStream)
 		if !ok {
 			// exit the health check function
-			return errors.New("type assertion to grpc.ClientStream failed")
+			return fmt.Errorf("newStream returned %v (type %T); want grpc.ClientStream", rawS, rawS)
 		}
 
 		if err = s.SendMsg(&healthpb.HealthCheckRequest{Service: service}); err != nil && err != io.EOF {
