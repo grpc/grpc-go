@@ -217,9 +217,6 @@ final class GrpclbState {
     if (usingFallbackBackends) {
       return;
     }
-    if (fallbackTimer != null && fallbackTimer.isPending()) {
-      return;
-    }
     int numReadySubchannels = 0;
     for (Subchannel subchannel : subchannels.values()) {
       if (subchannel.getAttributes().get(STATE_INFO).get().getState() == READY) {
