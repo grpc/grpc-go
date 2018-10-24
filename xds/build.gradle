@@ -38,14 +38,12 @@ dependencies {
     signature "org.codehaus.mojo.signature:java17:1.0@signature"
 }
 
-if (rootProject.childProjects.containsKey('grpc-compiler')) {
-    apply plugin: 'com.google.protobuf'
-    sourceSets {
-        main {
-            proto {
-                srcDir 'third_party/envoy/src/main/proto'
-                srcDir 'third_party/protoc-gen-validate/src/main/proto'
-            }
+apply plugin: 'com.google.protobuf'
+sourceSets {
+    main {
+        proto {
+            srcDir 'third_party/envoy/src/main/proto'
+            srcDir 'third_party/protoc-gen-validate/src/main/proto'
         }
     }
 }

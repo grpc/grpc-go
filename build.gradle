@@ -117,59 +117,55 @@ subprojects {
 
         configureProtoCompilation = {
             String generatedSourcePath = "${projectDir}/src/generated"
-            if (rootProject.childProjects.containsKey('grpc-compiler')) {
-                // Only when the codegen is built along with the project, will we be able to recompile
-                // the proto files.
-                project.apply plugin: 'com.google.protobuf'
-                project.protobuf {
-                    protoc {
-                        if (project.hasProperty('protoc')) {
-                            path = project.protoc
-                        } else {
-                            artifact = "com.google.protobuf:protoc:${protocVersion}"
-                        }
+            project.apply plugin: 'com.google.protobuf'
+            project.protobuf {
+                protoc {
+                    if (project.hasProperty('protoc')) {
+                        path = project.protoc
+                    } else {
+                        artifact = "com.google.protobuf:protoc:${protocVersion}"
                     }
+                }
+                generateProtoTasks {
+                    all().each { task ->
+                        // Recompile protos when build.gradle has been changed, because
+                        // it's possible the version of protoc has been changed.
+                        task.inputs.file "${rootProject.projectDir}/build.gradle"
+                    }
+                }
+            }
+            if (rootProject.childProjects.containsKey('grpc-compiler')) {
+                // Only when the codegen is built along with the project, will we be able to run
+                // the grpc code generator.
+                project.protobuf {
                     plugins { grpc { path = javaPluginPath } }
                     generateProtoTasks {
                         all().each { task ->
+                            project["syncGeneratedSources${task.sourceSet.name}"].dependsOn task
+
                             task.dependsOn ':grpc-compiler:java_pluginExecutable'
-                            // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
-                            task.dependsOn 'deleteGeneratedSource' + task.sourceSet.name
                             // Recompile protos when the codegen has been changed
                             task.inputs.file javaPluginPath
-                            // Recompile protos when build.gradle has been changed, because
-                            // it's possible the version of protoc has been changed.
-                            task.inputs.file "${rootProject.projectDir}/build.gradle"
                             task.plugins { grpc { option 'noversion' } }
                         }
                     }
-                    generatedFilesBaseDir = generatedSourcePath
                 }
 
-                sourceSets.each { sourceSet ->
-                    task "deleteGeneratedSource${sourceSet.name}" {
-                        doLast {
-                            project.delete project.fileTree(dir: generatedSourcePath + '/' + sourceSet.name)
-                        }
+                task syncGeneratedSources { }
+                sourceSets.all { sourceSet ->
+                    task "syncGeneratedSources${sourceSet.name}"(type: Sync) {
+                        from "$buildDir/generated/source/proto/${sourceSet.name}/grpc"
+                        into "$generatedSourcePath/${sourceSet.name}/grpc"
                     }
+                    syncGeneratedSources.dependsOn "syncGeneratedSources${sourceSet.name}"
                 }
+                // Re-sync as part of a normal build, to avoid forgetting to run the sync
+                assemble.dependsOn syncGeneratedSources
             } else {
                 // Otherwise, we just use the checked-in generated code.
                 project.sourceSets {
-                    main {
-                        java {
-                            srcDir "${generatedSourcePath}/main/java"
-                            srcDir "${generatedSourcePath}/main/javanano"
-                            srcDir "${generatedSourcePath}/main/grpc"
-                        }
-                    }
-                    test {
-                        java {
-                            srcDir "${generatedSourcePath}/test/java"
-                            srcDir "${generatedSourcePath}/test/javanano"
-                            srcDir "${generatedSourcePath}/test/grpc"
-                        }
-                    }
+                    main { java { srcDir "${generatedSourcePath}/main/grpc" } }
+                    test { java { srcDir "${generatedSourcePath}/test/grpc" } }
                 }
             }
 
@@ -183,7 +179,8 @@ subprojects {
                 it.options.compilerArgs += [
                     "-Xlint:-cast",
                 ]
-                it.options.errorprone.excludedPaths = ".*/src/generated/[^/]+/java/.*"
+                it.options.errorprone.excludedPaths = ".*/src/generated/[^/]+/java/.*" +
+                        "|.*/build/generated/source/proto/[^/]+/java/.*"
             }
         }
 
