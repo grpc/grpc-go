@@ -32,39 +32,38 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func init() {
-	internal.HealthCheckFunc = newClientHealthCheck
+const maxDelay = 120 * time.Second
+
+var backoffStrategy = backoff.Exponential{MaxDelay: maxDelay}
+var backoffFunc = func(ctx context.Context, retries int) bool {
+	d := backoffStrategy.Backoff(retries)
+	timer := time.NewTimer(d)
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		timer.Stop()
+		return false
+	}
 }
 
-const maxDelay time.Duration = 5 * time.Second
+func init() {
+	internal.HealthCheckFunc = clientHealthCheck
+}
 
-func newClientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
-	retryCnt := 0
-	needsBackoff := false
-	bo := backoff.Exponential{MaxDelay: maxDelay}
+func clientHealthCheck(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), service string) error {
+	tryCnt := 0
 
 retryConnection:
 	for {
 		// Backs off if the connection has failed in some way without receiving a message in the previous retry.
-		if needsBackoff {
-			timer := time.NewTimer(bo.Backoff(retryCnt))
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				timer.Stop()
-				return nil
-			}
-			retryCnt++
-		}
-
-		// Assumes that the connection will fail without receiving a message and we will need a backoff before the next retry.
-		// If everything goes alright and we receive a message before connection fails, then this is set to false below.
-		needsBackoff = true
-
-		select {
-		case <-ctx.Done():
+		if tryCnt > 0 && !backoffFunc(ctx, tryCnt-1) {
 			return nil
-		default:
+		}
+		tryCnt++
+
+		if ctx.Err() != nil {
+			return nil
 		}
 		rawS, err := newStream()
 		if err != nil {
@@ -77,21 +76,18 @@ retryConnection:
 			return errors.New("type assertion to grpc.ClientStream failed")
 		}
 
-		req := healthpb.HealthCheckRequest{
-			Service: service,
-		}
-		if err = s.SendMsg(&req); err != nil && err != io.EOF {
+		if err = s.SendMsg(&healthpb.HealthCheckRequest{Service: service}); err != nil && err != io.EOF {
 			//stream should have been closed, so we can safely continue to create a new stream.
 			continue retryConnection
 		}
 		s.CloseSend()
 
+		resp := new(healthpb.HealthCheckResponse)
 		for {
-			resp := new(healthpb.HealthCheckResponse)
 			err = s.RecvMsg(resp)
 
 			// Reports healthy for the LBing purposes if health check is not implemented in the server.
-			if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			if status.Code(err) == codes.Unimplemented {
 				reportHealth(true)
 				return err
 			}
@@ -102,14 +98,9 @@ retryConnection:
 				continue retryConnection
 			}
 
-			// As a message has been received, removes the need for backoff for the next retry and resets the retry count.
-			retryCnt = 0
-			needsBackoff = false
-			if resp.Status == healthpb.HealthCheckResponse_SERVING {
-				reportHealth(true)
-			} else {
-				reportHealth(false)
-			}
+			// As a message has been received, removes the need for backoff for the next retry by reseting the try count.
+			tryCnt = 0
+			reportHealth(resp.Status == healthpb.HealthCheckResponse_SERVING)
 		}
 	}
 }

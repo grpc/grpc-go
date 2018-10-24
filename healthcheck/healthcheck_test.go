@@ -20,15 +20,15 @@ package healthcheck
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
-
 	"google.golang.org/grpc/internal/backoff"
 )
 
-func TestNewClientHealthCheckBackoff(t *testing.T) {
+func TestClientHealthCheckBackoff(t *testing.T) {
 	retried := false
 	var fstTry time.Time
 	var sndTry time.Time
@@ -43,12 +43,42 @@ func TestNewClientHealthCheckBackoff(t *testing.T) {
 		return nil, errors.New("Backoff")
 
 	}
-	newClientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
 	actualDelta := sndTry.Sub(fstTry)
 	bo := backoff.Exponential{MaxDelay: maxDelay}
 	expectedDelta := bo.Backoff(0)
 
 	if float64(actualDelta.Nanoseconds()) <= float64(expectedDelta)*.8 {
 		t.Fatalf("Duration between two calls of newStream is %v (expected: %v)\n", actualDelta, expectedDelta)
+	}
+}
+
+func TestClientHealthCheckMultipleBackoffDurations(t *testing.T) {
+	const maxRetries = 5
+
+	var want []time.Duration
+	for i := 0; i < maxRetries; i++ {
+		want = append(want, time.Duration(i+1)*time.Second)
+	}
+
+	var got []time.Duration
+	newStream := func() (interface{}, error) {
+		if len(got) < maxRetries {
+			return nil, errors.New("backoff")
+		}
+		return nil, nil
+	}
+
+	oldBackoffFunc := backoffFunc
+	backoffFunc = func(ctx context.Context, retries int) bool {
+		got = append(got, time.Duration(retries+1)*time.Second)
+		return true
+	}
+	defer func() { backoffFunc = oldBackoffFunc }()
+
+	clientHealthCheck(context.Background(), newStream, func(_ bool) {}, "test")
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Backoff durations for %v retries are %v. (expected: %v)", maxRetries, got, want)
 	}
 }
