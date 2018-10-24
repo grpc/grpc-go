@@ -71,13 +71,14 @@ retryConnection:
 		}
 
 		s, ok := rawS.(grpc.ClientStream)
+		// Ideally, this should never happen. But if it happens, the server is marked as healthy for LBing purposes.
 		if !ok {
-			// exit the health check function
+			reportHealth(true)
 			return fmt.Errorf("newStream returned %v (type %T); want grpc.ClientStream", rawS, rawS)
 		}
 
 		if err = s.SendMsg(&healthpb.HealthCheckRequest{Service: service}); err != nil && err != io.EOF {
-			//stream should have been closed, so we can safely continue to create a new stream.
+			// Stream should have been closed, so we can safely continue to create a new stream.
 			continue retryConnection
 		}
 		s.CloseSend()
