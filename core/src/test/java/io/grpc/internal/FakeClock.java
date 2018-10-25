@@ -81,7 +81,6 @@ public final class FakeClock {
   public class ScheduledTask extends AbstractFuture<Void> implements ScheduledFuture<Void> {
     public final Runnable command;
     public final long dueTimeNanos;
-    private boolean hasRun;
 
     ScheduledTask(long dueTimeNanos, Runnable command) {
       this.dueTimeNanos = dueTimeNanos;
@@ -244,7 +243,6 @@ public final class FakeClock {
       }
       ScheduledTask task;
       while ((task = dueTasks.poll()) != null) {
-        task.hasRun = true;
         task.command.run();
         task.complete();
         count++;

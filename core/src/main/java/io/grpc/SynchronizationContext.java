@@ -25,7 +25,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -52,8 +51,6 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4984")
 public final class SynchronizationContext implements Executor {
-  private static final Logger log = Logger.getLogger(SynchronizationContext.class.getName());
-
   private final Object lock = new Object();
   private final UncaughtExceptionHandler uncaughtExceptionHandler;
 
