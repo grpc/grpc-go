@@ -772,7 +772,7 @@ func (cs *clientStream) finish(err error) {
 	cs.finished = true
 	cs.commitAttemptLocked()
 	cs.mu.Unlock()
-	// For binaly logging. only log cancel in finish (could be caused by RPC ctx
+	// For binary logging. only log cancel in finish (could be caused by RPC ctx
 	// canceled or ClientConn closed). Trailer will be logged in RecvMsg.
 	//
 	// Only one of cancel or trailer needs to be logged. In the cases where

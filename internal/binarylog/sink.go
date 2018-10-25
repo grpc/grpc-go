@@ -61,7 +61,7 @@ func (ns *noopSink) Close()                 {}
 // newWriterSink creates a binary log sink with the given writer.
 //
 // Write() marshalls the proto message and writes it to the given writer. Each
-// message is prefixed with a 4 byte big endial unsigned integer as the length.
+// message is prefixed with a 4 byte big endian unsigned integer as the length.
 //
 // No buffer is done, Close() doesn't try to close the writer.
 func newWriterSink(w io.Writer) *writerSink {
@@ -87,7 +87,7 @@ func (ws *writerSink) Close() {}
 
 type bufWriteCloserSink struct {
 	closer io.Closer
-	out    *writerSink   // out is built upen buf.
+	out    *writerSink   // out is built on buf.
 	buf    *bufio.Writer // buf is kept for flush.
 
 	writeStartOnce sync.Once
