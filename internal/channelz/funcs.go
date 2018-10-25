@@ -558,7 +558,7 @@ func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric,
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
-	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
+	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= startID })
 	count := 0
 	var end bool
 	for i, v := range ids[idx:] {

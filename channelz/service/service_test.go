@@ -402,6 +402,33 @@ func TestGetServerSockets(t *testing.T) {
 	}
 }
 
+// This test makes a GetServerSockets with a non-zero start ID, and expect only
+// sockets with ID >= the given start ID.
+func TestGetServerSocketsNonZeroStartID(t *testing.T) {
+	channelz.NewChannelzStorage()
+	svrID := channelz.RegisterServer(&dummyServer{}, "")
+	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
+	ids := make([]int64, 3)
+	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
+	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
+	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
+	svr := newCZServer()
+	// Make GetServerSockets with startID = ids[1]+1, so socket-1 won't be
+	// included in the response.
+	resp, _ := svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: ids[1] + 1})
+	if !resp.GetEnd() {
+		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
+	}
+	// GetServerSockets only return normal socket-2, socket-1 should be
+	// filtered by start ID.
+	want := map[int64]string{
+		ids[2]: refNames[2],
+	}
+	if !reflect.DeepEqual(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
+		t.Fatalf("GetServerSockets want: %#v, got: %#v", want, resp.GetSocketRef())
+	}
+}
+
 func TestGetChannel(t *testing.T) {
 	channelz.NewChannelzStorage()
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
