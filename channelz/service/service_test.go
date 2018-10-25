@@ -427,14 +427,6 @@ func TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	if !reflect.DeepEqual(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
 		t.Fatalf("GetServerSockets want: %#v, got: %#v", want, resp.GetSocketRef())
 	}
-
-	for i := 0; i < 50; i++ {
-		channelz.RegisterNormalSocket(&dummySocket{}, svrID, "")
-	}
-	resp, _ = svr.GetServerSockets(context.Background(), &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
-	if resp.GetEnd() {
-		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
-	}
 }
 
 func TestGetChannel(t *testing.T) {
