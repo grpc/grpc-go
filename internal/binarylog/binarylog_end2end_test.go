@@ -42,7 +42,8 @@ import (
 )
 
 func init() {
-	// Environment variable doesn't because of the init orders.
+	// Setting environment variable in tests doesn't work because of the init
+	// orders. Set the loggers directly here.
 	binarylog.SetLogger(binarylog.AllLogger)
 	binarylog.SetDefaultSink(testSink)
 }

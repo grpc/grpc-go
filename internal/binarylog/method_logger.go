@@ -206,8 +206,8 @@ func (c *ServerHeader) toProto() *pb.GrpcLogEntry {
 // ClientMessage configs the binary log entry to be a ClientMessage entry.
 type ClientMessage struct {
 	OnClientSide bool
-	// Message should only be a proto.Message. Could add support for other
-	// message types in the future.
+	// Message can be a proto.Message or []byte. Other messages formats are not
+	// supported.
 	Message interface{}
 }
 
@@ -246,8 +246,8 @@ func (c *ClientMessage) toProto() *pb.GrpcLogEntry {
 // ServerMessage configs the binary log entry to be a ServerMessage entry.
 type ServerMessage struct {
 	OnClientSide bool
-	// Message should only be a proto.Message. Could add support for other
-	// message types in the future.
+	// Message can be a proto.Message or []byte. Other messages formats are not
+	// supported.
 	Message interface{}
 }
 
