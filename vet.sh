@@ -29,6 +29,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+fail_on_output() {
+  tee /dev/stderr | (! read)
+}
+
 PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
 
 if [[ "$1" = "-install" ]]; then
@@ -69,42 +73,53 @@ elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
 fi
 
-git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | tee /dev/stderr | (! read)
-git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand') | tee /dev/stderr | (! read)
-# Any import of a ptypes proto package must be renamed.
-git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/")
-git ls-files | xargs dirname | sort | uniq | xargs go run test/go_vet/vet.go | tee /dev/stderr | (! read)
-gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)
-goimports -l . 2>&1 | tee /dev/stderr | (! read)
-golint ./... 2>&1 | (grep -vE "(_mock|\.pb)\.go:" || true) | tee /dev/stderr | (! read)
+# - Ensure all source files contain a copyright message.
+git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | fail_on_output
 
+# - Do not import math/rand for real library code.  Use internal/grpcrand for
+#   thread safety.
+git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand')
+
+# - Ensure all ptypes proto packages are renamed when importing.
+git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/")
+
+# - Check imports that are illegal in appengine (until Go 1.11).
+# TODO: Remove when we drop Go 1.10 support
+go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
+
+# - gofmt, goimports, golint (with exceptions for generated code).
+gofmt -s -d -l . 2>&1 | fail_on_output
+goimports -l . 2>&1 | fail_on_output
+golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
+
+# - go vet
+# TODO: Remove from here to "END TODO" and use simply "go tool vet -all ." when
+#       context is imported directly and 1.6 support is dropped.
 # Rewrite golang.org/x/net/context -> context imports (see grpc/grpc-go#1484).
-# TODO: Remove this mangling once "context" is imported directly (grpc/grpc-go#711).
 git ls-files "*.go" | xargs sed -i 's:"golang.org/x/net/context":"context":'
 set +o pipefail # vet exits with non-zero error if issues are found
-
-# TODO(deklerk) remove when we drop Go 1.6 support
 go tool vet -all . 2>&1 | \
     grep -vE 'clientconn.go:.*cancel (function|var)' | \
-    grep -vE '.*transport_test.go:.*cancel' | \
-    tee /dev/stderr | \
-    (! read)
-
+    (! grep -vE '.*transport_test.go:.*cancel')
 set -o pipefail
 git reset --hard HEAD
+# END TODO
 
+# - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then
   PATH="/home/travis/bin:${PATH}" make proto && \
-    git status --porcelain 2>&1 | (! read) || \
+    git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 fi
 
+# - Check that our module is tidy.
 if go help mod >& /dev/null; then
   go mod tidy && \
-    git status --porcelain 2>&1 | (! read) || \
+    git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 fi
 
+# - Collection of static analysis checks
 ### HACK HACK HACK: Remove once staticcheck works with modules.
 # Make a symlink in ${GOPATH}/src to its ${GOPATH}/pkg/mod equivalent for every package we use.
 for x in $(find "${GOPATH}/pkg/mod" -name '*@*' | grep -v \/mod\/cache\/); do

@@ -16,8 +16,8 @@
  *
  */
 
-// vet.go is a script to check whether files that are supposed to be built on appengine import
-// unsupported package (e.g. "unsafe", "syscall") or not.
+// vet checks whether files that are supposed to be built on appengine running
+// Go 1.10 or earlier import an unsupported package (e.g. "unsafe", "syscall").
 package main
 
 import (
@@ -27,6 +27,7 @@ import (
 )
 
 func main() {
+	fail := false
 	b := build.Default
 	b.BuildTags = []string{"appengine", "appenginevm"}
 	argsWithoutProg := os.Args[1:]
@@ -36,12 +37,17 @@ func main() {
 			continue
 		} else if err != nil {
 			fmt.Printf("build.Import failed due to %v\n", err)
+			fail = true
 			continue
 		}
 		for _, pkg := range p.Imports {
 			if pkg == "syscall" || pkg == "unsafe" {
 				fmt.Printf("Package %s/%s importing %s package without appengine build tag is NOT ALLOWED!\n", p.Dir, p.Name, pkg)
+				fail = true
 			}
 		}
+	}
+	if fail {
+		os.Exit(1)
 	}
 }
