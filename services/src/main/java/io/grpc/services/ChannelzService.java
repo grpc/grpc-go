@@ -87,7 +87,9 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
       GetChannelRequest request, StreamObserver<GetChannelResponse> responseObserver) {
     InternalInstrumented<ChannelStats> s = channelz.getRootChannel(request.getChannelId());
     if (s == null) {
-      responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
+      responseObserver.onError(
+          Status.NOT_FOUND.withDescription("Can't find channel " + request.getChannelId())
+              .asRuntimeException());
       return;
     }
 
@@ -130,7 +132,9 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
       GetSubchannelRequest request, StreamObserver<GetSubchannelResponse> responseObserver) {
     InternalInstrumented<ChannelStats> s = channelz.getSubchannel(request.getSubchannelId());
     if (s == null) {
-      responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
+      responseObserver.onError(
+          Status.NOT_FOUND.withDescription("Can't find subchannel " + request.getSubchannelId())
+              .asRuntimeException());
       return;
     }
 
@@ -155,7 +159,9 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
       GetSocketRequest request, StreamObserver<GetSocketResponse> responseObserver) {
     InternalInstrumented<SocketStats> s = channelz.getSocket(request.getSocketId());
     if (s == null) {
-      responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
+      responseObserver.onError(
+          Status.NOT_FOUND.withDescription("Can't find socket " + request.getSocketId())
+              .asRuntimeException());
       return;
     }
 
@@ -178,7 +184,9 @@ public final class ChannelzService extends ChannelzGrpc.ChannelzImplBase {
     ServerSocketsList serverSockets
         = channelz.getServerSockets(request.getServerId(), request.getStartSocketId(), maxPageSize);
     if (serverSockets == null) {
-      responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
+      responseObserver.onError(
+          Status.NOT_FOUND.withDescription("Can't find server " + request.getServerId())
+              .asRuntimeException());
       return;
     }
 
