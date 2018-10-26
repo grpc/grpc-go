@@ -54,7 +54,7 @@ public abstract class CallCredentials2 implements CallCredentials {
   @SuppressWarnings("deprecation")
   public final void applyRequestMetadata(
       final MethodDescriptor<?, ?> method, final Attributes attrs,
-      Executor appExecutor, CallCredentials.MetadataApplier applier) {
+      Executor appExecutor, final CallCredentials.MetadataApplier applier) {
     final String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");
     final SecurityLevel securityLevel =
         firstNonNull(attrs.get(ATTR_SECURITY_LEVEL), SecurityLevel.NONE);
@@ -79,6 +79,21 @@ public abstract class CallCredentials2 implements CallCredentials {
           return attrs;
         }
       };
-    applyRequestMetadata(requestInfo, appExecutor, applier);
+    MetadataApplier applierAdapter = new MetadataApplier() {
+        @Override
+        public void apply(Metadata headers) {
+          applier.apply(headers);
+        }
+
+        @Override
+        public void fail(Status status) {
+          applier.fail(status);
+        }
+      };
+    applyRequestMetadata(requestInfo, appExecutor, applierAdapter);
   }
+
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  @SuppressWarnings("deprecation")
+  public abstract static class MetadataApplier implements CallCredentials.MetadataApplier {}
 }

@@ -29,9 +29,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials.RequestInfo;
 import io.grpc.CallCredentials2;
+import io.grpc.CallCredentials2.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;

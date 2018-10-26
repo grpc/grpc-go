@@ -99,18 +99,19 @@ public interface CallCredentials {
    *
    * <p>Exactly one of its methods must be called to make the RPC proceed.
    */
+  @Deprecated
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
-  public abstract static class MetadataApplier {
+  public interface MetadataApplier {
     /**
      * Called when headers are successfully generated. They will be merged into the original
      * headers.
      */
-    public abstract void apply(Metadata headers);
+    void apply(Metadata headers);
 
     /**
      * Called when there has been an error when preparing the headers. This will fail the RPC.
      */
-    public abstract void fail(Status status);
+    void fail(Status status);
   }
 
   /**

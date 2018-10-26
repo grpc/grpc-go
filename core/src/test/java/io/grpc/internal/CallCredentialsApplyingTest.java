@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 
 import io.grpc.Attributes;
 import io.grpc.CallCredentials;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
@@ -128,7 +127,7 @@ public class CallCredentialsApplyingTest {
 
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(same(method), attrsCaptor.capture(), same(mockExecutor),
-        any(MetadataApplier.class));
+        any(CallCredentials.MetadataApplier.class));
     Attributes attrs = attrsCaptor.getValue();
     assertSame(ATTR_VALUE, attrs.get(ATTR_KEY));
     assertSame(AUTHORITY, attrs.get(CallCredentials.ATTR_AUTHORITY));
@@ -148,7 +147,7 @@ public class CallCredentialsApplyingTest {
 
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(same(method), attrsCaptor.capture(), same(mockExecutor),
-        any(MetadataApplier.class));
+        any(CallCredentials.MetadataApplier.class));
     Attributes attrs = attrsCaptor.getValue();
     assertSame(ATTR_VALUE, attrs.get(ATTR_KEY));
     assertEquals("transport-override-authority", attrs.get(CallCredentials.ATTR_AUTHORITY));
@@ -170,7 +169,7 @@ public class CallCredentialsApplyingTest {
 
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(same(method), attrsCaptor.capture(),
-        same(anotherExecutor), any(MetadataApplier.class));
+        same(anotherExecutor), any(CallCredentials.MetadataApplier.class));
     Attributes attrs = attrsCaptor.getValue();
     assertSame(ATTR_VALUE, attrs.get(ATTR_KEY));
     assertEquals("calloptions-authority", attrs.get(CallCredentials.ATTR_AUTHORITY));
@@ -182,7 +181,8 @@ public class CallCredentialsApplyingTest {
     final RuntimeException ex = new RuntimeException();
     when(mockTransport.getAttributes()).thenReturn(Attributes.EMPTY);
     doThrow(ex).when(mockCreds).applyRequestMetadata(
-        same(method), any(Attributes.class), same(mockExecutor), any(MetadataApplier.class));
+        same(method), any(Attributes.class), same(mockExecutor),
+        any(CallCredentials.MetadataApplier.class));
 
     FailingClientStream stream =
         (FailingClientStream) transport.newStream(method, origHeaders, callOptions);
@@ -198,14 +198,15 @@ public class CallCredentialsApplyingTest {
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock invocation) throws Throwable {
-          MetadataApplier applier = (MetadataApplier) invocation.getArguments()[3];
+          CallCredentials.MetadataApplier applier =
+              (CallCredentials.MetadataApplier) invocation.getArguments()[3];
           Metadata headers = new Metadata();
           headers.put(CREDS_KEY, CREDS_VALUE);
           applier.apply(headers);
           return null;
         }
       }).when(mockCreds).applyRequestMetadata(same(method), any(Attributes.class),
-          same(mockExecutor), any(MetadataApplier.class));
+          same(mockExecutor), any(CallCredentials.MetadataApplier.class));
 
     ClientStream stream = transport.newStream(method, origHeaders, callOptions);
 
@@ -222,12 +223,13 @@ public class CallCredentialsApplyingTest {
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock invocation) throws Throwable {
-          MetadataApplier applier = (MetadataApplier) invocation.getArguments()[3];
+          CallCredentials.MetadataApplier applier =
+              (CallCredentials.MetadataApplier) invocation.getArguments()[3];
           applier.fail(error);
           return null;
         }
       }).when(mockCreds).applyRequestMetadata(same(method), any(Attributes.class),
-          same(mockExecutor), any(MetadataApplier.class));
+          same(mockExecutor), any(CallCredentials.MetadataApplier.class));
 
     FailingClientStream stream =
         (FailingClientStream) transport.newStream(method, origHeaders, callOptions);
@@ -243,7 +245,7 @@ public class CallCredentialsApplyingTest {
     // Will call applyRequestMetadata(), which is no-op.
     DelayedStream stream = (DelayedStream) transport.newStream(method, origHeaders, callOptions);
 
-    ArgumentCaptor<MetadataApplier> applierCaptor = ArgumentCaptor.forClass(null);
+    ArgumentCaptor<CallCredentials.MetadataApplier> applierCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(same(method), any(Attributes.class),
         same(mockExecutor), applierCaptor.capture());
     verify(mockTransport, never()).newStream(method, origHeaders, callOptions);
@@ -265,7 +267,7 @@ public class CallCredentialsApplyingTest {
     // Will call applyRequestMetadata(), which is no-op.
     DelayedStream stream = (DelayedStream) transport.newStream(method, origHeaders, callOptions);
 
-    ArgumentCaptor<MetadataApplier> applierCaptor = ArgumentCaptor.forClass(null);
+    ArgumentCaptor<CallCredentials.MetadataApplier> applierCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(same(method), any(Attributes.class),
         same(mockExecutor), applierCaptor.capture());
 
