@@ -226,6 +226,10 @@ public final class Status {
     }
   }
 
+  private static final String TEST_EQUALS_FAILURE_PROPERTY = "io.grpc.Status.failOnEqualsForTest";
+  private static final boolean failOnEqualsForTest =
+      Boolean.parseBoolean(System.getProperty(TEST_EQUALS_FAILURE_PROPERTY, "false"));
+  
   // Create the canonical list of Status instances indexed by their code values.
   private static final List<Status> STATUS_LIST = buildStatusList();
 
@@ -653,6 +657,8 @@ public final class Status {
    */
   @Override
   public boolean equals(Object obj) {
+    assert !failOnEqualsForTest
+        : "Status.equals called; disable this by setting " + TEST_EQUALS_FAILURE_PROPERTY;
     return super.equals(obj);
   }
 
