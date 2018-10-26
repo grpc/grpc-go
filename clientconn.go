@@ -130,6 +130,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		dopts:          defaultDialOptions(),
 		blockingpicker: newPickerWrapper(),
 		czData:         new(channelzData),
+		resolvedAddrs:  make(chan struct{}),
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -402,6 +403,10 @@ type ClientConn struct {
 	balancerWrapper *ccBalancerWrapper
 	retryThrottler  atomic.Value
 
+	resolvedAddrsOnce sync.Once
+	resolvedAddrs     chan struct{}
+	hasResolvedAddrs  int32
+
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
 }
@@ -447,6 +452,26 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
+// waitForResolvedAddrs blocks until the resolver has provided addresses or the
+// context expires.  Returns nil unless the context expires first; otherwise
+// returns a status error based on the context.
+func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
+	// This is on the RPC path, so we use an atomic to avoid the need to do a
+	// more-expensive "select" below after the resolver has returned once.
+	if atomic.LoadInt32(&cc.hasResolvedAddrs) != 0 {
+		return nil
+	}
+	select {
+	case <-cc.resolvedAddrs:
+		atomic.StoreInt32(&cc.hasResolvedAddrs, 1)
+		return nil
+	case <-ctx.Done():
+		return status.FromContextError(ctx.Err()).Err()
+	case <-cc.ctx.Done():
+		return ErrClientConnClosing
+	}
+}
+
 func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -460,6 +485,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	}
 
 	cc.curAddresses = addrs
+	cc.resolvedAddrsOnce.Do(func() { close(cc.resolvedAddrs) })
 
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial

@@ -7147,3 +7147,55 @@ func (lis notifyingListener) Accept() (net.Conn, error) {
 	defer lis.connEstablished.Fire()
 	return lis.Listener.Accept()
 }
+
+func TestRPCWaitsForResolver(t *testing.T) {
+	te := testServiceConfigSetup(t, tcpClearRREnv)
+	te.startServer(&testServer{security: tcpClearRREnv.security})
+	defer te.tearDown()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	te.resolverScheme = r.Scheme()
+	te.nonBlockingDial = true
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	// With no resolved addresses yet, this will timeout.
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		time.Sleep(time.Second)
+		r.NewServiceConfig(`{
+		    "methodConfig": [
+		        {
+		            "name": [
+		                {
+		                    "service": "grpc.testing.TestService",
+		                    "method": "UnaryCall"
+		                }
+		            ],
+                    "maxRequestMessageBytes": 0
+		        }
+		    ]
+		}`)
+		r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	}()
+	// We wait a second before providing a service config and resolving
+	// addresses.  So this will wait for that and then honor the
+	// maxRequestMessageBytes it contains.
+	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{ResponseType: testpb.PayloadType_UNCOMPRESSABLE}); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, nil", err)
+	}
+	if got := ctx.Err(); got != nil {
+		t.Fatalf("ctx.Err() = %v; want nil (deadline should be set short by service config)", got)
+	}
+	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, nil", err)
+	}
+}
