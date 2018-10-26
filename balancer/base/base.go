@@ -50,3 +50,19 @@ func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
 		pickerBuilder: pb,
 	}
 }
+
+// BalancerBuilderConfig contains the config info about the base balancer builder.
+type BalancerBuilderConfig struct {
+	HealthCheck bool
+}
+
+// NewBalancerBuilderWithConfig returns a base balancer builder configured by the provided config.
+//
+// This is an EXPERIMENTAL API.
+func NewBalancerBuilderWithConfig(name string, pb PickerBuilder, config BalancerBuilderConfig) balancer.Builder {
+	return &baseBuilder{
+		name:          name,
+		pickerBuilder: pb,
+		config:        config,
+	}
+}

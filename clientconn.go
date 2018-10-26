@@ -579,7 +579,6 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		czData:              new(channelzData),
 		successfulHandshake: true, // make the first nextAddr() call _not_ move addrIdx up by 1
 		resetBackoff:        make(chan struct{}),
-		healthCheckEnabled:  opts.HealthCheckEnabled,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
@@ -719,7 +718,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	return m
 }
 
-func (cc *ClientConn) getHealthCheckConfig() *healthCheckConfig {
+func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	return cc.sc.healthCheckConfig
@@ -887,9 +886,9 @@ type addrConn struct {
 	acbw   balancer.SubConn
 	scopts balancer.NewSubConnOptions
 
-	// transport is set when there's a viable transport(note: ac state may not be READY as LB channel
+	// transport is set when there's a viable transport (note: ac state may not be READY as LB channel
 	// health checking may require server to report healthy to set ac to READY), and is reset
-	// to nil when the current transport should not longer be used to create a stream(e.g. after GoAway
+	// to nil when the current transport should no longer be used to create a stream (e.g. after GoAway
 	// is received, transport is closed, ac has been torn down).
 	transport transport.ClientTransport // The current transport.
 
@@ -1199,14 +1198,15 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	ac.transport = newTr
 	ac.mu.Unlock()
 
-	healthCheckConfig := ac.cc.getHealthCheckConfig()
+	healthCheckConfig := ac.cc.healthCheckConfig()
 	// LB channel health checking is only enabled when all the four requirements below are met:
 	// 1. it is not disabled by the user with the WithDisableHealthCheck DialOption,
 	// 2. the internal.HealthCheckFunc is set by importing the grpc/healthcheck package,
 	// 3. a service config with non-empty healthCheckConfig field is provided,
 	// 4. the current load balancer allows it.
-	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.healthCheckEnabled {
-		ac.startHealthCheck(hcCtx, newTr, addr, allowedToReset, skipReset, healthCheckConfig.ServiceName)
+	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
+		ac.startHealthCheck(hcCtx, newTr, addr, healthCheckConfig.ServiceName)
+		close(allowedToReset)
 		return nil
 	}
 
@@ -1216,8 +1216,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 
-		// We don't want to reset during this close because we prefer to kick out of this function and let the loop
-		// in resetTransport take care of reconnecting.
+		// unblock onGoAway/onClose callback.
 		close(skipReset)
 		return errConnClosing
 	}
@@ -1234,12 +1233,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	return nil
 }
 
-func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.ClientTransport, addr resolver.Address, allowedToReset chan struct{}, skipReset chan struct{}, serviceName string) {
+func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.ClientTransport, addr resolver.Address, serviceName string) {
 	//set up the health check helper functions
 	newStream := func() (interface{}, error) {
 		ac.mu.Lock()
-		defer ac.mu.Unlock()
 		if ac.transport != newTr {
+			ac.mu.Unlock()
 			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 		}
 		// transition to CONNECTING state when an attempt starts
@@ -1247,6 +1246,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 			ac.updateConnectivityState(connectivity.Connecting)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
+		ac.mu.Unlock()
 		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 	}
 	firstReady := true
@@ -1260,7 +1260,6 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 			if firstReady {
 				firstReady = false
 				ac.curAddr = addr
-				close(allowedToReset)
 			}
 			// This is the only place where we set state to READY in case of health check enabled.
 			// Therefore we don't need to check whether ac is already in READY state.
@@ -1293,22 +1292,6 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 			} else {
 				grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
 			}
-		}
-		// in case allowedToReset/skipReset has not been called inside the HealthCheckFunc, close
-		// allowedToReset/skipReset now to unblock the onGoAway or onClose callback.
-		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			ac.mu.Unlock()
-			// we can safely close skipReset here, because skipReset must have not been closed when we
-			// reach here.
-			close(skipReset)
-			return
-		}
-		ac.mu.Unlock()
-		select {
-		case <-allowedToReset:
-		default:
-			close(allowedToReset)
 		}
 	}()
 }
