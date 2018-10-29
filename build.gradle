@@ -46,9 +46,6 @@ subprojects {
             }
         }
     }
-    // TODO(zpencer): remove when intellij 2017.2 is released
-    // https://github.com/gradle/gradle/issues/2315
-    idea.module.inheritOutputDirs = true
 
     group = "io.grpc"
     version = "1.17.0-SNAPSHOT" // CURRENT_GRPC_VERSION
