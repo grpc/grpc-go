@@ -19,6 +19,7 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -27,13 +28,16 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	_ "google.golang.org/grpc/healthcheck"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -97,6 +101,10 @@ func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthp
 		case <-time.After(5 * time.Second):
 		}
 		return nil
+	case "channelzSuccess":
+		return status.Error(codes.OK, "fake success")
+	case "channelzFailure":
+		return status.Error(codes.Internal, "fake error")
 	default:
 		return nil
 	}
@@ -198,12 +206,12 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state after 5s.")
+	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
+		t.Fatal("ClientConn is still in READY state after 5s.")
 	}
 	cancel()
-	if s := cc.GetState(); s != connectivity.Ready {
-		t.Fatalf("ClientConn is in %v state, want READY", s)
+	if s := cc.GetState(); s != connectivity.TransientFailure {
+		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 }
 
@@ -810,4 +818,107 @@ func TestHealthCheckDisable(t *testing.T) {
 	testHealthCheckDisableWithDialOption(t, lis.Addr().String())
 	testHealthCheckDisableWithBalancer(t, lis.Addr().String())
 	testHealthCheckDisableWithServiceConfig(t, lis.Addr().String())
+}
+
+func TestHealthCheckChannelzCounting(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	testHealthCheckChannelzCountingCallSuccess(t, lis.Addr().String())
+	testHealthCheckChannelzCountingCallFailure(t, lis.Addr().String())
+}
+
+func testHealthCheckChannelzCountingCallSuccess(t *testing.T, addr string) {
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "channelzSuccess"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: addr}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm, _ := channelz.GetTopChannels(0)
+		if len(cm) == 0 {
+			return false, errors.New("channelz.GetTopChannels return 0 top channel")
+		}
+		if len(cm[0].SubChans) == 0 {
+			return false, errors.New("there is 0 subchannel")
+		}
+		var id int64
+		for k := range cm[0].SubChans {
+			id = k
+			break
+		}
+		scm := channelz.GetSubChannel(id)
+		if scm == nil || scm.ChannelData == nil {
+			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
+		}
+		// exponential backoff retry may result in more than one health check call.
+		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsSucceeded > 0 && scm.ChannelData.CallsFailed == 0 {
+			return true, nil
+		}
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsSucceeded, want >0 >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsSucceeded)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testHealthCheckChannelzCountingCallFailure(t *testing.T, addr string) {
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "channelzFailure"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: addr}})
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		cm, _ := channelz.GetTopChannels(0)
+		if len(cm) == 0 {
+			return false, errors.New("channelz.GetTopChannels return 0 top channel")
+		}
+		if len(cm[0].SubChans) == 0 {
+			return false, errors.New("there is 0 subchannel")
+		}
+		var id int64
+		for k := range cm[0].SubChans {
+			id = k
+			break
+		}
+		scm := channelz.GetSubChannel(id)
+		if scm == nil || scm.ChannelData == nil {
+			return false, errors.New("nil subchannel metric or nil subchannel metric ChannelData returned")
+		}
+		// exponential backoff retry may result in more than one health check call.
+		if scm.ChannelData.CallsStarted > 0 && scm.ChannelData.CallsFailed > 0 && scm.ChannelData.CallsSucceeded == 0 {
+			return true, nil
+		}
+		return false, fmt.Errorf("got %d CallsStarted, %d CallsFailed, want >0, >0", scm.ChannelData.CallsStarted, scm.ChannelData.CallsFailed)
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
