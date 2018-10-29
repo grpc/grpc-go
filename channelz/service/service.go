@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -332,4 +334,8 @@ func (s *serverImpl) GetSocket(ctx context.Context, req *channelzpb.GetSocketReq
 	}
 	resp := &channelzpb.GetSocketResponse{Socket: socketMetricToProto(metric)}
 	return resp, nil
+}
+
+func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "GetServer not implemented")
 }
