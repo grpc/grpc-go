@@ -203,6 +203,45 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	}
 }
 
+// If Watch returns Unimplemented, then the ClientConn should go into READY state.
+func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("Failed to listen")
+	}
+	go s.Serve(lis)
+	defer s.Stop()
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	if err != nil {
+		t.Fatal("dial failed")
+	}
+	defer cc.Close()
+
+	r.NewServiceConfig(`{
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	}
+}`)
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
+		t.Fatal("ClientConn is still in IDLE state after 5s.")
+	}
+	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
+		t.Fatal("ClientConn is still in CONNECTING state after 5s.")
+	}
+	if s := cc.GetState(); s != connectivity.Ready {
+		t.Fatalf("ClientConn is in %v state, want READY", s)
+	}
+}
+
 // In the case of a goaway received, the health check stream should be terminated and health check
 // function should exit.
 func TestHealthCheckWithGoAway(t *testing.T) {
