@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
@@ -34,12 +34,16 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
+import io.grpc.Attributes;
+import io.grpc.ConnectivityState;
+import io.grpc.ConnectivityStateInfo;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
-import io.grpc.PickFirstBalancerFactory.PickFirstBalancer;
+import io.grpc.Status;
 import java.net.SocketAddress;
 import java.util.List;
 import org.junit.After;
@@ -54,10 +58,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 
-/** Unit test for {@link PickFirstBalancerFactory}. */
+/** Unit test for {@link PickFirstLoadBalancer}. */
 @RunWith(JUnit4.class)
 public class PickFirstLoadBalancerTest {
-  private PickFirstBalancer loadBalancer;
+  private PickFirstLoadBalancer loadBalancer;
   private List<EquivalentAddressGroup> servers = Lists.newArrayList();
   private List<SocketAddress> socketAddresses = Lists.newArrayList();
 
@@ -89,8 +93,7 @@ public class PickFirstLoadBalancerTest {
         anyListOf(EquivalentAddressGroup.class), any(Attributes.class)))
         .thenReturn(mockSubchannel);
 
-    loadBalancer = (PickFirstBalancer) PickFirstBalancerFactory.getInstance().newLoadBalancer(
-        mockHelper);
+    loadBalancer = new PickFirstLoadBalancer(mockHelper);
   }
 
   @After

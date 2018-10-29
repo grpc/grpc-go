@@ -170,6 +170,7 @@ public abstract class LoadBalancer {
    * @since 1.2.0
    */
   @ThreadSafe
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract static class SubchannelPicker {
     /**
      * Make a balancing decision for a new RPC.
@@ -196,6 +197,7 @@ public abstract class LoadBalancer {
    *
    * @since 1.2.0
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract static class PickSubchannelArgs {
 
     /**
@@ -240,6 +242,7 @@ public abstract class LoadBalancer {
    * @since 1.2.0
    */
   @Immutable
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public static final class PickResult {
     private static final PickResult NO_RESULT = new PickResult(null, null, Status.OK, false);
 
@@ -455,6 +458,7 @@ public abstract class LoadBalancer {
    * @since 1.2.0
    */
   @ThreadSafe
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract static class Helper {
     /**
      * Equivalent to {@link #createSubchannel(List, Attributes)} with the given single {@code
@@ -628,6 +632,7 @@ public abstract class LoadBalancer {
    * @since 1.2.0
    */
   @ThreadSafe
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract static class Subchannel {
     /**
      * Shuts down the Subchannel.  After this method is called, this Subchannel should no longer
@@ -713,6 +718,7 @@ public abstract class LoadBalancer {
    * @since 1.2.0
    */
   @ThreadSafe
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract static class Factory {
     /**
      * Creates a {@link LoadBalancer} that will be used inside a channel.

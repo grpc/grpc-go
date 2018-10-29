@@ -16,33 +16,49 @@
 
 package io.grpc.grpclb;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
-import io.grpc.internal.ExponentialBackoffPolicy;
-import io.grpc.internal.TimeProvider;
+import io.grpc.LoadBalancerProvider;
+import io.grpc.LoadBalancerRegistry;
 
 /**
  * A factory for {@link LoadBalancer}s that uses the GRPCLB protocol.
  *
  * <p><b>Experimental:</b>This only works with the GRPCLB load-balancer service, which is not
  * available yet. Right now it's only good for internal testing.
+ *
+ * @deprecated The "grpclb" policy will be selected when environment is set up correctly, thus no
+ *             need to directly reference the factory.  If explicit selection is needed, use {@link
+ *             io.grpc.LoadBalancerRegistry#getProvider} with "grpclb" policy.  This class will be
+ *             deleted soon.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1782")
-public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
+@Deprecated
+public final class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
-  private static final GrpclbLoadBalancerFactory INSTANCE = new GrpclbLoadBalancerFactory();
+  private static GrpclbLoadBalancerFactory instance;
+  private final LoadBalancerProvider provider;
 
   private GrpclbLoadBalancerFactory() {
+    provider = checkNotNull(
+        LoadBalancerRegistry.getDefaultRegistry().getProvider("grpclb"),
+        "grpclb balancer not available");
   }
 
+  /**
+   * Returns the instance.
+   */
   public static GrpclbLoadBalancerFactory getInstance() {
-    return INSTANCE;
+    if (instance == null) {
+      instance = new GrpclbLoadBalancerFactory();
+    }
+    return instance;
   }
 
   @Override
   public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
-    return new GrpclbLoadBalancer(
-        helper, new CachedSubchannelPool(), TimeProvider.SYSTEM_TIME_PROVIDER,
-        new ExponentialBackoffPolicy.Provider());
+    return provider.newLoadBalancer(helper);
   }
 }
