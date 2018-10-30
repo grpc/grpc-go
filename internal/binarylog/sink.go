@@ -51,15 +51,15 @@ type Sink interface {
 	// Write will be called to write the log entry into the sink.
 	//
 	// It should be thread-safe so it can be called in parallel.
-	Write(*pb.GrpcLogEntry)
+	Write(*pb.GrpcLogEntry) error
 	// Close will be called when the Sink is replaced by a new Sink.
-	Close()
+	Close() error
 }
 
 type noopSink struct{}
 
-func (ns *noopSink) Write(*pb.GrpcLogEntry) {}
-func (ns *noopSink) Close()                 {}
+func (ns *noopSink) Write(*pb.GrpcLogEntry) error { return nil }
+func (ns *noopSink) Close() error                 { return nil }
 
 // newWriterSink creates a binary log sink with the given writer.
 //
@@ -72,26 +72,29 @@ func newWriterSink(w io.Writer) *writerSink {
 }
 
 type writerSink struct {
-	mu  sync.Mutex
 	out io.Writer
 }
 
-func (ws *writerSink) Write(e *pb.GrpcLogEntry) {
+func (ws *writerSink) Write(e *pb.GrpcLogEntry) error {
 	b, err := proto.Marshal(e)
 	if err != nil {
 		grpclog.Infof("binary logging: failed to marshal proto message: %v", err)
 	}
 	hdr := make([]byte, 4)
 	binary.BigEndian.PutUint32(hdr, uint32(len(b)))
-	ws.mu.Lock()
-	ws.out.Write(hdr)
-	ws.out.Write(b)
-	ws.mu.Unlock()
+	if _, err := ws.out.Write(hdr); err != nil {
+		return err
+	}
+	if _, err := ws.out.Write(b); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (ws *writerSink) Close() {}
+func (ws *writerSink) Close() error { return nil }
 
 type bufWriteCloserSink struct {
+	mu     sync.Mutex
 	closer io.Closer
 	out    *writerSink   // out is built on buf.
 	buf    *bufio.Writer // buf is kept for flush.
@@ -100,10 +103,16 @@ type bufWriteCloserSink struct {
 	writeTicker    *time.Ticker
 }
 
-func (fs *bufWriteCloserSink) Write(e *pb.GrpcLogEntry) {
+func (fs *bufWriteCloserSink) Write(e *pb.GrpcLogEntry) error {
 	// Start the write loop when Write is called.
 	fs.writeStartOnce.Do(fs.startFlushGoroutine)
-	fs.out.Write(e)
+	fs.mu.Lock()
+	if err := fs.out.Write(e); err != nil {
+		fs.mu.Unlock()
+		return err
+	}
+	fs.mu.Unlock()
+	return nil
 }
 
 const (
@@ -114,18 +123,23 @@ func (fs *bufWriteCloserSink) startFlushGoroutine() {
 	fs.writeTicker = time.NewTicker(bufFlushDuration)
 	go func() {
 		for range fs.writeTicker.C {
+			fs.mu.Lock()
 			fs.buf.Flush()
+			fs.mu.Unlock()
 		}
 	}()
 }
 
-func (fs *bufWriteCloserSink) Close() {
+func (fs *bufWriteCloserSink) Close() error {
 	if fs.writeTicker != nil {
 		fs.writeTicker.Stop()
 	}
+	fs.mu.Lock()
 	fs.buf.Flush()
 	fs.closer.Close()
 	fs.out.Close()
+	fs.mu.Unlock()
+	return nil
 }
 
 func newBufWriteCloserSink(o io.WriteCloser) Sink {

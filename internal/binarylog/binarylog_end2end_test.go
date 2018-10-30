@@ -55,13 +55,14 @@ type testBinLogSink struct {
 	buf []*pb.GrpcLogEntry
 }
 
-func (s *testBinLogSink) Write(e *pb.GrpcLogEntry) {
+func (s *testBinLogSink) Write(e *pb.GrpcLogEntry) error {
 	s.mu.Lock()
 	s.buf = append(s.buf, e)
 	s.mu.Unlock()
+	return nil
 }
 
-func (s *testBinLogSink) Close() {}
+func (s *testBinLogSink) Close() error { return nil }
 
 func (s *testBinLogSink) clear() {
 	s.mu.Lock()
