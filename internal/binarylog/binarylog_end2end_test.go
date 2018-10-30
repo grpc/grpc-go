@@ -647,7 +647,7 @@ func (ed *expectedData) toClientLogEntries() []*pb.GrpcLogEntry {
 				ret = append(ret, ed.newServerHeaderEntry(true, globalRPCID, idInRPC))
 				idInRPC += 1
 			}
-			if !ed.cc.success { // } i >= len(ed.responses) || ed.responses[i] == nil {
+			if !ed.cc.success {
 				// There is no response in the RPC error case.
 				continue
 			}
@@ -711,7 +711,7 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 		for i := 0; i < len(ed.requests); i++ {
 			ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[i]))
 			idInRPC += 1
-			if !ed.cc.success { // } i >= len(ed.responses) || ed.responses[i] == nil {
+			if !ed.cc.success {
 				// There is no response in the RPC error case.
 				continue
 			}
@@ -730,7 +730,7 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 			ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[i]))
 			idInRPC += 1
 		}
-		if ed.cc.success { // } ed.cc.callType == clientStreamRPC {
+		if ed.cc.success {
 			ret = append(ret, ed.newHalfCloseEntry(false, globalRPCID, idInRPC))
 			idInRPC += 1
 			ret = append(ret, ed.newServerMessageEntry(false, globalRPCID, idInRPC, ed.responses[0]))
@@ -795,8 +795,7 @@ func runRPCs(t *testing.T, tc *testConfig, cc *rpcConfig) *expectedData {
 	return expect
 }
 
-// equalLogEntry sorts the metadata entries by key (to compare metadata) and
-// remove content-type from server header before doing a proto compare.
+// equalLogEntry sorts the metadata entries by key (to compare metadata).
 //
 // This function is typically called with only two entries. It's written in this
 // way so the code can be put in a for loop instead of copied twice.
@@ -809,11 +808,7 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 			h.Timeout = nil
 			tmp := h.Metadata.Entry[:0]
 			for _, e := range h.Metadata.Entry {
-				switch e.Key {
-				case "content-type", ":authority", "user-agent":
-				default:
-					tmp = append(tmp, e)
-				}
+				tmp = append(tmp, e)
 			}
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
@@ -821,11 +816,7 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 		if h := e.GetServerHeader(); h != nil {
 			tmp := h.Metadata.Entry[:0]
 			for _, e := range h.Metadata.Entry {
-				switch e.Key {
-				case "content-type", ":authority", "user-agent":
-				default:
-					tmp = append(tmp, e)
-				}
+				tmp = append(tmp, e)
 			}
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })

@@ -372,7 +372,7 @@ func (c *Cancel) toProto() *pb.GrpcLogEntry {
 // omitted.
 func metadataKeyOmit(key string) bool {
 	switch key {
-	case "lb-token", ":path", ":authority", "content-encoding", "user-agent", "te":
+	case "lb-token", ":path", ":authority", "content-encoding", "content-type", "user-agent", "te":
 		return true
 	case "grpc-trace-bin": // grpc-trace-bin is special because it's visiable to users.
 		return false
