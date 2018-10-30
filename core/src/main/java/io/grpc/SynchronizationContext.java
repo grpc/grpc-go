@@ -17,6 +17,7 @@
 package io.grpc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.util.ArrayDeque;
@@ -57,7 +58,7 @@ public final class SynchronizationContext implements Executor {
   @GuardedBy("lock")
   private final Queue<Runnable> queue = new ArrayDeque<Runnable>();
   @GuardedBy("lock")
-  private boolean draining;
+  private Thread drainingThread;
 
   /**
    * Creates a SynchronizationContext.
@@ -84,15 +85,15 @@ public final class SynchronizationContext implements Executor {
       Runnable runnable;
       synchronized (lock) {
         if (!drainLeaseAcquired) {
-          if (draining) {
+          if (drainingThread != null) {
             return;
           }
-          draining = true;
+          drainingThread = Thread.currentThread();
           drainLeaseAcquired = true;
         }
         runnable = queue.poll();
         if (runnable == null) {
-          draining = false;
+          drainingThread = null;
           break;
         }
       }
@@ -127,6 +128,18 @@ public final class SynchronizationContext implements Executor {
   public final void execute(Runnable task) {
     executeLater(task);
     drain();
+  }
+
+  /**
+   * Throw {@link IllegalStateException} if this method is not called from this synchronization
+   * context.
+   */
+  public void throwIfNotInThisSynchronizationContext() {
+    synchronized (lock) {
+      checkState(
+          Thread.currentThread() == drainingThread,
+          "Not called from the SynchronizationContext");
+    }
   }
 
   /**

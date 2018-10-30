@@ -19,6 +19,7 @@ package io.grpc;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -150,6 +151,61 @@ public class SynchronizationContextTest {
 
     assertSame(sideThread, task1Thread.get());
     assertSame(sideThread, task2Thread.get());
+  }
+
+  @Test
+  public void throwIfNotInThisSynchronizationContext() throws Exception {
+    final AtomicBoolean taskSuccess = new AtomicBoolean(false);
+    final CountDownLatch task1Running = new CountDownLatch(1);
+    final CountDownLatch task1Proceed = new CountDownLatch(1);
+
+    doAnswer(new Answer<Void>() {
+        @Override
+        public Void answer(InvocationOnMock invocation) {
+          task1Running.countDown();
+          syncContext.throwIfNotInThisSynchronizationContext();
+          try {
+            assertTrue(task1Proceed.await(5, TimeUnit.SECONDS));
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+          taskSuccess.set(true);
+          return null;
+        }
+      }).when(task1).run();
+
+    Thread sideThread = new Thread() {
+        @Override
+        public void run() {
+          syncContext.execute(task1);
+        }
+      };
+    sideThread.start();
+
+    assertThat(task1Running.await(5, TimeUnit.SECONDS)).isTrue();
+
+    // syncContext is draining, but the current thread is not in the context
+    try {
+      syncContext.throwIfNotInThisSynchronizationContext();
+      fail("Should throw");
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).isEqualTo("Not called from the SynchronizationContext");
+    }
+
+    // Let task1 finish
+    task1Proceed.countDown();
+    sideThread.join();
+
+    // throwIfNotInThisSynchronizationContext() didn't throw in task1
+    assertThat(taskSuccess.get()).isTrue();
+
+    // syncContext is not draining, but the current thread is not in the context
+    try {
+      syncContext.throwIfNotInThisSynchronizationContext();
+      fail("Should throw");
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).isEqualTo("Not called from the SynchronizationContext");
+    }
   }
 
   @Test

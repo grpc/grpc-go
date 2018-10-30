@@ -1026,6 +1026,14 @@ final class ManagedChannelImpl extends ManagedChannel implements
     @Override
     public AbstractSubchannel createSubchannel(
         List<EquivalentAddressGroup> addressGroups, Attributes attrs) {
+      try {
+        syncContext.throwIfNotInThisSynchronizationContext();
+      } catch (IllegalStateException e) {
+        logger.log(Level.WARNING,
+            "We sugguest you call createSubchannel() from SynchronizationContext."
+            + " Otherwise, it may race with handleSubchannelState()."
+            + " See https://github.com/grpc/grpc-java/issues/5015", e);
+      }
       checkNotNull(addressGroups, "addressGroups");
       checkNotNull(attrs, "attrs");
       // TODO(ejona): can we be even stricter? Like loadBalancer == null?

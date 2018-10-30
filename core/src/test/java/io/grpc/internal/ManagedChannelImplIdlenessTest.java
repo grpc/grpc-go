@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -262,7 +263,7 @@ public class ManagedChannelImplIdlenessTest {
     assertTrue(channel.inUseStateAggregator.isInUse());
 
     // Assume LoadBalancer has received an address, then create a subchannel.
-    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    Subchannel subchannel = createSubchannelSafely(helper, addressGroup, Attributes.EMPTY);
     subchannel.requestConnection();
     MockClientTransportInfo t0 = newTransports.poll();
     t0.listener.transportReady();
@@ -301,7 +302,7 @@ public class ManagedChannelImplIdlenessTest {
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
     verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
-    Subchannel subchannel = helper.createSubchannel(servers.get(0), Attributes.EMPTY);
+    Subchannel subchannel = createSubchannelSafely(helper, servers.get(0), Attributes.EMPTY);
 
     subchannel.requestConnection();
     MockClientTransportInfo t0 = newTransports.poll();
@@ -321,7 +322,7 @@ public class ManagedChannelImplIdlenessTest {
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
     verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
-    Subchannel subchannel = helper.createSubchannel(servers.get(0), Attributes.EMPTY);
+    Subchannel subchannel = createSubchannelSafely(helper, servers.get(0), Attributes.EMPTY);
 
     subchannel.requestConnection();
     MockClientTransportInfo t0 = newTransports.poll();
@@ -448,5 +449,19 @@ public class ManagedChannelImplIdlenessTest {
     public String toString() {
       return "FakeSocketAddress-" + name;
     }
+  }
+
+  // We need this because createSubchannel() should be called from the SynchronizationContext
+  private static Subchannel createSubchannelSafely(
+      final Helper helper, final EquivalentAddressGroup addressGroup, final Attributes attrs) {
+    final AtomicReference<Subchannel> resultCapture = new AtomicReference<Subchannel>();
+    helper.getSynchronizationContext().execute(
+        new Runnable() {
+          @Override
+          public void run() {
+            resultCapture.set(helper.createSubchannel(addressGroup, attrs));
+          }
+        });
+    return resultCapture.get();
   }
 }
