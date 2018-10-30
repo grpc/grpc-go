@@ -16,6 +16,7 @@
  *
  */
 
+// Package testutils contains testing helpers.
 package testutils
 
 import (
