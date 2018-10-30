@@ -535,7 +535,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[ls] = true
 
 	if channelz.IsOn() {
-		ls.channelzID = channelz.RegisterListenSocket(ls, s.channelzID, "")
+		ls.channelzID = channelz.RegisterListenSocket(ls, s.channelzID, lis.Addr().String())
 	}
 	s.mu.Unlock()
 

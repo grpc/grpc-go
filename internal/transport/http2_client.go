@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -265,7 +266,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.statsHandler.HandleConn(t.ctx, connBegin)
 	}
 	if channelz.IsOn() {
-		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
+		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, fmt.Sprintf("%s -> %s", t.localAddr, t.remoteAddr))
 	}
 	if t.kp.Time != infinity {
 		t.keepaliveEnabled = true
