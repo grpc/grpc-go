@@ -48,6 +48,9 @@ func SetDefaultSink(s Sink) {
 
 // Sink writes log entry into the binary log sink.
 type Sink interface {
+	// Write will be called to write the log entry into the sink.
+	//
+	// It should be thread-safe so it can be called in parallel.
 	Write(*pb.GrpcLogEntry)
 	// Close will be called when the Sink is replaced by a new Sink.
 	Close()
@@ -69,6 +72,7 @@ func newWriterSink(w io.Writer) *writerSink {
 }
 
 type writerSink struct {
+	mu  sync.Mutex
 	out io.Writer
 }
 
@@ -79,8 +83,10 @@ func (ws *writerSink) Write(e *pb.GrpcLogEntry) {
 	}
 	hdr := make([]byte, 4)
 	binary.BigEndian.PutUint32(hdr, uint32(len(b)))
+	ws.mu.Lock()
 	ws.out.Write(hdr)
 	ws.out.Write(b)
+	ws.mu.Unlock()
 }
 
 func (ws *writerSink) Close() {}

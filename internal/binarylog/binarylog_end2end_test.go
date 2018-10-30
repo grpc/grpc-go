@@ -953,11 +953,10 @@ func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 		for i, e := range got {
 			t.Errorf("in got: %d, %s", i, e.GetType())
 		}
-		// return fmt.Errorf("didn't get same amount of log entries, want: %d, got: %d", len(want), len(got))
+		return fmt.Errorf("didn't get same amount of log entries, want: %d, got: %d", len(want), len(got))
 	}
 	var errored bool
-	// for i := 0; i < len(got); i++ {
-	for i := 0; i < len(got) && i < len(want); i++ {
+	for i := 0; i < len(got); i++ {
 		if !equalLogEntry(want[i], got[i]) {
 			t.Errorf("entry: %d, want %+v, got %+v", i, want[i], got[i])
 			errored = true
