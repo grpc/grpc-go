@@ -18,8 +18,9 @@
 
 //go:generate ./regenerate.sh
 
-// Package health provides some utility functions to health-check a server. The implementation
-// is based on protobuf. Users need to write their own implementations if other IDLs are used.
+// Package health enables support for gRPC health checking. It is EXPERIMENTAL.
+// The implementation is based on protobuf. Users need to write their own
+// implementations if other IDLs are used.
 package health
 
 import (

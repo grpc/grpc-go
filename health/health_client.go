@@ -16,9 +16,7 @@
  *
  */
 
-// Package healthcheck enables support for grpc health checking.  It is
-// EXPERIMENTAL.
-package healthcheck
+package health
 
 import (
 	"fmt"
