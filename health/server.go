@@ -18,8 +18,8 @@
 
 //go:generate ./regenerate.sh
 
-// Package health provides some utility functions to health-check a server. The implementation
-// is based on protobuf. Users need to write their own implementations if other IDLs are used.
+// Package health provides a service that exposes server's health and it must be
+// imported to enable support for client-side health checks.
 package health
 
 import (

@@ -16,7 +16,7 @@
  *
  */
 
-package healthcheck
+package health
 
 import (
 	"errors"
