@@ -19,10 +19,8 @@ package io.grpc;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.mock;
 
-import io.grpc.ClientStreamTracer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
-import io.grpc.Status;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.List;

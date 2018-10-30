@@ -24,8 +24,11 @@ import io.grpc.internal.RoundRobinLoadBalancerProvider;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link LoadBalancerRegistry}. */
+@RunWith(JUnit4.class)
 public class LoadBalancerRegistryTest {
   @Test
   public void getClassesViaHardcoded_classesPresent() throws Exception {

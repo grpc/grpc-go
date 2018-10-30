@@ -83,7 +83,6 @@ public class ManagedChannelImplIdlenessTest {
   private final FakeClock oobExecutor = new FakeClock();
   private static final String AUTHORITY = "fakeauthority";
   private static final String USER_AGENT = "fakeagent";
-  private static final ProxyParameters NO_PROXY = null;
   private static final long IDLE_TIMEOUT_SECONDS = 30;
   private ManagedChannelImpl channel;
 

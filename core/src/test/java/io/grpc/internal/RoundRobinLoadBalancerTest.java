@@ -59,7 +59,6 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.Metadata.Key;
 import io.grpc.Status;
-import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.RoundRobinLoadBalancer.EmptyPicker;
 import io.grpc.internal.RoundRobinLoadBalancer.ReadyPicker;
 import io.grpc.internal.RoundRobinLoadBalancer.Ref;
@@ -88,11 +87,13 @@ import org.mockito.stubbing.Answer;
 /** Unit test for {@link RoundRobinLoadBalancer}. */
 @RunWith(JUnit4.class)
 public class RoundRobinLoadBalancerTest {
-  private RoundRobinLoadBalancer loadBalancer;
-  private List<EquivalentAddressGroup> servers = Lists.newArrayList();
-  private Map<List<EquivalentAddressGroup>, Subchannel> subchannels = Maps.newLinkedHashMap();
   private static final Attributes.Key<String> MAJOR_KEY = Attributes.Key.create("major-key");
-  private Attributes affinity = Attributes.newBuilder().set(MAJOR_KEY, "I got the keys").build();
+
+  private RoundRobinLoadBalancer loadBalancer;
+  private final List<EquivalentAddressGroup> servers = Lists.newArrayList();
+  private final Map<List<EquivalentAddressGroup>, Subchannel> subchannels = Maps.newLinkedHashMap();
+  private final Attributes affinity =
+      Attributes.newBuilder().set(MAJOR_KEY, "I got the keys").build();
 
   @Captor
   private ArgumentCaptor<SubchannelPicker> pickerCaptor;

@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Ascii;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -179,7 +180,6 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     static LoadBalancerProvider decideLoadBalancerProvider(
         List<EquivalentAddressGroup> servers, @Nullable Map<String, Object> config)
         throws PolicyNotFoundException {
-      String policy = DEFAULT_POLICY;
       // Check for balancer addresses
       boolean haveBalancerAddress = false;
       for (EquivalentAddressGroup s : servers) {
@@ -198,7 +198,9 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
         serviceConfigChoiceBalancingPolicy =
             ServiceConfigUtil.getLoadBalancingPolicyFromServiceConfig(config);
         if (serviceConfigChoiceBalancingPolicy != null) {
-          return getProviderOrThrow(serviceConfigChoiceBalancingPolicy.toLowerCase(),
+          // Handle ASCII specifically rather than relying on the implicit default locale of the str
+          return getProviderOrThrow(
+              Ascii.toLowerCase(serviceConfigChoiceBalancingPolicy),
               "service-config specifies load-balancing policy");
         }
       }

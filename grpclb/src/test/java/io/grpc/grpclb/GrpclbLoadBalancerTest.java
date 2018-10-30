@@ -1167,11 +1167,10 @@ public class GrpclbLoadBalancerTest {
     inOrder.verify(helper).createOobChannel(eq(resolutionList.get(1)), eq(lbAuthority(0)));
 
     // Attempted to connect to balancer
-    assertEquals(1, fakeOobChannels.size());
-    ManagedChannel oobChannel = fakeOobChannels.poll();
+    assertThat(fakeOobChannels).hasSize(1);
     verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
     StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
-    assertEquals(1, lbRequestObservers.size());
+    assertThat(lbRequestObservers).hasSize(1);
     StreamObserver<LoadBalanceRequest> lbRequestObserver = lbRequestObservers.poll();
 
     verify(lbRequestObserver).onNext(
@@ -1199,8 +1198,7 @@ public class GrpclbLoadBalancerTest {
 
     // A new stream is created
     verify(mockLbService, times(2)).balanceLoad(lbResponseObserverCaptor.capture());
-    lbResponseObserver = lbResponseObserverCaptor.getValue();
-    assertEquals(1, lbRequestObservers.size());
+    assertThat(lbRequestObservers).hasSize(1);
     lbRequestObserver = lbRequestObservers.poll();
     verify(lbRequestObserver).onNext(
         eq(LoadBalanceRequest.newBuilder().setInitialRequest(
