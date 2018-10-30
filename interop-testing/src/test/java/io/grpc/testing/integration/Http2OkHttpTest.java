@@ -115,8 +115,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
         Messages.ResponseParameters.newBuilder()
         .setSize(1);
     Messages.StreamingOutputCallRequest.Builder requestBuilder =
-        Messages.StreamingOutputCallRequest.newBuilder()
-            .setResponseType(Messages.PayloadType.COMPRESSABLE);
+        Messages.StreamingOutputCallRequest.newBuilder();
     for (int i = 0; i < 1000; i++) {
       requestBuilder.addResponseParameters(responseParameters);
     }

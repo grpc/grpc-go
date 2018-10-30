@@ -57,7 +57,6 @@ public final class LongLivedChannel extends HttpServlet {
     int responseSize = 5678;
     SimpleRequest request = SimpleRequest.newBuilder()
         .setResponseSize(responseSize)
-        .setResponseType(Messages.PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder()
             .setBody(ByteString.copyFrom(new byte[requestSize])))
         .build();

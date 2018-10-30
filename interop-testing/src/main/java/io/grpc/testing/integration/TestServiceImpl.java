@@ -29,7 +29,6 @@ import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.Payload;
-import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.ResponseParameters;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
@@ -37,8 +36,6 @@ import io.grpc.testing.integration.Messages.StreamingInputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingInputCallResponse;
 import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -56,12 +53,9 @@ import javax.annotation.concurrent.GuardedBy;
  * sent in response streams.
  */
 public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
-  private static final String UNCOMPRESSABLE_FILE =
-      "/io/grpc/testing/integration/testdata/uncompressable.bin";
   private final Random random = new Random();
 
   private final ScheduledExecutorService executor;
-  private final ByteString uncompressableBuffer;
   private final ByteString compressableBuffer;
 
   /**
@@ -70,11 +64,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   public TestServiceImpl(ScheduledExecutorService executor) {
     this.executor = executor;
     this.compressableBuffer = ByteString.copyFrom(new byte[1024]);
-    this.uncompressableBuffer = createBufferFromFile(UNCOMPRESSABLE_FILE);
   }
 
   @Override
-  public void emptyCall(EmptyProtos.Empty empty,
+  public void emptyCall(EmptyProtos.Empty request,
       StreamObserver<EmptyProtos.Empty> responseObserver) {
     responseObserver.onNext(EmptyProtos.Empty.getDefaultInstance());
     responseObserver.onCompleted();
@@ -103,16 +96,12 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     }
 
     if (req.getResponseSize() != 0) {
-      boolean compressable = compressableResponse(req.getResponseType());
-      ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;
       // For consistency with the c++ TestServiceImpl, use a random offset for unary calls.
       // TODO(wonderfly): whether or not this is a good approach needs further discussion.
-      int offset = random.nextInt(
-          compressable ? compressableBuffer.size() : uncompressableBuffer.size());
-      ByteString payload = generatePayload(dataBuffer, offset, req.getResponseSize());
+      int offset = random.nextInt(compressableBuffer.size());
+      ByteString payload = generatePayload(compressableBuffer, offset, req.getResponseSize());
       responseBuilder.setPayload(
           Payload.newBuilder()
-              .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
               .setBody(payload));
     }
 
@@ -211,7 +200,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   public StreamObserver<Messages.StreamingOutputCallRequest> halfDuplexCall(
       final StreamObserver<Messages.StreamingOutputCallResponse> responseObserver) {
     final ResponseDispatcher dispatcher = new ResponseDispatcher(responseObserver);
-    final Queue<Chunk> chunks = new ArrayDeque<Chunk>();
+    final Queue<Chunk> chunks = new ArrayDeque<>();
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
       public void onNext(StreamingOutputCallRequest request) {
@@ -237,7 +226,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * available, the stream is half-closed.
    */
   private class ResponseDispatcher {
-    private final Chunk completionChunk = new Chunk(0, 0, 0, false);
+    private final Chunk completionChunk = new Chunk(0, 0, 0);
     private final Queue<Chunk> chunks;
     private final StreamObserver<StreamingOutputCallResponse> responseStream;
     private boolean scheduled;
@@ -385,14 +374,11 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   public Queue<Chunk> toChunkQueue(StreamingOutputCallRequest request) {
     Queue<Chunk> chunkQueue = new ArrayDeque<Chunk>();
     int offset = 0;
-    boolean compressable = compressableResponse(request.getResponseType());
     for (ResponseParameters params : request.getResponseParametersList()) {
-      chunkQueue.add(new Chunk(params.getIntervalUs(), offset, params.getSize(), compressable));
+      chunkQueue.add(new Chunk(params.getIntervalUs(), offset, params.getSize()));
 
-      // Increment the offset past this chunk.
-      // Both buffers need to be circular.
-      offset = (offset + params.getSize())
-          % (compressable ? compressableBuffer.size() : uncompressableBuffer.size());
+      // Increment the offset past this chunk. Buffer need to be circular.
+      offset = (offset + params.getSize()) % compressableBuffer.size();
     }
     return chunkQueue;
   }
@@ -400,20 +386,18 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   /**
    * A single chunk of a response stream. Contains delivery information for the dispatcher and can
    * be converted to a streaming response proto. A chunk just references it's payload in the
-   * {@link #uncompressableBuffer} array. The payload isn't actually created until {@link
+   * {@link #compressableBuffer} array. The payload isn't actually created until {@link
    * #toResponse()} is called.
    */
   private class Chunk {
     private final int delayMicroseconds;
     private final int offset;
     private final int length;
-    private final boolean compressable;
 
-    public Chunk(int delayMicroseconds, int offset, int length, boolean compressable) {
+    public Chunk(int delayMicroseconds, int offset, int length) {
       this.delayMicroseconds = delayMicroseconds;
       this.offset = offset;
       this.length = length;
-      this.compressable = compressable;
     }
 
     /**
@@ -422,54 +406,11 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     private StreamingOutputCallResponse toResponse() {
       StreamingOutputCallResponse.Builder responseBuilder =
           StreamingOutputCallResponse.newBuilder();
-      ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;
-      ByteString payload = generatePayload(dataBuffer, offset, length);
+      ByteString payload = generatePayload(compressableBuffer, offset, length);
       responseBuilder.setPayload(
           Payload.newBuilder()
-              .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
               .setBody(payload));
       return responseBuilder.build();
-    }
-  }
-
-  /**
-   * Creates a buffer with data read from a file.
-   */
-  @SuppressWarnings("Finally") // Not concerned about suppression; expected to be exceedingly rare
-  private ByteString createBufferFromFile(String fileClassPath) {
-    ByteString buffer = ByteString.EMPTY;
-    InputStream inputStream = getClass().getResourceAsStream(fileClassPath);
-    if (inputStream == null) {
-      throw new IllegalArgumentException("Unable to locate file on classpath: " + fileClassPath);
-    }
-
-    try {
-      buffer = ByteString.readFrom(inputStream);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    } finally {
-      try {
-        inputStream.close();
-      } catch (IOException ignorable) {
-        // ignore
-      }
-    }
-    return buffer;
-  }
-
-  /**
-   * Indicates whether or not the response for this type should be compressable. If {@code RANDOM},
-   * picks a random boolean.
-   */
-  private boolean compressableResponse(PayloadType responseType) {
-    switch (responseType) {
-      case COMPRESSABLE:
-        return true;
-      case RANDOM:
-        return random.nextBoolean();
-      case UNCOMPRESSABLE:
-      default:
-        return false;
     }
   }
 
@@ -506,7 +447,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * testing end-to-end metadata propagation.
    */
   private static ServerInterceptor echoRequestHeadersInterceptor(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    final Set<Metadata.Key<?>> keySet = new HashSet<>(Arrays.asList(keys));
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
@@ -534,7 +475,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * Echoes request headers with the specified key(s) from a client into response headers only.
    */
   private static ServerInterceptor echoRequestMetadataInHeaders(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    final Set<Metadata.Key<?>> keySet = new HashSet<>(Arrays.asList(keys));
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
@@ -561,7 +502,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * Echoes request headers with the specified key(s) from a client into response trailers only.
    */
   private static ServerInterceptor echoRequestMetadataInTrailers(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    final Set<Metadata.Key<?>> keySet = new HashSet<>(Arrays.asList(keys));
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(

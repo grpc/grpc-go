@@ -11,34 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 // Message definitions to be used by integration test service definitions.
 
 syntax = "proto3";
-
-import "google/protobuf/wrappers.proto";
 
 package grpc.testing;
 
 option java_package = "io.grpc.testing.integration";
 
-// DEPRECATED, don't use. To be removed shortly.
-// The type of payload that should be returned.
-enum PayloadType {
-  // Compressable text format.
-  COMPRESSABLE = 0;
-
-  // Uncompressable binary format.
-  UNCOMPRESSABLE = 1;
-
-  // Randomly chosen from all other formats defined in this enum.
-  RANDOM = 2;
+// TODO(jihuncho): Use well-known types once all languages are synced.
+message BoolValue {
+  // The bool value.
+  bool value = 1;
 }
 
 // A block of data, to simply increase gRPC message size.
 message Payload {
-  // DEPRECATED, don't use. To be removed shortly.
-  // The type of data in body.
-  PayloadType type = 1;
+  reserved 1;
+
   // Primary contents of payload.
   bytes body = 2;
 }
@@ -52,10 +43,7 @@ message EchoStatus {
 
 // Unary request.
 message SimpleRequest {
-  // DEPRECATED, don't use. To be removed shortly.
-  // Desired payload type in the response from the server.
-  // If response_type is RANDOM, server randomly chooses one from other formats.
-  PayloadType response_type = 1;
+  reserved 1;
 
   // Desired payload size in the response from the server.
   int32 response_size = 2;
@@ -73,13 +61,13 @@ message SimpleRequest {
   // "nullable" in order to interoperate seamlessly with clients not able to
   // implement the full compression tests by introspecting the call to verify
   // the response's compression status.
-  google.protobuf.BoolValue response_compressed = 6;
+  BoolValue response_compressed = 6;
 
   // Whether server should return a given status
   EchoStatus response_status = 7;
 
   // Whether the server should expect this request to be compressed.
-  google.protobuf.BoolValue expect_compressed = 8;
+  BoolValue expect_compressed = 8;
 }
 
 // Unary response, as configured by the request.
@@ -106,7 +94,7 @@ message StreamingInputCallRequest {
   // is "nullable" in order to interoperate seamlessly with servers not able to
   // implement the full compression tests by introspecting the call to verify
   // the request's compression status.
-  google.protobuf.BoolValue expect_compressed = 2;
+  BoolValue expect_compressed = 2;
 
   // Not expecting any payload from the response.
 }
@@ -130,17 +118,12 @@ message ResponseParameters {
   // "nullable" in order to interoperate seamlessly with clients not able to
   // implement the full compression tests by introspecting the call to verify
   // the response's compression status.
-  google.protobuf.BoolValue compressed = 3;
+  BoolValue compressed = 3;
 }
 
 // Server-streaming request.
 message StreamingOutputCallRequest {
-  // DEPRECATED, don't use. To be removed shortly.
-  // Desired payload type in the response from the server.
-  // If response_type is RANDOM, the payload from each response in the stream
-  // might be of different types. This is to simulate a mixed type of payload
-  // stream.
-  PayloadType response_type = 1;
+  reserved 1;
 
   // Configuration for each expected response message.
   repeated ResponseParameters response_parameters = 2;

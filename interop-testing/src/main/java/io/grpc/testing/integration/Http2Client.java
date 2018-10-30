@@ -30,7 +30,6 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.Payload;
-import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import java.net.InetAddress;
@@ -205,12 +204,10 @@ public final class Http2Client {
     private final int payloadSize = 271828;
     private final SimpleRequest simpleRequest = SimpleRequest.newBuilder()
         .setResponseSize(responseSize)
-        .setResponseType(PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[payloadSize])))
         .build();
     final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
         .setPayload(Payload.newBuilder()
-            .setType(PayloadType.COMPRESSABLE)
             .setBody(ByteString.copyFrom(new byte[responseSize])))
         .build();
 
@@ -272,7 +269,7 @@ public final class Http2Client {
       assertResponseEquals(blockingStub.unaryCall(simpleRequest), goldenResponse);
 
       threadpool = MoreExecutors.listeningDecorator(newFixedThreadPool(numThreads));
-      List<ListenableFuture<?>> workerFutures = new ArrayList<ListenableFuture<?>>();
+      List<ListenableFuture<?>> workerFutures = new ArrayList<>();
       for (int i = 0; i < numThreads; i++) {
         workerFutures.add(threadpool.submit(new MaxStreamsWorker(i, simpleRequest)));
       }
