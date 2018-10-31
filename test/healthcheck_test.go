@@ -142,7 +142,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	//| SERVICE_UNKNOWN              | ->TRANSIENT FAILURE                       |
 	//| SERVING                      | ->READY                                   |
 	//| UNKNOWN                      | ->TRANSIENT FAILURE                       |
-	//		+------------------------------+-------------------------------------------+
+	//+------------------------------+-------------------------------------------+
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_NOT_SERVING)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
@@ -158,54 +158,46 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	}
 }`)
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state after 5s.")
+		t.Fatal("ClientConn is still in IDLE state when the context times out.")
 	}
 	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state after 5s.")
+		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
 	}
-	cancel()
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state after 5s.")
+		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
 	}
-	cancel()
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state after 5s.")
+		t.Fatal("ClientConn is still in READY state when the context times out.")
 	}
-	cancel()
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.TransientFailure); !ok {
-		t.Fatal("ClientConn is still in TRANSIENT FAILURE state after 5s.")
+		t.Fatal("ClientConn is still in TRANSIENT FAILURE state when the context times out.")
 	}
-	cancel()
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
 	}
 
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_UNKNOWN)
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	if ok := cc.WaitForStateChange(ctx, connectivity.Ready); !ok {
-		t.Fatal("ClientConn is still in READY state after 5s.")
+		t.Fatal("ClientConn is still in READY state when the context times out.")
 	}
-	cancel()
 	if s := cc.GetState(); s != connectivity.TransientFailure {
 		t.Fatalf("ClientConn is in %v state, want TRANSIENT FAILURE", s)
 	}

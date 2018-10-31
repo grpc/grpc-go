@@ -1210,10 +1210,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			close(allowedToReset)
 			return nil
 		}
-		grpclog.Error("the client side LB channel health check function has not been set. Please" +
-			"import the \"google.golang.org/grpc/health\" package to set it and thus enabling health checking." +
-			"Or, please disable health checking explicitly by the WithDisableHealthCheck() DialOption. Note " +
-			"it is suggested by the current service provider (through service config) to have LB channel health check")
+		// TODO: add a link to the health check doc in the error message.
+		grpclog.Error("the client side LB channel health check function has not been set.")
 	}
 
 	// No LB channel health check case
