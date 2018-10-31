@@ -206,8 +206,8 @@ func (c *ServerHeader) toProto() *pb.GrpcLogEntry {
 // ClientMessage configs the binary log entry to be a ClientMessage entry.
 type ClientMessage struct {
 	OnClientSide bool
-	// Message should only be a proto.Message. Could add support for other
-	// message types in the future.
+	// Message can be a proto.Message or []byte. Other messages formats are not
+	// supported.
 	Message interface{}
 }
 
@@ -246,8 +246,8 @@ func (c *ClientMessage) toProto() *pb.GrpcLogEntry {
 // ServerMessage configs the binary log entry to be a ServerMessage entry.
 type ServerMessage struct {
 	OnClientSide bool
-	// Message should only be a proto.Message. Could add support for other
-	// message types in the future.
+	// Message can be a proto.Message or []byte. Other messages formats are not
+	// supported.
 	Message interface{}
 }
 
@@ -372,7 +372,7 @@ func (c *Cancel) toProto() *pb.GrpcLogEntry {
 // omitted.
 func metadataKeyOmit(key string) bool {
 	switch key {
-	case "lb-token", ":path", ":authority", "content-encoding", "user-agent", "te":
+	case "lb-token", ":path", ":authority", "content-encoding", "content-type", "user-agent", "te":
 		return true
 	case "grpc-trace-bin": // grpc-trace-bin is special because it's visiable to users.
 		return false

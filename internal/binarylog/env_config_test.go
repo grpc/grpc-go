@@ -34,7 +34,7 @@ func TestNewLoggerFromConfigString(t *testing.T) {
 		fullM2 = s1 + "/" + m2
 	)
 	c := fmt.Sprintf("*{h:1;m:2},%s{h},%s{m},%s{h;m}", s1+"/*", fullM1, fullM2)
-	l := newLoggerFromConfigString(c)
+	l := NewLoggerFromConfigString(c).(*logger)
 
 	if l.all.hdr != 1 || l.all.msg != 2 {
 		t.Errorf("l.all = %#v, want headerLen: 1, messageLen: 2", l.all)
@@ -83,7 +83,7 @@ func TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 		"*,*{h:1;m:1}",
 	}
 	for _, tc := range testCases {
-		l := newLoggerFromConfigString(tc)
+		l := NewLoggerFromConfigString(tc)
 		if l != nil {
 			t.Errorf("With config %q, want logger %v, got %v", tc, nil, l)
 		}
