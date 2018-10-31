@@ -50,6 +50,7 @@ func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
 
 // Config contains the config info about the base balancer builder.
 type Config struct {
+	// HealthCheck indicates whether health checking should be enabled for this specific balancer.
 	HealthCheck bool
 }
 

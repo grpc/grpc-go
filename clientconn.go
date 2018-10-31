@@ -1210,7 +1210,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 			close(allowedToReset)
 			return nil
 		}
-		grpclog.Errorf("the client side LB channel health check function has not been set. Please" +
+		grpclog.Error("the client side LB channel health check function has not been set. Please" +
 			"import the \"google.golang.org/grpc/health\" package to set it and thus enabling health checking." +
 			"Or, please disable health checking explicitly by the WithDisableHealthCheck() DialOption. Note " +
 			"it is suggested by the current service provider (through service config) to have LB channel health check")
@@ -1268,23 +1268,20 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 		}
 	}
 
-	// start a goroutine for health checking of this transport.
-	go func() {
-		err := internal.HealthCheckFunc(ctx, newStream, reportHealth, serviceName)
-		if err != nil {
-			if status.Code(err) == codes.Unimplemented {
-				if channelz.IsOn() {
-					channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-						Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
-						Severity: channelz.CtError,
-					})
-				}
-				grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
-			} else {
-				grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
+	err := internal.HealthCheckFunc(ctx, newStream, reportHealth, serviceName)
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			if channelz.IsOn() {
+				channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+					Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",
+					Severity: channelz.CtError,
+				})
 			}
+			grpclog.Error("Subchannel health check is unimplemented at server side, thus health check is disabled")
+		} else {
+			grpclog.Errorf("HealthCheckFunc exits with unexpected error %v", err)
 		}
-	}()
+	}
 }
 
 // nextAddr increments the addrIdx if there are more addresses to try. If
