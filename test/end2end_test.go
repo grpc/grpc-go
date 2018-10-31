@@ -2481,6 +2481,48 @@ func testHealthWatchMultipleClients(t *testing.T, e env) {
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
+func TestHealthWatchSameStatus(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSameStatus(t, e)
+	}
+}
+
+func testHealthWatchSameStatus(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream1, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVING)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
 func TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
