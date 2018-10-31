@@ -83,10 +83,16 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 		s.mu.Unlock()
 	}()
 	s.mu.Unlock()
+
+	var lastSentStatus healthpb.HealthCheckResponse_ServingStatus = -1
 	for {
 		select {
 		// Status updated. Sends the up-to-date status to the client.
 		case servingStatus := <-update:
+			if lastSentStatus == servingStatus {
+				continue
+			}
+			lastSentStatus = servingStatus
 			err := stream.Send(&healthpb.HealthCheckResponse{Status: servingStatus})
 			if err != nil {
 				return status.Error(codes.Canceled, "Stream has ended.")
@@ -102,6 +108,8 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 // or insert a new service entry into the statusMap.
 func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.statusMap[service] = servingStatus
 	for _, update := range s.updates[service] {
 		// Clears previous updates, that are not sent to the client, from the channel.
@@ -113,5 +121,4 @@ func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthC
 		// Puts the most recent update to the channel.
 		update <- servingStatus
 	}
-	s.mu.Unlock()
 }
