@@ -62,6 +62,32 @@ public final class ServiceConfigUtil {
 
   private ServiceConfigUtil() {}
 
+  /**
+   * Fetch the health-checked service name from service config. {@code null} if can't find one.
+   */
+  @Nullable
+  public static String getHealthCheckedServiceName(@Nullable Map<String, Object> serviceConfig) {
+    String healthCheckKey = "healthCheckConfig";
+    String serviceNameKey = "serviceName";
+    if (serviceConfig == null || !serviceConfig.containsKey(healthCheckKey)) {
+      return null;
+    }
+
+    /* schema as follows
+    {
+      "healthCheckConfig": {
+        // Service name to use in the health-checking request.
+        "serviceName": string
+      }
+    }
+    */
+    Map<String, Object> healthCheck = getObject(serviceConfig, healthCheckKey);
+    if (!healthCheck.containsKey(serviceNameKey)) {
+      return null;
+    }
+    return getString(healthCheck, "serviceName");
+  }
+
   @Nullable
   static Throttle getThrottlePolicy(@Nullable Map<String, Object> serviceConfig) {
     String retryThrottlingKey = "retryThrottling";
