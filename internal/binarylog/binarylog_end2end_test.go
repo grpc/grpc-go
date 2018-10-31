@@ -635,54 +635,54 @@ func (ed *expectedData) toClientLogEntries() []*pb.GrpcLogEntry {
 		idInRPC uint64 = 1
 	)
 	ret = append(ret, ed.newClientHeaderEntry(true, globalRPCID, idInRPC))
-	idInRPC += 1
+	idInRPC++
 
 	switch ed.cc.callType {
 	case unaryRPC, fullDuplexStreamRPC:
 		for i := 0; i < len(ed.requests); i++ {
 			ret = append(ret, ed.newClientMessageEntry(true, globalRPCID, idInRPC, ed.requests[i]))
-			idInRPC += 1
+			idInRPC++
 			if i == 0 {
 				// First message, append ServerHeader.
 				ret = append(ret, ed.newServerHeaderEntry(true, globalRPCID, idInRPC))
-				idInRPC += 1
+				idInRPC++
 			}
 			if !ed.cc.success {
 				// There is no response in the RPC error case.
 				continue
 			}
 			ret = append(ret, ed.newServerMessageEntry(true, globalRPCID, idInRPC, ed.responses[i]))
-			idInRPC += 1
+			idInRPC++
 		}
 		if ed.cc.success && ed.cc.callType == fullDuplexStreamRPC {
 			ret = append(ret, ed.newHalfCloseEntry(true, globalRPCID, idInRPC))
-			idInRPC += 1
+			idInRPC++
 		}
 	case clientStreamRPC, serverStreamRPC:
 		for i := 0; i < len(ed.requests); i++ {
 			ret = append(ret, ed.newClientMessageEntry(true, globalRPCID, idInRPC, ed.requests[i]))
-			idInRPC += 1
+			idInRPC++
 		}
 		if ed.cc.callType == clientStreamRPC {
 			ret = append(ret, ed.newHalfCloseEntry(true, globalRPCID, idInRPC))
-			idInRPC += 1
+			idInRPC++
 		}
 		ret = append(ret, ed.newServerHeaderEntry(true, globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 		if ed.cc.success {
 			for i := 0; i < len(ed.responses); i++ {
 				ret = append(ret, ed.newServerMessageEntry(true, globalRPCID, idInRPC, ed.responses[0]))
-				idInRPC += 1
+				idInRPC++
 			}
 		}
 	}
 
 	if ed.cc.callType == cancelRPC {
 		ret = append(ret, ed.newCancelEntry(globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 	} else {
 		ret = append(ret, ed.newServerTrailerEntry(true, globalRPCID, idInRPC, ed.err))
-		idInRPC += 1
+		idInRPC++
 	}
 	return ret
 }
@@ -693,62 +693,62 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 		idInRPC uint64 = 1
 	)
 	ret = append(ret, ed.newClientHeaderEntry(false, globalRPCID, idInRPC))
-	idInRPC += 1
+	idInRPC++
 
 	switch ed.cc.callType {
 	case unaryRPC:
 		ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[0]))
-		idInRPC += 1
+		idInRPC++
 		ret = append(ret, ed.newServerHeaderEntry(false, globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 		if ed.cc.success {
 			ret = append(ret, ed.newServerMessageEntry(false, globalRPCID, idInRPC, ed.responses[0]))
-			idInRPC += 1
+			idInRPC++
 		}
 	case fullDuplexStreamRPC:
 		ret = append(ret, ed.newServerHeaderEntry(false, globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 		for i := 0; i < len(ed.requests); i++ {
 			ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[i]))
-			idInRPC += 1
+			idInRPC++
 			if !ed.cc.success {
 				// There is no response in the RPC error case.
 				continue
 			}
 			ret = append(ret, ed.newServerMessageEntry(false, globalRPCID, idInRPC, ed.responses[i]))
-			idInRPC += 1
+			idInRPC++
 		}
 
 		if ed.cc.success && ed.cc.callType == fullDuplexStreamRPC {
 			ret = append(ret, ed.newHalfCloseEntry(false, globalRPCID, idInRPC))
-			idInRPC += 1
+			idInRPC++
 		}
 	case clientStreamRPC:
 		ret = append(ret, ed.newServerHeaderEntry(false, globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 		for i := 0; i < len(ed.requests); i++ {
 			ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[i]))
-			idInRPC += 1
+			idInRPC++
 		}
 		if ed.cc.success {
 			ret = append(ret, ed.newHalfCloseEntry(false, globalRPCID, idInRPC))
-			idInRPC += 1
+			idInRPC++
 			ret = append(ret, ed.newServerMessageEntry(false, globalRPCID, idInRPC, ed.responses[0]))
-			idInRPC += 1
+			idInRPC++
 		}
 	case serverStreamRPC:
 		ret = append(ret, ed.newClientMessageEntry(false, globalRPCID, idInRPC, ed.requests[0]))
-		idInRPC += 1
+		idInRPC++
 		ret = append(ret, ed.newServerHeaderEntry(false, globalRPCID, idInRPC))
-		idInRPC += 1
+		idInRPC++
 		for i := 0; i < len(ed.responses); i++ {
 			ret = append(ret, ed.newServerMessageEntry(false, globalRPCID, idInRPC, ed.responses[0]))
-			idInRPC += 1
+			idInRPC++
 		}
 	}
 
 	ret = append(ret, ed.newServerTrailerEntry(false, globalRPCID, idInRPC, ed.err))
-	idInRPC += 1
+	idInRPC++
 
 	return ret
 }
@@ -834,7 +834,6 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 
 func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
-	// globalRPCID += 1
 	expect := runRPCs(t, &testConfig{}, c)
 	var got []*pb.GrpcLogEntry
 	for _, e := range testSink.buf {
@@ -928,7 +927,6 @@ func TestClientBinaryLogCancel(t *testing.T) {
 
 func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
-	// globalRPCID += 1
 	expect := runRPCs(t, &testConfig{}, c)
 	var got []*pb.GrpcLogEntry
 	for _, e := range testSink.buf {
