@@ -102,16 +102,19 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_W
 // or insert a new service entry into the statusMap.
 func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
-	s.statusMap[service] = servingStatus
-	for _, update := range s.updates[service] {
-		// Clears previous updates, that are not sent to the client, from the channel.
-		// This can happen if the client is not reading and the server gets flow control limited.
-		select {
-		case <-update:
-		default:
+	// Checks if the serving status of the service has been changed.
+	if s.statusMap[service] != servingStatus {
+		s.statusMap[service] = servingStatus
+		for _, update := range s.updates[service] {
+			// Clears previous updates, that are not sent to the client, from the channel.
+			// This can happen if the client is not reading and the server gets flow control limited.
+			select {
+			case <-update:
+			default:
+			}
+			// Puts the most recent update to the channel.
+			update <- servingStatus
 		}
-		// Puts the most recent update to the channel.
-		update <- servingStatus
 	}
 	s.mu.Unlock()
 }
