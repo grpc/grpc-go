@@ -2513,6 +2513,8 @@ func testHealthWatchSameStatus(t *testing.T, e env) {
 		t.Fatalf("error: %v", err)
 	}
 
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
 	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
 
 	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVING)
