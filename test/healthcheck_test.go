@@ -52,14 +52,10 @@ func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error),
 }
 
 func newTestHealthServer() *testHealthServer {
-	return &testHealthServer{
-		watchFunc: defaultWatchFunc,
-		update:    make(chan struct{}, 1),
-		status:    make(map[string]healthpb.HealthCheckResponse_ServingStatus),
-	}
+	return newTestHealthServerWithWatchFunc(defaultWatchFunc)
 }
 
-func newTestHealthServerWithSpecialWatchFunc(f func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error) *testHealthServer {
+func newTestHealthServerWithWatchFunc(f func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error) *testHealthServer {
 	return &testHealthServer{
 		watchFunc: f,
 		update:    make(chan struct{}, 1),
@@ -546,7 +542,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err %v", err)
 	}
-	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -630,7 +626,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -851,7 +847,7 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
 		if in.Service != "channelzSuccess" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzSuccess\"")
@@ -910,9 +906,9 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
 		if in.Service != "channelzFailure" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzFailure\"")
