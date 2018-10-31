@@ -1204,10 +1204,16 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// 2. the internal.HealthCheckFunc is set by importing the grpc/healthcheck package,
 	// 3. a service config with non-empty healthCheckConfig field is provided,
 	// 4. the current load balancer allows it.
-	if !ac.cc.dopts.disableHealthCheck && internal.HealthCheckFunc != nil && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
-		ac.startHealthCheck(hcCtx, newTr, addr, healthCheckConfig.ServiceName)
-		close(allowedToReset)
-		return nil
+	if !ac.cc.dopts.disableHealthCheck && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
+		if internal.HealthCheckFunc != nil {
+			go ac.startHealthCheck(hcCtx, newTr, addr, healthCheckConfig.ServiceName)
+			close(allowedToReset)
+			return nil
+		}
+		grpclog.Errorf("the client side LB channel health check function has not been set. Please" +
+			"import the \"google.golang.org/grpc/health\" package to set it and thus enabling health checking." +
+			"Or, please disable health checking explicitly by the WithDisableHealthCheck() DialOption. Note " +
+			"it is suggested by the current service provider (through service config) to have LB channel health check")
 	}
 
 	// No LB channel health check case
@@ -1234,19 +1240,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 }
 
 func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.ClientTransport, addr resolver.Address, serviceName string) {
-	//set up the health check helper functions
+	// Set up the health check helper functions
 	newStream := func() (interface{}, error) {
-		ac.mu.Lock()
-		if ac.transport != newTr {
-			ac.mu.Unlock()
-			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
-		}
-		// transition to CONNECTING state when an attempt starts
-		if ac.state != connectivity.Connecting {
-			ac.updateConnectivityState(connectivity.Connecting)
-			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-		}
-		ac.mu.Unlock()
 		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", newTr)
 	}
 	firstReady := true
@@ -1261,15 +1256,11 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 				firstReady = false
 				ac.curAddr = addr
 			}
-			// This is the only place where we set state to READY in case of health check enabled.
-			// Therefore we don't need to check whether ac is already in READY state.
-			ac.updateConnectivityState(connectivity.Ready)
-			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			if ac.state != connectivity.Ready {
+				ac.updateConnectivityState(connectivity.Ready)
+				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+			}
 		} else {
-			// It is possible that server alternates between "UNKNOWN", "SERVING", and "NOT_SERVING" when
-			// returning the status for health. And all these status leads to transition to TRANSIENT
-			// FAILURE. Therefore we need to check whether ac is already in TRANSIENT FAILURE state, to
-			// avoid unnecessary setting.
 			if ac.state != connectivity.TransientFailure {
 				ac.updateConnectivityState(connectivity.TransientFailure)
 				ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
@@ -1281,7 +1272,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 	go func() {
 		err := internal.HealthCheckFunc(ctx, newStream, reportHealth, serviceName)
 		if err != nil {
-			if e, ok := status.FromError(err); ok && e.Code() == codes.Unimplemented {
+			if status.Code(err) == codes.Unimplemented {
 				if channelz.IsOn() {
 					channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
 						Desc:     "Subchannel health check is unimplemented at server side, thus health check is disabled",

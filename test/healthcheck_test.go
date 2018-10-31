@@ -53,15 +53,51 @@ func replaceHealthCheckFunc(f func(context.Context, func() (interface{}, error),
 
 func newTestHealthServer() *testHealthServer {
 	return &testHealthServer{
-		update: make(chan struct{}, 1),
-		status: make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+		watchFunc: defaultWatchFunc,
+		update:    make(chan struct{}, 1),
+		status:    make(map[string]healthpb.HealthCheckResponse_ServingStatus),
 	}
 }
 
+func newTestHealthServerWithSpecialWatchFunc(f func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error) *testHealthServer {
+	return &testHealthServer{
+		watchFunc: f,
+		update:    make(chan struct{}, 1),
+		status:    make(map[string]healthpb.HealthCheckResponse_ServingStatus),
+	}
+}
+
+// defaultWatchFunc will send a HealthCheckResponse to the client whenever SetServingStatus is called.
+func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	if in.Service != "foo" {
+		return status.Error(codes.FailedPrecondition,
+			"the defaultWatchFunc only handles request with service name to be \"foo\"")
+	}
+	var done bool
+	for {
+		select {
+		case <-stream.Context().Done():
+			done = true
+		case <-s.update:
+		}
+		if done {
+			break
+		}
+		s.mu.Lock()
+		resp := &healthpb.HealthCheckResponse{
+			Status: s.status[in.Service],
+		}
+		s.mu.Unlock()
+		stream.SendMsg(resp)
+	}
+	return nil
+}
+
 type testHealthServer struct {
-	mu     sync.Mutex
-	status map[string]healthpb.HealthCheckResponse_ServingStatus
-	update chan struct{}
+	watchFunc func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error
+	mu        sync.Mutex
+	status    map[string]healthpb.HealthCheckResponse_ServingStatus
+	update    chan struct{}
 }
 
 func (s *testHealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
@@ -71,43 +107,7 @@ func (s *testHealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRe
 }
 
 func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
-	// service string is used here to switch between the behaviors of Watch.
-	switch in.Service {
-	case "foo":
-		var done bool
-		for {
-			select {
-			case <-stream.Context().Done():
-				done = true
-			case <-s.update:
-			}
-			if done {
-				break
-			}
-			s.mu.Lock()
-			resp := &healthpb.HealthCheckResponse{
-				Status: s.status[in.Service],
-			}
-			s.mu.Unlock()
-			stream.SendMsg(resp)
-		}
-		return nil
-	case "delay":
-		// Do nothing to mock a delay of health check response from server side.
-		// This case is to help with the test that covers the condition that reportHealth is not
-		// called inside HealthCheckFunc before the func returns.
-		select {
-		case <-stream.Context().Done():
-		case <-time.After(5 * time.Second):
-		}
-		return nil
-	case "channelzSuccess":
-		return status.Error(codes.OK, "fake success")
-	case "channelzFailure":
-		return status.Error(codes.Internal, "fake error")
-	default:
-		return nil
-	}
+	return s.watchFunc(s, in, stream)
 }
 
 // SetServingStatus is called when need to reset the serving status of a service
@@ -128,7 +128,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -140,7 +140,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	// test, we use ClientConn's connectivity state as the addrConn connectivity state.
 	//+------------------------------+-------------------------------------------+
 	//| Health Check Returned Status | Expected addrConn Connectivity Transition |
-	//		+------------------------------+-------------------------------------------+
+	//+------------------------------+-------------------------------------------+
 	//| NOT_SERVING                  | ->TRANSIENT FAILURE                       |
 	//| SERVING                      | ->READY                                   |
 	//| SERVICE_UNKNOWN              | ->TRANSIENT FAILURE                       |
@@ -152,7 +152,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -222,7 +222,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -243,7 +243,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -267,6 +267,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 	// the stream rpc will persist through goaway event.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -309,8 +310,6 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
 	}
-	// The RPC will run until canceled.
-	cancel()
 }
 
 func TestHealthCheckWithConnClose(t *testing.T) {
@@ -318,7 +317,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -339,7 +338,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 	tc := testpb.NewTestServiceClient(cc)
@@ -376,14 +375,14 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	}
 }
 
-// addrConn drain happens when addrConn gets tron down due to its address being no longer in the
+// addrConn drain happens when addrConn gets torn down due to its address being no longer in the
 // address list returned by the resolver.
 func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer leakcheck.Check(t)
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -404,7 +403,7 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -428,6 +427,7 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 
 	// the stream rpc will persist through goaway event.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -469,8 +469,6 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
 	}
-	// The RPC will run until canceled.
-	cancel()
 }
 
 // ClientConn close will lead to its addrConns being torn down.
@@ -479,7 +477,7 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -500,7 +498,7 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -546,9 +544,22 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err %v", err)
 	}
-	ts := newTestHealthServer()
+	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+		if in.Service != "delay" {
+			return status.Error(codes.FailedPrecondition,
+				"this special Watch function only handles request with service name to be \"delay\"")
+		}
+		// Do nothing to mock a delay of health check response from server side.
+		// This case is to help with the test that covers the condition that reportHealth is not
+		// called inside HealthCheckFunc before the func returns.
+		select {
+		case <-stream.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+		return nil
+	})
 	healthpb.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
@@ -570,7 +581,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -617,9 +628,22 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServer()
+	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+		if in.Service != "delay" {
+			return status.Error(codes.FailedPrecondition,
+				"this special Watch function only handles request with service name to be \"delay\"")
+		}
+		// Do nothing to mock a delay of health check response from server side.
+		// This case is to help with the test that covers the condition that reportHealth is not
+		// called inside HealthCheckFunc before the func returns.
+		select {
+		case <-stream.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+		return nil
+	})
 	healthpb.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
@@ -641,7 +665,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -693,7 +717,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"), grpc.WithDisableHealthCheck())
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	tc := testpb.NewTestServiceClient(cc)
 	defer cc.Close()
@@ -734,7 +758,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("pick_first"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	tc := testpb.NewTestServiceClient(cc)
 	defer cc.Close()
@@ -775,7 +799,7 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	tc := testpb.NewTestServiceClient(cc)
 	defer cc.Close()
@@ -805,7 +829,7 @@ func TestHealthCheckDisable(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
 	healthpb.RegisterHealthServer(s, ts)
@@ -820,29 +844,30 @@ func TestHealthCheckDisable(t *testing.T) {
 	testHealthCheckDisableWithServiceConfig(t, lis.Addr().String())
 }
 
-func TestHealthCheckChannelzCounting(t *testing.T) {
+func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	defer leakcheck.Check(t)
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServer()
+	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+		if in.Service != "channelzSuccess" {
+			return status.Error(codes.FailedPrecondition,
+				"this special Watch function only handles request with service name to be \"channelzSuccess\"")
+		}
+		return status.Error(codes.OK, "fake success")
+	})
 	healthpb.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
 
-	testHealthCheckChannelzCountingCallSuccess(t, lis.Addr().String())
-	testHealthCheckChannelzCountingCallFailure(t, lis.Addr().String())
-}
-
-func testHealthCheckChannelzCountingCallSuccess(t *testing.T, addr string) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -851,7 +876,7 @@ func testHealthCheckChannelzCountingCallSuccess(t *testing.T, addr string) {
 		"serviceName": "channelzSuccess"
 	}
 }`)
-	r.NewAddress([]resolver.Address{{Addr: addr}})
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0)
@@ -880,12 +905,30 @@ func testHealthCheckChannelzCountingCallSuccess(t *testing.T, addr string) {
 	}
 }
 
-func testHealthCheckChannelzCountingCallFailure(t *testing.T, addr string) {
+func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
+	defer leakcheck.Check(t)
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal("failed to listen")
+	}
+	ts := newTestHealthServerWithSpecialWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+		if in.Service != "channelzFailure" {
+			return status.Error(codes.FailedPrecondition,
+				"this special Watch function only handles request with service name to be \"channelzFailure\"")
+		}
+		return status.Error(codes.Internal, "fake failure")
+	})
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -894,7 +937,7 @@ func testHealthCheckChannelzCountingCallFailure(t *testing.T, addr string) {
 		"serviceName": "channelzFailure"
 	}
 }`)
-	r.NewAddress([]resolver.Address{{Addr: addr}})
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0)

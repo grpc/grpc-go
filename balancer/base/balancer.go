@@ -29,7 +29,7 @@ import (
 type baseBuilder struct {
 	name          string
 	pickerBuilder PickerBuilder
-	config        BalancerBuilderConfig
+	config        Config
 }
 
 func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
@@ -62,7 +62,7 @@ type baseBalancer struct {
 	subConns map[resolver.Address]balancer.SubConn
 	scStates map[balancer.SubConn]connectivity.State
 	picker   balancer.Picker
-	config   BalancerBuilderConfig
+	config   Config
 }
 
 func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {

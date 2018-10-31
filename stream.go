@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/connectivity"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
@@ -951,6 +953,18 @@ func (a *csAttempt) finish(err error) {
 }
 
 func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, t transport.ClientTransport, opts ...CallOption) (_ ClientStream, err error) {
+	ac.mu.Lock()
+	if ac.transport != t {
+		ac.mu.Unlock()
+		return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
+	}
+	// transition to CONNECTING state when an attempt starts
+	if ac.state != connectivity.Connecting {
+		ac.updateConnectivityState(connectivity.Connecting)
+		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+	}
+	ac.mu.Unlock()
+
 	if t == nil {
 		// TODO: return RPC error here?
 		return nil, errors.New("transport provided is nil")
@@ -1012,6 +1026,7 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 
 	as := &addrConnStream{
 		callHdr:  callHdr,
+		ac:       ac,
 		ctx:      ctx,
 		cancel:   cancel,
 		opts:     opts,
@@ -1021,13 +1036,6 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 		cp:       cp,
 		comp:     comp,
 		t:        t,
-		done: func(b balancer.DoneInfo) {
-			if b.Err != nil && b.Err != io.EOF {
-				ac.incrCallsFailed()
-			} else {
-				ac.incrCallsSucceeded()
-			}
-		},
 	}
 
 	as.callInfo.stream = as
@@ -1059,6 +1067,7 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 
 type addrConnStream struct {
 	s         *transport.Stream
+	ac        *addrConn
 	callHdr   *transport.CallHdr
 	cancel    context.CancelFunc
 	opts      []CallOption
@@ -1227,16 +1236,10 @@ func (as *addrConnStream) finish(err error) {
 		as.t.CloseStream(as.s, err)
 	}
 
-	if as.done != nil {
-		br := false
-		if as.s != nil {
-			br = as.s.BytesReceived()
-		}
-		as.done(balancer.DoneInfo{
-			Err:           err,
-			BytesSent:     as.s != nil,
-			BytesReceived: br,
-		})
+	if err != nil {
+		as.ac.incrCallsFailed()
+	} else {
+		as.ac.incrCallsSucceeded()
 	}
 	as.cancel()
 	as.mu.Unlock()

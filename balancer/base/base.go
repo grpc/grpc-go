@@ -45,21 +45,16 @@ type PickerBuilder interface {
 // NewBalancerBuilder returns a balancer builder. The balancers
 // built by this builder will use the picker builder to build pickers.
 func NewBalancerBuilder(name string, pb PickerBuilder) balancer.Builder {
-	return &baseBuilder{
-		name:          name,
-		pickerBuilder: pb,
-	}
+	return NewBalancerBuilderWithConfig(name, pb, Config{})
 }
 
-// BalancerBuilderConfig contains the config info about the base balancer builder.
-type BalancerBuilderConfig struct {
+// Config contains the config info about the base balancer builder.
+type Config struct {
 	HealthCheck bool
 }
 
 // NewBalancerBuilderWithConfig returns a base balancer builder configured by the provided config.
-//
-// This is an EXPERIMENTAL API.
-func NewBalancerBuilderWithConfig(name string, pb PickerBuilder, config BalancerBuilderConfig) balancer.Builder {
+func NewBalancerBuilderWithConfig(name string, pb PickerBuilder, config Config) balancer.Builder {
 	return &baseBuilder{
 		name:          name,
 		pickerBuilder: pb,
