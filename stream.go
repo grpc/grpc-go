@@ -86,7 +86,8 @@ type ClientStream interface {
 	// stream.Recv has returned a non-nil error (including io.EOF).
 	Trailer() metadata.MD
 	// CloseSend closes the send direction of the stream. It closes the stream
-	// when non-nil error is met.
+	// when non-nil error is met. It is also not safe to call CloseSend
+	// concurrently with SendMsg.
 	CloseSend() error
 	// Context returns the context for this stream.
 	//
@@ -109,7 +110,8 @@ type ClientStream interface {
 	//
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not safe
-	// to call SendMsg on the same stream in different goroutines.
+	// to call SendMsg on the same stream in different goroutines. It is also
+	// not safe to call CloseSend concurrently with SendMsg.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the stream completes successfully. On
