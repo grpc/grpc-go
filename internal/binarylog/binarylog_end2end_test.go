@@ -835,13 +835,25 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
 	expect := runRPCs(t, &testConfig{}, c)
-	var got []*pb.GrpcLogEntry
-	for _, e := range testSink.buf {
-		if e.Logger == pb.GrpcLogEntry_LOGGER_CLIENT {
-			got = append(got, e)
-		}
-	}
 	want := expect.toClientLogEntries()
+	var got []*pb.GrpcLogEntry
+	// In racy cases, some entries are not logged when the RPC is finished (e.g.
+	// context.Cancel).
+	//
+	// Check 10 times, with a sleep of 1/100 seconds between each check. Makes
+	// it an 1-second wait in total.
+	for i := 0; i < 10; i++ {
+		for _, e := range testSink.buf {
+			if e.Logger == pb.GrpcLogEntry_LOGGER_CLIENT {
+				got = append(got, e)
+			}
+		}
+		if len(want) == len(got) {
+			break
+		}
+		got = nil
+		time.Sleep(100 * time.Millisecond)
+	}
 	if len(want) != len(got) {
 		for i, e := range want {
 			t.Errorf("in want: %d, %s", i, e.GetType())
@@ -928,14 +940,27 @@ func TestClientBinaryLogCancel(t *testing.T) {
 func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
 	expect := runRPCs(t, &testConfig{}, c)
+	want := expect.toServerLogEntries()
 	var got []*pb.GrpcLogEntry
-	for _, e := range testSink.buf {
-		if e.Logger == pb.GrpcLogEntry_LOGGER_SERVER {
-			got = append(got, e)
+	// In racy cases, some entries are not logged when the RPC is finished (e.g.
+	// context.Cancel). This is unlikely to happen on server side, but it does
+	// no harm to retry.
+	//
+	// Check 10 times, with a sleep of 1/100 seconds between each check. Makes
+	// it an 1-second wait in total.
+	for i := 0; i < 10; i++ {
+		for _, e := range testSink.buf {
+			if e.Logger == pb.GrpcLogEntry_LOGGER_SERVER {
+				got = append(got, e)
+			}
 		}
+		if len(want) == len(got) {
+			break
+		}
+		got = nil
+		time.Sleep(100 * time.Millisecond)
 	}
 
-	want := expect.toServerLogEntries()
 	if len(want) != len(got) {
 		for i, e := range want {
 			t.Errorf("in want: %d, %s", i, e.GetType())
