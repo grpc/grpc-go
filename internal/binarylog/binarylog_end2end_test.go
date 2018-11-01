@@ -62,6 +62,24 @@ func (s *testBinLogSink) Write(e *pb.GrpcLogEntry) error {
 
 func (s *testBinLogSink) Close() error { return nil }
 
+// Returns all client entris if client is true, otherwise return all server
+// entries.
+func (s *testBinLogSink) logEntries(client bool) []*pb.GrpcLogEntry {
+	logger := pb.GrpcLogEntry_LOGGER_SERVER
+	if client {
+		logger = pb.GrpcLogEntry_LOGGER_CLIENT
+	}
+	var ret []*pb.GrpcLogEntry
+	s.mu.Lock()
+	for _, e := range s.buf {
+		if e.Logger == logger {
+			ret = append(ret, e)
+		}
+	}
+	s.mu.Unlock()
+	return ret
+}
+
 func (s *testBinLogSink) clear() {
 	s.mu.Lock()
 	s.buf = nil
@@ -841,15 +859,10 @@ func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	// Check 10 times, with a sleep of 1/100 seconds between each check. Makes
 	// it an 1-second wait in total.
 	for i := 0; i < 10; i++ {
-		for _, e := range testSink.buf {
-			if e.Logger == pb.GrpcLogEntry_LOGGER_CLIENT {
-				got = append(got, e)
-			}
-		}
+		got = testSink.logEntries(true) // all client entries.
 		if len(want) == len(got) {
 			break
 		}
-		got = nil
 		time.Sleep(100 * time.Millisecond)
 	}
 	if len(want) != len(got) {
@@ -947,15 +960,10 @@ func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 	// Check 10 times, with a sleep of 1/100 seconds between each check. Makes
 	// it an 1-second wait in total.
 	for i := 0; i < 10; i++ {
-		for _, e := range testSink.buf {
-			if e.Logger == pb.GrpcLogEntry_LOGGER_SERVER {
-				got = append(got, e)
-			}
-		}
+		got = testSink.logEntries(false) // all server entries.
 		if len(want) == len(got) {
 			break
 		}
-		got = nil
 		time.Sleep(100 * time.Millisecond)
 	}
 
