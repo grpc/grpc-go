@@ -19,6 +19,7 @@
 package dns
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -904,7 +905,7 @@ func TestResolveFunc(t *testing.T) {
 		{"[2001:db8::1]:", errEndsWithColon},
 		{":", errEndsWithColon},
 		{"", errMissingAddr},
-		{"[2001:db8:a0b:12f0::1", errForInvalidTarget},
+		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")},
 	}
 
 	b := NewBuilder()
@@ -1017,4 +1018,107 @@ func TestDNSResolverRetry(t *testing.T) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, addrs, want)
 	}
 	r.Close()
+}
+
+func TestCustomAuthority(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	tests := []struct {
+		authority     string
+		authorityWant string
+		expectError   bool
+	}{
+		{
+			"4.3.2.1:" + defaultDNSSvrPort,
+			"4.3.2.1:" + defaultDNSSvrPort,
+			false,
+		},
+		{
+			"4.3.2.1:123",
+			"4.3.2.1:123",
+			false,
+		},
+		{
+			"4.3.2.1",
+			"4.3.2.1:" + defaultDNSSvrPort,
+			false,
+		},
+		{
+			"::1",
+			"[::1]:" + defaultDNSSvrPort,
+			false,
+		},
+		{
+			"[::1]",
+			"[::1]:" + defaultDNSSvrPort,
+			false,
+		},
+		{
+			"[::1]:123",
+			"[::1]:123",
+			false,
+		},
+		{
+			"dnsserver.com",
+			"dnsserver.com:" + defaultDNSSvrPort,
+			false,
+		},
+		{
+			":123",
+			"localhost:123",
+			false,
+		},
+		{
+			":",
+			"",
+			true,
+		},
+		{
+			"[::1]:",
+			"",
+			true,
+		},
+		{
+			"dnsserver.com:",
+			"",
+			true,
+		},
+	}
+	oldCustomAuthorityDialler := customAuthorityDialler
+	defer func() {
+		customAuthorityDialler = oldCustomAuthorityDialler
+	}()
+
+	for _, a := range tests {
+		errChan := make(chan error, 1)
+		customAuthorityDialler = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
+			if authority != a.authorityWant {
+				errChan <- fmt.Errorf("wrong custom authority passed to resolver. input: %s expected: %s actual: %s", a.authority, a.authorityWant, authority)
+			} else {
+				errChan <- nil
+			}
+			return func(ctx context.Context, network, address string) (net.Conn, error) {
+				return nil, errors.New("no need to dial")
+			}
+		}
+
+		b := NewBuilder()
+		cc := &testClientConn{target: "foo.bar.com"}
+		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOption{})
+
+		if err == nil {
+			r.Close()
+
+			err = <-errChan
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+
+			if a.expectError {
+				t.Errorf("custom authority should have caused an error: %s", a.authority)
+			}
+		} else if !a.expectError {
+			t.Errorf("unexpected error using custom authority %s: %s", a.authority, err)
+		}
+	}
 }

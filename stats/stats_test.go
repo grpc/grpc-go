@@ -1,5 +1,3 @@
-// +build go1.7
-
 /*
  *
  * Copyright 2016 gRPC authors.

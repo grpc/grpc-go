@@ -21,6 +21,7 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -31,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
@@ -703,6 +703,31 @@ func ErrorDesc(err error) string {
 // Deprecated: use status.Errorf instead.
 func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return status.Errorf(c, format, a...)
+}
+
+// toRPCErr converts an error into an error from the status package.
+func toRPCErr(err error) error {
+	if err == nil || err == io.EOF {
+		return err
+	}
+	if err == io.ErrUnexpectedEOF {
+		return status.Error(codes.Internal, err.Error())
+	}
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+	switch e := err.(type) {
+	case transport.ConnectionError:
+		return status.Error(codes.Unavailable, e.Desc)
+	default:
+		switch err {
+		case context.DeadlineExceeded:
+			return status.Error(codes.DeadlineExceeded, err.Error())
+		case context.Canceled:
+			return status.Error(codes.Canceled, err.Error())
+		}
+	}
+	return status.Error(codes.Unknown, err.Error())
 }
 
 // setCallInfoCodec should only be called after CallOptions have been applied.
