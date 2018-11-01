@@ -45,6 +45,9 @@ import (
 // If two configs exist for one certain method or service, the one specified
 // later overrides the privous config.
 func NewLoggerFromConfigString(s string) Logger {
+	if s == "" {
+		return nil
+	}
 	l := newEmptyLogger()
 	methods := strings.Split(s, ",")
 	for _, method := range methods {
