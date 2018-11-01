@@ -1,4 +1,4 @@
-// +build go1.8
+// +build !linux appengine
 
 /*
  *
@@ -18,10 +18,9 @@
  *
  */
 
-package dns
+package channelz
 
-import (
-	"fmt"
-)
-
-var errForInvalidTarget = fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")
+// GetSocketOption gets the socket option info of the conn.
+func GetSocketOption(c interface{}) *SocketOptionData {
+	return nil
+}

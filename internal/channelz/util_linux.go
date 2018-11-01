@@ -1,4 +1,4 @@
-// +build go1.9,!appengine
+// +build linux,!appengine
 
 /*
  *
@@ -18,18 +18,22 @@
  *
  */
 
-package credentials
+package channelz
 
 import (
-	"errors"
 	"syscall"
 )
 
-// implements the syscall.Conn interface
-func (c tlsConn) SyscallConn() (syscall.RawConn, error) {
-	conn, ok := c.rawConn.(syscall.Conn)
+// GetSocketOption gets the socket option info of the conn.
+func GetSocketOption(socket interface{}) *SocketOptionData {
+	c, ok := socket.(syscall.Conn)
 	if !ok {
-		return nil, errors.New("RawConn does not implement syscall.Conn")
+		return nil
 	}
-	return conn.SyscallConn()
+	data := &SocketOptionData{}
+	if rawConn, err := c.SyscallConn(); err == nil {
+		rawConn.Control(data.Getsockopt)
+		return data
+	}
+	return nil
 }

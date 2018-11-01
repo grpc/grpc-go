@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -29,7 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/codes"
@@ -183,7 +183,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.copts.Dialer = newProxyDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {
 				network, addr := parseDialTarget(addr)
-				return dialContext(ctx, network, addr)
+				return (&net.Dialer{}).DialContext(ctx, network, addr)
 			},
 		)
 	}

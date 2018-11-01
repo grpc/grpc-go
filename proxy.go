@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,8 +28,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-
-	"golang.org/x/net/context"
 )
 
 var (
@@ -127,4 +126,12 @@ func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func
 		}
 		return
 	}
+}
+
+func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	req = req.WithContext(ctx)
+	if err := req.Write(conn); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+	return nil
 }

@@ -51,6 +51,7 @@ var protoToSocketOpt protoToSocketOptFunc
 // with &utcLoc. However zero value of a time.Time type value loc field is nil.
 // This behavior will make reflect.DeepEqual fail upon unset time.Time field,
 // and cause false positive fatal error.
+// TODO: Go1.7 is no longer supported - does this need a change?
 var emptyTime time.Time
 
 type dummyChannel struct {
