@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.CheckReturnValue;
 
 /**
  * Common utility methods.
@@ -72,9 +73,6 @@ class Utils {
   public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(0, "grpc-default-worker-ELG");
 
-  @VisibleForTesting
-  static boolean validateHeaders = false;
-
   public static Metadata convertHeaders(Http2Headers http2Headers) {
     if (http2Headers instanceof GrpcHttp2InboundHeaders) {
       GrpcHttp2InboundHeaders h = (GrpcHttp2InboundHeaders) http2Headers;
@@ -83,6 +81,7 @@ class Utils {
     return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
+  @CheckReturnValue
   private static byte[][] convertHeadersToArray(Http2Headers http2Headers) {
     // The Netty AsciiString class is really just a wrapper around a byte[] and supports
     // arbitrary binary data, not just ASCII.

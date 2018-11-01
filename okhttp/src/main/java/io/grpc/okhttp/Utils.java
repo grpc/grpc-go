@@ -29,6 +29,7 @@ import java.net.SocketException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.annotation.CheckReturnValue;
 
 /**
  * Common utility methods for OkHttp transport.
@@ -51,6 +52,7 @@ class Utils {
     return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
+  @CheckReturnValue
   private static byte[][] convertHeadersToArray(List<Header> http2Headers) {
     byte[][] headerValues = new byte[http2Headers.size() * 2][];
     int i = 0;

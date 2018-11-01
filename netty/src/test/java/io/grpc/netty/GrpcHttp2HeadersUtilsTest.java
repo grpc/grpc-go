@@ -16,13 +16,20 @@
 
 package io.grpc.netty;
 
+import static io.grpc.Metadata.BINARY_BYTE_MARSHALLER;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
 import static io.netty.util.AsciiString.of;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Iterables;
+import com.google.common.io.BaseEncoding;
+import io.grpc.Metadata;
+import io.grpc.Metadata.Key;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2RequestHeaders;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -33,6 +40,8 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2HeadersEncoder;
 import io.netty.handler.codec.http2.Http2HeadersEncoder.SensitivityDetector;
+import io.netty.util.AsciiString;
+import java.util.Arrays;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -123,6 +132,28 @@ public class GrpcHttp2HeadersUtilsTest {
     Http2Headers decodedHeaders = decoder.decodeHeaders(3 /* randomly chosen */, encodedHeaders);
     assertEquals(0, decodedHeaders.size());
     assertThat(decodedHeaders.toString(), containsString("[]"));
+  }
+
+  @Test
+  public void dupBinHeadersWithComma() {
+    Key<byte[]> key = Key.of("bytes-bin", BINARY_BYTE_MARSHALLER);
+    Http2Headers http2Headers = new GrpcHttp2RequestHeaders(2);
+    http2Headers.add(AsciiString.of("bytes-bin"), AsciiString.of("BaS,e6,,4+,padding=="));
+    http2Headers.add(AsciiString.of("bytes-bin"), AsciiString.of("more"));
+    http2Headers.add(AsciiString.of("bytes-bin"), AsciiString.of(""));
+    Metadata recoveredHeaders = Utils.convertHeaders(http2Headers);
+    byte[][] values = Iterables.toArray(recoveredHeaders.getAll(key), byte[].class);
+
+    assertTrue(Arrays.deepEquals(
+        new byte[][] {
+            BaseEncoding.base64().decode("BaS"),
+            BaseEncoding.base64().decode("e6"),
+            BaseEncoding.base64().decode(""),
+            BaseEncoding.base64().decode("4+"),
+            BaseEncoding.base64().decode("padding"),
+            BaseEncoding.base64().decode("more"),
+            BaseEncoding.base64().decode("")},
+        values));
   }
 
   private static void assertContainsKeyAndValue(String str, CharSequence key, CharSequence value) {

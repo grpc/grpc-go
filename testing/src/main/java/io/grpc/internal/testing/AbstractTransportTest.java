@@ -722,6 +722,7 @@ public abstract class AbstractTransportTest {
     clientHeaders.put(asciiKey, "dupvalue");
     clientHeaders.put(asciiKey, "dupvalue");
     clientHeaders.put(binaryKey, "äbinaryclient");
+    clientHeaders.put(binaryKey, "dup,value");
     Metadata clientHeadersCopy = new Metadata();
 
     clientHeadersCopy.merge(clientHeaders);
@@ -790,14 +791,13 @@ public abstract class AbstractTransportTest {
     serverHeaders.put(asciiKey, "dupvalue");
     serverHeaders.put(asciiKey, "dupvalue");
     serverHeaders.put(binaryKey, "äbinaryserver");
+    serverHeaders.put(binaryKey, "dup,value");
     Metadata serverHeadersCopy = new Metadata();
     serverHeadersCopy.merge(serverHeaders);
     serverStream.writeHeaders(serverHeaders);
     Metadata headers = clientStreamListener.headers.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     assertNotNull(headers);
-    assertEquals(
-        Lists.newArrayList(serverHeadersCopy.getAll(asciiKey)),
-        Lists.newArrayList(headers.getAll(asciiKey)));
+    assertAsciiMetadataValuesEqual(serverHeadersCopy.getAll(asciiKey), headers.getAll(asciiKey));
     assertEquals(
         Lists.newArrayList(serverHeadersCopy.getAll(binaryKey)),
         Lists.newArrayList(headers.getAll(binaryKey)));
@@ -842,6 +842,7 @@ public abstract class AbstractTransportTest {
     trailers.put(asciiKey, "dupvalue");
     trailers.put(asciiKey, "dupvalue");
     trailers.put(binaryKey, "äbinarytrailers");
+    trailers.put(binaryKey, "dup,value");
     serverStream.close(status, trailers);
     assertNull(serverStreamTracer1.nextInboundEvent());
     assertNull(serverStreamTracer1.nextOutboundEvent());
@@ -855,9 +856,8 @@ public abstract class AbstractTransportTest {
     assertNull(clientStreamTracer1.nextOutboundEvent());
     assertEquals(status.getCode(), clientStreamStatus.getCode());
     assertEquals(status.getDescription(), clientStreamStatus.getDescription());
-    assertEquals(
-        Lists.newArrayList(trailers.getAll(asciiKey)),
-        Lists.newArrayList(clientStreamTrailers.getAll(asciiKey)));
+    assertAsciiMetadataValuesEqual(
+        trailers.getAll(asciiKey), clientStreamTrailers.getAll(asciiKey));
     assertEquals(
         Lists.newArrayList(trailers.getAll(binaryKey)),
         Lists.newArrayList(clientStreamTrailers.getAll(binaryKey)));
@@ -881,6 +881,18 @@ public abstract class AbstractTransportTest {
     ServerStream serverStream = serverStreamCreation.stream;
 
     assertEquals(testAuthority(server), serverStream.getAuthority());
+  }
+
+  private void assertAsciiMetadataValuesEqual(Iterable<String> expected, Iterable<String> actural) {
+    StringBuilder sbExpected = new StringBuilder();
+    for (String str : expected) {
+      sbExpected.append(str).append(",");
+    }
+    StringBuilder sbActual = new StringBuilder();
+    for (String str : actural) {
+      sbActual.append(str).append(",");
+    }
+    assertEquals(sbExpected.toString(), sbActual.toString());
   }
 
   @Test

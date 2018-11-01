@@ -21,8 +21,11 @@ import static com.google.common.base.Charsets.US_ASCII;
 import com.google.common.io.BaseEncoding;
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Logger;
+import javax.annotation.CheckReturnValue;
 
 /**
  * Utility functions for transport layer framing.
@@ -84,27 +87,65 @@ public final class TransportFrameUtil {
 
   /**
    * Transform HTTP/2-compliant headers to the raw serialized format which can be deserialized by
-   * metadata marshallers. It decodes the Base64-encoded binary headers.  This function modifies
-   * the headers in place.  By modifying the input array.
+   * metadata marshallers. It decodes the Base64-encoded binary headers.
+   *
+   * <p>Warning: This function may partially modify the headers in place by modifying the input
+   * array (but not modifying any single byte), so the input reference {@code http2Headers} can not
+   * be used again.
    *
    * @param http2Headers the interleaved keys and values of HTTP/2-compliant headers
    * @return the interleaved keys and values in the raw serialized format
    */
   @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
+  @CheckReturnValue
   public static byte[][] toRawSerializedHeaders(byte[][] http2Headers) {
     for (int i = 0; i < http2Headers.length; i += 2) {
       byte[] key = http2Headers[i];
       byte[] value = http2Headers[i + 1];
-      http2Headers[i] = key;
       if (endsWith(key, binaryHeaderSuffixBytes)) {
         // Binary header
-        http2Headers[i + 1] = BaseEncoding.base64().decode(new String(value, US_ASCII));
+        for (int idx = 0; idx < value.length; idx++) {
+          if (value[idx] == (byte) ',') {
+            return serializeHeadersWithCommasInBin(http2Headers, i);
+          }
+        }
+        byte[] decodedVal = BaseEncoding.base64().decode(new String(value, US_ASCII));
+        http2Headers[i + 1] = decodedVal;
       } else {
         // Non-binary header
         // Nothing to do, the value is already in the right place.
       }
     }
     return http2Headers;
+  }
+
+  private static byte[][] serializeHeadersWithCommasInBin(byte[][] http2Headers, int resumeFrom) {
+    List<byte[]> headerList = new ArrayList<>(http2Headers.length + 10);
+    for (int i = 0; i < resumeFrom; i++) {
+      headerList.add(http2Headers[i]);
+    }
+    for (int i = resumeFrom; i < http2Headers.length; i += 2) {
+      byte[] key = http2Headers[i];
+      byte[] value = http2Headers[i + 1];
+      if (!endsWith(key, binaryHeaderSuffixBytes)) {
+        headerList.add(key);
+        headerList.add(value);
+        continue;
+      }
+      // Binary header
+      int prevIdx = 0;
+      for (int idx = 0; idx <= value.length; idx++) {
+        if (idx != value.length && value[idx] != (byte) ',') {
+          continue;
+        }
+        byte[] decodedVal =
+            BaseEncoding.base64().decode(new String(value, prevIdx, idx - prevIdx, US_ASCII));
+        prevIdx = idx + 1;
+        headerList.add(key);
+        headerList.add(decodedVal);
+      }
+    }
+    return headerList.toArray(new byte[0][]);
   }
 
   /**
