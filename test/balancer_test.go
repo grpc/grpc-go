@@ -68,7 +68,7 @@ func (b *testBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) 
 			grpclog.Errorf("testBalancer: failed to NewSubConn: %v", err)
 			return
 		}
-		b.cc.UpdateBalancerState(connectivity.Idle, &picker{sc: b.sc, bal: b})
+		b.cc.UpdateBalancerState(connectivity.Connecting, &picker{sc: b.sc, bal: b})
 		b.sc.Connect()
 	}
 }
