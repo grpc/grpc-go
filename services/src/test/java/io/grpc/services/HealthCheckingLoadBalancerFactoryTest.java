@@ -71,6 +71,7 @@ import io.grpc.stub.StreamObserver;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -959,9 +960,8 @@ public class HealthCheckingLoadBalancerFactoryTest {
   }
 
   private static class HealthImpl extends HealthGrpc.HealthImplBase {
-    boolean isImplemented = true;
     boolean checkCalled;
-    final LinkedList<ServerSideCall> calls = new LinkedList<ServerSideCall>();
+    final Deque<ServerSideCall> calls = new LinkedList<ServerSideCall>();
 
     @Override
     public void check(HealthCheckRequest request,

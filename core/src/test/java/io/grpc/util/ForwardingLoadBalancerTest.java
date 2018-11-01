@@ -21,7 +21,6 @@ import static org.mockito.Mockito.mock;
 import io.grpc.ForwardingTestUtil;
 import io.grpc.LoadBalancer;
 import java.lang.reflect.Method;
-import java.net.SocketAddress;
 import java.util.Collections;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,7 +40,6 @@ public class ForwardingLoadBalancerTest {
 
   @Test
   public void allMethodsForwarded() throws Exception {
-    final SocketAddress mockAddr = mock(SocketAddress.class);
     ForwardingTestUtil.testMethodsForwarded(
         LoadBalancer.class,
         mockDelegate,

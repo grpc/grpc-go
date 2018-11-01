@@ -624,6 +624,7 @@ public class RoundRobinLoadBalancerTest {
     picker = pickerCaptor.getValue();
 
     // second pick with a different stickiness value
+    @SuppressWarnings("unused")
     Subchannel sc2 = picker.pickSubchannel(mockArgs).getSubchannel();
 
     // go back to ready
