@@ -285,6 +285,15 @@ type OtherChannelzSecurityValue struct {
 
 func (*OtherChannelzSecurityValue) isChannelzSecurityValue() {}
 
+// tlsConn keeps reference of rawConn to support syscall.Conn for channelz.
+// SyscallConn() (the method in interface syscall.Conn) is explicitly
+// implemented on this type,
+//
+// Interface syscall.Conn is implemented by most net.Conn implementations (e.g.
+// TCPConn, UnixConn), but is not part of net.Conn interface. So wrapper conns
+// that embed net.Conn don't implement syscall.Conn. (Side note: tls.Conn
+// doesn't embed net.Conn, so even if syscall.Conn is part of net.Conn, it won't
+// help here).
 type tlsConn struct {
 	*tls.Conn
 	rawConn net.Conn
