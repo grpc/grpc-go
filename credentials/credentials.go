@@ -139,8 +139,8 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
-// GetChannelzSecurityValue returns security info requested by channelz.
-func (t TLSInfo) GetChannelzSecurityValue() ChannelzSecurityValue {
+// GetSecurityValue returns security info requested by channelz.
+func (t TLSInfo) GetSecurityValue() ChannelzSecurityValue {
 	v := &TLSChannelzSecurityValue{
 		StandardName: cipherSuiteLookup[t.State.CipherSuite],
 	}

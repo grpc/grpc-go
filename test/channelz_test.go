@@ -20,8 +20,10 @@ package test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +34,7 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
@@ -39,6 +42,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
@@ -1191,6 +1195,82 @@ func TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", ns[0].SocketData.KeepAlivesSent)
 		}
 		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var cipherSuites = []string{
+	"TLS_RSA_WITH_RC4_128_SHA",
+	"TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+	"TLS_RSA_WITH_AES_128_CBC_SHA",
+	"TLS_RSA_WITH_AES_256_CBC_SHA",
+	"TLS_RSA_WITH_AES_128_GCM_SHA256",
+	"TLS_RSA_WITH_AES_256_GCM_SHA384",
+	"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+	"TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+	"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+	"TLS_FALLBACK_SCSV",
+	"TLS_RSA_WITH_AES_128_CBC_SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+}
+
+func TestCZSocketGetSecurityValueTLS(t *testing.T) {
+	defer leakcheck.Check(t)
+	channelz.NewChannelzStorage()
+	e := tcpTLSRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	te.clientConn()
+	if err := verifyResultWithDelay(func() (bool, error) {
+		tchan, _ := channelz.GetTopChannels(0)
+		if len(tchan) != 1 {
+			return false, fmt.Errorf("there should only be one top channel, not %d", len(tchan))
+		}
+		if len(tchan[0].SubChans) != 1 {
+			return false, fmt.Errorf("there should only be one subchannel under top channel %d, not %d", tchan[0].ID, len(tchan[0].SubChans))
+		}
+		var id int64
+		for id = range tchan[0].SubChans {
+			break
+		}
+		sc := channelz.GetSubChannel(id)
+		if sc == nil {
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not 0", id)
+		}
+		if len(sc.Sockets) != 1 {
+			return false, fmt.Errorf("there should only be one socket under subchannel %d, not %d", sc.ID, len(sc.Sockets))
+		}
+		for id = range sc.Sockets {
+			break
+		}
+		skt := channelz.GetSocket(id)
+		cert, _ := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
+		securityVal, ok := skt.SocketData.Security.(*credentials.TLSChannelzSecurityValue)
+		if !ok {
+			return false, fmt.Errorf("the SocketData.Security is of type: %T, want: *credentials.TLSChannelzSecurityValue", skt.SocketData.Security)
+		}
+		if !reflect.DeepEqual(securityVal.RemoteCertificate, cert.Certificate[0]) {
+			return false, fmt.Errorf("SocketData.Security.RemoteCertificate got: %v, want: %v", securityVal.RemoteCertificate, cert.Certificate[0])
+		}
+		for _, v := range cipherSuites {
+			if v == securityVal.StandardName {
+				return true, nil
+			}
+		}
+		return false, fmt.Errorf("SocketData.Security.StandardName got: %v, want it to be one of %v ", securityVal.StandardName, cipherSuites)
 	}); err != nil {
 		t.Fatal(err)
 	}
