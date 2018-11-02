@@ -209,7 +209,7 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatal("Failed to listen")
+		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	go s.Serve(lis)
 	defer s.Stop()
@@ -218,7 +218,7 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
-		t.Fatal("dial failed")
+		t.Fatalf("dial failed due to err: %v", err)
 	}
 	defer cc.Close()
 
@@ -232,10 +232,10 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	defer cancel()
 
 	if ok := cc.WaitForStateChange(ctx, connectivity.Idle); !ok {
-		t.Fatal("ClientConn is still in IDLE state after 5s.")
+		t.Fatal("ClientConn is still in IDLE state when the context times out.")
 	}
 	if ok := cc.WaitForStateChange(ctx, connectivity.Connecting); !ok {
-		t.Fatal("ClientConn is still in CONNECTING state after 5s.")
+		t.Fatal("ClientConn is still in CONNECTING state when the context times out.")
 	}
 	if s := cc.GetState(); s != connectivity.Ready {
 		t.Fatalf("ClientConn is in %v state, want READY", s)
