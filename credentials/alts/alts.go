@@ -24,13 +24,13 @@
 package alts
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
 	core "google.golang.org/grpc/credentials/alts/internal"
 	"google.golang.org/grpc/credentials/alts/internal/handshaker"

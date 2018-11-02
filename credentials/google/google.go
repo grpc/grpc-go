@@ -20,10 +20,10 @@
 package google
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/oauth"

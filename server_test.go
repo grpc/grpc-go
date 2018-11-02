@@ -19,13 +19,13 @@
 package grpc
 
 import (
+	"context"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/transport"
 )

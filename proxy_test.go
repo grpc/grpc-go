@@ -22,6 +22,7 @@ package grpc
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -29,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/internal/leakcheck"
 )
 

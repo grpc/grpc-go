@@ -22,9 +22,9 @@ package test
 // tests to this file.
 
 import (
+	"context"
 	"testing"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/leakcheck"

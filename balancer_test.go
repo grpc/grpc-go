@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -26,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal/leakcheck"

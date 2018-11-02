@@ -19,6 +19,7 @@
 package grpclb
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -26,7 +27,6 @@ import (
 	"time"
 
 	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"

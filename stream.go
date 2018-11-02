@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"context"
 	"errors"
 	"io"
 	"math"
@@ -26,12 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/connectivity"
-
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/binarylog"

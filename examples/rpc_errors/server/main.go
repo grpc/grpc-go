@@ -19,12 +19,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 
-	"golang.org/x/net/context"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

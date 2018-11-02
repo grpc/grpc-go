@@ -24,6 +24,7 @@ Package benchmark implements the building blocks to setup end-to-end gRPC benchm
 package benchmark
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -31,7 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"

@@ -40,6 +40,7 @@ Assume there are two result files names as "basePerf" and "curPerf" created by a
 package main
 
 import (
+	"context"
 	"encoding/gob"
 	"errors"
 	"flag"
@@ -59,7 +60,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	bm "google.golang.org/grpc/benchmark"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"

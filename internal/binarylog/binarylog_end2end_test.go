@@ -19,6 +19,7 @@
 package binarylog_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	"google.golang.org/grpc/grpclog"

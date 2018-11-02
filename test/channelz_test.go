@@ -19,13 +19,13 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/grpclb"

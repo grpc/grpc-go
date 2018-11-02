@@ -24,6 +24,7 @@
 package reflection
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -32,7 +33,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"

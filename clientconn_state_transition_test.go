@@ -19,13 +19,13 @@
 package grpc
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"

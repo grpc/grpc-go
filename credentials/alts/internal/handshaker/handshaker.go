@@ -20,13 +20,13 @@
 package handshaker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 
-	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

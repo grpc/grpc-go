@@ -23,6 +23,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -43,7 +44,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"

@@ -23,6 +23,7 @@
 package credentials // import "google.golang.org/grpc/credentials"
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -32,7 +33,6 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 )
 
 // alpnProtoStr are the specified application level protocols for gRPC.
