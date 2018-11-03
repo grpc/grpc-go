@@ -57,7 +57,9 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -2429,6 +2431,260 @@ func testHealthCheckOff(t *testing.T, e env) {
 	want := status.Error(codes.Unimplemented, "unknown service grpc.health.v1.Health")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !reflect.DeepEqual(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
+	}
+}
+
+func TestHealthWatchMultipleClients(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchMultipleClients(t, e)
+	}
+}
+
+func testHealthWatchMultipleClients(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream1, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
+	stream2, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func TestHealthWatchSameStatus(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSameStatus(t, e)
+	}
+}
+
+func testHealthWatchSameStatus(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream1, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_SERVING)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream1, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func TestHealthWatchServiceStatusSetBeforeStartingServer(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSetServiceStatusBeforeStartingServer(t, e)
+	}
+}
+
+func testHealthWatchSetServiceStatusBeforeStartingServer(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchDefaultStatusChange(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchDefaultStatusChange(t, e)
+	}
+}
+
+func testHealthWatchDefaultStatusChange(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVICE_UNKNOWN)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchSetServiceStatusBeforeClientCallsWatch(t, e)
+	}
+}
+
+func testHealthWatchSetServiceStatusBeforeClientCallsWatch(t *testing.T, e env) {
+	const service = "grpc.health.v1.Health1"
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+}
+
+func TestHealthWatchOverallServerHealthChange(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testHealthWatchOverallServerHealthChange(t, e)
+	}
+}
+
+func testHealthWatchOverallServerHealthChange(t *testing.T, e env) {
+	const service = ""
+
+	hs := health.NewServer()
+
+	te := newTest(t, e)
+	te.healthServer = hs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	hc := healthgrpc.NewHealthClient(cc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := &healthpb.HealthCheckRequest{
+		Service: service,
+	}
+
+	stream, err := hc.Watch(ctx, req)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_SERVING)
+
+	hs.SetServingStatus(service, healthpb.HealthCheckResponse_NOT_SERVING)
+
+	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
+	response, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("error on %v.Recv(): %v", stream, err)
+	}
+	if response.Status != expectedServingStatus {
+		t.Fatalf("response.Status is %v (%v expected)", response.Status, expectedServingStatus)
 	}
 }
 
@@ -6716,49 +6972,11 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	}
 }
 
-type pipeAddr struct{}
-
-func (p pipeAddr) Network() string { return "pipe" }
-func (p pipeAddr) String() string  { return "pipe" }
-
-type pipeListener struct {
-	c chan chan<- net.Conn
-}
-
-func (p *pipeListener) Accept() (net.Conn, error) {
-	connChan, ok := <-p.c
-	if !ok {
-		return nil, errors.New("closed")
-	}
-	c1, c2 := net.Pipe()
-	connChan <- c1
-	close(connChan)
-	return c2, nil
-}
-
-func (p *pipeListener) Close() error {
-	close(p.c)
-	return nil
-}
-
-func (p *pipeListener) Addr() net.Addr {
-	return pipeAddr{}
-}
-
-func (p *pipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
-	return func(string, time.Duration) (net.Conn, error) {
-		connChan := make(chan net.Conn)
-		p.c <- connChan
-		conn := <-connChan
-		return conn, nil
-	}
-}
-
 func TestNetPipeConn(t *testing.T) {
 	// This test will block indefinitely if grpc writes both client and server
 	// prefaces without either reading from the Conn.
 	defer leakcheck.Check(t)
-	pl := &pipeListener{c: make(chan chan<- net.Conn)}
+	pl := testutils.NewPipeListener()
 	s := grpc.NewServer()
 	defer s.Stop()
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -6777,4 +6995,155 @@ func TestNetPipeConn(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 	}
+}
+
+func TestLargeTimeout(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testLargeTimeout(t, e)
+	}
+}
+
+func testLargeTimeout(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.declareLogNoise("Server.processUnaryRPC failed to write status")
+
+	ts := &funcServer{}
+	te.startServer(ts)
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	timeouts := []time.Duration{
+		time.Duration(math.MaxInt64), // will be (correctly) converted to
+		// 2562048 hours, which overflows upon converting back to an int64
+		2562047 * time.Hour, // the largest timeout that does not overflow
+	}
+
+	for i, maxTimeout := range timeouts {
+		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			deadline, ok := ctx.Deadline()
+			timeout := deadline.Sub(time.Now())
+			minTimeout := maxTimeout - 5*time.Second
+			if !ok || timeout < minTimeout || timeout > maxTimeout {
+				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
+				return nil, status.Error(codes.OutOfRange, "deadline error")
+			}
+			return &testpb.SimpleResponse{}, nil
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+		defer cancel()
+
+		if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
+		}
+	}
+}
+
+// Proxies typically send GO_AWAY followed by connection closure a minute or so later. This
+// test ensures that the connection is re-created after GO_AWAY and not affected by the
+// subsequent (old) connection closure.
+func TestGoAwayThenClose(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s1 := grpc.NewServer()
+	defer s1.Stop()
+	ts1 := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Wait forever.
+			_, err := stream.Recv()
+			if err == nil {
+				t.Error("expected to never receive any message")
+			}
+			return err
+		},
+	}
+	testpb.RegisterTestServiceServer(s1, ts1)
+	go s1.Serve(lis1)
+
+	conn2Established := grpcsync.NewEvent()
+	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	s2 := grpc.NewServer()
+	defer s2.Stop()
+	conn2Ready := grpcsync.NewEvent()
+	ts2 := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		conn2Ready.Fire()
+		return &testpb.SimpleResponse{}, nil
+	}}
+	testpb.RegisterTestServiceServer(s2, ts2)
+	go s2.Serve(lis2)
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+	r.InitialAddrs([]resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+	})
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	// Should go on connection 1. We use a long-lived RPC because it will cause GracefulStop to send GO_AWAY, but the
+	// connection doesn't get closed until the server stops and the client receives.
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
+	}
+
+	// Send GO_AWAY to connection 1.
+	go s1.GracefulStop()
+
+	// Wait for connection 2 to be established.
+	<-conn2Established.Done()
+
+	// Close connection 1.
+	s1.Stop()
+
+	// Wait for client to close.
+	_, err = stream.Recv()
+	if err == nil {
+		t.Fatal("expected the stream to die, but got a successful Recv")
+	}
+
+	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
+	for i := 0; i < 10; i++ {
+		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+		}
+	}
+}
+
+func listenWithNotifyingListener(network, address string, event *grpcsync.Event) (net.Listener, error) {
+	lis, err := net.Listen(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return notifyingListener{connEstablished: event, Listener: lis}, nil
+}
+
+type notifyingListener struct {
+	connEstablished *grpcsync.Event
+	net.Listener
+}
+
+func (lis notifyingListener) Accept() (net.Conn, error) {
+	defer lis.connEstablished.Fire()
+	return lis.Listener.Accept()
 }

@@ -307,7 +307,7 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), traceCtx func(context.Context, string) context.Context) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
 
-	ctx := contextFromRequest(ht.req)
+	ctx := ht.req.Context()
 	var cancel context.CancelFunc
 	if ht.timeoutSet {
 		ctx, cancel = context.WithTimeout(ctx, ht.timeout)

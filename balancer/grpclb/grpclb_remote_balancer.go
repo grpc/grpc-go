@@ -241,7 +241,7 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 				if err == errServerTerminatedConnection {
 					grpclog.Info(err)
 				} else {
-					grpclog.Error(err)
+					grpclog.Warning(err)
 				}
 			}
 		}

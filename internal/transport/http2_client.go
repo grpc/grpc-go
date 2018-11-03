@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -122,7 +123,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if fn != nil {
 		return fn(ctx, addr)
 	}
-	return dialContext(ctx, "tcp", addr)
+	return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 }
 
 func isTemporary(err error) bool {
@@ -274,7 +275,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		t.statsHandler.HandleConn(t.ctx, connBegin)
 	}
 	if channelz.IsOn() {
-		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, "")
+		t.channelzID = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, fmt.Sprintf("%s -> %s", t.localAddr, t.remoteAddr))
 	}
 	if t.keepaliveEnabled {
 		go t.keepalive()
@@ -1181,7 +1182,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if !endStream {
 		return
 	}
-	t.closeStream(s, io.EOF, false, http2.ErrCodeNo, state.status(), state.mdata, true)
+	// if client received END_STREAM from server while stream was still active, send RST_STREAM
+	rst := s.getState() == streamActive
+	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, state.status(), state.mdata, true)
 }
 
 // reader runs as a separate goroutine in charge of reading data from network

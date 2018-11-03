@@ -36,7 +36,7 @@ const Name = "round_robin"
 
 // newBuilder creates a new roundrobin balancer builder.
 func newBuilder() balancer.Builder {
-	return base.NewBalancerBuilder(Name, &rrPickerBuilder{})
+	return base.NewBalancerBuilderWithConfig(Name, &rrPickerBuilder{}, base.Config{HealthCheck: true})
 }
 
 func init() {
