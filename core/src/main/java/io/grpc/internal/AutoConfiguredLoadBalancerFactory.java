@@ -88,6 +88,10 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
         Helper helper, @Nullable ChannelTracer channelTracer, @Nullable TimeProvider timeProvider) {
       this.helper = helper;
       delegateProvider = registry.getProvider(DEFAULT_POLICY);
+      if (delegateProvider == null) {
+        throw new IllegalStateException("Could not find LoadBalancer " + DEFAULT_POLICY
+            + ". The build probably threw away META-INF/services/io.grpc.LoadBalancerProvider");
+      }
       delegate = delegateProvider.newLoadBalancer(helper);
       this.channelTracer = channelTracer;
       this.timeProvider = timeProvider;

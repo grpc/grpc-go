@@ -347,8 +347,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
       return;
     }
     logger.log(Level.FINE, "[{0}] Exiting idle mode", getLogId());
-    lbHelper = new LbHelperImpl(nameResolver);
+    LbHelperImpl lbHelper = new LbHelperImpl(nameResolver);
     lbHelper.lb = loadBalancerFactory.newLoadBalancer(lbHelper);
+    // Delay setting lbHelper until fully initialized, since loadBalancerFactory is user code and
+    // may throw. We don't want to confuse our state, even if we will enter panic mode.
+    this.lbHelper = lbHelper;
 
     NameResolverListenerImpl listener = new NameResolverListenerImpl(lbHelper);
     try {
