@@ -978,10 +978,9 @@ public class OkHttpClientTransportTest {
     assertEquals(0, clientTransport.getPendingStreamSize());
     ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(5), captor.capture(), eq(5 + HEADER_LENGTH));
+        .data(eq(true), eq(5), captor.capture(), eq(5 + HEADER_LENGTH));
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(sentMessage), sentFrame);
-    verify(frameWriter, timeout(TIME_OUT_MS)).data(eq(true), eq(5), any(Buffer.class), eq(0));
     stream2.cancel(Status.CANCELLED);
     shutdownAndVerify();
   }

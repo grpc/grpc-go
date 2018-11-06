@@ -33,9 +33,7 @@ import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
-import java.util.ArrayDeque;
 import java.util.List;
-import java.util.Queue;
 import javax.annotation.concurrent.GuardedBy;
 import okio.Buffer;
 
@@ -194,12 +192,10 @@ class OkHttpClientStream extends AbstractClientStream {
     private final Object lock;
     @GuardedBy("lock")
     private List<Header> requestHeaders;
-    /**
-     * Null iff {@link #requestHeaders} is null.  Non-null iff neither {@link #cancel} nor
-     * {@link #start(int)} have been called.
-     */
     @GuardedBy("lock")
-    private Queue<PendingData> pendingData = new ArrayDeque<PendingData>();
+    private Buffer pendingData = new Buffer();
+    private boolean pendingDataHasEndOfStream = false;
+    private boolean flushPendingData = false;
     @GuardedBy("lock")
     private boolean cancelSent = false;
     @GuardedBy("lock")
@@ -212,6 +208,9 @@ class OkHttpClientStream extends AbstractClientStream {
     private final OutboundFlowController outboundFlow;
     @GuardedBy("lock")
     private final OkHttpClientTransport transport;
+    /** True iff neither {@link #cancel} nor {@link #start(int)} have been called. */
+    @GuardedBy("lock")
+    private boolean canStart = true;
 
     public TransportState(
         int maxMessageSize,
@@ -237,24 +236,16 @@ class OkHttpClientStream extends AbstractClientStream {
       id = streamId;
       state.onStreamAllocated();
 
-      if (pendingData != null) {
+      if (canStart) {
         // Only happens when the stream has neither been started nor cancelled.
         frameWriter.synStream(useGet, false, id, 0, requestHeaders);
         statsTraceCtx.clientOutboundHeaders();
         requestHeaders = null;
 
-        boolean flush = false;
-        while (!pendingData.isEmpty()) {
-          PendingData data = pendingData.poll();
-          outboundFlow.data(data.endOfStream, id, data.buffer, false);
-          if (data.flush) {
-            flush = true;
-          }
+        if (pendingData.size() > 0) {
+          outboundFlow.data(pendingDataHasEndOfStream, id, pendingData, flushPendingData);
         }
-        if (flush) {
-          outboundFlow.flush();
-        }
-        pendingData = null;
+        canStart = false;
       }
     }
 
@@ -354,15 +345,13 @@ class OkHttpClientStream extends AbstractClientStream {
         return;
       }
       cancelSent = true;
-      if (pendingData != null) {
+      if (canStart) {
         // stream is pending.
         transport.removePendingStream(OkHttpClientStream.this);
         // release holding data, so they can be GCed or returned to pool earlier.
         requestHeaders = null;
-        for (PendingData data : pendingData) {
-          data.buffer.clear();
-        }
-        pendingData = null;
+        pendingData.clear();
+        canStart = false;
         transportReportStatus(reason, true, trailers != null ? trailers : new Metadata());
       } else {
         // If pendingData is null, start must have already been called, which means synStream has
@@ -377,9 +366,12 @@ class OkHttpClientStream extends AbstractClientStream {
       if (cancelSent) {
         return;
       }
-      if (pendingData != null) {
+      if (canStart) {
         // Stream is pending start, queue the data.
-        pendingData.add(new PendingData(buffer, endOfStream, flush));
+        int dataSize = (int) buffer.size();
+        pendingData.write(buffer, dataSize);
+        pendingDataHasEndOfStream |= endOfStream;
+        flushPendingData |= flush;
       } else {
         checkState(id() != ABSENT_ID, "streamId should be set");
         // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
@@ -401,17 +393,5 @@ class OkHttpClientStream extends AbstractClientStream {
 
   Object getOutboundFlowState() {
     return outboundFlowState;
-  }
-
-  private static class PendingData {
-    Buffer buffer;
-    boolean endOfStream;
-    boolean flush;
-
-    PendingData(Buffer buffer, boolean endOfStream, boolean flush) {
-      this.buffer = buffer;
-      this.endOfStream = endOfStream;
-      this.flush = flush;
-    }
   }
 }
