@@ -266,6 +266,9 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	}
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
 	defer replace()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -368,6 +371,9 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -433,6 +439,9 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -528,6 +537,9 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -611,6 +623,9 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -700,6 +715,9 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -902,6 +920,9 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -963,6 +984,9 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
