@@ -17,10 +17,10 @@ proto:
 	go generate google.golang.org/grpc/...
 
 test: testdeps
-	go test -cpu 1,4 -timeout 7m ./test -run TestHealthCheckWithoutReportHealthCalled -count 1000
+	go test -cpu 1,4 -timeout 10m ./test -run TestHealthCheck -count 1000
 
 testappengine: testappenginedeps
-	goapp test -cpu 1,4 -timeout 7m ./test -run TestHealthCheckWithoutReportHealthCalled -count 1000
+	goapp test -cpu 1,4 -timeout 10m ./test -run TestHealthCheck -count 1000
 
 testappenginedeps:
 	goapp get -d -v -t -tags 'appengine appenginevm' google.golang.org/grpc/...
@@ -29,7 +29,7 @@ testdeps:
 	go get -d -v -t google.golang.org/grpc/...
 
 testrace: testdeps
-	go test -race -cpu 1,4 -timeout 7m ./test -run TestHealthCheckWithoutReportHealthCalled -count 1000
+	go test -race -cpu 1,4 -timeout 10m ./test -run TestHealthCheck -count 1000
 
 updatedeps:
 	go get -d -v -u -f google.golang.org/grpc/...
