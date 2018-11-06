@@ -104,7 +104,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel, List)}, but while
-   * still having access to the original {@code ManagedChannel}.
+   * still having access to the original {@code ManagedChannel}. Interceptors run in the reverse
+   * order in which they are added, just as with consecutive calls to {@code
+   * ClientInterceptors.intercept()}.
    *
    * @return this
    * @since 1.0.0
@@ -115,6 +117,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel,
    * ClientInterceptor...)}, but while still having access to the original {@code ManagedChannel}.
+   * Interceptors run in the reverse order in which they are added, just as with consecutive calls
+   * to {@code ClientInterceptors.intercept()}.
    *
    * @return this
    * @since 1.0.0

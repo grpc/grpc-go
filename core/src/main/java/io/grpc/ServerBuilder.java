@@ -94,7 +94,8 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   /**
    * Adds a {@link ServerInterceptor} that is run for all services on the server.  Interceptors
    * added through this method always run before per-service interceptors added through {@link
-   * ServerInterceptors}.  Interceptors run in the reverse order in which they are added.
+   * ServerInterceptors}.  Interceptors run in the reverse order in which they are added, just as
+   * with consecutive calls to {@code ServerInterceptors.intercept()}.
    *
    * @param interceptor the all-service interceptor
    * @return this
