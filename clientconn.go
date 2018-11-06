@@ -124,13 +124,13 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target:         target,
-		csMgr:          &connectivityStateManager{},
-		conns:          make(map[*addrConn]struct{}),
-		dopts:          defaultDialOptions(),
-		blockingpicker: newPickerWrapper(),
-		czData:         new(channelzData),
-		resolvedAddrs:  make(chan struct{}),
+		target:          target,
+		csMgr:           &connectivityStateManager{},
+		conns:           make(map[*addrConn]struct{}),
+		dopts:           defaultDialOptions(),
+		blockingpicker:  newPickerWrapper(),
+		czData:          new(channelzData),
+		hasResolvedChan: make(chan struct{}),
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -403,9 +403,9 @@ type ClientConn struct {
 	balancerWrapper *ccBalancerWrapper
 	retryThrottler  atomic.Value
 
-	resolvedAddrsOnce sync.Once
-	resolvedAddrs     chan struct{}
-	hasResolvedAddrs  int32
+	hasResolvedOnce sync.Once
+	hasResolvedChan chan struct{}
+	hasResolved     int32
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
@@ -458,12 +458,12 @@ func (cc *ClientConn) scWatcher() {
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	// This is on the RPC path, so we use an atomic to avoid the need to do a
 	// more-expensive "select" below after the resolver has returned once.
-	if atomic.LoadInt32(&cc.hasResolvedAddrs) != 0 {
+	if atomic.LoadInt32(&cc.hasResolved) != 0 {
 		return nil
 	}
 	select {
-	case <-cc.resolvedAddrs:
-		atomic.StoreInt32(&cc.hasResolvedAddrs, 1)
+	case <-cc.hasResolvedChan:
+		atomic.StoreInt32(&cc.hasResolved, 1)
 		return nil
 	case <-ctx.Done():
 		return status.FromContextError(ctx.Err()).Err()
@@ -485,7 +485,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	}
 
 	cc.curAddresses = addrs
-	cc.resolvedAddrsOnce.Do(func() { close(cc.resolvedAddrs) })
+	cc.hasResolvedOnce.Do(func() { close(cc.hasResolved) })
 
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial
