@@ -23,12 +23,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
-	pb "google.golang.org/grpc/health/grpc_health_v1"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // Make sure the service implementation complies with the proto definition.
 func TestRegister(t *testing.T) {
 	s := grpc.NewServer()
-	pb.RegisterHealthServer(s, health.NewServer())
+	healthgrpc.RegisterHealthServer(s, health.NewServer())
 	s.Stop()
 }
