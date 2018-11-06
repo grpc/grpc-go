@@ -251,7 +251,7 @@ public class LoadWorker {
         log.log(Level.INFO, "Received quitWorker request.");
         responseObserver.onNext(Control.Void.getDefaultInstance());
         responseObserver.onCompleted();
-        driverServer.shutdownNow();
+        driverServer.shutdown();
       } catch (Throwable t) {
         log.log(Level.WARNING, "Error during shutdown", t);
       }
