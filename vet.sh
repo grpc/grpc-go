@@ -121,14 +121,16 @@ done
 
 # TODO(menghanl): fix errors in transport_test.
 staticcheck -ignore '
-internal/transport/transport_test.go:SA2002
-benchmark/benchmain/main.go:SA1019
-stats/stats_test.go:SA1019
-test/end2end_test.go:SA1019
-balancer_test.go:SA1019
 balancer.go:SA1019
+balancer_test.go:SA1019
 clientconn_test.go:SA1019
-internal/transport/handler_server_test.go:SA1019
+balancer/roundrobin/roundrobin_test.go:SA1019
+benchmark/benchmain/main.go:SA1019
 internal/transport/handler_server.go:SA1019
+internal/transport/handler_server_test.go:SA1019
+internal/transport/transport_test.go:SA2002
+stats/stats_test.go:SA1019
+test/channelz_test.go:SA1019
+test/end2end_test.go:SA1019
 ' ./...
 misspell -error .

@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -132,6 +133,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		blockingpicker:    newPickerWrapper(),
 		czData:            new(channelzData),
 		firstResolveEvent: grpcsync.NewEvent(),
+		reqHandshake:      envconfig.RequireHandshake,
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -403,6 +405,8 @@ type ClientConn struct {
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
+
+	reqHandshake envconfig.RequireHandshakeSetting // local copy to avoid test races if it changes
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -1148,12 +1152,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if err == nil {
 		prefaceMu.Lock()
 		clientPrefaceWrote = true
-		if serverPrefaceReceived {
+		if serverPrefaceReceived || (!ac.dopts.waitForHandshake && ac.cc.reqHandshake == envconfig.RequireHandshakeOff) {
 			ac.successfulHandshake = true
 		}
 		prefaceMu.Unlock()
 
-		if ac.dopts.waitForHandshake {
+		if ac.dopts.waitForHandshake || ac.cc.reqHandshake == envconfig.RequireHandshakeOn {
 			select {
 			case <-prefaceTimer.C:
 				// We didn't get the preface in time.
@@ -1166,7 +1170,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				close(allowedToReset)
 				return nil
 			}
-		} else {
+		} else if ac.cc.reqHandshake == envconfig.RequireHandshakeHybrid {
 			go func() {
 				select {
 				case <-prefaceTimer.C:
