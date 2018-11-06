@@ -25,6 +25,7 @@ import io.grpc.Status;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Manages keepalive pings.
@@ -38,9 +39,13 @@ public class KeepAliveManager {
   private final Ticker ticker;
   private final KeepAlivePinger keepAlivePinger;
   private final boolean keepAliveDuringTransportIdle;
+  @GuardedBy("this")
   private State state = State.IDLE;
+  @GuardedBy("this")
   private long nextKeepaliveTime;
+  @GuardedBy("this")
   private ScheduledFuture<?> shutdownFuture;
+  @GuardedBy("this")
   private ScheduledFuture<?> pingFuture;
   private final Runnable shutdown = new LogExceptionRunnable(new Runnable() {
     @Override
@@ -62,9 +67,9 @@ public class KeepAliveManager {
   private final Runnable sendPing = new LogExceptionRunnable(new Runnable() {
     @Override
     public void run() {
-      pingFuture = null;
       boolean shouldSendPing = false;
       synchronized (KeepAliveManager.this) {
+        pingFuture = null;
         if (state == State.PING_SCHEDULED) {
           shouldSendPing = true;
           state = State.PING_SENT;
@@ -87,8 +92,8 @@ public class KeepAliveManager {
     }
   });
 
-  private long keepAliveTimeInNanos;
-  private long keepAliveTimeoutInNanos;
+  private final long keepAliveTimeInNanos;
+  private final long keepAliveTimeoutInNanos;
 
   private enum State {
     /*
