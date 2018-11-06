@@ -356,7 +356,11 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
+		select {
+		case <-hcExitChan:
+		default:
+			close(hcExitChan)
+		}
 		return err
 	}
 
@@ -681,7 +685,12 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	hcEnterChan := make(chan struct{})
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		close(hcEnterChan)
+		select {
+		case <-hcEnterChan:
+			return nil
+		default:
+			close(hcEnterChan)
+		}
 		err := testHealthCheckFunc(ctx, newStream, update, service)
 		close(hcExitChan)
 		return err
