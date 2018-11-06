@@ -247,17 +247,7 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 // function should exit.
 func TestHealthCheckWithGoAway(t *testing.T) {
 	defer leakcheck.Check(t)
-	s := grpc.NewServer()
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to listen due to err: %v", err)
-	}
-	ts := newTestHealthServer()
-	healthgrpc.RegisterHealthServer(s, ts)
-	testpb.RegisterTestServiceServer(s, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
-	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		err := testHealthCheckFunc(ctx, newStream, update, service)
@@ -269,6 +259,19 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
 	// the health check func without data race.
 	defer leakcheck.Check(t)
+
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen due to err: %v", err)
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -345,17 +348,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 func TestHealthCheckWithConnClose(t *testing.T) {
 	defer leakcheck.Check(t)
-	s := grpc.NewServer()
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to listen due to err: %v", err)
-	}
-	ts := newTestHealthServer()
-	healthgrpc.RegisterHealthServer(s, ts)
-	testpb.RegisterTestServiceServer(s, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
-	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		err := testHealthCheckFunc(ctx, newStream, update, service)
@@ -369,11 +362,24 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
 	defer replace()
-	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
 	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
 	// the health check func without data race.
 	defer leakcheck.Check(t)
+
+	s := grpc.NewServer()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen due to err: %v", err)
+	}
+	ts := newTestHealthServer()
+	healthpb.RegisterHealthServer(s, ts)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -417,6 +423,20 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 // address list returned by the resolver.
 func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	defer leakcheck.Check(t)
+
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
+
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -428,20 +448,9 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	go s.Serve(lis)
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	hcExitChan := make(chan struct{})
-	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
-	}
 
-	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
-	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -515,6 +524,20 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 // ClientConn close will lead to its addrConns being torn down.
 func TestHealthCheckWithClientConnClose(t *testing.T) {
 	defer leakcheck.Check(t)
+
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
+
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -526,20 +549,9 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 	go s.Serve(lis)
 	defer s.Stop()
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
-	hcExitChan := make(chan struct{})
-	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
-	}
 
-	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
-	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -585,6 +597,22 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 // onGoAway/onClose goroutine.
 func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	defer leakcheck.Check(t)
+
+	hcEnterChan := make(chan struct{})
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		close(hcEnterChan)
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
+
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -610,22 +638,8 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan := make(chan struct{})
-	hcExitChan := make(chan struct{})
-	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
-	}
-
-	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
-	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -672,6 +686,27 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 // onGoAway/onClose goroutine.
 func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	defer leakcheck.Check(t)
+
+	hcEnterChan := make(chan struct{})
+	hcExitChan := make(chan struct{})
+	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
+		select {
+		case <-hcEnterChan:
+			return nil
+		default:
+			close(hcEnterChan)
+		}
+		err := testHealthCheckFunc(ctx, newStream, update, service)
+		close(hcExitChan)
+		return err
+	}
+
+	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
+	defer replace()
+	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
+	// the health check func without data race.
+	defer leakcheck.Check(t)
+
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -697,27 +732,8 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	defer s.Stop()
 	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan := make(chan struct{})
-	hcExitChan := make(chan struct{})
-	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		select {
-		case <-hcEnterChan:
-			return nil
-		default:
-			close(hcEnterChan)
-		}
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
-	}
-
-	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
-	defer replace()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -920,9 +936,6 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
@@ -984,9 +997,6 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	// this leakcheck is used here to make sure grpc goroutines have all exited so we can safely replace
-	// the health check func without data race.
-	defer leakcheck.Check(t)
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)

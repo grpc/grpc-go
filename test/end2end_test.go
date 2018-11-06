@@ -2385,33 +2385,33 @@ func testHealthCheckOnSuccess(t *testing.T, e env) {
 	}
 }
 
-func TestHealthCheckOnFailure(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testHealthCheckOnFailure(t, e)
-	}
-}
-
-func testHealthCheckOnFailure(t *testing.T, e env) {
-	defer leakcheck.Check(t)
-	te := newTest(t, e)
-	te.declareLogNoise(
-		"Failed to dial ",
-		"grpc: the client connection is closing; please retry",
-	)
-	hs := health.NewServer()
-	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
-	te.healthServer = hs
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	wantErr := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
-	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
-	}
-	awaitNewConnLogOutput()
-}
+//func TestHealthCheckOnFailure(t *testing.T) {
+//	defer leakcheck.Check(t)
+//	for _, e := range listTestEnv() {
+//		testHealthCheckOnFailure(t, e)
+//	}
+//}
+//
+//func testHealthCheckOnFailure(t *testing.T, e env) {
+//	defer leakcheck.Check(t)
+//	te := newTest(t, e)
+//	te.declareLogNoise(
+//		"Failed to dial ",
+//		"grpc: the client connection is closing; please retry",
+//	)
+//	hs := health.NewServer()
+//	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
+//	te.healthServer = hs
+//	te.startServer(&testServer{security: e.security})
+//	defer te.tearDown()
+//
+//	cc := te.clientConn()
+//	wantErr := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
+//	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
+//		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
+//	}
+//	awaitNewConnLogOutput()
+//}
 
 func TestHealthCheckOff(t *testing.T) {
 	defer leakcheck.Check(t)
