@@ -22,10 +22,13 @@ import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
 import io.grpc.internal.RoundRobinLoadBalancerProvider;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link InternalHealthCheckingRoundRobinLoadBalancerProvider}.
  */
+@RunWith(JUnit4.class)
 public class HealthCheckingRoundRobinLoadBalancerProviderTest {
   @Test
   public void registry() {
