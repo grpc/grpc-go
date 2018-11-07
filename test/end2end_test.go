@@ -2678,7 +2678,7 @@ func testHealthWatchOverallServerHealthChange(t *testing.T, e env) {
 	healthWatchChecker(t, stream, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
-func healthWatchChecker(t *testing.T, stream healthpb.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
+func healthWatchChecker(t *testing.T, stream healthgrpc.Health_WatchClient, expectedServingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	response, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("error on %v.Recv(): %v", stream, err)

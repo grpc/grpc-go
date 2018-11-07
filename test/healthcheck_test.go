@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
@@ -55,7 +56,7 @@ func newTestHealthServer() *testHealthServer {
 	return newTestHealthServerWithWatchFunc(defaultWatchFunc)
 }
 
-func newTestHealthServerWithWatchFunc(f func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error) *testHealthServer {
+func newTestHealthServerWithWatchFunc(f func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error) *testHealthServer {
 	return &testHealthServer{
 		watchFunc: f,
 		update:    make(chan struct{}, 1),
@@ -64,7 +65,7 @@ func newTestHealthServerWithWatchFunc(f func(s *testHealthServer, in *healthpb.H
 }
 
 // defaultWatchFunc will send a HealthCheckResponse to the client whenever SetServingStatus is called.
-func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 	if in.Service != "foo" {
 		return status.Error(codes.FailedPrecondition,
 			"the defaultWatchFunc only handles request with service name to be \"foo\"")
@@ -90,7 +91,7 @@ func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stre
 }
 
 type testHealthServer struct {
-	watchFunc func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error
+	watchFunc func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error
 	mu        sync.Mutex
 	status    map[string]healthpb.HealthCheckResponse_ServingStatus
 	update    chan struct{}
@@ -102,7 +103,7 @@ func (s *testHealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRe
 	}, nil
 }
 
-func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+func (s *testHealthServer) Watch(in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 	return s.watchFunc(s, in, stream)
 }
 
@@ -127,7 +128,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -252,7 +253,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -347,7 +348,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -412,7 +413,7 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -507,7 +508,7 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -573,7 +574,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err %v", err)
 	}
-	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -587,7 +588,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 		}
 		return nil
 	})
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -657,7 +658,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -671,7 +672,7 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 		}
 		return nil
 	})
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -859,7 +860,7 @@ func TestHealthCheckDisable(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -878,14 +879,14 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "channelzSuccess" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzSuccess\"")
 		}
 		return status.Error(codes.OK, "fake success")
 	})
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -939,14 +940,14 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	ts := newTestHealthServerWithWatchFunc(func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "channelzFailure" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzFailure\"")
 		}
 		return status.Error(codes.Internal, "fake failure")
 	})
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
