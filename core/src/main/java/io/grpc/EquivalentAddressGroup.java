@@ -94,7 +94,7 @@ public final class EquivalentAddressGroup {
   @Override
   public String toString() {
     // TODO(zpencer): Summarize return value if addr is very large
-    return "[addrs=" + addrs + ", attrs=" + attrs + "]";
+    return "[" + addrs + "/" + attrs + "]";
   }
 
   @Override

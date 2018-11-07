@@ -614,6 +614,15 @@ public abstract class LoadBalancer {
      * @since 1.2.0
      */
     public abstract String getAuthority();
+
+    /**
+     * Returns the {@link ChannelLogger} for the Channel served by this LoadBalancer.
+     *
+     * @since 1.17.0
+     */
+    public ChannelLogger getChannelLogger() {
+      throw new UnsupportedOperationException();
+    }
   }
 
   /**
@@ -707,6 +716,15 @@ public abstract class LoadBalancer {
      */
     @Internal
     public Channel asChannel() {
+      throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Returns a {@link ChannelLogger} for this Subchannel.
+     *
+     * @since 1.17.0
+     */
+    public ChannelLogger getChannelLogger() {
       throw new UnsupportedOperationException();
     }
   }

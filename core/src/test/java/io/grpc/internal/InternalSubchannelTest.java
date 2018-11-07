@@ -42,6 +42,7 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.InternalChannelz;
+import io.grpc.InternalLogId;
 import io.grpc.InternalWithLogId;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext;
@@ -1116,10 +1117,13 @@ public class InternalSubchannelTest {
 
   private void createInternalSubchannel(EquivalentAddressGroup ... addrs) {
     List<EquivalentAddressGroup> addressGroups = Arrays.asList(addrs);
+    InternalLogId logId = InternalLogId.allocate("Subchannel");
     internalSubchannel = new InternalSubchannel(addressGroups, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), syncContext, mockInternalSubchannelCallback,
-        channelz, CallTracer.getDefaultFactory().create(), null, fakeClock.getTimeProvider());
+        channelz, CallTracer.getDefaultFactory().create(),
+        new ChannelTracer(logId, 10, fakeClock.getTimeProvider().currentTimeNanos(), "Subchannel"),
+        logId, fakeClock.getTimeProvider());
   }
 
   private void assertNoCallbackInvoke() {

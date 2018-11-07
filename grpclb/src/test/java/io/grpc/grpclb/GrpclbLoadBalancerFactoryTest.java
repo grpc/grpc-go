@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import io.grpc.ChannelLogger;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.SynchronizationContext;
 import io.grpc.internal.FakeClock;
@@ -48,6 +49,7 @@ public class GrpclbLoadBalancerFactoryTest {
     when(helper.getSynchronizationContext()).thenReturn(syncContext);
     when(helper.getScheduledExecutorService()).thenReturn(clock.getScheduledExecutorService());
     when(helper.getAuthority()).thenReturn("fakeauthority");
+    when(helper.getChannelLogger()).thenReturn(mock(ChannelLogger.class));
 
     assertThat(GrpclbLoadBalancerFactory.getInstance().newLoadBalancer(helper))
         .isInstanceOf(io.grpc.grpclb.GrpclbLoadBalancer.class);
@@ -55,6 +57,7 @@ public class GrpclbLoadBalancerFactoryTest {
     verify(helper).getSynchronizationContext();
     verify(helper).getScheduledExecutorService();
     verify(helper).getAuthority();
+    verify(helper).getChannelLogger();
     verifyNoMoreInteractions(helper);
   }
 }

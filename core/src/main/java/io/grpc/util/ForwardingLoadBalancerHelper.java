@@ -18,6 +18,7 @@ package io.grpc.util;
 
 import com.google.common.base.MoreObjects;
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger;
 import io.grpc.ConnectivityState;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
@@ -88,6 +89,11 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   @Override
   public ScheduledExecutorService getScheduledExecutorService() {
     return delegate().getScheduledExecutorService();
+  }
+
+  @Override
+  public ChannelLogger getChannelLogger() {
+    return delegate().getChannelLogger();
   }
 
   @Override

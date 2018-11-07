@@ -18,12 +18,19 @@ package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import io.grpc.ChannelLogger;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalChannelz.ChannelTrace.Event;
 import io.grpc.InternalChannelz.ChannelTrace.Event.Severity;
-import org.junit.Rule;
+import io.grpc.InternalLogId;
+import java.util.ArrayList;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -32,21 +39,63 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ChannelTracerTest {
-  @Rule
-  public final ExpectedException thrown = ExpectedException.none();
+  private static final Logger logger = Logger.getLogger(ChannelLogger.class.getName());
+  private final ArrayList<LogRecord> logs = new ArrayList<LogRecord>();
+  private final Handler handler = new Handler() {
+      @Override
+      public void publish(LogRecord record) {
+        logs.add(record);
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() throws SecurityException {
+      }
+    };
+
+  private final InternalLogId logId = InternalLogId.allocate("test");
+  private final String logPrefix = "[" + logId + "] ";
+
+  @Before
+  public void setUp() {
+    logger.addHandler(handler);
+    logger.setLevel(Level.ALL);
+  }
+
+  @After
+  public void tearDown() {
+    logger.removeHandler(handler);
+  }
 
   @Test
-  public void channelTracerWithZeroMaxEventsShouldThrow() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("maxEvents must be greater than zero");
+  public void channelTracerWithZeroMaxEvents() {
+    ChannelTracer channelTracer =
+        new ChannelTracer(logId, /* maxEvents= */ 0, /* channelCreationTimeNanos= */ 3L, "fooType");
+    ChannelStats.Builder builder = new ChannelStats.Builder();
+    Event e1 = new Event.Builder()
+        .setDescription("e1").setSeverity(Severity.CT_ERROR).setTimestampNanos(1001).build();
+    channelTracer.reportEvent(e1);
 
-    new ChannelTracer(/* maxEvents= */ 0, /* channelCreationTimeNanos= */ 3L, "fooType");
+    channelTracer.updateBuilder(builder);
+    ChannelStats stats = builder.build();
+    assertThat(stats.channelTrace).isNull();
+
+    assertThat(logs).hasSize(2);
+    LogRecord log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "fooType created");
+    assertThat(log.getLevel()).isEqualTo(Level.FINEST);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "e1");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
   }
 
   @Test
   public void reportEvents() {
     ChannelTracer channelTracer =
-        new ChannelTracer(/* maxEvents= */ 2, /* channelCreationTimeNanos= */ 3L, "fooType");
+        new ChannelTracer(logId, /* maxEvents= */ 2, /* channelCreationTimeNanos= */ 3L, "fooType");
     ChannelStats.Builder builder = new ChannelStats.Builder();
     Event e1 = new Event.Builder()
         .setDescription("e1").setSeverity(Severity.CT_ERROR).setTimestampNanos(1001).build();
@@ -57,6 +106,7 @@ public class ChannelTracerTest {
     Event e4 = new Event.Builder()
         .setDescription("e4").setSeverity(Severity.CT_UNKNOWN).setTimestampNanos(1004).build();
 
+    // Check Channelz
     channelTracer.updateBuilder(builder);
     ChannelStats stats = builder.build();
     assertThat(stats.channelTrace.events).hasSize(1);
@@ -91,5 +141,27 @@ public class ChannelTracerTest {
 
     assertThat(stats.channelTrace.events).containsExactly(e3, e4);
     assertThat(stats.channelTrace.numEventsLogged).isEqualTo(5);
+
+    // Check logs
+    assertThat(logs).hasSize(5);
+    LogRecord log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "fooType created");
+    assertThat(log.getLevel()).isEqualTo(Level.FINEST);
+
+    log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "e1");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+
+    log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "e2");
+    assertThat(log.getLevel()).isEqualTo(Level.FINEST);
+
+    log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "e3");
+    assertThat(log.getLevel()).isEqualTo(Level.FINER);
+
+    log = logs.remove(0);
+    assertThat(log.getMessage()).isEqualTo(logPrefix + "e4");
+    assertThat(log.getLevel()).isEqualTo(Level.FINEST);
   }
 }

@@ -28,6 +28,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
@@ -55,8 +56,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -70,8 +69,6 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
       Attributes.Key.create("state-info");
   // package-private to avoid synthetic access
   static final Attributes.Key<Ref<Subchannel>> STICKY_REF = Attributes.Key.create("sticky-ref");
-
-  private static final Logger logger = Logger.getLogger(RoundRobinLoadBalancer.class.getName());
 
   private final Helper helper;
   private final Map<EquivalentAddressGroup, Subchannel> subchannels =
@@ -104,9 +101,9 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
           ServiceConfigUtil.getStickinessMetadataKeyFromServiceConfig(serviceConfig);
       if (stickinessMetadataKey != null) {
         if (stickinessMetadataKey.endsWith(Metadata.BINARY_HEADER_SUFFIX)) {
-          logger.log(
-              Level.FINE,
-              "Binary stickiness header is not supported. The header '{0}' will be ignored",
+          helper.getChannelLogger().log(
+              ChannelLogLevel.WARNING,
+              "Binary stickiness header is not supported. The header \"{0}\" will be ignored",
               stickinessMetadataKey);
         } else if (stickinessState == null
             || !stickinessState.key.name().equals(stickinessMetadataKey)) {

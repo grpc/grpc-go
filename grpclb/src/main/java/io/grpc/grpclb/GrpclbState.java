@@ -26,14 +26,14 @@ import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.protobuf.util.Durations;
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger;
+import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.InternalLogId;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -71,8 +71,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -83,8 +81,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 final class GrpclbState {
-  private static final Logger logger = Logger.getLogger(GrpclbState.class.getName());
-
   static final long FALLBACK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
   private static final Attributes LB_PROVIDED_BACKEND_ATTRS =
       Attributes.newBuilder().set(GrpcAttributes.ATTR_LB_PROVIDED_BACKEND, true).build();
@@ -106,7 +102,6 @@ final class GrpclbState {
       }
     };
 
-  private final InternalLogId logId;
   private final String serviceName;
   private final Helper helper;
   private final SynchronizationContext syncContext;
@@ -117,6 +112,7 @@ final class GrpclbState {
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.create("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
   private final BackoffPolicy.Provider backoffPolicyProvider;
+  private final ChannelLogger logger;
 
   // Scheduled only once.  Never reset.
   @Nullable
@@ -152,8 +148,7 @@ final class GrpclbState {
       Helper helper,
       SubchannelPool subchannelPool,
       TimeProvider time,
-      BackoffPolicy.Provider backoffPolicyProvider,
-      InternalLogId logId) {
+      BackoffPolicy.Provider backoffPolicyProvider) {
     this.helper = checkNotNull(helper, "helper");
     this.syncContext = checkNotNull(helper.getSynchronizationContext(), "syncContext");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
@@ -161,7 +156,7 @@ final class GrpclbState {
     this.timerService = checkNotNull(helper.getScheduledExecutorService(), "timerService");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
-    this.logId = checkNotNull(logId, "logId");
+    this.logger = checkNotNull(helper.getChannelLogger(), "logger");
   }
 
   void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newState) {
@@ -199,7 +194,6 @@ final class GrpclbState {
     fallbackBackendList = newBackendServers;
     // Start the fallback timer if it's never started
     if (fallbackTimer == null) {
-      logger.log(Level.FINE, "[{0}] Starting fallback timer.", new Object[] {logId});
       fallbackTimer = syncContext.schedule(
           new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS, timerService);
     }
@@ -235,7 +229,7 @@ final class GrpclbState {
    */
   private void useFallbackBackends() {
     usingFallbackBackends = true;
-    logger.log(Level.INFO, "[{0}] Using fallback: {1}", new Object[] {logId, fallbackBackendList});
+    logger.log(ChannelLogLevel.INFO, "Using fallback backends");
 
     List<DropEntry> newDropList = new ArrayList<>();
     List<BackendAddressGroup> newBackendAddrList = new ArrayList<>();
@@ -320,8 +314,7 @@ final class GrpclbState {
   }
 
   void propagateError(Status status) {
-    logger.log(Level.FINE, "[{0}] Had an error: {1}; dropList={2}; backendList={3}",
-        new Object[] {logId, status, dropList, backendList});
+    logger.log(ChannelLogLevel.DEBUG, "Error: {0}", status);
     if (backendList.isEmpty()) {
       maybeUpdatePicker(
           TRANSIENT_FAILURE, new RoundRobinPicker(dropList, Arrays.asList(new ErrorEntry(status))));
@@ -343,8 +336,8 @@ final class GrpclbState {
   private void useRoundRobinLists(
       List<DropEntry> newDropList, List<BackendAddressGroup> newBackendAddrList,
       @Nullable GrpclbClientLoadRecorder loadRecorder) {
-    logger.log(Level.FINE, "[{0}] Using round-robin list: {1}, droplist={2}",
-         new Object[] {logId, newBackendAddrList, newDropList});
+    logger.log(
+        ChannelLogLevel.INFO, "Using RR list={0}, drop={1}", newBackendAddrList, newDropList);
     HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
         new HashMap<EquivalentAddressGroup, Subchannel>();
     List<BackendEntry> newBackendList = new ArrayList<>();
@@ -499,15 +492,12 @@ final class GrpclbState {
       if (closed) {
         return;
       }
-      logger.log(Level.FINER, "[{0}] Got an LB response: {1}", new Object[] {logId, response});
+      logger.log(ChannelLogLevel.DEBUG, "Got an LB response: {0}", response);
 
       LoadBalanceResponseTypeCase typeCase = response.getLoadBalanceResponseTypeCase();
       if (!initialResponseReceived) {
         if (typeCase != LoadBalanceResponseTypeCase.INITIAL_RESPONSE) {
-          logger.log(
-              Level.WARNING,
-              "[{0}] : Did not receive response with type initial response: {1}",
-              new Object[] {logId, response});
+          logger.log(ChannelLogLevel.WARNING, "Received a response without initial response");
           return;
         }
         initialResponseReceived = true;
@@ -519,10 +509,7 @@ final class GrpclbState {
       }
 
       if (typeCase != LoadBalanceResponseTypeCase.SERVER_LIST) {
-        logger.log(
-            Level.WARNING,
-            "[{0}] : Ignoring unexpected response type: {1}",
-            new Object[] {logId, response});
+        logger.log(ChannelLogLevel.WARNING, "Ignoring unexpected response type: {0}", typeCase);
         return;
       }
 
@@ -649,19 +636,13 @@ final class GrpclbState {
     ConnectivityState state;
     if (pickList.isEmpty()) {
       if (error != null && !hasIdle) {
-        logger.log(Level.FINE, "[{0}] No ready Subchannel. Using error: {1}",
-            new Object[] {logId, error});
         pickList.add(new ErrorEntry(error));
         state = TRANSIENT_FAILURE;
       } else {
-        logger.log(Level.FINE, "[{0}] No ready Subchannel and still connecting", logId);
         pickList.add(BUFFER_ENTRY);
         state = CONNECTING;
       }
     } else {
-      logger.log(
-          Level.FINE, "[{0}] Using drop list {1} and pick list {2}",
-          new Object[] {logId, dropList, pickList});
       state = READY;
     }
     maybeUpdatePicker(state, new RoundRobinPicker(dropList, pickList));
@@ -678,9 +659,9 @@ final class GrpclbState {
         && picker.pickList.equals(currentPicker.pickList)) {
       return;
     }
-    // No need to skip ErrorPicker. If the current picker is ErrorPicker, there won't be any pending
-    // stream thus no time is wasted in re-process.
     currentPicker = picker;
+    logger.log(
+        ChannelLogLevel.INFO, "{0}: picks={1}, drops={2}", state, picker.pickList, picker.dropList);
     helper.updateBalancingState(state, picker);
   }
 
@@ -692,10 +673,9 @@ final class GrpclbState {
       if (!authority.equals(group.getAuthority())) {
         // TODO(ejona): Allow different authorities for different addresses. Requires support from
         // Helper.
-        logger.log(Level.WARNING,
-            "[{0}] Multiple authorities found for LB. "
-            + "Skipping addresses for {0} in preference to {1}",
-            new Object[] {logId, group.getAuthority(), authority});
+        logger.log(ChannelLogLevel.WARNING,
+            "Multiple authorities found for LB. "
+            + "Skipping addresses for {0} in preference to {1}", group.getAuthority(), authority);
       } else {
         eags.add(group.getAddresses());
       }
@@ -740,10 +720,8 @@ final class GrpclbState {
 
     @Override
     public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("loadRecorder", loadRecorder)
-          .add("token", token)
-          .toString();
+      // This is printed in logs.  Only include useful information.
+      return "drop(" + token + ")";
     }
 
     @Override
@@ -803,11 +781,8 @@ final class GrpclbState {
 
     @Override
     public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("result", result)
-          .add("loadRecorder", loadRecorder)
-          .add("token", token)
-          .toString();
+      // This is printed in logs.  Only give out useful information.
+      return "[" + result.getSubchannel().getAllAddresses().toString() + "(" + token + ")]";
     }
 
     @Override
@@ -854,9 +829,8 @@ final class GrpclbState {
 
     @Override
     public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("result", result)
-          .toString();
+      // This is printed in logs.  Only include useful information.
+      return result.getStatus().toString();
     }
   }
 

@@ -19,14 +19,18 @@ package io.grpc.internal;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger;
+import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.InternalChannelz;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
@@ -56,8 +60,9 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class AutoConfiguredLoadBalancerFactoryTest {
-  private final AutoConfiguredLoadBalancerFactory lbf =
-      new AutoConfiguredLoadBalancerFactory(null, null);
+  private final AutoConfiguredLoadBalancerFactory lbf = new AutoConfiguredLoadBalancerFactory();
+
+  private final ChannelLogger channelLogger = mock(ChannelLogger.class);
 
   @Test
   public void newLoadBalancer_isAuto() {
@@ -267,11 +272,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
   @Test
   public void channelTracing_lbPolicyChanged() {
-    ChannelTracer channelTracer = new ChannelTracer(100, 1000, "dummy_type");
     final FakeClock clock = new FakeClock();
-    InternalChannelz.ChannelStats.Builder statsBuilder
-        = new InternalChannelz.ChannelStats.Builder();
-    channelTracer.updateBuilder(statsBuilder);
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(
             new EquivalentAddressGroup(new SocketAddress(){}, Attributes.EMPTY));
@@ -312,42 +313,41 @@ public class AutoConfiguredLoadBalancerFactoryTest {
         return clock.getScheduledExecutorService();
       }
     };
-    int prevNumOfEvents = statsBuilder.build().channelTrace.events.size();
 
-    LoadBalancer lb =
-        new AutoConfiguredLoadBalancerFactory(channelTracer, clock.getTimeProvider())
-        .newLoadBalancer(helper);
+    LoadBalancer lb = new AutoConfiguredLoadBalancerFactory().newLoadBalancer(helper);
     lb.handleResolvedAddressGroups(servers, Attributes.EMPTY);
-    channelTracer.updateBuilder(statsBuilder);
-    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents);
+
+    verifyNoMoreInteractions(channelLogger);
 
     Map<String, Object> serviceConfig = new HashMap<String, Object>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     lb.handleResolvedAddressGroups(servers,
         Attributes.newBuilder()
             .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build());
-    channelTracer.updateBuilder(statsBuilder);
-    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents + 1);
-    assertThat(statsBuilder.build().channelTrace.events.get(prevNumOfEvents).description)
-        .isEqualTo("Load balancer changed from PickFirstLoadBalancer to RoundRobinLoadBalancer");
-    prevNumOfEvents = statsBuilder.build().channelTrace.events.size();
+
+    verify(channelLogger).log(
+        eq(ChannelLogLevel.INFO),
+        eq("Load balancer changed from {0} to {1}"),
+        eq("PickFirstLoadBalancer"), eq("RoundRobinLoadBalancer"));
+    verifyNoMoreInteractions(channelLogger);
 
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     lb.handleResolvedAddressGroups(servers,
         Attributes.newBuilder()
             .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build());
-    channelTracer.updateBuilder(statsBuilder);
-    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents);
+    verifyNoMoreInteractions(channelLogger);
 
     servers = Collections.singletonList(new EquivalentAddressGroup(
         new SocketAddress(){},
         Attributes.newBuilder().set(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY, "ok").build()));
     lb.handleResolvedAddressGroups(servers, Attributes.EMPTY);
 
-    channelTracer.updateBuilder(statsBuilder);
-    assertThat(statsBuilder.build().channelTrace.events).hasSize(prevNumOfEvents + 1);
-    assertThat(statsBuilder.build().channelTrace.events.get(prevNumOfEvents).description)
-        .isEqualTo("Load balancer changed from RoundRobinLoadBalancer to GrpclbLoadBalancer");
+    verify(channelLogger).log(
+        eq(ChannelLogLevel.INFO),
+        eq("Load balancer changed from {0} to {1}"),
+        eq("RoundRobinLoadBalancer"), eq("GrpclbLoadBalancer"));
+
+    verifyNoMoreInteractions(channelLogger);
   }
 
   public static class ForwardingLoadBalancer extends LoadBalancer {
@@ -389,10 +389,15 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     }
   }
 
-  private static class TestHelper extends ForwardingLoadBalancerHelper {
+  private class TestHelper extends ForwardingLoadBalancerHelper {
     @Override
     protected Helper delegate() {
       return null;
+    }
+
+    @Override
+    public ChannelLogger getChannelLogger() {
+      return channelLogger;
     }
   }
 
