@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
@@ -135,11 +135,11 @@ final class DnsNameResolver extends NameResolver {
   private final String authority;
   private final String host;
   private final int port;
-  private final Resource<ExecutorService> executorResource;
+  private final Resource<Executor> executorResource;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
-  private ExecutorService executor;
+  private Executor executor;
   @GuardedBy("this")
   private boolean resolving;
   @GuardedBy("this")
@@ -148,7 +148,7 @@ final class DnsNameResolver extends NameResolver {
   private final Runnable resolveRunnable;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
-      Resource<ExecutorService> executorResource, ProxyDetector proxyDetector,
+      Resource<Executor> executorResource, ProxyDetector proxyDetector,
       Stopwatch stopwatch, boolean isAndroid) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java

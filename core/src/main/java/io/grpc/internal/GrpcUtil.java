@@ -501,17 +501,17 @@ public final class GrpcUtil {
   /**
    * Shared executor for channels.
    */
-  public static final Resource<ExecutorService> SHARED_CHANNEL_EXECUTOR =
-      new Resource<ExecutorService>() {
+  public static final Resource<Executor> SHARED_CHANNEL_EXECUTOR =
+      new Resource<Executor>() {
         private static final String NAME = "grpc-default-executor";
         @Override
-        public ExecutorService create() {
+        public Executor create() {
           return Executors.newCachedThreadPool(getThreadFactory(NAME + "-%d", true));
         }
 
         @Override
-        public void close(ExecutorService instance) {
-          instance.shutdown();
+        public void close(Executor instance) {
+          ((ExecutorService) instance).shutdown();
         }
 
         @Override
@@ -549,7 +549,7 @@ public final class GrpcUtil {
             throw new RuntimeException(e);
           }
 
-          return service;
+          return Executors.unconfigurableScheduledExecutorService(service);
         }
 
         @Override

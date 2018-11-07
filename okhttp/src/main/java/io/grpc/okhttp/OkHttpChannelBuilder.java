@@ -124,16 +124,16 @@ public class OkHttpChannelBuilder extends
           .build();
 
   private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
-  private static final Resource<ExecutorService> SHARED_EXECUTOR =
-      new Resource<ExecutorService>() {
+  private static final Resource<Executor> SHARED_EXECUTOR =
+      new Resource<Executor>() {
         @Override
-        public ExecutorService create() {
+        public Executor create() {
           return Executors.newCachedThreadPool(GrpcUtil.getThreadFactory("grpc-okhttp-%d", true));
         }
 
         @Override
-        public void close(ExecutorService executor) {
-          executor.shutdown();
+        public void close(Executor executor) {
+          ((ExecutorService) executor).shutdown();
         }
       };
 
@@ -606,7 +606,7 @@ public class OkHttpChannelBuilder extends
       }
 
       if (usingSharedExecutor) {
-        SharedResourceHolder.release(SHARED_EXECUTOR, (ExecutorService) executor);
+        SharedResourceHolder.release(SHARED_EXECUTOR, executor);
       }
     }
   }
