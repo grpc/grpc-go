@@ -585,6 +585,11 @@ final class DnsNameResolver extends NameResolver {
     this.addressResolver = addressResolver;
   }
 
+  @VisibleForTesting
+  void setResourceResolver(ResourceResolver resourceResolver) {
+    this.resourceResolver.set(resourceResolver);
+  }
+
   /**
    * {@link ResourceResolverFactory} is a factory for making resource resolvers.  It supports
    * optionally checking if the factory is available.

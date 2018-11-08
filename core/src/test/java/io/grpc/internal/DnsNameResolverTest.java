@@ -44,6 +44,8 @@ import io.grpc.internal.DnsNameResolver.AddressResolver;
 import io.grpc.internal.DnsNameResolver.ResolutionResults;
 import io.grpc.internal.DnsNameResolver.ResourceResolver;
 import io.grpc.internal.DnsNameResolver.ResourceResolverFactory;
+import io.grpc.internal.JndiResourceResolverFactory.JndiResourceResolver;
+import io.grpc.internal.JndiResourceResolverFactory.RecordFetcher;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -86,7 +88,7 @@ public class DnsNameResolverTest {
   @Rule
   public final ExpectedException thrown = ExpectedException.none();
 
-  private final Map<String, Object> serviceConfig = new LinkedHashMap<String, Object>();
+  private final Map<String, Object> serviceConfig = new LinkedHashMap<>();
 
   private static final int DEFAULT_PORT = 887;
   private static final Attributes NAME_RESOLVER_PARAMS =
@@ -114,6 +116,8 @@ public class DnsNameResolverTest {
   private ArgumentCaptor<List<EquivalentAddressGroup>> resultCaptor;
   @Nullable
   private String networkaddressCacheTtlPropertyValue;
+  @Mock
+  private RecordFetcher recordFetcher;
 
   private DnsNameResolver newResolver(String name, int port) {
     return newResolver(name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted());
@@ -147,6 +151,8 @@ public class DnsNameResolverTest {
         proxyDetector,
         stopwatch,
         isAndroid);
+    // By default, using the mocked ResourceResolver to avoid I/O
+    dnsResolver.setResourceResolver(new JndiResourceResolver(recordFetcher));
     return dnsResolver;
   }
 
@@ -899,9 +905,6 @@ public class DnsNameResolverTest {
         enableJndi, enableJndiLocalhost, "8.8.8.8.in-addr.arpa."));
     assertTrue(DnsNameResolver.shouldUseJndi(
         enableJndi, enableJndiLocalhost, "2001-db8-1234--as3.ipv6-literal.net"));
-
-
-
   }
 
   private void testInvalidUri(URI uri) {
