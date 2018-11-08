@@ -11,6 +11,7 @@ java_library(
         "//context",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
     ],
 )
 
@@ -26,6 +27,7 @@ java_library(
         "//context",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
     ],
 )
 
@@ -42,6 +44,7 @@ java_library(
         "@com_google_code_gson_gson//jar",
         "@com_google_errorprone_error_prone_annotations//jar",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
         "@io_opencensus_opencensus_api//jar",
         "@io_opencensus_opencensus_contrib_grpc_metrics//jar",
         "@org_codehaus_mojo_animal_sniffer_annotations//jar",
@@ -59,5 +62,6 @@ java_library(
         ":internal",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
     ],
 )

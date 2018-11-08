@@ -13,6 +13,7 @@ java_library(
         "//stub",
         "@com_google_protobuf//:protobuf_java_util",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
         "@com_google_code_findbugs_jsr305//jar",
         ":load_balancer_java_proto",
         ":load_balancer_java_grpc",

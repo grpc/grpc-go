@@ -8,6 +8,7 @@ def grpc_java_repositories(
         omit_com_google_code_gson = False,
         omit_com_google_errorprone_error_prone_annotations = False,
         omit_com_google_guava = False,
+        omit_com_google_j2objc_j2objc_annotations = False,
         omit_com_google_protobuf = False,
         omit_com_google_protobuf_java = False,
         omit_com_google_protobuf_javalite = False,
@@ -48,6 +49,8 @@ def grpc_java_repositories(
         com_google_errorprone_error_prone_annotations()
     if not omit_com_google_guava:
         com_google_guava()
+    if not omit_com_google_j2objc_j2objc_annotations:
+        com_google_j2objc_j2objc_annotations()
     if not omit_com_google_protobuf:
         com_google_protobuf()
     if omit_com_google_protobuf_java:
@@ -155,6 +158,13 @@ def com_google_guava():
         name = "com_google_guava_guava",
         artifact = "com.google.guava:guava:26.0-android",
         sha1 = "ef69663836b339db335fde0df06fb3cd84e3742b",
+    )
+
+def com_google_j2objc_j2objc_annotations():
+    native.maven_jar(
+        name = "com_google_j2objc_j2objc_annotations",
+	artifact = "com.google.j2objc:j2objc-annotations:1.1",
+        sha1 = "ed28ded51a8b1c6b112568def5f4b455e6809019",
     )
 
 def com_google_protobuf():

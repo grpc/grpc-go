@@ -8,6 +8,7 @@ java_library(
         "//core",
         "@com_google_auth_google_auth_library_credentials//jar",
         "@com_google_guava_guava//jar",
+        "@com_google_j2objc_j2objc_annotations//jar",
         "@com_google_code_findbugs_jsr305//jar",
     ],
 )
