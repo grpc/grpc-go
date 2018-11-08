@@ -125,13 +125,13 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target:         target,
-		csMgr:          &connectivityStateManager{},
-		conns:          make(map[*addrConn]struct{}),
-		dopts:          defaultDialOptions(),
-		blockingpicker: newPickerWrapper(),
-		czData:         new(channelzData),
-		resolvedOnce:   grpcsync.NewEvent(),
+		target:            target,
+		csMgr:             &connectivityStateManager{},
+		conns:             make(map[*addrConn]struct{}),
+		dopts:             defaultDialOptions(),
+		blockingpicker:    newPickerWrapper(),
+		czData:            new(channelzData),
+		firstResolveEvent: grpcsync.NewEvent(),
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -404,7 +404,7 @@ type ClientConn struct {
 	balancerWrapper *ccBalancerWrapper
 	retryThrottler  atomic.Value
 
-	resolvedOnce *grpcsync.Event
+	firstResolveEvent *grpcsync.Event
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
@@ -457,11 +457,11 @@ func (cc *ClientConn) scWatcher() {
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.
-	if cc.resolvedOnce.HasFired() {
+	if cc.firstResolveEvent.HasFired() {
 		return nil
 	}
 	select {
-	case <-cc.resolvedOnce.Done():
+	case <-cc.firstResolveEvent.Done():
 		return nil
 	case <-ctx.Done():
 		return status.FromContextError(ctx.Err()).Err()
@@ -483,7 +483,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	}
 
 	cc.curAddresses = addrs
-	cc.resolvedOnce.Fire()
+	cc.firstResolveEvent.Fire()
 
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial
