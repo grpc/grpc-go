@@ -183,13 +183,18 @@ public class HealthCheckingLoadBalancerFactoryTest {
     hcLb = hcLbFactory.newLoadBalancer(origHelper);
     // Make sure all calls into the hcLb is from the syncContext
     hcLbEventDelivery = new LoadBalancer() {
+        // Per LoadBalancer API, no more callbacks will be called after shutdown() is called.
+        boolean shutdown;
+
         @Override
         public void handleResolvedAddressGroups(
             final List<EquivalentAddressGroup> servers, final Attributes attributes) {
           syncContext.execute(new Runnable() {
               @Override
               public void run() {
-                hcLb.handleResolvedAddressGroups(servers, attributes);
+                if (!shutdown) {
+                  hcLb.handleResolvedAddressGroups(servers, attributes);
+                }
               }
             });
         }
@@ -200,7 +205,9 @@ public class HealthCheckingLoadBalancerFactoryTest {
           syncContext.execute(new Runnable() {
               @Override
               public void run() {
-                hcLb.handleSubchannelState(subchannel, stateInfo);
+                if (!shutdown) {
+                  hcLb.handleSubchannelState(subchannel, stateInfo);
+                }
               }
             });
         }
@@ -212,7 +219,15 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
         @Override
         public void shutdown() {
-          throw new AssertionError("Not supposed to be called");
+          syncContext.execute(new Runnable() {
+              @Override
+              public void run() {
+                if (!shutdown) {
+                  shutdown = true;
+                  hcLb.shutdown();
+                }
+              }
+            });
         }
       };
     verify(origLbFactory).newLoadBalancer(any(Helper.class));
@@ -940,6 +955,43 @@ public class HealthCheckingLoadBalancerFactoryTest {
     serviceConfig.put("healthCheckConfig", hcConfig);
     assertThat(ServiceConfigUtil.getHealthCheckedServiceName(serviceConfig))
         .isEqualTo("FooService");
+  }
+
+  @Test
+  public void balancerShutdown() {
+    Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
+    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+
+    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verifyNoMoreInteractions(origLb);
+
+    Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
+    assertThat(subchannel).isSameAs(subchannels[0]);
+
+    // Trigger the health check
+    hcLbEventDelivery.handleSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
+
+    HealthImpl healthImpl = healthImpls[0];
+    assertThat(healthImpl.calls).hasSize(1);
+    ServerSideCall serverCall = healthImpl.calls.poll();
+    assertThat(serverCall.cancelled).isFalse();
+
+    verify(origLb).handleSubchannelState(
+        same(subchannel), eq(ConnectivityStateInfo.forNonError(CONNECTING)));
+
+    // Shut down the balancer
+    hcLbEventDelivery.shutdown();
+    verify(origLb).shutdown();
+
+    // Health check stream should be cancelled
+    assertThat(serverCall.cancelled).isTrue();
+
+    // LoadBalancer API requires no more callbacks on LoadBalancer after shutdown() is called.
+    verifyNoMoreInteractions(origLb);
+
+    // No more health check call is made or scheduled
+    assertThat(healthImpl.calls).isEmpty();
+    assertThat(clock.getPendingTasks()).isEmpty();
   }
 
   @Test

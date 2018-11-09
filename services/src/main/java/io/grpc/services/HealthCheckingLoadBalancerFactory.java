@@ -95,6 +95,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     
     private LoadBalancer delegateBalancer;
     @Nullable String healthCheckedService;
+    private boolean balancerShutdown;
 
     final HashSet<HealthCheckState> hcStates = new HashSet<HealthCheckState>();
 
@@ -119,7 +120,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
       // createSubchannel() from the SynchronizationContext.
       syncContext.throwIfNotInThisSynchronizationContext();
       HealthCheckState hcState = new HealthCheckState(
-          delegateBalancer, syncContext, delegate.getScheduledExecutorService());
+          this, delegateBalancer, syncContext, delegate.getScheduledExecutorService());
       hcStates.add(hcState);
       Subchannel subchannel = super.createSubchannel(
           addrs, attrs.toBuilder().set(KEY_HEALTH_CHECK_STATE, hcState).build());
@@ -184,6 +185,19 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     }
 
     @Override
+    public void shutdown() {
+      super.shutdown();
+      helper.balancerShutdown = true;
+      for (HealthCheckState hcState : helper.hcStates) {
+        // ManagedChannel will stop calling handleSubchannelState() after shutdown() is called,
+        // which is required by LoadBalancer API semantics. We need to deliver the final SHUTDOWN
+        // signal to health checkers so that they can cancel the streams.
+        hcState.updateRawState(ConnectivityStateInfo.forNonError(SHUTDOWN));
+      }
+      helper.hcStates.clear();
+    }
+
+    @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
     }
@@ -202,6 +216,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     private final LoadBalancer delegate;
     private final SynchronizationContext syncContext;
     private final ScheduledExecutorService timerService;
+    private final HelperImpl helperImpl;
 
     private Subchannel subchannel;
     private ChannelLogger subchannelLogger;
@@ -225,8 +240,10 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     private ScheduledHandle retryTimer;
 
     HealthCheckState(
+        HelperImpl helperImpl,
         LoadBalancer delegate, SynchronizationContext syncContext,
         ScheduledExecutorService timerService) {
+      this.helperImpl = checkNotNull(helperImpl, "helperImpl");
       this.delegate = checkNotNull(delegate, "delegate");
       this.syncContext = checkNotNull(syncContext, "syncContext");
       this.timerService = checkNotNull(timerService, "timerService");
@@ -315,7 +332,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
 
     private void gotoState(ConnectivityStateInfo newState) {
       checkState(subchannel != null, "init() not called");
-      if (!Objects.equal(concludedState, newState)) {
+      if (!helperImpl.balancerShutdown && !Objects.equal(concludedState, newState)) {
         concludedState = newState;
         delegate.handleSubchannelState(subchannel, concludedState);
       }
