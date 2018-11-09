@@ -16,12 +16,12 @@
 
 package io.grpc.netty;
 
+import static io.grpc.InternalMetadata.BASE64_ENCODING_OMIT_PADDING;
 import static io.netty.util.AsciiString.of;
 import static junit.framework.TestCase.assertNotSame;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-import com.google.common.io.BaseEncoding;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2InboundHeaders;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2RequestHeaders;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ResponseHeaders;
@@ -69,7 +69,7 @@ public class GrpcHttp2InboundHeadersTest {
 
     byte[] data = new byte[100];
     new Random().nextBytes(data);
-    headers.add(of("foo-bin"), of(BaseEncoding.base64().encode(data)));
+    headers.add(of("foo-bin"), of(BASE64_ENCODING_OMIT_PADDING.encode(data)));
 
     assertEquals(1, headers.size());
 

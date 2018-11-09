@@ -104,6 +104,8 @@ public final class Metadata {
         }
       };
 
+  static final BaseEncoding BASE64_ENCODING_OMIT_PADDING = BaseEncoding.base64().omitPadding();
+
   /**
    * Constructor called by the transport layer when it receives binary metadata. Metadata will
    * mutate the passed in array.
@@ -466,7 +468,7 @@ public final class Metadata {
       String headerName = new String(name(i), US_ASCII);
       sb.append(headerName).append('=');
       if (headerName.endsWith(BINARY_HEADER_SUFFIX)) {
-        sb.append(BaseEncoding.base64().encode(value(i)));
+        sb.append(BASE64_ENCODING_OMIT_PADDING.encode(value(i)));
       } else {
         String headerValue = new String(value(i), US_ASCII);
         sb.append(headerValue);

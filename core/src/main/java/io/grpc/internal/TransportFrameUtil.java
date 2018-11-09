@@ -61,7 +61,8 @@ public final class TransportFrameUtil {
       if (endsWith(key, binaryHeaderSuffixBytes)) {
         // Binary header.
         serializedHeaders[k] = key;
-        serializedHeaders[k + 1] = BaseEncoding.base64().encode(value).getBytes(US_ASCII);
+        serializedHeaders[k + 1]
+            = InternalMetadata.BASE64_ENCODING_OMIT_PADDING.encode(value).getBytes(US_ASCII);
         k += 2;
       } else {
         // Non-binary header.

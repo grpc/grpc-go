@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import com.google.common.io.BaseEncoding;
 import io.grpc.Metadata.AsciiMarshaller;
 import io.grpc.Metadata.Key;
 import java.nio.charset.Charset;
@@ -42,6 +43,13 @@ public final class InternalMetadata {
    */
   @Internal
   public static final Charset US_ASCII = Charset.forName("US-ASCII");
+
+  /**
+   * An instance of base64 encoder that omits padding.
+   */
+  @Internal
+  public static final BaseEncoding BASE64_ENCODING_OMIT_PADDING
+      = Metadata.BASE64_ENCODING_OMIT_PADDING;
 
   @Internal
   public static <T> Key<T> keyOf(String name, TrustedAsciiMarshaller<T> marshaller) {
