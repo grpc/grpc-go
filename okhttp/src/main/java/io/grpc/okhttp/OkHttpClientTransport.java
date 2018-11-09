@@ -1011,9 +1011,9 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
       } catch (Throwable t) {
         // TODO(madongfly): Send the exception message to the server.
         startGoAway(
-            0, 
-            ErrorCode.PROTOCOL_ERROR, 
-            Status.UNAVAILABLE.withDescription("error in frame handler").withCause(t));
+            0,
+            ErrorCode.PROTOCOL_ERROR,
+            Status.INTERNAL.withDescription("error in frame handler").withCause(t));
       } finally {
         try {
           frameReader.close();

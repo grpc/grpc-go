@@ -301,9 +301,9 @@ public class OkHttpClientTransportTest {
     listener2.waitUntilStreamClosed();
 
     assertEquals(0, activeStreamCount());
-    assertEquals(Status.UNAVAILABLE.getCode(), listener1.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener1.status.getCause().getMessage());
-    assertEquals(Status.UNAVAILABLE.getCode(), listener2.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
@@ -329,7 +329,7 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
 
     assertEquals(0, activeStreamCount());
-    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertEquals(ERROR_MESSAGE, listener.status.getCause().getMessage());
     verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
