@@ -266,7 +266,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
@@ -372,7 +372,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
 	ts := newTestHealthServer()
-	healthpb.RegisterHealthServer(s, ts)
+	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
