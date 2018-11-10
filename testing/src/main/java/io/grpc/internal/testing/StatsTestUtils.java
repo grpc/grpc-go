@@ -328,6 +328,7 @@ public class StatsTestUtils {
     /**
      * Creates a MockableSpan with a random trace ID and span ID.
      */
+    @SuppressWarnings("deprecation")
     public static MockableSpan generateRandomSpan(Random random) {
       return new MockableSpan(
           SpanContext.create(
