@@ -91,7 +91,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	if t := proxyURL.User; t != nil {
 		u := t.Username()
 		p, _ := t.Password()
-		req.Header.Add(proxyAuthHeaderKey, basicAuth(u, p))
+		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 	}
 
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {

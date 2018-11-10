@@ -199,7 +199,7 @@ func TestHTTPConnectBasicAuth(t *testing.T) {
 			if req.UserAgent() != grpcUA {
 				return fmt.Errorf("unexpect user agent %q, want %q", req.UserAgent(), grpcUA)
 			}
-			wantProxyAuthStr := base64.StdEncoding.EncodeToString([]byte(user + ":" + password))
+			wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 			if got := req.Header.Get(proxyAuthHeaderKey); got != wantProxyAuthStr {
 				gotDecoded, _ := base64.StdEncoding.DecodeString(got)
 				wantDecoded, _ := base64.StdEncoding.DecodeString(wantProxyAuthStr)
