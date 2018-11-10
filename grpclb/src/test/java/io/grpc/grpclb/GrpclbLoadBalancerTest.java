@@ -109,8 +109,6 @@ import org.mockito.stubbing.Answer;
 /** Unit tests for {@link GrpclbLoadBalancer}. */
 @RunWith(JUnit4.class)
 public class GrpclbLoadBalancerTest {
-  private static final Attributes.Key<String> RESOLUTION_ATTR =
-      Attributes.Key.create("resolution-attr");
   private static final String SERVICE_AUTHORITY = "api.google.com";
 
   // The tasks are wrapped by SynchronizationContext, so we can't compare the types

@@ -78,7 +78,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   private final CallTracer callsTracer;
   private final ChannelTracer channelTracer;
   private final ChannelLogger channelLogger;
-  private final TimeProvider timeProvider;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
   private final Object lock = new Object();
@@ -184,7 +183,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     this.channelz = channelz;
     this.callsTracer = callsTracer;
     this.channelTracer = Preconditions.checkNotNull(channelTracer, "channelTracer");
-    this.timeProvider = Preconditions.checkNotNull(timeProvider, "timeProvider");
     this.logId = Preconditions.checkNotNull(logId, "logId");
     this.channelLogger = new ChannelLoggerImpl(channelTracer, timeProvider);
   }

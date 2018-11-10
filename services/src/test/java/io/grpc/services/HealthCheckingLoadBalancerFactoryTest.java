@@ -72,13 +72,13 @@ import io.grpc.internal.ServiceConfigUtil;
 import io.grpc.stub.StreamObserver;
 import java.net.SocketAddress;
 import java.text.MessageFormat;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1068,7 +1068,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
   private static class HealthImpl extends HealthGrpc.HealthImplBase {
     boolean checkCalled;
-    final Deque<ServerSideCall> calls = new LinkedList<ServerSideCall>();
+    final Queue<ServerSideCall> calls = new ArrayDeque<ServerSideCall>();
 
     @Override
     public void check(HealthCheckRequest request,
