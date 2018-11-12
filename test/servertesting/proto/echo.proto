@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "proto";
+
+// EchoService is a dummy service for use in the servertesting examples and
+// tests.
+service EchoService {
+    rpc Echo(Request) returns (Response) {}
+}
+
+message Request {
+    string msg = 1;
+}
+
+message Response {
+    string msg = 1;
+}
