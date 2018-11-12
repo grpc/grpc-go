@@ -23,9 +23,9 @@
 package health
 
 import (
+	"context"
 	"sync"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"

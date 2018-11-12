@@ -19,12 +19,12 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"

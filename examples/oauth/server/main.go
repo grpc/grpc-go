@@ -21,12 +21,12 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"log"
 	"net"
 	"strings"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

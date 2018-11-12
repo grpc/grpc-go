@@ -19,6 +19,7 @@
 package dns
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -28,7 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 )

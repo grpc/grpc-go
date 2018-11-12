@@ -1137,8 +1137,8 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		ac.mu.Unlock()
 	}
 
-	// Do not cancel in the success path because of this issue in Go1.6: https://github.com/golang/go/issues/15078.
 	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
+	defer cancel()
 	if channelz.IsOn() {
 		copts.ChannelzParentID = ac.channelzID
 	}
@@ -1183,7 +1183,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 
 	if err != nil {
 		// newTr is either nil, or closed.
-		cancel()
 		ac.cc.blockingpicker.updateConnectionError(err)
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {

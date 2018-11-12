@@ -87,23 +87,11 @@ git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protob
 # TODO: Remove when we drop Go 1.10 support
 go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 
-# - gofmt, goimports, golint (with exceptions for generated code).
+# - gofmt, goimports, golint (with exceptions for generated code), go vet.
 gofmt -s -d -l . 2>&1 | fail_on_output
 goimports -l . 2>&1 | fail_on_output
 golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
-
-# - go vet
-# TODO: Remove from here to "END TODO" and use simply "go tool vet -all ." when
-#       context is imported directly and 1.6 support is dropped.
-# Rewrite golang.org/x/net/context -> context imports (see grpc/grpc-go#1484).
-git ls-files "*.go" | xargs sed -i 's:"golang.org/x/net/context":"context":'
-set +o pipefail # vet exits with non-zero error if issues are found
-go tool vet -all . 2>&1 | \
-    grep -vE 'clientconn.go:.*cancel (function|var)' | \
-    (! grep -vE '.*transport_test.go:.*cancel')
-set -o pipefail
-git reset --hard HEAD
-# END TODO
+go tool vet -all .
 
 # - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then

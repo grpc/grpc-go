@@ -21,11 +21,11 @@
 package balancer
 
 import (
+	"context"
 	"errors"
 	"net"
 	"strings"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"

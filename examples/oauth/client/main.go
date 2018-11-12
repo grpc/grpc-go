@@ -20,11 +20,11 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"log"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

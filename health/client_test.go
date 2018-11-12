@@ -19,12 +19,11 @@
 package health
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 func TestClientHealthCheckBackoff(t *testing.T) {

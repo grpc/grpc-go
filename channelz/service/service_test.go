@@ -19,6 +19,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"golang.org/x/net/context"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"

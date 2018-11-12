@@ -19,12 +19,12 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
