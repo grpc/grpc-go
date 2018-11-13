@@ -53,7 +53,8 @@ class NettyServerTransport implements ServerTransport {
   // Some exceptions are not very useful and add too much noise to the log
   private static final ImmutableList<String> QUIET_ERRORS = ImmutableList.of(
       "Connection reset by peer",
-      "An existing connection was forcibly closed by the remote host");
+      "An existing connection was forcibly closed by the remote host",
+      "An established connection was aborted by the software in your host machine");
 
   private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
   private final Channel channel;
