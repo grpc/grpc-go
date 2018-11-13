@@ -109,7 +109,6 @@ func TestServerOpts(t *testing.T) {
 	defer cleanup()
 
 	c := pb.NewEchoServiceClient(conn)
-	const msg = "42"
 	got, err := c.Echo(context.Background(), &pb.Request{Msg: "hello"})
 
 	if err != nil {
