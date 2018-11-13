@@ -65,7 +65,7 @@ public final class MetadataUtils {
 
     // Non private to avoid synthetic class
     HeaderAttachingClientInterceptor(Metadata extraHeaders) {
-      this.extraHeaders = checkNotNull(extraHeaders, extraHeaders);
+      this.extraHeaders = checkNotNull(extraHeaders, "extraHeaders");
     }
 
     @Override
