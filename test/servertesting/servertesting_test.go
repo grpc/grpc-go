@@ -25,18 +25,17 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/servertesting"
 	pb "google.golang.org/grpc/test/servertesting/proto"
 )
 
-type service struct{}
+type echo struct{}
 
-func (service) Echo(ctx context.Context, in *pb.Request) (*pb.Response, error) {
+func (echo) Echo(ctx context.Context, in *pb.Request) (*pb.Response, error) {
 	return &pb.Response{
 		Msg: in.Msg,
 	}, nil
@@ -51,8 +50,8 @@ func ExampleTester() {
 	// identical arguments to RegisterService().
 
 	// This variable declaration is purely demonstrative of the fact that
-	// service implements the interface.
-	var svc pb.EchoServiceServer = &service{}
+	// echo{} implements the interface.
+	var svc pb.EchoServiceServer = &echo{}
 	if err := st.RegisterService(pb.RegisterEchoServiceServer, svc); err != nil {
 		fmt.Printf("RegisterService() got err %v", err)
 		return
@@ -78,13 +77,17 @@ func ExampleTester() {
 	}
 	fmt.Println(resp.Msg)
 
+	st.Close()
+	// Not entirely necessary; but demonstrates that the Server has stopped.
+	<-done
+
 	// Output: hello world
 }
 
 func ExampleNewClientConn() {
 	// This variable declaration is purely demonstrative of the fact that
-	// service implements the interface.
-	var svc pb.EchoServiceServer = &service{}
+	// echo{} implements the interface.
+	var svc pb.EchoServiceServer = &echo{}
 	conn, cleanup, err := servertesting.NewClientConn(pb.RegisterEchoServiceServer, svc)
 	if err != nil {
 		fmt.Printf("NewClientConn() got err %v; want nil err", err)
@@ -93,7 +96,6 @@ func ExampleNewClientConn() {
 	defer cleanup()
 
 	c := pb.NewEchoServiceClient(conn)
-
 	resp, err := c.Echo(context.Background(), &pb.Request{Msg: "foobar"})
 	if err != nil {
 		fmt.Printf("EchoService.Echo() got err %v; want nil err", err)
@@ -120,7 +122,7 @@ func TestServerOpts(t *testing.T) {
 		}
 	})
 
-	conn, cleanup, err := servertesting.NewClientConn(pb.RegisterEchoServiceServer, &service{}, uiOpt)
+	conn, cleanup, err := servertesting.NewClientConn(pb.RegisterEchoServiceServer, &echo{}, uiOpt)
 	if err != nil {
 		t.Fatalf("NewClientConn() got err %v; want nil err", err)
 	}
@@ -128,7 +130,6 @@ func TestServerOpts(t *testing.T) {
 
 	c := pb.NewEchoServiceClient(conn)
 	got, err := c.Echo(context.Background(), &pb.Request{Msg: "hello"})
-
 	if err != nil {
 		t.Errorf("EchoService.Echo() with interceptor got err %v; want nil err", err)
 	}
@@ -153,13 +154,13 @@ func TestRegisterErrors(t *testing.T) {
 		{
 			name:           "nil register function",
 			fn:             nil,
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "nil",
 		},
 		{
 			name:           "function-typed-nil register function",
 			fn:             (func())(nil),
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "nil",
 		},
 		{
@@ -171,38 +172,38 @@ func TestRegisterErrors(t *testing.T) {
 		{
 			name:           "typed-nil implementation",
 			fn:             pb.RegisterEchoServiceServer,
-			implementation: (*service)(nil),
+			implementation: (*echo)(nil),
 			want:           "nil",
 		},
 		{
 			name:           "incorrect register-function kind",
 			fn:             "hello",
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "function",
 		},
 		{
 			name:           "register function num in",
 			fn:             func(_, _, _ string) {},
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "input",
 		},
 		{
 			name:           "register function num out",
 			fn:             func(_, _ string) error { return nil },
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "returns",
 		},
 		{
 			name:           "register function first parameter not gRPC server",
 			fn:             func(_ string, _ pb.EchoServiceServer) {},
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "*grpc.Server",
 		},
 		{
 			name:           "register function second parameter not service interface",
 			fn:             func(_ *grpc.Server, _ string) {},
-			implementation: &service{},
-			want:           reflect.TypeOf(&service{}).String(),
+			implementation: &echo{},
+			want:           reflect.TypeOf(&echo{}).String(),
 		},
 		{
 			name:           "bad service implementation",
@@ -215,7 +216,7 @@ func TestRegisterErrors(t *testing.T) {
 			fn: func(_ *grpc.Server, _ pb.EchoServiceServer) {
 				panic("don't")
 			},
-			implementation: &service{},
+			implementation: &echo{},
 			want:           "don't",
 		},
 	}
