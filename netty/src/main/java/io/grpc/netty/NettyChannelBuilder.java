@@ -202,17 +202,6 @@ public final class NettyChannelBuilder
   }
 
   /**
-   * Sets the max message size.
-   *
-   * @deprecated Use {@link #maxInboundMessageSize} instead
-   */
-  @Deprecated
-  public NettyChannelBuilder maxMessageSize(int maxMessageSize) {
-    maxInboundMessageSize(maxMessageSize);
-    return this;
-  }
-
-  /**
    * Sets the maximum size of header list allowed to be received. This is cumulative size of the
    * headers with some overhead, as defined for
    * <a href="http://httpwg.org/specs/rfc7540.html#rfc.section.6.5.2">
