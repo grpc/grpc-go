@@ -134,6 +134,30 @@ func TestRegisterErrors(t *testing.T) {
 		want string
 	}{
 		{
+			name:           "nil register function",
+			fn:             nil,
+			implementation: &service{},
+			want:           "nil",
+		},
+		{
+			name:           "function-typed-nil register function",
+			fn:             (func())(nil),
+			implementation: &service{},
+			want:           "nil",
+		},
+		{
+			name:           "nil implementation",
+			fn:             pb.RegisterEchoServiceServer,
+			implementation: nil,
+			want:           "nil",
+		},
+		{
+			name:           "typed-nil implementation",
+			fn:             pb.RegisterEchoServiceServer,
+			implementation: (*service)(nil),
+			want:           "nil",
+		},
+		{
 			name:           "incorrect register-function kind",
 			fn:             "hello",
 			implementation: &service{},

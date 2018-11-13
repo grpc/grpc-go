@@ -3,6 +3,7 @@
 package servertesting
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -45,6 +46,13 @@ func (t *Tester) RegisterService(registerFunc, implementation interface{}) (err 
 		}
 	}()
 
+	if isNil(registerFunc) {
+		return errors.New("nil registering function")
+	}
+	if isNil(implementation) {
+		return errors.New("nil implementation")
+	}
+
 	typ := reflect.TypeOf(registerFunc)
 	if got, want := typ.Kind(), reflect.Func; got != want {
 		return fmt.Errorf("got first argument of kind %s; must be a RegisterXServiceServer function", got)
@@ -74,6 +82,24 @@ func (t *Tester) RegisterService(registerFunc, implementation interface{}) (err 
 	return nil
 }
 
+// isNil returns true if the value of v is nil, regardless of type.
+func isNil(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Chan:
+	case reflect.Func:
+	case reflect.Interface:
+	case reflect.Map:
+	case reflect.Ptr:
+	case reflect.Slice:
+	default:
+		return false
+	}
+	return reflect.ValueOf(v).IsNil()
+}
+
 // Serve is equivalent to grpc.Server.Serve() but without the need for a
 // Listener.
 func (t *Tester) Serve() {
@@ -95,7 +121,7 @@ func (t *Tester) Dial(opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 }
 
 // dialOpts extends user-provided options with those necessary to connect to the
-// Server.
+// grpc.Server.
 func (t *Tester) dialOpts(user ...grpc.DialOption) []grpc.DialOption {
 	return append(user,
 		grpc.WithDialer(func(_ string, _ time.Duration) (net.Conn, error) {
@@ -106,11 +132,11 @@ func (t *Tester) dialOpts(user ...grpc.DialOption) []grpc.DialOption {
 }
 
 // NewClientConn is a convenience wrapper for registering a single service with
-// a Server, and returning the ClientConn obtained from Dial(). The returned
+// a Tester, and returning the ClientConn obtained from Dial(). The returned
 // cleanup function blocks until the underlying grpc.Server stops, and does not
 // need to be called if NewClientConn returns an error.
 //
-// See Server.RegisterService() for a description of the arguments.
+// See Tester.RegisterService() for a description of the arguments.
 func NewClientConn(registerFunc, serviceImplementation interface{}, opts ...grpc.ServerOption) (*grpc.ClientConn, func(), error) {
 	t := New(opts...)
 	if err := t.RegisterService(registerFunc, serviceImplementation); err != nil {
@@ -124,14 +150,16 @@ func NewClientConn(registerFunc, serviceImplementation interface{}, opts ...grpc
 		t.Serve()
 	}()
 
+	cleanup := func() {
+		t.Close()
+		<-done
+	}
+
 	conn, err := t.Dial()
 	if err != nil {
-		t.Close()
+		cleanup()
 		return nil, func() {}, fmt.Errorf("dialing server: %v", err)
 	}
 
-	return conn, func() {
-		t.Close()
-		<-done
-	}, nil
+	return conn, cleanup, nil
 }
