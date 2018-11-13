@@ -83,11 +83,11 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 		}
 	}()
 
-	req := (&http.Request{
+	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: backendAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
-	})
+	}
 	if t := proxyURL.User; t != nil {
 		u := t.Username()
 		p, _ := t.Password()
