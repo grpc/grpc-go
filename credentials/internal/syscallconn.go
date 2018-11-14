@@ -18,10 +18,10 @@
  *
  */
 
+// Package internal contains credentials-internal code.
 package internal
 
 import (
-	"errors"
 	"net"
 	"syscall"
 )
@@ -37,31 +37,26 @@ import (
 // help here).
 type syscallConn struct {
 	net.Conn
-	rawConn net.Conn
+	sysConn syscall.Conn
 }
 
-// WrapSyscallConn tries to wrapper rawConn and newConn into a net.Conn that
+// WrapSyscallConn tries to wrap rawConn and newConn into a net.Conn that
 // implements syscall.Conn. rawConn will be used to support syscall, and newConn
 // will be used for read/write.
 //
 // This function returns newConn if rawConn doesn't implement syscall.Conn.
 func WrapSyscallConn(rawConn, newConn net.Conn) net.Conn {
-	if _, ok := rawConn.(syscall.Conn); !ok {
+	sysConn, ok := rawConn.(syscall.Conn)
+	if !ok {
 		return newConn
 	}
 	return &syscallConn{
 		Conn:    newConn,
-		rawConn: rawConn,
+		sysConn: sysConn,
 	}
 }
 
 // implements the syscall.Conn interface
 func (c *syscallConn) SyscallConn() (syscall.RawConn, error) {
-	conn, ok := c.rawConn.(syscall.Conn)
-	if !ok {
-		// This should never happen because we already checked rawConn in
-		// newConnSyscall(). It is kept to avoid panic.
-		return nil, errors.New("RawConn does not implement syscall.Conn")
-	}
-	return conn.SyscallConn()
+	return c.sysConn.SyscallConn()
 }
