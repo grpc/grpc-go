@@ -1,5 +1,6 @@
 java_library(
     name = "testing",
+    testonly = 1,
     srcs = glob([
         "src/main/java/io/grpc/testing/*.java",
     ]),
@@ -13,14 +14,12 @@ java_library(
         "//core:inprocess",
         "//core:util",
         "//stub",
-
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
         "@com_google_j2objc_j2objc_annotations//jar",
         "@com_google_truth_truth//jar",
         "@junit_junit//jar",
     ],
-    testonly = 1,
 )
 
 java_library(

@@ -7,16 +7,16 @@ java_library(
     ]),
     visibility = ["//visibility:public"],
     deps = [
+        ":load_balancer_java_grpc",
+        ":load_balancer_java_proto",
         "//core",
         "//core:internal",
         "//core:util",
         "//stub",
-        "@com_google_protobuf//:protobuf_java_util",
+        "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava_guava//jar",
         "@com_google_j2objc_j2objc_annotations//jar",
-        "@com_google_code_findbugs_jsr305//jar",
-        ":load_balancer_java_proto",
-        ":load_balancer_java_grpc",
+        "@com_google_protobuf//:protobuf_java_util",
     ],
 )
 
@@ -24,8 +24,8 @@ proto_library(
     name = "load_balancer_proto",
     srcs = ["src/main/proto/grpc/lb/v1/load_balancer.proto"],
     deps = [
-        "@com_google_protobuf//:timestamp_proto",
         "@com_google_protobuf//:duration_proto",
+        "@com_google_protobuf//:timestamp_proto",
     ],
 )
 

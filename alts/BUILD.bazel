@@ -35,9 +35,9 @@ java_library(
     deps = [
         ":alts_internal",
         ":handshaker_java_grpc",
+        "//auth",
         "//core",
         "//core:internal",
-        "//auth",
         "//netty",
         "@com_google_auth_google_auth_library_oauth2_http//jar",
         "@com_google_code_findbugs_jsr305//jar",
