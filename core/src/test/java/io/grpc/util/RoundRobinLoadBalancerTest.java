@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc.util;
 
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.ConnectivityState.CONNECTING;
@@ -22,7 +22,7 @@ import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
-import static io.grpc.internal.RoundRobinLoadBalancer.STATE_INFO;
+import static io.grpc.util.RoundRobinLoadBalancer.STATE_INFO;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -59,10 +59,11 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.Metadata.Key;
 import io.grpc.Status;
-import io.grpc.internal.RoundRobinLoadBalancer.EmptyPicker;
-import io.grpc.internal.RoundRobinLoadBalancer.ReadyPicker;
-import io.grpc.internal.RoundRobinLoadBalancer.Ref;
-import io.grpc.internal.RoundRobinLoadBalancer.StickinessState;
+import io.grpc.internal.GrpcAttributes;
+import io.grpc.util.RoundRobinLoadBalancer.EmptyPicker;
+import io.grpc.util.RoundRobinLoadBalancer.ReadyPicker;
+import io.grpc.util.RoundRobinLoadBalancer.Ref;
+import io.grpc.util.RoundRobinLoadBalancer.StickinessState;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;

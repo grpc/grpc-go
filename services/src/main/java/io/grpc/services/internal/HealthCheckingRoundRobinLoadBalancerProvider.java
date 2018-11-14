@@ -16,11 +16,12 @@
 
 package io.grpc.services.internal;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Throwables;
 import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancerProvider;
-import io.grpc.internal.RoundRobinLoadBalancerProvider;
 import io.grpc.services.HealthCheckingLoadBalancerUtil;
 
 /**
@@ -29,7 +30,11 @@ import io.grpc.services.HealthCheckingLoadBalancerUtil;
  */
 @Internal
 public final class HealthCheckingRoundRobinLoadBalancerProvider extends LoadBalancerProvider {
-  private final RoundRobinLoadBalancerProvider rrProvider = new RoundRobinLoadBalancerProvider();
+  private final LoadBalancerProvider rrProvider;
+
+  public HealthCheckingRoundRobinLoadBalancerProvider() {
+    rrProvider = newRoundRobinProvider();
+  }
 
   @Override
   public boolean isAvailable() {
@@ -49,5 +54,19 @@ public final class HealthCheckingRoundRobinLoadBalancerProvider extends LoadBala
   @Override
   public LoadBalancer newLoadBalancer(Helper helper) {
     return HealthCheckingLoadBalancerUtil.newHealthCheckingLoadBalancer(rrProvider, helper);
+  }
+
+  @SuppressWarnings("unchecked")
+  @VisibleForTesting
+  static LoadBalancerProvider newRoundRobinProvider() {
+    try {
+      Class<LoadBalancerProvider> rrProviderClass =
+          (Class<LoadBalancerProvider>) Class.forName(
+              "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
+      return rrProviderClass.getDeclaredConstructor().newInstance();
+    } catch (Exception e) {
+      Throwables.throwIfUnchecked(e);
+      throw new RuntimeException(e);
+    }
   }
 }

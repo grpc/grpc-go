@@ -20,7 +20,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import io.grpc.grpclb.GrpclbLoadBalancerProvider;
 import io.grpc.internal.PickFirstLoadBalancerProvider;
-import io.grpc.internal.RoundRobinLoadBalancerProvider;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
@@ -33,8 +32,10 @@ public class LoadBalancerRegistryTest {
   @Test
   public void getClassesViaHardcoded_classesPresent() throws Exception {
     List<Class<?>> classes = LoadBalancerRegistry.getHardCodedClasses();
-    assertThat(classes).hasSize(1);
+    assertThat(classes).hasSize(2);
     assertThat(classes.get(0)).isEqualTo(PickFirstLoadBalancerProvider.class);
+    assertThat(classes.get(1).getName()).isEqualTo(
+        "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
   }
 
   @Test
@@ -47,7 +48,8 @@ public class LoadBalancerRegistryTest {
     assertThat(pickFirst.getPriority()).isEqualTo(5);
 
     LoadBalancerProvider roundRobin = defaultRegistry.getProvider("round_robin");
-    assertThat(roundRobin).isInstanceOf(RoundRobinLoadBalancerProvider.class);
+    assertThat(roundRobin.getClass().getName()).isEqualTo(
+        "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
     assertThat(roundRobin.getPriority()).isEqualTo(5);
 
     LoadBalancerProvider grpclb = defaultRegistry.getProvider("grpclb");

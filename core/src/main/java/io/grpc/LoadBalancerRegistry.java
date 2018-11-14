@@ -19,6 +19,7 @@ package io.grpc;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -116,13 +117,20 @@ public final class LoadBalancerRegistry {
     // Class.forName(String) is used to remove the need for ProGuard configuration. Note that
     // ProGuard does not detect usages of Class.forName(String, boolean, ClassLoader):
     // https://sourceforge.net/p/proguard/bugs/418/
+    ArrayList<Class<?>> list = new ArrayList<Class<?>>();
     try {
-      return Collections.<Class<?>>singletonList(
-          Class.forName("io.grpc.internal.PickFirstLoadBalancerProvider"));
+      list.add(Class.forName("io.grpc.internal.PickFirstLoadBalancerProvider"));
     } catch (ClassNotFoundException e) {
       logger.log(Level.WARNING, "Unable to find pick-first LoadBalancer", e);
     }
-    return Collections.emptyList();
+    try {
+      list.add(Class.forName("io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider"));
+    } catch (ClassNotFoundException e) {
+      // Since hard-coded list is only used in Android environment, and we don't expect round-robin
+      // to be actually used there, we log it as a lower level.
+      logger.log(Level.FINE, "Unable to find round-robin LoadBalancer", e);
+    }
+    return Collections.unmodifiableList(list);
   }
 
   private static final class LoadBalancerPriorityAccessor

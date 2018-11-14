@@ -35,7 +35,7 @@ public class RoundRobinLoadBalancerFactoryTest {
     Helper helper = mock(Helper.class);
     assertThat(
         RoundRobinLoadBalancerFactory.getInstance().newLoadBalancer(helper).getClass().getName())
-        .isEqualTo("io.grpc.internal.RoundRobinLoadBalancer");
+        .isEqualTo("io.grpc.util.RoundRobinLoadBalancer");
     verifyZeroInteractions(helper);
   }
 }

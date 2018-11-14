@@ -191,7 +191,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
     lb.handleResolvedAddressGroups(servers, serviceConfigAttrs);
 
-    assertThat(lb.getDelegateProvider()).isInstanceOf(RoundRobinLoadBalancerProvider.class);
+    assertThat(lb.getDelegateProvider().getClass().getName()).isEqualTo(
+        "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
     assertTrue(shutdown.get());
   }
 
@@ -249,7 +250,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     LoadBalancerProvider provider = AutoConfiguredLoadBalancer.decideLoadBalancerProvider(
         servers, serviceConfig);
 
-    assertThat(provider).isInstanceOf(RoundRobinLoadBalancerProvider.class);
+    assertThat(provider.getClass().getName()).isEqualTo(
+        "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
   }
 
   @Test
