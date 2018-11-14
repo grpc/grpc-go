@@ -1,3 +1,5 @@
+// +build !appengine
+
 /*
  *
  * Copyright 2018 gRPC authors.
@@ -19,6 +21,7 @@
 package internal
 
 import (
+	"errors"
 	"net"
 	"syscall"
 )
@@ -50,4 +53,15 @@ func WrapSyscallConn(rawConn, newConn net.Conn) net.Conn {
 		Conn:    newConn,
 		rawConn: rawConn,
 	}
+}
+
+// implements the syscall.Conn interface
+func (c *syscallConn) SyscallConn() (syscall.RawConn, error) {
+	conn, ok := c.rawConn.(syscall.Conn)
+	if !ok {
+		// This should never happen because we already checked rawConn in
+		// newConnSyscall(). It is kept to avoid panic.
+		return nil, errors.New("RawConn does not implement syscall.Conn")
+	}
+	return conn.SyscallConn()
 }
