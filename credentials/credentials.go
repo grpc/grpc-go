@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/credentials/internal"
 )
 
 // alpnProtoStr are the specified application level protocols for gRPC.
@@ -187,7 +188,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
+	return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
@@ -195,7 +196,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if err := conn.Handshake(); err != nil {
 		return nil, nil, err
 	}
-	return tlsConn{Conn: conn, rawConn: rawConn}, TLSInfo{conn.ConnectionState()}, nil
+	return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState()}, nil
 }
 
 func (c *tlsCreds) Clone() TransportCredentials {
@@ -284,20 +285,6 @@ type OtherChannelzSecurityValue struct {
 }
 
 func (*OtherChannelzSecurityValue) isChannelzSecurityValue() {}
-
-// tlsConn keeps reference of rawConn to support syscall.Conn for channelz.
-// SyscallConn() (the method in interface syscall.Conn) is explicitly
-// implemented on this type,
-//
-// Interface syscall.Conn is implemented by most net.Conn implementations (e.g.
-// TCPConn, UnixConn), but is not part of net.Conn interface. So wrapper conns
-// that embed net.Conn don't implement syscall.Conn. (Side note: tls.Conn
-// doesn't embed net.Conn, so even if syscall.Conn is part of net.Conn, it won't
-// help here).
-type tlsConn struct {
-	*tls.Conn
-	rawConn net.Conn
-}
 
 var cipherSuiteLookup = map[uint16]string{
 	tls.TLS_RSA_WITH_RC4_128_SHA:                "TLS_RSA_WITH_RC4_128_SHA",
