@@ -966,7 +966,8 @@ public final class BinlogHelperTest {
         eq(CALL_ID),
         isNull(SocketAddress.class));
     verifyNoMoreInteractions(mockSinkWriter);
-    assertThat(TimeUnit.SECONDS.toNanos(1) - timeoutCaptor.getValue().getNanos())
+    Duration timeout = timeoutCaptor.getValue();
+    assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
         .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
   }
 
