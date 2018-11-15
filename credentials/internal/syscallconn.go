@@ -26,6 +26,8 @@ import (
 	"syscall"
 )
 
+type sysConn = syscall.Conn
+
 // syscallConn keeps reference of rawConn to support syscall.Conn for channelz.
 // SyscallConn() (the method in interface syscall.Conn) is explicitly
 // implemented on this type,
@@ -37,7 +39,9 @@ import (
 // help here).
 type syscallConn struct {
 	net.Conn
-	sysConn syscall.Conn
+	// sysConn is a type alias of syscall.Conn. It's necessary because the name
+	// `Conn` collides with `net.Conn`.
+	sysConn
 }
 
 // WrapSyscallConn tries to wrap rawConn and newConn into a net.Conn that
@@ -54,9 +58,4 @@ func WrapSyscallConn(rawConn, newConn net.Conn) net.Conn {
 		Conn:    newConn,
 		sysConn: sysConn,
 	}
-}
-
-// implements the syscall.Conn interface
-func (c *syscallConn) SyscallConn() (syscall.RawConn, error) {
-	return c.sysConn.SyscallConn()
 }
