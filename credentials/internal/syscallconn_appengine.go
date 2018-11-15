@@ -1,4 +1,4 @@
-// +build !appengine
+// +build appengine
 
 /*
  *
@@ -18,18 +18,13 @@
  *
  */
 
-package credentials
+package internal
 
 import (
-	"errors"
-	"syscall"
+	"net"
 )
 
-// implements the syscall.Conn interface
-func (c tlsConn) SyscallConn() (syscall.RawConn, error) {
-	conn, ok := c.rawConn.(syscall.Conn)
-	if !ok {
-		return nil, errors.New("RawConn does not implement syscall.Conn")
-	}
-	return conn.SyscallConn()
+// WrapSyscallConn returns newConn on appengine.
+func WrapSyscallConn(rawConn, newConn net.Conn) net.Conn {
+	return newConn
 }
