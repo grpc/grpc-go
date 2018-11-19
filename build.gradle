@@ -48,7 +48,7 @@ subprojects {
     }
 
     group = "io.grpc"
-    version = "1.17.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+    version = "1.18.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
     sourceCompatibility = 1.7
     targetCompatibility = 1.7
