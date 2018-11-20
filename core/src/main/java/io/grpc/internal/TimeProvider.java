@@ -27,12 +27,9 @@ public interface TimeProvider {
   long currentTimeNanos();
 
   TimeProvider SYSTEM_TIME_PROVIDER = new TimeProvider() {
-    final long offsetNanos =
-        TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis()) - System.nanoTime();
-
     @Override
     public long currentTimeNanos() {
-      return System.nanoTime() + offsetNanos;
+      return TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis());
     }
   };
 }
