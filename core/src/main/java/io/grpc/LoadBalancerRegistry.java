@@ -16,17 +16,20 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Registry of {@link LoadBalancerProvider}s.  The {@link #getDefaultRegistry default instance}
@@ -35,48 +38,60 @@ import javax.annotation.Nullable;
  * @since 1.17.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
+@ThreadSafe
 public final class LoadBalancerRegistry {
   private static final Logger logger = Logger.getLogger(LoadBalancerRegistry.class.getName());
   private static LoadBalancerRegistry instance;
   private static final Iterable<Class<?>> HARDCODED_CLASSES = getHardCodedClasses();
 
-  private final Map<String, LoadBalancerProvider> providers;
+  private final LinkedHashSet<LoadBalancerProvider> allProviders =
+      new LinkedHashSet<LoadBalancerProvider>();
+  private final LinkedHashMap<String, LoadBalancerProvider> effectiveProviders =
+      new LinkedHashMap<String, LoadBalancerProvider>();
 
-  @VisibleForTesting
-  LoadBalancerRegistry(List<LoadBalancerProvider> providerList) {
-    // Use LinkedHashMap to preserve order s othat it's easier to test
-    LinkedHashMap<String, LoadBalancerProvider> providerMap = new LinkedHashMap<>();
-    for (LoadBalancerProvider provider : providerList) {
-      if (!provider.isAvailable()) {
-        logger.fine(provider + " found but not available");
-        continue;
-      }
+  /**
+   * Register a provider.
+   *
+   * <p>If the provider's {@link LoadBalancerProvider#isAvailable isAvailable()} returns
+   * {@code false}, this method will throw {@link IllegalArgumentException}.
+   *
+   * <p>If more than one provider with the same {@link LoadBalancerProvider#getPolicyName policy
+   * name} are registered, the one with the highest {@link LoadBalancerProvider#getPriority
+   * priority} will be effective.  If there are more than one name-sake providers rank the highest
+   * priority, the one registered first will be effective.
+   */
+  public synchronized void register(LoadBalancerProvider provider) {
+    addProvider(provider);
+    refreshProviderMap();
+  }
+
+  private synchronized void addProvider(LoadBalancerProvider provider) {
+    checkArgument(provider.isAvailable(), "isAvailable() returned false");
+    allProviders.add(provider);
+  }
+
+  /**
+   * Deregisters a provider.  No-op if the provider is not in the registry.  If there are more
+   * than one providers with the same policy name as the deregistered one in the registry, one
+   * of them will become the effective provider for that policy, per the rule documented in {@link
+   * #register}.
+   *
+   * @param provider the provider that was added to the register via {@link #register}.
+   */
+  public synchronized void deregister(LoadBalancerProvider provider) {
+    allProviders.remove(provider);
+    refreshProviderMap();
+  }
+
+  private synchronized void refreshProviderMap() {
+    effectiveProviders.clear();
+    for (LoadBalancerProvider provider : allProviders) {
       String policy = provider.getPolicyName();
-      LoadBalancerProvider existing = providerMap.get(policy);
-      if (existing == null) {
-        logger.fine("Found " + provider);
-        providerMap.put(policy, provider);
-      } else {
-        if (existing.getPriority() < provider.getPriority()) {
-          logger.fine(provider + " overrides " + existing + " because of higher priority");
-          providerMap.put(policy, provider);
-        } else if (existing.getPriority() > provider.getPriority()) {
-          logger.fine(provider + " doesn't override " + existing + " because of lower priority");
-        } else {
-          LoadBalancerProvider selected = existing;
-          if (existing.getClass().getName().compareTo(provider.getClass().getName()) < 0) {
-            providerMap.put(policy, provider);
-            selected = provider;
-          }
-          logger.warning(
-              provider + " and " + existing + " has the same priority. "
-              + selected + " is selected for this time. "
-              + "You should make them differ in either policy name or priority, or remove "
-              + "one of them from your classpath");
-        }
+      LoadBalancerProvider existing = effectiveProviders.get(policy);
+      if (existing == null || existing.getPriority() < provider.getPriority()) {
+        effectiveProviders.put(policy, provider);
       }
     }
-    providers = Collections.unmodifiableMap(providerMap);
   }
 
   /**
@@ -89,27 +104,34 @@ public final class LoadBalancerRegistry {
           HARDCODED_CLASSES,
           LoadBalancerProvider.class.getClassLoader(),
           new LoadBalancerPriorityAccessor());
-      instance = new LoadBalancerRegistry(providerList);
+      instance = new LoadBalancerRegistry();
+      for (LoadBalancerProvider provider : providerList) {
+        logger.fine("Service loader found " + provider);
+        if (provider.isAvailable()) {
+          instance.addProvider(provider);
+        }
+      }
+      instance.refreshProviderMap();
     }
     return instance;
   }
 
   /**
-   * Returns the provider for the given load-balancing policy, or {@code null} if no suitable
-   * provider can be found.  Each provider declares its policy name via {@link
+   * Returns the effective provider for the given load-balancing policy, or {@code null} if no
+   * suitable provider can be found.  Each provider declares its policy name via {@link
    * LoadBalancerProvider#getPolicyName}.
    */
   @Nullable
-  public LoadBalancerProvider getProvider(String policy) {
-    return providers.get(checkNotNull(policy, "policy"));
+  public synchronized LoadBalancerProvider getProvider(String policy) {
+    return effectiveProviders.get(checkNotNull(policy, "policy"));
   }
 
   /**
-   * Returns effective providers.
+   * Returns effective providers in a new map.
    */
   @VisibleForTesting
-  Map<String, LoadBalancerProvider> providers() {
-    return providers;
+  synchronized Map<String, LoadBalancerProvider> providers() {
+    return new LinkedHashMap<String, LoadBalancerProvider>(effectiveProviders);
   }
 
   @VisibleForTesting

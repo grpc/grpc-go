@@ -71,11 +71,16 @@ final class ServiceProviders {
       list.add(current);
     }
 
-    // Sort descending based on priority.
+    // Sort descending based on priority.  If priorities are equal, compare the class names to
+    // get a reliable result.
     Collections.sort(list, Collections.reverseOrder(new Comparator<T>() {
       @Override
       public int compare(T f1, T f2) {
-        return priorityAccessor.getPriority(f1) - priorityAccessor.getPriority(f2);
+        int pd = priorityAccessor.getPriority(f1) - priorityAccessor.getPriority(f2);
+        if (pd != 0) {
+          return pd;
+        }
+        return f1.getClass().getName().compareTo(f2.getClass().getName());
       }
     }));
     return Collections.unmodifiableList(list);

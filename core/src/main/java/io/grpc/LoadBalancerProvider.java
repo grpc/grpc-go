@@ -57,4 +57,17 @@ public abstract class LoadBalancerProvider extends LoadBalancer.Factory {
         .add("available", isAvailable())
         .toString();
   }
+
+  /**
+   * Uses identity equality.
+   */
+  @Override
+  public final boolean equals(Object other) {
+    return this == other;
+  }
+
+  @Override
+  public final int hashCode() {
+    return super.hashCode();
+  }
 }
