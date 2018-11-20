@@ -86,6 +86,7 @@ public class RetriableStreamTest {
   private static final long CHANNEL_BUFFER_LIMIT = 2000;
   private static final int MAX_ATTEMPTS = 6;
   private static final long INITIAL_BACKOFF_IN_SECONDS = 100;
+  private static final long HEDGING_DELAY_IN_SECONDS = 100;
   private static final long MAX_BACKOFF_IN_SECONDS = 700;
   private static final double BACKOFF_MULTIPLIER = 2D;
   private static final double FAKE_RANDOM = .5D;
@@ -104,6 +105,9 @@ public class RetriableStreamTest {
   private static final Code RETRIABLE_STATUS_CODE_1 = Code.UNAVAILABLE;
   private static final Code RETRIABLE_STATUS_CODE_2 = Code.DATA_LOSS;
   private static final Code NON_RETRIABLE_STATUS_CODE = Code.INTERNAL;
+  private static final Code NON_FATAL_STATUS_CODE_1 = Code.UNAVAILABLE;
+  private static final Code NON_FATAL_STATUS_CODE_2 = Code.DATA_LOSS;
+  private static final Code FATAL_STATUS_CODE = Code.INTERNAL;
   private static final RetryPolicy RETRY_POLICY =
       new RetryPolicy(
           MAX_ATTEMPTS,
@@ -111,6 +115,11 @@ public class RetriableStreamTest {
           TimeUnit.SECONDS.toNanos(MAX_BACKOFF_IN_SECONDS),
           BACKOFF_MULTIPLIER,
           ImmutableSet.of(RETRIABLE_STATUS_CODE_1, RETRIABLE_STATUS_CODE_2));
+  private static final HedgingPolicy HEDGING_POLICY =
+      new HedgingPolicy(
+          MAX_ATTEMPTS,
+          TimeUnit.SECONDS.toNanos(HEDGING_DELAY_IN_SECONDS),
+          ImmutableSet.of(NON_FATAL_STATUS_CODE_1, NON_FATAL_STATUS_CODE_2));
 
   private final RetriableStreamRecorder retriableStreamRecorder =
       mock(RetriableStreamRecorder.class);
@@ -173,6 +182,8 @@ public class RetriableStreamTest {
 
   private final RetriableStream<String> retriableStream =
       newThrottledRetriableStream(null /* throttle */);
+  private final RetriableStream<String> hedgingStream =
+      newThrottledHedgingStream(null /* throttle */);
 
   private ClientStreamTracer bufferSizeTracer;
 
@@ -181,6 +192,13 @@ public class RetriableStreamTest {
         method, new Metadata(), channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
         MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(), RETRY_POLICY,
         HedgingPolicy.DEFAULT, throttle);
+  }
+
+  private RetriableStream<String> newThrottledHedgingStream(Throttle throttle) {
+    return new RecordedRetriableStream(
+        method, new Metadata(), channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
+        MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(),
+        RetryPolicy.DEFAULT, HEDGING_POLICY, throttle);
   }
 
   @After
@@ -1526,6 +1544,40 @@ public class RetriableStreamTest {
   }
 
   @Test
+  public void noRetry_transparentRetry_earlyCommit() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(retriableStreamRecorder, mockStream1, mockStream2);
+    RetriableStream<String> unretriableStream = new RecordedRetriableStream(
+        method, new Metadata(), channelBufferUsed, PER_RPC_BUFFER_LIMIT, CHANNEL_BUFFER_LIMIT,
+        MoreExecutors.directExecutor(), fakeClock.getScheduledExecutorService(),
+        RetryPolicy.DEFAULT, HedgingPolicy.DEFAULT, null);
+
+    // start
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
+    unretriableStream.start(masterListener);
+
+    inOrder.verify(retriableStreamRecorder).newSubstream(0);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // transparent retry
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(0);
+    sublistenerCaptor1.getValue()
+        .closed(Status.fromCode(NON_RETRIABLE_STATUS_CODE), REFUSED, new Metadata());
+
+    inOrder.verify(retriableStreamRecorder).newSubstream(0);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+    assertEquals(0, fakeClock.numPendingTasks());
+  }
+
+  @Test
   public void droppedShouldNeverRetry() {
     ClientStream mockStream1 = mock(ClientStream.class);
     ClientStream mockStream2 = mock(ClientStream.class);
@@ -1547,6 +1599,671 @@ public class RetriableStreamTest {
     verifyNoMoreInteractions(mockStream1, mockStream2);
     verify(retriableStreamRecorder).postCommit();
     verify(masterListener).closed(same(status), any(Metadata.class));
+  }
+
+
+  @Test
+  public void hedging_everythingDrained_oneHedgeReceivesNonFatal_oneHedgeReceivesFatalStatus() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    ClientStream mockStream4 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
+    doReturn(mockStream3).when(retriableStreamRecorder).newSubstream(2);
+    doReturn(mockStream4).when(retriableStreamRecorder).newSubstream(3);
+    InOrder inOrder = inOrder(
+        retriableStreamRecorder,
+        masterListener,
+        mockStream1, mockStream2, mockStream3, mockStream4);
+
+    // stream settings before start
+    hedgingStream.setAuthority(AUTHORITY);
+    hedgingStream.setCompressor(COMPRESSOR);
+    hedgingStream.setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
+    hedgingStream.setFullStreamDecompression(false);
+    hedgingStream.setFullStreamDecompression(true);
+    hedgingStream.setMaxInboundMessageSize(MAX_INBOUND_MESSAGE_SIZE);
+    hedgingStream.setMessageCompression(true);
+    hedgingStream.setMaxOutboundMessageSize(MAX_OUTBOUND_MESSAGE_SIZE);
+    hedgingStream.setMessageCompression(false);
+
+    inOrder.verifyNoMoreInteractions();
+
+    // start
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+
+    inOrder.verify(retriableStreamRecorder).prestart();
+    inOrder.verify(retriableStreamRecorder).newSubstream(0);
+
+    inOrder.verify(mockStream1).setAuthority(AUTHORITY);
+    inOrder.verify(mockStream1).setCompressor(COMPRESSOR);
+    inOrder.verify(mockStream1).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
+    inOrder.verify(mockStream1).setFullStreamDecompression(false);
+    inOrder.verify(mockStream1).setFullStreamDecompression(true);
+    inOrder.verify(mockStream1).setMaxInboundMessageSize(MAX_INBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream1).setMessageCompression(true);
+    inOrder.verify(mockStream1).setMaxOutboundMessageSize(MAX_OUTBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream1).setMessageCompression(false);
+
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    hedgingStream.sendMessage("msg1");
+    hedgingStream.sendMessage("msg2");
+    hedgingStream.request(345);
+    hedgingStream.flush();
+    hedgingStream.flush();
+    hedgingStream.sendMessage("msg3");
+    hedgingStream.request(456);
+
+    inOrder.verify(mockStream1, times(2)).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream1).request(345);
+    inOrder.verify(mockStream1, times(2)).flush();
+    inOrder.verify(mockStream1).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream1).request(456);
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS - 1, TimeUnit.SECONDS);
+    inOrder.verifyNoMoreInteractions();
+    // hedge2 starts
+    fakeClock.forwardTime(1, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    inOrder.verify(retriableStreamRecorder).newSubstream(1);
+    inOrder.verify(mockStream2).setAuthority(AUTHORITY);
+    inOrder.verify(mockStream2).setCompressor(COMPRESSOR);
+    inOrder.verify(mockStream2).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
+    inOrder.verify(mockStream2).setFullStreamDecompression(false);
+    inOrder.verify(mockStream2).setFullStreamDecompression(true);
+    inOrder.verify(mockStream2).setMaxInboundMessageSize(MAX_INBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream2).setMessageCompression(true);
+    inOrder.verify(mockStream2).setMaxOutboundMessageSize(MAX_OUTBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream2).setMessageCompression(false);
+
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verify(mockStream2, times(2)).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).request(345);
+    inOrder.verify(mockStream2, times(2)).flush();
+    inOrder.verify(mockStream2).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).request(456);
+    inOrder.verifyNoMoreInteractions();
+
+    // send more messages
+    hedgingStream.sendMessage("msg1 after hedge2 starts");
+    hedgingStream.sendMessage("msg2 after hedge2 starts");
+
+    inOrder.verify(mockStream1).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream1).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).writeMessage(any(InputStream.class));
+    inOrder.verifyNoMoreInteractions();
+
+
+    // hedge3 starts
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+
+    inOrder.verify(retriableStreamRecorder).newSubstream(2);
+    inOrder.verify(mockStream3).setAuthority(AUTHORITY);
+    inOrder.verify(mockStream3).setCompressor(COMPRESSOR);
+    inOrder.verify(mockStream3).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
+    inOrder.verify(mockStream3).setFullStreamDecompression(false);
+    inOrder.verify(mockStream3).setFullStreamDecompression(true);
+    inOrder.verify(mockStream3).setMaxInboundMessageSize(MAX_INBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream3).setMessageCompression(true);
+    inOrder.verify(mockStream3).setMaxOutboundMessageSize(MAX_OUTBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream3).setMessageCompression(false);
+
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream3).start(sublistenerCaptor3.capture());
+    inOrder.verify(mockStream3, times(2)).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream3).request(345);
+    inOrder.verify(mockStream3, times(2)).flush();
+    inOrder.verify(mockStream3).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream3).request(456);
+    inOrder.verify(mockStream3, times(2)).writeMessage(any(InputStream.class));
+    inOrder.verifyNoMoreInteractions();
+
+    // send one more message
+    hedgingStream.sendMessage("msg1 after hedge3 starts");
+    inOrder.verify(mockStream1).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream3).writeMessage(any(InputStream.class));
+
+    // hedge3 receives nonFatalStatus
+    sublistenerCaptor3.getValue().closed(NON_FATAL_STATUS_CODE_1.toStatus(), new Metadata());
+    inOrder.verifyNoMoreInteractions();
+
+    // send one more message
+    hedgingStream.sendMessage("msg1 after hedge3 fails");
+    inOrder.verify(mockStream1).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream2).writeMessage(any(InputStream.class));
+
+    // the hedge mockStream4 starts
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+
+    inOrder.verify(retriableStreamRecorder).newSubstream(3);
+    inOrder.verify(mockStream4).setAuthority(AUTHORITY);
+    inOrder.verify(mockStream4).setCompressor(COMPRESSOR);
+    inOrder.verify(mockStream4).setDecompressorRegistry(DECOMPRESSOR_REGISTRY);
+    inOrder.verify(mockStream4).setFullStreamDecompression(false);
+    inOrder.verify(mockStream4).setFullStreamDecompression(true);
+    inOrder.verify(mockStream4).setMaxInboundMessageSize(MAX_INBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream4).setMessageCompression(true);
+    inOrder.verify(mockStream4).setMaxOutboundMessageSize(MAX_OUTBOUND_MESSAGE_SIZE);
+    inOrder.verify(mockStream4).setMessageCompression(false);
+
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor4 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream4).start(sublistenerCaptor4.capture());
+    inOrder.verify(mockStream4, times(2)).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream4).request(345);
+    inOrder.verify(mockStream4, times(2)).flush();
+    inOrder.verify(mockStream4).writeMessage(any(InputStream.class));
+    inOrder.verify(mockStream4).request(456);
+    inOrder.verify(mockStream4, times(4)).writeMessage(any(InputStream.class));
+    inOrder.verifyNoMoreInteractions();
+
+    // commit
+    sublistenerCaptor2.getValue().closed(
+        Status.fromCode(FATAL_STATUS_CODE), new Metadata());
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    inOrder.verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(mockStream4).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verify(masterListener).closed(any(Status.class), any(Metadata.class));
+    inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void hedging_maxAttempts() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    ClientStream mockStream4 = mock(ClientStream.class);
+    ClientStream mockStream5 = mock(ClientStream.class);
+    ClientStream mockStream6 = mock(ClientStream.class);
+    ClientStream mockStream7 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(
+        mockStream1, mockStream2, mockStream3, mockStream4, mockStream5, mockStream6, mockStream7,
+        retriableStreamRecorder, masterListener);
+    when(retriableStreamRecorder.newSubstream(anyInt())).thenReturn(
+        mockStream1, mockStream2, mockStream3, mockStream4, mockStream5, mockStream6, mockStream7);
+
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream3).start(sublistenerCaptor3.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor4 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream4).start(sublistenerCaptor4.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // a random one of the hedges fails
+    sublistenerCaptor2.getValue().closed(NON_FATAL_STATUS_CODE_1.toStatus(), new Metadata());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor5 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream5).start(sublistenerCaptor5.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(0, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor6 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream6).start(sublistenerCaptor6.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    inOrder.verifyNoMoreInteractions();
+
+    // all but one of the hedges fail
+    sublistenerCaptor1.getValue().closed(NON_FATAL_STATUS_CODE_2.toStatus(), new Metadata());
+    sublistenerCaptor4.getValue().closed(NON_FATAL_STATUS_CODE_2.toStatus(), new Metadata());
+    sublistenerCaptor5.getValue().closed(NON_FATAL_STATUS_CODE_2.toStatus(), new Metadata());
+    inOrder.verifyNoMoreInteractions();
+    sublistenerCaptor6.getValue().closed(NON_FATAL_STATUS_CODE_1.toStatus(), new Metadata());
+    inOrder.verifyNoMoreInteractions();
+
+    hedgingStream.sendMessage("msg1 after commit");
+    inOrder.verify(mockStream3).writeMessage(any(InputStream.class));
+    inOrder.verifyNoMoreInteractions();
+
+    Metadata heders = new Metadata();
+    sublistenerCaptor3.getValue().headersRead(heders);
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verify(masterListener).headersRead(heders);
+    inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void hedging_receiveHeaders() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(
+        mockStream1, mockStream2, mockStream3,
+        retriableStreamRecorder, masterListener);
+    when(retriableStreamRecorder.newSubstream(anyInt())).thenReturn(
+        mockStream1, mockStream2, mockStream3);
+
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream3).start(sublistenerCaptor3.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // a random one of the hedges receives headers
+    Metadata headers = new Metadata();
+    sublistenerCaptor2.getValue().headersRead(headers);
+
+    // all but one of the hedges get cancelled
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    inOrder.verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(mockStream3).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verify(masterListener).headersRead(headers);
+    inOrder.verifyNoMoreInteractions();
+
+  }
+
+  @Test
+  public void hedging_pushback_negative() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    ClientStream mockStream4 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(
+        mockStream1, mockStream2, mockStream3, mockStream4,
+        retriableStreamRecorder, masterListener);
+    when(retriableStreamRecorder.newSubstream(anyInt())).thenReturn(
+        mockStream1, mockStream2, mockStream3, mockStream4);
+
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream3).start(sublistenerCaptor3.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // a random one of the hedges receives a negative pushback
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "-1");
+    sublistenerCaptor2.getValue().closed(Status.fromCode(NON_FATAL_STATUS_CODE_1), headers);
+    assertEquals(0, fakeClock.numPendingTasks());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(0, fakeClock.numPendingTasks());
+    inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void hedging_pushback_positive() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    ClientStream mockStream4 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(
+        mockStream1, mockStream2, mockStream3, mockStream4,
+        retriableStreamRecorder, masterListener);
+    when(retriableStreamRecorder.newSubstream(anyInt())).thenReturn(
+        mockStream1, mockStream2, mockStream3, mockStream4);
+
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+
+
+    // hedge1 receives a pushback for HEDGING_DELAY_IN_SECONDS + 1 second
+    Metadata headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "101000");
+    sublistenerCaptor1.getValue().closed(Status.fromCode(NON_FATAL_STATUS_CODE_1), headers);
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(1, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream3).start(sublistenerCaptor3.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // hedge2 receives a pushback for HEDGING_DELAY_IN_SECONDS - 1 second
+    headers = new Metadata();
+    headers.put(RetriableStream.GRPC_RETRY_PUSHBACK_MS, "99000");
+    sublistenerCaptor2.getValue().closed(Status.fromCode(NON_FATAL_STATUS_CODE_1), headers);
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS - 1, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor4 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream4).start(sublistenerCaptor4.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    // commit
+    Status fatal = FATAL_STATUS_CODE.toStatus();
+    Metadata metadata = new Metadata();
+    sublistenerCaptor4.getValue().closed(fatal, metadata);
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    inOrder.verify(mockStream3).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verify(masterListener).closed(fatal, metadata);
+    inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void hedging_cancelled() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    InOrder inOrder = inOrder(
+        mockStream1, mockStream2,
+        retriableStreamRecorder, masterListener);
+    when(retriableStreamRecorder.newSubstream(anyInt())).thenReturn(mockStream1, mockStream2);
+
+    hedgingStream.start(masterListener);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream1).start(sublistenerCaptor1.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    assertEquals(1, fakeClock.numPendingTasks());
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    inOrder.verify(mockStream2).start(sublistenerCaptor2.capture());
+    inOrder.verifyNoMoreInteractions();
+
+    Status status = Status.CANCELLED.withDescription("cancelled");
+    hedgingStream.cancel(status);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    inOrder.verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    inOrder.verify(mockStream2).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+
+    inOrder.verify(retriableStreamRecorder).postCommit();
+    inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void hedging_perRpcBufferLimitExceeded() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
+
+    hedgingStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    ClientStreamTracer bufferSizeTracer1 = bufferSizeTracer;
+    bufferSizeTracer1.outboundWireSize(PER_RPC_BUFFER_LIMIT - 1);
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream2).start(sublistenerCaptor2.capture());
+
+    ClientStreamTracer bufferSizeTracer2 = bufferSizeTracer;
+    bufferSizeTracer2.outboundWireSize(PER_RPC_BUFFER_LIMIT - 1);
+
+    verify(retriableStreamRecorder, never()).postCommit();
+
+    // bufferLimitExceeded
+    bufferSizeTracer2.outboundWireSize(2);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    verify(retriableStreamRecorder).postCommit();
+
+    verifyNoMoreInteractions(mockStream1);
+    verifyNoMoreInteractions(mockStream2);
+  }
+
+  @Test
+  public void hedging_channelBufferLimitExceeded() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    doReturn(mockStream1).when(retriableStreamRecorder).newSubstream(0);
+    doReturn(mockStream2).when(retriableStreamRecorder).newSubstream(1);
+
+    hedgingStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    ClientStreamTracer bufferSizeTracer1 = bufferSizeTracer;
+    bufferSizeTracer1.outboundWireSize(100);
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream2).start(sublistenerCaptor2.capture());
+
+    ClientStreamTracer bufferSizeTracer2 = bufferSizeTracer;
+    bufferSizeTracer2.outboundWireSize(100);
+
+    verify(retriableStreamRecorder, never()).postCommit();
+
+    //  channel bufferLimitExceeded
+    channelBufferUsed.addAndGet(CHANNEL_BUFFER_LIMIT - 200);
+    bufferSizeTracer2.outboundWireSize(101);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    verify(retriableStreamRecorder).postCommit();
+    verifyNoMoreInteractions(mockStream1);
+    verifyNoMoreInteractions(mockStream2);
+    // verify channel buffer is adjusted
+    assertEquals(CHANNEL_BUFFER_LIMIT - 200, channelBufferUsed.addAndGet(0));
+  }
+
+  @Test
+  public void hedging_transparentRetry() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    ClientStream mockStream4 = mock(ClientStream.class);
+    when(retriableStreamRecorder.newSubstream(anyInt()))
+        .thenReturn(mockStream1, mockStream2, mockStream3, mockStream4);
+
+    hedgingStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream2).start(sublistenerCaptor2.capture());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream3).start(sublistenerCaptor3.capture());
+
+    // transparent retry for hedge2
+    sublistenerCaptor2.getValue()
+        .closed(Status.fromCode(FATAL_STATUS_CODE), REFUSED, new Metadata());
+
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor4 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream4).start(sublistenerCaptor4.capture());
+    assertEquals(1, fakeClock.numPendingTasks());
+
+    // no more transparent retry
+    Status status = Status.fromCode(FATAL_STATUS_CODE);
+    Metadata metadata = new Metadata();
+    sublistenerCaptor3.getValue()
+        .closed(status, REFUSED, metadata);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    verify(mockStream4).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    verify(retriableStreamRecorder).postCommit();
+    verify(masterListener).closed(status, metadata);
+  }
+
+  @Test
+  public void hedging_transparentRetryNotAllowed() {
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    when(retriableStreamRecorder.newSubstream(anyInt()))
+        .thenReturn(mockStream1, mockStream2, mockStream3);
+
+    hedgingStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor2 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream2).start(sublistenerCaptor2.capture());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor3 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream3).start(sublistenerCaptor3.capture());
+
+    sublistenerCaptor2.getValue()
+        .closed(Status.fromCode(NON_FATAL_STATUS_CODE_1), new Metadata());
+
+    // no more transparent retry
+    Status status = Status.fromCode(FATAL_STATUS_CODE);
+    Metadata metadata = new Metadata();
+    sublistenerCaptor3.getValue()
+        .closed(status, REFUSED, metadata);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockStream1).cancel(statusCaptor.capture());
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(CANCELLED_BECAUSE_COMMITTED, statusCaptor.getValue().getDescription());
+    verify(retriableStreamRecorder).postCommit();
+    verify(masterListener).closed(status, metadata);
+  }
+
+  @Test
+  public void hedging_throttled() {
+    Throttle throttle = new Throttle(4f, 0.8f);
+    RetriableStream<String> hedgingStream = newThrottledHedgingStream(throttle);
+
+    ClientStream mockStream1 = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    ClientStream mockStream3 = mock(ClientStream.class);
+    when(retriableStreamRecorder.newSubstream(anyInt()))
+        .thenReturn(mockStream1, mockStream2, mockStream3);
+
+    hedgingStream.start(masterListener);
+    ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream1).start(sublistenerCaptor1.capture());
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    verify(mockStream2).start(any(ClientStreamListener.class));
+
+    sublistenerCaptor1.getValue().closed(Status.fromCode(NON_FATAL_STATUS_CODE_1), new Metadata());
+    assertTrue(throttle.isAboveThreshold()); // count = 3
+
+    // mimic some other call in the channel triggers a throttle countdown
+    assertFalse(throttle.onQualifiedFailureThenCheckIsAboveThreshold()); // count = 2
+
+    fakeClock.forwardTime(HEDGING_DELAY_IN_SECONDS, TimeUnit.SECONDS);
+    verify(mockStream3).start(any(ClientStreamListener.class));
+    assertEquals(0, fakeClock.numPendingTasks());
   }
 
   /**

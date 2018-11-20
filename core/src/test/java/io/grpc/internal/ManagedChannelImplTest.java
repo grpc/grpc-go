@@ -2858,6 +2858,101 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void hedgingScheduledThenChannelShutdown_hedgeShouldStillHappen_newCallShouldFail() {
+    Map<String, Object> hedgingPolicy = new HashMap<String, Object>();
+    hedgingPolicy.put("maxAttempts", 3D);
+    hedgingPolicy.put("hedgingDelay", "10s");
+    hedgingPolicy.put("nonFatalStatusCodes", Arrays.<Object>asList("UNAVAILABLE"));
+    Map<String, Object> methodConfig = new HashMap<String, Object>();
+    Map<String, Object> name = new HashMap<String, Object>();
+    name.put("service", "service");
+    methodConfig.put("name", Arrays.<Object>asList(name));
+    methodConfig.put("hedgingPolicy", hedgingPolicy);
+    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    serviceConfig.put("methodConfig", Arrays.<Object>asList(methodConfig));
+    Attributes attributesWithRetryPolicy = Attributes
+        .newBuilder().set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
+
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri)
+            .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(attributesWithRetryPolicy);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    channelBuilder.executor(MoreExecutors.directExecutor());
+    channelBuilder.enableRetry();
+
+    requestConnection = false;
+    createChannel();
+
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(Helper.class);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    helper = helperCaptor.getValue();
+    verify(mockLoadBalancer)
+        .handleResolvedAddressGroups(nameResolverFactory.servers, attributesWithRetryPolicy);
+
+    // simulating request connection and then transport ready after resolved address
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(PickResult.withSubchannel(subchannel));
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    ConnectionClientTransport mockTransport = transportInfo.transport;
+    ClientStream mockStream = mock(ClientStream.class);
+    ClientStream mockStream2 = mock(ClientStream.class);
+    when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream).thenReturn(mockStream2);
+    transportInfo.listener.transportReady();
+    helper.updateBalancingState(READY, mockPicker);
+
+    ArgumentCaptor<ClientStreamListener> streamListenerCaptor =
+        ArgumentCaptor.forClass(ClientStreamListener.class);
+    verify(mockStream).start(streamListenerCaptor.capture());
+
+    // in hedging delay backoff
+    timer.forwardTime(5, TimeUnit.SECONDS);
+    assertThat(timer.numPendingTasks()).isEqualTo(1);
+    // first hedge fails
+    streamListenerCaptor.getValue().closed(Status.UNAVAILABLE, new Metadata());
+    verify(mockStream2, never()).start(any(ClientStreamListener.class));
+
+    // shutdown during backoff period
+    channel.shutdown();
+
+    assertThat(timer.numPendingTasks()).isEqualTo(1);
+    verify(mockCallListener, never()).onClose(any(Status.class), any(Metadata.class));
+
+    ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
+    call2.start(mockCallListener2, new Metadata());
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener2).onClose(statusCaptor.capture(), any(Metadata.class));
+    assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+    assertEquals("Channel shutdown invoked", statusCaptor.getValue().getDescription());
+
+    // backoff ends
+    timer.forwardTime(5, TimeUnit.SECONDS);
+    assertThat(timer.numPendingTasks()).isEqualTo(1);
+    verify(mockStream2).start(streamListenerCaptor.capture());
+    verify(mockLoadBalancer, never()).shutdown();
+    assertFalse(
+        "channel.isTerminated() is expected to be false but was true",
+        channel.isTerminated());
+
+    streamListenerCaptor.getValue().closed(Status.INTERNAL, new Metadata());
+    assertThat(timer.numPendingTasks()).isEqualTo(0);
+    verify(mockLoadBalancer).shutdown();
+    // simulating the shutdown of load balancer triggers the shutdown of subchannel
+    subchannel.shutdown();
+    transportInfo.listener.transportTerminated(); // simulating transport terminated
+    assertTrue(
+        "channel.isTerminated() is expected to be true but was false",
+        channel.isTerminated());
+  }
+
+  @Test
   public void badServiceConfigIsRecoverable() throws Exception {
     final List<EquivalentAddressGroup> addresses =
         ImmutableList.of(new EquivalentAddressGroup(new SocketAddress() {}));
