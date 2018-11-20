@@ -125,7 +125,70 @@ func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures sta
 	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
-func makeFuncUnary(benchFeatures stats.Features) (func(int), func()) {
+func unconstrainedStreamBenchmark(startTimer func(), stopTimer func(uint32, uint32), benchFeatures stats.Features, benchtime time.Duration, sSend, sRecv *stats.Stats) {
+	sender, recver, cleanup := makeFuncUnconstrainedStream(benchFeatures)
+	defer cleanup()
+	// Warm up connection.
+	for i := 0; i < 10; i++ {
+		sender(0)
+		recver(0)
+	}
+	// Run benchmark.
+	startTimer()
+	var (
+		muSend  sync.Mutex
+		muRecv  sync.Mutex
+		wg      sync.WaitGroup
+		cntSend uint32
+		cntRecv uint32
+	)
+	wg.Add(2 * benchFeatures.MaxConcurrentCalls)
+	bmEnd := time.Now().Add(benchtime)
+	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
+		go func(pos int) {
+			go func() {
+				for {
+					t := time.Now()
+					if t.After(bmEnd) {
+						break
+					}
+
+					start := time.Now()
+					sender(pos)
+					elapse := time.Since(start)
+
+					atomic.AddUint32(&cntSend, 1)
+					muSend.Lock()
+					sSend.Add(elapse)
+					muSend.Unlock()
+				}
+				wg.Done()
+			}()
+			go func() {
+				for {
+					t := time.Now()
+					if t.After(bmEnd) {
+						break
+					}
+
+					start := time.Now()
+					recver(pos)
+					elapse := time.Since(start)
+
+					atomic.AddUint32(&cntRecv, 1)
+					muRecv.Lock()
+					sRecv.Add(elapse)
+					muRecv.Unlock()
+				}
+				wg.Done()
+			}()
+		}(i)
+	}
+	wg.Wait()
+	stopTimer(cntSend, cntRecv)
+}
+
+func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, func()) {
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -165,57 +228,22 @@ func makeFuncUnary(benchFeatures stats.Features) (func(int), func()) {
 	lis = nw.Listener(lis)
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conn := bm.NewClientConn("" /* target not used */, opts...)
-	tc := testpb.NewBenchmarkServiceClient(conn)
+	return testpb.NewBenchmarkServiceClient(conn), func() {
+		conn.Close()
+		stopper()
+	}
+}
+
+func makeFuncUnary(benchFeatures stats.Features) (func(int), func()) {
+	tc, cleanup := makeClient(benchFeatures)
 	return func(int) {
-			unaryCaller(tc, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-		}, func() {
-			conn.Close()
-			stopper()
-		}
+		unaryCaller(tc, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
+	}, cleanup
 }
 
 func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
-	// TODO: Refactor to remove duplication with makeFuncUnary.
-	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	opts := []grpc.DialOption{}
-	sopts := []grpc.ServerOption{}
-	if benchFeatures.EnableCompressor {
-		sopts = append(sopts,
-			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
-			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
-		)
-		opts = append(opts,
-			grpc.WithCompressor(grpc.NewGZIPCompressor()),
-			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
-		)
-	}
-	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
-	opts = append(opts, grpc.WithInsecure())
+	tc, cleanup := makeClient(benchFeatures)
 
-	var lis net.Listener
-	if *useBufconn {
-		bcLis := bufconn.Listen(256 * 1024)
-		lis = bcLis
-		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(
-				func(string, string, time.Duration) (net.Conn, error) {
-					return bcLis.Dial()
-				})("", "", 0)
-		}))
-	} else {
-		var err error
-		lis, err = net.Listen("tcp", "localhost:0")
-		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
-		}
-		opts = append(opts, grpc.WithDialer(func(_ string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", lis.Addr().String(), timeout)
-		}))
-	}
-	lis = nw.Listener(lis)
-	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
-	conn := bm.NewClientConn("" /* target not used */, opts...)
-	tc := testpb.NewBenchmarkServiceClient(conn)
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
 	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
 		stream, err := tc.StreamingCall(context.Background())
@@ -224,12 +252,36 @@ func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
 		}
 		streams[i] = stream
 	}
+
 	return func(pos int) {
-			streamCaller(streams[pos], benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-		}, func() {
-			conn.Close()
-			stopper()
+		streamCaller(streams[pos], benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
+	}, cleanup
+}
+
+func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(int), func()) {
+	tc, cleanup := makeClient(benchFeatures)
+
+	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
+	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
+		stream, err := tc.UnconstrainedStreamingCall(context.Background())
+		if err != nil {
+			grpclog.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
 		}
+		streams[i] = stream
+	}
+
+	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, benchFeatures.ReqSizeBytes)
+	req := &testpb.SimpleRequest{
+		ResponseType: pl.Type,
+		ResponseSize: int32(benchFeatures.RespSizeBytes),
+		Payload:      pl,
+	}
+
+	return func(pos int) {
+			streams[pos].Send(req)
+		}, func(pos int) {
+			streams[pos].Recv()
+		}, cleanup
 }
 
 func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
@@ -422,11 +474,11 @@ func main() {
 		startBytes = memStats.TotalAlloc
 		startTime = time.Now()
 	}
-	var stopTimer = func(count int32) {
-		runtime.ReadMemStats(&memStats)
-		results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
-			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
-	}
+	// var stopTimer = func(count int32) {
+	// 	runtime.ReadMemStats(&memStats)
+	// 	results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
+	// 		Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
+	// }
 	sharedPos := make([]bool, len(featuresPos))
 	for i := 0; i < len(featuresPos); i++ {
 		if featuresNum[i] <= 1 {
@@ -455,24 +507,43 @@ func main() {
 		if enableChannelz[featuresPos[8]] {
 			channelz.TurnOn()
 		}
-		if runMode[0] {
-			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-			s.SetBenchmarkResult("Unary", benchFeature, results.N,
-				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-			fmt.Println(s.BenchString())
-			fmt.Println(s.String())
-			resultSlice = append(resultSlice, s.GetBenchmarkResults())
-			s.Clear()
-		}
-		if runMode[1] {
-			streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-			s.SetBenchmarkResult("Stream", benchFeature, results.N,
-				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-			fmt.Println(s.BenchString())
-			fmt.Println(s.String())
-			resultSlice = append(resultSlice, s.GetBenchmarkResults())
-			s.Clear()
-		}
+		// if runMode[0] {
+		// 	unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
+		// 	s.SetBenchmarkResult("Unary", benchFeature, results.N,
+		// 		results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+		// 	fmt.Println(s.BenchString())
+		// 	fmt.Println(s.String())
+		// 	resultSlice = append(resultSlice, s.GetBenchmarkResults())
+		// 	s.Clear()
+		// }
+		// if runMode[1] {
+		// 	streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
+		// 	s.SetBenchmarkResult("Stream", benchFeature, results.N,
+		// 		results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+		// 	fmt.Println(s.BenchString())
+		// 	fmt.Println(s.String())
+		// 	resultSlice = append(resultSlice, s.GetBenchmarkResults())
+		// 	s.Clear()
+		// }
+		sSend := stats.NewStats(10)
+		sRecv := stats.NewStats(10)
+		fmt.Println(benchFeature)
+		unconstrainedStreamBenchmark(startTimer, func(cntSend, cntRecv uint32) {
+			fmt.Println(cntSend, cntRecv)
+			runtime.ReadMemStats(&memStats)
+			results = testing.BenchmarkResult{N: int((cntSend + cntRecv) / 2), T: time.Since(startTime),
+				Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
+		}, benchFeature, benchtime, sSend, sRecv)
+		sSend.SetBenchmarkResult("Client to server", benchFeature, results.N,
+			results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+		fmt.Println(sSend.BenchString())
+		fmt.Println(sSend.String())
+		resultSlice = append(resultSlice, sSend.GetBenchmarkResults())
+		sRecv.SetBenchmarkResult("Server to client", benchFeature, results.N,
+			results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+		fmt.Println(sRecv.BenchString())
+		fmt.Println(sRecv.String())
+		resultSlice = append(resultSlice, sRecv.GetBenchmarkResults())
 		bm.AddOne(featuresPos, featuresNum)
 	}
 	after(resultSlice)

@@ -29,6 +29,7 @@ service BenchmarkService {
   // One request followed by one response.
   // The server returns the client payload as-is.
   rpc StreamingCall(stream SimpleRequest) returns (stream SimpleResponse);
+  rpc UnconstrainedStreamingCall(stream SimpleRequest) returns (stream SimpleResponse);
 }
 
 service WorkerService {
