@@ -1131,10 +1131,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		serverPrefaceReceived = true
 		if clientPrefaceWrote {
 			ac.successfulHandshake = true
-			ac.backoffDeadline = time.Time{}
-			ac.connectDeadline = time.Time{}
-			ac.addrIdx = 0
-			ac.backoffIdx = 0
 		}
 		prefaceMu.Unlock()
 
@@ -1312,11 +1308,14 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
 
-	// If a handshake has been observed, we expect the counters to have manually
-	// been reset so we'll just return, since we want the next usage to start
-	// at index 0.
+	// If a handshake has been observed, we want the next usage to start at
+	// index 0 immediately.
 	if ac.successfulHandshake {
 		ac.successfulHandshake = false
+		ac.backoffDeadline = time.Time{}
+		ac.connectDeadline = time.Time{}
+		ac.addrIdx = 0
+		ac.backoffIdx = 0
 		ac.mu.Unlock()
 		return nil
 	}
