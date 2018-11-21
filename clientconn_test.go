@@ -154,6 +154,8 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 
 	defer leakcheck.Check(t)
 
+	// Test with all environment variable settings, which should not impact the
+	// test case since WithWaitForHandshake has higher priority.
 	for _, setting := range allReqHSSettings {
 		envconfig.RequireHandshake = setting
 		lis, err := net.Listen("tcp", "localhost:0")
