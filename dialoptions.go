@@ -55,7 +55,7 @@ type dialOptions struct {
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
 	resolverBuilder      resolver.Builder
-	reqHandshake         *envconfig.RequireHandshakeSetting
+	reqHandshake         envconfig.RequireHandshakeSetting
 	channelzParentID     int64
 	disableServiceConfig bool
 	disableRetry         bool
@@ -100,8 +100,7 @@ func newFuncDialOption(f func(*dialOptions)) *funcDialOption {
 // variable GRPC_GO_READY_BEFORE_HANDSHAKE=on.
 func WithWaitForHandshake() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		t := envconfig.RequireHandshakeOn
-		o.reqHandshake = &t
+		o.reqHandshake = envconfig.RequireHandshakeOn
 	})
 }
 
@@ -472,7 +471,7 @@ func WithDisableHealthCheck() DialOption {
 func defaultDialOptions() dialOptions {
 	return dialOptions{
 		disableRetry: !envconfig.Retry,
-		reqHandshake: &envconfig.RequireHandshake,
+		reqHandshake: envconfig.RequireHandshake,
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,

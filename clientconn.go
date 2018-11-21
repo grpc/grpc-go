@@ -1145,12 +1145,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if err == nil {
 		prefaceMu.Lock()
 		clientPrefaceWrote = true
-		if serverPrefaceReceived || *ac.dopts.reqHandshake == envconfig.RequireHandshakeOff {
+		if serverPrefaceReceived || ac.dopts.reqHandshake == envconfig.RequireHandshakeOff {
 			ac.successfulHandshake = true
 		}
 		prefaceMu.Unlock()
 
-		if *ac.dopts.reqHandshake == envconfig.RequireHandshakeOn {
+		if ac.dopts.reqHandshake == envconfig.RequireHandshakeOn {
 			select {
 			case <-prefaceTimer.C:
 				// We didn't get the preface in time.
@@ -1163,7 +1163,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				close(allowedToReset)
 				return nil
 			}
-		} else if *ac.dopts.reqHandshake == envconfig.RequireHandshakeHybrid {
+		} else if ac.dopts.reqHandshake == envconfig.RequireHandshakeHybrid {
 			go func() {
 				select {
 				case <-prefaceTimer.C:
