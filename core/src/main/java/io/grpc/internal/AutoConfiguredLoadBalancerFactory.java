@@ -35,7 +35,8 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
+@VisibleForTesting
+public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
   private static final String DEFAULT_POLICY = "pick_first";
 
   private static final LoadBalancerRegistry registry = LoadBalancerRegistry.getDefaultRegistry();
@@ -62,7 +63,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
 
 
   @VisibleForTesting
-  static final class AutoConfiguredLoadBalancer extends LoadBalancer {
+  public static final class AutoConfiguredLoadBalancer extends LoadBalancer {
     private final Helper helper;
     private LoadBalancer delegate;
     private LoadBalancerProvider delegateProvider;
@@ -125,7 +126,7 @@ final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @VisibleForTesting
-    LoadBalancer getDelegate() {
+    public LoadBalancer getDelegate() {
       return delegate;
     }
 

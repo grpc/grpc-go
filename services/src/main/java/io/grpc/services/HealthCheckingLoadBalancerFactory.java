@@ -86,7 +86,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     HelperImpl wrappedHelper = new HelperImpl(helper);
     LoadBalancer delegateBalancer = delegateFactory.newLoadBalancer(wrappedHelper);
     wrappedHelper.init(delegateBalancer);
-    return new LoadBalancerImpl(wrappedHelper, delegateBalancer);
+    return new HealthCheckingLoadBalancer(wrappedHelper, delegateBalancer);
   }
 
   private final class HelperImpl extends ForwardingLoadBalancerHelper {
@@ -144,13 +144,13 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     }
   }
 
-  private static final class LoadBalancerImpl extends ForwardingLoadBalancer {
+  private static final class HealthCheckingLoadBalancer extends ForwardingLoadBalancer {
     final LoadBalancer delegate;
     final HelperImpl helper;
     final SynchronizationContext syncContext;
     final ScheduledExecutorService timerService;
 
-    LoadBalancerImpl(HelperImpl helper, LoadBalancer delegate) {
+    HealthCheckingLoadBalancer(HelperImpl helper, LoadBalancer delegate) {
       this.helper = checkNotNull(helper, "helper");
       this.syncContext = checkNotNull(helper.getSynchronizationContext(), "syncContext");
       this.timerService = checkNotNull(helper.getScheduledExecutorService(), "timerService");
