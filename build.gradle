@@ -27,7 +27,7 @@ subprojects {
     apply plugin: "ru.vyarus.animalsniffer"
     // jdk10 not supported by errorprone: https://github.com/google/error-prone/issues/860
     if (!JavaVersion.current().isJava10Compatible() &&
-        rootProject.properties.get('errorProne', true)) {
+        rootProject.properties.get('errorProne', true).toBoolean()) {
         apply plugin: "net.ltgt.errorprone"
 
         dependencies {
