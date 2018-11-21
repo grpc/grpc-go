@@ -69,7 +69,8 @@ jacocoTestReport {
     classDirectories = files(classDirectories.files.collect {
         fileTree(dir: it,
         exclude: [
-            '**/io/grpc/okhttp/internal/**'
+                '**/io/grpc/internal/testing/**',
+                '**/io/grpc/okhttp/internal/**',
         ])
     })
 }
