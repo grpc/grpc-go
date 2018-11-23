@@ -30,7 +30,6 @@ import (
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
-	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -49,10 +48,10 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 func RegisterChannelzServiceToServer(s *grpc.Server) {
-	channelzgrpc.RegisterChannelzServer(s, newCZServer())
+	channelzpb.RegisterChannelzServer(s, newCZServer())
 }
 
-func newCZServer() channelzgrpc.ChannelzServer {
+func newCZServer() channelzpb.ChannelzServer {
 	return &serverImpl{}
 }
 
