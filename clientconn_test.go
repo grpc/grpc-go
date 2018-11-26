@@ -285,8 +285,8 @@ func TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 				defer conn.Close()
 			}
 		}()
-		getMinConnectTimeout = func() time.Duration { return time.Second / 2 }
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		getMinConnectTimeout = func() time.Duration { return time.Second / 4 }
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock())
 		lis.Close()
@@ -331,8 +331,8 @@ func TestDialWaitsForServerSettingsViaEnvAndFails(t *testing.T) {
 			defer conn.Close()
 		}
 	}()
-	getMinConnectTimeout = func() time.Duration { return time.Second / 2 }
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	getMinConnectTimeout = func() time.Duration { return time.Second / 4 }
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock())
 	lis.Close()
