@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -1127,10 +1128,6 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 		serverPrefaceReceived = true
 		if clientPrefaceWrote {
 			ac.successfulHandshake = true
-			ac.backoffDeadline = time.Time{}
-			ac.connectDeadline = time.Time{}
-			ac.addrIdx = 0
-			ac.backoffIdx = 0
 		}
 		prefaceMu.Unlock()
 
@@ -1148,12 +1145,12 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	if err == nil {
 		prefaceMu.Lock()
 		clientPrefaceWrote = true
-		if serverPrefaceReceived {
+		if serverPrefaceReceived || ac.dopts.reqHandshake == envconfig.RequireHandshakeOff {
 			ac.successfulHandshake = true
 		}
 		prefaceMu.Unlock()
 
-		if ac.dopts.waitForHandshake {
+		if ac.dopts.reqHandshake == envconfig.RequireHandshakeOn {
 			select {
 			case <-prefaceTimer.C:
 				// We didn't get the preface in time.
@@ -1166,7 +1163,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 				close(allowedToReset)
 				return nil
 			}
-		} else {
+		} else if ac.dopts.reqHandshake == envconfig.RequireHandshakeHybrid {
 			go func() {
 				select {
 				case <-prefaceTimer.C:
@@ -1308,11 +1305,14 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 func (ac *addrConn) nextAddr() error {
 	ac.mu.Lock()
 
-	// If a handshake has been observed, we expect the counters to have manually
-	// been reset so we'll just return, since we want the next usage to start
-	// at index 0.
+	// If a handshake has been observed, we want the next usage to start at
+	// index 0 immediately.
 	if ac.successfulHandshake {
 		ac.successfulHandshake = false
+		ac.backoffDeadline = time.Time{}
+		ac.connectDeadline = time.Time{}
+		ac.addrIdx = 0
+		ac.backoffIdx = 0
 		ac.mu.Unlock()
 		return nil
 	}
