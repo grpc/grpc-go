@@ -426,6 +426,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         }
         if (clientReceiveQueue.isEmpty() && clientNotifyStatus != null) {
           closed = true;
+          clientStream.statsTraceCtx.clientInboundTrailers(clientNotifyTrailers);
           clientStream.statsTraceCtx.streamClosed(clientNotifyStatus);
           clientStreamListener.closed(clientNotifyStatus, clientNotifyTrailers);
         }
@@ -535,6 +536,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           }
           if (clientReceiveQueue.isEmpty()) {
             closed = true;
+            clientStream.statsTraceCtx.clientInboundTrailers(trailers);
             clientStream.statsTraceCtx.streamClosed(clientStatus);
             clientStreamListener.closed(clientStatus, trailers);
           } else {

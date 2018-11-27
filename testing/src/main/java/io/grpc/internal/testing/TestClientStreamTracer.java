@@ -17,10 +17,12 @@
 package io.grpc.internal.testing;
 
 import io.grpc.ClientStreamTracer;
+import io.grpc.Metadata;
 import io.grpc.Status;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 
 /**
  * A {@link ClientStreamTracer} suitable for testing.
@@ -32,6 +34,7 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
       new AtomicReference<Throwable>();
   protected final AtomicReference<Throwable> inboundHeadersCalled =
       new AtomicReference<Throwable>();
+  protected final AtomicReference<Metadata> inboundTrailers = new AtomicReference<Metadata>();
 
   @Override
   public void await() throws InterruptedException {
@@ -48,6 +51,15 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
    */
   public boolean getInboundHeaders() {
     return inboundHeadersCalled.get() != null;
+  }
+
+  /**
+   * Returns the inbound trailers if {@link ClientStreamTracer#inboundTrailers} has been called, or
+   * {@code null}.
+   */
+  @Nullable
+  public Metadata getInboundTrailers() {
+    return inboundTrailers.get();
   }
 
   /**
@@ -170,6 +182,18 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
       throw new AssertionError(
           "inboundHeaders called more than once",
           new Exception("second stack", inboundHeadersCalled.get()));
+    }
+  }
+
+  @Override
+  public void inboundTrailers(Metadata trailers) {
+    if (delegate.getStatus() != null) {
+      throw new AssertionError(
+          "stream has already been closed with " + delegate.getStatus(),
+          delegate.streamClosedStack.get());
+    }
+    if (!inboundTrailers.compareAndSet(null, trailers) && delegate.failDuplicateCallbacks.get()) {
+      throw new AssertionError("inboundTrailers called more than once");
     }
   }
 }

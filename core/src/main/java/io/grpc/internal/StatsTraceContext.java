@@ -111,6 +111,17 @@ public final class StatsTraceContext {
   }
 
   /**
+   * See {@link ClientStreamTracer#inboundTrailers}.  For client-side only.
+   *
+   * <p>Called from abstract stream implementations.
+   */
+  public void clientInboundTrailers(Metadata trailers) {
+    for (StreamTracer tracer : tracers) {
+      ((ClientStreamTracer) tracer).inboundTrailers(trailers);
+    }
+  }
+
+  /**
    * See {@link ServerStreamTracer#filterContext}.  For server-side only.
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.

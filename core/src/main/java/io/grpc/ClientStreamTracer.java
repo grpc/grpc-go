@@ -37,6 +37,16 @@ public abstract class ClientStreamTracer extends StreamTracer {
   }
 
   /**
+   * Trailing metadata has been received from the server.
+   *
+   * @param trailers the mutable trailing metadata.  Modifications to it will be seen by
+   *                 interceptors and the application.
+   * @since 1.17.0
+   */
+  public void inboundTrailers(Metadata trailers) {
+  }
+
+  /**
    * Factory class for {@link ClientStreamTracer}.
    */
   public abstract static class Factory {

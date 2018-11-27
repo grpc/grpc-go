@@ -388,6 +388,7 @@ public abstract class AbstractClientStream extends AbstractStream
         return;
       }
       this.trailers = trailers;
+      statsTraceCtx.clientInboundTrailers(trailers);
       trailerStatus = status;
       closeDeframer(false);
     }

@@ -94,6 +94,7 @@ public interface TestStreamTracer {
     protected final LinkedBlockingQueue<String> outboundEvents = new LinkedBlockingQueue<String>();
     protected final LinkedBlockingQueue<String> inboundEvents = new LinkedBlockingQueue<String>();
     protected final AtomicReference<Status> streamClosedStatus = new AtomicReference<Status>();
+    protected final AtomicReference<Throwable> streamClosedStack = new AtomicReference<Throwable>();
     protected final CountDownLatch streamClosed = new CountDownLatch(1);
     protected final AtomicBoolean failDuplicateCallbacks = new AtomicBoolean(true);
 
@@ -154,9 +155,10 @@ public interface TestStreamTracer {
 
     @Override
     public void streamClosed(Status status) {
+      streamClosedStack.compareAndSet(null, new Throwable("first call"));
       if (!streamClosedStatus.compareAndSet(null, status)) {
         if (failDuplicateCallbacks.get()) {
-          throw new AssertionError("streamClosed called more than once");
+          throw new AssertionError("streamClosed called more than once", streamClosedStack.get());
         }
       } else {
         streamClosed.countDown();
