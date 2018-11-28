@@ -148,16 +148,22 @@ public final class TsiHandshakeHandler extends ByteToMessageDecoder {
 
     // If the handshake is complete, transition to the framing state.
     if (!handshaker.isInProgress()) {
+      TsiFrameProtector protector = null;
       try {
         ctx.pipeline().remove(this);
-        ctx.fireUserEventTriggered(
-            new TsiHandshakeCompletionEvent(
-                handshaker.createFrameProtector(ctx.alloc()),
-                handshaker.extractPeer(),
-                handshaker.extractPeerObject()));
+        protector = handshaker.createFrameProtector(ctx.alloc());
+        TsiHandshakeCompletionEvent evt = new TsiHandshakeCompletionEvent(
+            protector,
+            handshaker.extractPeer(),
+            handshaker.extractPeerObject());
+        protector = null;
+        ctx.fireUserEventTriggered(evt);
         // No need to do anything with the in buffer, it will be re added to the pipeline when this
         // handler is removed.
       } finally {
+        if (protector != null) {
+          protector.destroy();
+        }
         close();
       }
     }

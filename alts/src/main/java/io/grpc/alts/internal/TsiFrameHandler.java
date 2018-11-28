@@ -124,16 +124,19 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @Override
   public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) {
+    release();
     ctx.disconnect(promise);
   }
 
   @Override
   public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
+    release();
     ctx.close(promise);
   }
 
   @Override
   public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
+    release();
     ctx.deregister(promise);
   }
 
@@ -177,5 +180,12 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
     // We're done writing, start the flow of promise events.
     @SuppressWarnings("unused") // go/futurereturn-lsc
     Future<?> possiblyIgnoredError = aggregatePromise.doneAllocatingPromises();
+  }
+
+  private void release() {
+    if (protector != null) {
+      protector.destroy();
+      protector = null;
+    }
   }
 }
