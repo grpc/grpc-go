@@ -175,7 +175,8 @@ public class ManagedChannelImplTest {
       new FakeClock.TaskFilter() {
         @Override
         public boolean shouldAccept(Runnable command) {
-          return command instanceof ManagedChannelImpl.NameResolverRefresh;
+          return command.toString().contains(
+              ManagedChannelImpl.NameResolverRefresh.class.getName());
         }
       };
 

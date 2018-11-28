@@ -62,6 +62,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext;
+import io.grpc.SynchronizationContext.ScheduledHandle;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.RetriableStream.ChannelBufferMeter;
 import io.grpc.internal.RetriableStream.Throttle;
@@ -394,17 +395,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
   // Run from syncContext
   @VisibleForTesting
   class NameResolverRefresh implements Runnable {
-    // Only mutated from syncContext
-    boolean cancelled;
-
     @Override
     public void run() {
-      if (cancelled) {
-        // Race detected: this task was scheduled on syncContext before
-        // cancelNameResolverBackoff() could cancel the timer.
-        return;
-      }
-      nameResolverRefreshFuture = null;
       nameResolverRefresh = null;
       if (nameResolver != null) {
         nameResolver.refresh();
@@ -413,19 +405,15 @@ final class ManagedChannelImpl extends ManagedChannel implements
   }
 
   // Must be used from syncContext
-  @Nullable private ScheduledFuture<?> nameResolverRefreshFuture;
-  // Must be used from syncContext
-  @Nullable private NameResolverRefresh nameResolverRefresh;
+  @Nullable private ScheduledHandle nameResolverRefresh;
   // The policy to control backoff between name resolution attempts. Non-null when an attempt is
   // scheduled. Must be used from syncContext
   @Nullable private BackoffPolicy nameResolverBackoffPolicy;
 
   // Must be run from syncContext
   private void cancelNameResolverBackoff() {
-    if (nameResolverRefreshFuture != null) {
-      nameResolverRefreshFuture.cancel(false);
-      nameResolverRefresh.cancelled = true;
-      nameResolverRefreshFuture = null;
+    if (nameResolverRefresh != null) {
+      nameResolverRefresh.cancel();
       nameResolverRefresh = null;
       nameResolverBackoffPolicy = null;
     }
@@ -869,7 +857,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         if (shutdown.get()) {
           return;
         }
-        if (nameResolverRefreshFuture != null) {
+        if (nameResolverRefresh != null && nameResolverRefresh.isPending()) {
           checkState(nameResolverStarted, "name resolver must be started");
           cancelNameResolverBackoff();
           nameResolver.refresh();
@@ -1317,7 +1305,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
             return;
           }
           helper.lb.handleNameResolutionError(error);
-          if (nameResolverRefreshFuture != null) {
+          if (nameResolverRefresh != null && nameResolverRefresh.isPending()) {
             // The name resolver may invoke onError multiple times, but we only want to
             // schedule one backoff attempt
             // TODO(ericgribkoff) Update contract of NameResolver.Listener or decide if we
@@ -1331,11 +1319,10 @@ final class ManagedChannelImpl extends ManagedChannel implements
           channelLogger.log(
                 ChannelLogLevel.DEBUG,
                 "Scheduling DNS resolution backoff for {0} ns", delayNanos);
-          nameResolverRefresh = new NameResolverRefresh();
-          nameResolverRefreshFuture =
-              transportFactory
-                  .getScheduledExecutorService()
-                  .schedule(nameResolverRefresh, delayNanos, TimeUnit.NANOSECONDS);
+          nameResolverRefresh =
+              syncContext.schedule(
+                  new NameResolverRefresh(), delayNanos, TimeUnit.NANOSECONDS,
+                  transportFactory .getScheduledExecutorService());
         }
       }
 
