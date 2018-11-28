@@ -113,19 +113,19 @@ var (
 	}
 )
 
-func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) {
+func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) int32 {
 	caller, cleanup := makeFuncUnary(benchFeatures)
 	defer cleanup()
-	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
+	return runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
-func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) {
+func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) int32 {
 	caller, cleanup := makeFuncStream(benchFeatures)
 	defer cleanup()
-	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
+	return runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
-func unconstrainedStreamBenchmark(startTimer func(), stopTimer func(uint32, uint32), benchFeatures stats.Features, benchtime time.Duration, sSend, sRecv *stats.Stats) {
+func unconstrainedStreamBenchmark(benchFeatures stats.Features, benchtime time.Duration) (int32, int32) {
 	sender, recver, cleanup := makeFuncUnconstrainedStream(benchFeatures)
 	defer cleanup()
 	// Warm up connection.
@@ -134,58 +134,39 @@ func unconstrainedStreamBenchmark(startTimer func(), stopTimer func(uint32, uint
 		recver(0)
 	}
 	// Run benchmark.
-	startTimer()
 	var (
-		muSend  sync.Mutex
-		muRecv  sync.Mutex
-		wg      sync.WaitGroup
-		cntSend uint32
-		cntRecv uint32
+		wg            sync.WaitGroup
+		requestCount  int32
+		responseCount int32
 	)
 	wg.Add(2 * benchFeatures.MaxConcurrentCalls)
 	bmEnd := time.Now().Add(benchtime)
 	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
 		go func(pos int) {
-			go func() {
-				for {
-					t := time.Now()
-					if t.After(bmEnd) {
-						break
-					}
-
-					start := time.Now()
-					sender(pos)
-					elapse := time.Since(start)
-
-					atomic.AddUint32(&cntSend, 1)
-					muSend.Lock()
-					sSend.Add(elapse)
-					muSend.Unlock()
+			for {
+				t := time.Now()
+				if t.After(bmEnd) {
+					break
 				}
-				wg.Done()
-			}()
-			go func() {
-				for {
-					t := time.Now()
-					if t.After(bmEnd) {
-						break
-					}
-
-					start := time.Now()
-					recver(pos)
-					elapse := time.Since(start)
-
-					atomic.AddUint32(&cntRecv, 1)
-					muRecv.Lock()
-					sRecv.Add(elapse)
-					muRecv.Unlock()
+				sender(pos)
+				atomic.AddInt32(&requestCount, 1)
+			}
+			wg.Done()
+		}(i)
+		go func(pos int) {
+			for {
+				t := time.Now()
+				if t.After(bmEnd) {
+					break
 				}
-				wg.Done()
-			}()
+				recver(pos)
+				atomic.AddInt32(&responseCount, 1)
+			}
+			wg.Done()
 		}(i)
 	}
 	wg.Wait()
-	stopTimer(cntSend, cntRecv)
+	return requestCount, responseCount
 }
 
 func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, func()) {
@@ -296,7 +277,7 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, r
 	}
 }
 
-func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) {
+func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), benchFeatures stats.Features, benchtime time.Duration, s *stats.Stats) int32 {
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
 		caller(0)
@@ -330,6 +311,7 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 	}
 	wg.Wait()
 	stopTimer(count)
+	return count
 }
 
 var useBufconn = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
@@ -454,6 +436,14 @@ func readTimeFromInput(values *[]time.Duration, replace string) {
 	}
 }
 
+func printThroughput(requestCount int32, requestSize int, responseCount int32, responseSize int) {
+	requestThroughput := float64(requestCount) * float64(requestSize) * 8 / benchtime.Seconds()
+	responseThroughput := float64(responseCount) * float64(responseSize) * 8 / benchtime.Seconds()
+	fmt.Printf("Number of requests:  %v\tRequest throughput:  %v bit/s\n", requestCount, requestThroughput)
+	fmt.Printf("Number of responses: %v\tResponse throughput: %v bit/s\n", responseCount, responseThroughput)
+	fmt.Println()
+}
+
 func main() {
 	before()
 	featuresPos := make([]int, 9)
@@ -474,11 +464,11 @@ func main() {
 		startBytes = memStats.TotalAlloc
 		startTime = time.Now()
 	}
-	// var stopTimer = func(count int32) {
-	// 	runtime.ReadMemStats(&memStats)
-	// 	results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
-	// 		Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
-	// }
+	var stopTimer = func(count int32) {
+		runtime.ReadMemStats(&memStats)
+		results = testing.BenchmarkResult{N: int(count), T: time.Since(startTime),
+			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
+	}
 	sharedPos := make([]bool, len(featuresPos))
 	for i := 0; i < len(featuresPos); i++ {
 		if featuresNum[i] <= 1 {
@@ -507,43 +497,32 @@ func main() {
 		if enableChannelz[featuresPos[8]] {
 			channelz.TurnOn()
 		}
-		// if runMode[0] {
-		// 	unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-		// 	s.SetBenchmarkResult("Unary", benchFeature, results.N,
-		// 		results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-		// 	fmt.Println(s.BenchString())
-		// 	fmt.Println(s.String())
-		// 	resultSlice = append(resultSlice, s.GetBenchmarkResults())
-		// 	s.Clear()
-		// }
-		// if runMode[1] {
-		// 	streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-		// 	s.SetBenchmarkResult("Stream", benchFeature, results.N,
-		// 		results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-		// 	fmt.Println(s.BenchString())
-		// 	fmt.Println(s.String())
-		// 	resultSlice = append(resultSlice, s.GetBenchmarkResults())
-		// 	s.Clear()
-		// }
-		sSend := stats.NewStats(10)
-		sRecv := stats.NewStats(10)
-		fmt.Println(benchFeature)
-		unconstrainedStreamBenchmark(startTimer, func(cntSend, cntRecv uint32) {
-			fmt.Println(cntSend, cntRecv)
-			runtime.ReadMemStats(&memStats)
-			results = testing.BenchmarkResult{N: int((cntSend + cntRecv) / 2), T: time.Since(startTime),
-				Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
-		}, benchFeature, benchtime, sSend, sRecv)
-		sSend.SetBenchmarkResult("Client to server", benchFeature, results.N,
-			results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-		fmt.Println(sSend.BenchString())
-		fmt.Println(sSend.String())
-		resultSlice = append(resultSlice, sSend.GetBenchmarkResults())
-		sRecv.SetBenchmarkResult("Server to client", benchFeature, results.N,
-			results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
-		fmt.Println(sRecv.BenchString())
-		fmt.Println(sRecv.String())
-		resultSlice = append(resultSlice, sRecv.GetBenchmarkResults())
+		if runMode[0] {
+			count := unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
+			s.SetBenchmarkResult("Unary", benchFeature, results.N,
+				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+			fmt.Println(s.BenchString())
+			fmt.Println(s.String())
+			printThroughput(count, benchFeature.ReqSizeBytes, count, benchFeature.RespSizeBytes)
+			resultSlice = append(resultSlice, s.GetBenchmarkResults())
+			s.Clear()
+		}
+		if runMode[1] {
+			count := streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
+			s.SetBenchmarkResult("Stream", benchFeature, results.N,
+				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+			fmt.Println(s.BenchString())
+			fmt.Println(s.String())
+			printThroughput(count, benchFeature.ReqSizeBytes, count, benchFeature.RespSizeBytes)
+			resultSlice = append(resultSlice, s.GetBenchmarkResults())
+			s.Clear()
+
+			bm.ResponseSize = benchFeature.RespSizeBytes
+			requestCount, responseCount := unconstrainedStreamBenchmark(benchFeature, benchtime)
+
+			fmt.Println("Unconstrained Stream")
+			printThroughput(requestCount, benchFeature.ReqSizeBytes, responseCount, benchFeature.RespSizeBytes)
+		}
 		bm.AddOne(featuresPos, featuresNum)
 	}
 	after(resultSlice)
