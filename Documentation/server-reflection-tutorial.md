@@ -16,7 +16,6 @@ For example, to enable server reflection in `example/helloworld`, we need to mak
 --- a/examples/helloworld/greeter_server/main.go
 +++ b/examples/helloworld/greeter_server/main.go
 @@ -40,6 +40,7 @@ import (
-        "golang.org/x/net/context"
         "google.golang.org/grpc"
         pb "google.golang.org/grpc/examples/helloworld/helloworld"
 +       "google.golang.org/grpc/reflection"
