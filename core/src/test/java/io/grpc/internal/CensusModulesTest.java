@@ -191,7 +191,8 @@ public class CensusModulesTest {
         .thenReturn(fakeClientSpanContext);
     censusStats =
         new CensusStatsModule(
-            tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(), true);
+            tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
+            true, true, true);
     censusTracing = new CensusTracingModule(tracer, mockTracingPropagationHandler);
   }
 
@@ -240,7 +241,7 @@ public class CensusModulesTest {
     Channel interceptedChannel =
         ClientInterceptors.intercept(
             grpcServerRule.getChannel(), callOptionsCaptureInterceptor,
-            censusStats.getClientInterceptor(true, true), censusTracing.getClientInterceptor());
+            censusStats.getClientInterceptor(), censusTracing.getClientInterceptor());
     ClientCall<String, String> call;
     if (nonDefaultContext) {
       Context ctx =
@@ -353,9 +354,13 @@ public class CensusModulesTest {
   }
 
   private void subtestClientBasicStatsDefaultContext(boolean recordStarts, boolean recordFinishes) {
+    CensusStatsModule localCensusStats =
+        new CensusStatsModule(
+            tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
+            true, recordStarts, recordFinishes);
     CensusStatsModule.ClientCallTracer callTracer =
-        censusStats.newClientCallTracer(
-            tagger.empty(), method.getFullMethodName(), recordStarts, recordFinishes);
+        localCensusStats.newClientCallTracer(
+            tagger.empty(), method.getFullMethodName());
     Metadata headers = new Metadata();
     ClientStreamTracer tracer = callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
 
@@ -490,8 +495,7 @@ public class CensusModulesTest {
   @Test
   public void clientStreamNeverCreatedStillRecordStats() {
     CensusStatsModule.ClientCallTracer callTracer =
-        censusStats.newClientCallTracer(
-            tagger.empty(), method.getFullMethodName(), true, true);
+        censusStats.newClientCallTracer(tagger.empty(), method.getFullMethodName());
 
     fakeClock.forwardTime(3000, MILLISECONDS);
     callTracer.callEnded(Status.DEADLINE_EXCEEDED.withDescription("3 seconds"));
@@ -593,10 +597,10 @@ public class CensusModulesTest {
             tagCtxSerializer,
             statsRecorder,
             fakeClock.getStopwatchSupplier(),
-            propagate);
+            propagate, recordStats, recordStats);
     Metadata headers = new Metadata();
     CensusStatsModule.ClientCallTracer callTracer =
-        census.newClientCallTracer(clientCtx, method.getFullMethodName(), recordStats, recordStats);
+        census.newClientCallTracer(clientCtx, method.getFullMethodName());
     // This propagates clientCtx to headers if propagates==true
     callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
     if (recordStats) {
@@ -619,8 +623,7 @@ public class CensusModulesTest {
     }
 
     ServerStreamTracer serverTracer =
-        census.getServerTracerFactory(recordStats, recordStats).newServerStreamTracer(
-            method.getFullMethodName(), headers);
+        census.getServerTracerFactory().newServerStreamTracer(method.getFullMethodName(), headers);
     // Server tracer deserializes clientCtx from the headers, so that it records stats with the
     // propagated tags.
     Context serverContext = serverTracer.filterContext(Context.ROOT);
@@ -686,10 +689,12 @@ public class CensusModulesTest {
   @Test
   public void statsHeadersNotPropagateDefaultContext() {
     CensusStatsModule.ClientCallTracer callTracer =
-        censusStats.newClientCallTracer(tagger.empty(), method.getFullMethodName(), false, false);
+        censusStats.newClientCallTracer(tagger.empty(), method.getFullMethodName());
     Metadata headers = new Metadata();
     callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
     assertFalse(headers.containsKey(censusStats.statsHeader));
+    // Clear recorded stats to satisfy the assertions in wrapUp() 
+    statsRecorder.rolloverRecords();
   }
 
   @Test
@@ -828,8 +833,11 @@ public class CensusModulesTest {
   }
 
   private void subtestServerBasicStatsNoHeaders(boolean recordStarts, boolean recordFinishes) {
-    ServerStreamTracer.Factory tracerFactory =
-        censusStats.getServerTracerFactory(recordStarts, recordFinishes);
+    CensusStatsModule localCensusStats =
+        new CensusStatsModule(
+            tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
+            true, recordStarts, recordFinishes);
+    ServerStreamTracer.Factory tracerFactory = localCensusStats.getServerTracerFactory();
     ServerStreamTracer tracer =
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
 

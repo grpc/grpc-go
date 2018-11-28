@@ -432,12 +432,12 @@ public abstract class AbstractManagedChannelImplBuilder
       temporarilyDisableRetry = true;
       CensusStatsModule censusStats = this.censusStatsOverride;
       if (censusStats == null) {
-        censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
+        censusStats = new CensusStatsModule(
+            GrpcUtil.STOPWATCH_SUPPLIER, true, recordStartedRpcs, recordFinishedRpcs);
       }
       // First interceptor runs last (see ClientInterceptors.intercept()), so that no
       // other interceptor can override the tracer factory we set in CallOptions.
-      effectiveInterceptors.add(
-          0, censusStats.getClientInterceptor(recordStartedRpcs, recordFinishedRpcs));
+      effectiveInterceptors.add(0, censusStats.getClientInterceptor());
     }
     if (tracingEnabled) {
       temporarilyDisableRetry = true;

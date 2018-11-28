@@ -265,10 +265,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     if (statsEnabled) {
       CensusStatsModule censusStats = this.censusStatsOverride;
       if (censusStats == null) {
-        censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
+        censusStats = new CensusStatsModule(
+            GrpcUtil.STOPWATCH_SUPPLIER, true, recordStartedRpcs, recordFinishedRpcs);
       }
-      tracerFactories.add(
-          censusStats.getServerTracerFactory(recordStartedRpcs, recordFinishedRpcs));
+      tracerFactories.add(censusStats.getServerTracerFactory());
     }
     if (tracingEnabled) {
       CensusTracingModule censusTracing =
