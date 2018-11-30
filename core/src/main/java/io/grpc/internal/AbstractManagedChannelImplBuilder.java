@@ -165,6 +165,7 @@ public abstract class AbstractManagedChannelImplBuilder
   private boolean statsEnabled = true;
   private boolean recordStartedRpcs = true;
   private boolean recordFinishedRpcs = true;
+  private boolean recordRealTimeMetrics = false;
   private boolean tracingEnabled = true;
 
   @Nullable
@@ -384,6 +385,14 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
+   * Disable or enable real-time metrics recording.  Effective only if {@link #setStatsEnabled} is
+   * set to true.  Disabled by default.
+   */
+  protected void setStatsRecordRealTimeMetrics(boolean value) {
+    recordRealTimeMetrics = value;
+  }
+
+  /**
    * Disable or enable tracing features.  Enabled by default.
    *
    * <p>For the current release, calling {@code setTracingEnabled(true)} may have a side effect that
@@ -433,7 +442,8 @@ public abstract class AbstractManagedChannelImplBuilder
       CensusStatsModule censusStats = this.censusStatsOverride;
       if (censusStats == null) {
         censusStats = new CensusStatsModule(
-            GrpcUtil.STOPWATCH_SUPPLIER, true, recordStartedRpcs, recordFinishedRpcs);
+            GrpcUtil.STOPWATCH_SUPPLIER, true, recordStartedRpcs, recordFinishedRpcs,
+            recordRealTimeMetrics);
       }
       // First interceptor runs last (see ClientInterceptors.intercept()), so that no
       // other interceptor can override the tracer factory we set in CallOptions.

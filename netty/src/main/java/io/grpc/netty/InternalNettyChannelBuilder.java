@@ -62,6 +62,10 @@ public final class InternalNettyChannelBuilder {
     builder.setStatsRecordStartedRpcs(value);
   }
 
+  public static void setStatsRecordRealTimeMetrics(NettyChannelBuilder builder, boolean value) {
+    builder.setStatsRecordRealTimeMetrics(value);
+  }
+
   public static ClientTransportFactory buildTransportFactory(NettyChannelBuilder builder) {
     return builder.buildTransportFactory();
   }

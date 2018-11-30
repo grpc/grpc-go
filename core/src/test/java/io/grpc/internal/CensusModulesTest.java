@@ -63,6 +63,8 @@ import io.grpc.internal.testing.StatsTestUtils.FakeTagContextBinarySerializer;
 import io.grpc.internal.testing.StatsTestUtils.FakeTagger;
 import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
 import io.grpc.testing.GrpcServerRule;
+import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
+import io.opencensus.stats.Measure;
 import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagValue;
 import io.opencensus.trace.BlankSpan;
@@ -192,7 +194,7 @@ public class CensusModulesTest {
     censusStats =
         new CensusStatsModule(
             tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
-            true, true, true);
+            true, true, true, false /* real-time */);
     censusTracing = new CensusTracingModule(tracer, mockTracingPropagationHandler);
   }
 
@@ -334,30 +336,36 @@ public class CensusModulesTest {
   }
 
   @Test
-  public void clientBasicStatsDefaultContext_startsAndFinishes() {
-    subtestClientBasicStatsDefaultContext(true, true);
+  public void clientBasicStatsDefaultContext_starts_finishes_noRealTime() {
+    subtestClientBasicStatsDefaultContext(true, true, false);
   }
 
   @Test
-  public void clientBasicStatsDefaultContext_startsOnly() {
-    subtestClientBasicStatsDefaultContext(true, false);
+  public void clientBasicStatsDefaultContext_starts_noFinishes_noRealTime() {
+    subtestClientBasicStatsDefaultContext(true, false, false);
   }
 
   @Test
-  public void clientBasicStatsDefaultContext_finishesOnly() {
-    subtestClientBasicStatsDefaultContext(false, true);
+  public void clientBasicStatsDefaultContext_noStarts_finishes_noRealTime() {
+    subtestClientBasicStatsDefaultContext(false, true, false);
   }
 
   @Test
-  public void clientBasicStatsDefaultContext_neither() {
-    subtestClientBasicStatsDefaultContext(false, true);
+  public void clientBasicStatsDefaultContext_noStarts_noFinishes_noRealTime() {
+    subtestClientBasicStatsDefaultContext(false, false, false);
   }
 
-  private void subtestClientBasicStatsDefaultContext(boolean recordStarts, boolean recordFinishes) {
+  @Test
+  public void clientBasicStatsDefaultContext_starts_finishes_realTime() {
+    subtestClientBasicStatsDefaultContext(true, true, true);
+  }
+
+  private void subtestClientBasicStatsDefaultContext(
+      boolean recordStarts, boolean recordFinishes, boolean recordRealTime) {
     CensusStatsModule localCensusStats =
         new CensusStatsModule(
             tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
-            true, recordStarts, recordFinishes);
+            true, recordStarts, recordFinishes, recordRealTime);
     CensusStatsModule.ClientCallTracer callTracer =
         localCensusStats.newClientCallTracer(
             tagger.empty(), method.getFullMethodName());
@@ -381,21 +389,48 @@ public class CensusModulesTest {
     tracer.outboundHeaders();
 
     fakeClock.forwardTime(100, MILLISECONDS);
+
     tracer.outboundMessage(0);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_SENT_MESSAGES_PER_METHOD, 1, recordRealTime, true);
+
     tracer.outboundWireSize(1028);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_SENT_BYTES_PER_METHOD, 1028, recordRealTime, true);
+
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
+
     tracer.inboundMessage(0);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_RECEIVED_MESSAGES_PER_METHOD, 1, recordRealTime, true);
+
     tracer.inboundWireSize(33);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_RECEIVED_BYTES_PER_METHOD, 33, recordRealTime, true);
+
     tracer.inboundUncompressedSize(67);
+
     tracer.outboundMessage(1);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_SENT_MESSAGES_PER_METHOD, 1, recordRealTime, true);
+
     tracer.outboundWireSize(99);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_SENT_BYTES_PER_METHOD, 99, recordRealTime, true);
+
     tracer.outboundUncompressedSize(865);
 
     fakeClock.forwardTime(24, MILLISECONDS);
     tracer.inboundMessage(1);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_RECEIVED_MESSAGES_PER_METHOD, 1, recordRealTime, true);
+
     tracer.inboundWireSize(154);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_CLIENT_RECEIVED_BYTES_PER_METHOD, 154, recordRealTime, true);
+
     tracer.inboundUncompressedSize(552);
     tracer.streamClosed(Status.OK);
     callTracer.callEnded(Status.OK);
@@ -434,6 +469,24 @@ public class CensusModulesTest {
     } else {
       assertNull(statsRecorder.pollRecord());
     }
+  }
+
+  private void assertRealTimeMetric(
+      Measure measure, long expectedValue, boolean recordRealTimeMetrics, boolean clientSide) {
+    StatsTestUtils.MetricsRecord record = statsRecorder.pollRecord();
+    if (!recordRealTimeMetrics) {
+      assertNull(record);
+      return;
+    }
+    assertNotNull(record);
+    if (clientSide) {
+      assertNoServerContent(record);
+    } else {
+      assertNoClientContent(record);
+    }
+    TagValue methodTagOld = record.tags.get(DeprecatedCensusConstants.RPC_METHOD);
+    assertEquals(method.getFullMethodName(), methodTagOld.asString());
+    assertEquals(expectedValue, record.getMetricAsLongOrFail(measure));
   }
 
   @Test
@@ -597,7 +650,7 @@ public class CensusModulesTest {
             tagCtxSerializer,
             statsRecorder,
             fakeClock.getStopwatchSupplier(),
-            propagate, recordStats, recordStats);
+            propagate, recordStats, recordStats, recordStats);
     Metadata headers = new Metadata();
     CensusStatsModule.ClientCallTracer callTracer =
         census.newClientCallTracer(clientCtx, method.getFullMethodName());
@@ -813,30 +866,36 @@ public class CensusModulesTest {
   }
 
   @Test
-  public void serverBasicStatsNoHeaders_startsAndFinishes() {
-    subtestServerBasicStatsNoHeaders(true, true);
+  public void serverBasicStatsNoHeaders_starts_finishes_noRealTime() {
+    subtestServerBasicStatsNoHeaders(true, true, false);
   }
 
   @Test
-  public void serverBasicStatsNoHeaders_startsOnly() {
-    subtestServerBasicStatsNoHeaders(true, false);
+  public void serverBasicStatsNoHeaders_starts_noFinishes_noRealTime() {
+    subtestServerBasicStatsNoHeaders(true, false, false);
   }
 
   @Test
-  public void serverBasicStatsNoHeaders_finishesOnly() {
-    subtestServerBasicStatsNoHeaders(false, true);
+  public void serverBasicStatsNoHeaders_noStarts_finishes_noRealTime() {
+    subtestServerBasicStatsNoHeaders(false, true, false);
   }
 
   @Test
-  public void serverBasicStatsNoHeaders_neither() {
-    subtestServerBasicStatsNoHeaders(false, false);
+  public void serverBasicStatsNoHeaders_noStarts_noFinishes_noRealTime() {
+    subtestServerBasicStatsNoHeaders(false, false, false);
   }
 
-  private void subtestServerBasicStatsNoHeaders(boolean recordStarts, boolean recordFinishes) {
+  @Test
+  public void serverBasicStatsNoHeaders_starts_finishes_realTime() {
+    subtestServerBasicStatsNoHeaders(true, true, true);
+  }
+
+  private void subtestServerBasicStatsNoHeaders(
+      boolean recordStarts, boolean recordFinishes, boolean recordRealTime) {
     CensusStatsModule localCensusStats =
         new CensusStatsModule(
             tagger, tagCtxSerializer, statsRecorder, fakeClock.getStopwatchSupplier(),
-            true, recordStarts, recordFinishes);
+            true, recordStarts, recordFinishes, recordRealTime);
     ServerStreamTracer.Factory tracerFactory = localCensusStats.getServerTracerFactory();
     ServerStreamTracer tracer =
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
@@ -867,20 +926,44 @@ public class CensusModulesTest {
         statsCtx);
 
     tracer.inboundMessage(0);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_RECEIVED_MESSAGES_PER_METHOD, 1, recordRealTime, false);
+
     tracer.inboundWireSize(34);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_RECEIVED_BYTES_PER_METHOD, 34, recordRealTime, false);
+
     tracer.inboundUncompressedSize(67);
 
     fakeClock.forwardTime(100, MILLISECONDS);
     tracer.outboundMessage(0);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_SENT_MESSAGES_PER_METHOD, 1, recordRealTime, false);
+
     tracer.outboundWireSize(1028);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_SENT_BYTES_PER_METHOD, 1028, recordRealTime, false);
+
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
     tracer.inboundMessage(1);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_RECEIVED_MESSAGES_PER_METHOD, 1, recordRealTime, false);
+
     tracer.inboundWireSize(154);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_RECEIVED_BYTES_PER_METHOD, 154, recordRealTime, false);
+
     tracer.inboundUncompressedSize(552);
     tracer.outboundMessage(1);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_SENT_MESSAGES_PER_METHOD, 1, recordRealTime, false);
+
     tracer.outboundWireSize(99);
+    assertRealTimeMetric(
+        RpcMeasureConstants.GRPC_SERVER_SENT_BYTES_PER_METHOD, 99, recordRealTime, false);
+
     tracer.outboundUncompressedSize(865);
 
     fakeClock.forwardTime(24, MILLISECONDS);

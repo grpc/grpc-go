@@ -302,15 +302,15 @@ def io_netty_transport():
 def io_opencensus_api():
     native.maven_jar(
         name = "io_opencensus_opencensus_api",
-        artifact = "io.opencensus:opencensus-api:0.17.0",
-        sha1 = "0b9c91321f9c9f20f3a4627bfd9e3097164f85e6",
+        artifact = "io.opencensus:opencensus-api:0.18.0",
+        sha1 = "b89a8f8dfd1e1e0d68d83c82a855624814b19a6e",
     )
 
 def io_opencensus_grpc_metrics():
     native.maven_jar(
         name = "io_opencensus_opencensus_contrib_grpc_metrics",
-        artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.17.0",
-        sha1 = "4b82972073361704f57fa2107910242f1143df25",
+        artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.18.0",
+        sha1 = "8e90fab2930b6a0e67dab48911b9c936470d43dd",
     )
 
 def javax_annotation():

@@ -91,7 +91,7 @@ public class AbstractServerImplBuilderTest {
               new FakeTagContextBinarySerializer(),
               new FakeStatsRecorder(),
               GrpcUtil.STOPWATCH_SUPPLIER,
-              true, true, true));
+              true, true, true, true));
     }
 
     @Override

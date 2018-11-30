@@ -471,6 +471,11 @@ public final class NettyChannelBuilder
     super.setStatsRecordStartedRpcs(value);
   }
 
+  @Override
+  protected void setStatsRecordRealTimeMetrics(boolean value) {
+    super.setStatsRecordRealTimeMetrics(value);
+  }
+
   @VisibleForTesting
   NettyChannelBuilder setTransportTracerFactory(TransportTracer.Factory transportTracerFactory) {
     this.transportTracerFactory = transportTracerFactory;

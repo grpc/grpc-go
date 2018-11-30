@@ -228,7 +228,7 @@ public abstract class AbstractInteropTest {
             tagContextBinarySerializer,
             serverStatsRecorder,
             GrpcUtil.STOPWATCH_SUPPLIER,
-            true, true, true));
+            true, true, true, false /* real-time metrics */));
     try {
       server = builder.build().start();
     } catch (IOException ex) {
@@ -331,7 +331,7 @@ public abstract class AbstractInteropTest {
   protected final CensusStatsModule createClientCensusStatsModule() {
     return new CensusStatsModule(
         tagger, tagContextBinarySerializer, clientStatsRecorder, GrpcUtil.STOPWATCH_SUPPLIER,
-        true, true, true);
+        true, true, true, false /* real-time metrics */);
   }
 
   /**

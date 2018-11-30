@@ -414,7 +414,7 @@ public class AbstractManagedChannelImplBuilderTest {
               new FakeTagContextBinarySerializer(),
               new FakeStatsRecorder(),
               GrpcUtil.STOPWATCH_SUPPLIER,
-              true, true, true));
+              true, true, true, true));
     }
 
     Builder(SocketAddress directServerAddress, String authority) {
@@ -425,7 +425,7 @@ public class AbstractManagedChannelImplBuilderTest {
               new FakeTagContextBinarySerializer(),
               new FakeStatsRecorder(),
               GrpcUtil.STOPWATCH_SUPPLIER,
-              true, true, true));
+              true, true, true, true));
     }
 
     @Override

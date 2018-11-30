@@ -36,6 +36,9 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
+import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
+import io.opencensus.stats.Measure.MeasureDouble;
+import io.opencensus.stats.Measure.MeasureLong;
 import io.opencensus.stats.MeasureMap;
 import io.opencensus.stats.Stats;
 import io.opencensus.stats.StatsRecorder;
@@ -67,7 +70,6 @@ import javax.annotation.Nullable;
 public final class CensusStatsModule {
   private static final Logger logger = Logger.getLogger(CensusStatsModule.class.getName());
   private static final double NANOS_PER_MILLI = TimeUnit.MILLISECONDS.toNanos(1);
-  private static final ClientTracer BLANK_CLIENT_TRACER = new ClientTracer();
 
   private final Tagger tagger;
   private final StatsRecorder statsRecorder;
@@ -77,18 +79,20 @@ public final class CensusStatsModule {
   private final boolean propagateTags;
   private final boolean recordStartedRpcs;
   private final boolean recordFinishedRpcs;
+  private final boolean recordRealTimeMetrics;
 
   /**
    * Creates a {@link CensusStatsModule} with the default OpenCensus implementation.
    */
   CensusStatsModule(Supplier<Stopwatch> stopwatchSupplier,
-      boolean propagateTags, boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+      boolean propagateTags, boolean recordStartedRpcs, boolean recordFinishedRpcs,
+      boolean recordRealTimeMetrics) {
     this(
         Tags.getTagger(),
         Tags.getTagPropagationComponent().getBinarySerializer(),
         Stats.getStatsRecorder(),
         stopwatchSupplier,
-        propagateTags, recordStartedRpcs, recordFinishedRpcs);
+        propagateTags, recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
   }
 
   /**
@@ -98,7 +102,8 @@ public final class CensusStatsModule {
       final Tagger tagger,
       final TagContextBinarySerializer tagCtxSerializer,
       StatsRecorder statsRecorder, Supplier<Stopwatch> stopwatchSupplier,
-      boolean propagateTags, boolean recordStartedRpcs, boolean recordFinishedRpcs) {
+      boolean propagateTags, boolean recordStartedRpcs, boolean recordFinishedRpcs,
+      boolean recordRealTimeMetrics) {
     this.tagger = checkNotNull(tagger, "tagger");
     this.statsRecorder = checkNotNull(statsRecorder, "statsRecorder");
     checkNotNull(tagCtxSerializer, "tagCtxSerializer");
@@ -106,6 +111,7 @@ public final class CensusStatsModule {
     this.propagateTags = propagateTags;
     this.recordStartedRpcs = recordStartedRpcs;
     this.recordFinishedRpcs = recordFinishedRpcs;
+    this.recordRealTimeMetrics = recordRealTimeMetrics;
     this.statsHeader =
         Metadata.Key.of("grpc-tags-bin", new Metadata.BinaryMarshaller<TagContext>() {
             @Override
@@ -152,6 +158,20 @@ public final class CensusStatsModule {
    */
   ClientInterceptor getClientInterceptor() {
     return new StatsClientInterceptor();
+  }
+
+  private void recordRealTimeMetric(TagContext ctx, MeasureDouble measure, double value) {
+    if (recordRealTimeMetrics) {
+      MeasureMap measureMap = statsRecorder.newMeasureMap().put(measure, value);
+      measureMap.record(ctx);
+    }
+  }
+
+  private void recordRealTimeMetric(TagContext ctx, MeasureLong measure, long value) {
+    if (recordRealTimeMetrics) {
+      MeasureMap measureMap = statsRecorder.newMeasureMap().put(measure, value);
+      measureMap.record(ctx);
+    }
   }
 
   private static final class ClientTracer extends ClientStreamTracer {
@@ -209,12 +229,20 @@ public final class CensusStatsModule {
       inboundUncompressedSizeUpdater = tmpInboundUncompressedSizeUpdater;
     }
 
+    private final CensusStatsModule module;
+    private final TagContext startCtx;
+
     volatile long outboundMessageCount;
     volatile long inboundMessageCount;
     volatile long outboundWireSize;
     volatile long inboundWireSize;
     volatile long outboundUncompressedSize;
     volatile long inboundUncompressedSize;
+
+    ClientTracer(CensusStatsModule module, TagContext startCtx) {
+      this.module = checkNotNull(module, "module");
+      this.startCtx = checkNotNull(startCtx, "startCtx");
+    }
 
     @Override
     @SuppressWarnings("NonAtomicVolatileUpdate")
@@ -224,6 +252,8 @@ public final class CensusStatsModule {
       } else {
         outboundWireSize += bytes;
       }
+      module.recordRealTimeMetric(
+          startCtx, RpcMeasureConstants.GRPC_CLIENT_SENT_BYTES_PER_METHOD, bytes);
     }
 
     @Override
@@ -234,6 +264,8 @@ public final class CensusStatsModule {
       } else {
         inboundWireSize += bytes;
       }
+      module.recordRealTimeMetric(
+          startCtx, RpcMeasureConstants.GRPC_CLIENT_RECEIVED_BYTES_PER_METHOD, bytes);
     }
 
     @Override
@@ -264,6 +296,8 @@ public final class CensusStatsModule {
       } else {
         inboundMessageCount++;
       }
+      module.recordRealTimeMetric(
+          startCtx, RpcMeasureConstants.GRPC_CLIENT_RECEIVED_MESSAGES_PER_METHOD, 1);
     }
 
     @Override
@@ -274,6 +308,8 @@ public final class CensusStatsModule {
       } else {
         outboundMessageCount++;
       }
+      module.recordRealTimeMetric(
+          startCtx, RpcMeasureConstants.GRPC_CLIENT_SENT_MESSAGES_PER_METHOD, 1);
     }
   }
 
@@ -332,7 +368,7 @@ public final class CensusStatsModule {
 
     @Override
     public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
-      ClientTracer tracer = new ClientTracer();
+      ClientTracer tracer = new ClientTracer(module, startCtx);
       // TODO(zhangkun83): Once retry or hedging is implemented, a ClientCall may start more than
       // one streams.  We will need to update this file to support them.
       if (streamTracerUpdater != null) {
@@ -378,7 +414,7 @@ public final class CensusStatsModule {
       long roundtripNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
       ClientTracer tracer = streamTracer;
       if (tracer == null) {
-        tracer = BLANK_CLIENT_TRACER;
+        tracer = new ClientTracer(module, startCtx);
       }
       MeasureMap measureMap = module.statsRecorder.newMeasureMap()
           // TODO(songya): remove the deprecated measure constants once they are completed removed.
@@ -502,6 +538,8 @@ public final class CensusStatsModule {
       } else {
         outboundWireSize += bytes;
       }
+      module.recordRealTimeMetric(
+          parentCtx, RpcMeasureConstants.GRPC_SERVER_SENT_BYTES_PER_METHOD, bytes);
     }
 
     @Override
@@ -512,6 +550,8 @@ public final class CensusStatsModule {
       } else {
         inboundWireSize += bytes;
       }
+      module.recordRealTimeMetric(
+          parentCtx, RpcMeasureConstants.GRPC_SERVER_RECEIVED_BYTES_PER_METHOD, bytes);
     }
 
     @Override
@@ -542,6 +582,8 @@ public final class CensusStatsModule {
       } else {
         inboundMessageCount++;
       }
+      module.recordRealTimeMetric(
+          parentCtx, RpcMeasureConstants.GRPC_SERVER_RECEIVED_MESSAGES_PER_METHOD, 1);
     }
 
     @Override
@@ -552,6 +594,8 @@ public final class CensusStatsModule {
       } else {
         outboundMessageCount++;
       }
+      module.recordRealTimeMetric(
+          parentCtx, RpcMeasureConstants.GRPC_SERVER_SENT_MESSAGES_PER_METHOD, 1);
     }
 
     /**
