@@ -332,7 +332,10 @@ public final class ServerCalls {
     @Override
     public void onNext(RespT response) {
       if (cancelled) {
-        throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
+        if (onCancelHandler == null) {
+          throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
+        }
+        return;
       }
       if (!sentHeaders) {
         call.sendHeaders(new Metadata());
@@ -353,7 +356,9 @@ public final class ServerCalls {
     @Override
     public void onCompleted() {
       if (cancelled) {
-        throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
+        if (onCancelHandler == null) {
+          throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
+        }
       } else {
         call.close(Status.OK, new Metadata());
       }

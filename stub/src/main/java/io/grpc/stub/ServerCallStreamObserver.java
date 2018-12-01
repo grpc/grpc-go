@@ -39,12 +39,15 @@ public abstract class ServerCallStreamObserver<V> extends CallStreamObserver<V> 
   public abstract boolean isCancelled();
 
   /**
-   * Set a {@link Runnable} that will be called if the calls  {@link #isCancelled()} state
+   * Set a {@link Runnable} that will be called if the calls {@link #isCancelled()} state
    * changes from {@code false} to {@code true}. It is guaranteed that execution of the
    * {@link Runnable} are serialized with calls to the 'inbound' {@link StreamObserver}.
    *
-   * <p>Note that the handler may be called some time after {@link #isCancelled} has transitioned to
-   * {@code true} as other callbacks may still be executing in the 'inbound' observer.
+   * <p>Note that the handler may be called some time after {@link #isCancelled()} has transitioned
+   * to {@code true} as other callbacks may still be executing in the 'inbound' observer.
+   *
+   * <p>Setting the onCancelHandler will suppress the on-cancel exception thrown by
+   * {@link #onNext()}.
    *
    * @param onCancelHandler to call when client has cancelled the call.
    */
