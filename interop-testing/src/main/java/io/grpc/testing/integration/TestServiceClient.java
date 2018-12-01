@@ -80,6 +80,7 @@ public class TestServiceClient {
   private String testCase = "empty_unary";
   private boolean useTls = true;
   private boolean useAlts = false;
+  private boolean useH2cUpgrade = false;
   private String customCredentialsType;
   private boolean useTestCa;
   private boolean useOkHttp;
@@ -121,6 +122,8 @@ public class TestServiceClient {
         testCase = value;
       } else if ("use_tls".equals(key)) {
         useTls = Boolean.parseBoolean(value);
+      } else if ("use_upgrade".equals(key)) {
+        useH2cUpgrade = Boolean.parseBoolean(value);
       } else if ("use_alts".equals(key)) {
         useAlts = Boolean.parseBoolean(value);
       } else if ("custom_credentials_type".equals(key)) {
@@ -149,7 +152,7 @@ public class TestServiceClient {
         break;
       }
     }
-    if (useAlts) {
+    if (useAlts || useH2cUpgrade) {
       useTls = false;
     }
     if (usage) {
@@ -167,6 +170,9 @@ public class TestServiceClient {
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_alts=true|false       Whether to use ALTS. Enable ALTS will disable TLS."
           + "\n                              Default " + c.useAlts
+          + "\n  --use_upgrade=true|false    Whether to use the h2c Upgrade mechanism."
+          + "\n                              Enabling h2c Upgrade will disable TLS."
+          + "\n                              Default " + c.useH2cUpgrade
           + "\n  --custom_credentials_type   Custom credentials type to use. Default "
             + c.customCredentialsType
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Requires --use_tls=true "
@@ -371,7 +377,8 @@ public class TestServiceClient {
         NettyChannelBuilder nettyBuilder =
             NettyChannelBuilder.forAddress(serverHost, serverPort)
                 .flowControlWindow(65 * 1024)
-                .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
+                .negotiationType(useTls ? NegotiationType.TLS :
+                  (useH2cUpgrade ? NegotiationType.PLAINTEXT_UPGRADE : NegotiationType.PLAINTEXT))
                 .sslContext(sslContext);
         if (serverHostOverride != null) {
           nettyBuilder.overrideAuthority(serverHostOverride);

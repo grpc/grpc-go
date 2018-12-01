@@ -51,6 +51,7 @@ import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2RemoteFlowController;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
@@ -347,8 +348,12 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream) {
-    NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
-    stream.transportHeadersReceived(headers, endStream);
+    // Stream 1 is reserved for the Upgrade response, so we should ignore its headers here:
+    if (streamId != Http2CodecUtil.HTTP_UPGRADE_STREAM_ID) {
+      NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
+      stream.transportHeadersReceived(headers, endStream);
+    }
+
     if (keepAliveManager != null) {
       keepAliveManager.onDataReceived();
     }

@@ -42,6 +42,7 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpClientUpgradeHandler;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
@@ -351,6 +352,7 @@ public final class ProtocolNegotiators {
   }
 
   static final class PlaintextUpgradeNegotiator implements ProtocolNegotiator {
+
     @Override
     public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
       // Register the plaintext upgrader
@@ -358,7 +360,8 @@ public final class ProtocolNegotiators {
       HttpClientCodec httpClientCodec = new HttpClientCodec();
       final HttpClientUpgradeHandler upgrader =
           new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
-      return new BufferingHttp2UpgradeHandler(upgrader, handler);
+      return new BufferingHttp2UpgradeHandler(httpClientCodec, upgrader, handler,
+          handler.getAuthority());
     }
 
     @Override
@@ -742,9 +745,13 @@ public final class ProtocolNegotiators {
 
     private final GrpcHttp2ConnectionHandler grpcHandler;
 
-    BufferingHttp2UpgradeHandler(ChannelHandler handler, GrpcHttp2ConnectionHandler grpcHandler) {
-      super(handler);
+    private final String authority;
+
+    BufferingHttp2UpgradeHandler(ChannelHandler handler, ChannelHandler upgradeHandler,
+        GrpcHttp2ConnectionHandler grpcHandler, String authority) {
+      super(handler, upgradeHandler);
       this.grpcHandler = grpcHandler;
+      this.authority = authority;
     }
 
     @Override
@@ -759,6 +766,7 @@ public final class ProtocolNegotiators {
       // which causes the upgrade headers to be added
       DefaultHttpRequest upgradeTrigger =
           new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+      upgradeTrigger.headers().add(HttpHeaderNames.HOST, authority);
       ctx.writeAndFlush(upgradeTrigger);
       super.channelActive(ctx);
     }
