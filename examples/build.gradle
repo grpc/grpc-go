@@ -1,19 +1,16 @@
-apply plugin: 'java'
-apply plugin: 'com.google.protobuf'
-
-buildscript {
-    repositories {
-        maven { // The google mirror is less flaky than mavenCentral()
-            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
-    }
-    dependencies { // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier
-        // gradle versions
-        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5' }
+plugins {
+    // Provide convenience executables for trying out the examples.
+    id 'application'
+    // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier gradle versions
+    id 'com.google.protobuf' version '0.8.5'
+    // Generate IntelliJ IDEA's .idea & .iml project files
+    id 'idea'
 }
 
 repositories {
     maven { // The google mirror is less flaky than mavenCentral()
-        url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
+        url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+    }
     mavenLocal()
 }
 
@@ -31,22 +28,22 @@ def protobufVersion = '3.5.1'
 def protocVersion = '3.5.1-1'
 
 dependencies {
-    compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
-    compile "io.grpc:grpc-alts:${grpcVersion}"
-    compile "io.grpc:grpc-netty-shaded:${grpcVersion}"
-    compile "io.grpc:grpc-protobuf:${grpcVersion}"
-    compile "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.api.grpc:proto-google-common-protos:1.0.0"
+    implementation "io.grpc:grpc-alts:${grpcVersion}"
+    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
     compileOnly "javax.annotation:javax.annotation-api:1.2"
 
     // Used in HelloWorldServerTls
-    compile "io.grpc:grpc-netty:${grpcVersion}"
-    compile "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
+    implementation "io.grpc:grpc-netty:${grpcVersion}"
+    implementation "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
 
-    compile "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+    implementation "com.google.protobuf:protobuf-java-util:${protobufVersion}"
 
-    testCompile "io.grpc:grpc-testing:${grpcVersion}"
-    testCompile "junit:junit:4.12"
-    testCompile "org.mockito:mockito-core:1.9.5"
+    testImplementation "io.grpc:grpc-testing:${grpcVersion}"
+    testImplementation "junit:junit:4.12"
+    testImplementation "org.mockito:mockito-core:1.9.5"
 }
 
 protobuf {
@@ -69,75 +66,69 @@ sourceSets {
     }
 }
 
-// Generate IntelliJ IDEA's .idea & .iml project files
-apply plugin: 'idea'
-
-// Provide convenience executables for trying out the examples.
-apply plugin: 'application'
-
 startScripts.enabled = false
 
 task routeGuideServer(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.routeguide.RouteGuideServer'
     applicationName = 'route-guide-server'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task routeGuideClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.routeguide.RouteGuideClient'
     applicationName = 'route-guide-client'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldServer(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.helloworld.HelloWorldServer'
     applicationName = 'hello-world-server'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.helloworld.HelloWorldClient'
     applicationName = 'hello-world-client'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldAltsServer(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.alts.HelloWorldAltsServer'
     applicationName = 'hello-world-alts-server'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldAltsClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.alts.HelloWorldAltsClient'
     applicationName = 'hello-world-alts-client'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldTlsServer(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.helloworldtls.HelloWorldServerTls'
     applicationName = 'hello-world-tls-server'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task helloWorldTlsClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.helloworldtls.HelloWorldClientTls'
     applicationName = 'hello-world-tls-client'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 task compressingHelloWorldClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.experimental.CompressingHelloWorldClient'
     applicationName = 'compressing-hello-world-client'
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = startScripts.classpath
 }
 
 applicationDistribution.into('bin') {

@@ -44,11 +44,11 @@ protobuf {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:27.0.2'
+    implementation 'com.android.support:appcompat-v7:27.0.2'
 
     // You need to build grpc-java to obtain these libraries below.
-    compile 'io.grpc:grpc-okhttp:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-protobuf-lite:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-stub:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'javax.annotation:javax.annotation-api:1.2'
+    implementation 'io.grpc:grpc-okhttp:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-protobuf-lite:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-stub:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'javax.annotation:javax.annotation-api:1.2'
 }
