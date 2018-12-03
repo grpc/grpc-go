@@ -29,7 +29,6 @@ def protocVersion = '3.5.1-1'
 
 dependencies {
     implementation "com.google.api.grpc:proto-google-common-protos:1.0.0"
-    implementation "io.grpc:grpc-alts:${grpcVersion}"
     implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
@@ -96,20 +95,6 @@ task helloWorldClient(type: CreateStartScripts) {
     classpath = startScripts.classpath
 }
 
-task helloWorldAltsServer(type: CreateStartScripts) {
-    mainClassName = 'io.grpc.examples.alts.HelloWorldAltsServer'
-    applicationName = 'hello-world-alts-server'
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = startScripts.classpath
-}
-
-task helloWorldAltsClient(type: CreateStartScripts) {
-    mainClassName = 'io.grpc.examples.alts.HelloWorldAltsClient'
-    applicationName = 'hello-world-alts-client'
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = startScripts.classpath
-}
-
 task helloWorldTlsServer(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.helloworldtls.HelloWorldServerTls'
     applicationName = 'hello-world-tls-server'
@@ -136,8 +121,6 @@ applicationDistribution.into('bin') {
     from(routeGuideClient)
     from(helloWorldServer)
     from(helloWorldClient)
-    from(helloWorldAltsServer)
-    from(helloWorldAltsClient)
     from(helloWorldTlsServer)
     from(helloWorldTlsClient)
     from(compressingHelloWorldClient)

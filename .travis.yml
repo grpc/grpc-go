@@ -23,6 +23,7 @@ install:
   - ./gradlew assemble generateTestProto install
   - pushd examples && ./gradlew build && popd
   - pushd examples && mvn verify && popd
+  - pushd examples/example-alts && ./gradlew build && popd
   - pushd examples/example-kotlin && ./gradlew build && popd
 
 before_script:
