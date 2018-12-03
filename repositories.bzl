@@ -1,5 +1,7 @@
 """External dependencies for grpc-java."""
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 def grpc_java_repositories(
         omit_com_google_api_grpc_google_common_protos = False,
         omit_com_google_auth_google_auth_library_credentials = False,
@@ -171,7 +173,7 @@ def com_google_protobuf():
     # proto_library rules implicitly depend on @com_google_protobuf//:protoc,
     # which is the proto-compiler.
     # This statement defines the @com_google_protobuf repo.
-    native.http_archive(
+    http_archive(
         name = "com_google_protobuf",
         sha256 = "1f8b9b202e9a4e467ff0b0f25facb1642727cdf5e69092038f15b37c75b99e45",
         strip_prefix = "protobuf-3.5.1",
@@ -180,7 +182,7 @@ def com_google_protobuf():
 
 def com_google_protobuf_javalite():
     # java_lite_proto_library rules implicitly depend on @com_google_protobuf_javalite
-    native.http_archive(
+    http_archive(
         name = "com_google_protobuf_javalite",
         sha256 = "d8a2fed3708781196f92e1e7e7e713cf66804bd2944894401057214aff4f468e",
         strip_prefix = "protobuf-5e8916e881c573c5d83980197a6f783c132d4276",
