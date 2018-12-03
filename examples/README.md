@@ -47,8 +47,8 @@ USAGE: HelloWorldServerTls host port certChainFilePath privateKeyFilePath [trust
 **hello-world-tls-client**:
 
 ```text
-USAGE: HelloWorldClientTls host port [trustCertCollectionFilePath] [clientCertChainFilePath] [clientPrivateKeyFilePath]
-  Note: clientCertChainFilePath and clientPrivateKeyFilePath are only needed if mutual auth is desired. And if you specify clientCertChainFilePath you must also specify clientPrivateKeyFilePath
+USAGE: HelloWorldClientTls host port trustCertCollectionFilePath [clientCertChainFilePath clientPrivateKeyFilePath]
+  Note: clientCertChainFilePath and clientPrivateKeyFilePath are only needed if mutual auth is desired.
 ```
 
 #### Generating self-signed certificates for use with grpc
@@ -56,6 +56,8 @@ USAGE: HelloWorldClientTls host port [trustCertCollectionFilePath] [clientCertCh
 You can use the following script to generate self-signed certificates for grpc-java including the hello world with TLS examples:
 
 ```bash
+mkdir -p /tmp/sslcert
+pushd /tmp/sslcert
 # Changes these CN's to match your hosts in your environment if needed.
 SERVER_CN=localhost
 CLIENT_CN=localhost # Used when doing mutual TLS
@@ -88,24 +90,25 @@ echo Converting the private keys to X.509:
 openssl pkcs8 -topk8 -nocrypt -in client.key -out client.pem
 # Generates server.pem which is the privateKeyFile for the Server
 openssl pkcs8 -topk8 -nocrypt -in server.key -out server.pem
+popd
 ```
 
 #### Hello world example with TLS (no mutual auth):
 
 ```bash
 # Server
-./build/install/examples/bin/hello-world-server-tls mate 50440 ~/Downloads/sslcert/server.crt ~/Downloads/sslcert/server.pem
+./build/install/examples/bin/hello-world-tls-server localhost 50440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem
 # Client
-./build/install/examples/bin/hello-world-client-tls mate 50440 ~/Downloads/sslcert/ca.crt
+./build/install/examples/bin/hello-world-tls-client localhost 50440 /tmp/sslcert/ca.crt
 ```
 
 #### Hello world example with TLS with mutual auth:
 
 ```bash
 # Server
-./build/install/examples/bin/hello-world-server-tls mate 54440 ~/Downloads/sslcert/server.crt ~/Downloads/sslcert/server.pem ~/Downloads/sslcert/ca.crt
+./build/install/examples/bin/hello-world-tls-server localhost 54440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem /tmp/sslcert/ca.crt
 # Client
-./build/install/examples/bin/hello-world-client-tls mate 54440 ~/Downloads/sslcert/ca.crt ~/Downloads/sslcert/client.crt ~/Downloads/sslcert/client.pem
+./build/install/examples/bin/hello-world-tls-client localhost 54440 /tmp/sslcert/ca.crt /tmp/sslcert/client.crt /tmp/sslcert/client.pem
 ```
 
 That's it!
