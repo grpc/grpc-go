@@ -1,33 +1,18 @@
 /*
  *
- * Copyright 2016, Google Inc.
- * All rights reserved.
+ * Copyright 2018 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
@@ -35,12 +20,12 @@ package main
 
 import (
 	"io"
+	"log"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/metadata/helloworld"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -50,7 +35,7 @@ const (
 )
 
 func unaryCallWithMetadata(c pb.GreeterClient, name string) {
-	grpclog.Printf("------------ unary ------------")
+	log.Printf("------------ unary ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -59,33 +44,33 @@ func unaryCallWithMetadata(c pb.GreeterClient, name string) {
 	var header, trailer metadata.MD
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name}, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
-		grpclog.Fatalf("failed to call SayHello: %v", err)
+		log.Fatalf("failed to call SayHello: %v", err)
 	}
 
 	if t, ok := header["timestamp"]; ok {
-		grpclog.Printf("timestamp from header:")
+		log.Printf("timestamp from header:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		grpclog.Printf("location from header:")
+		log.Printf("location from header:")
 		for i, e := range l {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
-	grpclog.Printf("message:")
-	grpclog.Printf(" - %s", r.Message)
+	log.Printf("message:")
+	log.Printf(" - %s", r.Message)
 	if t, ok := trailer["timestamp"]; ok {
-		grpclog.Printf("timestamp from trailer:")
+		log.Printf("timestamp from trailer:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 }
 
 func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
-	grpclog.Printf("------------ server streaming ------------")
+	log.Printf("------------ server streaming ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -93,54 +78,54 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	// call RPC
 	stream, err := c.ServerStreamingSayHello(ctx, &pb.StreamingHelloRequest{Names: names})
 	if err != nil {
-		grpclog.Fatalf("failed to call ServerStreamingSayHello: %v", err)
+		log.Fatalf("failed to call ServerStreamingSayHello: %v", err)
 	}
 
 	// read header
 	header, err := stream.Header()
 	if err != nil {
-		grpclog.Fatalf("failed to get header from stream: %v", err)
+		log.Fatalf("failed to get header from stream: %v", err)
 	}
 	if t, ok := header["timestamp"]; ok {
-		grpclog.Printf("timestamp from header:")
+		log.Printf("timestamp from header:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		grpclog.Printf("location from header:")
+		log.Printf("location from header:")
 		for i, e := range l {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 
 	// read response
 	var rpcStatus error
-	grpclog.Printf("message:")
+	log.Printf("message:")
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
-		grpclog.Printf(" - %s", r.Message)
+		log.Printf(" - %s", r.Message)
 	}
 	if rpcStatus != io.EOF {
-		grpclog.Fatalf("failed to finish server streaming: %v", rpcStatus)
+		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
 	}
 
 	// read trailer
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
-		grpclog.Printf("timestamp from trailer:")
+		log.Printf("timestamp from trailer:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 }
 
 func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
-	grpclog.Printf("------------ client streaming ------------")
+	log.Printf("------------ client streaming ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -148,56 +133,56 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	// call RPC
 	stream, err := c.ClientStreamingSayHello(ctx)
 	if err != nil {
-		grpclog.Fatalf("failed to call ClientStreamingSayHello: %v\n", err)
+		log.Fatalf("failed to call ClientStreamingSayHello: %v\n", err)
 	}
 
 	// read header
 	header, err := stream.Header()
 	if err != nil {
-		grpclog.Fatalf("failed to get header from stream: %v", err)
+		log.Fatalf("failed to get header from stream: %v", err)
 	}
 	if t, ok := header["timestamp"]; ok {
-		grpclog.Printf("timestamp from header:")
+		log.Printf("timestamp from header:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		grpclog.Printf("location from header:")
+		log.Printf("location from header:")
 		for i, e := range l {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 
 	// send request to stream
 	for _, name := range names {
 		if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
-			grpclog.Fatalf("failed to send streaming: %v\n", err)
+			log.Fatalf("failed to send streaming: %v\n", err)
 		}
 	}
 
 	// read response
 	r, err := stream.CloseAndRecv()
 	if err != nil {
-		grpclog.Fatalf("failed to CloseAndRecv: %v\n", err)
+		log.Fatalf("failed to CloseAndRecv: %v\n", err)
 	}
-	grpclog.Printf("message:")
+	log.Printf("message:")
 	for _, m := range r.Messages {
-		grpclog.Printf(" - %s\n", m)
+		log.Printf(" - %s\n", m)
 	}
 
 	// read trailer
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
-		grpclog.Printf("timestamp from trailer:")
+		log.Printf("timestamp from trailer:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 }
 
 func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
-	grpclog.Printf("------------ bidirectional ------------")
+	log.Printf("------------ bidirectional ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -205,32 +190,32 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 	// call RPC
 	stream, err := c.BidirectionalStreamingSayHello(ctx)
 	if err != nil {
-		grpclog.Fatalf("failed to call BidirectionalStreamingSayHello: %v\n", err)
+		log.Fatalf("failed to call BidirectionalStreamingSayHello: %v\n", err)
 	}
 
 	go func() {
 		// read header
 		header, err := stream.Header()
 		if err != nil {
-			grpclog.Fatalf("failed to get header from stream: %v", err)
+			log.Fatalf("failed to get header from stream: %v", err)
 		}
 		if t, ok := header["timestamp"]; ok {
-			grpclog.Printf("timestamp from header:")
+			log.Printf("timestamp from header:")
 			for i, e := range t {
-				grpclog.Printf(" %d. %s", i, e)
+				log.Printf(" %d. %s", i, e)
 			}
 		}
 		if l, ok := header["location"]; ok {
-			grpclog.Printf("location from header:")
+			log.Printf("location from header:")
 			for i, e := range l {
-				grpclog.Printf(" %d. %s", i, e)
+				log.Printf(" %d. %s", i, e)
 			}
 		}
 
 		// send request
 		for _, name := range names {
 			if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
-				grpclog.Fatalf("failed to send streaming: %v\n", err)
+				log.Fatalf("failed to send streaming: %v\n", err)
 			}
 		}
 		stream.CloseSend()
@@ -238,25 +223,25 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 
 	// read response
 	var rpcStatus error
-	grpclog.Printf("message:")
+	log.Printf("message:")
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
-		grpclog.Printf(" - %s", r.Message)
+		log.Printf(" - %s", r.Message)
 	}
 	if rpcStatus != io.EOF {
-		grpclog.Fatalf("failed to finish server streaming: %v", rpcStatus)
+		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
 	}
 
 	// read trailer
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
-		grpclog.Printf("timestamp from trailer:")
+		log.Printf("timestamp from trailer:")
 		for i, e := range t {
-			grpclog.Printf(" %d. %s", i, e)
+			log.Printf(" %d. %s", i, e)
 		}
 	}
 
@@ -275,7 +260,7 @@ func main() {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
-		grpclog.Fatalf("did not connect: %v", err)
+		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
