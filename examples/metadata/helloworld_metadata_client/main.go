@@ -36,11 +36,11 @@ const (
 
 func unaryCallWithMetadata(c pb.GreeterClient, name string) {
 	log.Printf("------------ unary ------------")
-	// create metadata and context
+	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// call RPC
+	// Make RPC using the context with the metadata.
 	var header, trailer metadata.MD
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name}, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
@@ -71,17 +71,17 @@ func unaryCallWithMetadata(c pb.GreeterClient, name string) {
 
 func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	log.Printf("------------ server streaming ------------")
-	// create metadata and context
+	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// call RPC
+	// Make RPC using the context with the metadata.
 	stream, err := c.ServerStreamingSayHello(ctx, &pb.StreamingHelloRequest{Names: names})
 	if err != nil {
 		log.Fatalf("failed to call ServerStreamingSayHello: %v", err)
 	}
 
-	// read header
+	// Read the header when the header arrives.
 	header, err := stream.Header()
 	if err != nil {
 		log.Fatalf("failed to get header from stream: %v", err)
@@ -99,7 +99,7 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 		}
 	}
 
-	// read response
+	// Read all the responses.
 	var rpcStatus error
 	log.Printf("message:")
 	for {
@@ -114,7 +114,7 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
 	}
 
-	// read trailer
+	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")
@@ -126,17 +126,17 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 
 func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	log.Printf("------------ client streaming ------------")
-	// create metadata and context
+	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// call RPC
+	// Make RPC using the context with the metadata.
 	stream, err := c.ClientStreamingSayHello(ctx)
 	if err != nil {
 		log.Fatalf("failed to call ClientStreamingSayHello: %v\n", err)
 	}
 
-	// read header
+	// Read the header when the header arrives.
 	header, err := stream.Header()
 	if err != nil {
 		log.Fatalf("failed to get header from stream: %v", err)
@@ -154,14 +154,14 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 		}
 	}
 
-	// send request to stream
+	// Send all requests to the server.
 	for _, name := range names {
 		if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
 			log.Fatalf("failed to send streaming: %v\n", err)
 		}
 	}
 
-	// read response
+	// Read the response.
 	r, err := stream.CloseAndRecv()
 	if err != nil {
 		log.Fatalf("failed to CloseAndRecv: %v\n", err)
@@ -171,7 +171,7 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 		log.Printf(" - %s\n", m)
 	}
 
-	// read trailer
+	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")
@@ -183,18 +183,18 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 
 func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 	log.Printf("------------ bidirectional ------------")
-	// create metadata and context
+	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	// call RPC
+	// Make RPC using the context with the metadata.
 	stream, err := c.BidirectionalStreamingSayHello(ctx)
 	if err != nil {
 		log.Fatalf("failed to call BidirectionalStreamingSayHello: %v\n", err)
 	}
 
 	go func() {
-		// read header
+		// Read the header when the header arrives.
 		header, err := stream.Header()
 		if err != nil {
 			log.Fatalf("failed to get header from stream: %v", err)
@@ -212,7 +212,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 			}
 		}
 
-		// send request
+		// Send all requests to the server.
 		for _, name := range names {
 			if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
 				log.Fatalf("failed to send streaming: %v\n", err)
@@ -221,7 +221,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 		stream.CloseSend()
 	}()
 
-	// read response
+	// Read all the responses.
 	var rpcStatus error
 	log.Printf("message:")
 	for {
@@ -236,7 +236,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
 	}
 
-	// read trailer
+	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")

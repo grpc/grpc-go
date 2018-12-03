@@ -59,13 +59,13 @@ type server struct{}
 // SayHello implements unary call handler with metadata handling.
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	log.Printf("----------- SayHello -----------")
-	// create trailer, using defer to record timestamp of function return
+	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 		grpc.SetTrailer(ctx, trailer)
 	}()
 
-	// read metadata from client
+	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, grpc.Errorf(codes.DataLoss, "SayHello: failed to get metadata")
@@ -77,7 +77,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 		}
 	}
 
-	// create and send header
+	// Create and send header.
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	grpc.SendHeader(ctx, header)
 
@@ -89,13 +89,13 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 // ServerStreamingSayHello implements server streaming handler with metadata handling.
 func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb.Greeter_ServerStreamingSayHelloServer) error {
 	log.Printf("----------- ServerStreamingSayHello -----------")
-	// create trailer, using defer to record timestamp of function return
+	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 		stream.SetTrailer(trailer)
 	}()
 
-	// read metadata from client
+	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
@@ -107,13 +107,13 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 		}
 	}
 
-	// create and send header
+	// Create and send header.
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	stream.SendHeader(header)
 
 	log.Printf("request received: %v\n", in)
 
-	// read request and send response
+	// Read requests and send responses.
 	for _, name := range in.Names {
 		log.Printf("sending greeting for %v\n", name)
 		err := stream.Send(&pb.HelloReply{Message: fmt.Sprintf("%s, %s", greetingWords[rand.Intn(len(greetingWords))], name)})
@@ -127,13 +127,13 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 // ClientStreamingSayHello implements client streaming handler with metadata handling
 func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHelloServer) error {
 	log.Printf("----------- ClientStreamingSayHello -----------")
-	// create trailer, using defer to record timestamp of function return
+	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 		stream.SetTrailer(trailer)
 	}()
 
-	// read metadata from client
+	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
@@ -145,11 +145,11 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 		}
 	}
 
-	// create and send header
+	// Create and send header.
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	stream.SendHeader(header)
 
-	// read request and send response
+	// Read requests and send responses.
 	var messages []string
 	for {
 		in, err := stream.Recv()
@@ -168,13 +168,13 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 // BidirectionalStreamingSayHello implements bidirectional streaming handler with metadata handling
 func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalStreamingSayHelloServer) error {
 	log.Printf("----------- BidirectionalStreamingSayHello -----------")
-	// create trailer, using defer to record timestamp of function return
+	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 		stream.SetTrailer(trailer)
 	}()
 
-	// read metadata from client
+	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "BidirectionalStreamingSayHello: failed to get metadata")
@@ -187,11 +187,11 @@ func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalS
 		}
 	}
 
-	// create and send header
+	// Create and send header.
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	stream.SendHeader(header)
 
-	// read request and send response
+	// Read requests and send responses.
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
