@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/deadline/deadline"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
 const (
@@ -33,25 +33,27 @@ const (
 
 // ConnectAndRequest sets up a connection to the server,
 // makes a request and returns, if successful, the reply.
-func ConnectAndRequest(out *pb.DeadlinerRequest) (*pb.DeadlinerReply, error) {
+func ConnectAndRequest(name string) (*pb.HelloReply, error) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
-	c := pb.NewDeadlinerClient(conn)
+	c := pb.NewGreeterClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	req := &pb.HelloRequest{Name: name}
+
 	log.Println("# NEW REQUEST #")
-	log.Printf("Request: { %+v}", out)
-	r, err := c.MakeRequest(ctx, out)
+	log.Printf("Request: { %+v}", req)
+	rep, err := c.SayHello(ctx, req)
 	if err != nil {
 		log.Printf("No reply: %v", err)
 		return nil, err
 	}
-	log.Printf("Reply: { %+v}", r)
-	return r, nil
+	log.Printf("Reply: { %+v}", rep)
+	return rep, nil
 }

@@ -20,16 +20,15 @@ package main
 
 import (
 	"google.golang.org/grpc/examples/deadline/client"
-	pb "google.golang.org/grpc/examples/deadline/deadline"
 )
 
 func main() {
 	// A successful request
-	client.ConnectAndRequest(&pb.DeadlinerRequest{})
+	client.ConnectAndRequest("world")
 	// Exceeds deadline
-	client.ConnectAndRequest(&pb.DeadlinerRequest{Message: "delay"})
+	client.ConnectAndRequest("delay")
 	// A successful request with propagated deadline
-	client.ConnectAndRequest(&pb.DeadlinerRequest{Hops: 3})
+	client.ConnectAndRequest("[propagate me]world")
 	// Exceeds propagated deadline
-	client.ConnectAndRequest(&pb.DeadlinerRequest{Hops: 4})
+	client.ConnectAndRequest("[propagate me][propagate me]world")
 }

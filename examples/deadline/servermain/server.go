@@ -22,12 +22,13 @@ import (
 	"context"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/examples/deadline/client"
 
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/deadline/deadline"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
 const port = ":50052"
@@ -35,18 +36,19 @@ const port = ":50052"
 type server struct{}
 
 // MakeRequest implements deadline.DeadlinerServer
-func (s *server) MakeRequest(ctx context.Context, in *pb.DeadlinerRequest) (*pb.DeadlinerReply, error) {
-	if in.Hops > 0 {
-		in.Hops--
-		time.Sleep(300 * time.Millisecond)
-		return client.ConnectAndRequest(in)
+func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+	name := in.Name
+	if strings.HasPrefix(name, "[propagate me]") {
+		time.Sleep(800 * time.Millisecond)
+		name = strings.TrimPrefix(name, "[propagate me]")
+		return client.ConnectAndRequest(name)
 	}
 
-	if in.Message == "delay" {
-		time.Sleep(2 * time.Second)
+	if name == "delay" {
+		time.Sleep(1500 * time.Millisecond)
 	}
 
-	return &pb.DeadlinerReply{Message: "pong"}, nil
+	return &pb.HelloReply{Message: "Hello " + name}, nil
 }
 
 func main() {
@@ -55,7 +57,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterDeadlinerServer(s, &server{})
+	pb.RegisterGreeterServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
