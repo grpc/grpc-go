@@ -27,14 +27,10 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-const (
-	address = "localhost:50052"
-)
-
 // ConnectAndRequest sets up a connection to the server,
 // makes a request and returns, if successful, the reply.
 func ConnectAndRequest(name string) (*pb.HelloReply, error) {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:50052", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

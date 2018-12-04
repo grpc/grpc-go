@@ -31,8 +31,6 @@ import (
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-const port = ":50052"
-
 type server struct{}
 
 // MakeRequest implements deadline.DeadlinerServer
@@ -52,7 +50,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	lis, err := net.Listen("tcp", ":50052")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
