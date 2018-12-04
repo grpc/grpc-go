@@ -45,14 +45,13 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/examples/route_guide/testdata"
 )
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 	certFile   = flag.String("cert_file", "", "The TLS cert file")
 	keyFile    = flag.String("key_file", "", "The TLS key file")
-	jsonDBFile = flag.String("json_db_file", "", "A json file containing a list of features")
+	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )
 
@@ -209,11 +208,7 @@ func serialize(point *pb.Point) string {
 
 func newServer() *routeGuideServer {
 	s := &routeGuideServer{routeNotes: make(map[string][]*pb.RouteNote)}
-	dbFile := *jsonDBFile
-	if dbFile == "" {
-		dbFile = testdata.Path("route_guide_db.json")
-	}
-	s.loadFeatures(dbFile)
+	s.loadFeatures(*jsonDBFile)
 	return s
 }
 
@@ -238,6 +233,6 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterRouteGuideServer(grpcServer, &server{})
+	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	grpcServer.Serve(lis)
 }
