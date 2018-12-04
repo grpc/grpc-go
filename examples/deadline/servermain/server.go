@@ -24,44 +24,29 @@ import (
 	"net"
 	"time"
 
+	"google.golang.org/grpc/examples/deadline/client"
+
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/deadline/deadline"
 )
 
-const (
-	address = "localhost:50052"
-)
-const (
-	port = ":50052"
-)
+const port = ":50052"
 
 type server struct{}
 
-// SayHello implements helloworld.GreeterServer
+// MakeRequest implements deadline.DeadlinerServer
 func (s *server) MakeRequest(ctx context.Context, in *pb.DeadlinerRequest) (*pb.DeadlinerReply, error) {
 	if in.Hops > 0 {
-		conn, err := grpc.Dial(address, grpc.WithInsecure())
-		if err != nil {
-			log.Fatalf("did not connect: %v", err)
-		}
-		defer conn.Close()
-		c := pb.NewDeadlinerClient(conn)
-
 		in.Hops--
 		time.Sleep(300 * time.Millisecond)
-		r, err := c.MakeRequest(ctx, in)
-		if err != nil {
-			log.Printf("could not greet: %v", err)
-			return nil, err
-		}
-		return r, nil
+		return client.ConnectAndRequest(in)
 	}
 
 	if in.Message == "delay" {
 		time.Sleep(2 * time.Second)
 	}
 
-	return &pb.DeadlinerReply{Message: "pong "}, nil
+	return &pb.DeadlinerReply{Message: "pong"}, nil
 }
 
 func main() {

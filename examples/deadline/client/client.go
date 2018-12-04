@@ -16,7 +16,7 @@
  *
  */
 
-package main
+package client
 
 import (
 	"context"
@@ -31,28 +31,27 @@ const (
 	address = "localhost:50052"
 )
 
-func makeRequest(c pb.DeadlinerClient, request *pb.DeadlinerRequest) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.MakeRequest(ctx, request)
-	if err != nil {
-		log.Printf("could not greet: %v", err)
-		return
-	}
-	log.Printf("Reply: %s", r.Message)
-}
-
-func main() {
-	// Set up a connection to the server.
+// ConnectAndRequest sets up a connection to the server,
+// makes a request and returns, if successful, the reply.
+func ConnectAndRequest(out *pb.DeadlinerRequest) (*pb.DeadlinerReply, error) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
+
 	c := pb.NewDeadlinerClient(conn)
 
-	makeRequest(c, &pb.DeadlinerRequest{})
-	makeRequest(c, &pb.DeadlinerRequest{Message: "delay"})
-	makeRequest(c, &pb.DeadlinerRequest{Hops: 3})
-	makeRequest(c, &pb.DeadlinerRequest{Hops: 4})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	log.Println("# NEW REQUEST #")
+	log.Printf("Request: { %+v}", out)
+	r, err := c.MakeRequest(ctx, out)
+	if err != nil {
+		log.Printf("No reply: %v", err)
+		return nil, err
+	}
+	log.Printf("Reply: { %+v}", r)
+	return r, nil
 }
