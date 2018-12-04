@@ -36,11 +36,6 @@
       <version>${grpc.version}</version>
     </dependency>
     <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-alts</artifactId>
-      <version>${grpc.version}</version>
-    </dependency>
-    <dependency>
       <groupId>javax.annotation</groupId>
       <artifactId>javax.annotation-api</artifactId>
       <version>1.2</version>

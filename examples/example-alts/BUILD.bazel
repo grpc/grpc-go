@@ -1,0 +1,53 @@
+load("@io_grpc_grpc_java//:java_grpc_library.bzl", "java_grpc_library")
+
+proto_library(
+    name = "helloworld_proto",
+    srcs = ["src/main/proto/helloworld/helloworld.proto"],
+)
+
+java_proto_library(
+    name = "helloworld_java_proto",
+    deps = [":helloworld_proto"],
+)
+
+java_grpc_library(
+    name = "helloworld_java_grpc",
+    srcs = [":helloworld_proto"],
+    deps = [":helloworld_java_proto"],
+)
+
+java_library(
+    name = "example-alts",
+    testonly = 1,
+    srcs = glob(
+        ["src/main/java/**/*.java"],
+    ),
+    deps = [
+        ":helloworld_java_grpc",
+        ":helloworld_java_proto",
+        "@io_grpc_grpc_java//alts",
+        "@io_grpc_grpc_java//core",
+        "@io_grpc_grpc_java//protobuf",
+        "@io_grpc_grpc_java//stub",
+    ],
+)
+
+java_binary(
+    name = "hello-world-alts-client",
+    testonly = 1,
+    main_class = "io.grpc.examples.alts.HelloWorldAltsClient",
+    runtime_deps = [
+        ":example-alts",
+        "@io_grpc_grpc_java//netty",
+    ],
+)
+
+java_binary(
+    name = "hello-world-alts-server",
+    testonly = 1,
+    main_class = "io.grpc.examples.alts.HelloWorldAltsServer",
+    runtime_deps = [
+        ":example-alts",
+        "@io_grpc_grpc_java//netty",
+    ],
+)

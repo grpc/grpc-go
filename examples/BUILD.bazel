@@ -72,7 +72,6 @@ java_library(
         "@com_google_j2objc_j2objc_annotations//jar",
         "@com_google_protobuf//:protobuf_java",
         "@com_google_protobuf//:protobuf_java_util",
-        "@io_grpc_grpc_java//alts",
         "@io_grpc_grpc_java//core",
         "@io_grpc_grpc_java//netty",
         "@io_grpc_grpc_java//protobuf",
@@ -96,28 +95,6 @@ java_binary(
     main_class = "io.grpc.examples.helloworld.HelloWorldServer",
     runtime_deps = [
         ":examples",
-    ],
-)
-
-java_binary(
-    name = "hello-world-alts-client",
-    testonly = 1,
-    main_class = "io.grpc.examples.alts.HelloWorldAltsClient",
-    runtime_deps = [
-        ":examples",
-        "@io_grpc_grpc_java//alts",
-        "@io_grpc_grpc_java//netty",
-    ],
-)
-
-java_binary(
-    name = "hello-world-alts-server",
-    testonly = 1,
-    main_class = "io.grpc.examples.alts.HelloWorldAltsServer",
-    runtime_deps = [
-        ":examples",
-        "@io_grpc_grpc_java//alts",
-        "@io_grpc_grpc_java//netty",
     ],
 )
 
