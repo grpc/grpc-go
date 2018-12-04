@@ -37,15 +37,12 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/testdata"
-
 	"github.com/golang/protobuf/proto"
-
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/examples/route_guide/exampledata"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/examples/route_guide/testdata"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
@@ -211,7 +208,7 @@ func newServer() *routeGuideServer {
 	s := &routeGuideServer{routeNotes: make(map[string][]*pb.RouteNote)}
 	dbFile := *jsonDBFile
 	if dbFile == "" {
-		dbFile = testdata.Path("route_guide_db.json")
+		dbFile = exampledata.Path("route_guide_db.json")
 	}
 	s.loadFeatures(dbFile)
 	return s
@@ -238,6 +235,6 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterRouteGuideServer(grpcServer, &server{})
+	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	grpcServer.Serve(lis)
 }

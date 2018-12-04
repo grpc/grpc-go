@@ -15,7 +15,7 @@
  *
  */
 
-package testdata
+package exampledata
 
 import (
 	"path/filepath"
