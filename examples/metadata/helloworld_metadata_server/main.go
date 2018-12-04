@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	pb "google.golang.org/grpc/examples/metadata/helloworld"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -68,7 +69,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, grpc.Errorf(codes.DataLoss, "SayHello: failed to get metadata")
+		return nil, status.Errorf(codes.DataLoss, "SayHello: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
 		log.Printf("timestamp from metadata:")
@@ -98,7 +99,7 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
 		log.Printf("timestamp from metadata:")
@@ -136,7 +137,7 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
 		log.Printf("timestamp from metadata:")
@@ -177,7 +178,7 @@ func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalS
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return grpc.Errorf(codes.DataLoss, "BidirectionalStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "BidirectionalStreamingSayHello: failed to get metadata")
 	}
 
 	if t, ok := md["timestamp"]; ok {
