@@ -33,7 +33,7 @@ import (
 
 type server struct{}
 
-// MakeRequest implements deadline.DeadlinerServer
+// SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	name := in.Name
 	if strings.HasPrefix(name, "[propagate me]") {
