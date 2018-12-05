@@ -19,6 +19,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -26,10 +27,9 @@ import (
 	"net"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/metadata/helloworld"
+	pb "google.golang.org/grpc/examples/features/metadata/helloworld"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )

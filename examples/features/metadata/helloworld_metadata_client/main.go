@@ -19,13 +19,13 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/metadata/helloworld"
+	pb "google.golang.org/grpc/examples/features/metadata/helloworld"
 	"google.golang.org/grpc/metadata"
 )
 
