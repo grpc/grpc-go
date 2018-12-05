@@ -3,9 +3,6 @@ java_library(
     srcs = glob([
         "src/main/java/io/grpc/*.java",
     ]),
-    resources = glob([
-        "src/main/resources/**",
-    ]),
     visibility = ["//visibility:public"],
     deps = [
         "//context",
@@ -36,6 +33,9 @@ java_library(
     srcs = glob([
         "src/main/java/io/grpc/internal/*.java",
     ]),
+    resources = glob([
+            "src/bazel-internal/resources/**",
+        ]),
     visibility = ["//:__subpackages__"],
     deps = [
         ":core",
@@ -56,6 +56,9 @@ java_library(
     srcs = glob([
         "src/main/java/io/grpc/util/*.java",
     ]),
+    resources = glob([
+            "src/bazel-util/resources/**",
+        ]),
     visibility = ["//visibility:public"],
     deps = [
         ":core",
