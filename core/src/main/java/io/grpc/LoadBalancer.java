@@ -21,6 +21,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -102,6 +103,15 @@ import javax.annotation.concurrent.ThreadSafe;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 @NotThreadSafe
 public abstract class LoadBalancer {
+  /**
+   * The load-balancing config converted from an JSON object injected by the GRPC library.
+   *
+   * <p>{@link NameResolver}s should not produce this attribute.
+   */
+  @NameResolver.ResolutionResultAttr
+  public static final Attributes.Key<Map<String, Object>> ATTR_LOAD_BALANCING_CONFIG =
+      Attributes.Key.create("io.grpc.LoadBalancer.loadBalancingConfig");
+
   /**
    * Handles newly resolved server groups and metadata attributes from name resolution system.
    * {@code servers} contained in {@link EquivalentAddressGroup} should be considered equivalent

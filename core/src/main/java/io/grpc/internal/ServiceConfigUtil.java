@@ -23,6 +23,8 @@ import static com.google.common.math.LongMath.checkedAdd;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.internal.RetriableStream.Throttle;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +38,7 @@ public final class ServiceConfigUtil {
 
   private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
   private static final String SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY = "loadBalancingPolicy";
+  private static final String SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY = "loadBalancingConfig";
   private static final String SERVICE_CONFIG_STICKINESS_METADATA_KEY = "stickinessMetadataKey";
   private static final String METHOD_CONFIG_NAME_KEY = "name";
   private static final String METHOD_CONFIG_TIMEOUT_KEY = "timeout";
@@ -294,15 +297,48 @@ public final class ServiceConfigUtil {
   }
 
   /**
-   * Extracts the load balancing policy from a service config, or {@code null}.
+   * Extracts load balancing configs from a service config.
    */
-  @Nullable
+  @SuppressWarnings("unchecked")
   @VisibleForTesting
-  public static String getLoadBalancingPolicyFromServiceConfig(Map<String, Object> serviceConfig) {
-    if (!serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
-      return null;
+  public static List<Map<String, Object>> getLoadBalancingConfigsFromServiceConfig(
+      Map<String, Object> serviceConfig) {
+    /* schema as follows
+    {
+      "loadBalancingConfig": {
+        [
+          {"xds" :
+            {
+              "balancerName": "balancer1",
+              "childPolicy": {...},
+              "fallbackPolicy": {...},
+            }
+          },
+          {"round_robin": {}}
+        ]
+      },
+      "loadBalancingPolicy": "ROUND_ROBIN"  // The deprecated policy key
     }
-    return getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
+    */
+    List<Map<String, Object>> lbConfigs = new ArrayList<Map<String, Object>>();
+    if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY)) {
+      List<Object> configs = getList(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY);
+      for (Object config : configs) {
+        lbConfigs.add((Map<String, Object>) config);
+      }
+    }
+    if (lbConfigs.isEmpty()) {
+      // No LoadBalancingConfig found.  Fall back to the deprecated LoadBalancingPolicy
+      if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
+        String policy = getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
+        // Convert the policy to a config, so that the caller can handle them in the same way.
+        policy = policy.toLowerCase();
+        Map<String, Object> fakeConfig =
+            Collections.singletonMap(policy, (Object) Collections.emptyMap());
+        lbConfigs.add(fakeConfig);
+      }
+    }
+    return Collections.unmodifiableList(lbConfigs);
   }
 
   /**
