@@ -66,6 +66,11 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   }
 
   @Override
+  public void refreshNameResolution() {
+    delegate().refreshNameResolution();
+  }
+
+  @Override
   @Deprecated
   public void runSerialized(Runnable task) {
     delegate().runSerialized(task);

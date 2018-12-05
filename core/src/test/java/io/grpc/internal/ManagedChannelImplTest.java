@@ -176,7 +176,7 @@ public class ManagedChannelImplTest {
         @Override
         public boolean shouldAccept(Runnable command) {
           return command.toString().contains(
-              ManagedChannelImpl.NameResolverRefresh.class.getName());
+              ManagedChannelImpl.DelayedNameResolverRefresh.class.getName());
         }
       };
 
@@ -1867,7 +1867,7 @@ public class ManagedChannelImplTest {
     assertEquals(1, nameResolverFactory.resolvers.size());
     FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.remove(0);
 
-    Throwable panicReason = new Exception("Simulated uncaught exception");
+    final Throwable panicReason = new Exception("Simulated uncaught exception");
     if (initialState == IDLE) {
       timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
     } else {
@@ -1889,7 +1889,13 @@ public class ManagedChannelImplTest {
     }
 
     // Make channel panic!
-    channel.panic(panicReason);
+    channel.syncContext.execute(
+        new Runnable() {
+          @Override
+          public void run() {
+            channel.panic(panicReason);
+          }
+        });
 
     // Calls buffered in delayedTransport will fail
 
@@ -1946,8 +1952,14 @@ public class ManagedChannelImplTest {
     verifyZeroInteractions(mockCallListener, mockCallListener2);
 
     // Enter panic
-    Throwable panicReason = new Exception("Simulated uncaught exception");
-    channel.panic(panicReason);
+    final Throwable panicReason = new Exception("Simulated uncaught exception");
+    channel.syncContext.execute(
+        new Runnable() {
+          @Override
+          public void run() {
+            channel.panic(panicReason);
+          }
+        });
 
     // Buffered RPCs fail immediately
     executor.runDueTasks();
@@ -2189,6 +2201,19 @@ public class ManagedChannelImplTest {
     assertEquals(IDLE, channel.getState(false));
     executor.runDueTasks();
     verify(onStateChanged, never()).run();
+  }
+
+  @Test
+  public void balancerRefreshNameResolution() {
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.get(0);
+    int initialRefreshCount = resolver.refreshCalled;
+    helper.refreshNameResolution();
+    assertEquals(initialRefreshCount + 1, resolver.refreshCalled);
   }
 
   @Test

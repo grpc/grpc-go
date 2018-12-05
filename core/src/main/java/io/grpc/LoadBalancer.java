@@ -570,6 +570,15 @@ public abstract class LoadBalancer {
         @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker);
 
     /**
+     * Call {@link NameResolver#refresh} on the channel's resolver.
+     *
+     * @since 1.18.0
+     */
+    public void refreshNameResolution() {
+      throw new UnsupportedOperationException();
+    }
+
+    /**
      * Schedule a task to be run in the Synchronization Context, which serializes the task with the
      * callback methods on the {@link LoadBalancer} interface.
      *
