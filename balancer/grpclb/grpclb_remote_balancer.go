@@ -245,6 +245,8 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 				}
 			}
 		}
+		// Trigger a re-resolve when the stream errors.
+		lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
 
 		if !doBackoff {
 			retryCount = 0
