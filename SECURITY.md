@@ -90,7 +90,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>2.0.17.Final</version>
+      <version>2.0.20.Final</version>
     </dependency>
   </dependencies>
 </project>
@@ -108,7 +108,7 @@ buildscript {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative-boringssl-static:2.0.17.Final'
+    compile 'io.netty:netty-tcnative-boringssl-static:2.0.20.Final'
 }
 ```
 
@@ -143,7 +143,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>2.0.17.Final</version>
+      <version>2.0.20.Final</version>
       <classifier>${tcnative.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -211,7 +211,7 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:2.0.17.Final:' + tcnative_classifier
+    compile 'io.netty:netty-tcnative:2.0.20.Final:' + tcnative_classifier
 }
 ```
 
@@ -374,7 +374,8 @@ grpc-netty version | netty-handler version | netty-tcnative-boringssl-static ver
 1.11.x-1.12.x      | 4.1.22.Final          | 2.0.7.Final
 1.13.x             | 4.1.25.Final          | 2.0.8.Final
 1.14.x-1.15.x      | 4.1.27.Final          | 2.0.12.Final
-1.16.x-            | 4.1.30.Final          | 2.0.17.Final
+1.16.x-1.17.x      | 4.1.30.Final          | 2.0.17.Final
+1.18.x-            | 4.1.32.Final          | 2.0.20.Final
 
 _(grpc-netty-shaded avoids issues with keeping these versions in sync.)_
 

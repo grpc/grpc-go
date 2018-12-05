@@ -33,7 +33,6 @@ import io.netty.channel.ConnectTimeoutException;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.channel.socket.oio.OioSocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
@@ -137,8 +136,9 @@ public class UtilsTest {
   }
 
   @Test
+  @SuppressWarnings("deprecation")
   public void channelOptionsTest_oio() {
-    Channel channel = new OioSocketChannel();
+    Channel channel = new io.netty.channel.socket.oio.OioSocketChannel();
     SocketOptions socketOptions = setAndValidateGeneric(channel);
     assertEquals(250, (int) socketOptions.soTimeoutMillis);
   }
