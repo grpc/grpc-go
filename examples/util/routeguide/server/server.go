@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/examples/route_guide/exampledata"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
@@ -185,8 +186,15 @@ func serialize(point *pb.Point) string {
 }
 
 // New returns an implementation of RouteGuideServer.
+//
+// If jsonDBFile is an empty string, the default example file will be used.
 func New(jsonDBFile string) pb.RouteGuideServer {
 	s := &routeGuideServer{routeNotes: make(map[string][]*pb.RouteNote)}
-	s.loadFeatures(jsonDBFile)
+
+	dbFile := jsonDBFile
+	if dbFile == "" {
+		dbFile = exampledata.Path("route_guide_db.json")
+	}
+	s.loadFeatures(dbFile)
 	return s
 }
