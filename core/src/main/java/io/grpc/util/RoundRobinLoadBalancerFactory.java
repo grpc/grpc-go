@@ -27,7 +27,7 @@ import io.grpc.LoadBalancerRegistry;
  * A {@link LoadBalancer} that provides round-robin load balancing mechanism over the
  * addresses.
  *
- * @deprecated use {@link io.grpc.LoadBalancerRegistry#getProvider} with "round-robin" policy.  This
+ * @deprecated use {@link io.grpc.LoadBalancerRegistry#getProvider} with "round_robin" policy.  This
  *             class will be deleted soon.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
