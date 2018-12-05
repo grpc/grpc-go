@@ -161,5 +161,5 @@ For testing a gRPC server, create the server as an InProcessServer,
 and test it against a real client stub with an InProcessChannel.
 
 The gRPC-java library also provides a JUnit rule,
-[GrpcServerRule](../testing/src/main/java/io/grpc/testing/GrpcCleanupRule.java), to do the graceful
+[GrpcCleanupRule](../testing/src/main/java/io/grpc/testing/GrpcCleanupRule.java), to do the graceful
 shutdown boilerplate for you.
