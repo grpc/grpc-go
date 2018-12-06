@@ -77,7 +77,7 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeRespo
 
 ## Sending and receiving metadata - client side
 
-Client side metadata sending and receiving examples are available [here](../examples/features/metadata/helloworld_metadata_client/main.go).
+Client side metadata sending and receiving examples are available [here](../examples/features/metadata/client/main.go).
 
 ### Sending metadata
 
@@ -164,7 +164,7 @@ trailer := stream.Trailer()
 
 ## Sending and receiving metadata - server side
 
-Server side metadata sending and receiving examples are available [here](../examples/features/metadata/helloworld_metadata_server/main.go).
+Server side metadata sending and receiving examples are available [here](../examples/features/metadata/server/main.go).
 
 ### Receiving metadata
 
