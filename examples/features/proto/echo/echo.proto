@@ -18,7 +18,7 @@
 
 syntax = "proto3";
 
-package echo;
+package grpc.examples.echo;
 
 message EchoRequest {
   string message = 1;
