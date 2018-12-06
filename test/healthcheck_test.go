@@ -250,9 +250,8 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
+		defer close(hcExitChan)
+		return testHealthCheckFunc(ctx, newStream, update, service)
 	}
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
 	defer replace()
@@ -352,11 +351,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		err := testHealthCheckFunc(ctx, newStream, update, service)
-		select {
-		case <-hcExitChan:
-		default:
 			close(hcExitChan)
-		}
 		return err
 	}
 
@@ -380,7 +375,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName("round_robin"), grpc.WithWaitForHandshake())
 	if err != nil {
 		t.Fatalf("dial failed due to err: %v", err)
 	}
@@ -426,9 +421,8 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
+		defer close(hcExitChan)
+		return testHealthCheckFunc(ctx, newStream, update, service)
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
@@ -527,9 +521,8 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
+		defer close(hcExitChan)
+		return testHealthCheckFunc(ctx, newStream, update, service)
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
@@ -602,9 +595,8 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	hcExitChan := make(chan struct{})
 	testHealthCheckFuncWrapper := func(ctx context.Context, newStream func() (interface{}, error), update func(bool), service string) error {
 		close(hcEnterChan)
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
+		defer close(hcExitChan)
+		return testHealthCheckFunc(ctx, newStream, update, service)
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
@@ -696,9 +688,8 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 		default:
 			close(hcEnterChan)
 		}
-		err := testHealthCheckFunc(ctx, newStream, update, service)
-		close(hcExitChan)
-		return err
+		defer close(hcExitChan)
+		return testHealthCheckFunc(ctx, newStream, update, service)
 	}
 
 	replace := replaceHealthCheckFunc(testHealthCheckFuncWrapper)
