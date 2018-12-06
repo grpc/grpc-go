@@ -40,21 +40,6 @@ const (
 	smallDuration   = time.Second
 )
 
-var greetingWords = []string{
-	"Aloha",
-	"Ahoy",
-	"Bonjour",
-	"G'day",
-	"Hello",
-	"Hey",
-	"Hi",
-	"Hola",
-	"Howdy",
-	"Sup",
-	"What's up",
-	"Yo",
-}
-
 type server struct{}
 
 // SayHello implements unary call handler with metadata handling.
