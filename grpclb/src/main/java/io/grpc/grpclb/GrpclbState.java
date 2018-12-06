@@ -583,6 +583,8 @@ final class GrpclbState {
             syncContext.schedule(new LbRpcRetryTask(), delayNanos, TimeUnit.NANOSECONDS,
                 timerService);
       }
+
+      helper.refreshNameResolution();
     }
 
     void close(@Nullable Exception error) {
