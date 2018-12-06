@@ -189,7 +189,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
         throws PolicyException {
       // Check for balancer addresses
       boolean haveBalancerAddress = false;
-      List<EquivalentAddressGroup> backendAddrs = new ArrayList<EquivalentAddressGroup>();
+      List<EquivalentAddressGroup> backendAddrs = new ArrayList<>();
       for (EquivalentAddressGroup s : servers) {
         if (s.getAttributes().get(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY) != null) {
           haveBalancerAddress = true;

@@ -37,6 +37,7 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -368,7 +369,7 @@ public final class Http2Client {
   private static String validTestCasesHelpText() {
     StringBuilder builder = new StringBuilder();
     for (Http2TestCases testCase : Http2TestCases.values()) {
-      String strTestcase = testCase.name().toLowerCase();
+      String strTestcase = testCase.name().toLowerCase(Locale.ROOT);
       builder.append("\n      ")
           .append(strTestcase)
           .append(": ")

@@ -23,6 +23,7 @@ import com.google.common.base.Strings;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -204,7 +205,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
   }
 
   private static String commandLineFlag(Param param) {
-    String name = param.getName().toLowerCase();
+    String name = param.getName().toLowerCase(Locale.ROOT);
     String type = (!param.getType().isEmpty() ? '=' + param.getType() : "");
     return "--" + name + type;
   }

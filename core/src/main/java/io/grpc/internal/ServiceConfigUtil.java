@@ -26,6 +26,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -320,7 +321,7 @@ public final class ServiceConfigUtil {
       "loadBalancingPolicy": "ROUND_ROBIN"  // The deprecated policy key
     }
     */
-    List<Map<String, Object>> lbConfigs = new ArrayList<Map<String, Object>>();
+    List<Map<String, Object>> lbConfigs = new ArrayList<>();
     if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY)) {
       List<Object> configs = getList(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY);
       for (Object config : configs) {
@@ -332,7 +333,7 @@ public final class ServiceConfigUtil {
       if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
         String policy = getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
         // Convert the policy to a config, so that the caller can handle them in the same way.
-        policy = policy.toLowerCase();
+        policy = policy.toLowerCase(Locale.ROOT);
         Map<String, Object> fakeConfig =
             Collections.singletonMap(policy, (Object) Collections.emptyMap());
         lbConfigs.add(fakeConfig);

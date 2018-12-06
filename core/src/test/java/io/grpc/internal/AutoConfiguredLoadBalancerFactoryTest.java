@@ -399,7 +399,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
     assertThat(selection.provider).isInstanceOf(FakeRoundRobinLoadBalancerProvider.class);
     // Balancer addresses are filtered out in the server list passed to round_robin
-    assertThat(selection.serverList).isEqualTo(Collections.singletonList(servers.get(1)));
+    assertThat(selection.serverList).containsExactly(servers.get(1));
     assertThat(selection.config).isNull();
     verifyNoMoreInteractions(channelLogger);
   }
@@ -424,7 +424,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       lb.decideLoadBalancerProvider(servers, serviceConfig);
       fail("Should throw");
     } catch (PolicyException e) {
-      assertThat(e.getMessage())
+      assertThat(e)
+          .hasMessageThat()
           .isEqualTo("Received ONLY balancer addresses but grpclb runtime is missing");
     }
   }
@@ -433,7 +434,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbPolicyOverridesDefault() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -466,7 +467,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbPolicyFailsOnUnknown() {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "MAGIC_BALANCER");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -474,7 +475,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       lb.decideLoadBalancerProvider(servers, serviceConfig);
       fail();
     } catch (PolicyException e) {
-      assertThat(e.getMessage()).isEqualTo(
+      assertThat(e).hasMessageThat().isEqualTo(
           "None of [magic_balancer] specified by Service Config are available.");
     }
   }
@@ -491,7 +492,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       lb.decideLoadBalancerProvider(servers, serviceConfig);
       fail();
     } catch (PolicyException e) {
-      assertThat(e.getMessage()).isEqualTo(
+      assertThat(e).hasMessageThat().isEqualTo(
           "None of [magic_balancer] specified by Service Config are available.");
     }
   }
