@@ -5,8 +5,11 @@ The example require grpc-java to already be built. You are strongly encouraged
 to check out a git release tag, since there will already be a build of grpc
 available. Otherwise you must follow [COMPILING](../COMPILING.md).
 
-To build the example, run in this directory:
+To build the example,
 
+1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
+
+2. Run in this directory:
 ```
 $ ../gradlew installDist
 ```
@@ -97,6 +100,10 @@ That's it!
 ## Maven
 
 If you prefer to use Maven:
+
+1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
+
+2. Run in this directory:
 ```
 $ mvn verify
 $ # Run the server

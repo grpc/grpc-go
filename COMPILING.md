@@ -1,12 +1,13 @@
 Building gRPC-Java
 ==================
 
-Building is only necessary if you are making changes to gRPC-Java.
+Building is only necessary if you are making changes to gRPC-Java or testing/using a non-released
+ version (e.g. master HEAD) of gRPC-Java library.
 
 Building requires JDK 8, as our tests use TLS.
 
 grpc-java has a C++ code generation plugin for protoc. Since many Java
-developers don't have C compilers installed and don't need to modify the
+developers don't have C compilers installed and don't need to run or modify the
 codegen, the build can skip it. To skip, create the file
 `<project-root>/gradle.properties` and add `skipCodegen=true`.
 

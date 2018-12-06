@@ -9,8 +9,11 @@ You may want to read through the
 [Quick Start Guide](https://grpc.io/docs/quickstart/java.html)
 before trying out the examples.
 
-To build the examples, run in this directory:
+To build the examples,
 
+1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
+
+2. Run in this directory:
 ```
 $ ./gradlew installDist
 ```
