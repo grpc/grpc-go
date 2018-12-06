@@ -16,7 +16,7 @@
  *
  */
 
-//go:generate protoc -I ./echo --go_out=plugins=grpc:./echo ./echo/echo.proto
+//go:generate protoc -I ./echo --go_out=plugins=grpc,paths=source_relative:./echo ./echo/echo.proto
 
 // Package proto is for go generate.
 package proto
