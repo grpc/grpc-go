@@ -23,11 +23,10 @@ import (
 	"log"
 	"net"
 
-	"google.golang.org/grpc/codes"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
-	rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
 	"google.golang.org/grpc/status"
 )
 
@@ -43,21 +42,21 @@ func (s *hwServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.H
 	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
-type rgServer struct{}
+type ecServer struct{}
 
-func (s *rgServer) GetFeature(ctx context.Context, point *rgpb.Point) (*rgpb.Feature, error) {
-	return &rgpb.Feature{Name: "Unknown", Location: point}, nil
+func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+	return &ecpb.EchoResponse{Message: req.Message}, nil
 }
 
-func (s *rgServer) ListFeatures(rect *rgpb.Rectangle, stream rgpb.RouteGuide_ListFeaturesServer) error {
+func (s *ecServer) ServerStreamingEcho(*ecpb.EchoRequest, ecpb.Echo_ServerStreamingEchoServer) error {
 	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
-func (s *rgServer) RecordRoute(stream rgpb.RouteGuide_RecordRouteServer) error {
+func (s *ecServer) ClientStreamingEcho(ecpb.Echo_ClientStreamingEchoServer) error {
 	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
-func (s *rgServer) RouteChat(stream rgpb.RouteGuide_RouteChatServer) error {
+func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEchoServer) error {
 	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
@@ -72,7 +71,7 @@ func main() {
 	hwpb.RegisterGreeterServer(s, &hwServer{})
 
 	// Register RouteGuide on the same server.
-	rgpb.RegisterRouteGuideServer(s, &rgServer{})
+	ecpb.RegisterEchoServer(s, &ecServer{})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

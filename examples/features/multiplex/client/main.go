@@ -20,12 +20,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"google.golang.org/grpc"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
-	rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
 const (
@@ -41,19 +42,17 @@ func callSayHello(c hwpb.GreeterClient, name string) {
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
-	log.Printf("Greeting: %s", r.Message)
+	fmt.Println("Greeting: ", r.Message)
 }
 
-// callPrintFeature gets the feature for the given point.
-func callPrintFeature(client rgpb.RouteGuideClient, point *rgpb.Point) {
-	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
+func callUnaryEcho(client ecpb.EchoClient, req *ecpb.EchoRequest) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	feature, err := client.GetFeature(ctx, point)
+	resp, err := client.UnaryEcho(ctx, req)
 	if err != nil {
-		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
 	}
-	log.Println(feature)
+	fmt.Println("UnaryEcho: ", resp.Message)
 }
 
 func main() {
@@ -64,14 +63,14 @@ func main() {
 	}
 	defer conn.Close()
 
-	log.Println("--- calling helloworld.Greeter/SayHello ---")
+	fmt.Println("--- calling helloworld.Greeter/SayHello ---")
 	// Make a greeter client and send an RPC.
 	hwc := hwpb.NewGreeterClient(conn)
 	callSayHello(hwc, "multiplex")
 
-	log.Println()
-	log.Println("--- calling routeguide.RouteGuide/GetFeature ---")
+	fmt.Println()
+	fmt.Println("--- calling routeguide.RouteGuide/GetFeature ---")
 	// Make a routeguild client with the same ClientConn.
-	rgc := rgpb.NewRouteGuideClient(conn)
-	callPrintFeature(rgc, &rgpb.Point{Latitude: 314, Longitude: 271})
+	rgc := ecpb.NewEchoClient(conn)
+	callUnaryEcho(rgc, &ecpb.EchoRequest{Message: "this is examples/multiplex"})
 }
