@@ -23,7 +23,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -50,16 +49,16 @@ func (s *server) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerS
 }
 
 func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
+	var lastMessage string
 	for {
-		var messages []string
 		req, err := stream.Recv()
 		if err == io.EOF {
-			return stream.SendAndClose(&pb.EchoResponse{Message: strings.Join(messages, ";")})
+			return stream.SendAndClose(&pb.EchoResponse{Message: lastMessage})
 		}
 		if err != nil {
 			return err
 		}
-		messages = append(messages, req.Message)
+		lastMessage = req.Message
 	}
 }
 
