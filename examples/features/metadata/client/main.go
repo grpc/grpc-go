@@ -20,65 +20,68 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"time"
 
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/features/metadata/helloworld"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 )
 
 const (
 	address         = "localhost:9527"
 	timestampFormat = time.StampNano // "Jan _2 15:04:05.000"
+	streamingCount  = 10
 )
 
-func unaryCallWithMetadata(c pb.GreeterClient, name string) {
-	log.Printf("------------ unary ------------")
+func unaryCallWithMetadata(c pb.EchoClient, message string) {
+	fmt.Printf("--- unary ---\n")
 	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Make RPC using the context with the metadata.
 	var header, trailer metadata.MD
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name}, grpc.Header(&header), grpc.Trailer(&trailer))
+	r, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: message}, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
-		log.Fatalf("failed to call SayHello: %v", err)
+		log.Fatalf("failed to call UnaryEcho: %v", err)
 	}
 
 	if t, ok := header["timestamp"]; ok {
-		log.Printf("timestamp from header:")
+		fmt.Printf("timestamp from header:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		log.Printf("location from header:")
+		fmt.Printf("location from header:\n")
 		for i, e := range l {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
-	log.Printf("message:")
-	log.Printf(" - %s", r.Message)
+	fmt.Printf("response:\n")
+	fmt.Printf(" - %s\n", r.Message)
+
 	if t, ok := trailer["timestamp"]; ok {
-		log.Printf("timestamp from trailer:")
+		fmt.Printf("timestamp from trailer:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 }
 
-func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
-	log.Printf("------------ server streaming ------------")
+func serverStreamingWithMetadata(c pb.EchoClient, message string) {
+	fmt.Printf("--- server streaming ---\n")
 	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Make RPC using the context with the metadata.
-	stream, err := c.ServerStreamingSayHello(ctx, &pb.StreamingHelloRequest{Names: names})
+	stream, err := c.ServerStreamingEcho(ctx, &pb.EchoRequest{Message: message})
 	if err != nil {
-		log.Fatalf("failed to call ServerStreamingSayHello: %v", err)
+		log.Fatalf("failed to call ServerStreamingEcho: %v", err)
 	}
 
 	// Read the header when the header arrives.
@@ -88,28 +91,28 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	}
 	// Read metadata from server's header.
 	if t, ok := header["timestamp"]; ok {
-		log.Printf("timestamp from header:")
+		fmt.Printf("timestamp from header:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		log.Printf("location from header:")
+		fmt.Printf("location from header:\n")
 		for i, e := range l {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
 	// Read all the responses.
 	var rpcStatus error
-	log.Printf("message:")
+	fmt.Printf("response:\n")
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
-		log.Printf(" - %s", r.Message)
+		fmt.Printf(" - %s\n", r.Message)
 	}
 	if rpcStatus != io.EOF {
 		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
@@ -119,23 +122,23 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	trailer := stream.Trailer()
 	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
-		log.Printf("timestamp from trailer:")
+		fmt.Printf("timestamp from trailer:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 }
 
-func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
-	log.Printf("------------ client streaming ------------")
+func clientStreamWithMetadata(c pb.EchoClient, message string) {
+	fmt.Printf("--- client streaming ---\n")
 	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Make RPC using the context with the metadata.
-	stream, err := c.ClientStreamingSayHello(ctx)
+	stream, err := c.ClientStreamingEcho(ctx)
 	if err != nil {
-		log.Fatalf("failed to call ClientStreamingSayHello: %v\n", err)
+		log.Fatalf("failed to call ClientStreamingEcho: %v\n", err)
 	}
 
 	// Read the header when the header arrives.
@@ -145,21 +148,21 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	}
 	// Read metadata from server's header.
 	if t, ok := header["timestamp"]; ok {
-		log.Printf("timestamp from header:")
+		fmt.Printf("timestamp from header:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 	if l, ok := header["location"]; ok {
-		log.Printf("location from header:")
+		fmt.Printf("location from header:\n")
 		for i, e := range l {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
 	// Send all requests to the server.
-	for _, name := range names {
-		if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
+	for i := 0; i < streamingCount; i++ {
+		if err := stream.Send(&pb.EchoRequest{Message: message}); err != nil {
 			log.Fatalf("failed to send streaming: %v\n", err)
 		}
 	}
@@ -169,32 +172,30 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	if err != nil {
 		log.Fatalf("failed to CloseAndRecv: %v\n", err)
 	}
-	log.Printf("message:")
-	for _, m := range r.Messages {
-		log.Printf(" - %s\n", m)
-	}
+	fmt.Printf("response:\n")
+	fmt.Printf(" - %s\n\n", r.Message)
 
 	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
 	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
-		log.Printf("timestamp from trailer:")
+		fmt.Printf("timestamp from trailer:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 }
 
-func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
-	log.Printf("------------ bidirectional ------------")
+func bidirectionalWithMetadata(c pb.EchoClient, message string) {
+	fmt.Printf("--- bidirectional ---\n")
 	// Create metadata and context.
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Make RPC using the context with the metadata.
-	stream, err := c.BidirectionalStreamingSayHello(ctx)
+	stream, err := c.BidirectionalStreamingEcho(ctx)
 	if err != nil {
-		log.Fatalf("failed to call BidirectionalStreamingSayHello: %v\n", err)
+		log.Fatalf("failed to call BidirectionalStreamingEcho: %v\n", err)
 	}
 
 	go func() {
@@ -205,21 +206,21 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 		}
 		// Read metadata from server's header.
 		if t, ok := header["timestamp"]; ok {
-			log.Printf("timestamp from header:")
+			fmt.Printf("timestamp from header:\n")
 			for i, e := range t {
-				log.Printf(" %d. %s", i, e)
+				fmt.Printf(" %d. %s\n", i, e)
 			}
 		}
 		if l, ok := header["location"]; ok {
-			log.Printf("location from header:")
+			fmt.Printf("location from header:\n")
 			for i, e := range l {
-				log.Printf(" %d. %s", i, e)
+				fmt.Printf(" %d. %s\n", i, e)
 			}
 		}
 
 		// Send all requests to the server.
-		for _, name := range names {
-			if err := stream.Send(&pb.HelloRequest{Name: name}); err != nil {
+		for i := 0; i < streamingCount; i++ {
+			if err := stream.Send(&pb.EchoRequest{Message: message}); err != nil {
 				log.Fatalf("failed to send streaming: %v\n", err)
 			}
 		}
@@ -228,14 +229,14 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 
 	// Read all the responses.
 	var rpcStatus error
-	log.Printf("message:")
+	fmt.Printf("response:\n")
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
-		log.Printf(" - %s", r.Message)
+		fmt.Printf(" - %s\n", r.Message)
 	}
 	if rpcStatus != io.EOF {
 		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
@@ -245,22 +246,15 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 	trailer := stream.Trailer()
 	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
-		log.Printf("timestamp from trailer:")
+		fmt.Printf("timestamp from trailer:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
 }
 
-var names = []string{
-	"Anne",
-	"Hope",
-	"Margeret",
-	"Jamar",
-	"Judson",
-	"Carrol",
-}
+const message = "this is examples/metadata"
 
 func main() {
 	// Set up a connection to the server.
@@ -270,16 +264,16 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := pb.NewGreeterClient(conn)
+	c := pb.NewEchoClient(conn)
 
-	unaryCallWithMetadata(c, names[0])
+	unaryCallWithMetadata(c, message)
 	time.Sleep(1 * time.Second)
 
-	serverStreamingWithMetadata(c, names)
+	serverStreamingWithMetadata(c, message)
 	time.Sleep(1 * time.Second)
 
-	clientStreamWithMetadata(c, names)
+	clientStreamWithMetadata(c, message)
 	time.Sleep(1 * time.Second)
 
-	bidirectionalWithMetadata(c, names)
+	bidirectionalWithMetadata(c, message)
 }

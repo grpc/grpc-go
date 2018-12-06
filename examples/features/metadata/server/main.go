@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/metadata/helloworld"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -38,13 +38,13 @@ const (
 	port            = ":9527"
 	timestampFormat = time.StampNano
 	smallDuration   = time.Second
+	streamingCount  = 10
 )
 
 type server struct{}
 
-// SayHello implements unary call handler with metadata handling.
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	log.Printf("----------- SayHello -----------")
+func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+	fmt.Printf("--- UnaryEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
@@ -54,12 +54,12 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Errorf(codes.DataLoss, "SayHello: failed to get metadata")
+		return nil, status.Errorf(codes.DataLoss, "UnaryEcho: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
-		log.Printf("timestamp from metadata:")
+		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
@@ -67,14 +67,13 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	grpc.SendHeader(ctx, header)
 
-	log.Printf("request received: %v, sending greeting", in)
+	fmt.Printf("request received: %v, sending echo\n", in)
 
-	return &pb.HelloReply{Message: fmt.Sprintf("%s, %s", greetingWords[rand.Intn(len(greetingWords))], in.Name)}, nil
+	return &pb.EchoResponse{Message: in.Message}, nil
 }
 
-// ServerStreamingSayHello implements server streaming handler with metadata handling.
-func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb.Greeter_ServerStreamingSayHelloServer) error {
-	log.Printf("----------- ServerStreamingSayHello -----------")
+func (s *server) ServerStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
+	fmt.Printf("--- ServerStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
@@ -84,12 +83,12 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return status.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "ServerStreamingEcho: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
-		log.Printf("timestamp from metadata:")
+		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
@@ -97,12 +96,12 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	stream.SendHeader(header)
 
-	log.Printf("request received: %v\n", in)
+	fmt.Printf("request received: %v\n", in)
 
 	// Read requests and send responses.
-	for _, name := range in.Names {
-		log.Printf("sending greeting for %v\n", name)
-		err := stream.Send(&pb.HelloReply{Message: fmt.Sprintf("%s, %s", greetingWords[rand.Intn(len(greetingWords))], name)})
+	for i := 0; i < streamingCount; i++ {
+		fmt.Printf("echo message %v\n", in.Message)
+		err := stream.Send(&pb.EchoResponse{Message: in.Message})
 		if err != nil {
 			return err
 		}
@@ -110,9 +109,8 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 	return nil
 }
 
-// ClientStreamingSayHello implements client streaming handler with metadata handling
-func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHelloServer) error {
-	log.Printf("----------- ClientStreamingSayHello -----------")
+func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
+	fmt.Printf("--- ClientStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
@@ -122,12 +120,12 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return status.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "ClientStreamingEcho: failed to get metadata")
 	}
 	if t, ok := md["timestamp"]; ok {
-		log.Printf("timestamp from metadata:")
+		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
@@ -136,24 +134,23 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 	stream.SendHeader(header)
 
 	// Read requests and send responses.
-	var messages []string
+	var message string
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
-			log.Printf("sending all greetings")
-			return stream.SendAndClose(&pb.StreamingHelloReply{Messages: messages})
+			fmt.Printf("echo last received message\n")
+			return stream.SendAndClose(&pb.EchoResponse{Message: message})
 		}
-		log.Printf("request received: %v, building greeting", in)
+		message = in.Message
+		fmt.Printf("request received: %v, building echo\n", in)
 		if err != nil {
 			return err
 		}
-		messages = append(messages, fmt.Sprintf("%s, %s", greetingWords[rand.Intn(len(greetingWords))], in.Name))
 	}
 }
 
-// BidirectionalStreamingSayHello implements bidirectional streaming handler with metadata handling
-func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalStreamingSayHelloServer) error {
-	log.Printf("----------- BidirectionalStreamingSayHello -----------")
+func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
+	fmt.Printf("--- BidirectionalStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
 		trailer := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
@@ -163,13 +160,13 @@ func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalS
 	// Read metadata from client.
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return status.Errorf(codes.DataLoss, "BidirectionalStreamingSayHello: failed to get metadata")
+		return status.Errorf(codes.DataLoss, "BidirectionalStreamingEcho: failed to get metadata")
 	}
 
 	if t, ok := md["timestamp"]; ok {
-		log.Printf("timestamp from metadata:")
+		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
-			log.Printf(" %d. %s", i, e)
+			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
 
@@ -186,8 +183,8 @@ func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalS
 		if err != nil {
 			return err
 		}
-		log.Printf("request received %v, sending greeting", in)
-		if err := stream.Send(&pb.HelloReply{Message: fmt.Sprintf("%s, %s", greetingWords[rand.Intn(len(greetingWords))], in.Name)}); err != nil {
+		fmt.Printf("request received %v, sending echo\n", in)
+		if err := stream.Send(&pb.EchoResponse{Message: in.Message}); err != nil {
 			return err
 		}
 	}
@@ -199,9 +196,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	log.Printf("server listening at port %v", port)
+	fmt.Printf("server listening at port %v\n", port)
 
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, &server{})
+	pb.RegisterEchoServer(s, &server{})
 	s.Serve(lis)
 }
