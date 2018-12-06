@@ -40,15 +40,15 @@ func callSayHello(c hwpb.GreeterClient, name string) {
 	defer cancel()
 	r, err := c.SayHello(ctx, &hwpb.HelloRequest{Name: name})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		log.Fatalf("client.SayHello(_) = _, %v", err)
 	}
 	fmt.Println("Greeting: ", r.Message)
 }
 
-func callUnaryEcho(client ecpb.EchoClient, req *ecpb.EchoRequest) {
+func callUnaryEcho(client ecpb.EchoClient, message string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := client.UnaryEcho(ctx, req)
+	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
 		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
 	}
@@ -72,5 +72,5 @@ func main() {
 	fmt.Println("--- calling routeguide.RouteGuide/GetFeature ---")
 	// Make a routeguild client with the same ClientConn.
 	rgc := ecpb.NewEchoClient(conn)
-	callUnaryEcho(rgc, &ecpb.EchoRequest{Message: "this is examples/multiplex"})
+	callUnaryEcho(rgc, "this is examples/multiplex")
 }
