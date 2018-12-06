@@ -93,7 +93,6 @@ func serve() {
 
 // unaryCall makes a unary request and compares error code with the expected code.
 func unaryCall(c pb.EchoClient, requestID int, waitForReady bool, timeout time.Duration, want codes.Code) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
