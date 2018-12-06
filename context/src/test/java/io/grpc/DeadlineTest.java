@@ -211,13 +211,25 @@ public class DeadlineTest {
   @Test
   public void toString_exact() {
     Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS, ticker);
-    assertEquals("0 ns from now", d.toString());
+    assertEquals("0s from now", d.toString());
   }
 
   @Test
   public void toString_after() {
-    Deadline d = Deadline.after(-1, TimeUnit.MINUTES, ticker);
-    assertEquals("-60000000000 ns from now", d.toString());
+    Deadline d;
+
+    d = Deadline.after(-1, TimeUnit.MINUTES, ticker);
+    assertEquals("-60s from now", d.toString());
+    d = Deadline.after(-1, TimeUnit.MILLISECONDS, ticker);
+    assertEquals("-0.001000000s from now", d.toString());
+    d = Deadline.after(-500, TimeUnit.MILLISECONDS, ticker);
+    assertEquals("-0.500000000s from now", d.toString());
+    d = Deadline.after(-1000, TimeUnit.MILLISECONDS, ticker);
+    assertEquals("-1s from now", d.toString());
+    d = Deadline.after(-1500, TimeUnit.MILLISECONDS, ticker);
+    assertEquals("-1.500000000s from now", d.toString());
+    d = Deadline.after(-1023456789, TimeUnit.NANOSECONDS, ticker);
+    assertEquals("-1.023456789s from now", d.toString());
   }
 
   @Test
@@ -246,7 +258,7 @@ public class DeadlineTest {
   @Test
   public void toString_before() {
     Deadline d = Deadline.after(12, TimeUnit.MICROSECONDS, ticker);
-    assertEquals("12000 ns from now", d.toString());
+    assertEquals("0.000012000s from now", d.toString());
   }
 
   private static class FakeTicker extends Deadline.Ticker {

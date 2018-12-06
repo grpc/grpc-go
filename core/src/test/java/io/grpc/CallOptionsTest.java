@@ -168,7 +168,7 @@ public class CallOptionsTest {
 
   @Test
   public void toStringMatches_withDeadline() {
-    assertThat(allSet.toString()).contains("1 ns from now");
+    assertThat(allSet.toString()).contains("0.000000001s from now");
   }
 
   @Test

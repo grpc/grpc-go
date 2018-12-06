@@ -36,6 +36,7 @@ public final class Deadline implements Comparable<Deadline> {
   // to prevent wraparound as long as process runs for less than ~100 years.
   private static final long MAX_OFFSET = TimeUnit.DAYS.toNanos(100 * 365);
   private static final long MIN_OFFSET = -MAX_OFFSET;
+  private static final long NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
 
   /**
    * Create a deadline that will expire at the specified offset from the current system clock.
@@ -89,6 +90,7 @@ public final class Deadline implements Comparable<Deadline> {
    * Is {@code this} deadline before another.
    */
   public boolean isBefore(Deadline other) {
+    assert this.ticker == other.ticker : "Tickers don't match";
     return this.deadlineNanos - other.deadlineNanos < 0;
   }
 
@@ -97,6 +99,7 @@ public final class Deadline implements Comparable<Deadline> {
    * @param other deadline to compare with {@code this}.
    */
   public Deadline minimum(Deadline other) {
+    assert this.ticker == other.ticker : "Tickers don't match";
     return isBefore(other) ? this : other;
   }
 
@@ -142,11 +145,25 @@ public final class Deadline implements Comparable<Deadline> {
 
   @Override
   public String toString() {
-    return timeRemaining(TimeUnit.NANOSECONDS) + " ns from now";
+    long remainingNanos = timeRemaining(TimeUnit.NANOSECONDS);
+    long seconds = Math.abs(remainingNanos) / NANOS_PER_SECOND;
+    long nanos = Math.abs(remainingNanos) % NANOS_PER_SECOND;
+
+    StringBuilder buf = new StringBuilder();
+    if (remainingNanos < 0) {
+      buf.append('-');
+    }
+    buf.append(seconds);
+    if (nanos > 0) {
+      buf.append(String.format(".%09d", nanos));
+    }
+    buf.append("s from now");
+    return buf.toString();
   }
 
   @Override
   public int compareTo(Deadline that) {
+    assert this.ticker == that.ticker : "Tickers don't match";
     long diff = this.deadlineNanos - that.deadlineNanos;
     if (diff < 0) {
       return -1;
