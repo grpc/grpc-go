@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+//go:generate protoc -I ./echo --go_out=plugins=grpc,paths=source_relative:./echo ./echo/echo.proto
 
-// Version is the current grpc version.
-const Version = "1.18.0-dev"
+// Package proto is for go generate.
+package proto

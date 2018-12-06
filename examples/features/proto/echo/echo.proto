@@ -16,7 +16,23 @@
  *
  */
 
-package grpc
+syntax = "proto3";
 
-// Version is the current grpc version.
-const Version = "1.18.0-dev"
+package grpc.examples.echo;
+
+option go_package = "google.golang.org/grpc/examples/features/proto/echo";
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
+
+service Echo {
+  rpc UnaryEcho(EchoRequest) returns (EchoResponse) {}
+  rpc ServerStreamingEcho(EchoRequest) returns (stream EchoResponse) {}
+  rpc ClientStreamingEcho(stream EchoRequest) returns (EchoResponse) {}
+  rpc BidirectionalStreamingEcho(stream EchoRequest) returns (stream EchoResponse) {}
+}
