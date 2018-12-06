@@ -61,6 +61,9 @@ if [[ -z "${SKIP_TESTS:-}" ]]; then
   # --batch-mode reduces log spam
   mvn clean verify --batch-mode
   popd
+  pushd examples/example-tls
+  mvn clean verify --batch-mode
+  popd
   # TODO(zpencer): also build the GAE examples
 fi
 

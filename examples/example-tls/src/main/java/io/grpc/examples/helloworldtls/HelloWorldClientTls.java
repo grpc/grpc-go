@@ -21,7 +21,6 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.examples.helloworld.HelloWorldServer;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -35,7 +34,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * A simple client that requests a greeting from the {@link HelloWorldServer} with TLS.
+ * A simple client that requests a greeting from the {@link HelloWorldServerTls} with TLS.
  */
 public class HelloWorldClientTls {
     private static final Logger logger = Logger.getLogger(HelloWorldClientTls.class.getName());
