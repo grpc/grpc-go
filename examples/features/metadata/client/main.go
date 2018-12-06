@@ -86,6 +86,7 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	if err != nil {
 		log.Fatalf("failed to get header from stream: %v", err)
 	}
+	// Read metadata from server's header.
 	if t, ok := header["timestamp"]; ok {
 		log.Printf("timestamp from header:")
 		for i, e := range t {
@@ -116,6 +117,7 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 
 	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
+	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")
 		for i, e := range t {
@@ -141,6 +143,7 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	if err != nil {
 		log.Fatalf("failed to get header from stream: %v", err)
 	}
+	// Read metadata from server's header.
 	if t, ok := header["timestamp"]; ok {
 		log.Printf("timestamp from header:")
 		for i, e := range t {
@@ -173,6 +176,7 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 
 	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
+	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")
 		for i, e := range t {
@@ -199,6 +203,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 		if err != nil {
 			log.Fatalf("failed to get header from stream: %v", err)
 		}
+		// Read metadata from server's header.
 		if t, ok := header["timestamp"]; ok {
 			log.Printf("timestamp from header:")
 			for i, e := range t {
@@ -238,6 +243,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 
 	// Read the trailer after the RPC is finished.
 	trailer := stream.Trailer()
+	// Read metadata from server's trailer.
 	if t, ok := trailer["timestamp"]; ok {
 		log.Printf("timestamp from trailer:")
 		for i, e := range t {
