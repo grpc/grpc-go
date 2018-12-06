@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -63,12 +63,10 @@ func init() { resolver.Register(&splitResolverBuilder{}) }
 
 ///////////////////////////////////////////////////////////////////////
 
-// callSayHello calls SayHello on c with the given name, and prints the
-// response.
-func callSayHello(c hwpb.GreeterClient, name string) {
+func callUnaryEcho(c ecpb.EchoClient, message string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	r, err := c.SayHello(ctx, &hwpb.HelloRequest{Name: name})
+	r, err := c.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
@@ -76,9 +74,9 @@ func callSayHello(c hwpb.GreeterClient, name string) {
 }
 
 func makeRPCs(cc *grpc.ClientConn, n int) {
-	hwc := hwpb.NewGreeterClient(cc)
+	hwc := ecpb.NewEchoClient(cc)
 	for i := 0; i < n; i++ {
-		callSayHello(hwc, "lb")
+		callUnaryEcho(hwc, "this is examples/load_balancing")
 	}
 }
 

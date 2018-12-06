@@ -14,9 +14,9 @@ go run client/main.go
 
 ## Explanation
 
-Two helloworld servers are serving on ":50051" and ":50052". They will include
-their serving address in the response. So the server on ":50051" will reply to
-the RPC with `hello lb (from :50051)`.
+Two echo servers are serving on ":50051" and ":50052". They will include their
+serving address in the response. So the server on ":50051" will reply to the RPC
+with `this is examples/load_balancing (from :50051)`.
 
 Two clients are created, to connect to both of these servers (they get both
 server addresses from the name resolver).
@@ -30,16 +30,16 @@ successful). Because of this, all the RPCs will be sent to the same backend. The
 responses received all show the same backend address.
 
 ```
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
 ```
 
 ### round_robin
@@ -50,16 +50,16 @@ order. E.g. the first RPC will be sent to backend-1, the second RPC will be be
 sent to backend-2, and the third RPC will be be sent to backend-1 again.
 
 ```
-hello lb (from :50051)
-hello lb (from :50051)
-hello lb (from :50052)
-hello lb (from :50051)
-hello lb (from :50052)
-hello lb (from :50051)
-hello lb (from :50052)
-hello lb (from :50051)
-hello lb (from :50052)
-hello lb (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
+this is examples/load_balancing (from :50052)
+this is examples/load_balancing (from :50051)
 ```
 
 Note that it's possible to see two continues RPC sent to the same backend.
