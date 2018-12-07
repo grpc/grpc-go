@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/envconfig"
@@ -1220,7 +1219,7 @@ func (ac *addrConn) createTransport(backoffNum int, addr resolver.Address, copts
 	// 3. a service config with non-empty healthCheckConfig field is provided,
 	// 4. the current load balancer allows it.
 	if !ac.cc.dopts.disableHealthCheck && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
-		if internal.HealthCheckFunc != nil {
+		if ac.cc.dopts.healthCheckFunc != nil {
 			go ac.startHealthCheck(hcCtx, newTr, addr, healthCheckConfig.ServiceName)
 			close(allowedToReset)
 			return nil
@@ -1281,7 +1280,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.Client
 		}
 	}
 
-	err := internal.HealthCheckFunc(ctx, newStream, reportHealth, serviceName)
+	err := ac.cc.dopts.healthCheckFunc(ctx, newStream, reportHealth, serviceName)
 	if err != nil {
 		if status.Code(err) == codes.Unimplemented {
 			if channelz.IsOn() {
