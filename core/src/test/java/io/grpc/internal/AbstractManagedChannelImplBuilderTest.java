@@ -151,7 +151,7 @@ public class AbstractManagedChannelImplBuilderTest {
 
   @Test
   public void defaultLoadBalancingPolicy_default() {
-    assertEquals(builder.defaultLbPolicy, "pick_first");
+    assertEquals("pick_first", builder.defaultLbPolicy);
   }
 
   @Test
