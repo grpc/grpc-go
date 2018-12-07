@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -133,7 +134,7 @@ func TestSwitchBalancer(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
-	numServers := 2
+	const numServers = 2
 	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
@@ -165,7 +166,7 @@ func TestBalancerDialOption(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
-	numServers := 2
+	const numServers = 2
 	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
@@ -476,14 +477,14 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 // claim the first one is grpclb server. The all RPCs should all be send to the
 // other addresses, not the first one.
 func TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
-	balancer.UnregisterForTesting("grpclb")
+	internal.BalancerUnregister("grpclb")
 	defer balancer.Register(&magicalLB{})
 
 	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
-	numServers := 3
+	const numServers = 3
 	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
 	defer scleanup()
 
