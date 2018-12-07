@@ -29,11 +29,16 @@ import (
 	"google.golang.org/grpc/codes"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/status"
 )
 
 // Server implements `service Health`.
 type Server struct {
+	// If shutdownEvent has fired, it's expected all serving status is
+	// NOT_SERVING, and will stay in NOT_SERVING.
+	shutdownEvent *grpcsync.Event
+
 	mu sync.Mutex
 	// statusMap stores the serving status of the services this Server monitors.
 	statusMap map[string]healthpb.HealthCheckResponse_ServingStatus
@@ -43,6 +48,8 @@ type Server struct {
 // NewServer returns a new Server.
 func NewServer() *Server {
 	return &Server{
+		shutdownEvent: grpcsync.NewEvent(),
+
 		statusMap: map[string]healthpb.HealthCheckResponse_ServingStatus{"": healthpb.HealthCheckResponse_SERVING},
 		updates:   make(map[string]map[healthgrpc.Health_WatchServer]chan healthpb.HealthCheckResponse_ServingStatus),
 	}
@@ -110,7 +117,14 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthgrpc.Health
 func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.shutdownEvent.HasFired() {
+		return
+	}
 
+	s.setServingStatusLocked(service, servingStatus)
+}
+
+func (s *Server) setServingStatusLocked(service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
 	s.statusMap[service] = servingStatus
 	for _, update := range s.updates[service] {
 		// Clears previous updates, that are not sent to the client, from the channel.
@@ -121,5 +135,16 @@ func (s *Server) SetServingStatus(service string, servingStatus healthpb.HealthC
 		}
 		// Puts the most recent update to the channel.
 		update <- servingStatus
+	}
+}
+
+// Shutdown sets all serving status to NOT_SERVING, and configures the server to
+// ignore all future status changes.
+func (s *Server) Shutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shutdownEvent.Fire()
+	for service := range s.statusMap {
+		s.setServingStatusLocked(service, healthpb.HealthCheckResponse_NOT_SERVING)
 	}
 }
