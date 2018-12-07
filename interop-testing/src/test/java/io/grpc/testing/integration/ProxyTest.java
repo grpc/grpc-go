@@ -24,6 +24,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -79,13 +82,16 @@ public class ProxyTest {
     clientIn.readFully(new byte[5]);
 
     // test
-    long start = System.nanoTime();
-    clientOut.write(message, 0, 1);
-    clientIn.read(message);
-    long stop = System.nanoTime();
-
-    long rtt = (stop - start);
-    assertEquals(latency, rtt, latency);
+    List<Long> rtts = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      long start = System.nanoTime();
+      clientOut.write(message, 0, 1);
+      clientIn.read(message);
+      rtts.add(System.nanoTime() - start);
+    }
+    Collections.sort(rtts);
+    long rtt = rtts.get(0);
+    assertEquals(latency, rtt, .5 * latency);
   }
 
   @Test
@@ -109,13 +115,16 @@ public class ProxyTest {
     clientIn.readFully(new byte[5]);
 
     // test
-    long start = System.nanoTime();
-    clientOut.write(message, 0, 1);
-    clientIn.read(message);
-    long stop = System.nanoTime();
-
-    long rtt = (stop - start);
-    assertEquals(latency, rtt, latency);
+    List<Long> rtts = new ArrayList<>();
+    for (int i = 0; i < 2; i++) {
+      long start = System.nanoTime();
+      clientOut.write(message, 0, 1);
+      clientIn.read(message);
+      rtts.add(System.nanoTime() - start);
+    }
+    Collections.sort(rtts);
+    long rtt = rtts.get(0);
+    assertEquals(latency, rtt, .5 * latency);
   }
 
   @Test
@@ -135,11 +144,17 @@ public class ProxyTest {
 
     clientOut.write(new byte[1]);
     clientIn.readFully(new byte[100 * 1024]);
-    long start = System.nanoTime();
-    clientIn.readFully(new byte[5 * bandwidth]);
-    long stop = System.nanoTime();
-
-    long bandUsed = ((5 * bandwidth) / ((stop - start) / TimeUnit.SECONDS.toNanos(1)));
+    int sample = bandwidth / 5;
+    List<Double> bandwidths = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      long start = System.nanoTime();
+      clientIn.readFully(new byte[sample]);
+      long duration = System.nanoTime() - start;
+      double actualBandwidth = sample / (((double) duration) / TimeUnit.SECONDS.toNanos(1));
+      bandwidths.add(actualBandwidth);
+    }
+    Collections.sort(bandwidths);
+    double bandUsed = bandwidths.get(bandwidths.size() - 1);
     assertEquals(bandwidth, bandUsed, .5 * bandwidth);
   }
 
@@ -159,11 +174,17 @@ public class ProxyTest {
 
     clientOut.write(new byte[1]);
     clientIn.readFully(new byte[100 * 1024]);
-    long start = System.nanoTime();
-    clientIn.readFully(new byte[5 * bandwidth]);
-    long stop = System.nanoTime();
-
-    long bandUsed = ((5 * bandwidth) / ((stop - start) / TimeUnit.SECONDS.toNanos(1)));
+    int sample = bandwidth / 5;
+    List<Double> bandwidths = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      long start = System.nanoTime();
+      clientIn.readFully(new byte[sample]);
+      long duration = System.nanoTime() - start;
+      double actualBandwidth = sample / (((double) duration) / TimeUnit.SECONDS.toNanos(1));
+      bandwidths.add(actualBandwidth);
+    }
+    Collections.sort(bandwidths);
+    double bandUsed = bandwidths.get(bandwidths.size() - 1);
     assertEquals(bandwidth, bandUsed, .5 * bandwidth);
   }
 
