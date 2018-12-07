@@ -227,9 +227,10 @@ type Picker interface {
 	// - Else (error is other non-nil error):
 	//   - The RPC will fail with unavailable error.
 	//
-	// The returned done() function will be called once the rpc has finished, with the
-	// final status of that RPC.
-	// done may be nil if balancer doesn't care about the RPC status.
+	// The returned done() function will be called once the rpc has finished,
+	// with the final status of that RPC.  If the SubConn returned is not a
+	// valid SubConn type, done may not be called.  done may be nil if balancer
+	// doesn't care about the RPC status.
 	Pick(ctx context.Context, opts PickOptions) (conn SubConn, done func(DoneInfo), err error)
 }
 

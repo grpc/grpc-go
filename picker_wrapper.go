@@ -101,10 +101,7 @@ func doneChannelzWrapper(acw *acBalancerWrapper, done func(balancer.DoneInfo)) f
 // - the subConn returned by the current picker is not READY
 // When one of these situations happens, pick blocks until the picker gets updated.
 func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	var (
-		p  balancer.Picker
-		ch chan struct{}
-	)
+	var ch chan struct{}
 
 	for {
 		bp.mu.Lock()
@@ -130,7 +127,7 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 		}
 
 		ch = bp.blockingCh
-		p = bp.picker
+		p := bp.picker
 		bp.mu.Unlock()
 
 		subConn, done, err := p.Pick(ctx, opts)
@@ -152,7 +149,7 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 
 		acw, ok := subConn.(*acBalancerWrapper)
 		if !ok {
-			grpclog.Infof("subconn returned from pick is not *acBalancerWrapper")
+			grpclog.Error("subconn returned from pick is not *acBalancerWrapper")
 			continue
 		}
 		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
