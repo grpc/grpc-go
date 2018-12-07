@@ -23,8 +23,13 @@ serving address in the response. So the server on ":50051" will reply to the RPC
 with `this is examples/load_balancing (from :50051)`.
 
 Two clients are created, to connect to both of these servers (they get both
-server addresses from the name resolver). Each client picks a different load
-balancer (using `grpc.WithBalancerName`).
+server addresses from the name resolver).
+
+Each client picks a different load balancer (using `grpc.WithBalancerName`).
+Note that balancers can also be switched using service config, which allows
+service owners (instead of client owners) to pick the balancer to use. Service
+config doc is available at
+https://github.com/grpc/grpc/blob/master/doc/service_config.md.
 
 ### pick_first
 
