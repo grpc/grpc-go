@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -30,36 +29,48 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const splitScheme = "split"
+const (
+	exampleScheme      = "example"
+	exampleServiceName = "lb.example.grpc.io"
+)
 
 var addrs = []string{"localhost:50051", "localhost:50052"}
 
-type splitResolverBuilder struct{}
+type exampleResolverBuilder struct{}
 
-func (*splitResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
-	r := &splitResolver{target: target, cc: cc}
+func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+	r := &exampleResolver{
+		target: target,
+		cc:     cc,
+		addrsStore: map[string][]string{
+			exampleServiceName: addrs,
+		},
+	}
 	r.start()
 	return r, nil
 }
-func (*splitResolverBuilder) Scheme() string { return splitScheme }
+func (*exampleResolverBuilder) Scheme() string { return exampleScheme }
 
-type splitResolver struct {
-	target resolver.Target
-	cc     resolver.ClientConn
+type exampleResolver struct {
+	target     resolver.Target
+	cc         resolver.ClientConn
+	addrsStore map[string][]string
 }
 
-func (r *splitResolver) start() {
-	splitted := strings.Split(r.target.Endpoint, ",")
-	addrs := make([]resolver.Address, len(splitted), len(splitted))
-	for i, s := range splitted {
+func (r *exampleResolver) start() {
+	addrStrs := r.addrsStore[r.target.Endpoint]
+	addrs := make([]resolver.Address, len(addrStrs), len(addrStrs))
+	for i, s := range addrStrs {
 		addrs[i] = resolver.Address{Addr: s}
 	}
 	r.cc.NewAddress(addrs)
 }
-func (*splitResolver) ResolveNow(o resolver.ResolveNowOption) {}
-func (*splitResolver) Close()                                 {}
+func (*exampleResolver) ResolveNow(o resolver.ResolveNowOption) {}
+func (*exampleResolver) Close()                                 {}
 
-func init() { resolver.Register(&splitResolverBuilder{}) }
+func init() {
+	resolver.Register(&exampleResolverBuilder{})
+}
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -82,7 +93,7 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 
 func main() {
 	pickfirstConn, err := grpc.Dial(
-		fmt.Sprintf("%s:///%s", splitScheme, strings.Join(addrs, ",")),
+		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
 		// grpc.WithBalancerName("pick_first"), // "pick_first" is the default, so this DialOption is not necessary.
 		grpc.WithInsecure(),
 	)
@@ -98,7 +109,7 @@ func main() {
 
 	// Make another ClientConn with round_robin policy.
 	roundrobinConn, err := grpc.Dial(
-		fmt.Sprintf("%s:///%s", splitScheme, strings.Join(addrs, ",")),
+		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
 		grpc.WithBalancerName("round_robin"), // This sets the initial balancing policy.
 		grpc.WithInsecure(),
 	)
