@@ -222,9 +222,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
       }
       roundRobinDueToGrpclbDepMissing = false;
 
+      List<Map<String, Object>> lbConfigs = null;
       if (config != null) {
-        List<Map<String, Object>> lbConfigs =
-            ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(config);
+        lbConfigs = ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(config);
+      }
+      if (lbConfigs != null && !lbConfigs.isEmpty()) {
         LinkedHashSet<String> policiesTried = new LinkedHashSet<>();
         for (Map<String, Object> lbConfig : lbConfigs) {
           if (lbConfig.size() != 1) {

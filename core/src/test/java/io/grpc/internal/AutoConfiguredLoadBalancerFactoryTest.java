@@ -518,6 +518,21 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   }
 
   @Test
+  public void decideLoadBalancerProvider_serviceConfigHasZeroLbConfig() throws Exception {
+    AutoConfiguredLoadBalancer lb =
+        (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
+    List<EquivalentAddressGroup> servers =
+        Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
+    PolicySelection selection = lb.decideLoadBalancerProvider(
+        servers, Collections.<String, Object>emptyMap());
+
+    assertThat(selection.provider).isInstanceOf(PickFirstLoadBalancerProvider.class);
+    assertThat(selection.serverList).isEqualTo(servers);
+    assertThat(selection.config).isNull();
+    verifyZeroInteractions(channelLogger);
+  }
+
+  @Test
   public void channelTracing_lbPolicyChanged() {
     final FakeClock clock = new FakeClock();
     List<EquivalentAddressGroup> servers =
