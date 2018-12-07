@@ -47,7 +47,7 @@ public abstract class ServerCallStreamObserver<V> extends CallStreamObserver<V> 
    * to {@code true} as other callbacks may still be executing in the 'inbound' observer.
    *
    * <p>Setting the onCancelHandler will suppress the on-cancel exception thrown by
-   * {@link #onNext()}.
+   * {@link #onNext}.
    *
    * @param onCancelHandler to call when client has cancelled the call.
    */
