@@ -70,6 +70,7 @@ func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	p.Body = body
 }
 
+// NewPayload creates a payload with the given type and size.
 func NewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	p := new(testpb.Payload)
 	setPayload(p, t, size)
