@@ -9,7 +9,23 @@ You may want to read through the
 [Quick Start Guide](https://grpc.io/docs/quickstart/java.html)
 before trying out the examples.
 
-To build the examples,
+## Basic examples
+
+- [Hello world](src/main/java/io/grpc/examples/helloworld)
+
+- [Route guide](src/main/java/io/grpc/examples/routeguide)
+
+- [Metadata](src/main/java/io/grpc/examples/header)
+
+- [Error handling](src/main/java/io/grpc/examples/errorhandling)
+
+- [Compression](src/main/java/io/grpc/examples/experimental)
+
+- [Flow control](src/main/java/io/grpc/examples/manualflowcontrol)
+
+- [Json serialization](src/main/java/io/grpc/examples/advanced)
+
+### To build the examples
 
 1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
 
@@ -19,7 +35,7 @@ $ ./gradlew installDist
 ```
 
 This creates the scripts `hello-world-server`, `hello-world-client`,
-`route-guide-server`, and `route-guide-client` in the
+`route-guide-server`, `route-guide-client`, etc. in the
 `build/install/examples/bin/` directory that run the examples. Each
 example requires the server to be running before starting the client.
 
@@ -41,7 +57,7 @@ Please refer to gRPC Java's [README](../README.md) and
 [tutorial](https://grpc.io/docs/tutorials/basic/java.html) for more
 information.
 
-## Maven
+### Maven
 
 If you prefer to use Maven:
 1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
@@ -55,7 +71,7 @@ $ # In another terminal run the client
 $ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldClient
 ```
 
-## Bazel
+### Bazel
 
 If you prefer to use Bazel:
 ```
@@ -69,18 +85,19 @@ $ bazel-bin/hello-world-client
 
 ## Other examples
 
-### [Android examples](android)
+- [Android examples](android)
 
-### [Kotlin examples](example-kotlin)
+- Secure channel examples
 
-### [Kotlin Android examples](example-kotlin/android)
+  + [TLS examples](example-tls)
 
-### [TLS examples](example-tls)
+  + [ALTS examples](example-alts)
 
-### [ALTS examples](example-tls)
+- [Kotlin examples](example-kotlin)
 
-Unit test examples
-==============================================
+- [Kotlin Android examples](example-kotlin/android)
+
+## Unit test examples
 
 Examples for unit testing gRPC clients and servers are located in [examples/src/test](src/test).
 
@@ -102,3 +119,7 @@ and test it against a real client stub with an InProcessChannel.
 The gRPC-java library also provides a JUnit rule,
 [GrpcCleanupRule](../testing/src/main/java/io/grpc/testing/GrpcCleanupRule.java), to do the graceful
 shutdown boilerplate for you.
+
+## Even more examples
+
+A wide variety of third-party examples can be found [here](https://github.com/saturnism/grpc-java-by-example).
