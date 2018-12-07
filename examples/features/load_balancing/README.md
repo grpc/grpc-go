@@ -2,6 +2,10 @@
 
 This examples shows how `ClientConn` can pick different load balancing policies.
 
+Note: to show the effect of load balancers, an example resolver is installed in
+this example to get the backend addresses. It's suggested to read the name
+resolver example before this example.
+
 ## Try it
 
 ```
