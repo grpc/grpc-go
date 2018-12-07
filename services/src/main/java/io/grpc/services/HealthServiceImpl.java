@@ -29,28 +29,35 @@ import io.grpc.health.v1.HealthGrpc;
 import io.grpc.stub.StreamObserver;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
 
+  private static final Logger logger = Logger.getLogger(HealthServiceImpl.class.getName());
+
   // Due to the latency of rpc calls, synchronization of the map does not help with consistency.
   // However, need use ConcurrentHashMap to allow concurrent reading by check().
-  private final ConcurrentHashMap<String, ServingStatus> statusMap =
-      new ConcurrentHashMap<String, ServingStatus>();
+  private final Map<String, ServingStatus> statusMap = new ConcurrentHashMap<>();
 
   private final Object watchLock = new Object();
+
+  // Indicates if future status changes should be ignored.
+  @GuardedBy("watchLock")
+  private boolean terminal;
 
   // Technically a Multimap<String, StreamObserver<HealthCheckResponse>>.  The Boolean value is not
   // used.  The StreamObservers need to be kept in a identity-equality set, to make sure
   // user-defined equals() doesn't confuse our book-keeping of the StreamObservers.  Constructing
-  // such Multimap would require extra lines and the end result is not significally simpler, thus I
+  // such Multimap would require extra lines and the end result is not significantly simpler, thus I
   // would rather not have the Guava collections dependency.
   @GuardedBy("watchLock")
   private final HashMap<String, IdentityHashMap<StreamObserver<HealthCheckResponse>, Boolean>>
-      watchers =
-          new HashMap<String, IdentityHashMap<StreamObserver<HealthCheckResponse>, Boolean>>();
+      watchers = new HashMap<>();
 
   @Override
   public void check(HealthCheckRequest request,
@@ -76,7 +83,7 @@ final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
       IdentityHashMap<StreamObserver<HealthCheckResponse>, Boolean> serviceWatchers =
           watchers.get(service);
       if (serviceWatchers == null) {
-        serviceWatchers = new IdentityHashMap<StreamObserver<HealthCheckResponse>, Boolean>();
+        serviceWatchers = new IdentityHashMap<>();
         watchers.put(service, serviceWatchers);
       }
       serviceWatchers.put(responseObserver, Boolean.TRUE);
@@ -103,18 +110,44 @@ final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
 
   void setStatus(String service, ServingStatus status) {
     synchronized (watchLock) {
-      ServingStatus prevStatus = statusMap.put(service, status);
-      if (prevStatus != status) {
-        notifyWatchers(service, status);
+      if (terminal) {
+        logger.log(Level.FINE, "Ignoring status {} for {}", new Object[]{status, service});
+        return;
       }
+      setStatusInternal(service, status);
+    }
+  }
+
+  @GuardedBy("watchLock")
+  private void setStatusInternal(String service, ServingStatus status) {
+    ServingStatus prevStatus = statusMap.put(service, status);
+    if (prevStatus != status) {
+      notifyWatchers(service, status);
     }
   }
 
   void clearStatus(String service) {
     synchronized (watchLock) {
+      if (terminal) {
+        logger.log(Level.FINE, "Ignoring status clearing for {}", new Object[]{service});
+        return;
+      }
       ServingStatus prevStatus = statusMap.remove(service);
       if (prevStatus != null) {
         notifyWatchers(service, null);
+      }
+    }
+  }
+
+  void enterTerminalState() {
+    synchronized (watchLock) {
+      if (terminal) {
+        logger.log(Level.WARNING, "Already terminating", new RuntimeException());
+        return;
+      }
+      terminal = true;
+      for (String service : statusMap.keySet()) {
+        setStatusInternal(service, ServingStatus.NOT_SERVING);
       }
     }
   }

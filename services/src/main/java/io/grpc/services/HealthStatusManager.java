@@ -74,4 +74,13 @@ public final class HealthStatusManager {
   public void clearStatus(String service) {
     healthService.clearStatus(service);
   }
+
+  /**
+   * enterTerminalState causes the health status manager to mark all services as not serving, and
+   * prevents future updates to services.  This method is meant to be called prior to server
+   * shutdown as a way to indicate that clients should redirect their traffic elsewhere.
+   */
+  public void enterTerminalState() {
+    healthService.enterTerminalState();
+  }
 }

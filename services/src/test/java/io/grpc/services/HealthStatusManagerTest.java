@@ -66,12 +66,79 @@ public class HealthStatusManagerTest {
   }
 
   @Test
+  public void enterTerminalState_check() throws Exception {
+    manager.setStatus(SERVICE1, ServingStatus.SERVING);
+    RespObserver obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    HealthCheckResponse resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.SERVING);
+
+    manager.enterTerminalState();
+    obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.NOT_SERVING);
+
+    manager.setStatus(SERVICE1, ServingStatus.SERVING);
+    obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.NOT_SERVING);
+  }
+
+  @Test
+  public void enterTerminalState_watch() throws Exception {
+    manager.setStatus(SERVICE1, ServingStatus.SERVING);
+    RespObserver obs = new RespObserver();
+    service.watch(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(1);
+    HealthCheckResponse resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.SERVING);
+    obs.responses.clear();
+
+    manager.enterTerminalState();
+    assertThat(obs.responses).hasSize(1);
+    resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.NOT_SERVING);
+    obs.responses.clear();
+
+    manager.setStatus(SERVICE1, ServingStatus.SERVING);
+    assertThat(obs.responses).isEmpty();
+  }
+
+  @Test
+  public void enterTerminalState_ignoreClear() throws Exception {
+    manager.setStatus(SERVICE1, ServingStatus.SERVING);
+    RespObserver obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    HealthCheckResponse resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.SERVING);
+
+    manager.enterTerminalState();
+    obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.NOT_SERVING);
+
+    manager.clearStatus(SERVICE1);
+    obs = new RespObserver();
+    service.check(HealthCheckRequest.newBuilder().setService(SERVICE1).build(), obs);
+    assertThat(obs.responses).hasSize(2);
+    resp = (HealthCheckResponse) obs.responses.poll();
+    assertThat(resp.getStatus()).isEqualTo(ServingStatus.NOT_SERVING);
+  }
+
+  @Test
   public void getHealthService_getterReturnsTheSameHealthRefAfterUpdate() throws Exception {
     BindableService health = manager.getHealthService();
     manager.setStatus(SERVICE1, ServingStatus.UNKNOWN);
     assertThat(health).isSameAs(manager.getHealthService());
   }
-
 
   @Test
   public void checkValidStatus() throws Exception {
