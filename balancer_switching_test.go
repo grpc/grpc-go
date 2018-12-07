@@ -467,3 +467,52 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 		t.Fatalf("after 5 second, cc.balancer is of type %v, not round_robin", cc.curBalancerName)
 	}
 }
+
+// Test that when switching to grpclb fails because grpclb is not registered,
+// the fallback balancer will only get backend addresses, not the grpclb server
+// address.
+//
+// The tests sends 3 server addresses (all backends) as resolved addresses, but
+// claim the first one is grpclb server. The all RPCs should all be send to the
+// other addresses, not the first one.
+func TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
+	balancer.UnregisterForTesting("grpclb")
+	defer balancer.Register(&magicalLB{})
+
+	defer leakcheck.Check(t)
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	numServers := 3
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
+
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	r.NewAddress([]resolver.Address{{Addr: servers[1].addr}, {Addr: servers[2].addr}})
+	// The default balancer is pickfirst.
+	if err := checkPickFirst(cc, servers[1:]); err != nil {
+		t.Fatalf("check pickfirst returned non-nil error: %v", err)
+	}
+	// Try switching to grpclb by sending servers[0] as grpclb address. It's
+	// expected that servers[0] will be filtered out, so it will not be used by
+	// the balancer.
+	//
+	// If the filtering failed, servers[0] will be used for RPCs and the RPCs
+	// will succeed. The following checks will catch this and fail.
+	r.NewAddress([]resolver.Address{
+		{Addr: servers[0].addr, Type: resolver.GRPCLB},
+		{Addr: servers[1].addr}, {Addr: servers[2].addr}})
+	// Still check for pickfirst, but only with server[1] and server[2].
+	if err := checkPickFirst(cc, servers[1:]); err != nil {
+		t.Fatalf("check pickfirst returned non-nil error: %v", err)
+	}
+	// Switch to roundrobin, anc check against server[1] and server[2].
+	cc.handleServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	if err := checkRoundRobin(cc, servers[1:]); err != nil {
+		t.Fatalf("check roundrobin returned non-nil error: %v", err)
+	}
+}

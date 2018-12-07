@@ -47,6 +47,14 @@ func Register(b Builder) {
 	m[strings.ToLower(b.Name())] = b
 }
 
+// UnregisterForTesting deletes the balancer with the given name from the
+// balancer map.
+//
+// This function is not thread-safe. And should only be used for testing.
+func UnregisterForTesting(name string) {
+	delete(m, name)
+}
+
 // Get returns the resolver builder registered with the given name.
 // Note that the compare is done in a case-insenstive fashion.
 // If no builder is register with the name, nil will be returned.
