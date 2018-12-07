@@ -228,11 +228,34 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * are shipped with gRPC, but may not be implemented by custom channel builders, in which case
    * this method will throw.
    *
+   * @deprecated this method disables service-config-based policy selection, and may cause problems
+   *             if NameResolver returns GRPCLB balancer addresses but a non-GRPCLB LoadBalancer
+   *             is passed in here.  Use {@link #defaultLoadBalancingPolicy} instead.
+   *
    * @return this
    * @since 1.0.0
    */
+  @Deprecated
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
+
+  /**
+   * Sets the default load-balancing policy that will be used if the service config doesn't specify
+   * one.  If not set, the default will be the "pick_first" policy.
+   *
+   * <p>Policy implementations are looked up in the
+   * {@link LoadBalancerRegistry#getDefaultRegistry default LoadBalancerRegistry}.
+   *
+   * <p>This method is implemented by all stock channel builders that are shipped with gRPC, but may
+   * not be implemented by custom channel builders, in which case this method will throw.
+   *
+   * @return this
+   * @since 1.18.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
+  public T defaultLoadBalancingPolicy(String policy) {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Enables full-stream decompression of inbound streams. This will cause the channel's outbound

@@ -127,6 +127,7 @@ public class AbstractManagedChannelImplBuilderTest {
   }
 
   @Test
+  @Deprecated
   public void loadBalancerFactory_normal() {
     LoadBalancer.Factory loadBalancerFactory = mock(LoadBalancer.Factory.class);
     assertEquals(builder, builder.loadBalancerFactory(loadBalancerFactory));
@@ -134,6 +135,7 @@ public class AbstractManagedChannelImplBuilderTest {
   }
 
   @Test
+  @Deprecated
   public void loadBalancerFactory_null() {
     LoadBalancer.Factory defaultValue = builder.loadBalancerFactory;
     builder.loadBalancerFactory(mock(LoadBalancer.Factory.class));
@@ -142,8 +144,30 @@ public class AbstractManagedChannelImplBuilderTest {
   }
 
   @Test(expected = IllegalStateException.class)
+  @Deprecated
   public void loadBalancerFactory_notAllowedWithDirectAddress() {
     directAddressBuilder.loadBalancerFactory(mock(LoadBalancer.Factory.class));
+  }
+
+  @Test
+  public void defaultLoadBalancingPolicy_default() {
+    assertEquals(builder.defaultLbPolicy, "pick_first");
+  }
+
+  @Test
+  public void defaultLoadBalancingPolicy_normal() {
+    assertEquals(builder, builder.defaultLoadBalancingPolicy("magic_balancer"));
+    assertEquals("magic_balancer", builder.defaultLbPolicy);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void defaultLoadBalancingPolicy_null() {
+    builder.defaultLoadBalancingPolicy(null);
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void defaultLoadBalancingPolicy_notAllowedWithDirectAddress() {
+    directAddressBuilder.defaultLoadBalancingPolicy("magic_balancer");
   }
 
   @Test

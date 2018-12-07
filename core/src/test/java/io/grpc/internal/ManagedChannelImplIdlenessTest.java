@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -44,6 +45,8 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
+import io.grpc.LoadBalancerProvider;
+import io.grpc.LoadBalancerRegistry;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -84,6 +87,7 @@ public class ManagedChannelImplIdlenessTest {
   private static final String AUTHORITY = "fakeauthority";
   private static final String USER_AGENT = "fakeagent";
   private static final long IDLE_TIMEOUT_SECONDS = 30;
+  private static final String MOCK_POLICY_NAME = "mock_lb";
   private ManagedChannelImpl channel;
 
   private final MethodDescriptor<String, Integer> method =
@@ -102,7 +106,29 @@ public class ManagedChannelImplIdlenessTest {
 
   @Mock private ClientTransportFactory mockTransportFactory;
   @Mock private LoadBalancer mockLoadBalancer;
-  @Mock private LoadBalancer.Factory mockLoadBalancerFactory;
+  private final LoadBalancerProvider mockLoadBalancerProvider =
+      mock(LoadBalancerProvider.class, delegatesTo(new LoadBalancerProvider() {
+          @Override
+          public LoadBalancer newLoadBalancer(Helper helper) {
+            return mockLoadBalancer;
+          }
+
+          @Override
+          public boolean isAvailable() {
+            return true;
+          }
+
+          @Override
+          public int getPriority() {
+            return 999;
+          }
+
+          @Override
+          public String getPolicyName() {
+            return MOCK_POLICY_NAME;
+          }
+        }));
+
   @Mock private NameResolver mockNameResolver;
   @Mock private NameResolver.Factory mockNameResolverFactory;
   @Mock private ClientCall.Listener<Integer> mockCallListener;
@@ -113,7 +139,7 @@ public class ManagedChannelImplIdlenessTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(mockLoadBalancerFactory.newLoadBalancer(any(Helper.class))).thenReturn(mockLoadBalancer);
+    LoadBalancerRegistry.getDefaultRegistry().register(mockLoadBalancerProvider);
     when(mockNameResolver.getServiceAuthority()).thenReturn(AUTHORITY);
     when(mockNameResolverFactory
         .newNameResolver(any(URI.class), any(Attributes.class)))
@@ -137,7 +163,7 @@ public class ManagedChannelImplIdlenessTest {
 
     Builder builder = new Builder("fake://target")
         .nameResolverFactory(mockNameResolverFactory)
-        .loadBalancerFactory(mockLoadBalancerFactory)
+        .defaultLoadBalancingPolicy(MOCK_POLICY_NAME)
         .idleTimeout(IDLE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .userAgent(USER_AGENT);
     builder.executorPool = executorPool;
@@ -157,7 +183,7 @@ public class ManagedChannelImplIdlenessTest {
     }
     verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
     // Verify the initial idleness
-    verify(mockLoadBalancerFactory, never()).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancerProvider, never()).newLoadBalancer(any(Helper.class));
     verify(mockTransportFactory, never()).newClientTransport(
         any(SocketAddress.class),
         any(ClientTransportFactory.ClientTransportOptions.class));
@@ -173,12 +199,17 @@ public class ManagedChannelImplIdlenessTest {
     assertEquals(executor.getPendingTasks() + " should be empty", 0, executor.numPendingTasks());
   }
 
+  @After
+  public void cleanUp() {
+    LoadBalancerRegistry.getDefaultRegistry().deregister(mockLoadBalancerProvider);
+  }
+
   @Test
   public void newCallExitsIdleness() throws Exception {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
 
-    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
 
     verify(mockNameResolver).start(nameResolverListenerCaptor.capture());
     // Simulate new address resolved to make sure the LoadBalancer is correctly linked to
@@ -195,7 +226,7 @@ public class ManagedChannelImplIdlenessTest {
     call.cancel("For testing", null);
 
     // Verify that we have exited the idle mode
-    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
     assertFalse(channel.inUseStateAggregator.isInUse());
 
     // Move closer to idleness, but not yet.
@@ -257,7 +288,7 @@ public class ManagedChannelImplIdlenessTest {
 
     // Verify that we have exited the idle mode
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
     assertTrue(channel.inUseStateAggregator.isInUse());
 
@@ -299,7 +330,7 @@ public class ManagedChannelImplIdlenessTest {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata()); // Create LB
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
     Subchannel subchannel = createSubchannelSafely(helper, servers.get(0), Attributes.EMPTY);
 
@@ -319,7 +350,7 @@ public class ManagedChannelImplIdlenessTest {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata()); // Create LB
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
     Subchannel subchannel = createSubchannelSafely(helper, servers.get(0), Attributes.EMPTY);
 
@@ -343,7 +374,7 @@ public class ManagedChannelImplIdlenessTest {
 
     // Verify that we have exited the idle mode
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
 
     // Fail the RPC
@@ -389,7 +420,7 @@ public class ManagedChannelImplIdlenessTest {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata()); // Create LB
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
     ManagedChannel oobChannel = helper.createOobChannel(servers.get(0), "localhost");
 
@@ -409,7 +440,7 @@ public class ManagedChannelImplIdlenessTest {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata()); // Create LB
     ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    verify(mockLoadBalancerProvider).newLoadBalancer(helperCaptor.capture());
     Helper helper = helperCaptor.getValue();
     ManagedChannel oobChannel = helper.createOobChannel(servers.get(0), "localhost");
 

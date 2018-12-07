@@ -121,9 +121,16 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  @Deprecated
   @Override
   public T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory) {
     delegate().loadBalancerFactory(loadBalancerFactory);
+    return thisT();
+  }
+
+  @Override
+  public T defaultLoadBalancingPolicy(String policy) {
+    delegate().defaultLoadBalancingPolicy(policy);
     return thisT();
   }
 

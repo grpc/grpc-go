@@ -114,8 +114,9 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   String authorityOverride;
 
-
   @Nullable LoadBalancer.Factory loadBalancerFactory;
+
+  String defaultLbPolicy = GrpcUtil.DEFAULT_LB_POLICY;
 
   boolean fullStreamDecompression;
 
@@ -236,12 +237,23 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Deprecated
   @Override
   public final T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancer.Factory",
         directServerAddress);
     this.loadBalancerFactory = loadBalancerFactory;
+    return thisT();
+  }
+
+  @Override
+  public final T defaultLoadBalancingPolicy(String policy) {
+    Preconditions.checkState(directServerAddress == null,
+        "directServerAddress is set (%s), which forbids the use of load-balancing policy",
+        directServerAddress);
+    Preconditions.checkArgument(policy != null, "policy cannot be null");
+    this.defaultLbPolicy = policy;
     return thisT();
   }
 

@@ -43,19 +43,20 @@ import javax.annotation.Nullable;
 
 @VisibleForTesting
 public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
-  private static final String DEFAULT_POLICY = "pick_first";
   private static final Logger logger =
       Logger.getLogger(AutoConfiguredLoadBalancerFactory.class.getName());
 
   private final LoadBalancerRegistry registry;
+  private final String defaultPolicy;
 
-  public AutoConfiguredLoadBalancerFactory() {
-    this(LoadBalancerRegistry.getDefaultRegistry());
+  public AutoConfiguredLoadBalancerFactory(String defaultPolicy) {
+    this(LoadBalancerRegistry.getDefaultRegistry(), defaultPolicy);
   }
 
   @VisibleForTesting
-  AutoConfiguredLoadBalancerFactory(LoadBalancerRegistry registry) {
+  AutoConfiguredLoadBalancerFactory(LoadBalancerRegistry registry, String defaultPolicy) {
     this.registry = checkNotNull(registry, "registry");
+    this.defaultPolicy = checkNotNull(defaultPolicy, "defaultPolicy");
   }
 
   @Override
@@ -87,10 +88,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
 
     AutoConfiguredLoadBalancer(Helper helper) {
       this.helper = helper;
-      delegateProvider = registry.getProvider(DEFAULT_POLICY);
+      delegateProvider = registry.getProvider(defaultPolicy);
       if (delegateProvider == null) {
-        throw new IllegalStateException("Could not find LoadBalancer " + DEFAULT_POLICY
-            + ". The build probably threw away META-INF/services/io.grpc.LoadBalancerProvider");
+        throw new IllegalStateException("Could not find policy '" + defaultPolicy
+            + "'. Make sure its implementation is either registered to LoadBalancerRegistry or"
+            + " included in META-INF/services/io.grpc.LoadBalancerProvider from your jar files.");
       }
       delegate = delegateProvider.newLoadBalancer(helper);
     }
@@ -252,7 +254,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
             "None of " + policiesTried + " specified by Service Config are available.");
       }
       return new PolicySelection(
-          getProviderOrThrow(DEFAULT_POLICY, "using default policy"), servers, null);
+          getProviderOrThrow(defaultPolicy, "using default policy"), servers, null);
     }
   }
 

@@ -542,7 +542,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         "Channel for '" + target + "'");
     channelLogger = new ChannelLoggerImpl(channelTracer, timeProvider);
     if (builder.loadBalancerFactory == null) {
-      this.loadBalancerFactory = new AutoConfiguredLoadBalancerFactory();
+      this.loadBalancerFactory = new AutoConfiguredLoadBalancerFactory(builder.defaultLbPolicy);
     } else {
       this.loadBalancerFactory = builder.loadBalancerFactory;
     }

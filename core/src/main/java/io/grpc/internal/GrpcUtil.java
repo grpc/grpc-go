@@ -249,6 +249,11 @@ public final class GrpcUtil {
   };
 
   /**
+   * The very default load-balancing policy.
+   */
+  public static final String DEFAULT_LB_POLICY = "pick_first";
+
+  /**
    * RPCs created on the Channel returned by {@link io.grpc.LoadBalancer.Subchannel#asChannel}
    * will have this option with value {@code true}.  They will be treated differently from
    * the ones created by application.
