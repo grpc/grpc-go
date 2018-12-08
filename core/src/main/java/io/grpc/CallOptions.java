@@ -326,7 +326,7 @@ public final class CallOptions {
       newOptions.customOptions[customOptions.length] = new Object[] {key, value};
     } else {
       // Replace an existing option
-      newOptions.customOptions[existingIdx][1] = value;
+      newOptions.customOptions[existingIdx] = new Object[] {key, value};
     }
 
     return newOptions;
