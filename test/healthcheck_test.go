@@ -907,7 +907,7 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
-		cm, _ := channelz.GetTopChannels(0)
+		cm, _ := channelz.GetTopChannels(0, 0)
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
@@ -968,7 +968,7 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
-		cm, _ := channelz.GetTopChannels(0)
+		cm, _ := channelz.GetTopChannels(0, 0)
 		if len(cm) == 0 {
 			return false, errors.New("channelz.GetTopChannels return 0 top channel")
 		}
