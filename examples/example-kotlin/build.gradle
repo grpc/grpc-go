@@ -28,7 +28,6 @@ def grpcVersion = '1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 dependencies {
     def kotlinVerion = plugins.findPlugin("org.jetbrains.kotlin.jvm").kotlinPluginVersion
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVerion}"
-    implementation "com.google.api.grpc:proto-google-common-protos:1.0.0"
     implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"

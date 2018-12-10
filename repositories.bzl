@@ -116,8 +116,8 @@ def grpc_java_repositories(
 def com_google_api_grpc_google_common_protos():
     native.maven_jar(
         name = "com_google_api_grpc_proto_google_common_protos",
-        artifact = "com.google.api.grpc:proto-google-common-protos:1.0.0",
-        sha1 = "86f070507e28b930e50d218ee5b6788ef0dd05e6",
+        artifact = "com.google.api.grpc:proto-google-common-protos:1.12.0",
+        sha1 = "1140cc74df039deb044ed0e320035e674dc13062",
     )
 
 def com_google_auth_google_auth_library_credentials():
