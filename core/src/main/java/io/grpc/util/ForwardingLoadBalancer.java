@@ -58,6 +58,11 @@ public abstract class ForwardingLoadBalancer extends LoadBalancer {
   }
 
   @Override
+  public boolean canHandleEmptyAddressListFromNameResolution() {
+    return delegate().canHandleEmptyAddressListFromNameResolution();
+  }
+
+  @Override
   public String toString() {
     return MoreObjects.toStringHelper(this).add("delegate", delegate()).toString();
   }

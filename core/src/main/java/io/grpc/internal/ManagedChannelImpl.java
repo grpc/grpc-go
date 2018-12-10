@@ -1257,11 +1257,6 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     @Override
     public void onAddresses(final List<EquivalentAddressGroup> servers, final Attributes config) {
-      if (servers.isEmpty()) {
-        onError(Status.UNAVAILABLE.withDescription(
-            "Name resolver " + resolver + " returned an empty list"));
-        return;
-      }
       channelLogger.log(
           ChannelLogLevel.DEBUG, "Resolved address: {0}, config={1}", servers, config);
 
@@ -1300,7 +1295,12 @@ final class ManagedChannelImpl extends ManagedChannel implements
             }
           }
 
-          helper.lb.handleResolvedAddressGroups(servers, config);
+          if (servers.isEmpty() && !helper.lb.canHandleEmptyAddressListFromNameResolution()) {
+            onError(Status.UNAVAILABLE.withDescription(
+                    "Name resolver " + resolver + " returned an empty list"));
+          } else {
+            helper.lb.handleResolvedAddressGroups(servers, config);
+          }
         }
       }
 

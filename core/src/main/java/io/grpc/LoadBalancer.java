@@ -169,6 +169,20 @@ public abstract class LoadBalancer {
   public abstract void shutdown();
 
   /**
+   * Whether this LoadBalancer can handle empty address group list to be passed to {@link
+   * #handleResolvedAddressGroups}.  The default implementation returns {@code false}, meaning that
+   * if the NameResolver returns an empty list, the Channel will turn that into an error and call
+   * {@link #handleNameResolutionError}.  LoadBalancers that want to accept empty lists should
+   * override this method and return {@code true}.
+   *
+   * <p>This method should always return a constant value.  It's not specified when this will be
+   * called.
+   */
+  public boolean canHandleEmptyAddressListFromNameResolution() {
+    return false;
+  }
+
+  /**
    * The main balancing logic.  It <strong>must be thread-safe</strong>. Typically it should only
    * synchronize on its own state, and avoid synchronizing with the LoadBalancer's state.
    *

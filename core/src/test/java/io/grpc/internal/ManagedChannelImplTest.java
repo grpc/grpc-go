@@ -280,6 +280,7 @@ public class ManagedChannelImplTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+    when(mockLoadBalancer.canHandleEmptyAddressListFromNameResolution()).thenCallRealMethod();
     LoadBalancerRegistry.getDefaultRegistry().register(mockLoadBalancerProvider);
     expectedUri = new URI(TARGET);
     transports = TestUtils.captureTransports(mockTransportFactory);
@@ -825,10 +826,82 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void nameResolverReturnsEmptySubLists() {
+  public void nameResolverReturnsEmptySubLists_becomeErrorByDefault() throws Exception {
+    String errorDescription = "Name resolver returned no usable address";
+
+    // Pass a FakeNameResolverFactory with an empty list and LB config
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).build();
+    Map<String, Object> serviceConfig =
+        parseConfig("{\"loadBalancingConfig\": [ {\"mock_lb\": { \"setting1\": \"high\" } } ] }");
+    Attributes serviceConfigAttrs =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(serviceConfigAttrs);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    // LoadBalancer received the error
+    verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancer).handleNameResolutionError(statusCaptor.capture());
+    Status status = statusCaptor.getValue();
+    assertSame(Status.Code.UNAVAILABLE, status.getCode());
+    Truth.assertThat(status.getDescription()).startsWith(errorDescription);
+  }
+
+  @Test
+  public void nameResolverReturnsEmptySubLists_optionallyAllowed() throws Exception {
+    when(mockLoadBalancer.canHandleEmptyAddressListFromNameResolution()).thenReturn(true);
+
+    // Pass a FakeNameResolverFactory with an empty list and LB config
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).build();
+    Map<String, Object> serviceConfig =
+        parseConfig("{\"loadBalancingConfig\": [ {\"mock_lb\": { \"setting1\": \"high\" } } ] }");
+    Attributes serviceConfigAttrs =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(serviceConfigAttrs);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+    createChannel();
+
+    // LoadBalancer received the empty list and the LB config
+    verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
+    ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancer).handleResolvedAddressGroups(
+        eq(ImmutableList.<EquivalentAddressGroup>of()), attrsCaptor.capture());
+    Map<String, Object> lbConfig =
+        attrsCaptor.getValue().get(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG);
+    assertEquals(ImmutableMap.<String, Object>of("setting1", "high"), lbConfig);
+    assertSame(
+        serviceConfig, attrsCaptor.getValue().get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG));
+  }
+
+  @Test
+  @Deprecated
+  public void nameResolverReturnsEmptySubLists_becomeErrorByDefault_lbFactorySetDirectly()
+      throws Exception {
     String errorDescription = "returned an empty list";
 
-    // Pass a FakeNameResolverFactory with an empty list
+    // Pass a FakeNameResolverFactory with an empty list and LB config
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).build();
+    Map<String, Object> serviceConfig =
+        parseConfig("{\"loadBalancingConfig\": [ {\"mock_lb\": { \"setting1\": \"high\" } } ] }");
+    Attributes serviceConfigAttrs =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(serviceConfigAttrs);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+
+    // Pass a LoadBalancerFactory directly to the builder, bypassing
+    // AutoConfiguredLoadBalancerFactory.  The empty-list check is done in ManagedChannelImpl rather
+    // than AutoConfiguredLoadBalancerFactory
+    channelBuilder.loadBalancerFactory(mockLoadBalancerProvider);
+
     createChannel();
 
     // LoadBalancer received the error
@@ -837,6 +910,37 @@ public class ManagedChannelImplTest {
     Status status = statusCaptor.getValue();
     assertSame(Status.Code.UNAVAILABLE, status.getCode());
     Truth.assertThat(status.getDescription()).contains(errorDescription);
+  }
+
+  @Test
+  @Deprecated
+  public void nameResolverReturnsEmptySubLists_optionallyAllowed_lbFactorySetDirectly()
+      throws Exception {
+    when(mockLoadBalancer.canHandleEmptyAddressListFromNameResolution()).thenReturn(true);
+
+    // Pass a FakeNameResolverFactory with an empty list and LB config
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).build();
+    Map<String, Object> serviceConfig =
+        parseConfig("{\"loadBalancingConfig\": [ {\"mock_lb\": { \"setting1\": \"high\" } } ] }");
+    Attributes serviceConfigAttrs =
+        Attributes.newBuilder()
+            .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
+            .build();
+    nameResolverFactory.nextResolvedAttributes.set(serviceConfigAttrs);
+    channelBuilder.nameResolverFactory(nameResolverFactory);
+
+    // Pass a LoadBalancerFactory directly to the builder, bypassing
+    // AutoConfiguredLoadBalancerFactory.  The empty-list check is done in ManagedChannelImpl rather
+    // than AutoConfiguredLoadBalancerFactory
+    channelBuilder.loadBalancerFactory(mockLoadBalancerProvider);
+
+    createChannel();
+
+    // LoadBalancer received the empty list and the LB config
+    verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancer).handleResolvedAddressGroups(
+        eq(ImmutableList.<EquivalentAddressGroup>of()), same(serviceConfigAttrs));
   }
 
   @Test
@@ -2366,11 +2470,15 @@ public class ManagedChannelImplTest {
   public void channelTracing_nameResolvingErrorEvent() throws Exception {
     timer.forwardNanos(1234);
     channelBuilder.maxTraceEvents(10);
+
+    Status error = Status.UNAVAILABLE.withDescription("simulated error");
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory.Builder(expectedUri).setError(error).build();
+    channelBuilder.nameResolverFactory(nameResolverFactory);
     createChannel();
+
     assertThat(getStats(channel).channelTrace.events).contains(new ChannelTrace.Event.Builder()
-        .setDescription("Failed to resolve name:"
-            + " Status{code=UNAVAILABLE, description=Name resolver FakeNameResolver"
-            + " returned an empty list, cause=null}")
+        .setDescription("Failed to resolve name: " + error)
         .setSeverity(ChannelTrace.Event.Severity.CT_WARNING)
         .setTimestampNanos(timer.getTicker().read())
         .build());
@@ -3287,5 +3395,10 @@ public class ManagedChannelImplTest {
           }
         });
     return resultCapture.get();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> parseConfig(String json) throws Exception {
+    return (Map<String, Object>) JsonParser.parse(json);
   }
 }
