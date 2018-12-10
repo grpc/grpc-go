@@ -41,6 +41,8 @@ type BenchmarkServiceClient interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
 	StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error)
+	// Unconstrainted streaming.
+	// Both server and client keep sending & receiving simultaneously.
 	UnconstrainedStreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_UnconstrainedStreamingCallClient, error)
 }
 
@@ -131,6 +133,8 @@ type BenchmarkServiceServer interface {
 	// One request followed by one response.
 	// The server returns the client payload as-is.
 	StreamingCall(BenchmarkService_StreamingCallServer) error
+	// Unconstrainted streaming.
+	// Both server and client keep sending & receiving simultaneously.
 	UnconstrainedStreamingCall(BenchmarkService_UnconstrainedStreamingCallServer) error
 }
 
@@ -490,9 +494,9 @@ var _WorkerService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "services.proto",
 }
 
-func init() { proto.RegisterFile("services.proto", fileDescriptor_services_40dda98cee2e1c89) }
+func init() { proto.RegisterFile("services.proto", fileDescriptor_services_e4655369b5d7f4d0) }
 
-var fileDescriptor_services_40dda98cee2e1c89 = []byte{
+var fileDescriptor_services_e4655369b5d7f4d0 = []byte{
 	// 271 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x92, 0xc1, 0x4a, 0xc3, 0x40,
 	0x10, 0x86, 0x69, 0x0f, 0x42, 0x16, 0x53, 0x64, 0x4f, 0xba, 0xfa, 0x00, 0x9e, 0x82, 0x54, 0x5f,
