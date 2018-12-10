@@ -45,7 +45,7 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
 /**
- * Modifies RPCs in in conformance with a Service Config.
+ * Modifies RPCs in conformance with a Service Config.
  */
 final class ServiceConfigInterceptor implements ClientInterceptor {
 
