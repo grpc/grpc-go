@@ -31,9 +31,7 @@ func TestShutdown(t *testing.T) {
 	s := NewServer()
 	s.SetServingStatus(testService, healthpb.HealthCheckResponse_SERVING)
 
-	s.mu.Lock()
 	status := s.statusMap[testService]
-	s.mu.Unlock()
 	if status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_SERVING)
 	}
