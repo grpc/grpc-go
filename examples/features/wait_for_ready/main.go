@@ -20,7 +20,7 @@ package main
 
 import (
 	"context"
-	"io"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -40,44 +40,19 @@ func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoRe
 }
 
 func (s *server) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	for i := 0; i < 10; i++ {
-		if err := stream.Send(&pb.EchoResponse{Message: req.Message}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	var lastMessage string
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(&pb.EchoResponse{Message: lastMessage})
-		}
-		if err != nil {
-			return err
-		}
-		lastMessage = req.Message
-	}
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		stream.Send(&pb.EchoResponse{Message: req.Message})
-	}
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 // serve starts listening with a 2 seconds delay.
 func serve() {
-	time.Sleep(2 * time.Second)
 	lis, err := net.Listen("tcp", ":50053")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -90,19 +65,6 @@ func serve() {
 	}
 }
 
-// unaryCall makes a unary request and compares error code with the expected code.
-func unaryCall(c pb.EchoClient, requestID int, waitForReady bool, timeout time.Duration, want codes.Code) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.FailFast(!waitForReady))
-
-	got := status.Code(err)
-	if got != want {
-		log.Fatalf("[%v] wanted = %v, got = %v (error code)", requestID, want, got)
-	}
-}
-
 func main() {
 	conn, err := grpc.Dial("localhost:50053", grpc.WithInsecure())
 	if err != nil {
@@ -112,26 +74,51 @@ func main() {
 
 	c := pb.NewEchoClient(conn)
 
-	go serve()
-
 	var wg sync.WaitGroup
 	wg.Add(3)
+
 	// "Wait for ready" is not enabled, returns error with code "Unavailable".
 	go func() {
 		defer wg.Done()
-		unaryCall(c, 1, false, 10*time.Second, codes.Unavailable)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"})
+
+		got := status.Code(err)
+		fmt.Printf("[1] wanted = %v, got = %v\n", codes.Unavailable, got)
 	}()
+
 	// "Wait for ready" is enabled, returns nil error.
 	go func() {
 		defer wg.Done()
-		unaryCall(c, 2, true, 10*time.Second, codes.OK)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.FailFast(false))
+
+		got := status.Code(err)
+		fmt.Printf("[2] wanted = %v, got = %v\n", codes.OK, got)
 	}()
+
 	// "Wait for ready" is enabled but exceeds the deadline before server starts listening,
 	// returns error with code "DeadlineExceeded".
 	go func() {
 		defer wg.Done()
-		unaryCall(c, 3, true, 1*time.Second, codes.DeadlineExceeded)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.FailFast(false))
+
+		got := status.Code(err)
+		fmt.Printf("[3] wanted = %v, got = %v\n", codes.DeadlineExceeded, got)
 	}()
+
+	time.Sleep(2 * time.Second)
+	go serve()
 
 	wg.Wait()
 }
