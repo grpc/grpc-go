@@ -54,12 +54,16 @@ func unaryCallWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in header")
 	}
 	if l, ok := header["location"]; ok {
 		fmt.Printf("location from header:\n")
 		for i, e := range l {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("location expected but doesn't exist in header")
 	}
 	fmt.Printf("response:\n")
 	fmt.Printf(" - %s\n", r.Message)
@@ -69,6 +73,8 @@ func unaryCallWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in trailer")
 	}
 }
 
@@ -95,12 +101,16 @@ func serverStreamingWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in header")
 	}
 	if l, ok := header["location"]; ok {
 		fmt.Printf("location from header:\n")
 		for i, e := range l {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("location expected but doesn't exist in header")
 	}
 
 	// Read all the responses.
@@ -126,6 +136,8 @@ func serverStreamingWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in trailer")
 	}
 }
 
@@ -152,12 +164,16 @@ func clientStreamWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in header")
 	}
 	if l, ok := header["location"]; ok {
 		fmt.Printf("location from header:\n")
 		for i, e := range l {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("location expected but doesn't exist in header")
 	}
 
 	// Send all requests to the server.
@@ -183,6 +199,8 @@ func clientStreamWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in trailer")
 	}
 }
 
@@ -210,12 +228,16 @@ func bidirectionalWithMetadata(c pb.EchoClient, message string) {
 			for i, e := range t {
 				fmt.Printf(" %d. %s\n", i, e)
 			}
+		} else {
+			log.Fatal("timestamp expected but doesn't exist in header")
 		}
 		if l, ok := header["location"]; ok {
 			fmt.Printf("location from header:\n")
 			for i, e := range l {
 				fmt.Printf(" %d. %s\n", i, e)
 			}
+		} else {
+			log.Fatal("location expected but doesn't exist in header")
 		}
 
 		// Send all requests to the server.
@@ -250,6 +272,8 @@ func bidirectionalWithMetadata(c pb.EchoClient, message string) {
 		for i, e := range t {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in trailer")
 	}
 
 }
