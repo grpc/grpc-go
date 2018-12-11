@@ -16,6 +16,7 @@
  *
  */
 
+// client is an example client.
 package main
 
 import (
