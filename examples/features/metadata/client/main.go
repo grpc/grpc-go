@@ -16,7 +16,7 @@
  *
  */
 
-// client is an example client.
+// Binary client is an example client.
 package main
 
 import (
