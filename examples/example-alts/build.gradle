@@ -26,10 +26,8 @@ def grpcVersion = '1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 def protocVersion = '3.5.1-1'
 
 dependencies {
+    // grpc-alts transitively depends on grpc-netty-shaded, grpc-protobuf, and grpc-stub
     implementation "io.grpc:grpc-alts:${grpcVersion}"
-    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
-    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
-    implementation "io.grpc:grpc-stub:${grpcVersion}"
     compileOnly "javax.annotation:javax.annotation-api:1.2"
 }
 
