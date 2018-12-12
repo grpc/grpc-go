@@ -16,19 +16,20 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"time"
 
-	"google.golang.org/grpc/status"
-
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
-
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 func unaryCall(c pb.EchoClient, requestID int, message string, want codes.Code) {
@@ -40,9 +41,7 @@ func unaryCall(c pb.EchoClient, requestID int, message string, want codes.Code) 
 
 	_, err := c.UnaryEcho(ctx, req)
 	got := status.Code(err)
-	if got != want {
-		log.Fatalf("[%v] wanted = %v, got = %v (error code)", requestID, want, got)
-	}
+	fmt.Printf("[%v] wanted = %v, got = %v\n", requestID, want, got)
 }
 
 func streamingCall(c pb.EchoClient, requestID int, message string, want codes.Code) {
@@ -65,13 +64,15 @@ func streamingCall(c pb.EchoClient, requestID int, message string, want codes.Co
 	_, err = stream.Recv()
 
 	got := status.Code(err)
-	if got != want {
-		log.Fatalf("[%v] wanted = %v, got = %v (error code)", requestID, want, got)
-	}
+	fmt.Printf("[%v] wanted = %v, got = %v\n", requestID, want, got)
 }
 
 func main() {
-	conn, err := grpc.Dial("localhost:50052", grpc.WithInsecure())
+	port := flag.Int("port", 50052, "port number")
+	flag.Parse()
+
+	target := fmt.Sprintf("localhost:%v", *port)
+	conn, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

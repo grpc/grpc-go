@@ -16,10 +16,13 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -27,20 +30,23 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/status"
 )
 
-var c pb.EchoClient
-
 // server is used to implement EchoServer.
-type server struct{}
+type server struct {
+	client  pb.EchoClient
+	ccClose func() error
+}
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	message := req.Message
 	if strings.HasPrefix(message, "[propagate me]") {
 		time.Sleep(800 * time.Millisecond)
 		message = strings.TrimPrefix(message, "[propagate me]")
-		return c.UnaryEcho(ctx, &pb.EchoRequest{Message: message})
+		return s.client.UnaryEcho(ctx, &pb.EchoRequest{Message: message})
 	}
 
 	if message == "delay" {
@@ -51,26 +57,11 @@ func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoRe
 }
 
 func (s *server) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	for i := 0; i < 10; i++ {
-		if err := stream.Send(&pb.EchoResponse{Message: req.Message}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	var lastMessage string
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(&pb.EchoResponse{Message: lastMessage})
-		}
-		if err != nil {
-			return err
-		}
-		lastMessage = req.Message
-	}
+	return status.Error(codes.Unimplemented, "RPC unimplemented")
 }
 
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
@@ -87,7 +78,7 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 		if strings.HasPrefix(message, "[propagate me]") {
 			time.Sleep(800 * time.Millisecond)
 			message = strings.TrimPrefix(message, "[propagate me]")
-			res, err := c.UnaryEcho(stream.Context(), &pb.EchoRequest{Message: message})
+			res, err := s.client.UnaryEcho(stream.Context(), &pb.EchoRequest{Message: message})
 			if err != nil {
 				return err
 			}
@@ -101,23 +92,36 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 	}
 }
 
-func main() {
-	lis, err := net.Listen("tcp", ":50052")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &server{})
+func (s *server) Close() {
+	defer s.ccClose()
+}
 
-	conn, err := grpc.Dial("localhost:50052", grpc.WithInsecure())
+func newEchoServer(port int) *server {
+	target := fmt.Sprintf("localhost:%v", port)
+	cc, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
-	defer conn.Close()
+	return &server{client: pb.NewEchoClient(cc), ccClose: cc.Close}
+}
 
-	c = pb.NewEchoClient(conn)
+func main() {
+	port := flag.Int("port", 50052, "port number")
+	flag.Parse()
 
-	if err := s.Serve(lis); err != nil {
+	address := fmt.Sprintf(":%v", *port)
+	lis, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	echoServer := newEchoServer(*port)
+	defer echoServer.Close()
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterEchoServer(grpcServer, echoServer)
+
+	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
