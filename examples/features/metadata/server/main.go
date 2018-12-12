@@ -199,7 +199,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	fmt.Printf("server listening at port %v\n", *port)
+	fmt.Printf("server listening at %v\n", lis.Addr())
 
 	s := grpc.NewServer()
 	pb.RegisterEchoServer(s, &server{})
