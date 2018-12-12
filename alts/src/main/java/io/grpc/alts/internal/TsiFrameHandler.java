@@ -34,12 +34,16 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Encrypts and decrypts TSI Frames. Writes are buffered here until {@link #flush} is called. Writes
  * must not be made before the TSI handshake is complete.
  */
 public final class TsiFrameHandler extends ByteToMessageDecoder implements ChannelOutboundHandler {
+
+  private static final Logger logger = Logger.getLogger(TsiFrameHandler.class.getName());
 
   private TsiFrameProtector protector;
   private PendingWriteQueue pendingUnprotectedWrites;
@@ -48,6 +52,7 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+    logger.finest("TsiFrameHandler added");
     super.handlerAdded(ctx);
     assert pendingUnprotectedWrites == null;
     pendingUnprotectedWrites = new PendingWriteQueue(checkNotNull(ctx));
@@ -55,6 +60,9 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @Override
   public void userEventTriggered(ChannelHandlerContext ctx, Object event) throws Exception {
+    if (logger.isLoggable(Level.FINEST)) {
+      logger.log(Level.FINEST, "TsiFrameHandler user event triggered", new Object[]{event});
+    }
     if (event instanceof TsiHandshakeCompletionEvent) {
       TsiHandshakeCompletionEvent tsiEvent = (TsiHandshakeCompletionEvent) event;
       if (tsiEvent.isSuccess()) {
@@ -68,6 +76,7 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @VisibleForTesting
   void setProtector(TsiFrameProtector protector) {
+    logger.finest("TsiFrameHandler protector set");
     checkState(this.protector == null);
     this.protector = checkNotNull(protector);
   }
@@ -95,7 +104,8 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
   }
 
   @Override
-  public void handlerRemoved0(ChannelHandlerContext ctx) throws Exception {
+  public void handlerRemoved0(ChannelHandlerContext ctx) {
+    logger.finest("TsiFrameHandler removed");
     if (!pendingUnprotectedWrites.isEmpty()) {
       pendingUnprotectedWrites.removeAndFailAll(
           new ChannelException("Pending write on removal of TSI handler"));
