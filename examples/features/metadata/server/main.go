@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -35,8 +36,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var port = flag.Int("port", 50051, "the port to serve on")
+
 const (
-	port            = ":9527"
 	timestampFormat = time.StampNano
 	smallDuration   = time.Second
 	streamingCount  = 10
@@ -193,11 +195,11 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	lis, err := net.Listen("tcp", port)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	fmt.Printf("server listening at port %v\n", port)
+	fmt.Printf("server listening at port %v\n", *port)
 
 	s := grpc.NewServer()
 	pb.RegisterEchoServer(s, &server{})

@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -31,8 +32,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+var addr = flag.String("addr", "localhost:50051", "the address to connect to")
+
 const (
-	address         = "localhost:9527"
 	timestampFormat = time.StampNano // "Jan _2 15:04:05.000"
 	streamingCount  = 10
 )
@@ -283,7 +285,7 @@ const message = "this is examples/metadata"
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
