@@ -68,7 +68,7 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 	for {
 		req, err := stream.Recv()
 		if err == io.EOF {
-			return nil
+			return status.Error(codes.InvalidArgument, "request message not received")
 		}
 		if err != nil {
 			return err
