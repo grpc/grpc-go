@@ -141,7 +141,7 @@ func setupServer(sc *svrConfig) (s *grpc.Server, lis net.Listener, ts *testHealt
 	healthgrpc.RegisterHealthServer(s, ts)
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
-	return s, lis, ts, func() { s.Stop() }, nil
+	return s, lis, ts, s.Stop, nil
 }
 
 type clientConfig struct {
@@ -152,20 +152,20 @@ type clientConfig struct {
 
 func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, deferFunc func(), err error) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
-	defer rcleanup()
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure(), grpc.WithBalancerName(c.balancerName))
 	if c.testHealthCheckFuncWrapper != nil {
-		opts = append(opts, internal.WithHealthCheckFunc.(func(interface{}) grpc.DialOption)(c.testHealthCheckFuncWrapper))
+		opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
 	}
 	for _, dopt := range c.extraDialOption {
 		opts = append(opts, dopt)
 	}
 	cc, err = grpc.Dial(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		return nil, nil, func() { rcleanup() }, fmt.Errorf("dial failed due to err: %v", err)
+		defer rcleanup()
+		return nil, nil, nil, fmt.Errorf("dial failed due to err: %v", err)
 	}
-	return cc, r, func() { rcleanup(); cc.Close() }, nil
+	return cc, r, func() { cc.Close(); rcleanup() }, nil
 }
 
 func TestHealthCheckWatchStateChange(t *testing.T) {
@@ -191,10 +191,10 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_NOT_SERVING)
 
 	cc, r, deferFunc, err := setupClient(&clientConfig{balancerName: "round_robin"})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	r.NewServiceConfig(`{
 	"healthCheckConfig": {
@@ -259,10 +259,10 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	defer s.Stop()
 
 	cc, r, deferFunc, err := setupClient(&clientConfig{balancerName: "round_robin"})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	r.NewServiceConfig(`{
 	"healthCheckConfig": {
@@ -303,10 +303,10 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	tc := testpb.NewTestServiceClient(cc)
 	r.NewServiceConfig(`{
@@ -396,10 +396,11 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 		extraDialOption:            []grpc.DialOption{grpc.WithWaitForHandshake()},
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
+
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.NewServiceConfig(`{
@@ -458,10 +459,10 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	tc := testpb.NewTestServiceClient(cc)
 	r.NewServiceConfig(`{
@@ -550,10 +551,10 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	tc := testpb.NewTestServiceClient(cc)
 	r.NewServiceConfig(`{
@@ -629,10 +630,10 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	// The serviceName "delay" is specially handled at server side, where response will not be sent
 	// back to client immediately upon receiving the request (client should receive no response until
@@ -705,10 +706,10 @@ func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 		extraDialOption:            []grpc.DialOption{grpc.WithWaitForHandshake()},
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	// The serviceName "delay" is specially handled at server side, where response will not be sent
 	// back to client immediately upon receiving the request (client should receive no response until
@@ -753,10 +754,10 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 		extraDialOption:            []grpc.DialOption{grpc.WithDisableHealthCheck()},
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -791,10 +792,10 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 		balancerName:               "pick_first",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -829,10 +830,11 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
 	})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
+
 	tc := testpb.NewTestServiceClient(cc)
 
 	r.NewAddress([]resolver.Address{{Addr: addr}})
@@ -888,10 +890,10 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	}
 
 	_, r, deferFunc, err := setupClient(&clientConfig{balancerName: "round_robin"})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	r.NewServiceConfig(`{
 	"healthCheckConfig": {
@@ -945,10 +947,10 @@ func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	defer deferFunc()
 
 	_, r, deferFunc, err := setupClient(&clientConfig{balancerName: "round_robin"})
-	defer deferFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer deferFunc()
 
 	r.NewServiceConfig(`{
 	"healthCheckConfig": {

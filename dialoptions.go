@@ -60,7 +60,7 @@ type dialOptions struct {
 	disableServiceConfig bool
 	disableRetry         bool
 	disableHealthCheck   bool
-	healthCheckFunc      func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
+	healthCheckFunc      internal.HealthChecker
 }
 
 // DialOption configures how we set up the connection.
@@ -475,9 +475,9 @@ func WithDisableHealthCheck() DialOption {
 // tests easier to change the health check function.
 //
 // For testing purpose only.
-func withHealthCheckFunc(f interface{}) DialOption {
+func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.healthCheckFunc = f.(func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error)
+		o.healthCheckFunc = f
 	})
 }
 

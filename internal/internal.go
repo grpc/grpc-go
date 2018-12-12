@@ -30,8 +30,11 @@ var (
 	// WithHealthCheckFunc is not exported by dialoptions.go
 	WithHealthCheckFunc interface{} // func (f interface{}) DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
-	HealthCheckFunc func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
+	HealthCheckFunc HealthChecker
 )
+
+// HealthChecker defines the signature of the client-side LB channel health checking function.
+type HealthChecker func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
 
 const (
 	// CredsBundleModeFallback switches GoogleDefaultCreds to fallback mode.
