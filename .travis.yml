@@ -23,9 +23,9 @@ install:
   - ./gradlew assemble generateTestProto install
   - pushd examples && ./gradlew build && popd
   - pushd examples && mvn verify && popd
-  - pushd examples/example-alts && ./gradlew build && popd
+  - pushd examples/example-alts && ../gradlew build && popd
   - pushd examples/example-tls && ../gradlew clean build && popd
-  - pushd examples/example-kotlin && ./gradlew build && popd
+  - pushd examples/example-kotlin && ../gradlew build && popd
 
 before_script:
   - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)

@@ -36,14 +36,14 @@ popd
 # Build examples
 
 cd ./examples/android/clientcache
-./gradlew build
+../../gradlew build
 cd ../routeguide
-./gradlew build
+../../gradlew build
 cd ../helloworld
-./gradlew build
+../../gradlew build
 
 cd "$BASE_DIR/github/grpc-java/examples/example-kotlin/android/helloworld/"
-./gradlew build
+../../../gradlew build
 
 # Skip APK size and dex count comparisons for non-PR builds
 
@@ -81,7 +81,7 @@ cd $BASE_DIR/github/grpc-java
 git checkout HEAD^
 ./gradlew install
 cd examples/android/helloworld/
-./gradlew build
+../../gradlew build
 
 read -r ignored old_dex_count < \
   <("${ANDROID_HOME}/tools/bin/apkanalyzer" dex references app/build/outputs/apk/release/app-release-unsigned.apk)

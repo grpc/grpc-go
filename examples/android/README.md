@@ -19,7 +19,7 @@ INSTALL
 2. Install the app
 ```sh
 $ cd helloworld  # or "cd routeguide"
-$ ./gradlew installDebug
+$ ../../gradlew installDebug
 ```
 
 Please refer to the

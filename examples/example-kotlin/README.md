@@ -15,7 +15,7 @@ To build the examples,
 
 2. Run in this directory:
 ```
-$ ./gradlew installDist
+$ ../gradlew installDist
 ```
 
 This creates the scripts `hello-world-server`, `hello-world-client`,
