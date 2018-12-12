@@ -470,7 +470,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
 
     @Override
-    public <ReqT> RetriableStream<ReqT> newRetriableStream(
+    public <ReqT> ClientStream newRetriableStream(
         final MethodDescriptor<ReqT, ?> method,
         final CallOptions callOptions,
         final Metadata headers,

@@ -60,7 +60,7 @@ final class SubchannelChannel extends Channel {
       }
 
       @Override
-      public <ReqT> RetriableStream<ReqT> newRetriableStream(MethodDescriptor<ReqT, ?> method,
+      public <ReqT> ClientStream newRetriableStream(MethodDescriptor<ReqT, ?> method,
           CallOptions callOptions, Metadata headers, Context context) {
         throw new UnsupportedOperationException("OobChannel should not create retriable streams");
       }

@@ -128,7 +128,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
      */
     ClientTransport get(PickSubchannelArgs args);
 
-    <ReqT> RetriableStream<ReqT> newRetriableStream(
+    <ReqT> ClientStream newRetriableStream(
         MethodDescriptor<ReqT, ?> method,
         CallOptions callOptions,
         Metadata headers,
@@ -416,7 +416,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     try {
       if (stream instanceof RetriableStream) {
         @SuppressWarnings("unchecked")
-        RetriableStream<ReqT> retriableStream = ((RetriableStream<ReqT>) stream);
+        RetriableStream<ReqT> retriableStream = (RetriableStream<ReqT>) stream;
         retriableStream.sendMessage(message);
       } else {
         stream.writeMessage(method.streamRequest(message));
