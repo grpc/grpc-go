@@ -253,8 +253,8 @@ func (o PeerCallOption) after(c *callInfo) {
 	}
 }
 
-// FailFast configures the action to take when an RPC is attempted on broken
-// connections or unreachable servers.  If failFast is true, the RPC will fail
+// WaitForReady configures the action to take when an RPC is attempted on broken
+// connections or unreachable servers. If waitForReady is false, the RPC will fail
 // immediately. Otherwise, the RPC client will block the call until a
 // connection is available (or the call is canceled or times out) and will
 // retry the call if it fails due to a transient error.  gRPC will not retry if
@@ -262,7 +262,14 @@ func (o PeerCallOption) after(c *callInfo) {
 // the data.  Please refer to
 // https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
 //
-// By default, RPCs are "Fail Fast".
+// By default, RPCs don't "wait for ready".
+func WaitForReady(waitForReady bool) CallOption {
+	return FailFastCallOption{FailFast: !waitForReady}
+}
+
+// FailFast is the opposite of WaitForReady.
+//
+// Deprecated: use WaitForReady.
 func FailFast(failFast bool) CallOption {
 	return FailFastCallOption{FailFast: failFast}
 }

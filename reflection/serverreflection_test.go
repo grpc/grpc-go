@@ -203,7 +203,7 @@ func TestReflectionEnd2end(t *testing.T) {
 	defer conn.Close()
 
 	c := rpb.NewServerReflectionClient(conn)
-	stream, err := c.ServerReflectionInfo(context.Background(), grpc.FailFast(false))
+	stream, err := c.ServerReflectionInfo(context.Background(), grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
 	}
