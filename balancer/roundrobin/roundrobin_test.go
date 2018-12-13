@@ -66,9 +66,7 @@ func startTestServers(count int) (_ *test, err error) {
 
 	defer func() {
 		if err != nil {
-			for _, s := range t.servers {
-				s.Stop()
-			}
+			t.cleanup()
 		}
 	}()
 	for i := 0; i < count; i++ {
