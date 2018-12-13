@@ -29,7 +29,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/status"
 
@@ -121,8 +120,7 @@ func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, *
 		}
 }
 
-func TestNameDiscovery(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestNameDiscovery(t *testing.T) {
 	// Start 2 servers on 2 ports.
 	numServers := 2
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -157,8 +155,7 @@ func TestNameDiscovery(t *testing.T) {
 	}
 }
 
-func TestEmptyAddrs(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestEmptyAddrs(t *testing.T) {
 	servers, r, cleanup := startServers(t, 1, math.MaxUint32)
 	defer cleanup()
 	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
@@ -189,8 +186,7 @@ func TestEmptyAddrs(t *testing.T) {
 	}
 }
 
-func TestRoundRobin(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestRoundRobin(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -236,8 +232,7 @@ func TestRoundRobin(t *testing.T) {
 	}
 }
 
-func TestCloseWithPendingRPC(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCloseWithPendingRPC(t *testing.T) {
 	servers, r, cleanup := startServers(t, 1, math.MaxUint32)
 	defer cleanup()
 	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
@@ -288,8 +283,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	wg.Wait()
 }
 
-func TestGetOnWaitChannel(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGetOnWaitChannel(t *testing.T) {
 	servers, r, cleanup := startServers(t, 1, math.MaxUint32)
 	defer cleanup()
 	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
@@ -332,8 +326,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOneServerDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneServerDown(t *testing.T) {
 	// Start 2 servers.
 	numServers := 2
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -385,8 +378,7 @@ func TestOneServerDown(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOneAddressRemoval(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestOneAddressRemoval(t *testing.T) {
 	// Start 2 servers.
 	numServers := 2
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -463,8 +455,7 @@ func checkServerUp(t *testing.T, currentServer *server) {
 	}
 }
 
-func TestPickFirstEmptyAddrs(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestPickFirstEmptyAddrs(t *testing.T) {
 	servers, r, cleanup := startServers(t, 1, math.MaxUint32)
 	defer cleanup()
 	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(pickFirstBalancerV1(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
@@ -495,8 +486,7 @@ func TestPickFirstEmptyAddrs(t *testing.T) {
 	}
 }
 
-func TestPickFirstCloseWithPendingRPC(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	servers, r, cleanup := startServers(t, 1, math.MaxUint32)
 	defer cleanup()
 	cc, err := Dial("passthrough:///foo.bar.com", WithBalancer(pickFirstBalancerV1(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
@@ -547,8 +537,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	wg.Wait()
 }
 
-func TestPickFirstOrderAllServerUp(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestPickFirstOrderAllServerUp(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -660,8 +649,7 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 	}
 }
 
-func TestPickFirstOrderOneServerDown(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestPickFirstOrderOneServerDown(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)
@@ -751,8 +739,7 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	}
 }
 
-func TestPickFirstOneAddressRemoval(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestPickFirstOneAddressRemoval(t *testing.T) {
 	// Start 2 servers.
 	numServers := 2
 	servers, r, cleanup := startServers(t, numServers, math.MaxUint32)

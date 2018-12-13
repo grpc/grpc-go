@@ -29,11 +29,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/leakcheck"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func TestCZSocketMetricsSocketOption(t *testing.T) {
+func (s) TestCZSocketMetricsSocketOption(t *testing.T) {
 	envs := []env{tcpClearRREnv, tcpTLSRREnv}
 	for _, e := range envs {
 		testCZSocketMetricsSocketOption(t, e)
@@ -41,7 +40,6 @@ func TestCZSocketMetricsSocketOption(t *testing.T) {
 }
 
 func testCZSocketMetricsSocketOption(t *testing.T, e env) {
-	defer leakcheck.Check(t)
 	channelz.NewChannelzStorage()
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})

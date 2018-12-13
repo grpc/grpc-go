@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/leakcheck"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 )
@@ -66,8 +65,7 @@ func (c *testCredsBundle) NewWithMode(mode string) (credentials.Bundle, error) {
 	return &testCredsBundle{mode: mode}, nil
 }
 
-func TestCredsBundleBoth(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCredsBundleBoth(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
@@ -90,8 +88,7 @@ func TestCredsBundleBoth(t *testing.T) {
 	}
 }
 
-func TestCredsBundleTransportCredentials(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
@@ -113,8 +110,7 @@ func TestCredsBundleTransportCredentials(t *testing.T) {
 	}
 }
 
-func TestCredsBundlePerRPCCredentials(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCredsBundlePerRPCCredentials(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: "v1", security: "empty"})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{

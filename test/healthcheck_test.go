@@ -35,7 +35,6 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -168,8 +167,7 @@ func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, defe
 	return cc, r, func() { cc.Close(); rcleanup() }, nil
 }
 
-func TestHealthCheckWatchStateChange(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{})
 	defer deferFunc()
 	if err != nil {
@@ -248,8 +246,7 @@ func TestHealthCheckWatchStateChange(t *testing.T) {
 }
 
 // If Watch returns Unimplemented, then the ClientConn should go into READY state.
-func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -286,9 +283,7 @@ func TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 
 // In the case of a goaway received, the health check stream should be terminated and health check
 // function should exit.
-func TestHealthCheckWithGoAway(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	s, lis, ts, deferFunc, err := setupServer(&svrConfig{})
@@ -378,9 +373,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	}
 }
 
-func TestHealthCheckWithConnClose(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	s, lis, ts, deferFunc, err := setupServer(&svrConfig{})
@@ -442,9 +435,7 @@ func TestHealthCheckWithConnClose(t *testing.T) {
 
 // addrConn drain happens when addrConn gets torn down due to its address being no longer in the
 // address list returned by the resolver.
-func TestHealthCheckWithAddrConnDrain(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{})
@@ -534,9 +525,7 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 }
 
 // ClientConn close will lead to its addrConns being torn down.
-func TestHealthCheckWithClientConnClose(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{})
@@ -598,9 +587,7 @@ func TestHealthCheckWithClientConnClose(t *testing.T) {
 // This test is to test the logic in the createTransport after the health check function returns which
 // closes the skipReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
-func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{
@@ -673,9 +660,7 @@ func TestHealthCheckWithoutReportHealthCalledAddrConnShutDown(t *testing.T) {
 // This test is to test the logic in the createTransport after the health check function returns which
 // closes the allowedToReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
-func TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 
 	s, lis, ts, deferFunc, err := setupServer(&svrConfig{
@@ -856,9 +841,7 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	}
 }
 
-func TestHealthCheckDisable(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckDisable(t *testing.T) {
 	_, lis, ts, deferFunc, err := setupServer(&svrConfig{})
 	defer deferFunc()
 	if err != nil {
@@ -872,9 +855,7 @@ func TestHealthCheckDisable(t *testing.T) {
 	testHealthCheckDisableWithServiceConfig(t, lis.Addr().String())
 }
 
-func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	_, lis, _, deferFunc, err := setupServer(&svrConfig{
 		specialWatchFunc: func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 			if in.Service != "channelzSuccess" {
@@ -929,9 +910,7 @@ func TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	}
 }
 
-func TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	_, lis, _, deferFunc, err := setupServer(&svrConfig{
 		specialWatchFunc: func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 			if in.Service != "channelzFailure" {

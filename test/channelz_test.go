@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -67,8 +66,7 @@ func verifyResultWithDelay(f func() (bool, error)) error {
 	return err
 }
 
-func TestCZServerRegistrationAndDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
@@ -102,8 +100,7 @@ func TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
@@ -156,8 +153,7 @@ func TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
@@ -202,8 +198,7 @@ func TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	num := 3 // number of backends
@@ -274,8 +269,7 @@ func TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
 		start  int64
@@ -351,8 +345,7 @@ func TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func TestCZServerListenSocketDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerListenSocketDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -398,7 +391,7 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 	return &channelz.SocketInternalMetric{}
 }
 
-func TestCZRecusivelyDeletionOfEntry(t *testing.T) {
+func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	//           +--+TopChan+---+
 	//           |              |
 	//           v              v
@@ -449,8 +442,7 @@ func TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	}
 }
 
-func TestCZChannelMetrics(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZChannelMetrics(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	num := 3 // number of backends
@@ -538,8 +530,7 @@ func TestCZChannelMetrics(t *testing.T) {
 	}
 }
 
-func TestCZServerMetrics(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerMetrics(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -823,8 +814,7 @@ func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 	cancel()
 }
 
-func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -923,8 +913,7 @@ func TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 // server sending RST_STREAM to client due to client side flow control violation.
 // It is separated from other cases due to setup incompatibly, i.e. max receive
 // size violation will mask flow control violation.
-func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -984,8 +973,7 @@ func TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testi
 	}
 }
 
-func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1097,8 +1085,7 @@ func TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	}
 }
 
-func TestCZClientSocketMetricsKeepAlive(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1141,8 +1128,7 @@ func TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	}
 }
 
-func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1202,8 +1188,7 @@ func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	}
 }
 
-func TestCZServerSocketMetricsKeepAlive(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1258,8 +1243,7 @@ var cipherSuites = []string{
 	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
 }
 
-func TestCZSocketGetSecurityValueTLS(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpTLSRREnv
 	te := newTest(t, e)
@@ -1308,8 +1292,7 @@ func TestCZSocketGetSecurityValueTLS(t *testing.T) {
 	}
 }
 
-func TestCZChannelTraceCreationDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
@@ -1385,8 +1368,7 @@ func TestCZChannelTraceCreationDeletion(t *testing.T) {
 	}
 }
 
-func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1464,8 +1446,7 @@ func TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	}
 }
 
-func TestCZChannelAddressResolutionChange(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	e.balancer = ""
@@ -1567,8 +1548,7 @@ func TestCZChannelAddressResolutionChange(t *testing.T) {
 	}
 }
 
-func TestCZSubChannelPickedNewAddress(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	e.balancer = ""
@@ -1628,8 +1608,7 @@ func TestCZSubChannelPickedNewAddress(t *testing.T) {
 	}
 }
 
-func TestCZSubChannelConnectivityState(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1724,8 +1703,7 @@ func TestCZSubChannelConnectivityState(t *testing.T) {
 	}
 }
 
-func TestCZChannelConnectivityState(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZChannelConnectivityState(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1782,8 +1760,7 @@ func TestCZChannelConnectivityState(t *testing.T) {
 	}
 }
 
-func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
@@ -1844,8 +1821,7 @@ func TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	}
 }
 
-func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
@@ -1904,8 +1880,7 @@ func TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	}
 }
 
-func TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
