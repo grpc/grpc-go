@@ -16,6 +16,7 @@
  *
  */
 
+// Binary wait_for_ready is an example for "wait for ready".
 package main
 
 import (
