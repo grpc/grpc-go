@@ -31,6 +31,8 @@ var (
 	WithHealthCheckFunc interface{} // func (HealthChecker) DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
 	HealthCheckFunc HealthChecker
+	// BalancerUnregister is exported by package balancer to unregister a balancer.
+	BalancerUnregister func(name string)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

@@ -95,9 +95,9 @@ func newFuncDialOption(f func(*dialOptions)) *funcDialOption {
 // WithWaitForHandshake blocks until the initial settings frame is received from
 // the server before assigning RPCs to the connection.
 //
-// Deprecated: this will become the default behavior in the 1.17 release, and
+// Deprecated: this will become the default behavior in the 1.18 release, and
 // will be removed after the 1.18 release.  To override the default behavior in
-// the 1.17 release, either use this dial option or set the environment
+// the 1.18 release, either use this dial option or set the environment
 // variable GRPC_GO_READY_BEFORE_HANDSHAKE=on.
 func WithWaitForHandshake() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {

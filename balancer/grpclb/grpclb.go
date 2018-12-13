@@ -342,6 +342,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	var remoteBalancerAddrs, backendAddrs []resolver.Address
 	for _, a := range addrs {
 		if a.Type == resolver.GRPCLB {
+			a.Type = resolver.Backend
 			remoteBalancerAddrs = append(remoteBalancerAddrs, a)
 		} else {
 			backendAddrs = append(backendAddrs, a)
