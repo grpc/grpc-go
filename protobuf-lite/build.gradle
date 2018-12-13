@@ -34,9 +34,9 @@ compileTestJava {
     options.compilerArgs += [
         "-Xlint:-rawtypes",
         "-Xlint:-unchecked",
-        "-Xlint:-fallthrough",
-        "-XepExcludedPaths:.*/build/generated/source/proto/.*"
+        "-Xlint:-fallthrough"
     ]
+    options.errorprone.excludedPaths = ".*/build/generated/source/proto/.*"
 }
 
 protobuf {

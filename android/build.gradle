@@ -13,7 +13,7 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.0.1'
-        classpath "net.ltgt.gradle:gradle-errorprone-plugin:0.0.13"
+        classpath "net.ltgt.gradle:gradle-errorprone-plugin:0.6"
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
     }
 }
@@ -41,6 +41,9 @@ repositories {
 }
 
 dependencies {
+    errorprone 'com.google.errorprone:error_prone_core:2.3.2'
+    errorproneJavac 'com.google.errorprone:javac:9+181-r4173-1'
+
     implementation 'io.grpc:grpc-core:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
     testImplementation 'io.grpc:grpc-okhttp:1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION

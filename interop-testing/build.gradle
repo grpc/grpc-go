@@ -38,9 +38,11 @@ dependencies {
 
 configureProtoCompilation()
 
+import net.ltgt.gradle.errorprone.CheckSeverity
+
 compileJava {
     // This isn't a library; it can use beta APIs
-    it.options.compilerArgs += ["-Xep:BetaApi:OFF"]
+    options.errorprone.check("BetaApi", CheckSeverity.OFF)
 }
 
 test {

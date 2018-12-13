@@ -13,11 +13,11 @@ dependencies {
     signature "org.codehaus.mojo.signature:java17:1.0@signature"
 }
 
+import net.ltgt.gradle.errorprone.CheckSeverity
+
 [compileJava, compileTestJava].each() {
     // Netty retuns a lot of futures that we mostly don't care about.
-    it.options.compilerArgs += [
-        "-Xep:FutureReturnValueIgnored:OFF"
-    ]
+    it.options.errorprone.check("FutureReturnValueIgnored", CheckSeverity.OFF)
 }
 
 javadoc {

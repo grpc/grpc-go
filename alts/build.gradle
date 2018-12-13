@@ -46,13 +46,15 @@ dependencies {
 
 configureProtoCompilation()
 
+import net.ltgt.gradle.errorprone.CheckSeverity
+
 [compileJava, compileTestJava].each() {
-    // ALTS retuns a lot of futures that we mostly don't care about.
     // protobuf calls valueof. Will be fixed in next release (google/protobuf#4046)
     it.options.compilerArgs += [
-        "-Xlint:-deprecation",
-        "-Xep:FutureReturnValueIgnored:OFF"
+        "-Xlint:-deprecation"
     ]
+    // ALTS returns a lot of futures that we mostly don't care about.
+    it.options.errorprone.check("FutureReturnValueIgnored", CheckSeverity.OFF)
 }
 
 javadoc { exclude 'io/grpc/alts/internal/**' }

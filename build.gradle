@@ -7,11 +7,13 @@ buildscript {
         classpath "com.diffplug.spotless:spotless-plugin-gradle:3.13.0"
         classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
         classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.4.5'
-        classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.13'
+        classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.6'
         classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.5"
         classpath 'me.champeau.gradle:japicmp-gradle-plugin:0.2.5'
     }
 }
+
+import net.ltgt.gradle.errorprone.CheckSeverity
 
 subprojects {
     apply plugin: "checkstyle"
@@ -25,23 +27,21 @@ subprojects {
     apply plugin: "com.google.osdetector"
     // The plugin only has an effect if a signature is specified
     apply plugin: "ru.vyarus.animalsniffer"
-    // jdk10 not supported by errorprone: https://github.com/google/error-prone/issues/860
-    if (!JavaVersion.current().isJava10Compatible() &&
-        rootProject.properties.get('errorProne', true).toBoolean()) {
-        apply plugin: "net.ltgt.errorprone"
 
+    apply plugin: "net.ltgt.errorprone"
+    if (rootProject.properties.get('errorProne', true)) {
         dependencies {
-            // The ErrorProne plugin defaults to the latest, which would break our
-            // build if error prone releases a new version with a new check
             errorprone 'com.google.errorprone:error_prone_core:2.3.2'
+            errorproneJavac 'com.google.errorprone:javac:9+181-r4173-1'
+
             annotationProcessor 'com.google.guava:guava-beta-checker:1.0'
         }
     } else {
-        // Remove per-project error-prone checker config
+        // Disable Error Prone
         allprojects {
             afterEvaluate { project ->
                 project.tasks.withType(JavaCompile) {
-                    options.compilerArgs.removeAll { it.startsWith("-Xep") }
+                    options.errorprone.enabled = false
                 }
             }
         }
@@ -78,11 +78,11 @@ subprojects {
 
     compileTestJava {
         // serialVersionUID is basically guaranteed to be useless in our tests
-        // LinkedList doesn't hurt much in tests and has lots of usages
         options.compilerArgs += [
-            "-Xlint:-serial",
-            "-Xep:JdkObsolete:OFF"
+            "-Xlint:-serial"
         ]
+        // LinkedList doesn't hurt much in tests and has lots of usages
+        options.errorprone.check("JdkObsolete", CheckSeverity.OFF)
     }
 
     jar.manifest {
@@ -179,8 +179,8 @@ subprojects {
                 // https://github.com/google/protobuf/issues/2718
                 it.options.compilerArgs += [
                     "-Xlint:-cast",
-                    "-XepExcludedPaths:.*/src/generated/[^/]+/java/.*",
                 ]
+                it.options.errorprone.excludedPaths = ".*/src/generated/[^/]+/java/.*"
             }
         }
 

@@ -36,9 +36,11 @@ dependencies {
     compileOnly libraries.javax_annotation
 }
 
+import net.ltgt.gradle.errorprone.CheckSeverity
+
 compileJava {
     // The Control.Void protobuf clashes
-    options.compilerArgs += ["-Xep:JavaLangClash:OFF"]
+    options.errorprone.check("JavaLangClash", CheckSeverity.OFF)
 }
 
 configureProtoCompilation()
