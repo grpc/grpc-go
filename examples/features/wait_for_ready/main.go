@@ -97,7 +97,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.FailFast(false))
+		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.WaitForReady(true))
 
 		got := status.Code(err)
 		fmt.Printf("[2] wanted = %v, got = %v\n", codes.OK, got)
@@ -111,7 +111,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
-		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.FailFast(false))
+		_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hi!"}, grpc.WaitForReady(true))
 
 		got := status.Code(err)
 		fmt.Printf("[3] wanted = %v, got = %v\n", codes.DeadlineExceeded, got)
