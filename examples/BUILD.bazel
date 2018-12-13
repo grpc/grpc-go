@@ -99,6 +99,24 @@ java_binary(
 )
 
 java_binary(
+    name = "auth-client",
+    testonly = 1,
+    main_class = "io.grpc.examples.authentication.AuthClient",
+    runtime_deps = [
+        ":examples",
+    ],
+)
+
+java_binary(
+    name = "auth-server",
+    testonly = 1,
+    main_class = "io.grpc.examples.authentication.AuthServer",
+    runtime_deps = [
+        ":examples",
+    ],
+)
+
+java_binary(
     name = "route-guide-client",
     testonly = 1,
     main_class = "io.grpc.examples.routeguide.RouteGuideClient",

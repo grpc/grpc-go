@@ -91,6 +91,20 @@ task helloWorldClient(type: CreateStartScripts) {
     classpath = startScripts.classpath
 }
 
+task authServer(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.examples.authentication.AuthServer'
+    applicationName = 'auth-server'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = startScripts.classpath
+}
+
+task authClient(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.examples.authentication.AuthClient'
+    applicationName = 'auth-client'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = startScripts.classpath
+}
+
 task compressingHelloWorldClient(type: CreateStartScripts) {
     mainClassName = 'io.grpc.examples.experimental.CompressingHelloWorldClient'
     applicationName = 'compressing-hello-world-client'
@@ -103,6 +117,8 @@ applicationDistribution.into('bin') {
     from(routeGuideClient)
     from(helloWorldServer)
     from(helloWorldClient)
+    from(authServer)
+    from(authClient)
     from(compressingHelloWorldClient)
     fileMode = 0755
 }

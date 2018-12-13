@@ -25,6 +25,9 @@ before trying out the examples.
 
 - [Json serialization](src/main/java/io/grpc/examples/advanced)
 
+- [Authentication](AUTHENTICATION_EXAMPLE.md)
+
+
 ### To build the examples
 
 1. **[Install gRPC Java library SNAPSHOT locally, including code generation plugin](../COMPILING.md) (Only need this step for non-released versions, e.g. master HEAD).**
