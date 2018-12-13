@@ -162,7 +162,7 @@ func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, defe
 	}
 	cc, err = grpc.Dial(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		defer rcleanup()
+		rcleanup()
 		return nil, nil, nil, fmt.Errorf("dial failed due to err: %v", err)
 	}
 	return cc, r, func() { cc.Close(); rcleanup() }, nil
