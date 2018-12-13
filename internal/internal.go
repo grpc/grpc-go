@@ -29,6 +29,8 @@ var (
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
 	HealthCheckFunc func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
+	// BalancerUnregister is exported by package balancer to unregister a balancer.
+	BalancerUnregister func(name string)
 )
 
 const (
