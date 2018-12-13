@@ -296,7 +296,7 @@ func TestHealthCheckWithGoAway(t *testing.T) {
 	// the stream rpc will persist through goaway event.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -456,7 +456,7 @@ func TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	// the stream rpc will persist through goaway event.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}

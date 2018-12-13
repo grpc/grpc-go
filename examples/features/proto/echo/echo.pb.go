@@ -23,6 +23,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+// EchoRequest is the request for echo.
 type EchoRequest struct {
 	Message              string   `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -34,7 +35,7 @@ func (m *EchoRequest) Reset()         { *m = EchoRequest{} }
 func (m *EchoRequest) String() string { return proto.CompactTextString(m) }
 func (*EchoRequest) ProtoMessage()    {}
 func (*EchoRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_echo_1650ab141b9ec5a9, []int{0}
+	return fileDescriptor_echo_9d6886b3223721ca, []int{0}
 }
 func (m *EchoRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EchoRequest.Unmarshal(m, b)
@@ -61,6 +62,7 @@ func (m *EchoRequest) GetMessage() string {
 	return ""
 }
 
+// EchoResponse is the response for echo.
 type EchoResponse struct {
 	Message              string   `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -72,7 +74,7 @@ func (m *EchoResponse) Reset()         { *m = EchoResponse{} }
 func (m *EchoResponse) String() string { return proto.CompactTextString(m) }
 func (*EchoResponse) ProtoMessage()    {}
 func (*EchoResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_echo_1650ab141b9ec5a9, []int{1}
+	return fileDescriptor_echo_9d6886b3223721ca, []int{1}
 }
 func (m *EchoResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EchoResponse.Unmarshal(m, b)
@@ -116,9 +118,13 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type EchoClient interface {
+	// UnaryEcho is unary echo.
 	UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error)
+	// ServerStreamingEcho is server side streaming.
 	ServerStreamingEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Echo_ServerStreamingEchoClient, error)
+	// ClientStreamingEcho is client side streaming.
 	ClientStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_ClientStreamingEchoClient, error)
+	// BidirectionalStreamingEcho is bidi streaming.
 	BidirectionalStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_BidirectionalStreamingEchoClient, error)
 }
 
@@ -238,9 +244,13 @@ func (x *echoBidirectionalStreamingEchoClient) Recv() (*EchoResponse, error) {
 
 // EchoServer is the server API for Echo service.
 type EchoServer interface {
+	// UnaryEcho is unary echo.
 	UnaryEcho(context.Context, *EchoRequest) (*EchoResponse, error)
+	// ServerStreamingEcho is server side streaming.
 	ServerStreamingEcho(*EchoRequest, Echo_ServerStreamingEchoServer) error
+	// ClientStreamingEcho is client side streaming.
 	ClientStreamingEcho(Echo_ClientStreamingEchoServer) error
+	// BidirectionalStreamingEcho is bidi streaming.
 	BidirectionalStreamingEcho(Echo_BidirectionalStreamingEchoServer) error
 }
 
@@ -369,9 +379,9 @@ var _Echo_serviceDesc = grpc.ServiceDesc{
 	Metadata: "echo.proto",
 }
 
-func init() { proto.RegisterFile("echo.proto", fileDescriptor_echo_1650ab141b9ec5a9) }
+func init() { proto.RegisterFile("echo.proto", fileDescriptor_echo_9d6886b3223721ca) }
 
-var fileDescriptor_echo_1650ab141b9ec5a9 = []byte{
+var fileDescriptor_echo_9d6886b3223721ca = []byte{
 	// 234 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x92, 0xb1, 0x4b, 0x03, 0x31,
 	0x14, 0x87, 0x3d, 0x11, 0xa5, 0x4f, 0xa7, 0xb8, 0x94, 0x2e, 0x96, 0x5b, 0xbc, 0x29, 0x29, 0x16,
