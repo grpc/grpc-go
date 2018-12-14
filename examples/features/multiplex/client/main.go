@@ -16,10 +16,12 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -29,9 +31,7 @@ import (
 	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
-const (
-	address = "localhost:50051"
-)
+var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
 // callSayHello calls SayHello on c with the given name, and prints the
 // response.
@@ -56,8 +56,9 @@ func callUnaryEcho(client ecpb.EchoClient, message string) {
 }
 
 func main() {
+	flag.Parse()
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
