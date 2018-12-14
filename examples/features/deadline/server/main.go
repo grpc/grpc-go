@@ -35,10 +35,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var port = flag.Int("port", 50052, "port number")
+
 // server is used to implement EchoServer.
 type server struct {
-	client  pb.EchoClient
-	ccClose func() error
+	client pb.EchoClient
+	cc     *grpc.ClientConn
 }
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
@@ -93,7 +95,7 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 }
 
 func (s *server) Close() {
-	defer s.ccClose()
+	s.cc.Close()
 }
 
 func newEchoServer(port int) *server {
@@ -102,11 +104,10 @@ func newEchoServer(port int) *server {
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
-	return &server{client: pb.NewEchoClient(cc), ccClose: cc.Close}
+	return &server{client: pb.NewEchoClient(cc), cc: cc}
 }
 
 func main() {
-	port := flag.Int("port", 50052, "port number")
 	flag.Parse()
 
 	address := fmt.Sprintf(":%v", *port)
