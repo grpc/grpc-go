@@ -52,6 +52,8 @@ func recvMessage(stream pb.Echo_BidirectionalStreamingEchoClient, wantErrCode co
 }
 
 func main() {
+	flag.Parse()
+
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
