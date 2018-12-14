@@ -98,8 +98,8 @@ func (s *server) Close() {
 	s.cc.Close()
 }
 
-func newEchoServer(port int) *server {
-	target := fmt.Sprintf("localhost:%v", port)
+func newEchoServer() *server {
+	target := fmt.Sprintf("localhost:%v", *port)
 	cc, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
@@ -116,7 +116,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	echoServer := newEchoServer(*port)
+	echoServer := newEchoServer()
 	defer echoServer.Close()
 
 	grpcServer := grpc.NewServer()
