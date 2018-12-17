@@ -285,7 +285,8 @@ func TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 				defer conn.Close()
 			}
 		}()
-		getMinConnectTimeout = func() time.Duration { return time.Second / 4 }
+		cleanup := setMinConnectTimeout(time.Second / 4)
+		defer cleanup()
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock(), withBackoff(noBackoff{}))
@@ -331,7 +332,8 @@ func TestDialWaitsForServerSettingsViaEnvAndFails(t *testing.T) {
 			defer conn.Close()
 		}
 	}()
-	getMinConnectTimeout = func() time.Duration { return time.Second / 4 }
+	cleanup := setMinConnectTimeout(time.Second / 4)
+	defer cleanup()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock(), withBackoff(noBackoff{}))
@@ -404,12 +406,9 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	// 2. After minConnectTimeout(500 ms here), client disconnects and retries.
 	// 3. The new server sends its preface.
 	// 4. Client doesn't kill the connection this time.
-	mctBkp := getMinConnectTimeout()
-	defer func() {
-		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
-	}()
 	defer leakcheck.Check(t)
-	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(time.Millisecond)*500)
+	cleanup := setMinConnectTimeout(time.Millisecond * 500)
+	defer cleanup()
 
 	// Test with "on" and "hybrid".
 	for _, setting := range reqHSBeforeSuccess {
@@ -913,7 +912,7 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	time.Sleep(time.Second)
+	time.Sleep(1 * time.Second)
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	v := cc.mkp.Time
@@ -944,7 +943,7 @@ func TestDisableServiceConfigOption(t *testing.T) {
         }
     ]
 }`)
-	time.Sleep(time.Second)
+	time.Sleep(1 * time.Second)
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady != nil {
 		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %v", m)
@@ -1019,4 +1018,172 @@ func TestBackoffCancel(t *testing.T) {
 	<-dialStrCh
 	cc.Close()
 	// Should not leak. May need -count 5000 to exercise.
+}
+
+// UpdateAddresses should cause the next reconnect to begin from the top of the
+// list if the connection is not READY.
+func TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
+	cleanup := setMinConnectTimeout(time.Hour)
+	defer cleanup()
+
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis1.Close()
+
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis2.Close()
+
+	lis3, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis3.Close()
+
+	closeServer2 := make(chan struct{})
+	server1ContactedFirstTime := make(chan struct{})
+	server1ContactedSecondTime := make(chan struct{})
+	server2ContactedFirstTime := make(chan struct{})
+	server2ContactedSecondTime := make(chan struct{})
+	server3Contacted := make(chan struct{})
+
+	stateNotifications := make(chan connectivity.State, 100)
+	testBalancer.ResetNotifier(stateNotifications)
+
+	// Launch server 1.
+	go func() {
+		// First, let's allow the initial connection to go READY. We need to do
+		// this because tryUpdateAddrs only works after there's some non-nil
+		// address on the ac, and curAddress is only set after READY.
+		conn1, err := lis1.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		go keepReading(conn1)
+
+		framer := http2.NewFramer(conn1, conn1)
+		if err := framer.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("Error while writing settings frame. %v", err)
+			return
+		}
+
+		// Wait for the transport to become ready.
+		for s := range stateNotifications {
+			if s == connectivity.Ready {
+				break
+			}
+		}
+
+		// Once it's ready, curAddress has been set. So let's close this
+		// connection prompting the first reconnect cycle.
+		conn1.Close()
+
+		// Accept and immediately close, causing it to go to server2.
+		conn2, err := lis1.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		close(server1ContactedFirstTime)
+		conn2.Close()
+
+		// Hopefully it picks this server after tryUpdateAddrs.
+		lis1.Accept()
+		close(server1ContactedSecondTime)
+	}()
+	// Launch server 2.
+	go func() {
+		// Accept and then hang waiting for the test call tryUpdateAddrs and
+		// then signal to this server to close. After this server closes, it
+		// should start from the top instead of trying server2 or continuing
+		// to server3.
+		conn, err := lis2.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		close(server2ContactedFirstTime)
+		<-closeServer2
+		conn.Close()
+
+		// After tryUpdateAddrs, it should NOT try server2.
+		lis2.Accept()
+		close(server2ContactedSecondTime)
+	}()
+	// Launch server 3.
+	go func() {
+		// After tryUpdateAddrs, it should NOT try server3. (or any other time)
+		lis3.Accept()
+		close(server3Contacted)
+	}()
+
+	addrsList := []resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+		{Addr: lis3.Addr().String()},
+	}
+	rb := manual.NewBuilderWithScheme("whatever")
+	rb.InitialAddrs(addrsList)
+
+	client, err := Dial("this-gets-overwritten", WithInsecure(), WithWaitForHandshake(), withResolverBuilder(rb), withBackoff(noBackoff{}), WithBalancerName(stateRecordingBalancerName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	timeout := time.After(5 * time.Second)
+
+	// Wait for server1 to be contacted (which will immediately fail), then
+	// server2 (which will hang waiting for our signal).
+	select {
+	case <-server1ContactedFirstTime:
+	case <-timeout:
+		t.Fatal("timed out waiting for server1 to be contacted")
+	}
+	select {
+	case <-server2ContactedFirstTime:
+	case <-timeout:
+		t.Fatal("timed out waiting for server2 to be contacted")
+	}
+
+	// Grab the addrConn and call tryUpdateAddrs.
+	var ac *addrConn
+	client.mu.Lock()
+	for clientAC := range client.conns {
+		ac = clientAC
+		break
+	}
+	client.mu.Unlock()
+
+	ac.acbw.UpdateAddresses(addrsList)
+
+	// We've called tryUpdateAddrs - now let's make server2 close the
+	// connection and check that it goes back to server1 instead of continuing
+	// to server3 or trying server2 again.
+	close(closeServer2)
+
+	select {
+	case <-server1ContactedSecondTime:
+	case <-server2ContactedSecondTime:
+		t.Fatal("server2 was contacted a second time, but it after tryUpdateAddrs it should have re-started the list and tried server1")
+	case <-server3Contacted:
+		t.Fatal("server3 was contacted, but after tryUpdateAddrs it should have re-started the list and tried server1")
+	case <-timeout:
+		t.Fatal("timed out waiting for any server to be contacted after tryUpdateAddrs")
+	}
+}
+
+// Set the minConnectTimeout. Be sure to defer cleanup!
+func setMinConnectTimeout(newMin time.Duration) (cleanup func()) {
+	mctBkp := getMinConnectTimeout()
+	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(newMin))
+	return func() {
+		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
+	}
 }

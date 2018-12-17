@@ -43,8 +43,9 @@ func init() {
 	balancer.Register(testBalancer)
 }
 
-// These tests use a pipeListener. This listener is similar to net.Listener except that it is unbuffered, so each read
-// and write will wait for the other side's corresponding write or read.
+// These tests use a pipeListener. This listener is similar to net.Listener
+// except that it is unbuffered, so each read and write will wait for the other
+// side's corresponding write or read.
 func TestStateTransitions_SingleAddress(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -201,7 +202,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 }
 
 // When a READY connection is closed, the client enters TRANSIENT FAILURE before CONNECTING.
-func TestStateTransition_ReadyToTransientFailure(t *testing.T) {
+func TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
 	defer leakcheck.Check(t)
 
 	want := []connectivity.State{
@@ -270,8 +271,8 @@ func TestStateTransition_ReadyToTransientFailure(t *testing.T) {
 	}
 }
 
-// When the first connection is closed, the client enters stays in CONNECTING until it tries the second
-// address (which succeeds, and then it enters READY).
+// When the first connection is closed, the client enters stays in CONNECTING
+// until it tries the second address (which succeeds, and then it enters READY).
 func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -366,8 +367,9 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	}
 }
 
-// When there are multiple addresses, and we enter READY on one of them, a later closure should cause
-// the client to enter TRANSIENT FAILURE before it re-enters CONNECTING.
+// When there are multiple addresses, and we enter READY on one of them, a
+// later closure should cause the client to enter TRANSIENT FAILURE before it
+// re-enters CONNECTING.
 func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -505,9 +507,10 @@ type noBackoff struct{}
 
 func (b noBackoff) Backoff(int) time.Duration { return time.Duration(0) }
 
-// Keep reading until something causes the connection to die (EOF, server closed, etc). Useful
-// as a tool for mindlessly keeping the connection healthy, since the client will error if
-// things like client prefaces are not accepted in a timely fashion.
+// Keep reading until something causes the connection to die (EOF, server
+// closed, etc). Useful as a tool for mindlessly keeping the connection
+// healthy, since the client will error if things like client prefaces are not
+// accepted in a timely fashion.
 func keepReading(conn net.Conn) {
 	buf := make([]byte, 1024)
 	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
