@@ -80,15 +80,16 @@ var allCompressionModes = []string{modeOn, modeOff, modeBoth}
 var allTraceModes = []string{modeOn, modeOff, modeBoth}
 
 const (
-	workloadsUnary     = "unary"
-	workloadsStreaming = "streaming"
-	workloadsAll       = "all"
+	workloadsUnary         = "unary"
+	workloadsStreaming     = "streaming"
+	workloadsUnconstrained = "unconstrained"
+	workloadsAll           = "all"
 )
 
-var allWorkloads = []string{workloadsUnary, workloadsStreaming, workloadsAll}
+var allWorkloads = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
 
 var (
-	runMode = []bool{true, true} // {runUnary, runStream}
+	runMode = []bool{true, true, true} // {runUnary, runStream}
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	ltc                    = []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
@@ -352,12 +353,19 @@ func init() {
 	case workloadsUnary:
 		runMode[0] = true
 		runMode[1] = false
+		runMode[2] = false
 	case workloadsStreaming:
 		runMode[0] = false
 		runMode[1] = true
+		runMode[2] = false
+	case workloadsUnconstrained:
+		runMode[0] = false
+		runMode[1] = false
+		runMode[2] = true
 	case workloadsAll:
 		runMode[0] = true
 		runMode[1] = true
+		runMode[2] = true
 	default:
 		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
@@ -516,11 +524,11 @@ func main() {
 			printThroughput(count, benchFeature.ReqSizeBytes, count, benchFeature.RespSizeBytes)
 			resultSlice = append(resultSlice, s.GetBenchmarkResults())
 			s.Clear()
-
+		}
+		if runMode[2] {
 			bm.ResponseSize = benchFeature.RespSizeBytes
 			requestCount, responseCount := unconstrainedStreamBenchmark(benchFeature, benchtime)
-
-			fmt.Println("Unconstrained Stream")
+			fmt.Printf("Unconstrained Stream-%v\n", benchFeature)
 			printThroughput(requestCount, benchFeature.ReqSizeBytes, responseCount, benchFeature.RespSizeBytes)
 		}
 		bm.AddOne(featuresPos, featuresNum)
