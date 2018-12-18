@@ -46,7 +46,7 @@ import javax.annotation.concurrent.GuardedBy;
  * A cronet-based {@link ConnectionClientTransport} implementation.
  */
 class CronetClientTransport implements ConnectionClientTransport {
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final InetSocketAddress address;
   private final String authority;
   private final String userAgent;
@@ -87,6 +87,7 @@ class CronetClientTransport implements ConnectionClientTransport {
       boolean alwaysUsePut,
       TransportTracer transportTracer) {
     this.address = Preconditions.checkNotNull(address, "address");
+    this.logId = InternalLogId.allocate(getClass(), address.toString());
     this.authority = authority;
     this.userAgent = GrpcUtil.getGrpcUserAgent("cronet", userAgent);
     this.maxMessageSize = maxMessageSize;

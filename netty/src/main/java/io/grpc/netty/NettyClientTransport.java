@@ -63,7 +63,7 @@ import javax.annotation.Nullable;
  * A Netty-based {@link ConnectionClientTransport} implementation.
  */
 class NettyClientTransport implements ConnectionClientTransport {
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final Map<ChannelOption<?>, ?> channelOptions;
   private final SocketAddress remoteAddress;
   private final Class<? extends Channel> channelType;
@@ -121,6 +121,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
     this.eagAttributes = Preconditions.checkNotNull(eagAttributes, "eagAttributes");
     this.localSocketPicker = Preconditions.checkNotNull(localSocketPicker, "localSocketPicker");
+    this.logId = InternalLogId.allocate(getClass(), remoteAddress.toString());
   }
 
   @Override

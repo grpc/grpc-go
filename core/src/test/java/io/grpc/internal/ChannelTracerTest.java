@@ -56,7 +56,7 @@ public class ChannelTracerTest {
       }
     };
 
-  private final InternalLogId logId = InternalLogId.allocate("test");
+  private final InternalLogId logId = InternalLogId.allocate("test", /*details=*/ null);
   private final String logPrefix = "[" + logId + "] ";
 
   @Before

@@ -1117,7 +1117,7 @@ public class InternalSubchannelTest {
 
   private void createInternalSubchannel(EquivalentAddressGroup ... addrs) {
     List<EquivalentAddressGroup> addressGroups = Arrays.asList(addrs);
-    InternalLogId logId = InternalLogId.allocate("Subchannel");
+    InternalLogId logId = InternalLogId.allocate("Subchannel", /*details=*/ null);
     internalSubchannel = new InternalSubchannel(addressGroups, AUTHORITY, USER_AGENT,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
         fakeClock.getStopwatchSupplier(), syncContext, mockInternalSubchannelCallback,

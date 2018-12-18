@@ -122,7 +122,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   static final Status SUBCHANNEL_SHUTDOWN_STATUS =
       Status.UNAVAILABLE.withDescription("Subchannel shutdown invoked");
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final String target;
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
@@ -532,6 +532,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       List<ClientInterceptor> interceptors,
       final TimeProvider timeProvider) {
     this.target = checkNotNull(builder.target, "target");
+    this.logId = InternalLogId.allocate("Channel", target);
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
@@ -1010,7 +1011,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       checkState(!terminated, "Channel is terminated");
       final SubchannelImpl subchannel = new SubchannelImpl(attrs);
       long subchannelCreationTime = timeProvider.currentTimeNanos();
-      InternalLogId subchannelLogId = InternalLogId.allocate("Subchannel");
+      InternalLogId subchannelLogId = InternalLogId.allocate("Subchannel", /*details=*/ null);
       ChannelTracer subchannelTracer =
           new ChannelTracer(
               subchannelLogId, maxTraceEvents, subchannelCreationTime,
@@ -1141,8 +1142,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
       // TODO(ejona): can we be even stricter? Like terminating?
       checkState(!terminated, "Channel is terminated");
       long oobChannelCreationTime = timeProvider.currentTimeNanos();
-      InternalLogId oobLogId = InternalLogId.allocate("OobChannel");
-      InternalLogId subchannelLogId = InternalLogId.allocate("Subchannel-OOB");
+      InternalLogId oobLogId = InternalLogId.allocate("OobChannel", /*details=*/ null);
+      InternalLogId subchannelLogId = InternalLogId.allocate("Subchannel-OOB", /*details=*/ null);
       ChannelTracer oobChannelTracer =
           new ChannelTracer(
               oobLogId, maxTraceEvents, oobChannelCreationTime,

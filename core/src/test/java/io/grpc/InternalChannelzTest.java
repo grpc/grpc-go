@@ -303,7 +303,7 @@ public final class InternalChannelzTest {
 
   private static <T> InternalInstrumented<T> create() {
     return new InternalInstrumented<T>() {
-      final InternalLogId id = InternalLogId.allocate("fake-tag");
+      final InternalLogId id = InternalLogId.allocate("fake-type", /*details=*/ null);
       @Override
       public ListenableFuture<T> getStats() {
         throw new UnsupportedOperationException();

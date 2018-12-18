@@ -183,7 +183,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     this.channelz = channelz;
     this.callsTracer = callsTracer;
     this.channelTracer = Preconditions.checkNotNull(channelTracer, "channelTracer");
-    this.logId = Preconditions.checkNotNull(logId, "logId");
+    this.logId = InternalLogId.allocate("Subchannel", authority);
     this.channelLogger = new ChannelLoggerImpl(channelTracer, timeProvider);
   }
 

@@ -41,7 +41,7 @@ import java.util.Collections;
 final class ChannelzTestHelper {
 
   static final class TestSocket implements InternalInstrumented<SocketStats> {
-    private final InternalLogId id = InternalLogId.allocate("socket");
+    private final InternalLogId id = InternalLogId.allocate("socket", /*details=*/ null);
     TransportStats transportStats = new TransportStats(
         /*streamsStarted=*/ 1,
         /*lastLocalStreamCreatedTimeNanos=*/ 2,
@@ -88,7 +88,7 @@ final class ChannelzTestHelper {
   }
 
   static final class TestListenSocket implements InternalInstrumented<SocketStats> {
-    private final InternalLogId id = InternalLogId.allocate("listensocket");
+    private final InternalLogId id = InternalLogId.allocate("listensocket", /*details=*/ null);
     SocketAddress listenAddress = new InetSocketAddress("10.0.0.1", 1234);
 
     @Override
@@ -118,7 +118,7 @@ final class ChannelzTestHelper {
   }
 
   static final class TestServer implements InternalInstrumented<ServerStats> {
-    private final InternalLogId id = InternalLogId.allocate("server");
+    private final InternalLogId id = InternalLogId.allocate("server", /*details=*/ null);
     ServerStats serverStats = new ServerStats(
         /*callsStarted=*/ 1,
         /*callsSucceeded=*/ 2,
@@ -147,7 +147,8 @@ final class ChannelzTestHelper {
   }
 
   static final class TestChannel implements InternalInstrumented<ChannelStats> {
-    private final InternalLogId id = InternalLogId.allocate("channel-or-subchannel");
+    private final InternalLogId id =
+        InternalLogId.allocate("channel-or-subchannel", /*details=*/ null);
 
     ChannelStats stats = new ChannelStats.Builder()
         .setTarget("sometarget")

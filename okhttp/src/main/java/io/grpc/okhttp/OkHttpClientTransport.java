@@ -147,7 +147,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private AsyncFrameWriter frameWriter;
   private OutboundFlowController outboundFlow;
   private final Object lock = new Object();
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   @GuardedBy("lock")
   private int nextStreamId;
   @GuardedBy("lock")
@@ -244,6 +244,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
     this.maxInboundMetadataSize = maxInboundMetadataSize;
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
+    this.logId = InternalLogId.allocate(getClass(), address.toString());
     initTransportTracer();
   }
 
@@ -285,6 +286,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
     this.maxInboundMetadataSize = Integer.MAX_VALUE;
     this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
+    this.logId = InternalLogId.allocate(getClass(), String.valueOf(socket.getInetAddress()));
     initTransportTracer();
   }
 

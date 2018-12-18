@@ -49,7 +49,9 @@ import javax.annotation.concurrent.GuardedBy;
  * thus the delayed transport stops owning the stream.
  */
 final class DelayedClientTransport implements ManagedClientTransport {
-  private final InternalLogId lodId = InternalLogId.allocate(getClass().getName());
+  // lazily allocated, since it is infrequently used.
+  private final InternalLogId logId =
+      InternalLogId.allocate(DelayedClientTransport.class, /*details=*/ null);
 
   private final Object lock = new Object();
 
@@ -338,10 +340,9 @@ final class DelayedClientTransport implements ManagedClientTransport {
     syncContext.drain();
   }
 
-  // TODO(carl-mastrangelo): remove this once the Subchannel change is in.
   @Override
   public InternalLogId getLogId() {
-    return lodId;
+    return logId;
   }
 
   private class PendingStream extends DelayedStream {

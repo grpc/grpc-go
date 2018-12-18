@@ -39,6 +39,7 @@ import javax.annotation.Nullable;
  * or round-robin balancer.
  */
 class GrpclbLoadBalancer extends LoadBalancer {
+
   private final SubchannelPool subchannelPool;
 
   // All mutable states in this class are mutated ONLY from Channel Executor

@@ -1380,7 +1380,7 @@ public class ServerImplTest {
 
   private class SimpleServerTransport implements ServerTransport {
     ServerTransportListener listener;
-    InternalLogId id = InternalLogId.allocate(getClass().getName());
+    InternalLogId id = InternalLogId.allocate(getClass(), /*details=*/ null);
 
     @Override
     public void shutdown() {

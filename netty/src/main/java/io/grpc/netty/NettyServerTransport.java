@@ -37,6 +37,7 @@ import io.netty.channel.ChannelPromise;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
@@ -56,7 +57,7 @@ class NettyServerTransport implements ServerTransport {
       "An existing connection was forcibly closed by the remote host",
       "An established connection was aborted by the software in your host machine");
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final Channel channel;
   private final ChannelPromise channelUnused;
   private final ProtocolNegotiator protocolNegotiator;
@@ -112,6 +113,8 @@ class NettyServerTransport implements ServerTransport {
     this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
     this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
+    SocketAddress remote = channel.remoteAddress();
+    this.logId = InternalLogId.allocate(getClass(), remote != null ? remote.toString() : null);
   }
 
   public void start(ServerTransportListener listener) {

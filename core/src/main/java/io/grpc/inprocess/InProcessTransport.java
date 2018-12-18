@@ -73,7 +73,7 @@ import javax.annotation.concurrent.ThreadSafe;
 final class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   private static final Logger log = Logger.getLogger(InProcessTransport.class.getName());
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final String name;
   private final int clientMaxInboundMetadataSize;
   private final String authority;
@@ -117,6 +117,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     this.clientMaxInboundMetadataSize = maxInboundMetadataSize;
     this.authority = authority;
     this.userAgent = GrpcUtil.getGrpcUserAgent("inprocess", userAgent);
+    logId = InternalLogId.allocate(getClass(), name);
   }
 
   @CheckReturnValue

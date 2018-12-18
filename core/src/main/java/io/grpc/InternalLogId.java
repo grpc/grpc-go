@@ -16,7 +16,11 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.Nullable;
 
 /**
  * An internal class. Do not use.
@@ -25,38 +29,79 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Internal
 public final class InternalLogId {
+
   private static final AtomicLong idAlloc = new AtomicLong();
 
   /**
-   * @param tag a loggable tag associated with this tag. The ID that is allocated is guaranteed
-   *            to be unique and increasing, irrespective of the tag.
+   * @param type the "Type" to be used when logging this id.   The short name of this class will be
+   *     used, or else a default if the class is anonymous.
+   * @param details a short, human readable string that describes the object the id is attached to.
+   *     Typically this will be an address or target.
    */
-  public static InternalLogId allocate(String tag) {
-    return new InternalLogId(tag, getNextId());
+  public static InternalLogId allocate(Class<?> type, @Nullable String details) {
+    return allocate(getClassName(type), details);
+  }
+
+  /**
+   * @param typeName the "Type" to be used when logging this id.
+   * @param details a short, human readable string that describes the object the id is attached to.
+   *     Typically this will be an address or target.
+   */
+  public static InternalLogId allocate(String typeName, @Nullable String details) {
+    return new InternalLogId(typeName, details, getNextId());
   }
 
   static long getNextId() {
     return idAlloc.incrementAndGet();
   }
 
-  private final String tag;
+  private final String typeName;
+  private final @Nullable String details;
   private final long id;
 
-  protected InternalLogId(String tag, long id) {
-    this.tag = tag;
+  InternalLogId(String typeName, String details, long id) {
+    checkNotNull(typeName, "typeName");
+    checkArgument(!typeName.isEmpty(), "empty type");
+    this.typeName = typeName;
+    this.details = details;
     this.id = id;
+  }
+
+  public String getTypeName() {
+    return typeName;
+  }
+
+  @Nullable
+  public String getDetails() {
+    return details;
   }
 
   public long getId() {
     return id;
   }
 
-  public String getTag() {
-    return tag;
-  }
-
   @Override
   public String toString() {
-    return tag + "-" + id;
+    StringBuilder sb = new StringBuilder();
+    sb.append(shortName());
+    if (details != null) {
+      sb.append(": (");
+      sb.append(details);
+      sb.append(')');
+    }
+    return sb.toString();
+  }
+
+  private static String getClassName(Class<?> type) {
+    String className = checkNotNull(type, "type").getSimpleName();
+    if (!className.isEmpty()) {
+      return className;
+    }
+    // + 1 removes the separating '.'
+    return type.getName().substring(type.getPackage().getName().length() + 1);
+  }
+
+  public String shortName() {
+    return typeName + "<" + id + ">";
   }
 }

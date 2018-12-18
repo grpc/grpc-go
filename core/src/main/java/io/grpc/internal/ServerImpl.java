@@ -82,7 +82,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
   private static final Logger log = Logger.getLogger(ServerImpl.class.getName());
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final ObjectPool<? extends Executor> executorPool;
   /** Executor for application processing. Safe to read after {@link #start()}. */
   private Executor executor;
@@ -133,6 +133,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     this.fallbackRegistry =
         Preconditions.checkNotNull(builder.fallbackRegistry, "fallbackRegistry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
+    this.logId = InternalLogId.allocate("Server", String.valueOf(transportServer.getPort()));
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
     this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();

@@ -41,7 +41,7 @@ import org.junit.runners.JUnit4;
 public class ChannelLoggerImplTest {
   private static final Logger javaLogger = Logger.getLogger(ChannelLogger.class.getName());
   private final FakeClock clock = new FakeClock();
-  private final InternalLogId logId = InternalLogId.allocate("test");
+  private final InternalLogId logId = InternalLogId.allocate("test", /*details=*/ null);
   private final String logPrefix = "[" + logId + "] ";
   private final ArrayList<String> logs = new ArrayList<String>();
   private final Handler handler = new Handler() {

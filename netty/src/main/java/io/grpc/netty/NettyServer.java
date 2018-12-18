@@ -67,7 +67,7 @@ import javax.annotation.Nullable;
 class NettyServer implements InternalServer, InternalWithLogId {
   private static final Logger log = Logger.getLogger(InternalServer.class.getName());
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
   private final Map<ChannelOption<?>, ?> channelOptions;
@@ -133,6 +133,8 @@ class NettyServer implements InternalServer, InternalWithLogId {
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
     this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
     this.channelz = Preconditions.checkNotNull(channelz);
+    this.logId =
+        InternalLogId.allocate(getClass(), address != null ? address.toString() : "No address");
   }
 
   @Override
@@ -343,11 +345,12 @@ class NettyServer implements InternalServer, InternalWithLogId {
    * A class that can answer channelz queries about the server listen sockets.
    */
   private static final class ListenSocket implements InternalInstrumented<SocketStats> {
-    private final InternalLogId id = InternalLogId.allocate(getClass().getName());
+    private final InternalLogId id;
     private final Channel ch;
 
     ListenSocket(Channel ch) {
       this.ch = ch;
+      this.id = InternalLogId.allocate(getClass(), String.valueOf(ch.localAddress()));
     }
 
     @Override

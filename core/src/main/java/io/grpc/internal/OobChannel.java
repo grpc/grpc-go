@@ -69,7 +69,7 @@ final class OobChannel extends ManagedChannel implements InternalInstrumented<Ch
   private AbstractSubchannel subchannelImpl;
   private SubchannelPicker subchannelPicker;
 
-  private final InternalLogId logId = InternalLogId.allocate(getClass().getName());
+  private final InternalLogId logId;
   private final String authority;
   private final DelayedClientTransport delayedTransport;
   private final InternalChannelz channelz;
@@ -104,6 +104,7 @@ final class OobChannel extends ManagedChannel implements InternalInstrumented<Ch
       CallTracer callsTracer, ChannelTracer channelTracer, InternalChannelz channelz,
       TimeProvider timeProvider) {
     this.authority = checkNotNull(authority, "authority");
+    this.logId = InternalLogId.allocate(getClass(), authority);
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
     this.deadlineCancellationExecutor = checkNotNull(

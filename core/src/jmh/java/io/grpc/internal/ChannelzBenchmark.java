@@ -132,7 +132,7 @@ public class ChannelzBenchmark {
 
   private static <T> InternalInstrumented<T> create() {
     return new InternalInstrumented<T>() {
-      final InternalLogId id = InternalLogId.allocate("fake-tag");
+      final InternalLogId id = InternalLogId.allocate(getClass(), "fake-tag");
 
       @Override
       public ListenableFuture<T> getStats() {
