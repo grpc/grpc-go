@@ -39,9 +39,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// ResponseSize is the size of the response message for unconstrained streaming benchmark
-var ResponseSize int
-
 // AddOne add 1 to the features slice
 func AddOne(features []int, featuresMaxPosition []int) {
 	for i := len(features) - 1; i >= 0; i-- {
@@ -110,6 +107,21 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 
 func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
 	in := new(testpb.SimpleRequest)
+	// Receive a message to learn response type and size.
+	err := stream.(grpc.ServerStream).RecvMsg(in)
+	if err == io.EOF {
+		// read done.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	response := &testpb.SimpleResponse{
+		Payload: new(testpb.Payload),
+	}
+	setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
+
 	go func() {
 		for {
 			if err := stream.(grpc.ServerStream).RecvMsg(in); err != nil {
@@ -117,11 +129,6 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 			}
 		}
 	}()
-
-	response := &testpb.SimpleResponse{
-		Payload: new(testpb.Payload),
-	}
-	setPayload(response.Payload, testpb.PayloadType_COMPRESSABLE, ResponseSize)
 
 	go func() {
 		for {
