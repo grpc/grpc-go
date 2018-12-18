@@ -119,7 +119,7 @@ If you prefer to use Bazel:
 (With Bazel v0.8.0 or above.)
 $ bazel build :hello-world-tls-server :hello-world-tls-client
 $ # Run the server
-$ bazel-bin/hello-world-tls-server localhost 50440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem
+$ ../bazel-bin/hello-world-tls-server localhost 50440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem
 $ # In another terminal run the client
-$ bazel-bin/hello-world-tls-client localhost 50440 /tmp/sslcert/ca.crt
+$ ../bazel-bin/hello-world-tls-client localhost 50440 /tmp/sslcert/ca.crt
 ```
