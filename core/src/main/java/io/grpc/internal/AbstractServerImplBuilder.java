@@ -27,7 +27,6 @@ import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
-import io.grpc.Internal;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalNotifyOnServerBuild;
 import io.grpc.Server;
@@ -57,66 +56,38 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     throw new UnsupportedOperationException("Subclass failed to hide static factory");
   }
 
+  // defaults
   private static final ObjectPool<? extends Executor> DEFAULT_EXECUTOR_POOL =
       SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
-  private static final HandlerRegistry DEFAULT_FALLBACK_REGISTRY = new HandlerRegistry() {
-      @Override
-      public List<ServerServiceDefinition> getServices() {
-        return Collections.emptyList();
-      }
-
-      @Override
-      @Nullable
-      public ServerMethodDefinition<?, ?> lookupMethod(
-          String methodName, @Nullable String authority) {
-        return null;
-      }
-    };
+  private static final HandlerRegistry DEFAULT_FALLBACK_REGISTRY = new DefaultFallbackRegistry();
   private static final DecompressorRegistry DEFAULT_DECOMPRESSOR_REGISTRY =
       DecompressorRegistry.getDefaultInstance();
   private static final CompressorRegistry DEFAULT_COMPRESSOR_REGISTRY =
       CompressorRegistry.getDefaultInstance();
   private static final long DEFAULT_HANDSHAKE_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(120);
 
+  // mutable state
   final InternalHandlerRegistry.Builder registryBuilder =
       new InternalHandlerRegistry.Builder();
-
-  final List<ServerTransportFilter> transportFilters =
-      new ArrayList<>();
-
+  final List<ServerTransportFilter> transportFilters = new ArrayList<>();
   final List<ServerInterceptor> interceptors = new ArrayList<>();
-
-  private final List<InternalNotifyOnServerBuild> notifyOnBuildList =
-      new ArrayList<>();
-
-  private final List<ServerStreamTracer.Factory> streamTracerFactories =
-      new ArrayList<ServerStreamTracer.Factory>();
-
+  private final List<InternalNotifyOnServerBuild> notifyOnBuildList = new ArrayList<>();
+  private final List<ServerStreamTracer.Factory> streamTracerFactories = new ArrayList<>();
   HandlerRegistry fallbackRegistry = DEFAULT_FALLBACK_REGISTRY;
-
   ObjectPool<? extends Executor> executorPool = DEFAULT_EXECUTOR_POOL;
-
   DecompressorRegistry decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
-
   CompressorRegistry compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
-
   long handshakeTimeoutMillis = DEFAULT_HANDSHAKE_TIMEOUT_MILLIS;
-
-  @Nullable
-  private CensusStatsModule censusStatsOverride;
-
+  @Nullable private CensusStatsModule censusStatsOverride;
   private boolean statsEnabled = true;
   private boolean recordStartedRpcs = true;
   private boolean recordFinishedRpcs = true;
   private boolean recordRealTimeMetrics = false;
   private boolean tracingEnabled = true;
-
-  @Nullable
-  protected BinaryLog binlog;
-  protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
-
-  protected InternalChannelz channelz = InternalChannelz.instance();
-  protected CallTracer.Factory callTracerFactory = CallTracer.getDefaultFactory();
+  @Nullable BinaryLog binlog;
+  TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
+  InternalChannelz channelz = InternalChannelz.instance();
+  CallTracer.Factory callTracerFactory = CallTracer.getDefaultFactory();
 
   @Override
   public final T directExecutor() {
@@ -125,17 +96,13 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Override
   public final T executor(@Nullable Executor executor) {
-    if (executor != null) {
-      this.executorPool = new FixedObjectPool<Executor>(executor);
-    } else {
-      this.executorPool = DEFAULT_EXECUTOR_POOL;
-    }
+    this.executorPool = executor != null ? new FixedObjectPool<>(executor) : DEFAULT_EXECUTOR_POOL;
     return thisT();
   }
 
   @Override
   public final T addService(ServerServiceDefinition service) {
-    registryBuilder.addService(service);
+    registryBuilder.addService(checkNotNull(service, "service"));
     return thisT();
   }
 
@@ -144,7 +111,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     if (bindableService instanceof InternalNotifyOnServerBuild) {
       notifyOnBuildList.add((InternalNotifyOnServerBuild) bindableService);
     }
-    return addService(bindableService.bindService());
+    return addService(checkNotNull(bindableService, "bindableService").bindService());
   }
 
   @Override
@@ -155,7 +122,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Override
   public final T intercept(ServerInterceptor interceptor) {
-    interceptors.add(interceptor);
+    interceptors.add(checkNotNull(interceptor, "interceptor"));
     return thisT();
   }
 
@@ -166,44 +133,32 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
-  public final T fallbackHandlerRegistry(HandlerRegistry registry) {
-    if (registry != null) {
-      this.fallbackRegistry = registry;
-    } else {
-      this.fallbackRegistry = DEFAULT_FALLBACK_REGISTRY;
-    }
+  public final T fallbackHandlerRegistry(@Nullable HandlerRegistry registry) {
+    this.fallbackRegistry = registry != null ? registry : DEFAULT_FALLBACK_REGISTRY;
     return thisT();
   }
 
   @Override
-  public final T decompressorRegistry(DecompressorRegistry registry) {
-    if (registry != null) {
-      decompressorRegistry = registry;
-    } else {
-      decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
-    }
+  public final T decompressorRegistry(@Nullable DecompressorRegistry registry) {
+    this.decompressorRegistry = registry != null ? registry : DEFAULT_DECOMPRESSOR_REGISTRY;
     return thisT();
   }
 
   @Override
-  public final T compressorRegistry(CompressorRegistry registry) {
-    if (registry != null) {
-      compressorRegistry = registry;
-    } else {
-      compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
-    }
+  public final T compressorRegistry(@Nullable CompressorRegistry registry) {
+    this.compressorRegistry = registry != null ? registry : DEFAULT_COMPRESSOR_REGISTRY;
     return thisT();
   }
 
   @Override
   public final T handshakeTimeout(long timeout, TimeUnit unit) {
     checkArgument(timeout > 0, "handshake timeout is %s, but must be positive", timeout);
-    handshakeTimeoutMillis = unit.toMillis(timeout);
+    this.handshakeTimeoutMillis = checkNotNull(unit, "unit").toMillis(timeout);
     return thisT();
   }
 
   @Override
-  public final T setBinaryLog(BinaryLog binaryLog) {
+  public final T setBinaryLog(@Nullable BinaryLog binaryLog) {
     this.binlog = binaryLog;
     return thisT();
   }
@@ -212,8 +167,14 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    * Override the default stats implementation.
    */
   @VisibleForTesting
-  protected T overrideCensusStatsModule(CensusStatsModule censusStats) {
+  protected final T overrideCensusStatsModule(@Nullable CensusStatsModule censusStats) {
     this.censusStatsOverride = censusStats;
+    return thisT();
+  }
+
+  @VisibleForTesting
+  public final T setTransportTracerFactory(TransportTracer.Factory transportTracerFactory) {
+    this.transportTracerFactory = transportTracerFactory;
     return thisT();
   }
 
@@ -221,7 +182,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    * Disable or enable stats features.  Enabled by default.
    */
   protected void setStatsEnabled(boolean value) {
-    statsEnabled = value;
+    this.statsEnabled = value;
   }
 
   /**
@@ -256,10 +217,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
-  public Server build() {
+  public final Server build() {
     ServerImpl server = new ServerImpl(
         this,
-        buildTransportServer(Collections.unmodifiableList(getTracerFactories())),
+        buildTransportServer(getTracerFactories()),
         Context.ROOT);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
       notifyTarget.notifyOnBuild(server);
@@ -268,11 +229,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @VisibleForTesting
-  final List<ServerStreamTracer.Factory> getTracerFactories() {
-    ArrayList<ServerStreamTracer.Factory> tracerFactories =
-        new ArrayList<ServerStreamTracer.Factory>();
+  final List<? extends ServerStreamTracer.Factory> getTracerFactories() {
+    ArrayList<ServerStreamTracer.Factory> tracerFactories = new ArrayList<>(streamTracerFactories);
     if (statsEnabled) {
-      CensusStatsModule censusStats = this.censusStatsOverride;
+      CensusStatsModule censusStats = censusStatsOverride;
       if (censusStats == null) {
         censusStats = new CensusStatsModule(
             GrpcUtil.STOPWATCH_SUPPLIER, true, recordStartedRpcs, recordFinishedRpcs,
@@ -286,8 +246,16 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
               Tracing.getPropagationComponent().getBinaryFormat());
       tracerFactories.add(censusTracing.getServerTracerFactory());
     }
-    tracerFactories.addAll(streamTracerFactories);
-    return tracerFactories;
+    tracerFactories.trimToSize();
+    return Collections.unmodifiableList(tracerFactories);
+  }
+
+  protected final InternalChannelz getChannelz() {
+    return channelz;
+  }
+
+  protected final TransportTracer.Factory getTransportTracerFactory() {
+    return transportTracerFactory;
   }
 
   /**
@@ -297,13 +265,26 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    *
    * @param streamTracerFactories an immutable list of stream tracer factories
    */
-  @Internal
   protected abstract io.grpc.internal.InternalServer buildTransportServer(
-      List<ServerStreamTracer.Factory> streamTracerFactories);
+      List<? extends ServerStreamTracer.Factory> streamTracerFactories);
 
   private T thisT() {
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
     return thisT;
+  }
+
+  private static final class DefaultFallbackRegistry extends HandlerRegistry {
+    @Override
+    public List<ServerServiceDefinition> getServices() {
+      return Collections.emptyList();
+    }
+
+    @Nullable
+    @Override
+    public ServerMethodDefinition<?, ?> lookupMethod(
+        String methodName, @Nullable String authority) {
+      return null;
+    }
   }
 }

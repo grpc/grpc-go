@@ -64,7 +64,9 @@ public final class StatsTraceContext {
    * Factory method for the server-side.
    */
   public static StatsTraceContext newServerContext(
-      List<ServerStreamTracer.Factory> factories, String fullMethodName, Metadata headers) {
+      List<? extends ServerStreamTracer.Factory> factories,
+      String fullMethodName,
+      Metadata headers) {
     if (factories.isEmpty()) {
       return NOOP;
     }

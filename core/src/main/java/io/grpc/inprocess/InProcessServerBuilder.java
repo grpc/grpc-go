@@ -146,7 +146,7 @@ public final class InProcessServerBuilder
 
   @Override
   protected InProcessServer buildTransportServer(
-      List<ServerStreamTracer.Factory> streamTracerFactories) {
+      List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
     return new InProcessServer(this, streamTracerFactories);
   }
 

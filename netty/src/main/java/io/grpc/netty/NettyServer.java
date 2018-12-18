@@ -90,7 +90,7 @@ class NettyServer implements InternalServer, InternalWithLogId {
   private final boolean permitKeepAliveWithoutCalls;
   private final long permitKeepAliveTimeInNanos;
   private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
-  private final List<ServerStreamTracer.Factory> streamTracerFactories;
+  private final List<? extends ServerStreamTracer.Factory> streamTracerFactories;
   private final TransportTracer.Factory transportTracerFactory;
   private final InternalChannelz channelz;
   // Only modified in event loop but safe to read any time. Set at startup and unset at shutdown.
@@ -102,7 +102,8 @@ class NettyServer implements InternalServer, InternalWithLogId {
       SocketAddress address, Class<? extends ServerChannel> channelType,
       Map<ChannelOption<?>, ?> channelOptions,
       @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
-      ProtocolNegotiator protocolNegotiator, List<ServerStreamTracer.Factory> streamTracerFactories,
+      ProtocolNegotiator protocolNegotiator,
+      List<? extends ServerStreamTracer.Factory> streamTracerFactories,
       TransportTracer.Factory transportTracerFactory,
       int maxStreamsPerConnection, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
       long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,

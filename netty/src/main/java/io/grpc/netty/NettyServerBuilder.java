@@ -22,7 +22,6 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
@@ -31,7 +30,6 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.grpc.internal.TransportTracer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
@@ -69,8 +67,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
   private final SocketAddress address;
   private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
-  private final Map<ChannelOption<?>, Object> channelOptions =
-      new HashMap<ChannelOption<?>, Object>();
+  private final Map<ChannelOption<?>, Object> channelOptions = new HashMap<>();
   @Nullable
   private EventLoopGroup bossEventLoopGroup;
   @Nullable
@@ -231,12 +228,6 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   @Override
   protected void setStatsRecordRealTimeMetrics(boolean value) {
     super.setStatsRecordRealTimeMetrics(value);
-  }
-
-  @VisibleForTesting
-  NettyServerBuilder setTransportTracerFactory(TransportTracer.Factory transportTracerFactory) {
-    this.transportTracerFactory = transportTracerFactory;
-    return this;
   }
 
   /**
@@ -446,7 +437,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   @Override
   @CheckReturnValue
   protected NettyServer buildTransportServer(
-      List<ServerStreamTracer.Factory> streamTracerFactories) {
+      List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
     ProtocolNegotiator negotiator = protocolNegotiator;
     if (negotiator == null) {
       negotiator = sslContext != null ? ProtocolNegotiators.serverTls(sslContext) :
@@ -455,12 +446,12 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
     return new NettyServer(
         address, channelType, channelOptions, bossEventLoopGroup, workerEventLoopGroup,
-        negotiator, streamTracerFactories, transportTracerFactory,
+        negotiator, streamTracerFactories, getTransportTracerFactory(),
         maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
-        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos, channelz);
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos, getChannelz());
   }
 
   @Override

@@ -1412,7 +1412,7 @@ public class ServerImplTest {
 
   private static class Builder extends AbstractServerImplBuilder<Builder> {
     @Override protected InternalServer buildTransportServer(
-        List<ServerStreamTracer.Factory> streamTracerFactories) {
+        List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
       throw new UnsupportedOperationException();
     }
 

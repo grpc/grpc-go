@@ -58,7 +58,7 @@ final class InProcessServer implements InternalServer {
 
   InProcessServer(
       InProcessServerBuilder builder,
-      List<ServerStreamTracer.Factory> streamTracerFactories) {
+      List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
     this.name = builder.name;
     this.schedulerPool = builder.schedulerPool;
     this.maxInboundMetadataSize = builder.maxInboundMetadataSize;
