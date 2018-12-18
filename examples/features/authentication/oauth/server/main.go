@@ -23,6 +23,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"strings"
@@ -30,7 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
@@ -41,8 +43,12 @@ var (
 	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
 )
 
+var port = flag.Int("port", 50051, "the port to serve on")
+
 func main() {
-	log.Println("server starting on port 8080...")
+	flag.Parse()
+	log.Printf("server starting on port %d...\n", *port)
+
 	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
@@ -56,8 +62,8 @@ func main() {
 		grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
 	}
 	s := grpc.NewServer(opts...)
-	pb.RegisterGreeterServer(s, &server{})
-	lis, err := net.Listen("tcp", ":8080")
+	ecpb.RegisterEchoServer(s, &ecServer{})
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -66,12 +72,19 @@ func main() {
 	}
 }
 
-// server is used to implement helloworld.GreeterServer.
-type server struct{}
+type ecServer struct{}
 
-// SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
+func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+	return &ecpb.EchoResponse{Message: req.Message}, nil
+}
+func (s *ecServer) ServerStreamingEcho(*ecpb.EchoRequest, ecpb.Echo_ServerStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
+}
+func (s *ecServer) ClientStreamingEcho(ecpb.Echo_ClientStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
+}
+func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
 // valid validates the authorization.
