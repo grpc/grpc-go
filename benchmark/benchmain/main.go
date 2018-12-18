@@ -534,7 +534,7 @@ func main() {
 			s.Clear()
 		}
 		if runMode[2] {
-			requestCount, responseCount := unconstrainedStreamBenchmark(benchFeature, 5*time.Second, benchtime)
+			requestCount, responseCount := unconstrainedStreamBenchmark(benchFeature, time.Second, benchtime)
 			fmt.Printf("Unconstrained Stream-%v\n", benchFeature)
 			printThroughput(requestCount, benchFeature.ReqSizeBytes, responseCount, benchFeature.RespSizeBytes)
 		}
