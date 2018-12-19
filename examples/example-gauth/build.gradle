@@ -1,0 +1,72 @@
+plugins {
+    // Provide convenience executables for trying out the examples.
+    id 'application'
+    // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier gradle versions
+    id 'com.google.protobuf' version '0.8.5'
+    // Generate IntelliJ IDEA's .idea & .iml project files
+    id 'idea'
+}
+
+repositories {
+    maven { // The google mirror is less flaky than mavenCentral()
+        url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
+    }
+    mavenLocal()
+}
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+// IMPORTANT: You probably want the non-SNAPSHOT version of gRPC. Make sure you
+// are looking at a tagged version of the example and not "master"!
+
+// Feel free to delete the comment at the next line. It is just for safely
+// updating the version in our release process.
+def grpcVersion = '1.18.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+def protobufVersion = '3.5.1'
+def protocVersion = '3.5.1-1'
+
+
+dependencies {
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "io.grpc:grpc-auth:${grpcVersion}"
+    compileOnly "javax.annotation:javax.annotation-api:1.2"
+    implementation "com.google.auth:google-auth-library-oauth2-http:0.9.0"
+    implementation "com.google.api.grpc:grpc-google-cloud-pubsub-v1:0.1.24"
+    runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
+}
+
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:${protocVersion}" }
+    plugins {
+        grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
+    }
+    generateProtoTasks {
+        all()*.plugins { grpc {} }
+    }
+}
+
+// Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
+}
+
+startScripts.enabled = false
+
+task googleAuthClient(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.examples.googleAuth.GoogleAuthClient'
+    applicationName = 'google-auth-client'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = startScripts.classpath
+}
+
+applicationDistribution.into('bin') {
+    from(googleAuthClient)
+    fileMode = 0755
+}
