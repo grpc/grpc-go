@@ -46,7 +46,10 @@ public final class CallOptions {
   // Although {@code CallOptions} is immutable, its fields are not final, so that we can initialize
   // them outside of constructor. Otherwise the constructor will have a potentially long list of
   // unnamed arguments, which is undesirable.
+  @Nullable
   private Deadline deadline;
+  
+  @Nullable
   private Executor executor;
 
   @Nullable
@@ -197,7 +200,7 @@ public final class CallOptions {
    * Returns a new {@code CallOptions} with {@code executor} to be used instead of the default
    * executor specified with {@link ManagedChannelBuilder#executor}.
    */
-  public CallOptions withExecutor(Executor executor) {
+  public CallOptions withExecutor(@Nullable Executor executor) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.executor = executor;
     return newOptions;
