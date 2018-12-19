@@ -16,48 +16,47 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
-const (
-	address = "localhost:50051"
-)
+var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
-// callSayHello calls SayHello on c with the given name, and prints the
-// response.
-func callSayHello(c pb.GreeterClient, name string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+func callUnaryEcho(client ecpb.EchoClient, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
-		log.Fatalf("client.SayHello(_) = _, %v", err)
+		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
 	}
-	fmt.Println("Greeting: ", r.Message)
+	fmt.Println("UnaryEcho: ", resp.Message)
 }
 
 func main() {
+	flag.Parse()
+
 	// Create alts based credential.
 	altsTC := alts.NewClientCreds(alts.DefaultClientOptions())
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(altsTC))
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(altsTC))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
-	fmt.Println("--- calling helloworld.Greeter/SayHello ---")
-	// Make a greeter client and send an RPC.
-	hwc := pb.NewGreeterClient(conn)
-	callSayHello(hwc, "world")
+	// Make a echo client and send an RPC.
+	rgc := ecpb.NewEchoClient(conn)
+	callUnaryEcho(rgc, "hello world")
 }

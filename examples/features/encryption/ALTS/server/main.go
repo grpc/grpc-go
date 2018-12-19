@@ -16,32 +16,47 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/status"
 )
 
-const (
-	port = ":50051"
-)
+var port = flag.Int("port", 50051, "the port to serve on")
 
-// hwServer is used to implement helloworld.GreeterServer.
-type hwServer struct{}
+type ecServer struct{}
 
-// SayHello implements helloworld.GreeterServer
-func (s *hwServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
+func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+	return &ecpb.EchoResponse{Message: req.Message}, nil
+}
+
+func (s *ecServer) ServerStreamingEcho(*ecpb.EchoRequest, ecpb.Echo_ServerStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
+}
+
+func (s *ecServer) ClientStreamingEcho(ecpb.Echo_ClientStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
+}
+
+func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	flag.Parse()
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -50,8 +65,8 @@ func main() {
 
 	s := grpc.NewServer(grpc.Creds(altsTC))
 
-	// Register Greeter on the server.
-	pb.RegisterGreeterServer(s, &hwServer{})
+	// Register EchoServer on the server.
+	ecpb.RegisterEchoServer(s, &ecServer{})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
