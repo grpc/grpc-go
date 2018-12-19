@@ -24,7 +24,6 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingChannelBuilder;
-import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -104,7 +103,7 @@ public final class GoogleDefaultChannelBuilder
               // Used the shared grpc channel to connecting to the ALTS handshaker service.
               // TODO: Release the channel if it is not used.
               // https://github.com/grpc/grpc-java/issues/4755.
-              ManagedChannel channel =
+              Channel channel =
                   SharedResourceHolder.get(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
               AltsClientOptions handshakerOptions =
                   new AltsClientOptions.Builder()

@@ -17,11 +17,11 @@
 package io.grpc.alts;
 
 import io.grpc.BindableService;
+import io.grpc.Channel;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
-import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -59,7 +59,7 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
   private static final Logger logger = Logger.getLogger(AltsServerBuilder.class.getName());
   private final NettyServerBuilder delegate;
-  private ObjectPool<ManagedChannel> handshakerChannelPool =
+  private ObjectPool<Channel> handshakerChannelPool =
       SharedResourcePool.forResource(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
   private boolean enableUntrustedAlts;
 
@@ -90,10 +90,10 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
 
   /** Sets a new handshaker service address for testing. */
   public AltsServerBuilder setHandshakerAddressForTesting(String handshakerAddress) {
-    // Instead of using the default shared channel to the handshaker service, create a fix object
-    // pool of handshaker service channel for testing.
-    handshakerChannelPool =
-        HandshakerServiceChannel.getHandshakerChannelPoolForTesting(handshakerAddress);
+    // Instead of using the default shared channel to the handshaker service, create a separate
+    // resource to the test address.
+    handshakerChannelPool = SharedResourcePool.forResource(
+        HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
     return this;
   }
 

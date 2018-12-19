@@ -56,7 +56,7 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
   private final NettyChannelBuilder delegate;
   private final ImmutableList.Builder<String> targetServiceAccountsBuilder =
       ImmutableList.builder();
-  private ObjectPool<ManagedChannel> handshakerChannelPool =
+  private ObjectPool<Channel> handshakerChannelPool =
       SharedResourcePool.forResource(HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL);
   private boolean enableUntrustedAlts;
 
@@ -102,10 +102,10 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
 
   /** Sets a new handshaker service address for testing. */
   public AltsChannelBuilder setHandshakerAddressForTesting(String handshakerAddress) {
-    // Instead of using the default shared channel to the handshaker service, create a fix object
-    // pool of handshaker service channel for testing.
-    handshakerChannelPool =
-        HandshakerServiceChannel.getHandshakerChannelPoolForTesting(handshakerAddress);
+    // Instead of using the default shared channel to the handshaker service, create a separate
+    // resource to the test address.
+    handshakerChannelPool = SharedResourcePool.forResource(
+        HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
     return this;
   }
 
