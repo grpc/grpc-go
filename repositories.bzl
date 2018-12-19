@@ -200,7 +200,7 @@ def com_google_re2j():
     native.maven_jar(
         name = "com_google_re2j",
         artifact = "com.google.re2j:re2j:1.2",
-        sha1 = "499d5e041f962fefd0f245a9325e8125608ebb54",
+        sha1 = "4361eed4abe6f84d982cbb26749825f285996dd2",
     )
 
 def com_google_truth_truth():
