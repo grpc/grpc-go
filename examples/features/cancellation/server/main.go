@@ -62,7 +62,6 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 		fmt.Printf("echoing message %q\n", in.Message)
 		stream.Send(&pb.EchoResponse{Message: in.Message})
 	}
-	return nil
 }
 
 func main() {
