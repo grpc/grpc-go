@@ -16,10 +16,13 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 
@@ -30,9 +33,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	port = ":50051"
-)
+var port = flag.Int("port", 50051, "the port to serve on")
 
 // hwServer is used to implement helloworld.GreeterServer.
 type hwServer struct{}
@@ -61,10 +62,13 @@ func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEc
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	flag.Parse()
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	fmt.Printf("server listening at %v\n", lis.Addr())
+
 	s := grpc.NewServer()
 
 	// Register Greeter on the server.
