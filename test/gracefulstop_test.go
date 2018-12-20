@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
-
 	"google.golang.org/grpc/internal/envconfig"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -52,6 +52,13 @@ func (d *delayListener) Accept() (net.Conn, error) {
 	default:
 		close(d.acceptCalled)
 		conn, err := d.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		framer := http2.NewFramer(conn, conn)
+		if err = framer.WriteSettings(http2.Setting{}); err != nil {
+			return nil, err
+		}
 		// Allow closing of listener only after accept.
 		// Note: Dial can return successfully, yet Accept
 		// might now have finished.
@@ -107,10 +114,14 @@ func (d *delayConn) Read(b []byte) (n int, err error) {
 }
 
 func (s) TestGracefulStop(t *testing.T) {
-	// Set default behavior and restore current setting after test.
+	// We need to turn off RequireHandshake because if it were on, it would
+	// block forever waiting to read the handshake, and the delayConn would
+	// never let it (the delay is intended to block until later in the test).
+	//
+	// Restore current setting after test.
 	old := envconfig.RequireHandshake
-	envconfig.RequireHandshake = envconfig.RequireHandshakeOff
 	defer func() { envconfig.RequireHandshake = old }()
+	envconfig.RequireHandshake = envconfig.RequireHandshakeOff
 
 	// This test ensures GracefulStop cannot race and break RPCs on new
 	// connections created after GracefulStop was called but before

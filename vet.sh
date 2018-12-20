@@ -119,5 +119,6 @@ google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/channelz_test.go:SA1019
 google.golang.org/grpc/test/end2end_test.go:SA1019
 google.golang.org/grpc/test/healthcheck_test.go:SA1019
+google.golang.org/grpc/clientconn.go:S1024
 ' ./...
 misspell -error .

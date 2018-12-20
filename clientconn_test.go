@@ -121,15 +121,6 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 var allReqHSSettings = []envconfig.RequireHandshakeSetting{
 	envconfig.RequireHandshakeOff,
 	envconfig.RequireHandshakeOn,
-	envconfig.RequireHandshakeHybrid,
-}
-var reqNoHSSettings = []envconfig.RequireHandshakeSetting{
-	envconfig.RequireHandshakeOff,
-	envconfig.RequireHandshakeHybrid,
-}
-var reqHSBeforeSuccess = []envconfig.RequireHandshakeSetting{
-	envconfig.RequireHandshakeOn,
-	envconfig.RequireHandshakeHybrid,
 }
 
 func (s) TestDialWaitsForServerSettings(t *testing.T) {
@@ -332,50 +323,46 @@ func (s) TestDialDoesNotWaitForServerSettings(t *testing.T) {
 	// Restore current setting after test.
 	old := envconfig.RequireHandshake
 	defer func() { envconfig.RequireHandshake = old }()
+	envconfig.RequireHandshake = envconfig.RequireHandshakeOff
 
-	// Test with "off" and "hybrid".
-	for _, setting := range reqNoHSSettings {
-		envconfig.RequireHandshake = setting
-		lis, err := net.Listen("tcp", "localhost:0")
-		if err != nil {
-			t.Fatalf("Error while listening. Err: %v", err)
-		}
-		defer lis.Close()
-		done := make(chan struct{})
-		dialDone := make(chan struct{})
-		go func() { // Launch the server.
-			defer func() {
-				close(done)
-			}()
-			conn, err := lis.Accept()
-			if err != nil {
-				t.Errorf("Error while accepting. Err: %v", err)
-				return
-			}
-			defer conn.Close()
-			<-dialDone // Close conn only after dial returns.
-		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock())
-
-		if err != nil {
-			t.Fatalf("DialContext returned err =%v; want nil", err)
-		}
-		defer client.Close()
-
-		if state := client.GetState(); state != connectivity.Ready {
-			t.Fatalf("client.GetState() = %v; want connectivity.Ready", state)
-		}
-		close(dialDone)
-		<-done
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
 	}
+	defer lis.Close()
+	done := make(chan struct{})
+	dialDone := make(chan struct{})
+	go func() { // Launch the server.
+		defer func() {
+			close(done)
+		}()
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+		defer conn.Close()
+		<-dialDone // Close conn only after dial returns.
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock())
+	if err != nil {
+		t.Fatalf("DialContext returned err =%v; want nil", err)
+	}
+	defer client.Close()
+
+	if state := client.GetState(); state != connectivity.Ready {
+		t.Fatalf("client.GetState() = %v; want connectivity.Ready", state)
+	}
+	close(dialDone)
 }
 
 func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	// Restore current setting after test.
 	old := envconfig.RequireHandshake
 	defer func() { envconfig.RequireHandshake = old }()
+	envconfig.RequireHandshake = envconfig.RequireHandshakeOn
 
 	// 1. Client connects to a server that doesn't send preface.
 	// 2. After minConnectTimeout(500 ms here), client disconnects and retries.
@@ -384,80 +371,75 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	cleanup := setMinConnectTimeout(time.Millisecond * 500)
 	defer cleanup()
 
-	// Test with "on" and "hybrid".
-	for _, setting := range reqHSBeforeSuccess {
-		envconfig.RequireHandshake = setting
-
-		lis, err := net.Listen("tcp", "localhost:0")
-		if err != nil {
-			t.Fatalf("Error while listening. Err: %v", err)
-		}
-		var (
-			conn2 net.Conn
-			over  uint32
-		)
-		defer func() {
-			lis.Close()
-			// conn2 shouldn't be closed until the client has
-			// observed a successful test.
-			if conn2 != nil {
-				conn2.Close()
-			}
-		}()
-		done := make(chan struct{})
-		accepted := make(chan struct{})
-		go func() { // Launch the server.
-			defer close(done)
-			conn1, err := lis.Accept()
-			if err != nil {
-				t.Errorf("Error while accepting. Err: %v", err)
-				return
-			}
-			defer conn1.Close()
-			// Don't send server settings and the client should close the connection and try again.
-			conn2, err = lis.Accept() // Accept a reconnection request from client.
-			if err != nil {
-				t.Errorf("Error while accepting. Err: %v", err)
-				return
-			}
-			close(accepted)
-			framer := http2.NewFramer(conn2, conn2)
-			if err = framer.WriteSettings(http2.Setting{}); err != nil {
-				t.Errorf("Error while writing settings. Err: %v", err)
-				return
-			}
-			b := make([]byte, 8)
-			for {
-				_, err = conn2.Read(b)
-				if err == nil {
-					continue
-				}
-				if atomic.LoadUint32(&over) == 1 {
-					// The connection stayed alive for the timer.
-					// Success.
-					return
-				}
-				t.Errorf("Unexpected error while reading. Err: %v, want timeout error", err)
-				break
-			}
-		}()
-		client, err := Dial(lis.Addr().String(), WithInsecure())
-		if err != nil {
-			t.Fatalf("Error while dialing. Err: %v", err)
-		}
-		// wait for connection to be accepted on the server.
-		timer := time.NewTimer(time.Second * 10)
-		select {
-		case <-accepted:
-		case <-timer.C:
-			t.Fatalf("Client didn't make another connection request in time.")
-		}
-		// Make sure the connection stays alive for sometime.
-		time.Sleep(time.Second)
-		atomic.StoreUint32(&over, 1)
-		client.Close()
-		<-done
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
 	}
+	var (
+		conn2 net.Conn
+		over  uint32
+	)
+	defer func() {
+		lis.Close()
+		// conn2 shouldn't be closed until the client has
+		// observed a successful test.
+		if conn2 != nil {
+			conn2.Close()
+		}
+	}()
+	done := make(chan struct{})
+	accepted := make(chan struct{})
+	go func() { // Launch the server.
+		defer close(done)
+		conn1, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+		defer conn1.Close()
+		// Don't send server settings and the client should close the connection and try again.
+		conn2, err = lis.Accept() // Accept a reconnection request from client.
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+		close(accepted)
+		framer := http2.NewFramer(conn2, conn2)
+		if err = framer.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("Error while writing settings. Err: %v", err)
+			return
+		}
+		b := make([]byte, 8)
+		for {
+			_, err = conn2.Read(b)
+			if err == nil {
+				continue
+			}
+			if atomic.LoadUint32(&over) == 1 {
+				// The connection stayed alive for the timer.
+				// Success.
+				return
+			}
+			t.Errorf("Unexpected error while reading. Err: %v, want timeout error", err)
+			break
+		}
+	}()
+	client, err := Dial(lis.Addr().String(), WithInsecure())
+	if err != nil {
+		t.Fatalf("Error while dialing. Err: %v", err)
+	}
+	// wait for connection to be accepted on the server.
+	timer := time.NewTimer(time.Second * 10)
+	select {
+	case <-accepted:
+	case <-timer.C:
+		t.Fatalf("Client didn't make another connection request in time.")
+	}
+	// Make sure the connection stays alive for sometime.
+	time.Sleep(time.Second)
+	atomic.StoreUint32(&over, 1)
+	client.Close()
+	<-done
 }
 
 func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
