@@ -47,6 +47,16 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   private TsiFrameProtector protector;
   private PendingWriteQueue pendingUnprotectedWrites;
+  private State state = State.HANDSHAKE_NOT_FINISHED;
+  private boolean closeInitiated = false;
+
+  @VisibleForTesting
+  enum State {
+    HANDSHAKE_NOT_FINISHED,
+    PROTECTED,
+    CLOSED,
+    HANDSHAKE_FAILED
+  }
 
   public TsiFrameHandler() {}
 
@@ -67,6 +77,8 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
       TsiHandshakeCompletionEvent tsiEvent = (TsiHandshakeCompletionEvent) event;
       if (tsiEvent.isSuccess()) {
         setProtector(tsiEvent.protector());
+      } else {
+        state = State.HANDSHAKE_FAILED;
       }
       // Ignore errors.  Another handler in the pipeline must handle TSI Errors.
     }
@@ -79,18 +91,23 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
     logger.finest("TsiFrameHandler protector set");
     checkState(this.protector == null);
     this.protector = checkNotNull(protector);
+    this.state = State.PROTECTED;
   }
 
   @Override
   protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-    checkState(protector != null, "Cannot read frames while the TSI handshake is in progress");
+    checkState(
+        state == State.PROTECTED,
+        "Cannot read frames while the TSI handshake is %s", state);
     protector.unprotect(in, out, ctx.alloc());
   }
 
   @Override
   public void write(ChannelHandlerContext ctx, Object message, ChannelPromise promise)
       throws Exception {
-    checkState(protector != null, "Cannot write frames while the TSI handshake is in progress");
+    checkState(
+        state == State.PROTECTED,
+        "Cannot write frames while the TSI handshake state is %s", state);
     ByteBuf msg = (ByteBuf) message;
     if (!msg.isReadable()) {
       // Nothing to encode.
@@ -104,8 +121,7 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
   }
 
   @Override
-  public void handlerRemoved0(ChannelHandlerContext ctx) {
-    logger.finest("TsiFrameHandler removed");
+  public void handlerRemoved0(ChannelHandlerContext ctx) throws Exception {
     if (!pendingUnprotectedWrites.isEmpty()) {
       pendingUnprotectedWrites.removeAndFailAll(
           new ChannelException("Pending write on removal of TSI handler"));
@@ -134,19 +150,37 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @Override
   public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) {
-    release();
+    doClose(ctx);
     ctx.disconnect(promise);
+  }
+
+  private void doClose(ChannelHandlerContext ctx) {
+    if (closeInitiated) {
+      return;
+    }
+    closeInitiated = true;
+    try {
+      // flush any remaining writes before close
+      if (!pendingUnprotectedWrites.isEmpty()) {
+        flush(ctx);
+      }
+    } catch (GeneralSecurityException e) {
+      logger.log(Level.FINE, "Ignoring error on flush before close", e);
+    } finally {
+      state = State.CLOSED;
+      release();
+    }
   }
 
   @Override
   public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
-    release();
+    doClose(ctx);
     ctx.close(promise);
   }
 
   @Override
   public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
-    release();
+    doClose(ctx);
     ctx.deregister(promise);
   }
 
@@ -157,7 +191,14 @@ public final class TsiFrameHandler extends ByteToMessageDecoder implements Chann
 
   @Override
   public void flush(final ChannelHandlerContext ctx) throws GeneralSecurityException {
-    checkState(protector != null, "Cannot write frames while the TSI handshake is in progress");
+    if (state == State.CLOSED || state == State.HANDSHAKE_FAILED) {
+      logger.fine(
+          String.format("FrameHandler is inactive(%s), channel id: %s",
+              state, ctx.channel().id().asShortText()));
+      return;
+    }
+    checkState(
+        state == State.PROTECTED, "Cannot write frames while the TSI handshake state is %s", state);
     final ProtectedPromise aggregatePromise =
         new ProtectedPromise(ctx.channel(), ctx.executor(), pendingUnprotectedWrites.size());
 
