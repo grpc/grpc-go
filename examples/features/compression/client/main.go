@@ -54,7 +54,7 @@ func main() {
 	res, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: msg}, grpc.UseCompressor(gzip.Name))
 	fmt.Printf("UnaryEcho call returned %q, %v\n", res.GetMessage(), err)
 	if err != nil || res.GetMessage() != msg {
-		log.Fatalf("error: want Message=%q, <nil>", res, err, msg)
+		log.Fatalf("Message=%q, err=%v; want Message=%q, err=<nil>", res.GetMessage(), err, msg)
 	}
 
 }
