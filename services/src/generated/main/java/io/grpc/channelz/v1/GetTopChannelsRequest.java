@@ -17,6 +17,7 @@ private static final long serialVersionUID = 0L;
   }
   private GetTopChannelsRequest() {
     startChannelId_ = 0L;
+    maxResults_ = 0L;
   }
 
   @java.lang.Override
@@ -55,6 +56,11 @@ private static final long serialVersionUID = 0L;
             startChannelId_ = input.readInt64();
             break;
           }
+          case 16: {
+
+            maxResults_ = input.readInt64();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -85,12 +91,30 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * start_channel_id indicates that only channels at or above this id should be
    * included in the results.
+   * To request the first page, this should be set to 0. To request
+   * subsequent pages, the client generates this value by adding 1 to
+   * the highest seen result ID.
    * </pre>
    *
    * <code>int64 start_channel_id = 1;</code>
    */
   public long getStartChannelId() {
     return startChannelId_;
+  }
+
+  public static final int MAX_RESULTS_FIELD_NUMBER = 2;
+  private long maxResults_;
+  /**
+   * <pre>
+   * If non-zero, the server will return a page of results containing
+   * at most this many items. If zero, the server will choose a
+   * reasonable page size.  Must never be negative.
+   * </pre>
+   *
+   * <code>int64 max_results = 2;</code>
+   */
+  public long getMaxResults() {
+    return maxResults_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -108,6 +132,9 @@ private static final long serialVersionUID = 0L;
     if (startChannelId_ != 0L) {
       output.writeInt64(1, startChannelId_);
     }
+    if (maxResults_ != 0L) {
+      output.writeInt64(2, maxResults_);
+    }
     unknownFields.writeTo(output);
   }
 
@@ -119,6 +146,10 @@ private static final long serialVersionUID = 0L;
     if (startChannelId_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt64Size(1, startChannelId_);
+    }
+    if (maxResults_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(2, maxResults_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -138,6 +169,8 @@ private static final long serialVersionUID = 0L;
     boolean result = true;
     result = result && (getStartChannelId()
         == other.getStartChannelId());
+    result = result && (getMaxResults()
+        == other.getMaxResults());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -152,6 +185,9 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + START_CHANNEL_ID_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getStartChannelId());
+    hash = (37 * hash) + MAX_RESULTS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getMaxResults());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -283,6 +319,8 @@ private static final long serialVersionUID = 0L;
       super.clear();
       startChannelId_ = 0L;
 
+      maxResults_ = 0L;
+
       return this;
     }
 
@@ -306,6 +344,7 @@ private static final long serialVersionUID = 0L;
     public io.grpc.channelz.v1.GetTopChannelsRequest buildPartial() {
       io.grpc.channelz.v1.GetTopChannelsRequest result = new io.grpc.channelz.v1.GetTopChannelsRequest(this);
       result.startChannelId_ = startChannelId_;
+      result.maxResults_ = maxResults_;
       onBuilt();
       return result;
     }
@@ -350,6 +389,9 @@ private static final long serialVersionUID = 0L;
       if (other.getStartChannelId() != 0L) {
         setStartChannelId(other.getStartChannelId());
       }
+      if (other.getMaxResults() != 0L) {
+        setMaxResults(other.getMaxResults());
+      }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
@@ -382,6 +424,9 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * start_channel_id indicates that only channels at or above this id should be
      * included in the results.
+     * To request the first page, this should be set to 0. To request
+     * subsequent pages, the client generates this value by adding 1 to
+     * the highest seen result ID.
      * </pre>
      *
      * <code>int64 start_channel_id = 1;</code>
@@ -393,6 +438,9 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * start_channel_id indicates that only channels at or above this id should be
      * included in the results.
+     * To request the first page, this should be set to 0. To request
+     * subsequent pages, the client generates this value by adding 1 to
+     * the highest seen result ID.
      * </pre>
      *
      * <code>int64 start_channel_id = 1;</code>
@@ -407,6 +455,9 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * start_channel_id indicates that only channels at or above this id should be
      * included in the results.
+     * To request the first page, this should be set to 0. To request
+     * subsequent pages, the client generates this value by adding 1 to
+     * the highest seen result ID.
      * </pre>
      *
      * <code>int64 start_channel_id = 1;</code>
@@ -414,6 +465,50 @@ private static final long serialVersionUID = 0L;
     public Builder clearStartChannelId() {
       
       startChannelId_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long maxResults_ ;
+    /**
+     * <pre>
+     * If non-zero, the server will return a page of results containing
+     * at most this many items. If zero, the server will choose a
+     * reasonable page size.  Must never be negative.
+     * </pre>
+     *
+     * <code>int64 max_results = 2;</code>
+     */
+    public long getMaxResults() {
+      return maxResults_;
+    }
+    /**
+     * <pre>
+     * If non-zero, the server will return a page of results containing
+     * at most this many items. If zero, the server will choose a
+     * reasonable page size.  Must never be negative.
+     * </pre>
+     *
+     * <code>int64 max_results = 2;</code>
+     */
+    public Builder setMaxResults(long value) {
+      
+      maxResults_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * If non-zero, the server will return a page of results containing
+     * at most this many items. If zero, the server will choose a
+     * reasonable page size.  Must never be negative.
+     * </pre>
+     *
+     * <code>int64 max_results = 2;</code>
+     */
+    public Builder clearMaxResults() {
+      
+      maxResults_ = 0L;
       onChanged();
       return this;
     }

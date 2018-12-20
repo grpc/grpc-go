@@ -9,10 +9,21 @@ public interface GetSocketRequestOrBuilder extends
 
   /**
    * <pre>
-   * socket_id is the the identifier of the specific socket to get.
+   * socket_id is the identifier of the specific socket to get.
    * </pre>
    *
    * <code>int64 socket_id = 1;</code>
    */
   long getSocketId();
+
+  /**
+   * <pre>
+   * If true, the response will contain only high level information
+   * that is inexpensive to obtain. Fields thay may be omitted are
+   * documented.
+   * </pre>
+   *
+   * <code>bool summary = 2;</code>
+   */
+  boolean getSummary();
 }

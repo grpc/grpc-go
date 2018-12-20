@@ -11,6 +11,7 @@ public interface GetServerSocketsResponseOrBuilder extends
    * <pre>
    * list of socket refs that the connection detail service knows about.  Sorted in
    * ascending socket_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketRef socket_ref = 1;</code>
@@ -21,6 +22,7 @@ public interface GetServerSocketsResponseOrBuilder extends
    * <pre>
    * list of socket refs that the connection detail service knows about.  Sorted in
    * ascending socket_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketRef socket_ref = 1;</code>
@@ -30,6 +32,7 @@ public interface GetServerSocketsResponseOrBuilder extends
    * <pre>
    * list of socket refs that the connection detail service knows about.  Sorted in
    * ascending socket_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketRef socket_ref = 1;</code>
@@ -39,6 +42,7 @@ public interface GetServerSocketsResponseOrBuilder extends
    * <pre>
    * list of socket refs that the connection detail service knows about.  Sorted in
    * ascending socket_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketRef socket_ref = 1;</code>
@@ -49,6 +53,7 @@ public interface GetServerSocketsResponseOrBuilder extends
    * <pre>
    * list of socket refs that the connection detail service knows about.  Sorted in
    * ascending socket_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketRef socket_ref = 1;</code>

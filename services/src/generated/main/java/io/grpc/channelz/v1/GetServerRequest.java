@@ -4,24 +4,19 @@
 package io.grpc.channelz.v1;
 
 /**
- * <pre>
- * SocketRef is a reference to a Socket.
- * </pre>
- *
- * Protobuf type {@code grpc.channelz.v1.SocketRef}
+ * Protobuf type {@code grpc.channelz.v1.GetServerRequest}
  */
-public  final class SocketRef extends
+public  final class GetServerRequest extends
     com.google.protobuf.GeneratedMessageV3 implements
-    // @@protoc_insertion_point(message_implements:grpc.channelz.v1.SocketRef)
-    SocketRefOrBuilder {
+    // @@protoc_insertion_point(message_implements:grpc.channelz.v1.GetServerRequest)
+    GetServerRequestOrBuilder {
 private static final long serialVersionUID = 0L;
-  // Use SocketRef.newBuilder() to construct.
-  private SocketRef(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+  // Use GetServerRequest.newBuilder() to construct.
+  private GetServerRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
-  private SocketRef() {
-    socketId_ = 0L;
-    name_ = "";
+  private GetServerRequest() {
+    serverId_ = 0L;
   }
 
   @java.lang.Override
@@ -29,7 +24,7 @@ private static final long serialVersionUID = 0L;
   getUnknownFields() {
     return this.unknownFields;
   }
-  private SocketRef(
+  private GetServerRequest(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -55,15 +50,9 @@ private static final long serialVersionUID = 0L;
             }
             break;
           }
-          case 24: {
+          case 8: {
 
-            socketId_ = input.readInt64();
-            break;
-          }
-          case 34: {
-            java.lang.String s = input.readStringRequireUtf8();
-
-            name_ = s;
+            serverId_ = input.readInt64();
             break;
           }
         }
@@ -80,69 +69,27 @@ private static final long serialVersionUID = 0L;
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_SocketRef_descriptor;
+    return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_GetServerRequest_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_SocketRef_fieldAccessorTable
+    return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_GetServerRequest_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
-            io.grpc.channelz.v1.SocketRef.class, io.grpc.channelz.v1.SocketRef.Builder.class);
+            io.grpc.channelz.v1.GetServerRequest.class, io.grpc.channelz.v1.GetServerRequest.Builder.class);
   }
 
-  public static final int SOCKET_ID_FIELD_NUMBER = 3;
-  private long socketId_;
+  public static final int SERVER_ID_FIELD_NUMBER = 1;
+  private long serverId_;
   /**
    * <pre>
-   * The globally unique id for this socket.  Must be a positive number.
+   * server_id is the identifier of the specific server to get.
    * </pre>
    *
-   * <code>int64 socket_id = 3;</code>
+   * <code>int64 server_id = 1;</code>
    */
-  public long getSocketId() {
-    return socketId_;
-  }
-
-  public static final int NAME_FIELD_NUMBER = 4;
-  private volatile java.lang.Object name_;
-  /**
-   * <pre>
-   * An optional name associated with the socket.
-   * </pre>
-   *
-   * <code>string name = 4;</code>
-   */
-  public java.lang.String getName() {
-    java.lang.Object ref = name_;
-    if (ref instanceof java.lang.String) {
-      return (java.lang.String) ref;
-    } else {
-      com.google.protobuf.ByteString bs = 
-          (com.google.protobuf.ByteString) ref;
-      java.lang.String s = bs.toStringUtf8();
-      name_ = s;
-      return s;
-    }
-  }
-  /**
-   * <pre>
-   * An optional name associated with the socket.
-   * </pre>
-   *
-   * <code>string name = 4;</code>
-   */
-  public com.google.protobuf.ByteString
-      getNameBytes() {
-    java.lang.Object ref = name_;
-    if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
-          com.google.protobuf.ByteString.copyFromUtf8(
-              (java.lang.String) ref);
-      name_ = b;
-      return b;
-    } else {
-      return (com.google.protobuf.ByteString) ref;
-    }
+  public long getServerId() {
+    return serverId_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -157,11 +104,8 @@ private static final long serialVersionUID = 0L;
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (socketId_ != 0L) {
-      output.writeInt64(3, socketId_);
-    }
-    if (!getNameBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 4, name_);
+    if (serverId_ != 0L) {
+      output.writeInt64(1, serverId_);
     }
     unknownFields.writeTo(output);
   }
@@ -171,12 +115,9 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (socketId_ != 0L) {
+    if (serverId_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(3, socketId_);
-    }
-    if (!getNameBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(4, name_);
+        .computeInt64Size(1, serverId_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -188,16 +129,14 @@ private static final long serialVersionUID = 0L;
     if (obj == this) {
      return true;
     }
-    if (!(obj instanceof io.grpc.channelz.v1.SocketRef)) {
+    if (!(obj instanceof io.grpc.channelz.v1.GetServerRequest)) {
       return super.equals(obj);
     }
-    io.grpc.channelz.v1.SocketRef other = (io.grpc.channelz.v1.SocketRef) obj;
+    io.grpc.channelz.v1.GetServerRequest other = (io.grpc.channelz.v1.GetServerRequest) obj;
 
     boolean result = true;
-    result = result && (getSocketId()
-        == other.getSocketId());
-    result = result && getName()
-        .equals(other.getName());
+    result = result && (getServerId()
+        == other.getServerId());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -209,79 +148,77 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + SOCKET_ID_FIELD_NUMBER;
+    hash = (37 * hash) + SERVER_ID_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getSocketId());
-    hash = (37 * hash) + NAME_FIELD_NUMBER;
-    hash = (53 * hash) + getName().hashCode();
+        getServerId());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
   }
 
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       java.nio.ByteBuffer data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       com.google.protobuf.ByteString data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(byte[] data)
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(byte[] data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       byte[] data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(java.io.InputStream input)
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
-  public static io.grpc.channelz.v1.SocketRef parseDelimitedFrom(java.io.InputStream input)
+  public static io.grpc.channelz.v1.GetServerRequest parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
-  public static io.grpc.channelz.v1.SocketRef parseDelimitedFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static io.grpc.channelz.v1.SocketRef parseFrom(
+  public static io.grpc.channelz.v1.GetServerRequest parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -293,7 +230,7 @@ private static final long serialVersionUID = 0L;
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
   }
-  public static Builder newBuilder(io.grpc.channelz.v1.SocketRef prototype) {
+  public static Builder newBuilder(io.grpc.channelz.v1.GetServerRequest prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
   public Builder toBuilder() {
@@ -308,29 +245,25 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
-   * <pre>
-   * SocketRef is a reference to a Socket.
-   * </pre>
-   *
-   * Protobuf type {@code grpc.channelz.v1.SocketRef}
+   * Protobuf type {@code grpc.channelz.v1.GetServerRequest}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:grpc.channelz.v1.SocketRef)
-      io.grpc.channelz.v1.SocketRefOrBuilder {
+      // @@protoc_insertion_point(builder_implements:grpc.channelz.v1.GetServerRequest)
+      io.grpc.channelz.v1.GetServerRequestOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_SocketRef_descriptor;
+      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_GetServerRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_SocketRef_fieldAccessorTable
+      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_GetServerRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.grpc.channelz.v1.SocketRef.class, io.grpc.channelz.v1.SocketRef.Builder.class);
+              io.grpc.channelz.v1.GetServerRequest.class, io.grpc.channelz.v1.GetServerRequest.Builder.class);
     }
 
-    // Construct using io.grpc.channelz.v1.SocketRef.newBuilder()
+    // Construct using io.grpc.channelz.v1.GetServerRequest.newBuilder()
     private Builder() {
       maybeForceBuilderInitialization();
     }
@@ -347,34 +280,31 @@ private static final long serialVersionUID = 0L;
     }
     public Builder clear() {
       super.clear();
-      socketId_ = 0L;
-
-      name_ = "";
+      serverId_ = 0L;
 
       return this;
     }
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_SocketRef_descriptor;
+      return io.grpc.channelz.v1.ChannelzProto.internal_static_grpc_channelz_v1_GetServerRequest_descriptor;
     }
 
-    public io.grpc.channelz.v1.SocketRef getDefaultInstanceForType() {
-      return io.grpc.channelz.v1.SocketRef.getDefaultInstance();
+    public io.grpc.channelz.v1.GetServerRequest getDefaultInstanceForType() {
+      return io.grpc.channelz.v1.GetServerRequest.getDefaultInstance();
     }
 
-    public io.grpc.channelz.v1.SocketRef build() {
-      io.grpc.channelz.v1.SocketRef result = buildPartial();
+    public io.grpc.channelz.v1.GetServerRequest build() {
+      io.grpc.channelz.v1.GetServerRequest result = buildPartial();
       if (!result.isInitialized()) {
         throw newUninitializedMessageException(result);
       }
       return result;
     }
 
-    public io.grpc.channelz.v1.SocketRef buildPartial() {
-      io.grpc.channelz.v1.SocketRef result = new io.grpc.channelz.v1.SocketRef(this);
-      result.socketId_ = socketId_;
-      result.name_ = name_;
+    public io.grpc.channelz.v1.GetServerRequest buildPartial() {
+      io.grpc.channelz.v1.GetServerRequest result = new io.grpc.channelz.v1.GetServerRequest(this);
+      result.serverId_ = serverId_;
       onBuilt();
       return result;
     }
@@ -406,22 +336,18 @@ private static final long serialVersionUID = 0L;
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
-      if (other instanceof io.grpc.channelz.v1.SocketRef) {
-        return mergeFrom((io.grpc.channelz.v1.SocketRef)other);
+      if (other instanceof io.grpc.channelz.v1.GetServerRequest) {
+        return mergeFrom((io.grpc.channelz.v1.GetServerRequest)other);
       } else {
         super.mergeFrom(other);
         return this;
       }
     }
 
-    public Builder mergeFrom(io.grpc.channelz.v1.SocketRef other) {
-      if (other == io.grpc.channelz.v1.SocketRef.getDefaultInstance()) return this;
-      if (other.getSocketId() != 0L) {
-        setSocketId(other.getSocketId());
-      }
-      if (!other.getName().isEmpty()) {
-        name_ = other.name_;
-        onChanged();
+    public Builder mergeFrom(io.grpc.channelz.v1.GetServerRequest other) {
+      if (other == io.grpc.channelz.v1.GetServerRequest.getDefaultInstance()) return this;
+      if (other.getServerId() != 0L) {
+        setServerId(other.getServerId());
       }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
@@ -436,11 +362,11 @@ private static final long serialVersionUID = 0L;
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      io.grpc.channelz.v1.SocketRef parsedMessage = null;
+      io.grpc.channelz.v1.GetServerRequest parsedMessage = null;
       try {
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        parsedMessage = (io.grpc.channelz.v1.SocketRef) e.getUnfinishedMessage();
+        parsedMessage = (io.grpc.channelz.v1.GetServerRequest) e.getUnfinishedMessage();
         throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
@@ -450,129 +376,40 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private long socketId_ ;
+    private long serverId_ ;
     /**
      * <pre>
-     * The globally unique id for this socket.  Must be a positive number.
+     * server_id is the identifier of the specific server to get.
      * </pre>
      *
-     * <code>int64 socket_id = 3;</code>
+     * <code>int64 server_id = 1;</code>
      */
-    public long getSocketId() {
-      return socketId_;
+    public long getServerId() {
+      return serverId_;
     }
     /**
      * <pre>
-     * The globally unique id for this socket.  Must be a positive number.
+     * server_id is the identifier of the specific server to get.
      * </pre>
      *
-     * <code>int64 socket_id = 3;</code>
+     * <code>int64 server_id = 1;</code>
      */
-    public Builder setSocketId(long value) {
+    public Builder setServerId(long value) {
       
-      socketId_ = value;
+      serverId_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * The globally unique id for this socket.  Must be a positive number.
+     * server_id is the identifier of the specific server to get.
      * </pre>
      *
-     * <code>int64 socket_id = 3;</code>
+     * <code>int64 server_id = 1;</code>
      */
-    public Builder clearSocketId() {
+    public Builder clearServerId() {
       
-      socketId_ = 0L;
-      onChanged();
-      return this;
-    }
-
-    private java.lang.Object name_ = "";
-    /**
-     * <pre>
-     * An optional name associated with the socket.
-     * </pre>
-     *
-     * <code>string name = 4;</code>
-     */
-    public java.lang.String getName() {
-      java.lang.Object ref = name_;
-      if (!(ref instanceof java.lang.String)) {
-        com.google.protobuf.ByteString bs =
-            (com.google.protobuf.ByteString) ref;
-        java.lang.String s = bs.toStringUtf8();
-        name_ = s;
-        return s;
-      } else {
-        return (java.lang.String) ref;
-      }
-    }
-    /**
-     * <pre>
-     * An optional name associated with the socket.
-     * </pre>
-     *
-     * <code>string name = 4;</code>
-     */
-    public com.google.protobuf.ByteString
-        getNameBytes() {
-      java.lang.Object ref = name_;
-      if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
-            com.google.protobuf.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
-        name_ = b;
-        return b;
-      } else {
-        return (com.google.protobuf.ByteString) ref;
-      }
-    }
-    /**
-     * <pre>
-     * An optional name associated with the socket.
-     * </pre>
-     *
-     * <code>string name = 4;</code>
-     */
-    public Builder setName(
-        java.lang.String value) {
-      if (value == null) {
-    throw new NullPointerException();
-  }
-  
-      name_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * An optional name associated with the socket.
-     * </pre>
-     *
-     * <code>string name = 4;</code>
-     */
-    public Builder clearName() {
-      
-      name_ = getDefaultInstance().getName();
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * An optional name associated with the socket.
-     * </pre>
-     *
-     * <code>string name = 4;</code>
-     */
-    public Builder setNameBytes(
-        com.google.protobuf.ByteString value) {
-      if (value == null) {
-    throw new NullPointerException();
-  }
-  checkByteStringIsUtf8(value);
-      
-      name_ = value;
+      serverId_ = 0L;
       onChanged();
       return this;
     }
@@ -587,39 +424,39 @@ private static final long serialVersionUID = 0L;
     }
 
 
-    // @@protoc_insertion_point(builder_scope:grpc.channelz.v1.SocketRef)
+    // @@protoc_insertion_point(builder_scope:grpc.channelz.v1.GetServerRequest)
   }
 
-  // @@protoc_insertion_point(class_scope:grpc.channelz.v1.SocketRef)
-  private static final io.grpc.channelz.v1.SocketRef DEFAULT_INSTANCE;
+  // @@protoc_insertion_point(class_scope:grpc.channelz.v1.GetServerRequest)
+  private static final io.grpc.channelz.v1.GetServerRequest DEFAULT_INSTANCE;
   static {
-    DEFAULT_INSTANCE = new io.grpc.channelz.v1.SocketRef();
+    DEFAULT_INSTANCE = new io.grpc.channelz.v1.GetServerRequest();
   }
 
-  public static io.grpc.channelz.v1.SocketRef getDefaultInstance() {
+  public static io.grpc.channelz.v1.GetServerRequest getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
-  private static final com.google.protobuf.Parser<SocketRef>
-      PARSER = new com.google.protobuf.AbstractParser<SocketRef>() {
-    public SocketRef parsePartialFrom(
+  private static final com.google.protobuf.Parser<GetServerRequest>
+      PARSER = new com.google.protobuf.AbstractParser<GetServerRequest>() {
+    public GetServerRequest parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      return new SocketRef(input, extensionRegistry);
+      return new GetServerRequest(input, extensionRegistry);
     }
   };
 
-  public static com.google.protobuf.Parser<SocketRef> parser() {
+  public static com.google.protobuf.Parser<GetServerRequest> parser() {
     return PARSER;
   }
 
   @java.lang.Override
-  public com.google.protobuf.Parser<SocketRef> getParserForType() {
+  public com.google.protobuf.Parser<GetServerRequest> getParserForType() {
     return PARSER;
   }
 
-  public io.grpc.channelz.v1.SocketRef getDefaultInstanceForType() {
+  public io.grpc.channelz.v1.GetServerRequest getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
 

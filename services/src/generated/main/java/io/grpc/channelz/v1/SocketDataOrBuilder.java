@@ -236,7 +236,8 @@ public interface SocketDataOrBuilder extends
 
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -245,7 +246,8 @@ public interface SocketDataOrBuilder extends
       getOptionList();
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -253,7 +255,8 @@ public interface SocketDataOrBuilder extends
   io.grpc.channelz.v1.SocketOption getOption(int index);
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -261,7 +264,8 @@ public interface SocketDataOrBuilder extends
   int getOptionCount();
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -270,7 +274,8 @@ public interface SocketDataOrBuilder extends
       getOptionOrBuilderList();
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>

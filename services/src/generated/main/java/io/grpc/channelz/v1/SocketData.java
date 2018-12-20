@@ -510,7 +510,8 @@ private static final long serialVersionUID = 0L;
   private java.util.List<io.grpc.channelz.v1.SocketOption> option_;
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -520,7 +521,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -531,7 +533,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -541,7 +544,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -551,7 +555,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Socket options set on this socket.  May be absent.
+   * Socket options set on this socket.  May be absent if 'summary' is set
+   * on GetSocketRequest.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2409,7 +2414,8 @@ private static final long serialVersionUID = 0L;
 
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2423,7 +2429,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2437,7 +2444,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2451,7 +2459,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2472,7 +2481,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2490,7 +2500,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2510,7 +2521,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2531,7 +2543,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2549,7 +2562,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2567,7 +2581,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2586,7 +2601,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2603,7 +2619,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2620,7 +2637,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2631,7 +2649,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2645,7 +2664,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2660,7 +2680,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2671,7 +2692,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>
@@ -2683,7 +2705,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Socket options set on this socket.  May be absent.
+     * Socket options set on this socket.  May be absent if 'summary' is set
+     * on GetSocketRequest.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.SocketOption option = 13;</code>

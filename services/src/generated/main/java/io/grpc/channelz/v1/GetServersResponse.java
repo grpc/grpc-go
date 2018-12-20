@@ -99,6 +99,7 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * list of servers that the connection detail service knows about.  Sorted in
    * ascending server_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -110,6 +111,7 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * list of servers that the connection detail service knows about.  Sorted in
    * ascending server_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -122,6 +124,7 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * list of servers that the connection detail service knows about.  Sorted in
    * ascending server_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -133,6 +136,7 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * list of servers that the connection detail service knows about.  Sorted in
    * ascending server_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -144,6 +148,7 @@ private static final long serialVersionUID = 0L;
    * <pre>
    * list of servers that the connection detail service knows about.  Sorted in
    * ascending server_id order.
+   * Must contain at least 1 result, otherwise 'end' must be true.
    * </pre>
    *
    * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -527,6 +532,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -542,6 +548,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -557,6 +564,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -572,6 +580,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -594,6 +603,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -613,6 +623,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -634,6 +645,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -656,6 +668,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -675,6 +688,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -694,6 +708,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -714,6 +729,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -732,6 +748,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -750,6 +767,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -762,6 +780,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -777,6 +796,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -793,6 +813,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -805,6 +826,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>
@@ -818,6 +840,7 @@ private static final long serialVersionUID = 0L;
      * <pre>
      * list of servers that the connection detail service knows about.  Sorted in
      * ascending server_id order.
+     * Must contain at least 1 result, otherwise 'end' must be true.
      * </pre>
      *
      * <code>repeated .grpc.channelz.v1.Server server = 1;</code>

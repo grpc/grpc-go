@@ -83,7 +83,7 @@ private static final long serialVersionUID = 0L;
   private long channelId_;
   /**
    * <pre>
-   * channel_id is the the identifier of the specific channel to get.
+   * channel_id is the identifier of the specific channel to get.
    * </pre>
    *
    * <code>int64 channel_id = 1;</code>
@@ -379,7 +379,7 @@ private static final long serialVersionUID = 0L;
     private long channelId_ ;
     /**
      * <pre>
-     * channel_id is the the identifier of the specific channel to get.
+     * channel_id is the identifier of the specific channel to get.
      * </pre>
      *
      * <code>int64 channel_id = 1;</code>
@@ -389,7 +389,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * channel_id is the the identifier of the specific channel to get.
+     * channel_id is the identifier of the specific channel to get.
      * </pre>
      *
      * <code>int64 channel_id = 1;</code>
@@ -402,7 +402,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * channel_id is the the identifier of the specific channel to get.
+     * channel_id is the identifier of the specific channel to get.
      * </pre>
      *
      * <code>int64 channel_id = 1;</code>

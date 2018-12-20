@@ -8,6 +8,10 @@ public interface SocketRefOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
+   * <pre>
+   * The globally unique id for this socket.  Must be a positive number.
+   * </pre>
+   *
    * <code>int64 socket_id = 3;</code>
    */
   long getSocketId();

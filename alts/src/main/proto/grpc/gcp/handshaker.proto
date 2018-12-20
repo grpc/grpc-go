@@ -229,6 +229,6 @@ service HandshakerService {
   // service expects to respond. Client does not have to wait for service's
   // response before sending next request.
   rpc DoHandshake(stream HandshakerReq)
-    returns (stream HandshakerResp) {
+      returns (stream HandshakerResp) {
   }
 }

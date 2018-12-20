@@ -17,6 +17,7 @@ private static final long serialVersionUID = 0L;
   }
   private GetSocketRequest() {
     socketId_ = 0L;
+    summary_ = false;
   }
 
   @java.lang.Override
@@ -55,6 +56,11 @@ private static final long serialVersionUID = 0L;
             socketId_ = input.readInt64();
             break;
           }
+          case 16: {
+
+            summary_ = input.readBool();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -83,13 +89,28 @@ private static final long serialVersionUID = 0L;
   private long socketId_;
   /**
    * <pre>
-   * socket_id is the the identifier of the specific socket to get.
+   * socket_id is the identifier of the specific socket to get.
    * </pre>
    *
    * <code>int64 socket_id = 1;</code>
    */
   public long getSocketId() {
     return socketId_;
+  }
+
+  public static final int SUMMARY_FIELD_NUMBER = 2;
+  private boolean summary_;
+  /**
+   * <pre>
+   * If true, the response will contain only high level information
+   * that is inexpensive to obtain. Fields thay may be omitted are
+   * documented.
+   * </pre>
+   *
+   * <code>bool summary = 2;</code>
+   */
+  public boolean getSummary() {
+    return summary_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -107,6 +128,9 @@ private static final long serialVersionUID = 0L;
     if (socketId_ != 0L) {
       output.writeInt64(1, socketId_);
     }
+    if (summary_ != false) {
+      output.writeBool(2, summary_);
+    }
     unknownFields.writeTo(output);
   }
 
@@ -118,6 +142,10 @@ private static final long serialVersionUID = 0L;
     if (socketId_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt64Size(1, socketId_);
+    }
+    if (summary_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(2, summary_);
     }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
@@ -137,6 +165,8 @@ private static final long serialVersionUID = 0L;
     boolean result = true;
     result = result && (getSocketId()
         == other.getSocketId());
+    result = result && (getSummary()
+        == other.getSummary());
     result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
@@ -151,6 +181,9 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + SOCKET_ID_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getSocketId());
+    hash = (37 * hash) + SUMMARY_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getSummary());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -282,6 +315,8 @@ private static final long serialVersionUID = 0L;
       super.clear();
       socketId_ = 0L;
 
+      summary_ = false;
+
       return this;
     }
 
@@ -305,6 +340,7 @@ private static final long serialVersionUID = 0L;
     public io.grpc.channelz.v1.GetSocketRequest buildPartial() {
       io.grpc.channelz.v1.GetSocketRequest result = new io.grpc.channelz.v1.GetSocketRequest(this);
       result.socketId_ = socketId_;
+      result.summary_ = summary_;
       onBuilt();
       return result;
     }
@@ -349,6 +385,9 @@ private static final long serialVersionUID = 0L;
       if (other.getSocketId() != 0L) {
         setSocketId(other.getSocketId());
       }
+      if (other.getSummary() != false) {
+        setSummary(other.getSummary());
+      }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
@@ -379,7 +418,7 @@ private static final long serialVersionUID = 0L;
     private long socketId_ ;
     /**
      * <pre>
-     * socket_id is the the identifier of the specific socket to get.
+     * socket_id is the identifier of the specific socket to get.
      * </pre>
      *
      * <code>int64 socket_id = 1;</code>
@@ -389,7 +428,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * socket_id is the the identifier of the specific socket to get.
+     * socket_id is the identifier of the specific socket to get.
      * </pre>
      *
      * <code>int64 socket_id = 1;</code>
@@ -402,7 +441,7 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * socket_id is the the identifier of the specific socket to get.
+     * socket_id is the identifier of the specific socket to get.
      * </pre>
      *
      * <code>int64 socket_id = 1;</code>
@@ -410,6 +449,50 @@ private static final long serialVersionUID = 0L;
     public Builder clearSocketId() {
       
       socketId_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private boolean summary_ ;
+    /**
+     * <pre>
+     * If true, the response will contain only high level information
+     * that is inexpensive to obtain. Fields thay may be omitted are
+     * documented.
+     * </pre>
+     *
+     * <code>bool summary = 2;</code>
+     */
+    public boolean getSummary() {
+      return summary_;
+    }
+    /**
+     * <pre>
+     * If true, the response will contain only high level information
+     * that is inexpensive to obtain. Fields thay may be omitted are
+     * documented.
+     * </pre>
+     *
+     * <code>bool summary = 2;</code>
+     */
+    public Builder setSummary(boolean value) {
+      
+      summary_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * If true, the response will contain only high level information
+     * that is inexpensive to obtain. Fields thay may be omitted are
+     * documented.
+     * </pre>
+     *
+     * <code>bool summary = 2;</code>
+     */
+    public Builder clearSummary() {
+      
+      summary_ = false;
       onChanged();
       return this;
     }

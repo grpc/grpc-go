@@ -9,7 +9,7 @@ public interface GetChannelRequestOrBuilder extends
 
   /**
    * <pre>
-   * channel_id is the the identifier of the specific channel to get.
+   * channel_id is the identifier of the specific channel to get.
    * </pre>
    *
    * <code>int64 channel_id = 1;</code>

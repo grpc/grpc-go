@@ -9,7 +9,7 @@ public interface GetSubchannelRequestOrBuilder extends
 
   /**
    * <pre>
-   * subchannel_id is the the identifier of the specific subchannel to get.
+   * subchannel_id is the identifier of the specific subchannel to get.
    * </pre>
    *
    * <code>int64 subchannel_id = 1;</code>
