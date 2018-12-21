@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (
@@ -23,7 +24,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -31,9 +31,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	addrs = []string{":50051"}
-)
+const addr = "localhost:50051"
 
 type ecServer struct {
 	addr string
@@ -53,6 +51,9 @@ func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEc
 }
 
 func startServer(addr string) {
+}
+
+func main() {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -63,16 +64,4 @@ func startServer(addr string) {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-}
-
-func main() {
-	var wg sync.WaitGroup
-	for _, addr := range addrs {
-		wg.Add(1)
-		go func(addr string) {
-			defer wg.Done()
-			startServer(addr)
-		}(addr)
-	}
-	wg.Wait()
 }

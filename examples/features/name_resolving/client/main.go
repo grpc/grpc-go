@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
@@ -35,8 +36,6 @@ const (
 
 	backendAddr = "localhost:50051"
 )
-
-var addrs = []string{backendAddr}
 
 func callUnaryEcho(c ecpb.EchoClient, message string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -65,7 +64,7 @@ func main() {
 	}
 	defer passthroughConn.Close()
 
-	fmt.Println("--- calling helloworld.Greeter/SayHello with pick_first ---")
+	fmt.Printf("--- calling helloworld.Greeter/SayHello to \"passthrough:///%s\"\n", backendAddr)
 	makeRPCs(passthroughConn, 10)
 
 	fmt.Println()
@@ -79,12 +78,22 @@ func main() {
 	}
 	defer exampleConn.Close()
 
-	fmt.Println("--- calling helloworld.Greeter/SayHello with pick_first ---")
+	fmt.Printf("--- calling helloworld.Greeter/SayHello to \"%s:///%s\"\n", exampleScheme, exampleServiceName)
 	makeRPCs(exampleConn, 10)
 }
 
-// Following is an example name resolver implementation.
+// Following is an example name resolver. It includes a
+// ResolverBuilder(https://godoc.org/google.golang.org/grpc/resolver#Builder)
+// and a Resolver(https://godoc.org/google.golang.org/grpc/resolver#Resolver).
+//
+// A ResolverBuilder is registered for a scheme (in this example, "example" is
+// the scheme). When a ClientConn is created for this scheme, the
+// ResolverBuilder will be picked to build a Resolver. Note that a new Resolver
+// is built for each ClientConn. The Resolver will watch the updates for the
+// target, and send updates to the ClientConn.
 
+// exampleResolverBuilder is a
+// ResolverBuilder(https://godoc.org/google.golang.org/grpc/resolver#Builder).
 type exampleResolverBuilder struct{}
 
 func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
@@ -92,7 +101,7 @@ func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientC
 		target: target,
 		cc:     cc,
 		addrsStore: map[string][]string{
-			exampleServiceName: addrs,
+			exampleServiceName: []string{backendAddr},
 		},
 	}
 	r.start()
@@ -100,6 +109,8 @@ func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientC
 }
 func (*exampleResolverBuilder) Scheme() string { return exampleScheme }
 
+// exampleResolver is a
+// Resolver(https://godoc.org/google.golang.org/grpc/resolver#Resolver).
 type exampleResolver struct {
 	target     resolver.Target
 	cc         resolver.ClientConn
@@ -118,5 +129,7 @@ func (*exampleResolver) ResolveNow(o resolver.ResolveNowOption) {}
 func (*exampleResolver) Close()                                 {}
 
 func init() {
+	// Register the example ResolverBuilder. This is usually done in a package's
+	// init() function.
 	resolver.Register(&exampleResolverBuilder{})
 }
