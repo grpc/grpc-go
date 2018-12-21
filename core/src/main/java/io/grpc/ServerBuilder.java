@@ -120,7 +120,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
 
   /**
    * Adds a {@link ServerStreamTracer.Factory} to measure server-side traffic.  The order of
-   * factories being added is the order they will be executed.
+   * factories being added is the order they will be executed.  Tracers should not
    *
    * @return this
    * @since 1.3.0

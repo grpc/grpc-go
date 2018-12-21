@@ -230,7 +230,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @VisibleForTesting
   final List<? extends ServerStreamTracer.Factory> getTracerFactories() {
-    ArrayList<ServerStreamTracer.Factory> tracerFactories = new ArrayList<>(streamTracerFactories);
+    ArrayList<ServerStreamTracer.Factory> tracerFactories = new ArrayList<>();
     if (statsEnabled) {
       CensusStatsModule censusStats = censusStatsOverride;
       if (censusStats == null) {
@@ -246,6 +246,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
               Tracing.getPropagationComponent().getBinaryFormat());
       tracerFactories.add(censusTracing.getServerTracerFactory());
     }
+    tracerFactories.addAll(streamTracerFactories);
     tracerFactories.trimToSize();
     return Collections.unmodifiableList(tracerFactories);
   }
