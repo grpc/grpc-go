@@ -20,6 +20,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -30,9 +32,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var port = flag.Int("port", 50052, "port number")
+
 func main() {
+	flag.Parse()
+
+	target := fmt.Sprintf("localhost:%v", *port)
 	// Set up a connection to the server.
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	conn, err := grpc.Dial(target, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
