@@ -372,6 +372,18 @@ func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
 	return csm.notifyChan
 }
 
+// InvokerStreamer defines the functions clients need to perform unary and
+// streaming RPCs.  It is implemented by ClientConn.
+//
+// This API is EXPERIMENTAL.
+type InvokerStreamer interface {
+	// Invoke performs a unary RPC and returns after the response is received
+	// into reply.
+	Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...CallOption) error
+	// NewStream begins a streaming RPC.
+	NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error)
+}
+
 // ClientConn represents a client connection to an RPC server.
 type ClientConn struct {
 	ctx    context.Context
