@@ -28,20 +28,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/alts"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/status"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
-
-// hwServer is used to implement helloworld.GreeterServer.
-type hwServer struct{}
-
-// SayHello implements helloworld.GreeterServer
-func (s *hwServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
-	return &hwpb.HelloReply{Message: "Hello " + in.Name}, nil
-}
 
 type ecServer struct{}
 
@@ -63,18 +55,17 @@ func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEc
 
 func main() {
 	flag.Parse()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	fmt.Printf("server listening at %v\n", lis.Addr())
+	// Create alts based credential.
+	altsTC := alts.NewServerCreds(alts.DefaultServerOptions())
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.Creds(altsTC))
 
-	// Register Greeter on the server.
-	hwpb.RegisterGreeterServer(s, &hwServer{})
-
-	// Register RouteGuide on the same server.
+	// Register EchoServer on the server.
 	ecpb.RegisterEchoServer(s, &ecServer{})
 
 	if err := s.Serve(lis); err != nil {

@@ -246,7 +246,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	}
 	defer cc.Close()
 	var reply string
-	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
+	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err != nil {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
 	// Remove the server.
@@ -258,7 +258,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
+		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}
@@ -271,7 +271,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err == nil {
+		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -279,7 +279,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		defer wg.Done()
 		var reply string
 		time.Sleep(5 * time.Millisecond)
-		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err == nil {
+		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -306,7 +306,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	for {
 		var reply string
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
+		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}
@@ -318,7 +318,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
+		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err != nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 		}
 	}()
@@ -378,7 +378,7 @@ func TestOneServerDown(t *testing.T) {
 			time.Sleep(sleepDuration)
 			// After sleepDuration, invoke RPC.
 			// server[0] is killed around the same time to make it racy between balancer and gRPC internals.
-			cc.Invoke(context.Background(), "/foo/bar", &req, &reply, FailFast(false))
+			cc.Invoke(context.Background(), "/foo/bar", &req, &reply, WaitForReady(true))
 			wg.Done()
 		}()
 	}
@@ -437,7 +437,7 @@ func TestOneAddressRemoval(t *testing.T) {
 			time.Sleep(sleepDuration)
 			// After sleepDuration, invoke RPC.
 			// server[0] is removed around the same time to make it racy between balancer and gRPC internals.
-			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
+			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err != nil {
 				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want nil", err)
 			}
 			wg.Done()
@@ -505,7 +505,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	}
 	defer cc.Close()
 	var reply string
-	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
+	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err != nil {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
 	// Remove the server.
@@ -517,7 +517,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
+		if err := cc.Invoke(ctx, "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); status.Code(err) == codes.DeadlineExceeded {
 			cancel()
 			break
 		}
@@ -530,7 +530,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err == nil {
+		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -538,7 +538,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 		defer wg.Done()
 		var reply string
 		time.Sleep(5 * time.Millisecond)
-		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err == nil {
+		if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -798,7 +798,7 @@ func TestPickFirstOneAddressRemoval(t *testing.T) {
 			time.Sleep(sleepDuration)
 			// After sleepDuration, invoke RPC.
 			// server[0] is removed around the same time to make it racy between balancer and gRPC internals.
-			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, FailFast(false)); err != nil {
+			if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, WaitForReady(true)); err != nil {
 				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want nil", err)
 			}
 			wg.Done()

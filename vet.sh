@@ -132,5 +132,6 @@ internal/transport/transport_test.go:SA2002
 stats/stats_test.go:SA1019
 test/channelz_test.go:SA1019
 test/end2end_test.go:SA1019
+test/healthcheck_test.go:SA1019
 ' ./...
 misspell -error .

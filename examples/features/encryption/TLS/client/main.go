@@ -27,23 +27,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/testdata"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
-
-// callSayHello calls SayHello on c with the given name, and prints the
-// response.
-func callSayHello(c hwpb.GreeterClient, name string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.SayHello(ctx, &hwpb.HelloRequest{Name: name})
-	if err != nil {
-		log.Fatalf("client.SayHello(_) = _, %v", err)
-	}
-	fmt.Println("Greeting: ", r.Message)
-}
 
 func callUnaryEcho(client ecpb.EchoClient, message string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -57,21 +46,21 @@ func callUnaryEcho(client ecpb.EchoClient, message string) {
 
 func main() {
 	flag.Parse()
+
+	// Create tls based credential.
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	if err != nil {
+		log.Fatalf("failed to load credentials: %v", err)
+	}
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
-	fmt.Println("--- calling helloworld.Greeter/SayHello ---")
-	// Make a greeter client and send an RPC.
-	hwc := hwpb.NewGreeterClient(conn)
-	callSayHello(hwc, "multiplex")
-
-	fmt.Println()
-	fmt.Println("--- calling routeguide.RouteGuide/GetFeature ---")
-	// Make a routeguild client with the same ClientConn.
+	// Make a echo client and send an RPC.
 	rgc := ecpb.NewEchoClient(conn)
-	callUnaryEcho(rgc, "this is examples/multiplex")
+	callUnaryEcho(rgc, "hello world")
 }

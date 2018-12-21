@@ -259,7 +259,7 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 }
 
 func (s *serverImpl) GetTopChannels(ctx context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
-	metrics, end := channelz.GetTopChannels(req.GetStartChannelId())
+	metrics, end := channelz.GetTopChannels(req.GetStartChannelId(), req.GetMaxResults())
 	resp := &channelzpb.GetTopChannelsResponse{}
 	for _, m := range metrics {
 		resp.Channel = append(resp.Channel, channelMetricToProto(m))
@@ -290,7 +290,7 @@ func serverMetricToProto(sm *channelz.ServerMetric) *channelzpb.Server {
 }
 
 func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
-	metrics, end := channelz.GetServers(req.GetStartServerId())
+	metrics, end := channelz.GetServers(req.GetStartServerId(), req.GetMaxResults())
 	resp := &channelzpb.GetServersResponse{}
 	for _, m := range metrics {
 		resp.Server = append(resp.Server, serverMetricToProto(m))
@@ -300,7 +300,7 @@ func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersR
 }
 
 func (s *serverImpl) GetServerSockets(ctx context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
-	metrics, end := channelz.GetServerSockets(req.GetServerId(), req.GetStartSocketId())
+	metrics, end := channelz.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), req.GetMaxResults())
 	resp := &channelzpb.GetServerSocketsResponse{}
 	for _, m := range metrics {
 		resp.SocketRef = append(resp.SocketRef, &channelzpb.SocketRef{SocketId: m.ID, Name: m.RefName})

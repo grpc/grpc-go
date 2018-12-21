@@ -60,6 +60,7 @@ type dialOptions struct {
 	disableServiceConfig bool
 	disableRetry         bool
 	disableHealthCheck   bool
+	healthCheckFunc      internal.HealthChecker
 }
 
 // DialOption configures how we set up the connection.
@@ -338,6 +339,7 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 func init() {
 	internal.WithContextDialer = withContextDialer
 	internal.WithResolverBuilder = withResolverBuilder
+	internal.WithHealthCheckFunc = withHealthCheckFunc
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing
@@ -468,10 +470,22 @@ func WithDisableHealthCheck() DialOption {
 		o.disableHealthCheck = true
 	})
 }
+
+// withHealthCheckFunc replaces the default health check function with the provided one. It makes
+// tests easier to change the health check function.
+//
+// For testing purpose only.
+func withHealthCheckFunc(f internal.HealthChecker) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.healthCheckFunc = f
+	})
+}
+
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		disableRetry: !envconfig.Retry,
-		reqHandshake: envconfig.RequireHandshake,
+		disableRetry:    !envconfig.Retry,
+		reqHandshake:    envconfig.RequireHandshake,
+		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,

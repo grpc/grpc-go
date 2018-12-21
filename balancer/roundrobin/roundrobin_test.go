@@ -213,7 +213,7 @@ func TestAddressesRemoved(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); status.Code(err) == codes.DeadlineExceeded {
+		if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) == codes.DeadlineExceeded {
 			return
 		}
 		time.Sleep(time.Millisecond)

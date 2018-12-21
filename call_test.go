@@ -286,7 +286,7 @@ func TestInvokeCancelClosedNonFailFast(t *testing.T) {
 	req := "hello"
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := cc.Invoke(ctx, "/foo/bar", &req, &reply, FailFast(false)); err == nil {
+	if err := cc.Invoke(ctx, "/foo/bar", &req, &reply, WaitForReady(true)); err == nil {
 		t.Fatalf("canceled invoke on closed connection should fail")
 	}
 	server.stop()
