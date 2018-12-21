@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (

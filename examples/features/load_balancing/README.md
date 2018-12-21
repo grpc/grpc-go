@@ -25,7 +25,11 @@ with `this is examples/load_balancing (from :50051)`.
 Two clients are created, to connect to both of these servers (they get both
 server addresses from the name resolver).
 
-Each client picks a different load balancer (using `grpc.WithBalancerName`).
+Each client picks a different load balancer (using `grpc.WithBalancerName`):
+`pick_first` or `round_robin`. (These two policies are supported in gRPC by
+default. To add a custom balancing policy, implement the interfaces defined in
+https://godoc.org/google.golang.org/grpc/balancer).
+
 Note that balancers can also be switched using service config, which allows
 service owners (instead of client owners) to pick the balancer to use. Service
 config doc is available at
