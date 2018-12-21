@@ -506,7 +506,6 @@ final class DnsNameResolver extends NameResolver {
    * @return The service config object or {@code null} if this choice does not apply.
    */
   @Nullable
-  @SuppressWarnings("BetaApi") // Verify isn't all that beta
   @VisibleForTesting
   static Map<String, Object> maybeChooseServiceConfig(
       Map<String, Object> choice, Random random, String hostname) {

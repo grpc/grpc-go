@@ -101,7 +101,6 @@ class GrpcHttp2HeadersUtils {
       values = new AsciiString[numHeadersGuess];
     }
 
-    @SuppressWarnings("BetaApi") // BaseEncoding is stable in Guava 20.0
     protected Http2Headers add(AsciiString name, AsciiString value) {
       byte[] nameBytes = bytes(name);
       byte[] valueBytes;

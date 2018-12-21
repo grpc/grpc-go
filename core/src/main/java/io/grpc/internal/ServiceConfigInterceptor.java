@@ -201,7 +201,6 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           .toString();
     }
 
-    @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
     private static RetryPolicy retryPolicy(Map<String, Object> retryPolicy, int maxAttemptsLimit) {
       int maxAttempts = checkNotNull(
           ServiceConfigUtil.getMaxAttemptsFromRetryPolicy(retryPolicy),
@@ -249,7 +248,6 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     }
   }
 
-  @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
   private static HedgingPolicy hedgingPolicy(
       Map<String, Object> hedgingPolicy, int maxAttemptsLimit) {
     int maxAttempts = checkNotNull(
@@ -284,7 +282,6 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   static final CallOptions.Key<HedgingPolicy.Provider> HEDGING_POLICY_KEY =
       CallOptions.Key.create("internal-hedging-policy");
 
-  @SuppressWarnings("BetaApi") // Verify is stabilized since Guava v24.0
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {

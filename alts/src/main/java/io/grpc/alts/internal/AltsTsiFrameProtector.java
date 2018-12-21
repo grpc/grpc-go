@@ -128,7 +128,6 @@ public final class AltsTsiFrameProtector implements TsiFrameProtector {
       }
     }
 
-    @SuppressWarnings("BetaApi") // verify is stable in Guava
     private ByteBuf handleUnprotected(List<ByteBuf> unprotectedBufs, ByteBufAllocator alloc)
         throws GeneralSecurityException {
       long unprotectedBytes = 0;
@@ -270,7 +269,6 @@ public final class AltsTsiFrameProtector implements TsiFrameProtector {
       state = DeframerState.READ_PROTECTED_PAYLOAD;
     }
 
-    @SuppressWarnings("BetaApi") // verify is stable in Guava
     private ByteBuf handlePayload(ByteBufAllocator alloc) throws GeneralSecurityException {
       int requiredCiphertextBytes = requiredProtectedBytes - suffixBytes;
       int firstFrameUnprotectedLen = requiredCiphertextBytes;

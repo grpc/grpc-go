@@ -204,7 +204,6 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
       final int port;
     }
 
-    @SuppressWarnings("BetaApi") // Verify is only kinda beta
     private static SrvRecord parseSrvRecord(String rawRecord) {
       String[] parts = whitespace.split(rawRecord);
       Verify.verify(parts.length == 4, "Bad SRV Record: %s", rawRecord);

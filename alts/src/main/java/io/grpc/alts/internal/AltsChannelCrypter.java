@@ -54,7 +54,6 @@ final class AltsChannelCrypter implements ChannelCrypterNetty {
     return COUNTER_LENGTH;
   }
 
-  @SuppressWarnings("BetaApi") // verify is stable in Guava
   @Override
   public void encrypt(ByteBuf outBuf, List<ByteBuf> plainBufs) throws GeneralSecurityException {
     checkArgument(outBuf.nioBufferCount() == 1);
@@ -93,7 +92,6 @@ final class AltsChannelCrypter implements ChannelCrypterNetty {
     decrypt(out, cipherTextAndTag);
   }
 
-  @SuppressWarnings("BetaApi") // verify is stable in Guava
   @Override
   public void decrypt(ByteBuf out, ByteBuf ciphertextAndTag) throws GeneralSecurityException {
     int bytesRead = ciphertextAndTag.readableBytes();

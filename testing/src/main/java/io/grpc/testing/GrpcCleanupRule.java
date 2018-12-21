@@ -74,7 +74,7 @@ public final class GrpcCleanupRule implements TestRule {
    *
    * @return this
    */
-  @SuppressWarnings("BetaApi") // Stopwatch.createUnstarted(Ticker ticker) is not Beta. Test only.
+  @SuppressWarnings("BetaApi") // Test only.
   @VisibleForTesting
   GrpcCleanupRule setTicker(Ticker ticker) {
     this.stopwatch = Stopwatch.createUnstarted(ticker);
