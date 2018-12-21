@@ -47,7 +47,7 @@ var port = flag.Int("port", 50051, "the port to serve on")
 
 func main() {
 	flag.Parse()
-	log.Printf("server starting on port %d...\n", *port)
+	fmt.Printf("server starting on port %d...\n", *port)
 
 	cert, err := tls.LoadX509KeyPair(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 	if err != nil {
