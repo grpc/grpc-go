@@ -21,7 +21,8 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
+	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -29,11 +30,31 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/testdata"
 )
 
+var addr = flag.String("addr", "localhost:50051", "the address to connect to")
+
+func callUnaryEcho(client ecpb.EchoClient, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
+	if err != nil {
+		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
+	}
+	fmt.Println("UnaryEcho: ", resp.Message)
+}
+
 func main() {
+	flag.Parse()
+
+	// Set up the credentials for the connection.
 	perRPC := oauth.NewOauthAccess(fetchToken())
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
+	if err != nil {
+		log.Fatalf("failed to load credentials: %v", err)
+	}
 	opts := []grpc.DialOption{
 		// In addition to the following grpc.DialOption, callers may also use
 		// the grpc.CallOption grpc.PerRPCCredentials with the RPC invocation
@@ -42,24 +63,17 @@ func main() {
 		grpc.WithPerRPCCredentials(perRPC),
 		// oauth.NewOauthAccess requires the configuration of transport
 		// credentials.
-		grpc.WithTransportCredentials(
-			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}),
-		),
+		grpc.WithTransportCredentials(creds),
 	}
-	conn, err := grpc.Dial(":8080", opts...)
+
+	conn, err := grpc.Dial(*addr, opts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewGreeterClient(conn)
+	rgc := ecpb.NewEchoClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: "authenticated-client"})
-	if err != nil {
-		log.Fatalf("could not greet: %v", err)
-	}
-	log.Printf("Greeting: %s", r.Message)
+	callUnaryEcho(rgc, "hello world")
 }
 
 // fetchToken simulates a token lookup and omits the details of proper token
