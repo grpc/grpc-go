@@ -101,7 +101,7 @@ func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientC
 		target: target,
 		cc:     cc,
 		addrsStore: map[string][]string{
-			exampleServiceName: []string{backendAddr},
+			exampleServiceName: {backendAddr},
 		},
 	}
 	r.start()
