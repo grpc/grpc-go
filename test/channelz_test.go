@@ -100,6 +100,41 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
+func (s) TestCZGetServer(t *testing.T) {
+	channelz.NewChannelzStorage()
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	ss, _ := channelz.GetServers(0, 0)
+	if len(ss) != 1 {
+		t.Fatalf("there should only be one server, not %d", len(ss))
+	}
+
+	serverID := ss[0].ID
+	srv := channelz.GetServer(serverID)
+	if srv == nil {
+		t.Fatalf("server %d does not exist", serverID)
+	}
+	if srv.ID != serverID {
+		t.Fatalf("server want id %d, but got %d", serverID, srv.ID)
+	}
+
+	te.tearDown()
+
+	if err := verifyResultWithDelay(func() (bool, error) {
+		srv := channelz.GetServer(serverID)
+		if srv != nil {
+			return false, fmt.Errorf("server %d should not exist", serverID)
+		}
+
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	testcases := []struct {
 		total  int
@@ -371,6 +406,9 @@ func (s) TestCZServerListenSocketDeletion(t *testing.T) {
 		ss, _ := channelz.GetServers(0, 0)
 		if len(ss) != 1 {
 			return false, fmt.Errorf("there should be 1 server, not %d", len(ss))
+		}
+		if len(ss[0].ListenSockets) != 0 {
+			return false, fmt.Errorf("there should only be %d server listen socket, not %d", 0, len(ss[0].ListenSockets))
 		}
 		return true, nil
 	}); err != nil {

@@ -337,5 +337,10 @@ func (s *serverImpl) GetSocket(ctx context.Context, req *channelzpb.GetSocketReq
 }
 
 func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetServer not implemented")
+	var metric *channelz.ServerMetric
+	if metric = channelz.GetServer(req.GetServerId()); metric == nil {
+		return nil, status.Errorf(codes.NotFound, "requested server %d not found", req.GetServerId())
+	}
+	resp := &channelzpb.GetServerResponse{Server: serverMetricToProto(metric)}
+	return resp, nil
 }
