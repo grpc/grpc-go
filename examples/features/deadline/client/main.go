@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var addr = flag.String("addr", "localhost:50052", "the address to connect to")
+
 func unaryCall(c pb.EchoClient, requestID int, message string, want codes.Code) {
 	// Creates a context with a one second deadline for the RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -68,11 +70,9 @@ func streamingCall(c pb.EchoClient, requestID int, message string, want codes.Co
 }
 
 func main() {
-	port := flag.Int("port", 50052, "port number")
 	flag.Parse()
 
-	target := fmt.Sprintf("localhost:%v", *port)
-	conn, err := grpc.Dial(target, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
