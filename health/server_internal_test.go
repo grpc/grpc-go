@@ -59,4 +59,16 @@ func TestShutdown(t *testing.T) {
 	if status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_NOT_SERVING)
 	}
+
+	s.Resume()
+	status = s.statusMap[testService]
+	if status != healthpb.HealthCheckResponse_SERVING {
+		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_SERVING)
+	}
+
+	s.SetServingStatus(testService, healthpb.HealthCheckResponse_NOT_SERVING)
+	status = s.statusMap[testService]
+	if status != healthpb.HealthCheckResponse_NOT_SERVING {
+		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
 }
