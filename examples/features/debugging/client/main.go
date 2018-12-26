@@ -16,13 +16,13 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"time"
 
 	"golang.org/x/net/context"
@@ -39,10 +39,11 @@ const (
 
 func main() {
 	/***** Set up the server serving channelz service. *****/
-	lis, err := net.Listen("tcp", ":50050")
+	lis, err := net.Listen("tcp", ":50052")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	defer lis.Close()
 	s := grpc.NewServer()
 	service.RegisterChannelzServiceToServer(s)
 	go s.Serve(lis)
@@ -81,11 +82,8 @@ func main() {
 		}
 	}
 
-	/***** Wait for CTRL+C to exit *****/
-	// Unless you exit the program with CTRL+C, channelz data will be available for querying.
+	/***** Wait for user exiting the program *****/
+	// Unless you exit the program (e.g. CTRL+C), channelz data will be available for querying.
 	// Users can take time to examine and learn about the info provided by channelz.
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt)
-	// Block until a signal is received.
-	<-ch
+	select {}
 }

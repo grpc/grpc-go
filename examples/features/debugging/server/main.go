@@ -16,13 +16,12 @@
  *
  */
 
+// Binary server is an example server.
 package main
 
 import (
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"time"
 
 	"golang.org/x/net/context"
@@ -67,16 +66,13 @@ func main() {
 	defer s.Stop()
 
 	/***** Start three GreeterServers(with one of them to be the slowServer). *****/
-	var listeners []net.Listener
-	var svrs []*grpc.Server
 	for i := 0; i < 3; i++ {
 		lis, err := net.Listen("tcp", ports[i])
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
-		listeners = append(listeners, lis)
+		defer lis.Close()
 		s := grpc.NewServer()
-		svrs = append(svrs, s)
 		if i == 2 {
 			pb.RegisterGreeterServer(s, &slowServer{})
 		} else {
@@ -85,13 +81,6 @@ func main() {
 		go s.Serve(lis)
 	}
 
-	/***** Wait for CTRL+C to exit *****/
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt)
-	// Block until a signal is received.
-	<-ch
-	for i := 0; i < 3; i++ {
-		svrs[i].Stop()
-		listeners[i].Close()
-	}
+	/***** Wait for user exiting the program *****/
+	select {}
 }
