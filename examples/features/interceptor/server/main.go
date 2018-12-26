@@ -23,8 +23,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"reflect"
+	"strings"
+	"time"
+
+	"google.golang.org/grpc/metadata"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,24 +40,114 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-var port = flag.Int("port", 50051, "the port to serve on")
+var (
+	port = flag.Int("port", 50051, "the port to serve on")
 
-type ecServer struct{}
+	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
+	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
+)
 
-func (s *ecServer) UnaryEcho(ctx context.Context, req *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
-	return &ecpb.EchoResponse{Message: req.Message}, nil
+// logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
+func logger(format string, a ...interface{}) {
+	fmt.Printf("LOG:\t"+format+"\n", a...)
 }
 
-func (s *ecServer) ServerStreamingEcho(*ecpb.EchoRequest, ecpb.Echo_ServerStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
+type server struct{}
+
+func (s *server) UnaryEcho(ctx context.Context, in *ecpb.EchoRequest) (*ecpb.EchoResponse, error) {
+	fmt.Printf("unary echoing message %q\n", in.Message)
+	return &ecpb.EchoResponse{Message: in.Message}, nil
 }
 
-func (s *ecServer) ClientStreamingEcho(ecpb.Echo_ClientStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
+func (s *server) ServerStreamingEcho(in *ecpb.EchoRequest, stream ecpb.Echo_ServerStreamingEchoServer) error {
+	return status.Error(codes.Unimplemented, "not implemented")
 }
 
-func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEchoServer) error {
-	return status.Errorf(codes.Unimplemented, "not implemented")
+func (s *server) ClientStreamingEcho(stream ecpb.Echo_ClientStreamingEchoServer) error {
+	return status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (s *server) BidirectionalStreamingEcho(stream ecpb.Echo_BidirectionalStreamingEchoServer) error {
+	for {
+		in, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			fmt.Printf("server: error receiving from stream: %v\n", err)
+			return err
+		}
+		fmt.Printf("bidi echoing message %q\n", in.Message)
+		stream.Send(&ecpb.EchoResponse{Message: in.Message})
+	}
+}
+
+// valid validates the authorization.
+func valid(authorization []string) bool {
+	if len(authorization) < 1 {
+		return false
+	}
+	token := strings.TrimPrefix(authorization[0], "Bearer ")
+	// Perform the token validation here. For the sake of this example, the code
+	// here forgoes any of the usual OAuth2 token validation and instead checks
+	// for a token matching an arbitrary string.
+	if token != "some-secret-token" {
+		return false
+	}
+	return true
+}
+
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	// authentication (token verification)
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, errMissingMetadata
+	}
+	if !valid(md["authorization"]) {
+		return nil, errInvalidToken
+	}
+	m, err := handler(ctx, req)
+	if err != nil {
+		logger("RPC failed with error %v", err)
+	}
+	return m, err
+}
+
+// wrappedStream wraps around the embedded grpc.ServerStream, and intercepts the RecvMsg and
+// SendMsg method call.
+type wrappedStream struct {
+	grpc.ServerStream
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	logger("Receive a message (Type: %s) at %s", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	return w.ServerStream.RecvMsg(m)
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	logger("Send a message (Type: %s) at %v", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	return w.ServerStream.SendMsg(m)
+}
+
+func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
+	return &wrappedStream{s}
+}
+
+func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// authentication (token verification)
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok {
+		return errMissingMetadata
+	}
+	if !valid(md["authorization"]) {
+		return errInvalidToken
+	}
+
+	err := handler(srv, newWrappedStream(ss))
+	if err != nil {
+		logger("RPC failed with error %v", err)
+	}
+	return err
 }
 
 func main() {
@@ -68,10 +164,10 @@ func main() {
 		log.Fatalf("failed to create credentials: %v", err)
 	}
 
-	s := grpc.NewServer(grpc.Creds(creds))
+	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(unaryInterceptor), grpc.StreamInterceptor(streamInterceptor))
 
 	// Register EchoServer on the server.
-	ecpb.RegisterEchoServer(s, &ecServer{})
+	ecpb.RegisterEchoServer(s, &server{})
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
