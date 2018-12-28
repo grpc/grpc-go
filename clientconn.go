@@ -954,8 +954,8 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State) {
 func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 	switch r {
 	case transport.GoAwayTooManyPings:
-		v := 2 * ac.dopts.copts.KeepaliveParams.Time
 		ac.cc.mu.Lock()
+		v := 2 * ac.dopts.copts.KeepaliveParams.Time
 		if v > ac.cc.mkp.Time {
 			ac.cc.mkp.Time = v
 		}
@@ -996,9 +996,7 @@ func (ac *addrConn) resetTransport() {
 			connectDeadline := time.Now().Add(dialDuration)
 
 			ac.mu.Lock()
-			ac.cc.mu.RLock()
 			ac.dopts.copts.KeepaliveParams = ac.cc.mkp
-			ac.cc.mu.RUnlock()
 
 			if ac.state == connectivity.Shutdown {
 				ac.mu.Unlock()
