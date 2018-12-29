@@ -62,7 +62,7 @@ class OkHttpClientStream extends AbstractClientStream {
   OkHttpClientStream(
       MethodDescriptor<?, ?> method,
       Metadata headers,
-      AsyncFrameWriter frameWriter,
+      ExceptionHandlingFrameWriter frameWriter,
       OkHttpClientTransport transport,
       OutboundFlowController outboundFlow,
       Object lock,
@@ -203,7 +203,7 @@ class OkHttpClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     private int processedWindow;
     @GuardedBy("lock")
-    private final AsyncFrameWriter frameWriter;
+    private final ExceptionHandlingFrameWriter frameWriter;
     @GuardedBy("lock")
     private final OutboundFlowController outboundFlow;
     @GuardedBy("lock")
@@ -216,7 +216,7 @@ class OkHttpClientStream extends AbstractClientStream {
         int maxMessageSize,
         StatsTraceContext statsTraceCtx,
         Object lock,
-        AsyncFrameWriter frameWriter,
+        ExceptionHandlingFrameWriter frameWriter,
         OutboundFlowController outboundFlow,
         OkHttpClientTransport transport,
         int initialWindowSize) {

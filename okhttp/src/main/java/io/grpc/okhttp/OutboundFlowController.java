@@ -323,12 +323,7 @@ class OutboundFlowController {
         try {
           // endOfStream is set for the last chunk of data marked as endOfStream
           boolean isEndOfStream = buffer.size() == frameBytes && endOfStream;
-          // AsyncFrameWriter drains buffer in executor. To avoid race, copy to temp.
-          // TODO(jihuncho) remove temp buff when async logic is moved to AsyncSink.
-          Buffer temp = new Buffer();
-          temp.write(buffer, frameBytes);
-
-          frameWriter.data(isEndOfStream, streamId, temp, frameBytes);
+          frameWriter.data(isEndOfStream, streamId, buffer, frameBytes);
         } catch (IOException e) {
           throw new RuntimeException(e);
         }

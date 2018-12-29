@@ -46,7 +46,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -91,9 +90,11 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -113,6 +114,7 @@ import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Matchers;
@@ -139,7 +141,6 @@ public class OkHttpClientTransportTest {
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
-  @Mock
   private FrameWriter frameWriter;
 
   private MethodDescriptor<Void, Void> method = TestMethodDescriptors.voidMethod();
@@ -150,8 +151,10 @@ public class OkHttpClientTransportTest {
   private final SSLSocketFactory sslSocketFactory = null;
   private final HostnameVerifier hostnameVerifier = null;
   private final TransportTracer transportTracer = new TransportTracer();
+  private final Queue<Buffer> capturedBuffer = new ArrayDeque<>();
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
+  private Socket socket;
   private ExecutorService executor = Executors.newCachedThreadPool();
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
   private SettableFuture<Void> connectedFuture;
@@ -166,8 +169,10 @@ public class OkHttpClientTransportTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
     frameReader = new MockFrameReader();
+    socket = new MockSocket(frameReader);
+    MockFrameWriter mockFrameWriter = new MockFrameWriter(socket, capturedBuffer);
+    frameWriter = mock(FrameWriter.class, AdditionalAnswers.delegatesTo(mockFrameWriter));
   }
 
   @After
@@ -217,7 +222,7 @@ public class OkHttpClientTransportTest {
         frameReader,
         frameWriter,
         startId,
-        new MockSocket(frameReader),
+        socket,
         stopwatchSupplier,
         connectingCallback,
         connectedFuture,
@@ -556,10 +561,9 @@ public class OkHttpClientTransportTest {
     assertEquals(12, input.available());
     stream.writeMessage(input);
     stream.flush();
-    ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
-    Buffer sentFrame = captor.getValue();
+        .data(eq(false), eq(3), any(Buffer.class), eq(12 + HEADER_LENGTH));
+    Buffer sentFrame = capturedBuffer.poll();
     assertEquals(createMessageFrame(message), sentFrame);
     stream.cancel(Status.CANCELLED);
     shutdownAndVerify();
@@ -888,11 +892,9 @@ public class OkHttpClientTransportTest {
     assertEquals(22, input.available());
     stream.writeMessage(input);
     stream.flush();
-    ArgumentCaptor<Buffer> captor =
-        ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(3), captor.capture(), eq(22 + HEADER_LENGTH));
-    Buffer sentFrame = captor.getValue();
+        .data(eq(false), eq(3), any(Buffer.class), eq(22 + HEADER_LENGTH));
+    Buffer sentFrame = capturedBuffer.poll();
     assertEquals(createMessageFrame(sentMessage), sentFrame);
 
     // And read.
@@ -976,10 +978,9 @@ public class OkHttpClientTransportTest {
     // The second stream should be active now, and the pending data should be sent out.
     assertEquals(1, activeStreamCount());
     assertEquals(0, clientTransport.getPendingStreamSize());
-    ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(true), eq(5), captor.capture(), eq(5 + HEADER_LENGTH));
-    Buffer sentFrame = captor.getValue();
+        .data(eq(true), eq(5), any(Buffer.class), eq(5 + HEADER_LENGTH));
+    Buffer sentFrame = capturedBuffer.poll();
     assertEquals(createMessageFrame(sentMessage), sentFrame);
     stream2.cancel(Status.CANCELLED);
     shutdownAndVerify();
@@ -1456,10 +1457,9 @@ public class OkHttpClientTransportTest {
     allowTransportConnected();
 
     // The queued message should be sent out.
-    ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
-    Buffer sentFrame = captor.getValue();
+        .data(eq(false), eq(3), any(Buffer.class), eq(12 + HEADER_LENGTH));
+    Buffer sentFrame = capturedBuffer.poll();
     assertEquals(createMessageFrame(message), sentFrame);
     stream.cancel(Status.CANCELLED);
     shutdownAndVerify();
@@ -2091,7 +2091,6 @@ public class OkHttpClientTransportTest {
       verify(frameWriter, timeout(TIME_OUT_MS)).close();
     } catch (IOException e) {
       throw new RuntimeException(e);
-
     }
     frameReader.assertClosed();
   }
@@ -2112,5 +2111,84 @@ public class OkHttpClientTransportTest {
   private static TransportStats getTransportStats(InternalInstrumented<SocketStats> obj)
       throws ExecutionException, InterruptedException {
     return obj.getStats().get().data;
+  }
+
+  /** A FrameWriter to mock with CALL_REAL_METHODS option. */
+  private static class MockFrameWriter implements FrameWriter {
+
+    private Socket socket;
+    private Queue<Buffer> capturedBuffer;
+
+    public MockFrameWriter(Socket socket, Queue<Buffer> capturedBuffer) {
+      // Sets a socket to close. Some tests assumes that FrameWriter will close underlying sink
+      // which will eventually close the socket.
+      this.socket = socket;
+      this.capturedBuffer = capturedBuffer;
+    }
+
+    void setSocket(Socket socket) {
+      this.socket = socket;
+    }
+
+    @Override
+    public void close() throws IOException {
+      socket.close();
+    }
+
+    @Override
+    public int maxDataLength() {
+      return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public void data(boolean outFinished, int streamId, Buffer source, int byteCount)
+        throws IOException {
+      // simulate the side effect, and captures to internal queue.
+      Buffer capture = new Buffer();
+      capture.write(source, byteCount);
+      capturedBuffer.add(capture);
+    }
+
+    // rest of methods are unimplemented
+
+    @Override
+    public void connectionPreface() throws IOException {}
+
+    @Override
+    public void ackSettings(Settings peerSettings) throws IOException {}
+
+    @Override
+    public void pushPromise(int streamId, int promisedStreamId, List<Header> requestHeaders)
+        throws IOException {}
+
+    @Override
+    public void flush() throws IOException {}
+
+    @Override
+    public void synStream(boolean outFinished, boolean inFinished, int streamId,
+        int associatedStreamId, List<Header> headerBlock) throws IOException {}
+
+    @Override
+    public void synReply(boolean outFinished, int streamId, List<Header> headerBlock)
+        throws IOException {}
+
+    @Override
+    public void headers(int streamId, List<Header> headerBlock) throws IOException {}
+
+    @Override
+    public void rstStream(int streamId, ErrorCode errorCode) throws IOException {}
+
+    @Override
+    public void settings(Settings okHttpSettings) throws IOException {}
+
+    @Override
+    public void ping(boolean ack, int payload1, int payload2) throws IOException {}
+
+    @Override
+    public void goAway(int lastGoodStreamId, ErrorCode errorCode, byte[] debugData)
+        throws IOException {}
+
+    @Override
+    public void windowUpdate(int streamId, long windowSizeIncrement) throws IOException {}
   }
 }
