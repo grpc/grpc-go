@@ -25,24 +25,19 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"reflect"
 	"time"
 
 	"golang.org/x/oauth2"
-
-	"google.golang.org/grpc/credentials/oauth"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/oauth"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/testdata"
 )
 
-var (
-	addr = flag.String("addr", "localhost:50051", "the address to connect to")
+var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
-	fallbackToken = "some-secret-token"
-)
+const fallbackToken = "some-secret-token"
 
 // logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
 func logger(format string, a ...interface{}) {
@@ -53,9 +48,10 @@ func logger(format string, a ...interface{}) {
 func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	var credsConfigured bool
 	for _, o := range opts {
-		_, ok := o.(*grpc.PerRPCCredsCallOption)
+		_, ok := o.(grpc.PerRPCCredsCallOption)
 		if ok {
 			credsConfigured = true
+			break
 		}
 	}
 	if !credsConfigured {
@@ -77,12 +73,12 @@ type wrappedStream struct {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	logger("Receive a message (Type: %s) at %v", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	logger("Receive a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ClientStream.RecvMsg(m)
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	logger("Send a message (Type: %s) at %v", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ClientStream.SendMsg(m)
 }
 

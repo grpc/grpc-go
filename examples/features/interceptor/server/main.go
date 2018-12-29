@@ -26,16 +26,14 @@ import (
 	"io"
 	"log"
 	"net"
-	"reflect"
 	"strings"
 	"time"
-
-	"google.golang.org/grpc/metadata"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
@@ -120,12 +118,12 @@ type wrappedStream struct {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	logger("Receive a message (Type: %s) at %s", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	logger("Receive a message (Type: %T) at %s", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.RecvMsg(m)
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	logger("Send a message (Type: %s) at %v", reflect.TypeOf(m).String(), time.Now().Format(time.RFC3339))
+	logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.SendMsg(m)
 }
 
