@@ -33,6 +33,8 @@ public final class InternalLogId {
   private static final AtomicLong idAlloc = new AtomicLong();
 
   /**
+   * Creates a log id.
+   *
    * @param type the "Type" to be used when logging this id.   The short name of this class will be
    *     used, or else a default if the class is anonymous.
    * @param details a short, human readable string that describes the object the id is attached to.
@@ -43,6 +45,8 @@ public final class InternalLogId {
   }
 
   /**
+   * Creates a log id.
+   *
    * @param typeName the "Type" to be used when logging this id.
    * @param details a short, human readable string that describes the object the id is attached to.
    *     Typically this will be an address or target.
@@ -56,7 +60,8 @@ public final class InternalLogId {
   }
 
   private final String typeName;
-  private final @Nullable String details;
+  @Nullable
+  private final String details;
   private final long id;
 
   InternalLogId(String typeName, String details, long id) {

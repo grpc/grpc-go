@@ -101,8 +101,6 @@ public class AuthClientTest {
   @Test
   public void defaultTokenDeliveredToServer() {
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    ArgumentCaptor<HelloRequest> requestCaptor = ArgumentCaptor.forClass(HelloRequest.class);
-
     String retVal = client.greet("default token test");
 
     verify(mockServerInterceptor).interceptCall(
@@ -121,7 +119,6 @@ public class AuthClientTest {
   @Test
   public void nonDefaultTokenDeliveredToServer() {
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    ArgumentCaptor<HelloRequest> requestCaptor = ArgumentCaptor.forClass(HelloRequest.class);
 
     client.setTokenValue("non-default-token");
     String retVal = client.greet("non default token test");
