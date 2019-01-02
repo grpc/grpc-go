@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"testing"
@@ -36,7 +37,9 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
 )
 
 // AddOne add 1 to the features slice
@@ -124,16 +127,24 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 
 	go func() {
 		for {
-			if err := stream.(grpc.ServerStream).RecvMsg(in); err != nil {
-				return
+			err := stream.(grpc.ServerStream).RecvMsg(in)
+			switch status.Code(err) {
+			case codes.Canceled:
+			case codes.OK:
+			default:
+				log.Fatalf("server recv error: %v", err)
 			}
 		}
 	}()
 
 	go func() {
 		for {
-			if err := stream.Send(response); err != nil {
-				return
+			err := stream.Send(response)
+			switch status.Code(err) {
+			case codes.Unavailable:
+			case codes.OK:
+			default:
+				log.Fatalf("server send error: %v", err)
 			}
 		}
 	}()

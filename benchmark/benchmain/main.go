@@ -89,7 +89,7 @@ const (
 var allWorkloads = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
 
 var (
-	runMode = []bool{true, true, true} // {runUnary, runStream}
+	runMode = []bool{true, true, true} // {runUnary, runStream, runUnconstrained}
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	ltc                    = []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
@@ -129,12 +129,7 @@ func streamBenchmark(startTimer func(), stopTimer func(uint64), benchFeatures st
 func unconstrainedStreamBenchmark(benchFeatures stats.Features, warmuptime, benchtime time.Duration) (uint64, uint64) {
 	sender, recver, cleanup := makeFuncUnconstrainedStream(benchFeatures)
 	defer cleanup()
-	// Send a request to each stream to let server know about the response type and size.
-	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
-		sender(i)
-	}
 
-	// Run benchmark.
 	var (
 		wg            sync.WaitGroup
 		requestCount  uint64
@@ -145,8 +140,8 @@ func unconstrainedStreamBenchmark(benchFeatures stats.Features, warmuptime, benc
 	// Resets the counters once warmed up
 	go func() {
 		<-time.NewTimer(warmuptime).C
-		go atomic.StoreUint64(&requestCount, 0)
-		go atomic.StoreUint64(&responseCount, 0)
+		atomic.StoreUint64(&requestCount, 0)
+		atomic.StoreUint64(&responseCount, 0)
 	}()
 
 	bmEnd := time.Now().Add(benchtime + warmuptime)
