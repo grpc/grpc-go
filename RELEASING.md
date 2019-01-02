@@ -43,6 +43,8 @@ $ VERSION_FILES=(
   examples/android/helloworld/app/build.gradle
   examples/android/routeguide/app/build.gradle
   examples/example-alts/build.gradle
+  examples/example-gauth/build.gradle
+  examples/example-gauth/pom.xml
   examples/example-kotlin/build.gradle
   examples/example-kotlin/android/helloworld/app/build.gradle
   examples/example-tls/build.gradle
