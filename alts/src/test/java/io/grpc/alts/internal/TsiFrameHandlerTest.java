@@ -71,7 +71,7 @@ public class TsiFrameHandlerTest {
 
     channel.writeAndFlush(msg);
 
-    assertThat(channel.readOutbound()).isEqualTo(msg);
+    assertThat((Object) channel.readOutbound()).isEqualTo(msg);
     channel.close().sync();
     channel.checkException();
   }
@@ -115,7 +115,7 @@ public class TsiFrameHandlerTest {
     channel.close().sync();
 
     assertWithMessage("pending write should be flushed on close")
-        .that(channel.readOutbound()).isEqualTo(msg);
+        .that((Object) channel.readOutbound()).isEqualTo(msg);
     channel.checkException();
   }
 
