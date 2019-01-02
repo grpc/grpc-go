@@ -19,7 +19,6 @@ package io.grpc.okhttp;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -72,7 +71,7 @@ public class AsyncSinkTest {
     queueingExecutor.runAll();
 
     InOrder inOrder = inOrder(mockedSink);
-    inOrder.verify(mockedSink).write(any(Buffer.class), anyInt());
+    inOrder.verify(mockedSink).write(any(Buffer.class), anyLong());
     inOrder.verify(mockedSink).flush();
   }
 
@@ -91,9 +90,9 @@ public class AsyncSinkTest {
     queueingExecutor.runAll();
 
     InOrder inOrder = inOrder(mockedSink);
-    inOrder.verify(mockedSink).write(any(Buffer.class), anyInt());
+    inOrder.verify(mockedSink).write(any(Buffer.class), anyLong());
     inOrder.verify(mockedSink).flush();
-    inOrder.verify(mockedSink).write(any(Buffer.class), anyInt());
+    inOrder.verify(mockedSink).write(any(Buffer.class), anyLong());
     inOrder.verify(mockedSink).flush();
   }
 
