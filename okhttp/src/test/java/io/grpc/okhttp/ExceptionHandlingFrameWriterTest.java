@@ -35,10 +35,10 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ExceptionHandlingFrameWriterTest {
 
-  private FrameWriter mockedFrameWriter = mock(FrameWriter.class);
-  private TransportExceptionHandler transportExceptionHandler =
+  private final FrameWriter mockedFrameWriter = mock(FrameWriter.class);
+  private final TransportExceptionHandler transportExceptionHandler =
       mock(TransportExceptionHandler.class);
-  private ExceptionHandlingFrameWriter exceptionHandlingFrameWriter =
+  private final ExceptionHandlingFrameWriter exceptionHandlingFrameWriter =
       new ExceptionHandlingFrameWriter(transportExceptionHandler, mockedFrameWriter);
 
   @Test

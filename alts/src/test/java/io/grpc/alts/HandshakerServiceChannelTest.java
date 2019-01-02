@@ -37,7 +37,7 @@ import org.junit.runners.JUnit4;
 public final class HandshakerServiceChannelTest {
   @Rule
   public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
-  private Server server = grpcCleanup.register(
+  private final Server server = grpcCleanup.register(
       ServerBuilder.forPort(0)
         .addService(new SimpleServiceGrpc.SimpleServiceImplBase() {
           @Override

@@ -2117,7 +2117,7 @@ public class OkHttpClientTransportTest {
   private static class MockFrameWriter implements FrameWriter {
 
     private Socket socket;
-    private Queue<Buffer> capturedBuffer;
+    private final Queue<Buffer> capturedBuffer;
 
     public MockFrameWriter(Socket socket, Queue<Buffer> capturedBuffer) {
       // Sets a socket to close. Some tests assumes that FrameWriter will close underlying sink

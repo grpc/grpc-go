@@ -182,7 +182,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private int maxConcurrentStreams = 0;
   @SuppressWarnings("JdkObsolete") // Usage is bursty; want low memory usage when empty
   @GuardedBy("lock")
-  private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<>();
+  private final LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<>();
   private final ConnectionSpec connectionSpec;
   private FrameWriter testFrameWriter;
   private ScheduledExecutorService scheduler;

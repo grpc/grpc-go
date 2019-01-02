@@ -87,7 +87,8 @@ public class TsiFrameHandlerTest {
     try {
       channel.checkException();
     } catch (Exception e) {
-      throw new AssertionError("Any attempt after close should be ignored without out exception");
+      throw new AssertionError(
+          "Any attempt after close should be ignored without out exception", e);
     }
   }
 

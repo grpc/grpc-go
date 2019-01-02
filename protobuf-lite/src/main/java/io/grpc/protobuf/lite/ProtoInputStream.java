@@ -61,7 +61,7 @@ final class ProtoInputStream extends InputStream implements Drainable, KnownLeng
   }
 
   @Override
-  public int read() throws IOException {
+  public int read() {
     if (message != null) {
       partial = new ByteArrayInputStream(message.toByteArray());
       message = null;

@@ -51,11 +51,11 @@ import org.mockito.InOrder;
 @RunWith(JUnit4.class)
 public class AsyncSinkTest {
 
-  private Socket socket = mock(Socket.class);
-  private Sink mockedSink = mock(VoidSink.class, CALLS_REAL_METHODS);
-  private QueueingExecutor queueingExecutor = new QueueingExecutor();
-  private TransportExceptionHandler exceptionHandler = mock(TransportExceptionHandler.class);
-  private AsyncSink sink =
+  private final Socket socket = mock(Socket.class);
+  private final Sink mockedSink = mock(VoidSink.class, CALLS_REAL_METHODS);
+  private final QueueingExecutor queueingExecutor = new QueueingExecutor();
+  private final TransportExceptionHandler exceptionHandler = mock(TransportExceptionHandler.class);
+  private final AsyncSink sink =
       AsyncSink.sink(new SerializingExecutor(queueingExecutor), exceptionHandler);
 
   @Before
@@ -236,7 +236,7 @@ public class AsyncSinkTest {
     // flush should write everything.
     sink.flush();
     queueingExecutor.runAll();
-    verify(mockedSink).write(any(Buffer.class),eq((long) payloadSize - completeSegmentBytes));
+    verify(mockedSink).write(any(Buffer.class), eq((long) payloadSize - completeSegmentBytes));
     verify(mockedSink).flush();
   }
 

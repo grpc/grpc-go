@@ -32,7 +32,7 @@ public interface Codec extends Compressor, Decompressor {
    * A gzip compressor and decompressor.  In the future this will likely support other
    * compression methods, such as compression level.
    */
-  public static final class Gzip implements Codec {
+  final class Gzip implements Codec {
     @Override
     public String getMessageEncoding() {
       return "gzip";
@@ -53,7 +53,7 @@ public interface Codec extends Compressor, Decompressor {
    * The "identity", or "none" codec.  This codec is special in that it can be used to explicitly
    * disable Call compression on a Channel that by default compresses.
    */
-  public static final class Identity implements Codec {
+  final class Identity implements Codec {
     /**
      * Special sentinel codec indicating that no compression should be used.  Users should use
      * reference equality to see if compression is disabled.
@@ -61,7 +61,7 @@ public interface Codec extends Compressor, Decompressor {
     public static final Codec NONE = new Identity();
 
     @Override
-    public InputStream decompress(InputStream is) throws IOException {
+    public InputStream decompress(InputStream is) {
       return is;
     }
 
@@ -71,7 +71,7 @@ public interface Codec extends Compressor, Decompressor {
     }
 
     @Override
-    public OutputStream compress(OutputStream os) throws IOException {
+    public OutputStream compress(OutputStream os) {
       return os;
     }
 

@@ -16,7 +16,15 @@
 
 package io.grpc.examples.authentication;
 
-import io.grpc.*;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptors;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
@@ -24,7 +32,9 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerInterceptor;
+import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
+import java.io.IOException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -32,13 +42,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Matchers;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
  * Unit tests for {@link AuthClient} testing the default and non-default tokens
@@ -55,13 +58,13 @@ public class AuthClientTest {
   public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
   private final ServerInterceptor mockServerInterceptor = mock(ServerInterceptor.class, delegatesTo(
-          new ServerInterceptor() {
-            @Override
-            public <ReqT, RespT> Listener<ReqT> interceptCall(
-                    ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-              return next.startCall(call, headers);
-            }
-          }));
+      new ServerInterceptor() {
+        @Override
+        public <ReqT, RespT> Listener<ReqT> interceptCall(
+            ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+          return next.startCall(call, headers);
+        }
+      }));
 
   private AuthClient client;
 
@@ -73,51 +76,50 @@ public class AuthClientTest {
 
     // Create a server, add service, start, and register for automatic graceful shutdown.
     grpcCleanup.register(InProcessServerBuilder.forName(serverName).directExecutor()
-            .addService(ServerInterceptors.intercept(new GreeterGrpc.GreeterImplBase() {
+        .addService(ServerInterceptors.intercept(
+            new GreeterGrpc.GreeterImplBase() {
 
               @Override
-              public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
-                                   io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver) {
-                HelloReply reply = HelloReply.newBuilder().setMessage("AuthClientTest user=" + request.getName()).build();
+              public void sayHello(
+                  HelloRequest request, StreamObserver<HelloReply> responseObserver) {
+                HelloReply reply = HelloReply.newBuilder()
+                    .setMessage("AuthClientTest user=" + request.getName()).build();
                 responseObserver.onNext(reply);
                 responseObserver.onCompleted();
               }
-            }, mockServerInterceptor))
-            .build().start());
+            },
+            mockServerInterceptor))
+        .build().start());
 
     // Create an AuthClient using the in-process channel;
     client = new AuthClient(InProcessChannelBuilder.forName(serverName).directExecutor());
   }
 
   /**
-   * Test default JWT token used
-   *
-   * @throws Exception
+   * Test default JWT token used.
    */
   @Test
-  public void defaultTokenDeliveredToServer() throws Exception {
+  public void defaultTokenDeliveredToServer() {
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     ArgumentCaptor<HelloRequest> requestCaptor = ArgumentCaptor.forClass(HelloRequest.class);
 
     String retVal = client.greet("default token test");
 
     verify(mockServerInterceptor).interceptCall(
-            Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
-            metadataCaptor.capture(),
-            Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        metadataCaptor.capture(),
+        Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
     assertEquals(
-            "my-default-token",
-            metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));
+        "my-default-token",
+        metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));
     assertEquals("AuthClientTest user=default token test", retVal);
   }
 
   /**
-   * Test non-default JWT token used
-   *
-   * @throws Exception
+   * Test non-default JWT token used.
    */
   @Test
-  public void nonDefaultTokenDeliveredToServer() throws Exception {
+  public void nonDefaultTokenDeliveredToServer() {
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     ArgumentCaptor<HelloRequest> requestCaptor = ArgumentCaptor.forClass(HelloRequest.class);
 
@@ -125,12 +127,12 @@ public class AuthClientTest {
     String retVal = client.greet("non default token test");
 
     verify(mockServerInterceptor).interceptCall(
-            Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
-            metadataCaptor.capture(),
-            Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        metadataCaptor.capture(),
+        Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
     assertEquals(
-            "non-default-token",
-            metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));
+        "non-default-token",
+        metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));
     assertEquals("AuthClientTest user=non default token test", retVal);
   }
 }
