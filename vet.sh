@@ -120,7 +120,7 @@ done
 ### END HACK HACK HACK
 
 # TODO(menghanl): fix errors in transport_test.
-staticcheck -ignore '
+staticcheck -go 1.9 -ignore '
 balancer.go:SA1019
 balancer_test.go:SA1019
 clientconn_test.go:SA1019
