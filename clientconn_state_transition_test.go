@@ -29,7 +29,6 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -46,9 +45,7 @@ func init() {
 // These tests use a pipeListener. This listener is similar to net.Listener
 // except that it is unbuffered, so each read and write will wait for the other
 // side's corresponding write or read.
-func TestStateTransitions_SingleAddress(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 	mctBkp := getMinConnectTimeout()
 	defer func() {
 		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
@@ -151,8 +148,6 @@ client enters TRANSIENT FAILURE.`,
 }
 
 func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn) {
-	defer leakcheck.Check(t)
-
 	stateNotifications := make(chan connectivity.State, len(want))
 	testBalancer.ResetNotifier(stateNotifications)
 
@@ -202,9 +197,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 }
 
 // When a READY connection is closed, the client enters TRANSIENT FAILURE before CONNECTING.
-func TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
@@ -273,9 +266,7 @@ func TestStateTransitions_ReadyToTransientFailure(t *testing.T) {
 
 // When the first connection is closed, the client enters stays in CONNECTING
 // until it tries the second address (which succeeds, and then it enters READY).
-func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
@@ -370,9 +361,7 @@ func TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 // When there are multiple addresses, and we enter READY on one of them, a
 // later closure should cause the client to enter TRANSIENT FAILURE before it
 // re-enters CONNECTING.
-func TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
-	defer leakcheck.Check(t)
-
+func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014 gRPC authors.
+ * Copyright 2018 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,16 @@ package grpc
 import (
 	"testing"
 
-	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/encoding/proto"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/leakcheck"
 )
 
-func (s) TestGetCodecForProtoIsNotNil(t *testing.T) {
-	if encoding.GetCodec(proto.Name) == nil {
-		t.Fatalf("encoding.GetCodec(%q) must not be nil by default", proto.Name)
-	}
+type s struct{}
+
+func (s) Teardown(t *testing.T) {
+	leakcheck.Check(t)
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }

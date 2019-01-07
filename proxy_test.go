@@ -31,8 +31,6 @@ import (
 	"net/url"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/internal/leakcheck"
 )
 
 const (
@@ -102,7 +100,6 @@ func (p *proxyServer) stop() {
 }
 
 func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxyReqCheck func(*http.Request) error) {
-	defer leakcheck.Check(t)
 	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -165,7 +162,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	}
 }
 
-func TestHTTPConnect(t *testing.T) {
+func (s) TestHTTPConnect(t *testing.T) {
 	testHTTPConnect(t,
 		func(in *url.URL) *url.URL {
 			return in
@@ -182,7 +179,7 @@ func TestHTTPConnect(t *testing.T) {
 	)
 }
 
-func TestHTTPConnectBasicAuth(t *testing.T) {
+func (s) TestHTTPConnectBasicAuth(t *testing.T) {
 	const (
 		user     = "notAUser"
 		password = "notAPassword"
@@ -210,8 +207,7 @@ func TestHTTPConnectBasicAuth(t *testing.T) {
 	)
 }
 
-func TestMapAddressEnv(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestMapAddressEnv(t *testing.T) {
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == envTestAddr {

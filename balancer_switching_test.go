@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -129,8 +128,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 	return nil
 }
 
-func TestSwitchBalancer(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestSwitchBalancer(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -161,8 +159,7 @@ func TestSwitchBalancer(t *testing.T) {
 }
 
 // Test that balancer specified by dial option will not be overridden.
-func TestBalancerDialOption(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestBalancerDialOption(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -189,8 +186,7 @@ func TestBalancerDialOption(t *testing.T) {
 }
 
 // First addr update contains grpclb.
-func TestSwitchBalancerGRPCLBFirst(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -251,8 +247,7 @@ func TestSwitchBalancerGRPCLBFirst(t *testing.T) {
 }
 
 // First addr update does not contain grpclb.
-func TestSwitchBalancerGRPCLBSecond(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -329,8 +324,7 @@ func TestSwitchBalancerGRPCLBSecond(t *testing.T) {
 // Test that if the current balancer is roundrobin, after switching to grpclb,
 // when the resolved address doesn't contain grpclb addresses, balancer will be
 // switched back to roundrobin.
-func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -393,8 +387,7 @@ func TestSwitchBalancerGRPCLBRoundRobin(t *testing.T) {
 // Test that if resolved address list contains grpclb, the balancer option in
 // service config won't take effect. But when there's no grpclb address in a new
 // resolved address list, balancer will be switched to the new one.
-func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
@@ -476,11 +469,10 @@ func TestSwitchBalancerGRPCLBServiceConfig(t *testing.T) {
 // The tests sends 3 server addresses (all backends) as resolved addresses, but
 // claim the first one is grpclb server. The all RPCs should all be send to the
 // other addresses, not the first one.
-func TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
+func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	internal.BalancerUnregister("grpclb")
 	defer balancer.Register(&magicalLB{})
 
-	defer leakcheck.Check(t)
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 

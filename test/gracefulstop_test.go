@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/leakcheck"
 
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -106,8 +105,7 @@ func (d *delayConn) Read(b []byte) (n int, err error) {
 	return d.Conn.Read(b)
 }
 
-func TestGracefulStop(t *testing.T) {
-	defer leakcheck.Check(t)
+func (s) TestGracefulStop(t *testing.T) {
 	// This test ensures GracefulStop cannot race and break RPCs on new
 	// connections created after GracefulStop was called but before
 	// listener.Accept() returns a "closing" error.
