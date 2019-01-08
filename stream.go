@@ -312,14 +312,12 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		// the client will eventually receive, and then we will cancel the stream's
 		// context in clientStream.finish.
 		go func() {
-			var err error
 			select {
 			case <-cc.ctx.Done():
-				err = ErrClientConnClosing
+				cs.finish(ErrClientConnClosing)
 			case <-ctx.Done():
-				err = toRPCErr(ctx.Err())
+				cs.finish(toRPCErr(ctx.Err()))
 			}
-			cs.finish(err)
 		}()
 	}
 	return cs, nil
