@@ -17,7 +17,7 @@
  */
 
 // Binary wait_for_ready is an example for "wait for ready".
-package main
+package test
 
 import (
 	"context"
@@ -57,8 +57,8 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 }
 
 //TestRace tests.
-func TestRace(t *testing.T) {
-	lis, err := net.Listen("tcp", ":50053")
+func TestContextCanceled(t *testing.T) {
+	lis, err := net.Listen("tcp", ":50054")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestRace(t *testing.T) {
 	}()
 	defer s.Stop()
 
-	conn, err := grpc.Dial("localhost:50053", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:50054", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
