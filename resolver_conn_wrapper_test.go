@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-func TestParseTarget(t *testing.T) {
+func (s) TestParseTarget(t *testing.T) {
 	for _, test := range []resolver.Target{
 		{Scheme: "dns", Authority: "", Endpoint: "google.com"},
 		{Scheme: "dns", Authority: "a.server.com", Endpoint: "google.com"},
@@ -42,7 +42,7 @@ func TestParseTarget(t *testing.T) {
 	}
 }
 
-func TestParseTargetString(t *testing.T) {
+func (s) TestParseTargetString(t *testing.T) {
 	for _, test := range []struct {
 		targetStr string
 		want      resolver.Target
@@ -83,7 +83,7 @@ func TestParseTargetString(t *testing.T) {
 
 // The target string with unknown scheme should be kept unchanged and passed to
 // the dialer.
-func TestDialParseTargetUnknownScheme(t *testing.T) {
+func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 	for _, test := range []struct {
 		targetStr string
 		want      string

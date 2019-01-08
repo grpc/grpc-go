@@ -60,6 +60,7 @@ type dialOptions struct {
 	disableServiceConfig bool
 	disableRetry         bool
 	disableHealthCheck   bool
+	healthCheckFunc      internal.HealthChecker
 }
 
 // DialOption configures how we set up the connection.
@@ -94,9 +95,9 @@ func newFuncDialOption(f func(*dialOptions)) *funcDialOption {
 // WithWaitForHandshake blocks until the initial settings frame is received from
 // the server before assigning RPCs to the connection.
 //
-// Deprecated: this will become the default behavior in the 1.17 release, and
+// Deprecated: this will become the default behavior in the 1.18 release, and
 // will be removed after the 1.18 release.  To override the default behavior in
-// the 1.17 release, either use this dial option or set the environment
+// the 1.18 release, either use this dial option or set the environment
 // variable GRPC_GO_READY_BEFORE_HANDSHAKE=on.
 func WithWaitForHandshake() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
@@ -338,6 +339,7 @@ func withContextDialer(f func(context.Context, string) (net.Conn, error)) DialOp
 func init() {
 	internal.WithContextDialer = withContextDialer
 	internal.WithResolverBuilder = withResolverBuilder
+	internal.WithHealthCheckFunc = withHealthCheckFunc
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing
@@ -468,10 +470,22 @@ func WithDisableHealthCheck() DialOption {
 		o.disableHealthCheck = true
 	})
 }
+
+// withHealthCheckFunc replaces the default health check function with the provided one. It makes
+// tests easier to change the health check function.
+//
+// For testing purpose only.
+func withHealthCheckFunc(f internal.HealthChecker) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.healthCheckFunc = f
+	})
+}
+
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		disableRetry: !envconfig.Retry,
-		reqHandshake: envconfig.RequireHandshake,
+		disableRetry:    !envconfig.Retry,
+		reqHandshake:    envconfig.RequireHandshake,
+		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,

@@ -16,10 +16,12 @@
  *
  */
 
+// Binary client is an example client.
 package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -30,9 +32,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var addr = flag.String("addr", "localhost:50052", "the address to connect to")
+
 func main() {
+	flag.Parse()
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
