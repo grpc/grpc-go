@@ -390,11 +390,11 @@ type clientStream struct {
 	serverHeaderBinlogged bool
 
 	mu                      sync.Mutex
-	firstAttempt            bool // if true, transparent retry is valid
-	numRetries              int  // exclusive of transparent retry attempt(s)
-	numRetriesSincePushback int  // retries since pushback; to reset backoff
-	finished                bool // TODO: replace with atomic cmpxchg or sync.Once?
-	canceled                bool
+	firstAttempt            bool       // if true, transparent retry is valid
+	numRetries              int        // exclusive of transparent retry attempt(s)
+	numRetriesSincePushback int        // retries since pushback; to reset backoff
+	finished                bool       // TODO: replace with atomic cmpxchg or sync.Once?
+	canceled                bool       // RecvMsg returned context canceled error
 	attempt                 *csAttempt // the active client stream attempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
 	committed  bool                       // active attempt committed for retry?
@@ -631,6 +631,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	if cs.attempt.s == nil {
 		return nil
 	}
+	// Returns nil Trailer, if RecvMsg got a context canceled error
 	if cs.canceled {
 		return nil
 	}
@@ -720,7 +721,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 	err := cs.withRetry(func(a *csAttempt) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
-	//log.Printf("%v", toRPCErr(cs.ctx.Err()))
+	// The context is canceled.
 	if err.Error() == toRPCErr(context.Canceled).Error() {
 		cs.canceled = true
 	}
