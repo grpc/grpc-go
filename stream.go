@@ -312,12 +312,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		// the client will eventually receive, and then we will cancel the stream's
 		// context in clientStream.finish.
 		go func() {
+			var err error
 			select {
 			case <-cc.ctx.Done():
-				cs.finish(ErrClientConnClosing)
+				err = ErrClientConnClosing
 			case <-ctx.Done():
-				cs.finish(toRPCErr(ctx.Err()))
+				err = toRPCErr(ctx.Err())
 			}
+			cs.finish(err)
 		}()
 	}
 	return cs, nil
@@ -388,10 +390,11 @@ type clientStream struct {
 	serverHeaderBinlogged bool
 
 	mu                      sync.Mutex
-	firstAttempt            bool       // if true, transparent retry is valid
-	numRetries              int        // exclusive of transparent retry attempt(s)
-	numRetriesSincePushback int        // retries since pushback; to reset backoff
-	finished                bool       // TODO: replace with atomic cmpxchg or sync.Once?
+	firstAttempt            bool // if true, transparent retry is valid
+	numRetries              int  // exclusive of transparent retry attempt(s)
+	numRetriesSincePushback int  // retries since pushback; to reset backoff
+	finished                bool // TODO: replace with atomic cmpxchg or sync.Once?
+	canceled                bool
 	attempt                 *csAttempt // the active client stream attempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
 	committed  bool                       // active attempt committed for retry?
@@ -628,6 +631,9 @@ func (cs *clientStream) Trailer() metadata.MD {
 	if cs.attempt.s == nil {
 		return nil
 	}
+	if cs.canceled {
+		return nil
+	}
 	return cs.attempt.s.Trailer()
 }
 
@@ -714,6 +720,10 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 	err := cs.withRetry(func(a *csAttempt) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
+	//log.Printf("%v", toRPCErr(cs.ctx.Err()))
+	if err.Error() == toRPCErr(context.Canceled).Error() {
+		cs.canceled = true
+	}
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ServerMessage{
 			OnClientSide: true,

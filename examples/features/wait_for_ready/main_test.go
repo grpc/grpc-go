@@ -26,16 +26,17 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 // server is used to implement EchoServer.
-type server struct{}
+type server struct {
+	wait chan struct{}
+}
 
 func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
@@ -51,18 +52,20 @@ func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) e
 
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
+	close(s.wait)
 	return status.Error(codes.PermissionDenied, "perm denied")
 }
 
 //TestRace tests.
-func TestRace(*testing.T) {
+func TestRace(t *testing.T) {
 	lis, err := net.Listen("tcp", ":50053")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &server{})
+	server := &server{make(chan struct{})}
+	pb.RegisterEchoServer(s, server)
 	go func() {
 		err := s.Serve(lis)
 		if err != nil {
@@ -80,28 +83,19 @@ func TestRace(*testing.T) {
 	c := pb.NewEchoClient(conn)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	_ = cancel
 	str, err := c.BidirectionalStreamingEcho(ctx)
-	time.Sleep(1 * time.Millisecond)
-	err = str.Send(&pb.EchoRequest{Message: "a"})
-	if err != nil {
-		// log.Printf("send err: %v\n", err)
-		cancel()
-	}
-	_, err = str.Header()
-	if err != nil {
-		// log.Printf("header err: %v\n", err)
-	}
+	<-server.wait
+	time.Sleep(time.Millisecond)
+	cancel()
 	_, err = str.Recv()
-	if err != nil {
-		// log.Printf("recv err: %v\n", err)
+	if err == nil {
+		t.Fatalf("non-nil error expected from Recv()")
 	}
 	trl := str.Trailer()
-	_ = trl
-	// if status.Code(err) == codes.PermissionDenied && trl["a"] == nil {
-	// 	log.Printf("<<a>> not in trailer")
-	// } else if status.Code(err) == codes.Canceled && trl["a"] != nil {
-	// 	log.Printf("<<a>> in trailer")
-	// }
+	if status.Code(err) == codes.PermissionDenied && trl["a"] == nil {
+		t.Fatalf("<<a>> not in trailer")
+	} else if status.Code(err) == codes.Canceled && trl["a"] != nil {
+		t.Fatalf("<<a>> in trailer")
+	}
 }
