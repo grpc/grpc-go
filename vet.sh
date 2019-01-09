@@ -33,6 +33,12 @@ fail_on_output() {
   tee /dev/stderr | (! read)
 }
 
+# Fail if a dependency was added without the necessary go.mod/go.sum change
+# being part of the commit.
+GO111MODULE=on go mod tidy
+git diff go.mod | tee /dev/stderr | (! read)
+git diff go.sum | tee /dev/stderr | (! read)
+
 PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
 
 if [[ "$1" = "-install" ]]; then
