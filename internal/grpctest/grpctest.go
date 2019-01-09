@@ -37,8 +37,15 @@ func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 }
 
 // RunSubTests runs all "Test___" functions that are methods of x as subtests
-// of the current test.  If x contains Setup/Teardown functions, those are run
-// before/after each of the test functions, respectively.
+// of the current test.  If x contains methods "Setup(*testing.T)" or
+// "Teardown(*testing.T)", those are run before or after each of the test
+// functions, respectively.
+//
+// For example usage, see example_test.go.  Run it using:
+// $ go test -v -run '^Test$' .
+//
+// To run a specific test/subtest:
+// $ go test -v -run '^Test$/^Something$' .
 func RunSubTests(t *testing.T, x interface{}) {
 	xt := reflect.TypeOf(x)
 	xv := reflect.ValueOf(x)
