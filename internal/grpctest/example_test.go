@@ -44,7 +44,7 @@ func (s *s) TestSomething(t *testing.T) {
 func (s *s) TestSomethingElse(t *testing.T) {
 	t.Log("TestSomethingElse")
 	if got, want := s.i%4, 1; got != want {
-		t.Errorf("s.i %% 4 = %v; want %v", got, s)
+		t.Errorf("s.i %% 4 = %v; want %v", got, want)
 	}
 	s.i = 3
 }
