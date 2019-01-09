@@ -62,72 +62,59 @@ func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.Sta
 }
 
 func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
-	numServers := 2
-	servers := make([]net.Listener, numServers)
-	var err error
-	for i := 0; i < numServers; i++ {
-		servers[i], err = net.Listen("tcp", "localhost:0")
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis1.Close()
+	lis1Addr := resolver.Address{Addr: lis1.Addr().String()}
+	lis1Done := make(chan struct{})
+	// 1st listener accepts the connection and immediately closes it.
+	go func() {
+		defer close(lis1Done)
+		conn, err := lis1.Accept()
 		if err != nil {
-			t.Fatalf("Error while listening. Err: %v", err)
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
 		}
+		conn.Close()
+	}()
+
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
 	}
-	dones := make([]chan struct{}, numServers)
-	for i := 0; i < numServers; i++ {
-		dones[i] = make(chan struct{})
-	}
-	for i := 0; i < numServers; i++ {
-		go func(i int) {
-			defer func() {
-				close(dones[i])
-			}()
-			conn, err := servers[i].Accept()
-			if err != nil {
-				t.Errorf("Error while accepting. Err: %v", err)
-				return
-			}
-			defer conn.Close()
-			switch i {
-			case 0: // 1st server accepts the connection and immediately closes it.
-			case 1: // 2nd server accepts the connection and sends settings frames.
-				framer := http2.NewFramer(conn, conn)
-				if err := framer.WriteSettings(http2.Setting{}); err != nil {
-					t.Errorf("Error while writing settings frame. %v", err)
-					return
-				}
-				conn.SetDeadline(time.Now().Add(time.Second))
-				buf := make([]byte, 1024)
-				for { // Make sure the connection stays healthy.
-					_, err = conn.Read(buf)
-					if err == nil {
-						continue
-					}
-					if nerr, ok := err.(net.Error); !ok || !nerr.Timeout() {
-						t.Errorf("Server expected the conn.Read(_) to timeout instead got error: %v", err)
-					}
-					return
-				}
-			}
-		}(i)
-	}
+	defer lis2.Close()
+	lis2Done := make(chan struct{})
+	lis2Addr := resolver.Address{Addr: lis2.Addr().String()}
+	// 2nd listener should get a connection attempt since the first one failed.
+	go func() {
+		defer close(lis2Done)
+		_, err := lis2.Accept() // Closing the client will clean up this conn.
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+	}()
+
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	resolvedAddrs := make([]resolver.Address, numServers)
-	for i := 0; i < numServers; i++ {
-		resolvedAddrs[i] = resolver.Address{Addr: servers[i].Addr().String()}
-	}
-	r.InitialAddrs(resolvedAddrs)
+	r.InitialAddrs([]resolver.Address{lis1Addr, lis2Addr})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
 	if err != nil {
-		t.Errorf("Dial failed. Err: %v", err)
-	} else {
-		defer client.Close()
+		t.Fatalf("Dial failed. Err: %v", err)
 	}
-	time.Sleep(time.Second) // Close the servers after a second for cleanup.
-	for _, s := range servers {
-		s.Close()
+	defer client.Close()
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-timeout:
+		t.Fatal("timed out waiting for server 1 to finish")
+	case <-lis1Done:
 	}
-	for _, done := range dones {
-		<-done
+	select {
+	case <-timeout:
+		t.Fatal("timed out waiting for server 2 to finish")
+	case <-lis2Done:
 	}
 }
 
