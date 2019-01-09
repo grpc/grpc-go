@@ -49,6 +49,9 @@ func (s) TestContextCanceled(t *testing.T) {
 	defer cancel()
 
 	str, err := ss.client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
+	}
 	<-wait
 	time.Sleep(time.Millisecond)
 	cancel()
