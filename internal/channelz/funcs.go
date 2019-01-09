@@ -155,6 +155,11 @@ func GetSocket(id int64) *SocketMetric {
 	return db.get().GetSocket(id)
 }
 
+// GetServer returns the ServerMetric for the server (identified by id).
+func GetServer(id int64) *ServerMetric {
+	return db.get().GetServer(id)
+}
+
 // RegisterChannel registers the given channel c in channelz database with ref
 // as its reference name, and add it to the child list of its parent (identified
 // by pid). pid = 0 means no parent. It returns the unique channelz tracking id
@@ -662,6 +667,23 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 	}
 	c.mu.RUnlock()
 	return nil
+}
+
+func (c *channelMap) GetServer(id int64) *ServerMetric {
+	sm := &ServerMetric{}
+	var svr *server
+	var ok bool
+	c.mu.RLock()
+	if svr, ok = c.servers[id]; !ok {
+		c.mu.RUnlock()
+		return nil
+	}
+	sm.ListenSockets = copyMap(svr.listenSockets)
+	c.mu.RUnlock()
+	sm.ID = svr.id
+	sm.RefName = svr.refName
+	sm.ServerData = svr.s.ChannelzMetric()
+	return sm
 }
 
 type idGenerator struct {

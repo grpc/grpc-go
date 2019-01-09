@@ -312,7 +312,7 @@ func (s *serverImpl) GetServerSockets(ctx context.Context, req *channelzpb.GetSe
 func (s *serverImpl) GetChannel(ctx context.Context, req *channelzpb.GetChannelRequest) (*channelzpb.GetChannelResponse, error) {
 	var metric *channelz.ChannelMetric
 	if metric = channelz.GetChannel(req.GetChannelId()); metric == nil {
-		return &channelzpb.GetChannelResponse{}, nil
+		return nil, status.Errorf(codes.NotFound, "requested channel %d not found", req.GetChannelId())
 	}
 	resp := &channelzpb.GetChannelResponse{Channel: channelMetricToProto(metric)}
 	return resp, nil
@@ -321,7 +321,7 @@ func (s *serverImpl) GetChannel(ctx context.Context, req *channelzpb.GetChannelR
 func (s *serverImpl) GetSubchannel(ctx context.Context, req *channelzpb.GetSubchannelRequest) (*channelzpb.GetSubchannelResponse, error) {
 	var metric *channelz.SubChannelMetric
 	if metric = channelz.GetSubChannel(req.GetSubchannelId()); metric == nil {
-		return &channelzpb.GetSubchannelResponse{}, nil
+		return nil, status.Errorf(codes.NotFound, "requested sub channel %d not found", req.GetSubchannelId())
 	}
 	resp := &channelzpb.GetSubchannelResponse{Subchannel: subChannelMetricToProto(metric)}
 	return resp, nil
@@ -330,12 +330,17 @@ func (s *serverImpl) GetSubchannel(ctx context.Context, req *channelzpb.GetSubch
 func (s *serverImpl) GetSocket(ctx context.Context, req *channelzpb.GetSocketRequest) (*channelzpb.GetSocketResponse, error) {
 	var metric *channelz.SocketMetric
 	if metric = channelz.GetSocket(req.GetSocketId()); metric == nil {
-		return &channelzpb.GetSocketResponse{}, nil
+		return nil, status.Errorf(codes.NotFound, "requested socket %d not found", req.GetSocketId())
 	}
 	resp := &channelzpb.GetSocketResponse{Socket: socketMetricToProto(metric)}
 	return resp, nil
 }
 
 func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetServer not implemented")
+	var metric *channelz.ServerMetric
+	if metric = channelz.GetServer(req.GetServerId()); metric == nil {
+		return nil, status.Errorf(codes.NotFound, "requested server %d not found", req.GetServerId())
+	}
+	resp := &channelzpb.GetServerResponse{Server: serverMetricToProto(metric)}
+	return resp, nil
 }
