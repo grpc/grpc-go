@@ -235,7 +235,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
-
 	return &testpb.SimpleResponse{
 		Payload: payload,
 	}, nil

@@ -342,6 +342,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
+		ct:             t,
 		done:           make(chan struct{}),
 		method:         callHdr.Method,
 		sendCompress:   callHdr.SendCompress,
@@ -362,6 +363,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
 			recv:    s.buf,
+			stream:  s,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
