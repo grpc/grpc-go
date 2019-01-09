@@ -158,8 +158,8 @@ def com_google_errorprone_error_prone_annotations():
 def com_google_guava():
     native.maven_jar(
         name = "com_google_guava_guava",
-        artifact = "com.google.guava:guava:26.0-android",
-        sha1 = "ef69663836b339db335fde0df06fb3cd84e3742b",
+        artifact = "com.google.guava:guava:25.1-android",
+        sha1 = "bdaab946ca5ad20253502d873ba0c3313d141036",
     )
 
 def com_google_j2objc_j2objc_annotations():
