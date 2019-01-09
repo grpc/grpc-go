@@ -56,6 +56,6 @@ func (s *s) Teardown(t *testing.T) {
 	}
 }
 
-func Test(t *testing.T) {
+func TestExample(t *testing.T) {
 	grpctest.RunSubTests(t, &s{})
 }
