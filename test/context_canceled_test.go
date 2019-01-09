@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
  *
  */
 
-// Binary wait_for_ready is an example for "wait for ready".
 package test
 
 import (
@@ -30,13 +29,10 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-//TestRace tests.
-func (s) TestContextCanceled(t *testing.T) {
-	wait := make(chan struct{})
+func TestContextCanceled(t *testing.T) {
 	ss := &stubServer{
 		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
 			stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
-			close(wait)
 			return status.Error(codes.PermissionDenied, "perm denied")
 		},
 	}
@@ -45,24 +41,30 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	cntCanceled := 0
+	for i := 0; i < 100 && (cntCanceled < 5 || i-cntCanceled < 5); i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	str, err := ss.client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
-	}
-	<-wait
-	time.Sleep(time.Millisecond)
-	cancel()
-	_, err = str.Recv()
-	if err == nil {
-		t.Fatalf("non-nil error expected from Recv()")
-	}
-	trl := str.Trailer()
-	if status.Code(err) == codes.PermissionDenied && trl["a"] == nil {
-		t.Fatalf("<<a>> not in trailer")
-	} else if status.Code(err) == codes.Canceled && trl["a"] != nil {
-		t.Fatalf("<<a>> in trailer")
+		str, err := ss.client.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
+		}
+		time.Sleep(time.Millisecond)
+		cancel()
+		_, err = str.Recv()
+		if err == nil {
+			t.Fatalf("non-nil error expected from Recv()")
+		}
+		code := status.Code(err)
+		if code == codes.Canceled {
+			cntCanceled++
+		}
+		trl := str.Trailer()
+		if code == codes.PermissionDenied && trl["a"] == nil {
+			t.Fatalf("<<a>> not in trailer")
+		} else if code == codes.Canceled && trl["a"] != nil {
+			t.Fatalf("<<a>> in trailer")
+		}
 	}
 }

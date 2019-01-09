@@ -315,7 +315,9 @@ func (s *Stream) TrailersOnly() (bool, error) {
 // It can be safely read only after stream has ended that is either read
 // or write have returned io.EOF.
 func (s *Stream) Trailer() metadata.MD {
+	s.hdrMu.Lock()
 	c := s.trailer.Copy()
+	s.hdrMu.Unlock()
 	return c
 }
 
@@ -395,7 +397,13 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 		return 0, er
 	}
 	s.requestRead(len(p))
-	return io.ReadFull(s.trReader, p)
+	n, err = io.ReadFull(s.trReader, p)
+	if err != nil && err != io.EOF {
+		s.hdrMu.Lock()
+		s.trailer = nil
+		s.hdrMu.Unlock()
+	}
+	return n, err
 }
 
 // tranportReader reads all the data available for this Stream from the transport and

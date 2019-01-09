@@ -701,7 +701,9 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	// only after updating this.
 	s.status = st
 	if len(mdata) > 0 {
+		s.hdrMu.Lock()
 		s.trailer = mdata
+		s.hdrMu.Unlock()
 	}
 	if err != nil {
 		// This will unblock reads eventually.

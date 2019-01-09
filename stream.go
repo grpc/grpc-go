@@ -629,10 +629,6 @@ func (cs *clientStream) Trailer() metadata.MD {
 	if cs.attempt.s == nil {
 		return nil
 	}
-	// Returns nil Trailer, if RecvMsg got a context canceled error
-	if cs.canceled {
-		return nil
-	}
 	return cs.attempt.s.Trailer()
 }
 
@@ -719,10 +715,6 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 	err := cs.withRetry(func(a *csAttempt) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
-	// The context is canceled.
-	if err != nil && err.Error() == toRPCErr(context.Canceled).Error() {
-		cs.canceled = true
-	}
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ServerMessage{
 			OnClientSide: true,
