@@ -21,71 +21,35 @@ package test
 
 import (
 	"context"
-	"log"
-	"net"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// server is used to implement EchoServer.
-type server struct {
-	wait chan struct{}
-}
-
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: req.Message}, nil
-}
-
-func (s *server) ServerStreamingEcho(req *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
-	return status.Error(codes.Unimplemented, "RPC unimplemented")
-}
-
-func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
-	stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
-	close(s.wait)
-	return status.Error(codes.PermissionDenied, "perm denied")
-}
-
 //TestRace tests.
-func TestContextCanceled(t *testing.T) {
-	lis, err := net.Listen("tcp", ":50054")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+func (s) TestContextCanceled(t *testing.T) {
+	wait := make(chan struct{})
+	ss := &stubServer{
+		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			stream.SetTrailer(metadata.New(map[string]string{"a": "b"}))
+			close(wait)
+			return status.Error(codes.PermissionDenied, "perm denied")
+		},
 	}
-
-	s := grpc.NewServer()
-	server := &server{make(chan struct{})}
-	pb.RegisterEchoServer(s, server)
-	go func() {
-		err := s.Serve(lis)
-		if err != nil {
-			log.Fatalf("failed to serve: %v", err)
-		}
-	}()
-	defer s.Stop()
-
-	conn, err := grpc.Dial("localhost:50054", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
-	defer conn.Close()
-
-	c := pb.NewEchoClient(conn)
+	defer ss.Stop()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	_ = cancel
-	str, err := c.BidirectionalStreamingEcho(ctx)
-	<-server.wait
+	defer cancel()
+
+	str, err := ss.client.FullDuplexCall(ctx)
+	<-wait
 	time.Sleep(time.Millisecond)
 	cancel()
 	_, err = str.Recv()

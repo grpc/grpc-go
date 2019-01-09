@@ -720,7 +720,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 		return a.recvMsg(m, recvInfo)
 	}, cs.commitAttemptLocked)
 	// The context is canceled.
-	if err.Error() == toRPCErr(context.Canceled).Error() {
+	if err != nil && err.Error() == toRPCErr(context.Canceled).Error() {
 		cs.canceled = true
 	}
 	if cs.binlog != nil && err == nil {
