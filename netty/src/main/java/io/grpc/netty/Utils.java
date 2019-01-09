@@ -23,7 +23,6 @@ import static io.netty.channel.ChannelOption.SO_LINGER;
 import static io.netty.channel.ChannelOption.SO_TIMEOUT;
 import static io.netty.util.CharsetUtil.UTF_8;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalMetadata;
@@ -53,7 +52,6 @@ import javax.annotation.CheckReturnValue;
 /**
  * Common utility methods.
  */
-@VisibleForTesting
 class Utils {
 
   public static final AsciiString STATUS_OK = AsciiString.of("200");
