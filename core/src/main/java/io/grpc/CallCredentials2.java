@@ -16,23 +16,24 @@
 
 package io.grpc;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import java.util.concurrent.Executor;
 
 /**
  * The new interface for {@link CallCredentials}.
  *
  * <p>THIS CLASS NAME IS TEMPORARY and is part of a migration. This class will BE DELETED as it
- * replaces {@link CallCredentials} in short-term.  THIS CLASS SHOULD ONLY BE REFERENCED BY
- * IMPLEMENTIONS.  All consumers should still reference {@link CallCredentials}.
+ * replaces {@link CallCredentials} in short-term.  THIS CLASS IS ONLY REFERENCED BY IMPLEMENTIONS.
+ * All consumers should be always referencing {@link CallCredentials}.
+ *
+ * @deprecated the new interface has been promoted into {@link CallCredentials}.  Implementations
+ *             should switch back to "{@code extends CallCredentials}".
  */
+@Deprecated
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/4901")
-public abstract class CallCredentials2 implements CallCredentials {
+public abstract class CallCredentials2 extends CallCredentials {
   /**
-   * Pass the credential data to the given {@link CallCredentials.MetadataApplier}, which will
-   * propagate it to the request metadata.
+   * Pass the credential data to the given {@link MetadataApplier}, which will propagate it to the
+   * request metadata.
    *
    * <p>It is called for each individual RPC, within the {@link Context} of the call, before the
    * stream is about to be created on a transport. Implementations should not block in this
@@ -51,35 +52,10 @@ public abstract class CallCredentials2 implements CallCredentials {
       RequestInfo requestInfo, Executor appExecutor, MetadataApplier applier);
 
   @Override
-  @SuppressWarnings("deprecation")
   public final void applyRequestMetadata(
-      final MethodDescriptor<?, ?> method, final Attributes attrs,
-      Executor appExecutor, final CallCredentials.MetadataApplier applier) {
-    final String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");
-    final SecurityLevel securityLevel =
-        firstNonNull(attrs.get(ATTR_SECURITY_LEVEL), SecurityLevel.NONE);
-    RequestInfo requestInfo = new RequestInfo() {
-        @Override
-        public MethodDescriptor<?, ?> getMethodDescriptor() {
-          return method;
-        }
-
-        @Override
-        public SecurityLevel getSecurityLevel() {
-          return securityLevel;
-        }
-
-        @Override
-        public String getAuthority() {
-          return authority;
-        }
-
-        @Override
-        public Attributes getTransportAttrs() {
-          return attrs;
-        }
-      };
-    MetadataApplier applierAdapter = new MetadataApplier() {
+      RequestInfo requestInfo, Executor appExecutor,
+      final CallCredentials.MetadataApplier applier) {
+    applyRequestMetadata(requestInfo, appExecutor, new MetadataApplier() {
         @Override
         public void apply(Metadata headers) {
           applier.apply(headers);
@@ -89,11 +65,9 @@ public abstract class CallCredentials2 implements CallCredentials {
         public void fail(Status status) {
           applier.fail(status);
         }
-      };
-    applyRequestMetadata(requestInfo, appExecutor, applierAdapter);
+      });
   }
 
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
-  @SuppressWarnings("deprecation")
-  public abstract static class MetadataApplier implements CallCredentials.MetadataApplier {}
+  public abstract static class MetadataApplier extends CallCredentials.MetadataApplier {}
 }

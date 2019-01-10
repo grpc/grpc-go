@@ -20,7 +20,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import io.grpc.CallCredentials2.MetadataApplier;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.Metadata;

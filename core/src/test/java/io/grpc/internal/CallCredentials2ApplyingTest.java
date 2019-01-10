@@ -29,9 +29,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Attributes;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials.RequestInfo;
-import io.grpc.CallCredentials2;
-import io.grpc.CallCredentials2.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
@@ -55,6 +54,7 @@ import org.mockito.stubbing.Answer;
  * Unit test for {@link CallCredentials2} applying functionality implemented by {@link
  * CallCredentialsApplyingTransportFactory} and {@link MetadataApplierImpl}.
  */
+@SuppressWarnings("deprecation")
 @RunWith(JUnit4.class)
 public class CallCredentials2ApplyingTest {
   @Mock
@@ -67,7 +67,7 @@ public class CallCredentials2ApplyingTest {
   private ClientStream mockStream;
 
   @Mock
-  private CallCredentials2 mockCreds;
+  private io.grpc.CallCredentials2 mockCreds;
 
   @Mock
   private Executor mockExecutor;
@@ -128,7 +128,8 @@ public class CallCredentials2ApplyingTest {
 
     ArgumentCaptor<RequestInfo> infoCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(
-        infoCaptor.capture(), same(mockExecutor), any(MetadataApplier.class));
+        infoCaptor.capture(), same(mockExecutor),
+        any(io.grpc.CallCredentials2.MetadataApplier.class));
     RequestInfo info = infoCaptor.getValue();
     assertSame(method, info.getMethodDescriptor());
     assertSame(ATTR_VALUE, info.getTransportAttrs().get(ATTR_KEY));
@@ -148,7 +149,8 @@ public class CallCredentials2ApplyingTest {
 
     ArgumentCaptor<RequestInfo> infoCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(
-        infoCaptor.capture(), same(mockExecutor), any(MetadataApplier.class));
+        infoCaptor.capture(), same(mockExecutor),
+        any(io.grpc.CallCredentials2.MetadataApplier.class));
     RequestInfo info = infoCaptor.getValue();
     assertSame(method, info.getMethodDescriptor());
     assertSame(ATTR_VALUE, info.getTransportAttrs().get(ATTR_KEY));
@@ -169,7 +171,8 @@ public class CallCredentials2ApplyingTest {
 
     ArgumentCaptor<RequestInfo> infoCaptor = ArgumentCaptor.forClass(null);
     verify(mockCreds).applyRequestMetadata(
-        infoCaptor.capture(), same(anotherExecutor), any(MetadataApplier.class));
+        infoCaptor.capture(), same(anotherExecutor),
+        any(io.grpc.CallCredentials2.MetadataApplier.class));
     RequestInfo info = infoCaptor.getValue();
     assertSame(method, info.getMethodDescriptor());
     assertSame(ATTR_VALUE, info.getTransportAttrs().get(ATTR_KEY));
@@ -182,7 +185,8 @@ public class CallCredentials2ApplyingTest {
     final RuntimeException ex = new RuntimeException();
     when(mockTransport.getAttributes()).thenReturn(Attributes.EMPTY);
     doThrow(ex).when(mockCreds).applyRequestMetadata(
-        any(RequestInfo.class), same(mockExecutor), any(MetadataApplier.class));
+        any(RequestInfo.class), same(mockExecutor),
+        any(io.grpc.CallCredentials2.MetadataApplier.class));
 
     FailingClientStream stream =
         (FailingClientStream) transport.newStream(method, origHeaders, callOptions);
@@ -205,7 +209,8 @@ public class CallCredentials2ApplyingTest {
           return null;
         }
       }).when(mockCreds).applyRequestMetadata(
-          any(RequestInfo.class), same(mockExecutor), any(MetadataApplier.class));
+          any(RequestInfo.class), same(mockExecutor),
+          any(io.grpc.CallCredentials2.MetadataApplier.class));
 
     ClientStream stream = transport.newStream(method, origHeaders, callOptions);
 
@@ -227,7 +232,8 @@ public class CallCredentials2ApplyingTest {
           return null;
         }
       }).when(mockCreds).applyRequestMetadata(
-          any(RequestInfo.class), same(mockExecutor), any(MetadataApplier.class));
+          any(RequestInfo.class), same(mockExecutor),
+          any(io.grpc.CallCredentials2.MetadataApplier.class));
 
     FailingClientStream stream =
         (FailingClientStream) transport.newStream(method, origHeaders, callOptions);
