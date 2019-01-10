@@ -110,16 +110,15 @@ func (b *recvBuffer) get() <-chan recvMsg {
 	return b.c
 }
 
-//
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
-	stream  *Stream // parent stream, nil for server side
-	ctx     context.Context
-	ctxDone <-chan struct{} // cache of ctx.Done() (for performance).
-	recv    *recvBuffer
-	last    []byte // Stores the remaining data in the previous calls.
-	err     error
+	closeStream func(error) // Closes the client transport stream with the given error and nil trailer metadata.
+	ctx         context.Context
+	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
+	recv        *recvBuffer
+	last        []byte // Stores the remaining data in the previous calls.
+	err         error
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -135,7 +134,7 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		r.last = r.last[copied:]
 		return copied, nil
 	}
-	if r.stream != nil && r.stream.ct != nil {
+	if r.closeStream != nil {
 		n, r.err = r.readClient(p)
 	} else {
 		n, r.err = r.read(p)
@@ -154,11 +153,11 @@ func (r *recvBufferReader) read(p []byte) (n int, err error) {
 
 func (r *recvBufferReader) readClient(p []byte) (n int, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
-	// CloseStream writes its error parameter to r.recv as a recvMsg.
+	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
 	select {
 	case <-r.ctxDone:
-		r.stream.ct.CloseStream(r.stream, ContextErr(r.ctx.Err()))
+		r.closeStream(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
 		return r.readAdditional(m, p)
 	case m := <-r.recv.get():
@@ -189,7 +188,6 @@ const (
 type Stream struct {
 	id           uint32
 	st           ServerTransport    // nil for client side Stream
-	ct           ClientTransport    // nil for server side Stream
 	ctx          context.Context    // the associated context of the stream
 	cancel       context.CancelFunc // always nil for client side Stream
 	done         chan struct{}      // closed at the end of stream to unblock writers. On the client side.
@@ -419,8 +417,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 		return 0, er
 	}
 	s.requestRead(len(p))
-	n, err = io.ReadFull(s.trReader, p)
-	return n, err
+	return io.ReadFull(s.trReader, p)
 }
 
 // tranportReader reads all the data available for this Stream from the transport and
