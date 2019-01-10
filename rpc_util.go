@@ -426,22 +426,27 @@ func (o ForceCodecCallOption) before(c *callInfo) error {
 }
 func (o ForceCodecCallOption) after(c *callInfo) {}
 
-// wrapCodec converts a grpc.Codec into an encoding.Codec.
-type wrapCodec struct {
-	Codec
-}
-
-func (wc wrapCodec) Name() string {
-	return wc.Codec.String()
-}
-
 // CallCustomCodec behaves like ForceCodec, but accepts a grpc.Codec instead of
 // an encoding.Codec.
 //
 // Deprecated: use ForceCodec instead.
 func CallCustomCodec(codec Codec) CallOption {
-	return ForceCodec(wrapCodec{codec})
+	return CustomCodecCallOption{Codec: codec}
 }
+
+// CustomCodecCallOption is a CallOption that indicates the codec used for
+// marshaling messages.
+//
+// This is an EXPERIMENTAL API.
+type CustomCodecCallOption struct {
+	Codec Codec
+}
+
+func (o CustomCodecCallOption) before(c *callInfo) error {
+	c.codec = o.Codec
+	return nil
+}
+func (o CustomCodecCallOption) after(c *callInfo) {}
 
 // MaxRetryRPCBufferSize returns a CallOption that limits the amount of memory
 // used for buffering this RPC's requests for retry purposes.
