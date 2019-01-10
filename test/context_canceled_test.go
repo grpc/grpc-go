@@ -63,9 +63,9 @@ func (s) TestContextCanceled(t *testing.T) {
 		}
 		trl := str.Trailer()
 		if code == codes.PermissionDenied && trl["a"] == nil {
-			t.Fatalf("<<a>> not in trailer")
+			t.Fatalf("status err: %v; got trl[\"a\"] == nil, wanted trl[\"a\"] != nil", err)
 		} else if code == codes.Canceled && trl["a"] != nil {
-			t.Fatalf("<<a>> in trailer")
+			t.Fatalf("status err: %v; got trl[\"a\"] != nil, wanted trl[\"a\"] == nil", err)
 		}
 	}
 }
