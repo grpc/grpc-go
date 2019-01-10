@@ -1612,24 +1612,33 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void refreshNameResolutionWhenSubchannelConnectionFailed() {
-    subtestRefreshNameResolutionWhenConnectionFailed(false);
+  public void refreshNameResolution_whenSubchannelConnectionFailed_notIdle() {
+    subtestNameResolutionRefreshWhenConnectionFailed(false, false);
   }
 
   @Test
-  public void refreshNameResolutionWhenOobChannelConnectionFailed() {
-    subtestRefreshNameResolutionWhenConnectionFailed(true);
+  public void refreshNameResolution_whenOobChannelConnectionFailed_notIdle() {
+    subtestNameResolutionRefreshWhenConnectionFailed(true, false);
   }
 
-  private void subtestRefreshNameResolutionWhenConnectionFailed(boolean isOobChannel) {
+  @Test
+  public void notRefreshNameResolution_whenSubchannelConnectionFailed_idle() {
+    subtestNameResolutionRefreshWhenConnectionFailed(false, true);
+  }
+
+  @Test
+  public void notRefreshNameResolution_whenOobChannelConnectionFailed_idle() {
+    subtestNameResolutionRefreshWhenConnectionFailed(true, true);
+  }
+
+  private void subtestNameResolutionRefreshWhenConnectionFailed(
+      boolean isOobChannel, boolean isIdle) {
     FakeNameResolverFactory nameResolverFactory =
         new FakeNameResolverFactory.Builder(expectedUri)
             .setServers(Collections.singletonList(new EquivalentAddressGroup(socketAddress)))
             .build();
     channelBuilder.nameResolverFactory(nameResolverFactory);
     createChannel();
-    FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.get(0);
-
     if (isOobChannel) {
       OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "oobAuthority");
       oobChannel.getSubchannel().requestConnection();
@@ -1641,10 +1650,26 @@ public class ManagedChannelImplTest {
     MockClientTransportInfo transportInfo = transports.poll();
     assertNotNull(transportInfo);
 
+    FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.remove(0);
+
+    if (isIdle) {
+      channel.enterIdle();
+      // Entering idle mode will result in a new resolver
+      resolver = nameResolverFactory.resolvers.remove(0);
+    }
+
+    assertEquals(0, nameResolverFactory.resolvers.size());
+
+    int expectedRefreshCount = 0;
+
     // Transport closed when connecting
-    assertEquals(0, resolver.refreshCalled);
+    assertEquals(expectedRefreshCount, resolver.refreshCalled);
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
-    assertEquals(1, resolver.refreshCalled);
+    // When channel enters idle, new resolver is created but not started.
+    if (!isIdle) {
+      expectedRefreshCount++;
+    }
+    assertEquals(expectedRefreshCount, resolver.refreshCalled);
 
     timer.forwardNanos(RECONNECT_BACKOFF_INTERVAL_NANOS);
     transportInfo = transports.poll();
@@ -1653,9 +1678,13 @@ public class ManagedChannelImplTest {
     transportInfo.listener.transportReady();
 
     // Transport closed when ready
-    assertEquals(1, resolver.refreshCalled);
+    assertEquals(expectedRefreshCount, resolver.refreshCalled);
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
-    assertEquals(2, resolver.refreshCalled);
+    // When channel enters idle, new resolver is created but not started.
+    if (!isIdle) {
+      expectedRefreshCount++;
+    }
+    assertEquals(expectedRefreshCount, resolver.refreshCalled);
   }
 
   @Test
@@ -3316,7 +3345,6 @@ public class ManagedChannelImplTest {
       }
 
       @Override public void refresh() {
-        assertNotNull(listener);
         refreshCalled++;
         resolved();
       }
