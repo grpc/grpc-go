@@ -99,7 +99,6 @@ the project ID of the project you created (or used) in step 2 above.
  ## Bazel
  If you prefer to use Bazel:
  ```
- (With Bazel v0.8.0 or above.)
  $ bazel build :google-auth-client
  $ # Run the client
  $ ../bazel-bin/google-auth-client /path/to/JSON/file projects/xyz123

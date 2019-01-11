@@ -79,7 +79,6 @@ $ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldClient
 
 If you prefer to use Bazel:
 ```
-(With Bazel v0.8.0 or above.)
 $ bazel build :hello-world-server :hello-world-client
 $ # Run the server
 $ bazel-bin/hello-world-server

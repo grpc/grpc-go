@@ -69,7 +69,6 @@ $ mvn exec:java -Dexec.mainClass=io.grpc.examples.authentication.AuthClient -Dex
 
 If you prefer to use Bazel:
 ```
-(With Bazel v0.8.0 or above.)
 $ bazel build :auth-server :auth-client
 $ # Run the server
 $ bazel-bin/auth-server
