@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip"
+	// "google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -2055,7 +2056,66 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	}
 }
 
-func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
+func TestPreloaderClientSend(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testPreloaderClientSend(t, e)
+	}
+}
+
+func testPreloaderClientSend(t *testing.T, e env) { 
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	te.startServer(&testServer{security: e.security})
+
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const smallSize = 1
+	const largeSize = 4 * 1024 * 1024
+	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: int32(largeSize),
+		},
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            smallPayload,
+	}
+
+	// Test for streaming RPC recv.
+	// Set context for send with proper RPC Information
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.UseCompressor("gzip"))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	prep_msg := &grpc.PreparedMsg{}
+	err = prep_msg.Encode(stream, sreq)
+	if err != nil {
+		t.Fatalf("PrepareMsg failed : %v", err)
+	}
+	if err := stream.SendMsg(prep_msg); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, prep_msg, err)
+	}
+	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+}
+
+func TestMaxMsgSizeClientDefault(t *testing.T) {
+	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
 	}
