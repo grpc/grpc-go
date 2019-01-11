@@ -35,6 +35,7 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 import io.grpc.alts.internal.AltsHandshakerOptions;
 import io.grpc.alts.internal.AltsProtocolNegotiator;
+import io.grpc.alts.internal.AltsProtocolNegotiator.LazyChannel;
 import io.grpc.alts.internal.AltsTsiHandshaker;
 import io.grpc.alts.internal.HandshakerServiceGrpc;
 import io.grpc.alts.internal.RpcProtocolVersionsUtil;
@@ -92,8 +93,9 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
   public AltsServerBuilder setHandshakerAddressForTesting(String handshakerAddress) {
     // Instead of using the default shared channel to the handshaker service, create a separate
     // resource to the test address.
-    handshakerChannelPool = SharedResourcePool.forResource(
-        HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
+    handshakerChannelPool =
+        SharedResourcePool.forResource(
+            HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
     return this;
   }
 
@@ -196,19 +198,18 @@ public final class AltsServerBuilder extends ServerBuilder<AltsServerBuilder> {
       }
     }
 
+    final LazyChannel lazyHandshakerChannel = new LazyChannel(handshakerChannelPool);
     delegate.protocolNegotiator(
         AltsProtocolNegotiator.createServerNegotiator(
             new TsiHandshakerFactory() {
               @Override
               public TsiHandshaker newHandshaker(String authority) {
-                // Used the shared grpc channel to connecting to the ALTS handshaker service.
-                // TODO: Release the channel if it is not used.
-                // https://github.com/grpc/grpc-java/issues/4755.
                 return AltsTsiHandshaker.newServer(
-                    HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
+                    HandshakerServiceGrpc.newStub(lazyHandshakerChannel.get()),
                     new AltsHandshakerOptions(RpcProtocolVersionsUtil.getRpcProtocolVersions()));
               }
-            }));
+            },
+            lazyHandshakerChannel));
     return delegate.build();
   }
 

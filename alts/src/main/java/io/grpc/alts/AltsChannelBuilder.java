@@ -30,6 +30,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.alts.internal.AltsClientOptions;
 import io.grpc.alts.internal.AltsProtocolNegotiator;
+import io.grpc.alts.internal.AltsProtocolNegotiator.LazyChannel;
 import io.grpc.alts.internal.AltsTsiHandshaker;
 import io.grpc.alts.internal.HandshakerServiceGrpc;
 import io.grpc.alts.internal.RpcProtocolVersionsUtil;
@@ -104,8 +105,9 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
   public AltsChannelBuilder setHandshakerAddressForTesting(String handshakerAddress) {
     // Instead of using the default shared channel to the handshaker service, create a separate
     // resource to the test address.
-    handshakerChannelPool = SharedResourcePool.forResource(
-        HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
+    handshakerChannelPool =
+        SharedResourcePool.forResource(
+            HandshakerServiceChannel.getHandshakerChannelForTesting(handshakerAddress));
     return this;
   }
 
@@ -144,13 +146,11 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
     @Override
     public AltsProtocolNegotiator buildProtocolNegotiator() {
       final ImmutableList<String> targetServiceAccounts = targetServiceAccountsBuilder.build();
+      final LazyChannel lazyHandshakerChannel = new LazyChannel(handshakerChannelPool);
       TsiHandshakerFactory altsHandshakerFactory =
           new TsiHandshakerFactory() {
             @Override
             public TsiHandshaker newHandshaker(String authority) {
-              // Used the shared grpc channel to connecting to the ALTS handshaker service.
-              // TODO: Release the channel if it is not used.
-              // https://github.com/grpc/grpc-java/issues/4755.
               AltsClientOptions handshakerOptions =
                   new AltsClientOptions.Builder()
                       .setRpcProtocolVersions(RpcProtocolVersionsUtil.getRpcProtocolVersions())
@@ -158,12 +158,12 @@ public final class AltsChannelBuilder extends ForwardingChannelBuilder<AltsChann
                       .setTargetName(authority)
                       .build();
               return AltsTsiHandshaker.newClient(
-                  HandshakerServiceGrpc.newStub(handshakerChannelPool.getObject()),
-                  handshakerOptions);
+                  HandshakerServiceGrpc.newStub(lazyHandshakerChannel.get()), handshakerOptions);
             }
           };
       return negotiatorForTest =
-          AltsProtocolNegotiator.createClientNegotiator(altsHandshakerFactory);
+          AltsProtocolNegotiator.createClientNegotiator(
+              altsHandshakerFactory, lazyHandshakerChannel);
     }
   }
 
