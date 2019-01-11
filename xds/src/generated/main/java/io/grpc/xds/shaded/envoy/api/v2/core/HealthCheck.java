@@ -5250,6 +5250,28 @@ private static final long serialVersionUID = 0L;
      */
     com.google.protobuf.ByteString
         getServiceNameBytes();
+
+    /**
+     * <pre>
+     * The value of the :authority header in the gRPC health check request. If
+     * left empty (default value), the name of the cluster this health check is associated
+     * with will be used.
+     * </pre>
+     *
+     * <code>string authority = 2;</code>
+     */
+    java.lang.String getAuthority();
+    /**
+     * <pre>
+     * The value of the :authority header in the gRPC health check request. If
+     * left empty (default value), the name of the cluster this health check is associated
+     * with will be used.
+     * </pre>
+     *
+     * <code>string authority = 2;</code>
+     */
+    com.google.protobuf.ByteString
+        getAuthorityBytes();
   }
   /**
    * <pre>
@@ -5272,6 +5294,7 @@ private static final long serialVersionUID = 0L;
     }
     private GrpcHealthCheck() {
       serviceName_ = "";
+      authority_ = "";
     }
 
     @java.lang.Override
@@ -5309,6 +5332,12 @@ private static final long serialVersionUID = 0L;
               java.lang.String s = input.readStringRequireUtf8();
 
               serviceName_ = s;
+              break;
+            }
+            case 18: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              authority_ = s;
               break;
             }
           }
@@ -5385,6 +5414,52 @@ private static final long serialVersionUID = 0L;
       }
     }
 
+    public static final int AUTHORITY_FIELD_NUMBER = 2;
+    private volatile java.lang.Object authority_;
+    /**
+     * <pre>
+     * The value of the :authority header in the gRPC health check request. If
+     * left empty (default value), the name of the cluster this health check is associated
+     * with will be used.
+     * </pre>
+     *
+     * <code>string authority = 2;</code>
+     */
+    public java.lang.String getAuthority() {
+      java.lang.Object ref = authority_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        authority_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * The value of the :authority header in the gRPC health check request. If
+     * left empty (default value), the name of the cluster this health check is associated
+     * with will be used.
+     * </pre>
+     *
+     * <code>string authority = 2;</code>
+     */
+    public com.google.protobuf.ByteString
+        getAuthorityBytes() {
+      java.lang.Object ref = authority_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        authority_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -5400,6 +5475,9 @@ private static final long serialVersionUID = 0L;
       if (!getServiceNameBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, serviceName_);
       }
+      if (!getAuthorityBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, authority_);
+      }
       unknownFields.writeTo(output);
     }
 
@@ -5410,6 +5488,9 @@ private static final long serialVersionUID = 0L;
       size = 0;
       if (!getServiceNameBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, serviceName_);
+      }
+      if (!getAuthorityBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, authority_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -5429,6 +5510,8 @@ private static final long serialVersionUID = 0L;
       boolean result = true;
       result = result && getServiceName()
           .equals(other.getServiceName());
+      result = result && getAuthority()
+          .equals(other.getAuthority());
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -5442,6 +5525,8 @@ private static final long serialVersionUID = 0L;
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + SERVICE_NAME_FIELD_NUMBER;
       hash = (53 * hash) + getServiceName().hashCode();
+      hash = (37 * hash) + AUTHORITY_FIELD_NUMBER;
+      hash = (53 * hash) + getAuthority().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -5580,6 +5665,8 @@ private static final long serialVersionUID = 0L;
         super.clear();
         serviceName_ = "";
 
+        authority_ = "";
+
         return this;
       }
 
@@ -5603,6 +5690,7 @@ private static final long serialVersionUID = 0L;
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck(this);
         result.serviceName_ = serviceName_;
+        result.authority_ = authority_;
         onBuilt();
         return result;
       }
@@ -5646,6 +5734,10 @@ private static final long serialVersionUID = 0L;
         if (other == io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck.getDefaultInstance()) return this;
         if (!other.getServiceName().isEmpty()) {
           serviceName_ = other.serviceName_;
+          onChanged();
+        }
+        if (!other.getAuthority().isEmpty()) {
+          authority_ = other.authority_;
           onChanged();
         }
         this.mergeUnknownFields(other.unknownFields);
@@ -5780,6 +5872,105 @@ private static final long serialVersionUID = 0L;
   checkByteStringIsUtf8(value);
         
         serviceName_ = value;
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object authority_ = "";
+      /**
+       * <pre>
+       * The value of the :authority header in the gRPC health check request. If
+       * left empty (default value), the name of the cluster this health check is associated
+       * with will be used.
+       * </pre>
+       *
+       * <code>string authority = 2;</code>
+       */
+      public java.lang.String getAuthority() {
+        java.lang.Object ref = authority_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          authority_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * The value of the :authority header in the gRPC health check request. If
+       * left empty (default value), the name of the cluster this health check is associated
+       * with will be used.
+       * </pre>
+       *
+       * <code>string authority = 2;</code>
+       */
+      public com.google.protobuf.ByteString
+          getAuthorityBytes() {
+        java.lang.Object ref = authority_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          authority_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * The value of the :authority header in the gRPC health check request. If
+       * left empty (default value), the name of the cluster this health check is associated
+       * with will be used.
+       * </pre>
+       *
+       * <code>string authority = 2;</code>
+       */
+      public Builder setAuthority(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        authority_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * The value of the :authority header in the gRPC health check request. If
+       * left empty (default value), the name of the cluster this health check is associated
+       * with will be used.
+       * </pre>
+       *
+       * <code>string authority = 2;</code>
+       */
+      public Builder clearAuthority() {
+        
+        authority_ = getDefaultInstance().getAuthority();
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * The value of the :authority header in the gRPC health check request. If
+       * left empty (default value), the name of the cluster this health check is associated
+       * with will be used.
+       * </pre>
+       *
+       * <code>string authority = 2;</code>
+       */
+      public Builder setAuthorityBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        authority_ = value;
         onChanged();
         return this;
       }

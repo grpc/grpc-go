@@ -34,8 +34,8 @@ public interface CommonTlsContextOrBuilder extends
 
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -47,8 +47,8 @@ public interface CommonTlsContextOrBuilder extends
       getTlsCertificatesList();
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -59,8 +59,8 @@ public interface CommonTlsContextOrBuilder extends
   io.grpc.xds.shaded.envoy.api.v2.auth.TlsCertificate getTlsCertificates(int index);
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -71,8 +71,8 @@ public interface CommonTlsContextOrBuilder extends
   int getTlsCertificatesCount();
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -84,8 +84,8 @@ public interface CommonTlsContextOrBuilder extends
       getTlsCertificatesOrBuilderList();
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -101,7 +101,7 @@ public interface CommonTlsContextOrBuilder extends
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   java.util.List<io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig> 
       getTlsCertificateSdsSecretConfigsList();
@@ -110,7 +110,7 @@ public interface CommonTlsContextOrBuilder extends
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig getTlsCertificateSdsSecretConfigs(int index);
   /**
@@ -118,7 +118,7 @@ public interface CommonTlsContextOrBuilder extends
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   int getTlsCertificateSdsSecretConfigsCount();
   /**
@@ -126,7 +126,7 @@ public interface CommonTlsContextOrBuilder extends
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   java.util.List<? extends io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder> 
       getTlsCertificateSdsSecretConfigsOrBuilderList();
@@ -135,7 +135,7 @@ public interface CommonTlsContextOrBuilder extends
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder getTlsCertificateSdsSecretConfigsOrBuilder(
       int index);

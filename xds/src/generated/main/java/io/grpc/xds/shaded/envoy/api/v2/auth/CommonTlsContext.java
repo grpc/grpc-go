@@ -1145,8 +1145,8 @@ private static final long serialVersionUID = 0L;
   private java.util.List<io.grpc.xds.shaded.envoy.api.v2.auth.TlsCertificate> tlsCertificates_;
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -1159,8 +1159,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -1174,8 +1174,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -1188,8 +1188,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -1202,8 +1202,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Multiple TLS certificates can be associated with the same context.
-   * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+   * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+   * same context to allow both RSA and ECDSA certificates.
    * Only a single TLS certificate is supported in client contexts. In server contexts, the first
    * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
    * used for clients that support ECDSA.
@@ -1223,7 +1223,7 @@ private static final long serialVersionUID = 0L;
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   public java.util.List<io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig> getTlsCertificateSdsSecretConfigsList() {
     return tlsCertificateSdsSecretConfigs_;
@@ -1233,7 +1233,7 @@ private static final long serialVersionUID = 0L;
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   public java.util.List<? extends io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder> 
       getTlsCertificateSdsSecretConfigsOrBuilderList() {
@@ -1244,7 +1244,7 @@ private static final long serialVersionUID = 0L;
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   public int getTlsCertificateSdsSecretConfigsCount() {
     return tlsCertificateSdsSecretConfigs_.size();
@@ -1254,7 +1254,7 @@ private static final long serialVersionUID = 0L;
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig getTlsCertificateSdsSecretConfigs(int index) {
     return tlsCertificateSdsSecretConfigs_.get(index);
@@ -1264,7 +1264,7 @@ private static final long serialVersionUID = 0L;
    * Configs for fetching TLS certificates via SDS API.
    * </pre>
    *
-   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+   * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder getTlsCertificateSdsSecretConfigsOrBuilder(
       int index) {
@@ -2203,8 +2203,8 @@ private static final long serialVersionUID = 0L;
 
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2221,8 +2221,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2239,8 +2239,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2257,8 +2257,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2282,8 +2282,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2304,8 +2304,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2328,8 +2328,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2353,8 +2353,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2375,8 +2375,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2397,8 +2397,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2420,8 +2420,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2441,8 +2441,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2462,8 +2462,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2477,8 +2477,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2495,8 +2495,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2514,8 +2514,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2529,8 +2529,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2545,8 +2545,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Multiple TLS certificates can be associated with the same context.
-     * E.g. to allow both RSA and ECDSA certificates, two TLS certificates can be configured.
+     * :ref:`Multiple TLS certificates &lt;arch_overview_ssl_cert_select&gt;` can be associated with the
+     * same context to allow both RSA and ECDSA certificates.
      * Only a single TLS certificate is supported in client contexts. In server contexts, the first
      * RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
      * used for clients that support ECDSA.
@@ -2590,7 +2590,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public java.util.List<io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig> getTlsCertificateSdsSecretConfigsList() {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2604,7 +2604,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public int getTlsCertificateSdsSecretConfigsCount() {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2618,7 +2618,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig getTlsCertificateSdsSecretConfigs(int index) {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2632,7 +2632,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder setTlsCertificateSdsSecretConfigs(
         int index, io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig value) {
@@ -2653,7 +2653,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder setTlsCertificateSdsSecretConfigs(
         int index, io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder builderForValue) {
@@ -2671,7 +2671,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder addTlsCertificateSdsSecretConfigs(io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig value) {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2691,7 +2691,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder addTlsCertificateSdsSecretConfigs(
         int index, io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig value) {
@@ -2712,7 +2712,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder addTlsCertificateSdsSecretConfigs(
         io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder builderForValue) {
@@ -2730,7 +2730,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder addTlsCertificateSdsSecretConfigs(
         int index, io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder builderForValue) {
@@ -2748,7 +2748,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder addAllTlsCertificateSdsSecretConfigs(
         java.lang.Iterable<? extends io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig> values) {
@@ -2767,7 +2767,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder clearTlsCertificateSdsSecretConfigs() {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2784,7 +2784,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public Builder removeTlsCertificateSdsSecretConfigs(int index) {
       if (tlsCertificateSdsSecretConfigsBuilder_ == null) {
@@ -2801,7 +2801,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder getTlsCertificateSdsSecretConfigsBuilder(
         int index) {
@@ -2812,7 +2812,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder getTlsCertificateSdsSecretConfigsOrBuilder(
         int index) {
@@ -2826,7 +2826,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public java.util.List<? extends io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfigOrBuilder> 
          getTlsCertificateSdsSecretConfigsOrBuilderList() {
@@ -2841,7 +2841,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder addTlsCertificateSdsSecretConfigsBuilder() {
       return getTlsCertificateSdsSecretConfigsFieldBuilder().addBuilder(
@@ -2852,7 +2852,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder addTlsCertificateSdsSecretConfigsBuilder(
         int index) {
@@ -2864,7 +2864,7 @@ private static final long serialVersionUID = 0L;
      * Configs for fetching TLS certificates via SDS API.
      * </pre>
      *
-     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6;</code>
+     * <code>repeated .envoy.api.v2.auth.SdsSecretConfig tls_certificate_sds_secret_configs = 6 [(.validate.rules) = { ... }</code>
      */
     public java.util.List<io.grpc.xds.shaded.envoy.api.v2.auth.SdsSecretConfig.Builder> 
          getTlsCertificateSdsSecretConfigsBuilderList() {

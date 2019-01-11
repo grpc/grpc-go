@@ -63,7 +63,7 @@ public final class HealthCheckOuterClass {
       "e.proto\032\031google/protobuf/any.proto\032\036goog" +
       "le/protobuf/duration.proto\032\034google/proto" +
       "buf/struct.proto\032\036google/protobuf/wrappe" +
-      "rs.proto\032\027validate/validate.proto\"\346\016\n\013He" +
+      "rs.proto\032\027validate/validate.proto\"\371\016\n\013He" +
       "althCheck\0228\n\007timeout\030\001 \001(\0132\031.google.prot" +
       "obuf.DurationB\014\272\351\300\003\007\252\001\004\010\001*\000\0229\n\010interval\030" +
       "\002 \001(\0132\031.google.protobuf.DurationB\014\272\351\300\003\007\252" +
@@ -105,16 +105,17 @@ public final class HealthCheckOuterClass {
       "envoy.api.v2.core.HealthCheck.Payload\0227\n" +
       "\007receive\030\002 \003(\0132&.envoy.api.v2.core.Healt" +
       "hCheck.Payload\032\037\n\020RedisHealthCheck\022\013\n\003ke" +
-      "y\030\001 \001(\t\032\'\n\017GrpcHealthCheck\022\024\n\014service_na" +
-      "me\030\001 \001(\t\032\224\001\n\021CustomHealthCheck\022\027\n\004name\030\001" +
-      " \001(\tB\t\272\351\300\003\004r\002 \001\022)\n\006config\030\002 \001(\0132\027.google" +
-      ".protobuf.StructH\000\022,\n\014typed_config\030\003 \001(\013" +
-      "2\024.google.protobuf.AnyH\000B\r\n\013config_typeB" +
-      "\027\n\016health_checker\022\005\270\351\300\003\001J\004\010\n\020\013R\022redis_he" +
-      "alth_check*R\n\014HealthStatus\022\013\n\007UNKNOWN\020\000\022" +
-      "\013\n\007HEALTHY\020\001\022\r\n\tUNHEALTHY\020\002\022\014\n\010DRAINING\020" +
-      "\003\022\013\n\007TIMEOUT\020\004B(\n$io.grpc.xds.shaded.env" +
-      "oy.api.v2.coreP\001b\006proto3"
+      "y\030\001 \001(\t\032:\n\017GrpcHealthCheck\022\024\n\014service_na" +
+      "me\030\001 \001(\t\022\021\n\tauthority\030\002 \001(\t\032\224\001\n\021CustomHe" +
+      "althCheck\022\027\n\004name\030\001 \001(\tB\t\272\351\300\003\004r\002 \001\022)\n\006co" +
+      "nfig\030\002 \001(\0132\027.google.protobuf.StructH\000\022,\n" +
+      "\014typed_config\030\003 \001(\0132\024.google.protobuf.An" +
+      "yH\000B\r\n\013config_typeB\027\n\016health_checker\022\005\270\351" +
+      "\300\003\001J\004\010\n\020\013R\022redis_health_check*R\n\014HealthS" +
+      "tatus\022\013\n\007UNKNOWN\020\000\022\013\n\007HEALTHY\020\001\022\r\n\tUNHEA" +
+      "LTHY\020\002\022\014\n\010DRAINING\020\003\022\013\n\007TIMEOUT\020\004B(\n$io." +
+      "grpc.xds.shaded.envoy.api.v2.coreP\001b\006pro" +
+      "to3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -169,7 +170,7 @@ public final class HealthCheckOuterClass {
     internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_descriptor,
-        new java.lang.String[] { "ServiceName", });
+        new java.lang.String[] { "ServiceName", "Authority", });
     internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_descriptor =
       internal_static_envoy_api_v2_core_HealthCheck_descriptor.getNestedTypes().get(5);
     internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_fieldAccessorTable = new

@@ -242,7 +242,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -258,7 +260,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -274,7 +278,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -1334,7 +1340,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -1352,7 +1360,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -1370,7 +1380,9 @@ private static final long serialVersionUID = 0L;
      * multiplied by the overprovisioning factor drops below 100.
      * With the default value 140(1.4), Envoy doesn't consider a priority level
      * or a locality unhealthy until their percentage of healthy hosts drops
-     * below 72%.
+     * below 72%. For example:
+     * .. code-block:: json
+     *  { "overprovisioning_factor": 100 }
      * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
      * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
      * </pre>
@@ -2315,7 +2327,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2333,7 +2347,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2355,7 +2371,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2383,7 +2401,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2409,7 +2429,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2439,7 +2461,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2465,7 +2489,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2485,7 +2511,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>
@@ -2508,7 +2536,9 @@ private static final long serialVersionUID = 0L;
        * multiplied by the overprovisioning factor drops below 100.
        * With the default value 140(1.4), Envoy doesn't consider a priority level
        * or a locality unhealthy until their percentage of healthy hosts drops
-       * below 72%.
+       * below 72%. For example:
+       * .. code-block:: json
+       *  { "overprovisioning_factor": 100 }
        * Read more at :ref:`priority levels &lt;arch_overview_load_balancing_priority_levels&gt;` and
        * :ref:`localities &lt;arch_overview_load_balancing_locality_weighted_lb&gt;`.
        * </pre>

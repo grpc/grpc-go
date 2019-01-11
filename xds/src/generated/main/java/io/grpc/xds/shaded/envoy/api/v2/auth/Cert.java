@@ -106,50 +106,51 @@ public final class Cert {
       "estamp\030\006 \001(\0132\032.google.protobuf.BoolValue" +
       "\022*\n\003crl\030\007 \001(\0132\035.envoy.api.v2.core.DataSo" +
       "urce\022!\n\031allow_expired_certificate\030\010 \001(\010\"" +
-      "\212\006\n\020CommonTlsContext\0224\n\ntls_params\030\001 \001(\013" +
+      "\226\006\n\020CommonTlsContext\0224\n\ntls_params\030\001 \001(\013" +
       "2 .envoy.api.v2.auth.TlsParameters\022;\n\020tl" +
       "s_certificates\030\002 \003(\0132!.envoy.api.v2.auth" +
-      ".TlsCertificate\022N\n\"tls_certificate_sds_s" +
+      ".TlsCertificate\022Z\n\"tls_certificate_sds_s" +
       "ecret_configs\030\006 \003(\0132\".envoy.api.v2.auth." +
-      "SdsSecretConfig\022M\n\022validation_context\030\003 " +
-      "\001(\0132/.envoy.api.v2.auth.CertificateValid" +
-      "ationContextH\000\022R\n$validation_context_sds" +
-      "_secret_config\030\007 \001(\0132\".envoy.api.v2.auth" +
-      ".SdsSecretConfigH\000\022o\n\033combined_validatio" +
-      "n_context\030\010 \001(\0132H.envoy.api.v2.auth.Comm" +
-      "onTlsContext.CombinedCertificateValidati" +
-      "onContextH\000\022\026\n\016alpn_protocols\030\004 \003(\t\032\345\001\n$" +
-      "CombinedCertificateValidationContext\022_\n\032" +
-      "default_validation_context\030\001 \001(\0132/.envoy" +
-      ".api.v2.auth.CertificateValidationContex" +
-      "tB\n\272\351\300\003\005\212\001\002\020\001\022\\\n$validation_context_sds_" +
-      "secret_config\030\002 \001(\0132\".envoy.api.v2.auth." +
-      "SdsSecretConfigB\n\272\351\300\003\005\212\001\002\020\001B\031\n\027validatio" +
-      "n_context_typeJ\004\010\005\020\006\"\303\001\n\022UpstreamTlsCont" +
-      "ext\022?\n\022common_tls_context\030\001 \001(\0132#.envoy." +
-      "api.v2.auth.CommonTlsContext\022\027\n\003sni\030\002 \001(" +
-      "\tB\n\272\351\300\003\005r\003(\377\001\022\033\n\023allow_renegotiation\030\003 \001" +
-      "(\010\0226\n\020max_session_keys\030\004 \001(\0132\034.google.pr" +
-      "otobuf.UInt32Value\"\201\003\n\024DownstreamTlsCont" +
-      "ext\022?\n\022common_tls_context\030\001 \001(\0132#.envoy." +
-      "api.v2.auth.CommonTlsContext\022>\n\032require_" +
-      "client_certificate\030\002 \001(\0132\032.google.protob" +
-      "uf.BoolValue\022/\n\013require_sni\030\003 \001(\0132\032.goog" +
-      "le.protobuf.BoolValue\022F\n\023session_ticket_" +
-      "keys\030\004 \001(\0132\'.envoy.api.v2.auth.TlsSessio" +
-      "nTicketKeysH\000\022S\n%session_ticket_keys_sds" +
-      "_secret_config\030\005 \001(\0132\".envoy.api.v2.auth" +
-      ".SdsSecretConfigH\000B\032\n\030session_ticket_key" +
-      "s_type\"T\n\017SdsSecretConfig\022\014\n\004name\030\001 \001(\t\022" +
-      "3\n\nsds_config\030\002 \001(\0132\037.envoy.api.v2.core." +
-      "ConfigSource\"\363\001\n\006Secret\022\014\n\004name\030\001 \001(\t\022<\n" +
-      "\017tls_certificate\030\002 \001(\0132!.envoy.api.v2.au" +
-      "th.TlsCertificateH\000\022F\n\023session_ticket_ke" +
-      "ys\030\003 \001(\0132\'.envoy.api.v2.auth.TlsSessionT" +
-      "icketKeysH\000\022M\n\022validation_context\030\004 \001(\0132" +
-      "/.envoy.api.v2.auth.CertificateValidatio" +
-      "nContextH\000B\006\n\004typeB.\n$io.grpc.xds.shaded" +
-      ".envoy.api.v2.authP\001Z\004authb\006proto3"
+      "SdsSecretConfigB\n\272\351\300\003\005\222\001\002\020\001\022M\n\022validatio" +
+      "n_context\030\003 \001(\0132/.envoy.api.v2.auth.Cert" +
+      "ificateValidationContextH\000\022R\n$validation" +
+      "_context_sds_secret_config\030\007 \001(\0132\".envoy" +
+      ".api.v2.auth.SdsSecretConfigH\000\022o\n\033combin" +
+      "ed_validation_context\030\010 \001(\0132H.envoy.api." +
+      "v2.auth.CommonTlsContext.CombinedCertifi" +
+      "cateValidationContextH\000\022\026\n\016alpn_protocol" +
+      "s\030\004 \003(\t\032\345\001\n$CombinedCertificateValidatio" +
+      "nContext\022_\n\032default_validation_context\030\001" +
+      " \001(\0132/.envoy.api.v2.auth.CertificateVali" +
+      "dationContextB\n\272\351\300\003\005\212\001\002\020\001\022\\\n$validation_" +
+      "context_sds_secret_config\030\002 \001(\0132\".envoy." +
+      "api.v2.auth.SdsSecretConfigB\n\272\351\300\003\005\212\001\002\020\001B" +
+      "\031\n\027validation_context_typeJ\004\010\005\020\006\"\303\001\n\022Ups" +
+      "treamTlsContext\022?\n\022common_tls_context\030\001 " +
+      "\001(\0132#.envoy.api.v2.auth.CommonTlsContext" +
+      "\022\027\n\003sni\030\002 \001(\tB\n\272\351\300\003\005r\003(\377\001\022\033\n\023allow_reneg" +
+      "otiation\030\003 \001(\010\0226\n\020max_session_keys\030\004 \001(\013" +
+      "2\034.google.protobuf.UInt32Value\"\201\003\n\024Downs" +
+      "treamTlsContext\022?\n\022common_tls_context\030\001 " +
+      "\001(\0132#.envoy.api.v2.auth.CommonTlsContext" +
+      "\022>\n\032require_client_certificate\030\002 \001(\0132\032.g" +
+      "oogle.protobuf.BoolValue\022/\n\013require_sni\030" +
+      "\003 \001(\0132\032.google.protobuf.BoolValue\022F\n\023ses" +
+      "sion_ticket_keys\030\004 \001(\0132\'.envoy.api.v2.au" +
+      "th.TlsSessionTicketKeysH\000\022S\n%session_tic" +
+      "ket_keys_sds_secret_config\030\005 \001(\0132\".envoy" +
+      ".api.v2.auth.SdsSecretConfigH\000B\032\n\030sessio" +
+      "n_ticket_keys_type\"T\n\017SdsSecretConfig\022\014\n" +
+      "\004name\030\001 \001(\t\0223\n\nsds_config\030\002 \001(\0132\037.envoy." +
+      "api.v2.core.ConfigSource\"\363\001\n\006Secret\022\014\n\004n" +
+      "ame\030\001 \001(\t\022<\n\017tls_certificate\030\002 \001(\0132!.env" +
+      "oy.api.v2.auth.TlsCertificateH\000\022F\n\023sessi" +
+      "on_ticket_keys\030\003 \001(\0132\'.envoy.api.v2.auth" +
+      ".TlsSessionTicketKeysH\000\022M\n\022validation_co" +
+      "ntext\030\004 \001(\0132/.envoy.api.v2.auth.Certific" +
+      "ateValidationContextH\000B\006\n\004typeB.\n$io.grp" +
+      "c.xds.shaded.envoy.api.v2.authP\001Z\004authb\006" +
+      "proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
