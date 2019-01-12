@@ -2056,7 +2056,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	}
 }
 
-func TestPreloaderClientSend(t *testing.T) {
+func (s) TestPreloaderClientSend(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		testPreloaderClientSend(t, e)
@@ -2114,7 +2114,7 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	}
 }
 
-func TestMaxMsgSizeClientDefault(t *testing.T) {
+func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
