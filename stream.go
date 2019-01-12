@@ -14,7 +14,7 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 *
-*/
+ */
 
 package grpc
 
@@ -240,7 +240,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
-	ctx = newContextWithRPCInfo_Preloader(ctx, c.failFast, c.codec, cp, comp)
+	ctx = newContextWithRPCInfoPreloader(ctx, c.failFast, c.codec, cp, comp)
 	sh := cc.dopts.copts.StatsHandler
 	var beginTime time.Time
 	if sh != nil {
@@ -671,10 +671,10 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if !cs.desc.ClientStreams {
 		cs.sentLast = true
 	}
-	prepared_msg, ok := m.(*PreparedMsg)
+	preparedMsg, ok := m.(*PreparedMsg)
 	var hdr, payload, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(cs.codec, m)
 		if err != nil {
@@ -687,8 +687,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		hdr, payload = msgHeader(data, compData)
 
 	} else {
-		hdr, payload = prepared_msg.hdr, prepared_msg.payload
-		data = prepared_msg.encodedData
+		hdr, payload = preparedMsg.hdr, preparedMsg.payload
+		data = preparedMsg.encodedData
 	}
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > *cs.callInfo.maxSendMessageSize {
@@ -1152,10 +1152,10 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 	if !as.desc.ClientStreams {
 		as.sentLast = true
 	}
-	prepared_msg, ok := m.(*PreparedMsg)
+	preparedMsg, ok := m.(*PreparedMsg)
 	var hdr, payld, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(as.codec, m)
 		if err != nil {
@@ -1168,8 +1168,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 		hdr, payld = msgHeader(data, compData)
 
 	} else {
-		hdr, payld = prepared_msg.hdr, prepared_msg.payload
-		data = prepared_msg.encodedData
+		hdr, payld = preparedMsg.hdr, preparedMsg.payload
 	}
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payld) > *as.callInfo.maxSendMessageSize {
@@ -1407,10 +1406,10 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.t.IncrMsgSent()
 		}
 	}()
-	prepared_msg, ok := m.(*PreparedMsg)
+	preparedMsg, ok := m.(*PreparedMsg)
 	var hdr, payload, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(ss.codec, m)
 		if err != nil {
@@ -1422,8 +1421,8 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		}
 		hdr, payload = msgHeader(data, compData)
 	} else {
-		hdr, payload = prepared_msg.hdr, prepared_msg.payload
-		data = prepared_msg.encodedData
+		hdr, payload = preparedMsg.hdr, preparedMsg.payload
+		data = preparedMsg.encodedData
 	}
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > ss.maxSendMessageSize {

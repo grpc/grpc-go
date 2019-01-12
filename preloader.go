@@ -24,11 +24,13 @@ import (
 	// "google.golang.org/grpc/encoding"
 )
 
+// PreparedMsg is responsible for creating a Marshalled and Compressed object
 type PreparedMsg struct {
-	encodedData 		[]byte 
-	compredData 		[]byte
-	hdr		 			[]byte
-	payload 			[]byte
+	// Struct for preparing msg before sending them
+	encodedData []byte
+	compredData []byte
+	hdr         []byte
+	payload     []byte
 }
 
 // checks if the rpcInfo has all the correct information
@@ -42,6 +44,8 @@ func checkPreparedMsgContext(rpc *rpcInfo) error {
 	return nil
 }
 
+// Encode is responsible for preprocessing the data using relevant information
+// from the stream's Context
 // TODO(prannayk) : if something changes then mark prepared msg as old
 // Encode : marshal and compresses data based on stream context
 // Returns error in case of error

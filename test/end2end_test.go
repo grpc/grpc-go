@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip"
+
 	// "google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
@@ -2063,7 +2064,7 @@ func (s) TestPreloaderClientSend(t *testing.T) {
 	}
 }
 
-func testPreloaderClientSend(t *testing.T, e env) { 
+func testPreloaderClientSend(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.declareLogNoise(
@@ -2101,13 +2102,13 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	prep_msg := &grpc.PreparedMsg{}
-	err = prep_msg.Encode(stream, sreq)
+	preparedMsg := &grpc.PreparedMsg{}
+	err = preparedMsg.Encode(stream, sreq)
 	if err != nil {
 		t.Fatalf("PrepareMsg failed : %v", err)
 	}
-	if err := stream.SendMsg(prep_msg); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, prep_msg, err)
+	if err := stream.SendMsg(preparedMsg); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, preparedMsg, err)
 	}
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
