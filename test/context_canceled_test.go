@@ -41,8 +41,8 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	cntCanceled := 0
-	for i := 0; i < 500 && (cntCanceled < 5 || i-cntCanceled < 5); i++ {
+	var i, cntCanceled uint
+	for i, cntCanceled = 0, 0; i < 500 && (cntCanceled < 5 || cntPermissionDenied(i, cntCanceled) < 5); i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -61,11 +61,19 @@ func (s) TestContextCanceled(t *testing.T) {
 		if code == codes.Canceled {
 			cntCanceled++
 		}
-		trl := str.Trailer()
-		if code == codes.PermissionDenied && trl["a"] == nil {
-			t.Fatalf("status err: %v; got trl[\"a\"] == nil, wanted trl[\"a\"] != nil", err)
-		} else if code == codes.Canceled && trl["a"] != nil {
-			t.Fatalf("status err: %v; got trl[\"a\"] != nil, wanted trl[\"a\"] == nil", err)
+		_, ok := str.Trailer()["a"]
+		if code == codes.PermissionDenied && !ok {
+			t.Fatalf(`status err: %v; wanted key "a" in trailer but didn't get it`, err)
+		}
+		if code == codes.Canceled && ok {
+			t.Fatalf(`status err: %v; didn't want key "a" in trailer but got it`, err)
 		}
 	}
+	if cntCanceled < 5 || cntPermissionDenied(i, cntCanceled) < 5 {
+		t.Fatalf("got Canceled status %v times and PermissionDenied status %v times but wanted both of them at least 5 times", cntCanceled, cntPermissionDenied(i, cntCanceled))
+	}
+}
+
+func cntPermissionDenied(cntTotal, cntCanceled uint) uint {
+	return cntTotal - cntCanceled
 }
