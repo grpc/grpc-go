@@ -111,7 +111,7 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
 	in := new(testpb.SimpleRequest)
 	// Receive a message to learn response type and size.
-	err := stream.(grpc.ServerStream).RecvMsg(in)
+	err := stream.RecvMsg(in)
 	if err == io.EOF {
 		// read done.
 		return nil
@@ -127,7 +127,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 
 	go func() {
 		for {
-			err := stream.(grpc.ServerStream).RecvMsg(in)
+			err := stream.RecvMsg(in)
 			switch status.Code(err) {
 			case codes.Canceled:
 			case codes.OK:
@@ -149,11 +149,8 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 		}
 	}()
 
-	select {
-	case <-stream.(grpc.ServerStream).Context().Done():
-		return stream.(grpc.ServerStream).Context().Err()
-	}
-
+	<-stream.Context().Done()
+	return stream.Context().Err()
 }
 
 // byteBufServer is a gRPC server that sends and receives byte buffer.
