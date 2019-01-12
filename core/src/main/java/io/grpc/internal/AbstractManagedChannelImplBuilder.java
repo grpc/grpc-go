@@ -77,7 +77,6 @@ public abstract class AbstractManagedChannelImplBuilder
   /**
    * An idle timeout smaller than this would be capped to it.
    */
-  @VisibleForTesting
   static final long IDLE_MODE_MIN_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
   private static final ObjectPool<? extends Executor> DEFAULT_EXECUTOR_POOL =
