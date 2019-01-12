@@ -25,10 +25,10 @@ import (
 )
 
 type PreparedMsg struct {
-	encodedData 		[]byte 
-	compredData 		[]byte
-	hdr		 			[]byte
-	payload 			[]byte
+	encodedData []byte
+	compredData []byte
+	hdr         []byte
+	payload     []byte
 }
 
 // checks if the rpcInfo has all the correct information

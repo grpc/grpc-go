@@ -14,7 +14,7 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 *
-*/
+ */
 
 package grpc
 
@@ -674,7 +674,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	prepared_msg, ok := m.(*PreparedMsg)
 	var hdr, payload, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(cs.codec, m)
 		if err != nil {
@@ -1155,7 +1155,7 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 	prepared_msg, ok := m.(*PreparedMsg)
 	var hdr, payld, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(as.codec, m)
 		if err != nil {
@@ -1410,7 +1410,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	prepared_msg, ok := m.(*PreparedMsg)
 	var hdr, payload, data []byte
 	if !ok {
-		// The input interface is not a prepared msg. 
+		// The input interface is not a prepared msg.
 		// Marshal and Compress the data at this point
 		data, err = encode(ss.codec, m)
 		if err != nil {

@@ -2063,7 +2063,7 @@ func (s) TestPreloaderClientSend(t *testing.T) {
 	}
 }
 
-func testPreloaderClientSend(t *testing.T, e env) { 
+func testPreloaderClientSend(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.declareLogNoise(

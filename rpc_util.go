@@ -674,10 +674,10 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 // pointers to codec, and compressors, then we can use preparedMsg for Async message prep
 // and reuse marshalled bytes
 type rpcInfo struct {
-	failfast 	bool
-	codec		 baseCodec
-	cp    		Compressor
-	comp  		encoding.Compressor
+	failfast bool
+	codec    baseCodec
+	cp       Compressor
+	comp     encoding.Compressor
 }
 
 func (r *rpcInfo) SetEncodingCompressor(e encoding.Compressor) {
@@ -692,10 +692,10 @@ func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
 
 func newContextWithRPCInfo_Preloader(ctx context.Context, failfast bool, codec baseCodec, cp Compressor, comp encoding.Compressor) context.Context {
 	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{
-		failfast : failfast,
-		codec : codec, 
-		cp : cp, 
-		comp : comp,
+		failfast: failfast,
+		codec:    codec,
+		cp:       cp,
+		comp:     comp,
 	})
 }
 
@@ -706,7 +706,7 @@ func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
 
 func GetRPCInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
 	s, ok = rpcInfoFromContext(ctx)
-	return 
+	return
 }
 
 // Code returns the error code for err if it was produced by the rpc system.
