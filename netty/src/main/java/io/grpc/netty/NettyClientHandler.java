@@ -371,7 +371,6 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
   }
 
-
   /**
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
@@ -443,6 +442,12 @@ class NettyClientHandler extends AbstractNettyHandler {
     this.attributes = attributes;
     this.securityInfo = securityInfo;
     super.handleProtocolNegotiationCompleted(attributes, securityInfo);
+    // Once protocol negotiator is complete, release all writes and remove the buffer.
+    ChannelHandlerContext handlerCtx =
+        ctx().pipeline().context(WriteBufferingAndExceptionHandler.class);
+    if (handlerCtx != null) {
+      ((WriteBufferingAndExceptionHandler) handlerCtx.handler()).writeBufferedAndRemove(handlerCtx);
+    }
   }
 
   @Override
@@ -458,7 +463,6 @@ class NettyClientHandler extends AbstractNettyHandler {
   InternalChannelz.Security getSecurityInfo() {
     return securityInfo;
   }
-
 
   @Override
   protected void onConnectionError(ChannelHandlerContext ctx,  boolean outbound, Throwable cause,

@@ -601,9 +601,7 @@ public final class ProtocolNegotiators {
         bufferedWrites = null;
       }
 
-      // In case something goes wrong ensure that the channel gets closed as the
-      // NettyClientTransport relies on the channel's close future to get completed.
-      ctx.close();
+      ctx.fireExceptionCaught(cause);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
