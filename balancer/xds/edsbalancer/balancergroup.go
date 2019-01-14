@@ -33,16 +33,33 @@ type pickerState struct {
 	state  connectivity.State
 }
 
-// balancerGroup is a group of balancers with weights.
+// balancerGroup takes a list of balancers, and make then into one balancer.
+//
+// Note that this struct doesn't implement balancer.Balancer, because it's not
+// intended to be used directly as a balancer. It's expected to be used as a
+// sub-balancer manager by a high level balancer.
+//
+// Updates from ClientConn are forwarded to sub-balancers
+//  - service config update
+//     - Not implemented
+//  - address update
+//  - subConn state change
+//     - find the corresponding balancer and forward
+//
+// Actions from sub-balances are forwarded to parent ClientConn
+//  - new/remove SubConn
+//  - picker update and health states change
+//     - sub-pickers are grouped into a group-picker
+//     - aggregated health status is the overall status of all pickers.
+//  - resolveNow
 type balancerGroup struct {
 	cc balancer.ClientConn
 
 	mu           sync.Mutex
 	idToBalancer map[string]balancer.Balancer
-	// A separate mutex??? No, because we usually want to read the other map.
-	scToID map[balancer.SubConn]string
-	// All balancer ID exists as a key in this map. IDs not in map are either
-	// removed or never existed.
+	scToID       map[balancer.SubConn]string
+	// All balancer IDs exist as keys in this map. If an ID is not in map, it's
+	// either removed or never added.
 	idToPickerState map[string]*pickerState
 }
 
@@ -56,7 +73,7 @@ func newBalancerGroup(cc balancer.ClientConn) *balancerGroup {
 	}
 }
 
-// add adds a balancer built by builder to the group, with given id and picking weight.
+// add adds a balancer built by builder to the group, with given id and weight.
 func (bg *balancerGroup) add(id string, weight uint32, builder balancer.Builder) {
 	bg.mu.Lock()
 	if _, ok := bg.idToBalancer[id]; ok {
@@ -74,13 +91,18 @@ func (bg *balancerGroup) add(id string, weight uint32, builder balancer.Builder)
 	bg.idToBalancer[id] = b
 	bg.idToPickerState[id] = &pickerState{
 		weight: weight,
-		// Start everything in IDLE. We don't count IDLE when aggregating (as
-		// opposite to e.g. READY, 1 READY results in overall READY).
+		// Start everything in IDLE. It's doesn't affect the overall state
+		// because we don't count IDLE when aggregating (as opposite to e.g.
+		// READY, 1 READY results in overall READY).
 		state: connectivity.Idle,
 	}
 	bg.mu.Unlock()
 }
 
+// remove removes the balancer with id from the group, and closes the balancer.
+//
+// It also removes the picker generated from this balancer from the picker
+// group. It always results in a picker update.
 func (bg *balancerGroup) remove(id string) {
 	bg.mu.Lock()
 	defer bg.mu.Unlock()
@@ -90,8 +112,8 @@ func (bg *balancerGroup) remove(id string) {
 		b.Close()
 		delete(bg.idToBalancer, id)
 	}
-	// Remove picker. This also results in future updates for this ID to be
-	// ignored.
+	// Remove id and picker from picker map. This also results in future updates
+	// for this ID to be ignored.
 	delete(bg.idToPickerState, id)
 	// Remove SubConns.
 	for sc, bid := range bg.scToID {

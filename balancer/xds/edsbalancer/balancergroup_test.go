@@ -33,21 +33,7 @@ var (
 	testBackendAddrs = []resolver.Address{{Addr: "1.1.1.1:1"}, {Addr: "2.2.2.2:2"}, {Addr: "3.3.3.3:3"}, {Addr: "4.4.4.4:4"}}
 )
 
-/*
-
- - 2 balancers, weight 1, RR, resolved address updates
-   - Add address
-   - Remove address
-
- - 2 balancers, weight 1,2, RR with 1 backend
-
-
- - Closing (with pending RPC)
-
-*/
-
-// 1 balancer,
-// 1 backend -> 2 backends -> 1 backend.
+// 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
@@ -106,6 +92,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	}
 }
 
+// 2 balancers, each with 1 backend.
 func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
@@ -137,6 +124,7 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	}
 }
 
+// 2 balancers, each with more than 1 backends.
 func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
@@ -232,6 +220,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	}
 }
 
+// 2 balancers with different weights.
 func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
@@ -269,6 +258,7 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	}
 }
 
+// totally 3 balancers, add/remove balancer.
 func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
@@ -304,7 +294,8 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	bg.remove(testBalancerIDs[1]) // Remove the second balancer, while the others two are ready.
+	// Remove the second balancer, while the others two are ready.
+	bg.remove(testBalancerIDs[1])
 	scToRemove := <-cc.removeSubConnCh
 	if !reflect.DeepEqual(scToRemove, sc2) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
@@ -320,7 +311,8 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 
 	// move balancer 3 into transient failure.
 	bg.handleSubConnStateChange(sc3, connectivity.TransientFailure)
-	bg.remove(testBalancerIDs[0]) // Remove the first balancer, while the third is transient failure.
+	// Remove the first balancer, while the third is transient failure.
+	bg.remove(testBalancerIDs[0])
 	scToRemove = <-cc.removeSubConnCh
 	if !reflect.DeepEqual(scToRemove, sc1) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
@@ -333,6 +325,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	}
 }
 
+// 2 balancers, change balancer weight.
 func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
 	bg := newBalancerGroup(cc)
