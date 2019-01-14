@@ -50,7 +50,7 @@ type pickerState struct {
 //  - new/remove SubConn
 //  - picker update and health states change
 //     - sub-pickers are grouped into a group-picker
-//     - aggregated health status is the overall status of all pickers.
+//     - aggregated connectivity state is the overall state of all pickers.
 //  - resolveNow
 type balancerGroup struct {
 	cc balancer.ClientConn
@@ -133,13 +133,14 @@ func (bg *balancerGroup) remove(id string) {
 	bg.pickerMu.Unlock()
 }
 
+// changeWeight changes the weight of the balancer.
+//
+// NOTE: It always results in a picker update now. This probably isn't
+// necessary. But it seems better to do the update because it's a change in the
+// picker (which is balancer's snapshot).
 func (bg *balancerGroup) changeWeight(id string, newWeight uint32) {
-	// NOTE: This probably doesn't need to update the picker. But it seems better
-	// to do the update because it's still a change in the picker (which is
-	// balancer's snapshot).
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
-
 	pState, ok := bg.idToPickerState[id]
 	if !ok {
 		return
@@ -152,7 +153,7 @@ func (bg *balancerGroup) changeWeight(id string, newWeight uint32) {
 	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 }
 
-// Actions from ClientConn, forward to sub-balancers.
+// Following are actions from ClientConn, forward to sub-balancers.
 
 // SubConn state change: find the corresponding balancer and then forward.
 func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -191,10 +192,10 @@ func (bg *balancerGroup) handleResolvedAddrs(id string, addrs []resolver.Address
 // For BNS address for slicer, comes from endpoint.Metadata. It will be sent
 // from parent to sub-balancers as service config.
 
-// Actions from sub-balancers, forward to ClientConn.
+// Following are actions from sub-balancers, forward to ClientConn.
 
-// New SubConn: forward to ClientConn, and also create a map from sc to
-// balancer, so state update will find the right balancer.
+// newSubConn: forward to ClientConn, and also create a map from sc to balancer,
+// so state update will find the right balancer.
 //
 // One note about removing SubConn: only forward to ClientConn, but not delete
 // from map. Delete sc from the map only when state changes to Shutdown. Since
@@ -205,14 +206,14 @@ func (bg *balancerGroup) newSubConn(id string, addrs []resolver.Address, opts ba
 	if err != nil {
 		return nil, err
 	}
-
 	bg.mu.Lock()
 	bg.scToID[sc] = id
 	bg.mu.Unlock()
-
 	return sc, nil
 }
 
+// updateBalancerState: create an aggregated picker and an aggregated
+// connectivity state, then forward to ClientConn.
 func (bg *balancerGroup) updateBalancerState(id string, state connectivity.State, picker balancer.Picker) {
 	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
 	bg.pickerMu.Lock()
@@ -230,9 +231,11 @@ func (bg *balancerGroup) updateBalancerState(id string, state connectivity.State
 }
 
 func (bg *balancerGroup) close() {
+	bg.mu.Lock()
 	for _, b := range bg.idToBalancer {
 		b.Close()
 	}
+	bg.mu.Unlock()
 }
 
 func buildPickerAndState(m map[string]*pickerState) (connectivity.State, balancer.Picker) {
@@ -259,7 +262,6 @@ func buildPickerAndState(m map[string]*pickerState) (connectivity.State, balance
 	if aggregatedState == connectivity.TransientFailure {
 		return aggregatedState, base.NewErrPicker(balancer.ErrTransientFailure)
 	}
-
 	return aggregatedState, newPickerGroup(readyPickerWithWeights)
 }
 
@@ -290,7 +292,6 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 	if pg.length <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
-
 	// TODO: the WRR algorithm needs a design.
 	// MAYBE: move WRR implmentation to util.go as a separate struct.
 	pg.mu.Lock()
@@ -302,11 +303,13 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 		pg.count = 0
 	}
 	pg.mu.Unlock()
-
 	return p.Pick(ctx, opts)
 }
 
-// balancerGroupCC is a balancer.ClientConn implementation with the balancer ID.
+// balancerGroupCC contains the balancer ID.
+//
+// Some of the actions are forwarded to the parent ClientConn with no change.
+// Some are forward to balancer group with the sub-balancer ID.
 type balancerGroupCC struct {
 	id    string
 	group *balancerGroup
@@ -315,19 +318,15 @@ type balancerGroupCC struct {
 func (bgcc *balancerGroupCC) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return bgcc.group.newSubConn(bgcc.id, addrs, opts)
 }
-
 func (bgcc *balancerGroupCC) RemoveSubConn(sc balancer.SubConn) {
 	bgcc.group.cc.RemoveSubConn(sc)
 }
-
 func (bgcc *balancerGroupCC) UpdateBalancerState(state connectivity.State, picker balancer.Picker) {
 	bgcc.group.updateBalancerState(bgcc.id, state, picker)
 }
-
 func (bgcc *balancerGroupCC) ResolveNow(opt resolver.ResolveNowOption) {
 	bgcc.group.cc.ResolveNow(opt)
 }
-
 func (bgcc *balancerGroupCC) Target() string {
 	return bgcc.group.cc.Target()
 }
