@@ -121,6 +121,12 @@ func (tcc *testClientConn) Target() string {
 	panic("not implemented")
 }
 
+// isRoundRobin checks two conditions:
+//  1. if the return value of f is round-robin
+//  2. if the result value of f all comes from want
+//
+// Note that want can contain duplicate items, which results in
+// weight-round-robin.
 func isRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	wantSet := make(map[balancer.SubConn]int) // SubConn -> count, for weighted RR.
 	for _, sc := range want {
@@ -151,6 +157,7 @@ func isRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	return nil
 }
 
+// testClosure is a test util for TestIsRoundRobin.
 type testClosure struct {
 	r []balancer.SubConn
 	i int
@@ -200,19 +207,19 @@ func TestIsRoundRobin(t *testing.T) {
 			pass: true,
 		},
 		{
-			desc: "2 elements RR different order",
+			desc: "2 elements RR different order from want",
 			want: []balancer.SubConn{sc2, sc1},
 			got:  []balancer.SubConn{sc1, sc2, sc1, sc2, sc1, sc2},
 			pass: true,
 		},
 		{
-			desc: "2 elements RR not RR first iter",
+			desc: "2 elements RR not RR, mistake in first iter",
 			want: []balancer.SubConn{sc1, sc2},
 			got:  []balancer.SubConn{sc1, sc1, sc1, sc2, sc1, sc2},
 			pass: false,
 		},
 		{
-			desc: "2 elements RR not RR second iter",
+			desc: "2 elements RR not RR, mistake in second iter",
 			want: []balancer.SubConn{sc1, sc2},
 			got:  []balancer.SubConn{sc1, sc2, sc1, sc1, sc1, sc2},
 			pass: false,
@@ -249,13 +256,13 @@ func TestIsRoundRobin(t *testing.T) {
 			pass: true,
 		},
 		{
-			desc: "3 elements weighted RR not RR first iter",
+			desc: "3 elements weighted RR not RR, mistake in first iter",
 			want: []balancer.SubConn{sc1, sc1, sc1, sc2, sc2, sc3},
 			got:  []balancer.SubConn{sc1, sc2, sc1, sc1, sc2, sc1, sc1, sc2, sc3, sc1, sc2, sc1},
 			pass: false,
 		},
 		{
-			desc: "3 elements weighted RR not RR second iter",
+			desc: "3 elements weighted RR not RR, mistake insecond iter",
 			want: []balancer.SubConn{sc1, sc1, sc1, sc2, sc2, sc3},
 			got:  []balancer.SubConn{sc1, sc2, sc3, sc1, sc2, sc1, sc1, sc1, sc3, sc1, sc2, sc1},
 			pass: false,

@@ -87,7 +87,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		gotSC, _, _ := p3.Pick(context.Background(), balancer.PickOptions{})
 		if !reflect.DeepEqual(gotSC, sc2) {
-			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc1)
+			t.Fatalf("picker.Pick, got %v, want %v", gotSC, sc2)
 		}
 	}
 }
