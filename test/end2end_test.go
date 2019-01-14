@@ -80,8 +80,25 @@ func init() {
 
 type s struct{}
 
+var lcFailed uint32
+
+type errorer struct {
+	t *testing.T
+}
+
+func (e errorer) Errorf(format string, args ...interface{}) {
+	atomic.StoreUint32(&lcFailed, 1)
+	e.t.Errorf(format, args...)
+}
+
 func (s) Teardown(t *testing.T) {
-	leakcheck.Check(t)
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		return
+	}
+	leakcheck.Check(errorer{t: t})
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		t.Log("Leak check disabled for future tests")
+	}
 }
 
 func Test(t *testing.T) {
