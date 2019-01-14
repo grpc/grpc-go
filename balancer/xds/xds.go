@@ -14,4 +14,5 @@
  * limitations under the License.
  */
 
+// Package xds implements xds balancer.
 package xds // import "google.golang.org/grpc/balancer/xds"
