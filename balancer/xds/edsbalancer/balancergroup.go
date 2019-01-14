@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// TODO: move package comment to edsbalancer.go.
+
+// Package edsbalancer implements balancer generated from an eds response.
 package edsbalancer
 
 import (
