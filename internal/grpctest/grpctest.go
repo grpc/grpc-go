@@ -61,8 +61,9 @@ func RunSubTests(t *testing.T, x interface{}) {
 		tfunc := getTestFunc(t, xv, methodName)
 		t.Run(strings.TrimPrefix(methodName, "Test"), func(t *testing.T) {
 			setup(t)
+			// defer teardown to guarantee it is run even if tfunc uses t.Fatal()
+			defer teardown(t)
 			tfunc(t)
-			teardown(t)
 		})
 	}
 }
