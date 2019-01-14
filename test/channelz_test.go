@@ -1655,7 +1655,6 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	defer cleanup()
 	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
 	te.resolverScheme = r.Scheme()
-	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	cc := te.clientConn()
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
@@ -1750,7 +1749,6 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 	defer cleanup()
 	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
 	te.resolverScheme = r.Scheme()
-	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	cc := te.clientConn()
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)

@@ -387,7 +387,6 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	cc, r, deferFunc, err := setupClient(&clientConfig{
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
-		extraDialOption:            []grpc.DialOption{grpc.WithWaitForHandshake()},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -689,7 +688,6 @@ func (s) TestHealthCheckWithoutReportHealthCalled(t *testing.T) {
 	_, r, deferFunc, err := setupClient(&clientConfig{
 		balancerName:               "round_robin",
 		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
-		extraDialOption:            []grpc.DialOption{grpc.WithWaitForHandshake()},
 	})
 	if err != nil {
 		t.Fatal(err)
