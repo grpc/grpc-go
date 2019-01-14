@@ -58,6 +58,8 @@ type balancerGroup struct {
 	mu           sync.Mutex
 	idToBalancer map[string]balancer.Balancer
 	scToID       map[balancer.SubConn]string
+
+	pickerMu sync.Mutex
 	// All balancer IDs exist as keys in this map. If an ID is not in map, it's
 	// either removed or never added.
 	idToPickerState map[string]*pickerState
@@ -89,6 +91,9 @@ func (bg *balancerGroup) add(id string, weight uint32, builder balancer.Builder)
 	b := builder.Build(bgcc, balancer.BuildOptions{})
 	bg.mu.Lock()
 	bg.idToBalancer[id] = b
+	bg.mu.Unlock()
+
+	bg.pickerMu.Lock()
 	bg.idToPickerState[id] = &pickerState{
 		weight: weight,
 		// Start everything in IDLE. It's doesn't affect the overall state
@@ -96,7 +101,7 @@ func (bg *balancerGroup) add(id string, weight uint32, builder balancer.Builder)
 		// READY, 1 READY results in overall READY).
 		state: connectivity.Idle,
 	}
-	bg.mu.Unlock()
+	bg.pickerMu.Unlock()
 }
 
 // remove removes the balancer with id from the group, and closes the balancer.
@@ -105,16 +110,11 @@ func (bg *balancerGroup) add(id string, weight uint32, builder balancer.Builder)
 // group. It always results in a picker update.
 func (bg *balancerGroup) remove(id string) {
 	bg.mu.Lock()
-	defer bg.mu.Unlock()
-
 	// Close balancer.
 	if b, ok := bg.idToBalancer[id]; ok {
 		b.Close()
 		delete(bg.idToBalancer, id)
 	}
-	// Remove id and picker from picker map. This also results in future updates
-	// for this ID to be ignored.
-	delete(bg.idToPickerState, id)
 	// Remove SubConns.
 	for sc, bid := range bg.scToID {
 		if bid == id {
@@ -122,17 +122,23 @@ func (bg *balancerGroup) remove(id string) {
 			delete(bg.scToID, sc)
 		}
 	}
+	bg.mu.Unlock()
 
+	bg.pickerMu.Lock()
+	// Remove id and picker from picker map. This also results in future updates
+	// for this ID to be ignored.
+	delete(bg.idToPickerState, id)
 	// Update state and picker to reflect the changes.
 	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
+	bg.pickerMu.Unlock()
 }
 
 func (bg *balancerGroup) changeWeight(id string, newWeight uint32) {
 	// NOTE: This probably doesn't need to update the picker. But it seems better
 	// to do the update because it's still a change in the picker (which is
 	// balancer's snapshot).
-	bg.mu.Lock()
-	defer bg.mu.Unlock()
+	bg.pickerMu.Lock()
+	defer bg.pickerMu.Unlock()
 
 	pState, ok := bg.idToPickerState[id]
 	if !ok {
@@ -142,7 +148,6 @@ func (bg *balancerGroup) changeWeight(id string, newWeight uint32) {
 		return
 	}
 	pState.weight = newWeight
-
 	// Update state and picker to reflect the changes.
 	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 }
@@ -166,7 +171,6 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 		grpclog.Infof("balancer group: balancer not found for sc state change")
 		return
 	}
-
 	b.HandleSubConnStateChange(sc, state)
 }
 
@@ -211,8 +215,8 @@ func (bg *balancerGroup) newSubConn(id string, addrs []resolver.Address, opts ba
 
 func (bg *balancerGroup) updateBalancerState(id string, state connectivity.State, picker balancer.Picker) {
 	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
-	bg.mu.Lock()
-	defer bg.mu.Unlock()
+	bg.pickerMu.Lock()
+	defer bg.pickerMu.Unlock()
 	pickerSt, ok := bg.idToPickerState[id]
 	if !ok {
 		// All state starts in IDLE. It ID is not in map, it's either removed,
@@ -220,10 +224,8 @@ func (bg *balancerGroup) updateBalancerState(id string, state connectivity.State
 		grpclog.Infof("balancer group: pickerState not found when update picker/state")
 		return
 	}
-
 	pickerSt.picker = picker
 	pickerSt.state = state
-
 	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 }
 
