@@ -27,8 +27,25 @@ import (
 
 type s struct{}
 
+var lcFailed = false
+
+type errorer struct {
+	t *testing.T
+}
+
+func (e errorer) Errorf(format string, args ...interface{}) {
+	lcFailed = true
+	e.t.Errorf(format, args...)
+}
+
 func (s) Teardown(t *testing.T) {
-	leakcheck.Check(t)
+	if lcFailed {
+		return
+	}
+	leakcheck.Check(errorer{t: t})
+	if lcFailed {
+		t.Log("Leak check disabled for future tests")
+	}
 }
 
 func Test(t *testing.T) {
