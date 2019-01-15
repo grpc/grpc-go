@@ -6951,7 +6951,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	for i, maxTimeout := range timeouts {
 		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			deadline, ok := ctx.Deadline()
-			timeout := deadline.Sub(time.Now())
+			timeout := time.Until(deadline)
 			minTimeout := maxTimeout - 5*time.Second
 			if !ok || timeout < minTimeout || timeout > maxTimeout {
 				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
