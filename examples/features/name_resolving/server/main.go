@@ -50,9 +50,6 @@ func (s *ecServer) BidirectionalStreamingEcho(ecpb.Echo_BidirectionalStreamingEc
 	return status.Errorf(codes.Unimplemented, "not implemented")
 }
 
-func startServer(addr string) {
-}
-
 func main() {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
