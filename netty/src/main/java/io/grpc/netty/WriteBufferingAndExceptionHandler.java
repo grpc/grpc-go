@@ -54,6 +54,15 @@ final class WriteBufferingAndExceptionHandler extends ChannelDuplexHandler {
     super.handlerAdded(ctx);
   }
 
+  @Override
+  public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+    if (!bufferedWrites.isEmpty()) {
+      Status status = Status.INTERNAL.withDescription("Buffer removed before draining writes");
+      failWrites(status.asRuntimeException());
+    }
+    super.handlerRemoved(ctx);
+  }
+
   /**
    * If this channel becomes inactive, then notify all buffered writes that we failed.
    */

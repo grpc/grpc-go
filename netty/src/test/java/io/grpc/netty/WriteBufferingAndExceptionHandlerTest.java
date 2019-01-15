@@ -205,6 +205,46 @@ public class WriteBufferingAndExceptionHandlerTest {
   }
 
   @Test
+  public void handlerRemovedFailuresPropagated() throws Exception {
+    WriteBufferingAndExceptionHandler handler =
+        new WriteBufferingAndExceptionHandler(new ChannelHandlerAdapter() {
+          @Override
+          public void handlerRemoved(ChannelHandlerContext ctx) {
+            ctx.pipeline().remove(
+                ctx.pipeline().context(WriteBufferingAndExceptionHandler.class).name());
+          }
+        });
+    LocalAddress addr = new LocalAddress("local");
+    ChannelFuture cf = new Bootstrap()
+        .channel(LocalChannel.class)
+        .handler(handler)
+        .group(group)
+        .register();
+    chan = cf.channel();
+    cf.sync();
+    ChannelFuture sf = new ServerBootstrap()
+        .channel(LocalServerChannel.class)
+        .childHandler(new ChannelHandlerAdapter() {})
+        .group(group)
+        .bind(addr);
+    server = sf.channel();
+    sf.sync();
+
+    chan.connect(addr);
+    ChannelFuture wf = chan.writeAndFlush(new Object());
+    chan.pipeline().removeFirst();
+
+    try {
+      wf.sync();
+      fail();
+    } catch (Exception e) {
+      Status status = Status.fromThrowable(e);
+      assertThat(status.getCode()).isEqualTo(Code.INTERNAL);
+      assertThat(status.getDescription()).contains("Buffer removed");
+    }
+  }
+
+  @Test
   public void writesBuffered() throws Exception {
     final AtomicBoolean handlerAdded = new AtomicBoolean();
     final AtomicBoolean flush = new AtomicBoolean();
