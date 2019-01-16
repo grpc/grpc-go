@@ -156,9 +156,7 @@ func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, defe
 	if c.testHealthCheckFuncWrapper != nil {
 		opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
 	}
-	for _, dopt := range c.extraDialOption {
-		opts = append(opts, dopt)
-	}
+	opts = append(opts, c.extraDialOption...)
 	cc, err = grpc.Dial(r.Scheme()+":///test.server", opts...)
 	if err != nil {
 		rcleanup()
