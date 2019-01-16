@@ -16,6 +16,8 @@
  *
  */
 
+// Package stats registers benchmark statistics. utils.go provide methods to
+// add statistics for benchmarks
 package stats
 
 import (
