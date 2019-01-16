@@ -1003,9 +1003,6 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	server2ContactedSecondTime := make(chan struct{})
 	server3Contacted := make(chan struct{})
 
-	stateNotifications := make(chan connectivity.State, 100)
-	testBalancer.ResetNotifier(stateNotifications)
-
 	// Launch server 1.
 	go func() {
 		// First, let's allow the initial connection to go READY. We need to do
@@ -1024,6 +1021,10 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 			return
 		}
 
+		// nextStateNotifier() is updated after balancerBuilder.Build(), which is
+		// called by grpc.Dial. It's safe to do it here because lis1.Accept blocks
+		// until balancer is built to process the addresses.
+		stateNotifications := testBalancerBuilder.nextStateNotifier()
 		// Wait for the transport to become ready.
 		for s := range stateNotifications {
 			if s == connectivity.Ready {
