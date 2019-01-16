@@ -173,10 +173,7 @@ func (s *rpcStats) equal(o *rpcStats) bool {
 	defer s.mu.Unlock()
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if !mapsEqual(s.numCallsDropped, o.numCallsDropped) {
-		return false
-	}
-	return true
+	return mapsEqual(s.numCallsDropped, o.numCallsDropped)
 }
 
 type remoteBalancer struct {
