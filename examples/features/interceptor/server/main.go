@@ -89,10 +89,7 @@ func valid(authorization []string) bool {
 	// Perform the token validation here. For the sake of this example, the code
 	// here forgoes any of the usual OAuth2 token validation and instead checks
 	// for a token matching an arbitrary string.
-	if token != "some-secret-token" {
-		return false
-	}
-	return true
+	return token == "some-secret-token"
 }
 
 func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
