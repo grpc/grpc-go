@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -53,6 +54,10 @@ func (*rrPickerBuilder) Build(readySCs map[resolver.Address]balancer.SubConn) ba
 	}
 	return &rrPicker{
 		subConns: scs,
+		// Start at a random index, as the same RR balancer rebuilds a new
+		// picker when SubConn states change, and we don't want to apply excess
+		// load to the first server in the list.
+		next: grpcrand.Intn(len(scs)),
 	}
 }
 
