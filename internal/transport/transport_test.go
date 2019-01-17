@@ -110,6 +110,8 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	}
 	if !bytes.Equal(p, req) {
 		t.Errorf("handleStream got %v, want %v", p, req)
+		h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+		return
 	}
 	// send a response back to the client.
 	h.t.Write(s, nil, resp, &Options{})
@@ -126,11 +128,15 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 				return
 			}
 			t.Errorf("Error on server while reading data header: %v", err)
+			h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+			return
 		}
 		sz := binary.BigEndian.Uint32(header[1:])
 		msg := make([]byte, int(sz))
 		if _, err := s.Read(msg); err != nil {
 			t.Errorf("Error on server while reading message: %v", err)
+			h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+			return
 		}
 		buf := make([]byte, sz+5)
 		buf[0] = byte(0)
@@ -144,6 +150,8 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	conn, ok := s.st.(*http2Server)
 	if !ok {
 		t.Errorf("Failed to convert %v to *http2Server", s.st)
+		h.t.WriteStatus(s, status.New(codes.Internal, ""))
+		return
 	}
 	var sent int
 	p := make([]byte, http2MaxFrameLen)
