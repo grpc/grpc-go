@@ -1086,7 +1086,6 @@ type addrConnStream struct {
 	dc        Decompressor
 	decomp    encoding.Compressor
 	p         *parser
-	done      func(balancer.DoneInfo)
 	mu        sync.Mutex
 	finished  bool
 }

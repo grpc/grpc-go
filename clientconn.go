@@ -926,9 +926,8 @@ type addrConn struct {
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
 
-	channelzID         int64 // channelz unique identification number.
-	czData             *channelzData
-	healthCheckEnabled bool
+	channelzID int64 // channelz unique identification number.
+	czData     *channelzData
 }
 
 // Note: this requires a lock on ac.mu.
