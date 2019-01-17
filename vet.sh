@@ -132,7 +132,6 @@ balancer/roundrobin/roundrobin_test.go:SA1019
 benchmark/benchmain/main.go:SA1019
 internal/transport/handler_server.go:SA1019
 internal/transport/handler_server_test.go:SA1019
-internal/transport/transport_test.go:SA2002
 stats/stats_test.go:SA1019
 test/channelz_test.go:SA1019
 test/end2end_test.go:SA1019
