@@ -29,6 +29,8 @@ import io.netty.util.ReferenceCountUtil;
 import java.net.SocketAddress;
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Buffers all writes until either {@link #writeBufferedAndRemove(ChannelHandlerContext)} or
@@ -37,6 +39,8 @@ import java.util.Queue;
  * i.e.  before it's active or the TLS Handshake is complete.
  */
 final class WriteBufferingAndExceptionHandler extends ChannelDuplexHandler {
+  private static final Logger logger =
+      Logger.getLogger(WriteBufferingAndExceptionHandler.class.getName());
 
   private final Queue<ChannelWrite> bufferedWrites = new ArrayDeque<>();
   private final ChannelHandler next;
@@ -75,9 +79,21 @@ final class WriteBufferingAndExceptionHandler extends ChannelDuplexHandler {
 
   @Override
   public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    assert cause != null;
+    Throwable previousFailure = failCause;
     Status status = Utils.statusFromThrowable(cause);
     failWrites(status.asRuntimeException());
-    if (ctx.channel().isActive()) {
+    // Check to see if the channel is active and this is the first failure.  If a downstream
+    // handler triggers an exception in close(), avoid being reentrant.  This is not obviously
+    // correct, so here are the cases and how they are correctly handled:
+    // 1. !active, prev==null: the channel is inactive, no-op
+    // 2. !active, prev!=null: the channel is inactive, no-op
+    // 3.  active, prev==null: this is the first error, close
+    // 4a. active, prev!=null[channelInactive]: impossible, no-op
+    // 4b. active, prev!=null[close]: close() cannot succeed, no point in calling ctx.close().
+    // 4c. active, prev!=null[handlerRemoved]: channel will be closed out-of-band by buffered write.
+    // 4d. active, prev!=null[connect]: impossible, channel can't be active after a failed connect.
+    if (ctx.channel().isActive() && previousFailure == null) {
       ctx.close();
     }
   }
@@ -178,6 +194,8 @@ final class WriteBufferingAndExceptionHandler extends ChannelDuplexHandler {
   private void failWrites(Throwable cause) {
     if (failCause == null) {
       failCause = cause;
+    } else {
+      logger.log(Level.FINE, "Ignoring duplicate failure", cause);
     }
     while (!bufferedWrites.isEmpty()) {
       ChannelWrite write = bufferedWrites.poll();

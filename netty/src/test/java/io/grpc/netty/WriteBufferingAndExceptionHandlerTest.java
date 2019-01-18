@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -27,6 +28,7 @@ import io.grpc.Status.Code;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
@@ -39,6 +41,7 @@ import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
 import java.net.ConnectException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Rule;
@@ -202,6 +205,40 @@ public class WriteBufferingAndExceptionHandlerTest {
       assertThat(status.getCode()).isEqualTo(Code.ABORTED);
       assertThat(status.getDescription()).contains("zap");
     }
+  }
+
+  @Test
+  public void uncaughtException_closeAtMostOnce() throws Exception {
+    final AtomicInteger closes = new AtomicInteger();
+    WriteBufferingAndExceptionHandler handler =
+        new WriteBufferingAndExceptionHandler(new ChannelDuplexHandler() {
+          @Override
+          public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+            closes.getAndIncrement();
+            // Simulates a loop between this handler and the WriteBufferingAndExceptionHandler.
+            ctx.fireExceptionCaught(Status.ABORTED.withDescription("zap").asRuntimeException());
+            super.close(ctx, promise);
+          }
+        });
+    LocalAddress addr = new LocalAddress("local");
+    ChannelFuture cf = new Bootstrap()
+        .channel(LocalChannel.class)
+        .handler(handler)
+        .group(group)
+        .register();
+    chan = cf.channel();
+    cf.sync();
+    ChannelFuture sf = new ServerBootstrap()
+        .channel(LocalServerChannel.class)
+        .childHandler(new ChannelHandlerAdapter() {})
+        .group(group)
+        .bind(addr);
+    server = sf.channel();
+    sf.sync();
+
+    chan.connect(addr).sync();
+    chan.close().sync();
+    assertEquals(1, closes.get());
   }
 
   @Test
