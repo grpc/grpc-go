@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -41,38 +42,76 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	var i, cntCanceled uint
-	cntPermDenied := func() uint {
-		return i - cntCanceled
-	}
-	for i, cntCanceled = 0, 0; i < 500 && (cntCanceled < 5 || cntPermDenied() < 5); i++ {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	// Runs 5 rounds of tests with the given delay and returns counts of status codes.
+	// Fails in case of trailer/status code inconsistency.
+	runTest := func(delay uint) (cntCanceled, cntPermDenied uint) {
+		for i := 0; i < 5; i++ {
+			ctx, cancel := context.WithCancel(context.Background())
 
-		str, err := ss.client.FullDuplexCall(ctx)
-		if err != nil {
-			t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
+			str, err := ss.client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
+			}
+			// As this duration goes up chances of Recv returning Cancelled will decrease.
+			time.Sleep(time.Duration(delay) * time.Microsecond)
+			cancel()
+			_, err = str.Recv()
+			if err == nil {
+				t.Fatalf("non-nil error expected from Recv()")
+			}
+			code := status.Code(err)
+			log.Println(code)
+			_, ok := str.Trailer()["a"]
+			if code == codes.PermissionDenied {
+				if !ok {
+					t.Fatalf(`status err: %v; wanted key "a" in trailer but didn't get it`, err)
+				}
+				cntPermDenied++
+			} else if code == codes.Canceled {
+				if ok {
+					t.Fatalf(`status err: %v; didn't want key "a" in trailer but got it`, err)
+				}
+				cntCanceled++
+			}
 		}
-		// As this duration goes up chances of Recv returning Cancelled will decrease.
-		time.Sleep(time.Duration(i) * time.Microsecond)
-		cancel()
-		_, err = str.Recv()
-		if err == nil {
-			t.Fatalf("non-nil error expected from Recv()")
-		}
-		code := status.Code(err)
-		if code == codes.Canceled {
-			cntCanceled++
-		}
-		_, ok := str.Trailer()["a"]
-		if code == codes.PermissionDenied && !ok {
-			t.Fatalf(`status err: %v; wanted key "a" in trailer but didn't get it`, err)
-		}
-		if code == codes.Canceled && ok {
-			t.Fatalf(`status err: %v; didn't want key "a" in trailer but got it`, err)
+		return cntCanceled, cntPermDenied
+	}
+
+	const maxDelay uint = 250000
+	var delay uint = 1
+	// Doubles the delay until the upper bound is found.
+	for delay < maxDelay {
+		cntCanceled, cntPermDenied := runTest(delay)
+		if cntCanceled == 5 {
+			delay *= 2
+		} else if cntPermDenied == 5 {
+			break
+		} else {
+			return
 		}
 	}
-	if cntCanceled < 5 || cntPermDenied() < 5 {
-		t.Fatalf("got Canceled status %v times and PermissionDenied status %v times but wanted both of them at least 5 times", cntCanceled, cntPermDenied())
+
+	// Fails if the upper bound is greater than maxDelay
+	if delay >= maxDelay {
+		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
+	}
+
+	lower, upper := delay/2, delay
+	// Binary search for the delay that causes canceled/perm denied race.
+	for lower <= upper {
+		delay = lower + (upper-lower)/2
+		cntCanceled, cntPermDenied := runTest(delay)
+		if cntCanceled == 5 {
+			lower = delay + 1
+		} else if cntPermDenied == 5 {
+			upper = delay - 1
+		} else {
+			return
+		}
+	}
+
+	// Fails if the delay that causes canceled/perm denied race not found.
+	if delay >= maxDelay {
+		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
 	}
 }
