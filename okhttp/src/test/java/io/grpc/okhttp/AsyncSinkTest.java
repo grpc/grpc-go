@@ -41,10 +41,10 @@ import java.util.concurrent.Executor;
 import okio.Buffer;
 import okio.Sink;
 import okio.Timeout;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 /** Tests for {@link AsyncSink}. */
@@ -58,14 +58,10 @@ public class AsyncSinkTest {
   private final AsyncSink sink =
       AsyncSink.sink(new SerializingExecutor(queueingExecutor), exceptionHandler);
 
-  @Before
-  public void setUp() throws Exception {
-    sink.becomeConnected(mockedSink, socket);
-  }
-
   @Test
   public void noCoalesceRequired() throws IOException {
     Buffer buffer = new Buffer();
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer.writeUtf8("hello"), buffer.size());
     sink.flush();
     queueingExecutor.runAll();
@@ -80,6 +76,7 @@ public class AsyncSinkTest {
     byte[] firstData = "a string".getBytes(Charsets.UTF_8);
     byte[] secondData = "a longer string".getBytes(Charsets.UTF_8);
 
+    sink.becomeConnected(mockedSink, socket);
     Buffer buffer = new Buffer();
     sink.write(buffer.write(firstData), buffer.size());
     sink.flush();
@@ -101,6 +98,7 @@ public class AsyncSinkTest {
     byte[] firstData = "a string".getBytes(Charsets.UTF_8);
     byte[] secondData = "a longer string".getBytes(Charsets.UTF_8);
     Buffer buffer = new Buffer().write(firstData);
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer, buffer.size());
     sink.flush();
     buffer = new Buffer().write(secondData);
@@ -120,6 +118,7 @@ public class AsyncSinkTest {
     byte[] firstData = "a string".getBytes(Charsets.UTF_8);
     byte[] secondData = "a longer string".getBytes(Charsets.UTF_8);
     Buffer buffer = new Buffer();
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer.write(firstData), buffer.size());
     sink.write(buffer.write(secondData), buffer.size());
     sink.flush();
@@ -138,6 +137,7 @@ public class AsyncSinkTest {
         .when(mockedSink).write(any(Buffer.class), anyLong());
     Buffer buffer = new Buffer();
     buffer.writeUtf8("any message");
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer, buffer.size());
     sink.flush();
     queueingExecutor.runAll();
@@ -166,6 +166,7 @@ public class AsyncSinkTest {
         .when(mockedSink).write(any(Buffer.class), anyLong());
     Buffer buffer = new Buffer();
     buffer.writeUtf8("any message");
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer, buffer.size());
     sink.close();
     queueingExecutor.runAll();
@@ -180,6 +181,7 @@ public class AsyncSinkTest {
 
   @Test
   public void close_flushShouldThrowException() throws IOException {
+    sink.becomeConnected(mockedSink, socket);
     sink.close();
     queueingExecutor.runAll();
     try {
@@ -195,6 +197,7 @@ public class AsyncSinkTest {
   public void flush_shouldThrowIfAlreadyClosed() throws IOException {
     Buffer buffer = new Buffer();
     buffer.writeUtf8("any message");
+    sink.becomeConnected(mockedSink, socket);
     sink.write(buffer, buffer.size());
     sink.close();
     queueingExecutor.runAll();
@@ -210,6 +213,7 @@ public class AsyncSinkTest {
   @Test
   public void write_callSinkIfBufferIsLargerThanSegmentSize() throws IOException {
     Buffer buffer = new Buffer();
+    sink.becomeConnected(mockedSink, socket);
     // OkHttp is using 8192 as segment size.
     int payloadSize = 8192 * 2 - 1;
     int padding = 10;
@@ -238,6 +242,40 @@ public class AsyncSinkTest {
     queueingExecutor.runAll();
     verify(mockedSink).write(any(Buffer.class), eq((long) payloadSize - completeSegmentBytes));
     verify(mockedSink).flush();
+  }
+
+  @Test
+  public void writeAndFlush_beforeConnected() throws IOException {
+    Buffer buffer = new Buffer();
+    sink.write(buffer.writeUtf8("hello"), buffer.size());
+    sink.flush();
+    queueingExecutor.runAll();
+
+    verify(mockedSink, never()).write(any(Buffer.class), anyLong());
+    verify(mockedSink, never()).flush();
+
+    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
+
+    verify(exceptionHandler).onException(captor.capture());
+
+    Throwable t = captor.getValue();
+    assertThat(t).isInstanceOf(IOException.class);
+    assertThat(t).hasMessageThat().contains("unavailable sink");
+  }
+
+  @Test
+  public void close_multipleCloseShouldNotThrow() throws IOException {
+    sink.becomeConnected(mockedSink, socket);
+
+    sink.close();
+    queueingExecutor.runAll();
+
+    verify(exceptionHandler, never()).onException(any(Throwable.class));
+
+    sink.close();
+    queueingExecutor.runAll();
+
+    verify(exceptionHandler, never()).onException(any(Throwable.class));
   }
 
   /**

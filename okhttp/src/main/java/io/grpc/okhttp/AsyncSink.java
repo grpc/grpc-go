@@ -85,19 +85,15 @@ final class AsyncSink implements Sink {
       }
       writeEnqueued = true;
     }
-    serializingExecutor.execute(new Runnable() {
+    serializingExecutor.execute(new WriteRunnable() {
       @Override
-      public void run() {
+      public void doRun() throws IOException {
         Buffer buf = new Buffer();
         synchronized (lock) {
           buf.write(buffer, buffer.completeSegmentByteCount());
           writeEnqueued = false;
         }
-        try {
-          sink.write(buf, buf.size());
-        } catch (IOException e) {
-          transportExceptionHandler.onException(e);
-        }
+        sink.write(buf, buf.size());
       }
     });
   }
@@ -113,20 +109,16 @@ final class AsyncSink implements Sink {
       }
       flushEnqueued = true;
     }
-    serializingExecutor.execute(new Runnable() {
+    serializingExecutor.execute(new WriteRunnable() {
       @Override
-      public void run() {
+      public void doRun() throws IOException {
         Buffer buf = new Buffer();
         synchronized (lock) {
           buf.write(buffer, buffer.size());
           flushEnqueued = false;
         }
-        try {
-          sink.write(buf, buf.size());
-          sink.flush();
-        } catch (IOException e) {
-          transportExceptionHandler.onException(e);
-        }
+        sink.write(buf, buf.size());
+        sink.flush();
       }
     });
   }
@@ -147,16 +139,36 @@ final class AsyncSink implements Sink {
       public void run() {
         buffer.close();
         try {
-          sink.close();
+          if (sink != null) {
+            sink.close();
+          }
         } catch (IOException e) {
           transportExceptionHandler.onException(e);
         }
         try {
-          socket.close();
+          if (socket != null) {
+            socket.close();
+          }
         } catch (IOException e) {
           transportExceptionHandler.onException(e);
         }
       }
     });
+  }
+
+  private abstract class WriteRunnable implements Runnable {
+    @Override
+    public final void run() {
+      try {
+        if (sink == null) {
+          throw new IOException("Unable to perform write due to unavailable sink.");
+        }
+        doRun();
+      } catch (Exception e) {
+        transportExceptionHandler.onException(e);
+      }
+    }
+
+    public abstract void doRun() throws IOException;
   }
 }
