@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"log"
 	"testing"
 	"time"
 
@@ -60,7 +59,6 @@ func (s) TestContextCanceled(t *testing.T) {
 				t.Fatalf("non-nil error expected from Recv()")
 			}
 			code := status.Code(err)
-			log.Println(code)
 			_, ok := str.Trailer()["a"]
 			if code == codes.PermissionDenied {
 				if !ok {
