@@ -109,7 +109,5 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 
 	// Fails if the delay that causes canceled/perm denied race not found.
-	if delay >= maxDelay {
-		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
-	}
+	t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
 }
