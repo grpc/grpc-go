@@ -244,7 +244,7 @@ func MaxRecvMsgSize(m int) ServerOption {
 }
 
 // MaxSendMsgSize returns a ServerOption to set the max message size in bytes the server can send.
-// If this is not set, gRPC uses the default 4MB.
+// If this is not set, gRPC uses the default `math.MaxInt32`.
 func MaxSendMsgSize(m int) ServerOption {
 	return func(o *options) {
 		o.maxSendMessageSize = m
