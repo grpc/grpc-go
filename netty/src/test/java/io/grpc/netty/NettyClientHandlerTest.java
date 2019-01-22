@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.ClientStreamListener.RpcProgress.PROCESSED;
 import static io.grpc.internal.ClientStreamListener.RpcProgress.REFUSED;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
@@ -542,14 +543,36 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     ChannelFuture future = createStream();
     assertTrue(future.isSuccess());
 
+    TransportStateImpl newStreamTransportState = new TransportStateImpl(
+        handler(),
+        channel().eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE,
+        transportTracer);
+
     // This should fail - out of stream IDs.
-    future = createStream();
+    future = enqueue(newCreateStreamCommand(grpcHeaders, newStreamTransportState));
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
     Status status = lifecycleManager.getShutdownStatus();
     assertNotNull(status);
     assertTrue("status does not reference 'exhausted': " + status,
         status.getDescription().contains("exhausted"));
+  }
+
+  @Test
+  public void nonExistentStream() throws Exception {
+    Status status = Status.INTERNAL.withDescription("zz");
+
+    lifecycleManager.notifyShutdown(status);
+    // Stream creation can race with the transport shutting down, with the create command already
+    // enqueued.
+    ChannelFuture future1 = createStream();
+    future1.await();
+    assertNotNull(future1.cause());
+    assertThat(Status.fromThrowable(future1.cause()).getCode()).isEqualTo(status.getCode());
+
+    ChannelFuture future2 = enqueue(new CancelClientStreamCommand(streamTransportState, status));
+    future2.sync();
   }
 
   @Test

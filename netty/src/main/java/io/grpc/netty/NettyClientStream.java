@@ -212,6 +212,8 @@ class NettyClientStream extends AbstractClientStream {
   /** This should only called from the transport thread. */
   public abstract static class TransportState extends Http2ClientStreamTransportState
       implements StreamIdHolder {
+    private static final int NON_EXISTENT_ID = -1;
+
     private final NettyClientHandler handler;
     private final EventLoop eventLoop;
     private int id;
@@ -230,12 +232,27 @@ class NettyClientStream extends AbstractClientStream {
 
     @Override
     public int id() {
+      // id should be positive
       return id;
     }
 
     public void setId(int id) {
-      checkArgument(id > 0, "id must be positive");
+      checkArgument(id > 0, "id must be positive %s", id);
+      checkState(this.id == 0, "id has been previously set: %s", this.id);
       this.id = id;
+    }
+
+    /**
+     * Marks the stream state as if it had never existed.  This can happen if the stream is
+     * cancelled after it is created, but before it has been started.
+     */
+    void setNonExistent() {
+      checkState(this.id == 0, "Id has been previously set: %s", this.id);
+      this.id = NON_EXISTENT_ID;
+    }
+
+    boolean isNonExistent() {
+      return this.id == NON_EXISTENT_ID;
     }
 
     /**

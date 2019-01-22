@@ -515,7 +515,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         transportTracer,
         CallOptions.DEFAULT);
     stream.start(listener);
-    stream.transportState().setId(STREAM_ID);
     stream.transportState().setHttp2Stream(http2Stream);
     reset(listener);
     return stream;

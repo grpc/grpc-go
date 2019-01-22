@@ -502,6 +502,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private void createStream(final CreateStreamCommand command, final ChannelPromise promise)
           throws Exception {
     if (lifecycleManager.getShutdownThrowable() != null) {
+      command.stream().setNonExistent();
       // The connection is going away (it is really the GOAWAY case),
       // just terminate the stream now.
       command.stream().transportReportStatus(
@@ -515,6 +516,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     try {
       streamId = incrementAndGetNextStreamId();
     } catch (StatusException e) {
+      command.stream().setNonExistent();
       // Stream IDs have been exhausted for this connection. Fail the promise immediately.
       promise.setFailure(e);
 
@@ -588,7 +590,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     if (reason != null) {
       stream.transportReportStatus(reason, true, new Metadata());
     }
-    encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
+    if (!cmd.stream().isNonExistent()) {
+      encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
+    } else {
+      promise.setSuccess();
+    }
   }
 
   /**
