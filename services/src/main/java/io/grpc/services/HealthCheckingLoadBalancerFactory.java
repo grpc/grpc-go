@@ -56,6 +56,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -69,6 +71,8 @@ import javax.annotation.Nullable;
 final class HealthCheckingLoadBalancerFactory extends Factory {
   private static final Attributes.Key<HealthCheckState> KEY_HEALTH_CHECK_STATE =
       Attributes.Key.create("io.grpc.services.HealthCheckingLoadBalancerFactory.healthCheckState");
+  private static final Logger logger =
+      Logger.getLogger(HealthCheckingLoadBalancerFactory.class.getName());
 
   private final Factory delegateFactory;
   private final BackoffPolicy.Provider backoffPolicyProvider;
@@ -421,6 +425,9 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
       void handleStreamClosed(Status status) {
         if (Objects.equal(status.getCode(), Code.UNIMPLEMENTED)) {
           disabled = true;
+          logger.log(
+              Level.SEVERE, "Health-check with {0} is disabled. Server returned: {1}",
+              new Object[] {subchannel.getAllAddresses(), status});
           subchannelLogger.log(ChannelLogLevel.ERROR, "Health-check disabled: {0}", status);
           subchannelLogger.log(ChannelLogLevel.INFO, "{0} (no health-check)", rawState);
           gotoState(rawState);
