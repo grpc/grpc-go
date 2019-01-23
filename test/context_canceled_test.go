@@ -44,34 +44,34 @@ func (s) TestContextCanceled(t *testing.T) {
 	// Runs 10 rounds of tests with the given delay and returns counts of status codes.
 	// Fails in case of trailer/status code inconsistency.
 	const cntRetry uint = 10
-	runTest := func(delay uint) (cntCanceled, cntPermDenied uint) {
+	runTest := func(delay time.Duration) (cntCanceled, cntPermDenied uint) {
 		for i := uint(0); i < cntRetry; i++ {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), delay)
+			defer cancel()
 
 			str, err := ss.client.FullDuplexCall(ctx)
 			if err != nil {
-				t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", ss.client, err)
+				continue
 			}
-			// As this duration goes up chances of Recv returning Cancelled will decrease.
-			time.Sleep(time.Duration(delay) * time.Microsecond)
-			cancel()
+
 			_, err = str.Recv()
 			if err == nil {
 				t.Fatalf("non-nil error expected from Recv()")
 			}
-			code := status.Code(err)
-			_, ok := str.Trailer()["a"]
-			if code == codes.PermissionDenied {
-				if !ok {
+
+			_, trlOk := str.Trailer()["a"]
+			switch status.Code(err) {
+			case codes.PermissionDenied:
+				if !trlOk {
 					t.Fatalf(`status err: %v; wanted key "a" in trailer but didn't get it`, err)
 				}
 				cntPermDenied++
-			} else if code == codes.Canceled {
-				if ok {
+			case codes.DeadlineExceeded:
+				if trlOk {
 					t.Fatalf(`status err: %v; didn't want key "a" in trailer but got it`, err)
 				}
 				cntCanceled++
-			} else {
+			default:
 				t.Fatalf(`unexpected status err: %v`, err)
 			}
 		}
@@ -79,18 +79,33 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 
 	// Tries to find the delay that causes canceled/perm denied race.
-	for lower, upper := uint(0), uint(1000); lower <= upper; {
+	canceledOk, permDeniedOk := false, false
+	for lower, upper := time.Duration(0), 2*time.Millisecond; lower <= upper; {
 		delay := lower + (upper-lower)/2
 		cntCanceled, cntPermDenied := runTest(delay)
-		if cntCanceled == cntRetry {
-			lower += (upper-lower)/10 + 1
-		} else if cntPermDenied == cntRetry {
-			upper -= (upper-lower)/10 + 1
-		} else {
+		if cntPermDenied > 0 && cntCanceled > 0 {
+			// Delay that causes the race is found.
 			return
+		}
+
+		// Set OK flags.
+		if cntCanceled > 0 {
+			canceledOk = true
+		}
+		if cntPermDenied > 0 {
+			permDeniedOk = true
+		}
+
+		if cntPermDenied == 0 {
+			// No perm denied, increase the delay.
+			lower += (upper-lower)/10 + 1
+		} else {
+			// All perm denied, decrease the delay.
+			upper -= (upper-lower)/10 + 1
 		}
 	}
 
-	// Fails if the delay that causes canceled/perm denied race not found.
-	t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
+	if !canceledOk || !permDeniedOk {
+		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
+	}
 }
