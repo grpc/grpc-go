@@ -211,14 +211,10 @@ final class GrpclbState {
     if (usingFallbackBackends) {
       return;
     }
-    int numReadySubchannels = 0;
     for (Subchannel subchannel : subchannels.values()) {
       if (subchannel.getAttributes().get(STATE_INFO).get().getState() == READY) {
-        numReadySubchannels++;
+        return;
       }
-    }
-    if (numReadySubchannels > 0) {
-      return;
     }
     // Fallback contiditions met
     useFallbackBackends();
