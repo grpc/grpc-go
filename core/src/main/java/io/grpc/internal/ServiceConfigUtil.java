@@ -34,7 +34,6 @@ import javax.annotation.Nullable;
 /**
  * Helper utility to work with service configs.
  */
-@VisibleForTesting
 public final class ServiceConfigUtil {
 
   private static final String SERVICE_CONFIG_METHOD_CONFIG_KEY = "methodConfig";
