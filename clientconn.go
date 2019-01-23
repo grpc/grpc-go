@@ -86,7 +86,7 @@ var (
 	// with other individual Transport Credentials.
 	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle may not be used with individual TransportCredentials")
 	// errTransportCredentialsMissing indicates that users want to transmit security
-	// information (e.g., oauth2 token) which requires secure connection on an insecure
+	// information (e.g., OAuth2 token) which requires secure connection on an insecure
 	// connection.
 	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
 	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
@@ -237,9 +237,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		grpclog.Infof("parsed scheme: %q", cc.parsedTarget.Scheme)
 		cc.dopts.resolverBuilder = resolver.Get(cc.parsedTarget.Scheme)
 		if cc.dopts.resolverBuilder == nil {
-			// If resolver builder is still nil, the parse target's scheme is
+			// If resolver builder is still nil, the parsed target's scheme is
 			// not registered. Fallback to default resolver and set Endpoint to
-			// the original unparsed target.
+			// the original target.
 			grpclog.Infof("scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
 			cc.parsedTarget = resolver.Target{
 				Scheme:   resolver.GetDefaultScheme(),
@@ -436,7 +436,7 @@ func (cc *ClientConn) scWatcher() {
 			}
 			cc.mu.Lock()
 			// TODO: load balance policy runtime change is ignored.
-			// We may revist this decision in the future.
+			// We may revisit this decision in the future.
 			cc.sc = sc
 			cc.scRaw = ""
 			cc.mu.Unlock()
