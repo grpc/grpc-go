@@ -61,7 +61,7 @@ func init() {
 }
 
 // Get returns the resolver builder registered with the given name.
-// Note that the compare is done in a case-insenstive fashion.
+// Note that the compare is done in a case-insensitive fashion.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
 	if b, ok := m[strings.ToLower(name)]; ok {
@@ -127,7 +127,7 @@ type ClientConn interface {
 	// The SubConn will be shutdown.
 	RemoveSubConn(SubConn)
 
-	// UpdateBalancerState is called by balancer to nofity gRPC that some internal
+	// UpdateBalancerState is called by balancer to notify gRPC that some internal
 	// state in balancer has changed.
 	//
 	// gRPC will update the connectivity state of the ClientConn, and will call pick
