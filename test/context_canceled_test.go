@@ -41,10 +41,11 @@ func (s) TestContextCanceled(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	// Runs 5 rounds of tests with the given delay and returns counts of status codes.
+	// Runs 10 rounds of tests with the given delay and returns counts of status codes.
 	// Fails in case of trailer/status code inconsistency.
+	const cntRetry uint = 10
 	runTest := func(delay uint) (cntCanceled, cntPermDenied uint) {
-		for i := 0; i < 5; i++ {
+		for i := uint(0); i < cntRetry; i++ {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			str, err := ss.client.FullDuplexCall(ctx)
@@ -70,39 +71,21 @@ func (s) TestContextCanceled(t *testing.T) {
 					t.Fatalf(`status err: %v; didn't want key "a" in trailer but got it`, err)
 				}
 				cntCanceled++
+			} else {
+				t.Fatalf(`unexpected status err: %v`, err)
 			}
 		}
 		return cntCanceled, cntPermDenied
 	}
 
-	const maxDelay uint = 250000
-	var delay uint = 1
-	// Doubles the delay until the upper bound is found.
-	for delay < maxDelay {
+	// Tries to find the delay that causes canceled/perm denied race.
+	for lower, upper := uint(0), uint(1000); lower <= upper; {
+		delay := lower + (upper-lower)/2
 		cntCanceled, cntPermDenied := runTest(delay)
-		if cntCanceled == 5 {
-			delay *= 2
-		} else if cntPermDenied == 5 {
-			break
-		} else {
-			return
-		}
-	}
-
-	// Fails if the upper bound is greater than maxDelay
-	if delay >= maxDelay {
-		t.Fatalf(`couldn't find the delay that causes canceled/perm denied race.`)
-	}
-
-	lower, upper := delay/2, delay
-	// Binary search for the delay that causes canceled/perm denied race.
-	for lower <= upper {
-		delay = lower + (upper-lower)/2
-		cntCanceled, cntPermDenied := runTest(delay)
-		if cntCanceled == 5 {
-			lower = delay + 1
-		} else if cntPermDenied == 5 {
-			upper = delay - 1
+		if cntCanceled == cntRetry {
+			lower += (upper-lower)/10 + 1
+		} else if cntPermDenied == cntRetry {
+			upper -= (upper-lower)/10 + 1
 		} else {
 			return
 		}
