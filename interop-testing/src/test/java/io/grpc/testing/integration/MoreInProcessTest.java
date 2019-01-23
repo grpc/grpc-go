@@ -50,8 +50,10 @@ import org.junit.runners.JUnit4;
 public class MoreInProcessTest {
   private static final String UNIQUE_SERVER_NAME =
       "in-process server for " + MoreInProcessTest.class;
+
+  // Use a fairly large timeout to work around classloading slowness.
   @Rule
-  public final Timeout globalTimeout = new Timeout(1, TimeUnit.SECONDS);
+  public final Timeout globalTimeout = new Timeout(10, TimeUnit.SECONDS);
   // use a mutable service registry for later registering the service impl for each test case.
   private final MutableHandlerRegistry serviceRegistry = new MutableHandlerRegistry();
   private final Server inProcessServer = InProcessServerBuilder.forName(UNIQUE_SERVER_NAME)
