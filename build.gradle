@@ -258,7 +258,6 @@ subprojects {
             if (!(project.name in [
                 'grpc-benchmarks',
                 'grpc-interop-testing',
-                'grpc-gae-interop-testing-jdk7',
                 'grpc-gae-interop-testing-jdk8',
             ])) {
                 resolutionStrategy.failOnVersionConflict()
