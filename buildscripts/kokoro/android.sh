@@ -54,8 +54,9 @@ fi
 
 # Save a copy of set_github_status.py (it may differ from the base commit)
 
-SET_GITHUB_STATUS="$TMPDIR/set_github_status.py"
-cp "$BASE_DIR/github/grpc-java/buildscripts/set_github_status.py" "$SET_GITHUB_STATUS"
+# TODO(https://github.com/grpc/grpc-java/issues/5276) Re-enable posting of the deltas
+#SET_GITHUB_STATUS="$TMPDIR/set_github_status.py"
+#cp "$BASE_DIR/github/grpc-java/buildscripts/set_github_status.py" "$SET_GITHUB_STATUS"
 
 
 # Collect APK size and dex count stats for the helloworld example
@@ -107,16 +108,17 @@ fi
 
 # Update the statuses with the deltas
 
-gsutil cp gs://grpc-testing-secrets/github_credentials/oauth_token.txt ~/
-
-"$SET_GITHUB_STATUS" \
-  --sha1 "$KOKORO_GITHUB_PULL_REQUEST_COMMIT" \
-  --state success \
-  --description "New DEX reference count: $(printf "%'d" "$new_dex_count") (delta: $(printf "%'d" "$dex_count_delta"))" \
-  --context android/dex_diff --oauth_file ~/oauth_token.txt
-
-"$SET_GITHUB_STATUS" \
-  --sha1 "$KOKORO_GITHUB_PULL_REQUEST_COMMIT" \
-  --state success \
-  --description "New APK size in bytes: $(printf "%'d" "$new_apk_size") (delta: $(printf "%'d" "$apk_size_delta"))" \
-  --context android/apk_diff --oauth_file ~/oauth_token.txt
+# TODO(https://github.com/grpc/grpc-java/issues/5276) Re-enable posting of the deltas
+#gsutil cp gs://grpc-testing-secrets/github_credentials/oauth_token.txt ~/
+#
+#"$SET_GITHUB_STATUS" \
+#  --sha1 "$KOKORO_GITHUB_PULL_REQUEST_COMMIT" \
+#  --state success \
+#  --description "New DEX reference count: $(printf "%'d" "$new_dex_count") (delta: $(printf "%'d" "$dex_count_delta"))" \
+#  --context android/dex_diff --oauth_file ~/oauth_token.txt
+#
+#"$SET_GITHUB_STATUS" \
+#  --sha1 "$KOKORO_GITHUB_PULL_REQUEST_COMMIT" \
+#  --state success \
+#  --description "New APK size in bytes: $(printf "%'d" "$new_apk_size") (delta: $(printf "%'d" "$apk_size_delta"))" \
+#  --context android/apk_diff --oauth_file ~/oauth_token.txt
