@@ -59,6 +59,11 @@ final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
   private final HashMap<String, IdentityHashMap<StreamObserver<HealthCheckResponse>, Boolean>>
       watchers = new HashMap<>();
 
+  HealthServiceImpl() {
+    // Copy of what Go and C++ do.
+    statusMap.put(HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
+  }
+
   @Override
   public void check(HealthCheckRequest request,
       StreamObserver<HealthCheckResponse> responseObserver) {

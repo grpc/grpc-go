@@ -26,6 +26,9 @@ import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
  * created in the constructor of {@code HealthStatusManager}, and it can be retrieved by the
  * {@link #getHealthService()} method.
  * The health status manager can update the health statuses of the server.
+ *
+ * <p>The default, empty-string, service name, {@link #SERVICE_NAME_ALL_SERVICES}, is initialized to
+ * {@link ServingStatus#SERVING}.
  */
 @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/4696")
 public final class HealthStatusManager {

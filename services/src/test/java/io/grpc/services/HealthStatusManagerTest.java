@@ -134,6 +134,19 @@ public class HealthStatusManagerTest {
   }
 
   @Test
+  public void defaultIsServing() throws Exception {
+    HealthCheckRequest request =
+        HealthCheckRequest.newBuilder().setService(HealthStatusManager.SERVICE_NAME_ALL_SERVICES)
+            .build();
+
+    HealthCheckResponse response =
+        blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS).check(request);
+
+    assertThat(response).isEqualTo(
+        HealthCheckResponse.newBuilder().setStatus(ServingStatus.SERVING).build());
+  }
+
+  @Test
   public void getHealthService_getterReturnsTheSameHealthRefAfterUpdate() throws Exception {
     BindableService health = manager.getHealthService();
     manager.setStatus(SERVICE1, ServingStatus.UNKNOWN);
