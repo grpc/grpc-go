@@ -38,6 +38,8 @@ import com.google.common.testing.FakeTicker;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
+import io.grpc.ProxyDetector;
+import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
@@ -92,7 +94,10 @@ public class DnsNameResolverTest {
 
   private static final int DEFAULT_PORT = 887;
   private static final Attributes NAME_RESOLVER_PARAMS =
-      Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, DEFAULT_PORT).build();
+      Attributes.newBuilder()
+          .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, DEFAULT_PORT)
+          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
+          .build();
 
   private final DnsNameResolverProvider provider = new DnsNameResolverProvider();
   private final FakeClock fakeClock = new FakeClock();
@@ -272,7 +277,9 @@ public class DnsNameResolverTest {
   public void resolveAll_failsOnEmptyResult() throws Exception {
     String hostname = "dns:///addr.fake:1234";
     DnsNameResolver nrf =
-        new DnsNameResolverProvider().newNameResolver(new URI(hostname), Attributes.EMPTY);
+        new DnsNameResolverProvider().newNameResolver(new URI(hostname),  Attributes.newBuilder()
+            .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
+            .build());
     nrf.setAddressResolver(new AddressResolver() {
       @Override
       public List<InetAddress> resolveAddress(String host) throws Exception {
@@ -576,10 +583,11 @@ public class DnsNameResolverTest {
     final String name = "foo.googleapis.com";
     final int port = 81;
     ProxyDetector alwaysDetectProxy = mock(ProxyDetector.class);
-    ProxyParameters proxyParameters = new ProxyParameters(
-        new InetSocketAddress(InetAddress.getByName("10.0.0.1"), 1000),
-        "username",
-        "password");
+    ProxyParameters proxyParameters = ProxyParameters
+        .forAddress(
+          new InetSocketAddress(InetAddress.getByName("10.0.0.1"), 1000))
+        .username("username")
+        .password("password").build();
     when(alwaysDetectProxy.proxyFor(any(SocketAddress.class)))
         .thenReturn(proxyParameters);
     DnsNameResolver resolver =
@@ -847,7 +855,7 @@ public class DnsNameResolverTest {
   public void shouldUseJndi_falseIfDisabledForLocalhost() {
     boolean enableJndi = true;
     boolean enableJndiLocalhost = false;
-    
+
     assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "localhost"));
     assertFalse(DnsNameResolver.shouldUseJndi(enableJndi, enableJndiLocalhost, "LOCALHOST"));
   }

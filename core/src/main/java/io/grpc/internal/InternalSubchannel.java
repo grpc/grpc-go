@@ -44,6 +44,7 @@ import io.grpc.InternalLogId;
 import io.grpc.InternalWithLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext;
 import java.net.SocketAddress;

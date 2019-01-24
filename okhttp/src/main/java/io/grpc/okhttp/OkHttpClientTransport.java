@@ -40,6 +40,7 @@ import io.grpc.InternalLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.ProxyParameters;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -52,7 +53,6 @@ import io.grpc.internal.Http2Ping;
 import io.grpc.internal.InUseStateAggregator;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
-import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
@@ -507,10 +507,19 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
           if (proxy == null) {
             sock = new Socket(address.getAddress(), address.getPort());
           } else {
-            sock = createHttpProxySocket(
-                address, proxy.proxyAddress, proxy.username, proxy.password);
+            if (proxy.getProxyAddress() instanceof InetSocketAddress) {
+              sock = createHttpProxySocket(
+                  address,
+                  (InetSocketAddress)proxy.getProxyAddress(),
+                  proxy.getUsername(),
+                  proxy.getPassword()
+              );
+            } else {
+              throw Status.INTERNAL.withDescription(
+                  "Unsupported SocketAddress implementation " + proxy.getProxyAddress().getClass())
+                  .asException();
+            }
           }
-
           if (sslSocketFactory != null) {
             SSLSocket sslSocket = OkHttpTlsUpgrader.upgrade(
                 sslSocketFactory, hostnameVerifier, sock, getOverridenHost(), getOverridenPort(),

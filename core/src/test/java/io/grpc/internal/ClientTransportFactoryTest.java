@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.testing.EqualsTester;
 import io.grpc.Attributes;
+import io.grpc.ProxyParameters;
 import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
 import java.net.InetSocketAddress;
 import org.junit.Test;
@@ -33,7 +34,7 @@ public final class ClientTransportFactoryTest {
       Attributes.newBuilder().set(Attributes.Key.create("fake key"), "fake value").build();
   private String userAgent = "best-ua/3.14";
   private ProxyParameters proxyParameters =
-      new ProxyParameters(new InetSocketAddress(0), null, null);
+      ProxyParameters.forAddress(new InetSocketAddress(0)).build();
 
   @Test
   public void clientTransportOptions_init_checkNotNulls() {

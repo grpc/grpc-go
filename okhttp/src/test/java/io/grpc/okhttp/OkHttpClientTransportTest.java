@@ -62,6 +62,7 @@ import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
@@ -70,7 +71,6 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
@@ -1573,8 +1573,8 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        new ProxyParameters(
-            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
+        ProxyParameters.forAddress(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
@@ -1625,8 +1625,8 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        new ProxyParameters(
-            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
+        ProxyParameters.forAddress(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
@@ -1676,8 +1676,8 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        new ProxyParameters(
-            (InetSocketAddress) serverSocket.getLocalSocketAddress(), NO_USER, NO_PW),
+        ProxyParameters.forAddress(
+            (InetSocketAddress) serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);

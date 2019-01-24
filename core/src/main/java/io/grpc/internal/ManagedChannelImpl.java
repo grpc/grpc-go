@@ -60,6 +60,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
+import io.grpc.ProxyDetector;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext;
 import io.grpc.SynchronizationContext.ScheduledHandle;
@@ -135,6 +136,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   private final ExecutorHolder balancerRpcExecutorHolder;
   private final TimeProvider timeProvider;
   private final int maxTraceEvents;
+  private final ProxyDetector proxyDetector;
 
   @VisibleForTesting
   final SynchronizationContext syncContext = new SynchronizationContext(
@@ -543,7 +545,10 @@ final class ManagedChannelImpl extends ManagedChannel implements
     this.target = checkNotNull(builder.target, "target");
     this.logId = InternalLogId.allocate("Channel", target);
     this.nameResolverFactory = builder.getNameResolverFactory();
-    this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
+    this.proxyDetector =
+        builder.proxyDetector != null ? builder.proxyDetector : GrpcUtil.getDefaultProxyDetector();
+    this.nameResolverParams = addProxyToAttributes(this.proxyDetector,
+        checkNotNull(builder.getNameResolverParams(), "nameResolverParams"));
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     this.timeProvider = checkNotNull(timeProvider, "timeProvider");
     maxTraceEvents = builder.maxTraceEvents;
@@ -610,6 +615,16 @@ final class ManagedChannelImpl extends ManagedChannel implements
     channelCallTracer = callTracerFactory.create();
     this.channelz = checkNotNull(builder.channelz);
     channelz.addRootChannel(this);
+  }
+
+  private static Attributes addProxyToAttributes(ProxyDetector proxyDetector,
+      Attributes attributes) {
+    if (attributes.get(NameResolver.Factory.PARAMS_PROXY_DETECTOR) == null) {
+      return attributes.toBuilder()
+          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, proxyDetector).build();
+    } else {
+      return attributes;
+    }
   }
 
   @VisibleForTesting

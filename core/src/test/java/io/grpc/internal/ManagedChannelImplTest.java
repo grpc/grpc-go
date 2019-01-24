@@ -143,7 +143,10 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class ManagedChannelImplTest {
   private static final Attributes NAME_RESOLVER_PARAMS =
-      Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
+      Attributes.newBuilder()
+          .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447)
+          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
+          .build();
 
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()

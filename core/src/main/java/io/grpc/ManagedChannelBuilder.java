@@ -525,6 +525,18 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the proxy detector to be used in addresses name resolution. If <code>null</code> is passed
+   * the default proxy detector will be used.
+   *
+   * @return this
+   * @since 1.19.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
+  public T proxyDetector(ProxyDetector proxyDetector) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    *
    * @since 1.0.0

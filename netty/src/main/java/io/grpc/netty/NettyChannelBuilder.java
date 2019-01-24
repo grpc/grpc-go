@@ -30,13 +30,13 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.NameResolver;
+import io.grpc.ProxyParameters;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AtomicBackoff;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.TransportTracer;
 import io.netty.channel.Channel;
@@ -547,7 +547,9 @@ public final class NettyChannelBuilder
       ProxyParameters proxyParams = options.getProxyParameters();
       if (proxyParams != null) {
         localNegotiator = ProtocolNegotiators.httpProxy(
-            proxyParams.proxyAddress, proxyParams.username, proxyParams.password,
+            proxyParams.getProxyAddress(),
+            proxyParams.getUsername(),
+            proxyParams.getPassword(),
             protocolNegotiator);
       }
 

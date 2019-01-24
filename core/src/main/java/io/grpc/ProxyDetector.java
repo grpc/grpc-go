@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -26,6 +26,7 @@ import javax.annotation.Nullable;
  * and should only be used in places that are expected to do IO such as the
  * {@link io.grpc.NameResolver}.
  */
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
 public interface ProxyDetector {
   /**
    * Given a target address, returns which proxy address should be used. If no proxy should be

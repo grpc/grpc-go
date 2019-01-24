@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
+import io.grpc.ProxyParameters;
 import java.net.SocketAddress;
 
 /**

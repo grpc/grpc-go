@@ -27,6 +27,8 @@ import com.google.common.base.Verify;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
+import io.grpc.ProxyDetector;
+import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.io.IOException;
@@ -251,7 +253,7 @@ final class DnsNameResolver extends NameResolver {
       }
       if (proxy != null) {
         if (logger.isLoggable(Level.FINER)) {
-          logger.finer("Using proxy " + proxy.proxyAddress + " for " + resolver.host);
+          logger.finer("Using proxy " + proxy.getProxyAddress() + " for " + resolver.host);
         }
         EquivalentAddressGroup server =
             new EquivalentAddressGroup(
