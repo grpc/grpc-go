@@ -483,6 +483,27 @@ public class OkHttpClientTransportTest {
     shutdownAndVerify();
   }
 
+
+  @Test
+  public void receiveResetNoError() throws Exception {
+    initTransport();
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream.start(listener);
+    assertContainStream(3);
+    frameHandler().headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+    Buffer buffer = createMessageFrame("a message");
+    frameHandler().data(false, 3, buffer, (int) buffer.size());
+    frameHandler().headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
+    frameHandler().rstStream(3, ErrorCode.NO_ERROR);
+    stream.request(1);
+    listener.waitUntilStreamClosed();
+
+    assertTrue(listener.status.isOk());
+    shutdownAndVerify();
+  }
+
   @Test
   public void cancelStream() throws Exception {
     initTransport();

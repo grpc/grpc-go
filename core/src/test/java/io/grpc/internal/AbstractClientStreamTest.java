@@ -339,6 +339,24 @@ public class AbstractClientStreamTest {
   }
 
   @Test
+  public void statusOkFollowedByRstStreamNoError() {
+    AbstractClientStream stream =
+        new BaseAbstractClientStream(allocator, statsTraceCtx, transportTracer);
+    stream.start(mockListener);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 1, 1}));
+    stream.transportState().inboundTrailersReceived(new Metadata(), Status.OK);
+    Status status = Status.INTERNAL.withDescription("rst___stream");
+    // Simulate getting a reset
+    stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
+    stream.transportState().requestMessagesFromDeframer(1);
+
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockListener)
+        .closed(statusCaptor.capture(), any(RpcProgress.class), any(Metadata.class));
+    assertTrue(statusCaptor.getValue().isOk());
+  }
+
+  @Test
   public void trailerOkWithTruncatedMessage() {
     AbstractClientStream stream =
         new BaseAbstractClientStream(allocator, statsTraceCtx, transportTracer);

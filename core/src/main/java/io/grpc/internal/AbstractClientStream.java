@@ -240,8 +240,8 @@ public abstract class AbstractClientStream extends AbstractStream
      * #listenerClosed} because there may still be messages buffered to deliver to the application.
      */
     private boolean statusReported;
-    private Metadata trailers;
-    private Status trailerStatus;
+    /** True if the status reported (set via {@link #transportReportStatus}) is OK. */
+    private boolean statusReportedIsOk;
 
     protected TransportState(
         int maxMessageSize,
@@ -269,18 +269,14 @@ public abstract class AbstractClientStream extends AbstractStream
 
     @Override
     public void deframerClosed(boolean hasPartialMessage) {
+      checkState(statusReported, "status should have been reported on deframer closed");
       deframerClosed = true;
-
-      if (trailerStatus != null) {
-        if (trailerStatus.isOk() && hasPartialMessage) {
-          trailerStatus = Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame");
-          trailers = new Metadata();
-        }
-        transportReportStatus(trailerStatus, false, trailers);
-      } else {
-        checkState(statusReported, "status should have been reported on deframer closed");
+      if (statusReportedIsOk && hasPartialMessage) {
+        transportReportStatus(
+            Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame"),
+            true,
+            new Metadata());
       }
-
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
         deframerClosedTask = null;
@@ -387,10 +383,8 @@ public abstract class AbstractClientStream extends AbstractStream
             new Object[]{status, trailers});
         return;
       }
-      this.trailers = trailers;
       statsTraceCtx.clientInboundTrailers(trailers);
-      trailerStatus = status;
-      closeDeframer(false);
+      transportReportStatus(status, false, trailers);
     }
 
     /**
@@ -419,14 +413,16 @@ public abstract class AbstractClientStream extends AbstractStream
      *        {@link ClientStreamListener#closed(Status, RpcProgress, Metadata)}
      *        will receive
      * @param stopDelivery if {@code true}, interrupts any further delivery of inbound messages that
-     *        may already be queued up in the deframer. If {@code false}, the listener will be
-     *        notified immediately after all currently completed messages in the deframer have been
-     *        delivered to the application.
+     *        may already be queued up in the deframer and overrides any previously queued status.
+     *        If {@code false}, the listener will be notified immediately after all currently
+     *        completed messages in the deframer have been delivered to the application.
      * @param trailers new instance of {@code Trailers}, either empty or those returned by the
      *        server
      */
     public final void transportReportStatus(
-        final Status status, final RpcProgress rpcProgress, boolean stopDelivery,
+        final Status status,
+        final RpcProgress rpcProgress,
+        boolean stopDelivery,
         final Metadata trailers) {
       checkNotNull(status, "status");
       checkNotNull(trailers, "trailers");
@@ -435,6 +431,7 @@ public abstract class AbstractClientStream extends AbstractStream
         return;
       }
       statusReported = true;
+      statusReportedIsOk = status.isOk();
       onStreamDeallocated();
 
       if (deframerClosed) {
