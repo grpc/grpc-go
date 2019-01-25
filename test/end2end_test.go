@@ -22,6 +22,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -29,7 +30,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -42,6 +42,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/net/http2/hpack"
 
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
@@ -150,7 +152,6 @@ type testServer struct {
 	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
-	notSetAndNotSend   bool   // whether to not set and send header.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 	unaryCallSleepTime time.Duration
 }
@@ -7129,11 +7130,6 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 }
 
 func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
-	e := tcpClearRREnv
-	te := newTest(t, e)
-	lis := te.startServerWithConnControl(&testServer{security: e.security, setHeaderOnly: true})
-	defer te.tearDown()
-
 	for _, test := range []struct {
 		header  []string
 		errCode codes.Code
@@ -7231,51 +7227,102 @@ func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
 			errCode: codes.InvalidArgument,
 		},
 	} {
-		cc := te.clientConn()
-		tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		stream, err := tc.FullDuplexCall(ctx)
+		hTTPStatusTest(t, test.header, test.errCode)
+	}
+}
+
+type httpServer struct {
+	headerFields []string
+}
+
+func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string) error {
+	if len(headerFields)%2 == 1 {
+		panic("odd number of kv args")
+	}
+
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	for len(headerFields) > 0 {
+		k, v := headerFields[0], headerFields[1]
+		headerFields = headerFields[2:]
+		henc.WriteField(hpack.HeaderField{Name: k, Value: v})
+	}
+
+	return framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndStream:     true,
+		EndHeaders:    true,
+	})
+}
+
+func (s *httpServer) start(t *testing.T, lis net.Listener) {
+	// Launch an HTTP server to send back header with httpStatus.
+	go func() {
+		conn, err := lis.Accept()
 		if err != nil {
-			t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+			t.Errorf("Error accepting connection: %v", err)
+			return
 		}
+		defer conn.Close()
+		// Read preface sent by client.
+		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
+			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
+			return
+		}
+		reader := bufio.NewReader(conn)
+		writer := bufio.NewWriter(conn)
+		framer := http2.NewFramer(writer, reader)
+		if err = framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
+			return
+		}
+		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
 
-		// do a round trip of request and response to make sure the stream is up.
-		const smallSize = 1
-		smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
-		if err != nil {
-			t.Fatal(err)
+		var sid uint32
+		// Read frames until a header is received.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Errorf("Error at server-side while reading frame. Err: %v", err)
+				return
+			}
+			if hframe, ok := frame.(*http2.HeadersFrame); ok {
+				sid = hframe.Header().StreamID
+				break
+			}
 		}
+		if err = s.writeHeader(framer, sid, s.headerFields); err != nil {
+			t.Errorf("Error at server-side while writing headers. Err: %v", err)
+			return
+		}
+		writer.Flush()
+	}()
+}
 
-		sreq := &testpb.StreamingOutputCallRequest{
-			ResponseType: testpb.PayloadType_COMPRESSABLE,
-			ResponseParameters: []*testpb.ResponseParameters{
-				{Size: smallSize},
-			},
-			Payload: smallPayload,
-		}
-
-		if err := stream.Send(sreq); err != nil {
-			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
-		}
-		if _, err := stream.Recv(); err != nil {
-			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
-		}
-
-		rcw := lis.getLastConn()
-		hdr := http2.HeadersFrameParam{
-			StreamID:      tc.getCurrentStreamID(),
-			BlockFragment: rcw.encodeRawHeader(test.header...),
-			EndStream:     true,
-			EndHeaders:    true,
-		}
-		if err := rcw.writeHeaders(hdr); err != nil {
-			log.Fatalf("failed to write header due to %v", err)
-		}
-		if _, err := stream.Recv(); err == nil || status.Code(err) != test.errCode {
-			t.Fatalf("%v.Recv() = %v, want error code to be %v", stream, err, test.errCode)
-		}
-		cancel()
-		cc.Close()
-		te.cc = nil // clear te.cc to force te.clientConn() to make new connection
+func hTTPStatusTest(t *testing.T, headerFields []string, errCode codes.Code) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	server := &httpServer{
+		headerFields: headerFields,
+	}
+	server.start(t, lis)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("failed to dial due to err: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("error creating stream due to err: %v", err)
+	}
+	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
+		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
 }

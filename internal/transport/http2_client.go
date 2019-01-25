@@ -1142,7 +1142,10 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	atomic.StoreUint32(&s.bytesReceived, 1)
 	var state decodeState
-	if err := state.decodeHeader(frame); err != nil {
+	// If HEADER frame has been received before, then this header frame is a Trailer.
+	// isTrailer should be false if the HEADER frame is Response-Headers or Trailers-Only.
+	isTrailer := atomic.LoadUint32(&s.headerDone) == 1
+	if err := state.decodeHeader(frame, isTrailer); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return

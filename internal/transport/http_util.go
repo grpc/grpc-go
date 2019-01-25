@@ -238,7 +238,7 @@ func decodeMetadataHeader(k, v string) (string, error) {
 	return v, nil
 }
 
-func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
+func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool) error {
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
@@ -252,8 +252,12 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	// are in HTTP fallback mode, and should handle error specific to HTTP.
 	var isGRPC bool
 	var grpcErr, httpErr, contentTypeErr error
+	var str string
 	for _, hf := range frame.Fields {
 		err := d.processHeaderField(hf)
+		str += hf.Name
+		str += ":"
+		str += " " + hf.Value + " "
 		switch hf.Name {
 		case "content-type":
 			if err == nil {
@@ -272,7 +276,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	}
 
 	// gRPC mode
-	if isGRPC {
+	if isGRPC || isTrailer {
 		if grpcErr != nil {
 			return grpcErr
 		}
@@ -280,7 +284,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 			return nil
 		}
 		if d.rawStatusCode == nil && d.statusGen == nil {
-			// gRPC status doesn't exist and content-type indicates gRPC peer.
+			// gRPC status doesn't exist.
 			// Set rawStatusCode to be unknown and return nil error.
 			// So that, if the stream has ended this Unknown status
 			// will be propagated to the user.
@@ -309,7 +313,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 		}
 	}
 
-	return status.Error(code, d.constructHTTPErrMsg(contentTypeErr))
+	return status.Error(code, d.constructHTTPErrMsg(contentTypeErr)+" "+str)
 }
 
 // constructErrMsg constructs error message to be returned in HTTP fallback mode.
