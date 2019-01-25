@@ -244,44 +244,92 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	if frame.Truncated {
 		return status.Error(codes.Internal, "peer header list size exceeded limit")
 	}
+
+	// isGRPC indicates whether the peer is speaking gRPC (otherwise HTTP).
+	// If the header contains valid  a content-type, i.e. a string starts with "application/grpc", then
+	// we are in gRPC mode and should handle gRPC specific error.
+	// Otherwise (i.e. a content-type string starts without "application/grpc", or does not exist), we
+	// are in HTTP fallback mode, and should handle error specific to HTTP.
+	var isGRPC bool
+	var grpcErr, httpErr, contentTypeErr error
 	for _, hf := range frame.Fields {
-		if err := d.processHeaderField(hf); err != nil {
-			return err
+		err := d.processHeaderField(hf)
+		switch hf.Name {
+		case "content-type":
+			if err == nil {
+				// gRPC mode
+				isGRPC = true
+			} else {
+				contentTypeErr = err
+			}
+		case ":status":
+			httpErr = err // In gRPC mode, we don't care about HTTP field parsing error.
+		default:
+			if err != nil && grpcErr == nil {
+				grpcErr = err // store the first encountered gRPC field parsing error.
+			}
 		}
 	}
 
-	if d.serverSide {
+	// gRPC mode
+	if isGRPC {
+		if grpcErr != nil {
+			return grpcErr
+		}
+		if d.serverSide {
+			return nil
+		}
+		if d.rawStatusCode == nil && d.statusGen == nil {
+			// gRPC status doesn't exist and content-type indicates gRPC peer.
+			// Set rawStatusCode to be unknown and return nil error.
+			// So that, if the stream has ended this Unknown status
+			// will be propagated to the user.
+			// Otherwise, it will be ignored. In which case, status from
+			// a later trailer, that has StreamEnded flag set, is propagated.
+			code := int(codes.Unknown)
+			d.rawStatusCode = &code
+		}
 		return nil
 	}
 
-	// If grpc status exists, no need to check further.
-	if d.rawStatusCode != nil || d.statusGen != nil {
-		return nil
+	// HTTP fallback mode
+	if httpErr != nil {
+		return httpErr
 	}
 
-	// If grpc status doesn't exist and http status doesn't exist,
-	// then it's a malformed header.
-	if d.httpStatus == nil {
-		return status.Error(codes.Internal, "malformed header: doesn't contain status(gRPC or HTTP)")
-	}
+	var (
+		code = codes.Internal // when header does not include HTTP status, return INTERNAL
+		ok   bool
+	)
 
-	if *(d.httpStatus) != http.StatusOK {
-		code, ok := httpStatusConvTab[*(d.httpStatus)]
+	if d.httpStatus != nil {
+		code, ok = httpStatusConvTab[*(d.httpStatus)]
 		if !ok {
 			code = codes.Unknown
 		}
-		return status.Error(code, http.StatusText(*(d.httpStatus)))
 	}
 
-	// gRPC status doesn't exist and http status is OK.
-	// Set rawStatusCode to be unknown and return nil error.
-	// So that, if the stream has ended this Unknown status
-	// will be propagated to the user.
-	// Otherwise, it will be ignored. In which case, status from
-	// a later trailer, that has StreamEnded flag set, is propagated.
-	code := int(codes.Unknown)
-	d.rawStatusCode = &code
-	return nil
+	return status.Error(code, d.constructHTTPErrMsg(contentTypeErr))
+}
+
+// constructErrMsg constructs error message to be returned in HTTP fallback mode.
+// Format: HTTP status code and its corresponding message + content-type error message.
+func (d *decodeState) constructHTTPErrMsg(contentTypeErr error) string {
+	var errMsgs []string
+
+	if d.httpStatus == nil {
+		errMsgs = append(errMsgs, "malformed header: in HTTP fallback mode, but doesn't contain HTTP status")
+	} else {
+		errMsgs = append(errMsgs, fmt.Sprintf("%s: HTTP status code %d", http.StatusText(*(d.httpStatus)), *d.httpStatus))
+	}
+
+	if contentTypeErr == nil {
+		errMsgs = append(errMsgs, "transport: missing content-type field")
+	} else {
+		errMsgs = append(errMsgs, status.Convert(contentTypeErr).Message())
+	}
+
+	return strings.Join(errMsgs, "\t")
 }
 
 func (d *decodeState) addMetadata(k, v string) {

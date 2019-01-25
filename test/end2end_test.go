@@ -29,6 +29,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -149,6 +150,7 @@ type testServer struct {
 	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
 	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
+	notSetAndNotSend   bool   // whether to not set and send header.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 	unaryCallSleepTime time.Duration
 }
@@ -6892,7 +6894,7 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	time.Sleep(100 * time.Millisecond)
 	rcw.writeHeaders(http2.HeadersFrameParam{
 		StreamID:      tc.getCurrentStreamID(),
-		BlockFragment: rcw.encodeHeader("oversize", strings.Join(val, "")),
+		BlockFragment: rcw.encodeRawHeader("oversize", strings.Join(val, "")),
 		EndStream:     false,
 		EndHeaders:    true,
 	})
@@ -7123,5 +7125,157 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, nil", err)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	lis := te.startServerWithConnControl(&testServer{security: e.security, setHeaderOnly: true})
+	defer te.tearDown()
+
+	for _, test := range []struct {
+		header  []string
+		errCode codes.Code
+	}{
+		{
+			header: []string{
+				// non-grpc content-type, fallback to HTTP mode
+				":status", "400",
+				"content-type", "text/html",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			header: []string{
+				// non-grpc content-type, fallback to HTTP mode
+				":status", "401",
+				"content-type", "text/html",
+			},
+			errCode: codes.Unauthenticated,
+		},
+		{
+			header: []string{
+				// non-grpc content-type, fallback to HTTP mode
+				":status", "404",
+				"content-type", "text/html",
+			},
+			errCode: codes.Unimplemented,
+		},
+		{
+			header: []string{
+				// non-grpc content-type, fallback to HTTP mode
+				":status", "502",
+				"content-type", "text/html",
+			},
+			errCode: codes.Unavailable,
+		},
+		{
+			// non-grpc content-type, fallback to HTTP mode
+			// missing HTTP status
+			header: []string{
+				"content-type", "text/html",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// non-grpc content-type, fallback to HTTP mode
+			// malformed HTTP status
+			header: []string{
+				":status", "abc",
+				"content-type", "text/html",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// gRPC mode, but missing gRPC status (trailer, as EndStream is set).
+			header: []string{
+				":status", "403",
+				"content-type", "application/grpc",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			// gRPC mode, but missing gRPC status (trailer, as EndStream is set).
+			header: []string{
+				":status", "403",
+				"content-type", "application/grpc",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			// gRPC mode, with malformed grpc-status.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "abc",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// gRPC mode, with malformed grpc-tags-bin field.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "0",
+				"grpc-tags-bin", "???",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "3",
+			},
+			errCode: codes.InvalidArgument,
+		},
+	} {
+		cc := te.clientConn()
+		tc := &testServiceClientWrapper{TestServiceClient: testpb.NewTestServiceClient(cc)}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		stream, err := tc.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
+		}
+
+		// do a round trip of request and response to make sure the stream is up.
+		const smallSize = 1
+		smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sreq := &testpb.StreamingOutputCallRequest{
+			ResponseType: testpb.PayloadType_COMPRESSABLE,
+			ResponseParameters: []*testpb.ResponseParameters{
+				{Size: smallSize},
+			},
+			Payload: smallPayload,
+		}
+
+		if err := stream.Send(sreq); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+		}
+		if _, err := stream.Recv(); err != nil {
+			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+		}
+
+		rcw := lis.getLastConn()
+		hdr := http2.HeadersFrameParam{
+			StreamID:      tc.getCurrentStreamID(),
+			BlockFragment: rcw.encodeRawHeader(test.header...),
+			EndStream:     true,
+			EndHeaders:    true,
+		}
+		if err := rcw.writeHeaders(hdr); err != nil {
+			log.Fatalf("failed to write header due to %v", err)
+		}
+		if _, err := stream.Recv(); err == nil || status.Code(err) != test.errCode {
+			t.Fatalf("%v.Recv() = %v, want error code to be %v", stream, err, test.errCode)
+		}
+		cancel()
+		cc.Close()
+		te.cc = nil // clear te.cc to force te.clientConn() to make new connection
 	}
 }

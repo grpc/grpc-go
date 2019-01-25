@@ -227,6 +227,47 @@ func (rcw *rawConnWrapper) encodeHeaderField(k, v string) error {
 	return nil
 }
 
+// encodeRawHeader is for usage on both client and server side to construct header based on the input
+// key, value pairs.
+func (rcw *rawConnWrapper) encodeRawHeader(headers ...string) []byte {
+	if len(headers)%2 == 1 {
+		panic("odd number of kv args")
+	}
+
+	rcw.headerBuf.Reset()
+
+	pseudoCount := map[string]int{}
+	var keys []string
+	vals := map[string][]string{}
+
+	for len(headers) > 0 {
+		k, v := headers[0], headers[1]
+		headers = headers[2:]
+		if _, ok := vals[k]; !ok {
+			keys = append(keys, k)
+		}
+		if strings.HasPrefix(k, ":") {
+			pseudoCount[k]++
+			if pseudoCount[k] == 1 {
+				vals[k] = []string{v}
+			} else {
+				// Allows testing of invalid headers w/ dup pseudo fields.
+				vals[k] = append(vals[k], v)
+			}
+		} else {
+			vals[k] = append(vals[k], v)
+		}
+	}
+	for _, k := range keys {
+		for _, v := range vals[k] {
+			rcw.encodeHeaderField(k, v)
+		}
+	}
+	return rcw.headerBuf.Bytes()
+}
+
+// encodeHeader is for usage on client side to write request header.
+//
 // encodeHeader encodes headers and returns their HPACK bytes. headers
 // must contain an even number of key/value pairs.  There may be
 // multiple pairs for keys (e.g. "cookie").  The :method, :path, and
@@ -288,6 +329,7 @@ func (rcw *rawConnWrapper) encodeHeader(headers ...string) []byte {
 	return rcw.headerBuf.Bytes()
 }
 
+// writeHeadersGRPC is for usage on client side to write request header.
 func (rcw *rawConnWrapper) writeHeadersGRPC(streamID uint32, path string) {
 	rcw.writeHeaders(http2.HeadersFrameParam{
 		StreamID: streamID,
