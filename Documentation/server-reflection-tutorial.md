@@ -61,7 +61,7 @@ First, start the helloworld server in grpc-go directory:
 
 ```sh
 $ cd <grpc-go-directory>
-$ go run examples/helloworld/greeter_server/main.go
+$ go run examples/features/reflection/server/main.go
 ```
 
 Open a new terminal and make sure you are in the directory where grpc_cli lives:
@@ -82,8 +82,9 @@ $ cd <grpc-cpp-dirctory>/bins/opt
 
   output:
   ```sh
-  helloworld.Greeter
+  grpc.examples.echo.Echo
   grpc.reflection.v1alpha.ServerReflection
+  helloworld.Greeter
   ```
 
 - List one service with details
