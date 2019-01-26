@@ -41,7 +41,6 @@ import java.util.Map.Entry;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
-@VisibleForTesting
 public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
   private static final Logger logger =
       Logger.getLogger(AutoConfiguredLoadBalancerFactory.class.getName());

@@ -46,8 +46,6 @@ import org.mockito.MockitoAnnotations;
 
 @RunWith(JUnit4.class)
 public class ProxyDetectorImplTest {
-  private static final String NO_USER = null;
-  private static final String NO_PW = null;
   @Mock private ProxySelector proxySelector;
   @Mock private ProxyDetectorImpl.AuthenticationProvider authenticator;
   private InetSocketAddress destination = InetSocketAddress.createUnresolved("10.10.10.10", 5678);
