@@ -18,20 +18,22 @@ package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
 
+import com.google.common.testing.GcFinalization;
+import com.google.common.testing.GcFinalization.FinalizationPredicate;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.ManagedChannelOrphanWrapper.ManagedChannelReference;
 import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Filter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -43,10 +45,10 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class ManagedChannelOrphanWrapperTest {
   @Test
-  public void orphanedChannelsAreLogged() throws Exception {
-    ManagedChannel mc = mock(ManagedChannel.class);
+  public void orphanedChannelsAreLogged() {
+    ManagedChannel mc = new TestManagedChannel();
     String channelString = mc.toString();
-    ReferenceQueue<ManagedChannelOrphanWrapper> refqueue =
+    final ReferenceQueue<ManagedChannelOrphanWrapper> refqueue =
         new ReferenceQueue<ManagedChannelOrphanWrapper>();
     ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs =
         new ConcurrentHashMap<ManagedChannelReference, ManagedChannelReference>();
@@ -71,22 +73,18 @@ public final class ManagedChannelOrphanWrapperTest {
       }
     });
 
-    // TODO(carl-mastrangelo): consider using com.google.common.testing.GcFinalization instead.
     try {
       channel = null;
-      boolean success = false;
-      for (int retry = 0; retry < 3; retry++) {
-        System.gc();
-        System.runFinalization();
-        int orphans = ManagedChannelReference.cleanQueue(refqueue);
-        if (orphans == 1) {
-          success = true;
-          break;
-        }
-        assertEquals("unexpected extra orphans", 0, orphans);
-        Thread.sleep(100L * (1L << retry));
-      }
-      assertTrue("Channel was not garbage collected", success);
+      final AtomicInteger numOrphans = new AtomicInteger();
+      GcFinalization.awaitDone(
+          new FinalizationPredicate() {
+            @Override
+            public boolean isDone() {
+              numOrphans.getAndAdd(ManagedChannelReference.cleanQueue(refqueue));
+              return numOrphans.get() > 0;
+            }
+          });
+      assertEquals("unexpected extra orphans", 1, numOrphans.get());
 
       LogRecord lr;
       synchronized (records) {
@@ -102,7 +100,32 @@ public final class ManagedChannelOrphanWrapperTest {
     }
   }
 
-  private static final class TestManagedChannel extends ManagedChannel {
+  @Test
+  public void refCycleIsGCed() {
+    ReferenceQueue<ManagedChannelOrphanWrapper> refqueue =
+        new ReferenceQueue<ManagedChannelOrphanWrapper>();
+    ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs =
+        new ConcurrentHashMap<ManagedChannelReference, ManagedChannelReference>();
+    ApplicationWithChannelRef app = new ApplicationWithChannelRef();
+    ChannelWithApplicationRef channelImpl = new ChannelWithApplicationRef();
+    ManagedChannelOrphanWrapper channel =
+        new ManagedChannelOrphanWrapper(channelImpl, refqueue, refs);
+    app.channel = channel;
+    channelImpl.application = app;
+    WeakReference<ApplicationWithChannelRef> appWeakRef =
+        new WeakReference<ApplicationWithChannelRef>(app);
+
+    // Simulate the application and channel going out of scope. A ref cycle between app and
+    // channel remains, so ensure that our tracking of orphaned channels does not prevent this
+    // reference cycle from being GCed.
+    channel = null;
+    app = null;
+    channelImpl = null;
+
+    GcFinalization.awaitClear(appWeakRef);
+  }
+
+  private static class TestManagedChannel extends ManagedChannel {
     @Override
     public ManagedChannel shutdown() {
       return null;
@@ -138,5 +161,13 @@ public final class ManagedChannelOrphanWrapperTest {
     public String authority() {
       return null;
     }
+  }
+
+  private static final class ApplicationWithChannelRef {
+    private ManagedChannel channel;
+  }
+
+  private static final class ChannelWithApplicationRef extends TestManagedChannel {
+    private ApplicationWithChannelRef application;
   }
 }

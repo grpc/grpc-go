@@ -24,7 +24,6 @@ import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -56,22 +55,15 @@ final class ManagedChannelOrphanWrapper extends ForwardingManagedChannel {
   @Override
   public ManagedChannel shutdown() {
     phantom.shutdown = true;
+    phantom.clear();
     return super.shutdown();
   }
 
   @Override
   public ManagedChannel shutdownNow() {
-    phantom.shutdownNow = true;
+    phantom.shutdown = true;
+    phantom.clear();
     return super.shutdownNow();
-  }
-
-  @Override
-  public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-    boolean ret = super.awaitTermination(timeout, unit);
-    if (ret) {
-      phantom.clear();
-    }
-    return ret;
   }
 
   @VisibleForTesting
@@ -87,10 +79,9 @@ final class ManagedChannelOrphanWrapper extends ForwardingManagedChannel {
     private final ReferenceQueue<ManagedChannelOrphanWrapper> refqueue;
     private final ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs;
 
-    private final ManagedChannel channel;
+    private final String channelStr;
     private final Reference<RuntimeException> allocationSite;
     private volatile boolean shutdown;
-    private volatile boolean shutdownNow;
 
     ManagedChannelReference(
         ManagedChannelOrphanWrapper orphanable,
@@ -102,7 +93,7 @@ final class ManagedChannelOrphanWrapper extends ForwardingManagedChannel {
           ENABLE_ALLOCATION_TRACKING
               ? new RuntimeException("ManagedChannel allocation site")
               : missingCallSite);
-      this.channel = channel;
+      this.channelStr = channel.toString();
       this.refqueue = refqueue;
       this.refs = refs;
       this.refs.put(this, this);
@@ -144,21 +135,18 @@ final class ManagedChannelOrphanWrapper extends ForwardingManagedChannel {
       while ((ref = (ManagedChannelReference) refqueue.poll()) != null) {
         RuntimeException maybeAllocationSite = ref.allocationSite.get();
         ref.clearInternal(); // technically the reference is gone already.
-        if (!(ref.shutdown && ref.channel.isTerminated())) {
+        if (!ref.shutdown) {
           orphanedChannels++;
-          Level level = ref.shutdownNow ? Level.FINE : Level.SEVERE;
+          Level level = Level.SEVERE;
           if (logger.isLoggable(level)) {
             String fmt =
-                "*~*~*~ Channel {0} was not "
-                // Prefer to complain about shutdown if neither has been called.
-                + (!ref.shutdown ? "shutdown" : "terminated")
-                + " properly!!! ~*~*~*"
-                + System.getProperty("line.separator")
-                + "    Make sure to call shutdown()/shutdownNow() and wait "
-                + "until awaitTermination() returns true.";
+                "*~*~*~ Channel {0} was not shutdown properly!!! ~*~*~*"
+                    + System.getProperty("line.separator")
+                    + "    Make sure to call shutdown()/shutdownNow() and wait "
+                    + "until awaitTermination() returns true.";
             LogRecord lr = new LogRecord(level, fmt);
             lr.setLoggerName(logger.getName());
-            lr.setParameters(new Object[]{ref.channel.toString()});
+            lr.setParameters(new Object[] {ref.channelStr});
             lr.setThrown(maybeAllocationSite);
             logger.log(lr);
           }
