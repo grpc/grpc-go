@@ -43,11 +43,10 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/http2/hpack"
-
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -7129,62 +7128,63 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 }
 
-func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
+// A copy from http_util.go for testing.
+var httpStatusConvTab = map[int]codes.Code{
+	// 400 Bad Request - INTERNAL.
+	http.StatusBadRequest: codes.Internal,
+	// 401 Unauthorized  - UNAUTHENTICATED.
+	http.StatusUnauthorized: codes.Unauthenticated,
+	// 403 Forbidden - PERMISSION_DENIED.
+	http.StatusForbidden: codes.PermissionDenied,
+	// 404 Not Found - UNIMPLEMENTED.
+	http.StatusNotFound: codes.Unimplemented,
+	// 429 Too Many Requests - UNAVAILABLE.
+	http.StatusTooManyRequests: codes.Unavailable,
+	// 502 Bad Gateway - UNAVAILABLE.
+	http.StatusBadGateway: codes.Unavailable,
+	// 503 Service Unavailable - UNAVAILABLE.
+	http.StatusServiceUnavailable: codes.Unavailable,
+	// 504 Gateway timeout - UNAVAILABLE.
+	http.StatusGatewayTimeout: codes.Unavailable,
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
+	// Non-gRPC content-type fallback path.
+	for httpCode := range httpStatusConvTab {
+		doHTTPHeaderTest(t, httpStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Missing content-type fallback path.
+	for httpCode := range httpStatusConvTab {
+		doHTTPHeaderTest(t, httpStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			// Omitting content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Malformed HTTP status when fallback.
+	doHTTPHeaderTest(t, codes.Internal, []string{
+		":status", "abc",
+		// Omitting content type to switch to HTTP mode.
+		"grpc-status", "1", // Make up a gRPC status error
+		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+	})
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingGRPCNonTrailer(t *testing.T) {
 	for _, test := range []struct {
 		header  []string
 		errCode codes.Code
 	}{
 		{
-			header: []string{
-				// non-grpc content-type, fallback to HTTP mode
-				":status", "400",
-				"content-type", "text/html",
-			},
-			errCode: codes.Internal,
-		},
-		{
-			header: []string{
-				// non-grpc content-type, fallback to HTTP mode
-				":status", "401",
-				"content-type", "text/html",
-			},
-			errCode: codes.Unauthenticated,
-		},
-		{
-			header: []string{
-				// non-grpc content-type, fallback to HTTP mode
-				":status", "404",
-				"content-type", "text/html",
-			},
-			errCode: codes.Unimplemented,
-		},
-		{
-			header: []string{
-				// non-grpc content-type, fallback to HTTP mode
-				":status", "502",
-				"content-type", "text/html",
-			},
-			errCode: codes.Unavailable,
-		},
-		{
-			// non-grpc content-type, fallback to HTTP mode
-			// missing HTTP status
-			header: []string{
-				"content-type", "text/html",
-			},
-			errCode: codes.Internal,
-		},
-		{
-			// non-grpc content-type, fallback to HTTP mode
-			// malformed HTTP status
-			header: []string{
-				":status", "abc",
-				"content-type", "text/html",
-			},
-			errCode: codes.Internal,
-		},
-		{
-			// gRPC mode, but missing gRPC status (trailer, as EndStream is set).
+			// missing gRPC status.
 			header: []string{
 				":status", "403",
 				"content-type", "application/grpc",
@@ -7192,15 +7192,7 @@ func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
 			errCode: codes.Unknown,
 		},
 		{
-			// gRPC mode, but missing gRPC status (trailer, as EndStream is set).
-			header: []string{
-				":status", "403",
-				"content-type", "application/grpc",
-			},
-			errCode: codes.Unknown,
-		},
-		{
-			// gRPC mode, with malformed grpc-status.
+			// malformed grpc-status.
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
@@ -7209,7 +7201,7 @@ func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
 			errCode: codes.Internal,
 		},
 		{
-			// gRPC mode, with malformed grpc-tags-bin field.
+			// Malformed grpc-tags-bin field.
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
@@ -7219,6 +7211,7 @@ func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
 			errCode: codes.Internal,
 		},
 		{
+			// gRPC status error.
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
@@ -7227,15 +7220,49 @@ func (s) TestHTTPHeaderFrameErrorHandling(t *testing.T) {
 			errCode: codes.InvalidArgument,
 		},
 	} {
-		hTTPStatusTest(t, test.header, test.errCode)
+		doHTTPHeaderTest(t, test.errCode, test.header)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingTrailer(t *testing.T) {
+	for _, test := range []struct {
+		responseHeader []string
+		trailer        []string
+		errCode        codes.Code
+	}{
+		{
+			responseHeader: []string{
+				":status", "200",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// trailer missing grpc-status
+				":status", "502",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			responseHeader: []string{
+				":status", "404",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Internal,
+		},
+	} {
+		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
 	}
 }
 
 type httpServer struct {
-	headerFields []string
+	headerFields [][]string
 }
 
-func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string) error {
+func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
 	if len(headerFields)%2 == 1 {
 		panic("odd number of kv args")
 	}
@@ -7251,13 +7278,13 @@ func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields 
 	return framer.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      sid,
 		BlockFragment: buf.Bytes(),
-		EndStream:     true,
+		EndStream:     endStream,
 		EndHeaders:    true,
 	})
 }
 
 func (s *httpServer) start(t *testing.T, lis net.Listener) {
-	// Launch an HTTP server to send back header with httpStatus.
+	// Launch an HTTP server to send back header.
 	go func() {
 		conn, err := lis.Accept()
 		if err != nil {
@@ -7292,15 +7319,17 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				break
 			}
 		}
-		if err = s.writeHeader(framer, sid, s.headerFields); err != nil {
-			t.Errorf("Error at server-side while writing headers. Err: %v", err)
-			return
+		for i, headers := range s.headerFields {
+			if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
+				t.Errorf("Error at server-side while writing headers. Err: %v", err)
+				return
+			}
+			writer.Flush()
 		}
-		writer.Flush()
 	}()
 }
 
-func hTTPStatusTest(t *testing.T, headerFields []string, errCode codes.Code) {
+func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)

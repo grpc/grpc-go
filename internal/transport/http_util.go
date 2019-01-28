@@ -252,12 +252,8 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 	// are in HTTP fallback mode, and should handle error specific to HTTP.
 	var isGRPC bool
 	var grpcErr, httpErr, contentTypeErr error
-	var str string
 	for _, hf := range frame.Fields {
 		err := d.processHeaderField(hf)
-		str += hf.Name
-		str += ":"
-		str += " " + hf.Value + " "
 		switch hf.Name {
 		case "content-type":
 			if err == nil {
@@ -267,7 +263,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 				contentTypeErr = err
 			}
 		case ":status":
-			httpErr = err // In gRPC mode, we don't care about HTTP field parsing error.
+			httpErr = err // In gRPC mode, we don't care about HTTP field parsing error, so we store it separately.
 		default:
 			if err != nil && grpcErr == nil {
 				grpcErr = err // store the first encountered gRPC field parsing error.
@@ -313,7 +309,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 		}
 	}
 
-	return status.Error(code, d.constructHTTPErrMsg(contentTypeErr)+" "+str)
+	return status.Error(code, d.constructHTTPErrMsg(contentTypeErr))
 }
 
 // constructErrMsg constructs error message to be returned in HTTP fallback mode.
