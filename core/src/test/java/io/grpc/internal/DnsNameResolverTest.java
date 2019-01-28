@@ -64,6 +64,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
@@ -840,6 +842,73 @@ public class DnsNameResolverTest {
     choice.put("serviceConfig", serviceConfig);
 
     assertNotNull(DnsNameResolver.maybeChooseServiceConfig(choice, new Random(), "localhost"));
+  }
+
+  @Test
+  public void parseTxtResults_misspelledName() {
+    List<String> txtRecords = new ArrayList<>();
+    txtRecords.add("some_record");
+    txtRecords.add("_grpc_config=[]");
+
+    List<Map<String, Object>> results = DnsNameResolver.parseTxtResults(txtRecords);
+
+    assertThat(results).isEmpty();
+  }
+
+  @Test
+  public void parseTxtResults_badTypeIgnored() {
+    Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
+    Level level = logger.getLevel();
+    logger.setLevel(Level.SEVERE);
+    try {
+      List<String> txtRecords = new ArrayList<>();
+      txtRecords.add("some_record");
+      txtRecords.add("grpc_config={}");
+
+      List<Map<String, Object>> results = DnsNameResolver.parseTxtResults(txtRecords);
+
+      assertThat(results).isEmpty();
+    } finally {
+      logger.setLevel(level);
+    }
+  }
+
+  @Test
+  public void parseTxtResults_badInnerTypeIgnored() {
+    Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
+    Level level = logger.getLevel();
+    logger.setLevel(Level.SEVERE);
+    try {
+      List<String> txtRecords = new ArrayList<>();
+      txtRecords.add("some_record");
+      txtRecords.add("grpc_config=[\"bogus\"]");
+
+      List<Map<String, Object>> results = DnsNameResolver.parseTxtResults(txtRecords);
+
+      assertThat(results).isEmpty();
+    } finally {
+      logger.setLevel(level);
+    }
+  }
+
+  @Test
+  public void parseTxtResults_combineAll() {
+    Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
+    Level level = logger.getLevel();
+    logger.setLevel(Level.SEVERE);
+    try {
+      List<String> txtRecords = new ArrayList<>();
+      txtRecords.add("some_record");
+      txtRecords.add("grpc_config=[\"bogus\", {}]");
+      txtRecords.add("grpc_config=[{}, {}]"); // 2 records
+      txtRecords.add("grpc_config=[{\"\":{}}]"); // 1 record
+
+      List<Map<String, Object>> results = DnsNameResolver.parseTxtResults(txtRecords);
+
+      assertThat(results).hasSize(2 + 1);
+    } finally {
+      logger.setLevel(level);
+    }
   }
 
   @Test

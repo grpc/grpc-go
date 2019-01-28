@@ -72,7 +72,7 @@ final class DnsNameResolver extends NameResolver {
   private static final String SERVICE_CONFIG_CHOICE_SERVICE_CONFIG_KEY = "serviceConfig";
 
   // From https://github.com/grpc/proposal/blob/master/A2-service-configs-in-dns.md
-  static final String SERVICE_CONFIG_PREFIX = "_grpc_config=";
+  static final String SERVICE_CONFIG_PREFIX = "grpc_config=";
   private static final Set<String> SERVICE_CONFIG_CHOICE_KEYS =
       Collections.unmodifiableSet(
           new HashSet<>(
