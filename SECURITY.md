@@ -4,9 +4,13 @@ gRPC supports a number of different mechanisms for asserting identity between an
 
 # Transport Security (TLS)
 
-HTTP/2 over TLS mandates the use of [ALPN](https://tools.ietf.org/html/draft-ietf-tls-applayerprotoneg-05) to negotiate the use of the h2 protocol. ALPN is a fairly new standard and (where possible) gRPC also supports protocol negotiation via [NPN](https://tools.ietf.org/html/draft-agl-tls-nextprotoneg-04) for systems that do not yet support ALPN.
+HTTP/2 over TLS mandates the use of [ALPN](https://tools.ietf.org/html/rfc7301)
+to negotiate the use of the h2 protocol and support for the GCM mode of AES.
 
-On Android, use the [Play Services Provider](#tls-on-android). For non-Android systems, use [OpenSSL](#tls-with-openssl).
+There are multiple options available, but on Android we recommend using the
+[Play Services Provider](#tls-on-android) and for non-Android systems we
+recommend [netty-tcnative with
+BoringSSL](#tls-with-netty-tcnative-on-boringssl).
 
 ## TLS on Android
 
@@ -42,100 +46,92 @@ import java.security.Security;
 Security.insertProviderAt(Conscrypt.newProvider(), 1);
 ```
 
-## TLS with OpenSSL
+## TLS on non-Android
 
-This is currently the recommended approach for using gRPC over TLS (on non-Android systems).
+JDK versions prior to Java 9 do not support ALPN and are either missing AES GCM
+support or have 2% the performance of OpenSSL.
 
-The main benefits of using OpenSSL are:
+We recommend most users use grpc-netty-shaded, which includes netty-tcnative on
+BoringSSL. It includes pre-built libraries for 64 bit Windows, OS X, and 64 bit
+Linux. For 32 bit Windows, Conscrypt may be an option. For all other platforms,
+Java 9+ is required.
 
-1. **Speed**: In local testing, we've seen performance improvements of 3x over the JDK. GCM, which is used by the only cipher suite required by the HTTP/2 spec, is 10-500x faster.
-2. **Ciphers**: OpenSSL has its own ciphers and is not dependent on the limitations of the JDK. This allows supporting GCM on Java 7.
-3. **ALPN to NPN Fallback**: if the remote endpoint doesn't support ALPN.
-4. **Version Independence**: does not require using a different library version depending on the JDK update.
+For users of grpc-netty we recommend [netty-tcnative with
+BoringSSL](#tls-with-netty-tcnative-on-boringssl), although using the built-in
+JDK support in Java 9+, [Conscrypt](#tls-with-conscrypt), and [netty-tcnative
+with OpenSSL](#tls-with-netty-tcnative-on-openssl) are other valid options.
 
-Support for OpenSSL is only provided for the Netty transport via [netty-tcnative](https://github.com/netty/netty-tcnative), which is a fork of
-[Apache Tomcat's tcnative](http://tomcat.apache.org/native-doc/), a JNI wrapper around OpenSSL.
+[Netty TCNative](https://github.com/netty/netty-tcnative) is a fork of
+[Apache Tomcat's tcnative](http://tomcat.apache.org/native-doc/) and is a JNI
+wrapper around OpenSSL/BoringSSL/LibreSSL.
 
-### OpenSSL: Dynamic vs Static (which to use?)
+We recommend BoringSSL for its simplicitly and low occurence of security
+vulnerabilities relative to OpenSSL. BoringSSL is used by Conscrypt as well.
 
-As of version `1.1.33.Fork14`, netty-tcnative provides two options for usage: statically or dynamically linked. For simplification of initial setup,
-we recommend that users first look at `netty-tcnative-boringssl-static`, which is statically linked against BoringSSL and Apache APR. Using this artifact requires no extra installation and guarantees that ALPN and the ciphers required for
-HTTP/2 are available. In addition, starting with `1.1.33.Fork16` binaries for
-all supported platforms can be included at compile time and the correct binary
-for the platform can be selected at runtime.
+### TLS with netty-tcnative on BoringSSL
 
-Production systems, however, may require an easy upgrade path for OpenSSL security patches. In this case, relying on the statically linked artifact also implies waiting for the Netty team
-to release the new artifact to Maven Central, which can take some time. A better solution in this case is to use the dynamically linked `netty-tcnative` artifact, which allows the site administrator
-to easily upgrade OpenSSL in the standard way (e.g. apt-get) without relying on any new builds from Netty.
+Netty-tcnative with BoringSSL includes BoringSSL statically linked in the
+binary. This means the system's pre-installed TLS libraries will not be used.
+Production systems that have centralized upgrade agility in the face of
+security vulnerabilities may want to use [netty-tcnative on
+OpenSSL](#tls-with-netty-tcnative-on-openssl) instead.
 
-### OpenSSL: Statically Linked (netty-tcnative-boringssl-static)
+Users of grpc-netty-shaded will automatically use netty-tcnative with
+BoringSSL.
 
-This is the simplest way to configure the Netty transport for OpenSSL. You just need to add the appropriate `netty-tcnative-boringssl-static` artifact to your application's classpath.
+grpc-netty users will need to add the appropriate
+`netty-tcnative-boringssl-static` artifact to the application's classpath.
+Artifacts are available for 64 bit Windows, OS X, and 64 bit Linux.
 
-Artifacts are available on [Maven Central](http://repo1.maven.org/maven2/io/netty/netty-tcnative-boringssl-static/) for the following platforms:
-
-Maven Classifier | Description
----------------- | -----------
-windows-x86_64 | Windows distribution
-osx-x86_64 | Mac distribution
-linux-x86_64 | Linux distribution
-
-##### Getting netty-tcnative-boringssl-static from Maven
-
-In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-plugin) to help simplify the dependency.
+Depending on netty-tcnative-boringssl-static will include binaries for all
+supported platforms. For Maven:
 
 ```xml
-<project>
   <dependencies>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>2.0.20.Final</version>
+      <version>2.0.20.Final</version> <!-- See table for correct version -->
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
-</project>
 ```
 
-##### Getting netty-tcnative-boringssl-static from Gradle
-
-Gradle you can use the [osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin), which is a wrapper around the os-maven-plugin.
+And for Gradle:
 
 ```gradle
-buildscript {
-  repositories {
-    mavenCentral()
-  }
-}
-
 dependencies {
-    compile 'io.netty:netty-tcnative-boringssl-static:2.0.20.Final'
+  // See table for correct version
+  runtime 'io.netty:netty-tcnative-boringssl-static:2.0.20.Final'
 }
 ```
 
-### OpenSSL: Dynamically Linked (netty-tcnative)
+For projects sensitive to binary size, specify the classifier for the precise
+platform you need: `windows-x86_64`, `osx-x86_64`, `linux-x86_64`. You can also
+use [os-maven-plugin](https://github.com/trustin/os-maven-plugin) or
+[osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin),
+to choose the classifier for the platform running the build.
 
-If for any reason you need to dynamically link against OpenSSL (e.g. you need control over the version of OpenSSL), you can instead use the `netty-tcnative` artifact.
+### TLS with netty-tcnative on OpenSSL
 
-Requirements:
+Using OpenSSL can have more initial configuration issues, but can be useful if
+your OS's OpenSSL version is recent and kept up-to-date with security fixes.
+OpenSSL is not included with tcnative, but instead is dynamically linked using
+your operating system's OpenSSL.
 
-1. [OpenSSL](https://www.openssl.org/) version >= 1.0.2 for ALPN support, or version >= 1.0.1 for NPN.
+To use OpenSSL you will use the `netty-tcnative` artifact. It requires:
+
+1. [OpenSSL](https://www.openssl.org/) version >= 1.0.2 for ALPN support.
 2. [Apache APR library (libapr-1)](https://apr.apache.org/) version >= 1.5.2.
-3. [netty-tcnative](https://github.com/netty/netty-tcnative) version >= 1.1.33.Fork7 must be on classpath. Prior versions only supported NPN and only Fedora-derivatives were supported for Linux.
 
-Artifacts are available on [Maven Central](http://repo1.maven.org/maven2/io/netty/netty-tcnative/) for the following platforms:
+You must specify a classifier for the correct netty-tcnative binary:
+`windows-x86_64`, `osx-x86_64`, `linux-x86_64`, or `linux-x86_64-fedora`.
+Fedora derivatives use a different soname from other Linux distributations, so
+you must select the "fedora" version on those distributions.
 
-Classifier | Description
----------------- | -----------
-windows-x86_64 | Windows distribution
-osx-x86_64 | Mac distribution
-linux-x86_64 | Used for non-Fedora derivatives of Linux
-linux-x86_64-fedora | Used for Fedora derivatives
-
-On Linux it should be noted that OpenSSL uses a different soname for Fedora derivatives than other Linux releases. To work around this limitation, netty-tcnative deploys two separate versions for linux.
-
-##### Getting netty-tcnative from Maven
-
-In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-plugin) to help simplify the dependency.
+In Maven, you can use the
+[os-maven-plugin](https://github.com/trustin/os-maven-plugin) to help simplify
+the dependency.
 
 ```xml
 <project>
@@ -143,8 +139,9 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>2.0.20.Final</version>
+      <version>2.0.20.Final</version> <!-- see table for correct version -->
       <classifier>${tcnative.classifier}</classifier>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 
@@ -186,9 +183,8 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
 </project>
 ```
 
-##### Getting netty-tcnative from Gradle
-
-Gradle you can use the [osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin), which is a wrapper around the os-maven-plugin.
+And in Gradle you can use the
+[osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin).
 
 ```gradle
 buildscript {
@@ -211,43 +207,50 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:2.0.20.Final:' + tcnative_classifier
+    runtime 'io.netty:netty-tcnative:2.0.20.Final:' + tcnative_classifier
 }
 ```
 
-## TLS with JDK (Jetty ALPN/NPN)
+### TLS with Conscrypt
 
-**WARNING: DON'T DO THIS!!**
+[Conscrypt](https://conscrypt.org) provides an implementation of the JSSE
+security APIs based on BoringSSL. Pre-built binaries are available for 32 and
+64 bit Windows, OS X, and 64 bit Linux.
 
-*For non-Android systems, the recommended approach is to use [OpenSSL](#tls-with-openssl). Using the JDK for ALPN is generally much slower and may not support the necessary ciphers for HTTP2.*
+Depend on `conscrypt-openjdk-uber` for binaries of all supported JRE platforms.
+For projects sensitive to binary size, depend on `conscrypt-openjdk` and
+specify the appropriate classifier. `os-maven-plugin` and
+`osdetector-gradle-plugin` may also be used. See the documentation for
+[netty-tcnative-boringssl-static](#tls-with-netty-tcnative-on-boringssl) for
+example usage of the plugins.
 
-*Jetty ALPN brings its own baggage in that the Java bootclasspath needs to be modified, which may not be an option for some environments. In addition, a specific version of Jetty ALPN has to be used for a given version of the JRE. If the versions don't match the negotiation will fail, but you won't really know why. And since there is such a tight coupling between Jetty ALPN and the JRE, there are no guarantees that Jetty ALPN will support every JRE out in the wild.*
+Generally you will "install" Conscrypt before use, for gRPC to find.
 
-*The moral of the story is: Don't use the JDK for ALPN!  But if you absolutely have to, here's how you do it... :)*
+```java
+import org.conscrypt.Conscrypt;
+import java.security.Security;
+...
 
----
-
-If not using the Netty transport (or you are unable to use OpenSSL for some reason) another alternative is to use the JDK for TLS.
-
-No standard Java release has built-in support for ALPN today ([there is a tracking issue](https://bugs.openjdk.java.net/browse/JDK-8051498) so go upvote it!) so we need to use the [Jetty-ALPN](https://github.com/jetty-project/jetty-alpn) (or [Jetty-NPN](https://github.com/jetty-project/jetty-npn) if on Java < 8) bootclasspath extension for OpenJDK. To do this, add an `Xbootclasspath` JVM option referencing the path to the Jetty `alpn-boot` jar.
-
-```sh
-java -Xbootclasspath/p:/path/to/jetty/alpn/extension.jar ...
+// Somewhere in main()
+Security.insertProviderAt(Conscrypt.newProvider(), 1);
 ```
 
-Note that you must use the [release of the Jetty-ALPN jar](http://www.eclipse.org/jetty/documentation/current/alpn-chapter.html#alpn-versions) specific to the version of Java you are using. However, you can use the JVM agent [Jetty-ALPN-Agent](https://github.com/jetty-project/jetty-alpn-agent) to load the correct Jetty `alpn-boot` jar file for the current Java version. To do this, instead of adding an `Xbootclasspath` option, add a `javaagent` JVM option referencing the path to the Jetty `alpn-agent` jar.
+### TLS with Jetty ALPN
 
-```sh
-java -javaagent:/path/to/jetty-alpn-agent.jar ...
-```
+**Please do not use Jetty ALPN**
 
-### JDK Ciphers
+gRPC historically supported Jetty ALPN for ALPN on Java 8. While functional, it
+suffers from poor performance and breakages when the JRE is upgraded.
+When mis-matched to the JRE version, it can also produce unpredictable errors
+that are hard to diagnose. When using it, it became common practice that any
+time we saw a TLS failure that made no sense we would blame a Jetty ALPN/JRE
+version mismatch and we were overwhelmingly correct. The Jetty ALPN agent makes
+it much easier to use, but we still strongly discourage Jetty ALPN's use.
 
-Java 7 does not support [the cipher suites recommended](https://tools.ietf.org/html/draft-ietf-httpbis-http2-17#section-9.2.2) by the HTTP2 specification. To address this we suggest servers use Java 8 where possible or use an alternative JCE implementation such as [Bouncy Castle](https://www.bouncycastle.org/java.html). If this is not practical it is possible to use other ciphers but you need to ensure that the services you intend to call have [allowed out-of-spec ciphers](https://github.com/grpc/grpc/issues/681) and have evaluated the security risks of doing so.
+When using Jetty ALPN with Java 8, realize that performance will be 2-10% that
+of the other options due to a slow AES GCM implementation in Java.
 
-Users should be aware that GCM is [_very_ slow (1 MB/s)](https://bugzilla.redhat.com/show_bug.cgi?id=1135504) before Java 8u60. With Java 8u60 GCM is 10x faster (10-20 MB/s), but that is still slow compared to OpenSSL (~200 MB/s), especially with AES-NI support (~1 GB/s). GCM cipher suites are the only suites available that comply with HTTP2's cipher requirements.
-
-### Configuring Jetty ALPN in Web Containers
+#### Configuring Jetty ALPN in Web Containers
 
 Some web containers, such as [Jetty](http://www.eclipse.org/jetty/documentation/current/jetty-classloading.html) restrict access to server classes for web applications. A gRPC client running within such a container must be properly configured to allow access to the ALPN classes. In Jetty, this is done by including a `WEB-INF/jetty-env.xml` file containing the following:
 
