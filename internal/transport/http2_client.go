@@ -1141,11 +1141,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	atomic.StoreUint32(&s.bytesReceived, 1)
-	var state decodeState
-	// If HEADER frame has been received before, then this header frame contains a Trailer.
-	// isTrailer should be false if the HEADER frame contains Response-Headers or Trailers-Only.
-	isTrailer := atomic.LoadUint32(&s.headerDone) == 1
-	if err := state.decodeHeader(frame, isTrailer); err != nil {
+	state := decodeState{isTrailer: atomic.LoadUint32(&s.headerDone) == 1}
+	if err := state.decodeHeader(frame); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, false)
 		// Something wrong. Stops reading even when there is remaining.
 		return
@@ -1178,9 +1175,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
-			s.recvCompress = state.encoding
-			if len(state.mdata) > 0 {
-				s.header = state.mdata
+			s.recvCompress = state.data.encoding
+			if len(state.data.mdata) > 0 {
+				s.header = state.data.mdata
 			}
 		} else {
 			s.noHeaders = true
@@ -1192,7 +1189,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
 	rst := s.getState() == streamActive
-	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, state.status(), state.mdata, true)
+	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, state.status(), state.data.mdata, true)
 }
 
 // reader runs as a separate goroutine in charge of reading data from network

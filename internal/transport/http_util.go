@@ -98,9 +98,7 @@ var (
 	}
 )
 
-// Records the states during HPACK decoding. Must be reset once the
-// decoding of the entire headers are finished.
-type decodeState struct {
+type parsedHeaderData struct {
 	encoding string
 	// statusGen caches the stream status received from the trailer the server
 	// sent.  Client side only.  Do not access directly.  After all trailers are
@@ -120,8 +118,21 @@ type decodeState struct {
 	statsTags      []byte
 	statsTrace     []byte
 	contentSubtype string
+}
+
+// Records the states during HPACK decoding. Must be reset once the
+// decoding of the entire headers are finished.
+type decodeState struct {
 	// whether decoding on server side or not
 	serverSide bool
+	// whether the header is Trailers or not (Note Trailers != Trailers-Only, see
+	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md for definition).
+	// For server, this field is always false.
+	isTrailer bool
+
+	// data struct will be filled with info parsed from HTTP HEADERS frame once decodeHeader function
+	// has been invoked and returned.
+	data parsedHeaderData
 }
 
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
@@ -202,11 +213,11 @@ func contentType(contentSubtype string) string {
 }
 
 func (d *decodeState) status() *status.Status {
-	if d.statusGen == nil {
+	if d.data.statusGen == nil {
 		// No status-details were provided; generate status using code/msg.
-		d.statusGen = status.New(codes.Code(int32(*(d.rawStatusCode))), d.rawStatusMsg)
+		d.data.statusGen = status.New(codes.Code(int32(*(d.data.rawStatusCode))), d.data.rawStatusMsg)
 	}
-	return d.statusGen
+	return d.data.statusGen
 }
 
 const binHdrSuffix = "-bin"
@@ -238,7 +249,7 @@ func decodeMetadataHeader(k, v string) (string, error) {
 	return v, nil
 }
 
-func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool) error {
+func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
@@ -246,40 +257,54 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 	}
 
 	// isGRPC indicates whether the peer is speaking gRPC (otherwise HTTP).
-	// If the header contains valid  a content-type, i.e. a string starts with "application/grpc", then
-	// we are in gRPC mode and should handle gRPC specific error.
+	//
+	// We are in gRPC mode (peer speaking gRPC) if:
+	// 	* We are client side and have already received a HEADER frame that indicates gRPC peer.
+	//  * The header contains valid  a content-type, i.e. a string starts with "application/grpc"
+	// And we should handle error specific to gRPC.
+	//
 	// Otherwise (i.e. a content-type string starts without "application/grpc", or does not exist), we
 	// are in HTTP fallback mode, and should handle error specific to HTTP.
-	var isGRPC bool
+	//
+	// d.isTrailer is only set on client side after a gRPC ResponseHeader has been received (indicating
+	// peer speaking gRPC). Therefore, we can initialized isGRPC to d.isTrailer.
+	isGRPC := d.isTrailer
 	var grpcErr, httpErr, contentTypeErr error
 	for _, hf := range frame.Fields {
-		err := d.processHeaderField(hf)
-		switch hf.Name {
-		case "content-type":
-			if err == nil {
-				// gRPC mode
-				isGRPC = true
-			} else {
+		if hf.Name != "content-type" && hf.Name != ":status" && grpcErr != nil {
+			// if we've already encountered grpc related field parsing error, then we skip processing
+			// all following grpc related field.
+			continue
+		}
+
+		if err := d.processHeaderField(hf); err != nil {
+			switch hf.Name {
+			case "content-type":
 				contentTypeErr = err
-			}
-		case ":status":
-			httpErr = err // In gRPC mode, we don't care about HTTP field parsing error, so we store it separately.
-		default:
-			if err != nil && grpcErr == nil {
+			case ":status":
+				httpErr = err // In gRPC mode, we don't care about HTTP field parsing error, so we store it separately.
+			default:
 				grpcErr = err // store the first encountered gRPC field parsing error.
 			}
+			continue
+		}
+
+		// we got a valid content-type that starts with "applicatin/grpc", so we are operating in grpc
+		// mode.
+		if hf.Name == "content-type" {
+			isGRPC = true
 		}
 	}
 
-	// gRPC mode
-	if isGRPC || isTrailer {
+	//
+	if isGRPC {
 		if grpcErr != nil {
 			return grpcErr
 		}
 		if d.serverSide {
 			return nil
 		}
-		if d.rawStatusCode == nil && d.statusGen == nil {
+		if d.data.rawStatusCode == nil && d.data.statusGen == nil {
 			// gRPC status doesn't exist.
 			// Set rawStatusCode to be unknown and return nil error.
 			// So that, if the stream has ended this Unknown status
@@ -287,7 +312,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 			// Otherwise, it will be ignored. In which case, status from
 			// a later trailer, that has StreamEnded flag set, is propagated.
 			code := int(codes.Unknown)
-			d.rawStatusCode = &code
+			d.data.rawStatusCode = &code
 		}
 		return nil
 	}
@@ -302,8 +327,8 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 		ok   bool
 	)
 
-	if d.httpStatus != nil {
-		code, ok = httpStatusConvTab[*(d.httpStatus)]
+	if d.data.httpStatus != nil {
+		code, ok = httpStatusConvTab[*(d.data.httpStatus)]
 		if !ok {
 			code = codes.Unknown
 		}
@@ -317,10 +342,10 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame, isTrailer bool
 func (d *decodeState) constructHTTPErrMsg(contentTypeErr error) string {
 	var errMsgs []string
 
-	if d.httpStatus == nil {
+	if d.data.httpStatus == nil {
 		errMsgs = append(errMsgs, "malformed header: in HTTP fallback mode, but doesn't contain HTTP status")
 	} else {
-		errMsgs = append(errMsgs, fmt.Sprintf("%s: HTTP status code %d", http.StatusText(*(d.httpStatus)), *d.httpStatus))
+		errMsgs = append(errMsgs, fmt.Sprintf("%s: HTTP status code %d", http.StatusText(*(d.data.httpStatus)), *d.data.httpStatus))
 	}
 
 	if contentTypeErr == nil {
@@ -333,10 +358,10 @@ func (d *decodeState) constructHTTPErrMsg(contentTypeErr error) string {
 }
 
 func (d *decodeState) addMetadata(k, v string) {
-	if d.mdata == nil {
-		d.mdata = make(map[string][]string)
+	if d.data.mdata == nil {
+		d.data.mdata = make(map[string][]string)
 	}
-	d.mdata[k] = append(d.mdata[k], v)
+	d.data.mdata[k] = append(d.data.mdata[k], v)
 }
 
 func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
@@ -346,22 +371,22 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		if !validContentType {
 			return status.Errorf(codes.Internal, "transport: received the unexpected content-type %q", f.Value)
 		}
-		d.contentSubtype = contentSubtype
+		d.data.contentSubtype = contentSubtype
 		// TODO: do we want to propagate the whole content-type in the metadata,
 		// or come up with a way to just propagate the content-subtype if it was set?
 		// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
 		// in the metadata?
 		d.addMetadata(f.Name, f.Value)
 	case "grpc-encoding":
-		d.encoding = f.Value
+		d.data.encoding = f.Value
 	case "grpc-status":
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
 		}
-		d.rawStatusCode = &code
+		d.data.rawStatusCode = &code
 	case "grpc-message":
-		d.rawStatusMsg = decodeGrpcMessage(f.Value)
+		d.data.rawStatusMsg = decodeGrpcMessage(f.Value)
 	case "grpc-status-details-bin":
 		v, err := decodeBinHeader(f.Value)
 		if err != nil {
@@ -371,34 +396,34 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		if err := proto.Unmarshal(v, s); err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
 		}
-		d.statusGen = status.FromProto(s)
+		d.data.statusGen = status.FromProto(s)
 	case "grpc-timeout":
-		d.timeoutSet = true
+		d.data.timeoutSet = true
 		var err error
-		if d.timeout, err = decodeTimeout(f.Value); err != nil {
+		if d.data.timeout, err = decodeTimeout(f.Value); err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed time-out: %v", err)
 		}
 	case ":path":
-		d.method = f.Value
+		d.data.method = f.Value
 	case ":status":
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
 		}
-		d.httpStatus = &code
+		d.data.httpStatus = &code
 	case "grpc-tags-bin":
 		v, err := decodeBinHeader(f.Value)
 		if err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
 		}
-		d.statsTags = v
+		d.data.statsTags = v
 		d.addMetadata(f.Name, string(v))
 	case "grpc-trace-bin":
 		v, err := decodeBinHeader(f.Value)
 		if err != nil {
 			return status.Errorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
 		}
-		d.statsTrace = v
+		d.data.statsTrace = v
 		d.addMetadata(f.Name, string(v))
 	default:
 		if isReservedHeader(f.Name) && !isWhitelistedHeader(f.Name) {
