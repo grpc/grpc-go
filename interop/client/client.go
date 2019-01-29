@@ -141,8 +141,10 @@ func main() {
 		opts = append(opts, grpc.WithTransportCredentials(altsTC))
 	case credsGoogleDefaultCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))
-	default:
+	case credsNone:
 		opts = append(opts, grpc.WithInsecure())
+	default:
+		grpclog.Fatal("Invalid creds")
 	}
 	if credsChosen == credsTLS {
 		if *testCase == "compute_engine_creds" {
