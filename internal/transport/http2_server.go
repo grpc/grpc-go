@@ -456,6 +456,8 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
+			// handler is Asynchronous processing
+			atomic.StoreUint32(&t.resetPingStrikes, 1)
 			if t.operateHeaders(frame, handle, traceCtx) {
 				t.Close()
 				break
