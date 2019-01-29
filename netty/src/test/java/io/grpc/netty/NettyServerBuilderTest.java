@@ -19,7 +19,11 @@ package io.grpc.netty;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.common.truth.Truth;
+import io.grpc.ServerStreamTracer.Factory;
 import io.netty.handler.ssl.SslContext;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
@@ -37,6 +41,14 @@ public class NettyServerBuilderTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private NettyServerBuilder builder = NettyServerBuilder.forPort(8080);
+
+  @Test
+  public void createMultipleServers() {
+    builder.addPort(8081);
+    List<NettyServer> servers = builder.buildTransportServers(Collections.<Factory>emptyList());
+
+    Truth.assertThat(servers).hasSize(2);
+  }
 
   @Test
   public void sslContextCanBeNull() {

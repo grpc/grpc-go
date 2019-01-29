@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -98,7 +99,7 @@ import org.mockito.stubbing.OngoingStubbing;
 /** Standard unit tests for {@link ClientTransport}s and {@link ServerTransport}s. */
 @RunWith(JUnit4.class)
 public abstract class AbstractTransportTest {
-  private static final int TIMEOUT_MS = 1000;
+  private static final int TIMEOUT_MS = 5000;
 
   private static final Attributes.Key<String> ADDITIONAL_TRANSPORT_ATTR_KEY =
       Attributes.Key.create("additional-attr");
@@ -115,14 +116,14 @@ public abstract class AbstractTransportTest {
    * Returns a new server that when started will be able to be connected to from the client. Each
    * returned instance should be new and yet be accessible by new client transports.
    */
-  protected abstract InternalServer newServer(
+  protected abstract List<? extends InternalServer> newServer(
       List<ServerStreamTracer.Factory> streamTracerFactories);
 
   /**
-   * Builds a new server that is listening on the same location as the given server instance does.
+   * Builds a new server that is listening on the same port as the given server instance does.
    */
-  protected abstract InternalServer newServer(
-      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories);
+  protected abstract List<? extends InternalServer> newServer(
+      int port, List<ServerStreamTracer.Factory> streamTracerFactories);
 
   /**
    * Returns a new transport that when started will be able to connect to {@code server}.
@@ -182,7 +183,7 @@ public abstract class AbstractTransportTest {
 
   @Before
   public void setUp() {
-    server = newServer(Arrays.asList(serverStreamTracerFactory));
+    server = Iterables.getOnlyElement(newServer(Arrays.asList(serverStreamTracerFactory)));
     OngoingStubbing<ClientStreamTracer> clientStubbing =
         when(clientStreamTracerFactory
             .newClientStreamTracer(any(CallOptions.class), any(Metadata.class)))
@@ -363,7 +364,9 @@ public abstract class AbstractTransportTest {
   public void serverAlreadyListening() throws Exception {
     client = null;
     server.start(serverListener);
-    InternalServer server2 = newServer(server, Arrays.asList(serverStreamTracerFactory));
+    int port = server.getPort();
+    InternalServer server2 =
+        Iterables.getOnlyElement(newServer(port, Arrays.asList(serverStreamTracerFactory)));
     thrown.expect(IOException.class);
     server2.start(new MockServerListener());
   }
@@ -371,6 +374,7 @@ public abstract class AbstractTransportTest {
   @Test
   public void openStreamPreventsTermination() throws Exception {
     server.start(serverListener);
+    int port = server.getPort();
     client = newClientTransport(server);
     startTransport(client, mockClientTransportListener);
     MockServerTransportListener serverTransportListener
@@ -399,7 +403,7 @@ public abstract class AbstractTransportTest {
     // resources. There may be cases this is impossible in the future, but for now it is a useful
     // property.
     serverListener = new MockServerListener();
-    server = newServer(server, Arrays.asList(serverStreamTracerFactory));
+    server = Iterables.getOnlyElement(newServer(port, Arrays.asList(serverStreamTracerFactory)));
     server.start(serverListener);
 
     // Try to "flush" out any listener notifications on client and server. This also ensures that

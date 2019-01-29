@@ -101,7 +101,7 @@ public class AbstractServerImplBuilderTest {
     }
 
     @Override
-    protected io.grpc.internal.InternalServer buildTransportServer(
+    protected List<io.grpc.internal.InternalServer> buildTransportServers(
         List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
       throw new UnsupportedOperationException();
     }

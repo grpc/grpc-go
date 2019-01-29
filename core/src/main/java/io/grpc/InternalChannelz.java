@@ -311,7 +311,7 @@ public final class InternalChannelz {
       private long callsSucceeded;
       private long callsFailed;
       private long lastCallStartedNanos;
-      public List<InternalInstrumented<SocketStats>> listenSockets = Collections.emptyList();
+      public List<InternalInstrumented<SocketStats>> listenSockets = new ArrayList<>();
 
       public Builder setCallsStarted(long callsStarted) {
         this.callsStarted = callsStarted;
@@ -334,10 +334,11 @@ public final class InternalChannelz {
       }
 
       /** Sets the listen sockets. */
-      public Builder setListenSockets(List<InternalInstrumented<SocketStats>> listenSockets) {
-        checkNotNull(listenSockets);
-        this.listenSockets = Collections.unmodifiableList(
-            new ArrayList<InternalInstrumented<SocketStats>>(listenSockets));
+      public Builder addListenSockets(List<InternalInstrumented<SocketStats>> listenSockets) {
+        checkNotNull(listenSockets, "listenSockets");
+        for (InternalInstrumented<SocketStats> ss : listenSockets) {
+          this.listenSockets.add(checkNotNull(ss, "null listen socket"));
+        }
         return this;
       }
 

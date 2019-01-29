@@ -44,6 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -87,6 +88,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -208,6 +210,42 @@ public class ServerImplTest {
   public void noPendingTasks() {
     assertEquals(0, executor.numPendingTasks());
     assertEquals(0, timer.numPendingTasks());
+  }
+
+  @Test
+  public void multiport() throws Exception {
+    final CountDownLatch starts = new CountDownLatch(2);
+    final CountDownLatch shutdowns = new CountDownLatch(2);
+
+    final class Serv extends SimpleServer {
+      @Override
+      public void start(ServerListener listener) throws IOException {
+        super.start(listener);
+        starts.countDown();
+      }
+
+      @Override
+      public void shutdown() {
+        super.shutdown();
+        shutdowns.countDown();
+      }
+    }
+
+    SimpleServer transportServer1 = new Serv();
+    SimpleServer transportServer2 = new Serv();
+    assertNull(server);
+    builder.fallbackHandlerRegistry(fallbackRegistry);
+    builder.executorPool = executorPool;
+    server = new ServerImpl(
+        builder, ImmutableList.of(transportServer1, transportServer2), SERVER_CONTEXT);
+
+    server.start();
+    assertTrue(starts.await(1, TimeUnit.SECONDS));
+    assertEquals(2, shutdowns.getCount());
+
+    server.shutdown();
+    assertTrue(shutdowns.await(1, TimeUnit.SECONDS));
+    assertTrue(server.awaitTermination(1, TimeUnit.SECONDS));
   }
 
   @Test
@@ -1326,7 +1364,7 @@ public class ServerImplTest {
 
     builder.fallbackHandlerRegistry(fallbackRegistry);
     builder.executorPool = executorPool;
-    server = new ServerImpl(builder, transportServer, SERVER_CONTEXT);
+    server = new ServerImpl(builder, Collections.singletonList(transportServer), SERVER_CONTEXT);
   }
 
   private void verifyExecutorsAcquired() {
@@ -1411,7 +1449,7 @@ public class ServerImplTest {
   }
 
   private static class Builder extends AbstractServerImplBuilder<Builder> {
-    @Override protected InternalServer buildTransportServer(
+    @Override protected List<InternalServer> buildTransportServers(
         List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
       throw new UnsupportedOperationException();
     }

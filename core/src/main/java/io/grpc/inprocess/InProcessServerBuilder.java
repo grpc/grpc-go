@@ -27,6 +27,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.SharedResourcePool;
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
@@ -145,9 +146,9 @@ public final class InProcessServerBuilder
   }
 
   @Override
-  protected InProcessServer buildTransportServer(
+  protected List<InProcessServer> buildTransportServers(
       List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(this, streamTracerFactories);
+    return Collections.singletonList(new InProcessServer(this, streamTracerFactories));
   }
 
   @Override

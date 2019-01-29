@@ -21,6 +21,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
+import java.util.Collections;
 import java.util.List;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -35,16 +36,17 @@ public class InProcessTransportTest extends AbstractTransportTest {
   private static final String USER_AGENT = "a-testing-user-agent";
 
   @Override
-  protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
+  protected List<? extends InternalServer> newServer(
+      List<ServerStreamTracer.Factory> streamTracerFactories) {
     InProcessServerBuilder builder = InProcessServerBuilder
         .forName(TRANSPORT_NAME)
         .maxInboundMetadataSize(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
-    return new InProcessServer(builder, streamTracerFactories);
+    return Collections.singletonList(new InProcessServer(builder, streamTracerFactories));
   }
 
   @Override
-  protected InternalServer newServer(
-      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories) {
+  protected List<? extends InternalServer> newServer(
+      int port, List<ServerStreamTracer.Factory> streamTracerFactories) {
     return newServer(streamTracerFactories);
   }
 

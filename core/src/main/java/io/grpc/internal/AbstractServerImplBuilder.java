@@ -220,7 +220,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   public final Server build() {
     ServerImpl server = new ServerImpl(
         this,
-        buildTransportServer(getTracerFactories()),
+        buildTransportServers(getTracerFactories()),
         Context.ROOT);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
       notifyTarget.notifyOnBuild(server);
@@ -266,7 +266,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    *
    * @param streamTracerFactories an immutable list of stream tracer factories
    */
-  protected abstract io.grpc.internal.InternalServer buildTransportServer(
+  protected abstract List<? extends io.grpc.internal.InternalServer> buildTransportServers(
       List<? extends ServerStreamTracer.Factory> streamTracerFactories);
 
   private T thisT() {

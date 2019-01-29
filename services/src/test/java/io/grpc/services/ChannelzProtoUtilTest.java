@@ -538,7 +538,7 @@ public final class ChannelzProtoUtilTest {
 
     // 1 listen socket
     server.serverStats = toBuilder(server.serverStats)
-        .setListenSockets(ImmutableList.<InternalInstrumented<SocketStats>>of(listenSocket))
+        .addListenSockets(ImmutableList.<InternalInstrumented<SocketStats>>of(listenSocket))
         .build();
     assertEquals(
         serverProto
@@ -551,8 +551,8 @@ public final class ChannelzProtoUtilTest {
     TestListenSocket otherListenSocket = new TestListenSocket();
     SocketRef otherListenSocketRef = ChannelzProtoUtil.toSocketRef(otherListenSocket);
     server.serverStats = toBuilder(server.serverStats)
-        .setListenSockets(
-            ImmutableList.<InternalInstrumented<SocketStats>>of(listenSocket, otherListenSocket))
+        .addListenSockets(
+            ImmutableList.<InternalInstrumented<SocketStats>>of(otherListenSocket))
         .build();
     assertEquals(
         serverProto
@@ -944,6 +944,6 @@ public final class ChannelzProtoUtilTest {
         .setCallsSucceeded(stats.callsSucceeded)
         .setCallsFailed(stats.callsFailed)
         .setLastCallStartedNanos(stats.lastCallStartedNanos)
-        .setListenSockets(stats.listenSockets);
+        .addListenSockets(stats.listenSockets);
   }
 }

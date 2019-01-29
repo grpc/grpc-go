@@ -21,12 +21,12 @@ import java.util.List;
 
 /** A hack to access protected methods from io.grpc.internal. */
 public final class AccessProtectedHack {
-  public static InternalServer serverBuilderBuildTransportServer(
+  public static List<? extends InternalServer> serverBuilderBuildTransportServer(
       AbstractServerImplBuilder<?> builder,
       List<ServerStreamTracer.Factory> streamTracerFactories,
       TransportTracer.Factory transportTracerFactory) {
     builder.transportTracerFactory = transportTracerFactory;
-    return builder.buildTransportServer(streamTracerFactories);
+    return builder.buildTransportServers(streamTracerFactories);
   }
 
   private AccessProtectedHack() {}
