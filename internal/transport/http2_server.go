@@ -456,8 +456,6 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			// handler is Asynchronous processing
-			atomic.StoreUint32(&t.resetPingStrikes, 1)
 			if t.operateHeaders(frame, handle, traceCtx) {
 				t.Close()
 				break
@@ -644,6 +642,8 @@ const (
 	defaultPingTimeout = 2 * time.Hour
 )
 
+var emptyPing = [8]byte{}
+
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() {
 		if f.Data == goAwayPing.data && t.drainChan != nil {
@@ -664,6 +664,12 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	defer func() {
 		t.lastPingAt = now
 	}()
+
+	// 请求数据包忽略
+	if f.Data != emptyPing {
+		t.pingStrikes = 0
+		return
+	}
 	// A reset ping strikes means that we don't need to check for policy
 	// violation for this ping and the pingStrikes counter should be set
 	// to 0.
