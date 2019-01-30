@@ -72,8 +72,8 @@ func newBalancerGroup(cc balancer.ClientConn) *balancerGroup {
 	return &balancerGroup{
 		cc: cc,
 
-		idToBalancer:    make(map[string]balancer.Balancer),
 		scToID:          make(map[balancer.SubConn]string),
+		idToBalancer:    make(map[string]balancer.Balancer),
 		idToPickerState: make(map[string]*pickerState),
 	}
 }
@@ -156,7 +156,7 @@ func (bg *balancerGroup) changeWeight(id string, newWeight uint32) {
 	bg.cc.UpdateBalancerState(buildPickerAndState(bg.idToPickerState))
 }
 
-// Following are actions from ClientConn, forward to sub-balancers.
+// Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
 // SubConn state change: find the corresponding balancer and then forward.
 func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -223,7 +223,7 @@ func (bg *balancerGroup) updateBalancerState(id string, state connectivity.State
 	defer bg.pickerMu.Unlock()
 	pickerSt, ok := bg.idToPickerState[id]
 	if !ok {
-		// All state starts in IDLE. It ID is not in map, it's either removed,
+		// All state starts in IDLE. If ID is not in map, it's either removed,
 		// or never existed.
 		grpclog.Infof("balancer group: pickerState not found when update picker/state")
 		return
@@ -309,7 +309,9 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 	return p.Pick(ctx, opts)
 }
 
-// balancerGroupCC contains the balancer ID.
+// balancerGroupCC implements the balancer.ClientConn API and get passed to each
+// sub-balancer. It contains the sub-balancer ID, so the parent balancer can
+// keep track of SubConn/pickers and the sub-balancers they belong to.
 //
 // Some of the actions are forwarded to the parent ClientConn with no change.
 // Some are forward to balancer group with the sub-balancer ID.
