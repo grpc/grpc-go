@@ -13,20 +13,18 @@ die() {
   exit 1
 }
 
+fail_on_output() {
+  tee /dev/stderr | (! read)
+}
+
 # Check to make sure it's safe to modify the user's git repo.
-if git status --porcelain | read; then
-  die "Uncommitted or untracked files found; commit changes first"
-fi
+git status --porcelain | fail_on_output
 
 # Undo any edits made by this script.
 cleanup() {
   git reset --hard HEAD
 }
 trap cleanup EXIT
-
-fail_on_output() {
-  tee /dev/stderr | (! read)
-}
 
 PATH="${GOPATH}/bin:${GOROOT}/bin:${PATH}"
 
