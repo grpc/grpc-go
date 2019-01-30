@@ -7178,7 +7178,8 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	})
 }
 
-func (s) TestHTTPHeaderFrameErrorHandlingGRPCNonTrailer(t *testing.T) {
+// Testing erroneous ReponseHeader or Trailers-only (delivered in the first HEADERS frame).
+func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 	for _, test := range []struct {
 		header  []string
 		errCode codes.Code
@@ -7224,7 +7225,8 @@ func (s) TestHTTPHeaderFrameErrorHandlingGRPCNonTrailer(t *testing.T) {
 	}
 }
 
-func (s) TestHTTPHeaderFrameErrorHandlingTrailer(t *testing.T) {
+// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	for _, test := range []struct {
 		responseHeader []string
 		trailer        []string
@@ -7256,6 +7258,14 @@ func (s) TestHTTPHeaderFrameErrorHandlingTrailer(t *testing.T) {
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
 	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
+	header := []string{
+		":status", "200",
+		"content-type", "application/grpc",
+	}
+	doHTTPHeaderTest(t, codes.Internal, header, header, header)
 }
 
 type httpServer struct {

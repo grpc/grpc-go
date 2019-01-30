@@ -120,15 +120,26 @@ type parsedHeaderData struct {
 	contentSubtype string
 }
 
+func newDecodeState(serverSide bool, ignoreContentType bool) *decodeState {
+	return &decodeState{
+		serverSide:        serverSide,
+		ignoreContentType: ignoreContentType,
+	}
+}
+
 // Records the states during HPACK decoding. Must be reset once the
 // decoding of the entire headers are finished.
 type decodeState struct {
 	// whether decoding on server side or not
 	serverSide bool
-	// whether the header is Trailers or not (Note Trailers != Trailers-Only, see
-	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md for definition).
+	// ignoreContentType indicates whether when processing the HEADERS frame, ignoring checking the
+	// content-type is grpc or not.
+	//
+	// If we've already received a HEADERS frame which indicates gRPC peer, then we can ignore
+	// content-type for the following HEADERS frame (i.e. Trailers).
+	//
 	// For server, this field is always false.
-	isTrailer bool
+	ignoreContentType bool
 
 	// data struct will be filled with info parsed from HTTP HEADERS frame once decodeHeader function
 	// has been invoked and returned.
@@ -266,9 +277,9 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	// Otherwise (i.e. a content-type string starts without "application/grpc", or does not exist), we
 	// are in HTTP fallback mode, and should handle error specific to HTTP.
 	//
-	// d.isTrailer is only set on client side after a gRPC ResponseHeader has been received (indicating
-	// peer speaking gRPC). Therefore, we can initialized isGRPC to d.isTrailer.
-	isGRPC := d.isTrailer
+	// d.ignoreContentType is only set on client side after a gRPC ResponseHeader has been received (indicating
+	// peer speaking gRPC). Therefore, we can initialized isGRPC to d.ignoreContentType.
+	isGRPC := d.ignoreContentType
 	var grpcErr, httpErr, contentTypeErr error
 	for _, hf := range frame.Fields {
 		if hf.Name != "content-type" && hf.Name != ":status" && grpcErr != nil {
@@ -296,7 +307,6 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 		}
 	}
 
-	//
 	if isGRPC {
 		if grpcErr != nil {
 			return grpcErr
