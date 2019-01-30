@@ -25,7 +25,6 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.examples.helloworld.HelloWorldServer;
 import io.grpc.stub.ServerCalls.UnaryMethod;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
@@ -43,7 +42,7 @@ import java.util.logging.Logger;
  * https://groups.google.com/forum/#!forum/grpc-io
  */
 public class HelloJsonServer {
-  private static final Logger logger = Logger.getLogger(HelloWorldServer.class.getName());
+  private static final Logger logger = Logger.getLogger(HelloJsonServer.class.getName());
 
   private Server server;
 
