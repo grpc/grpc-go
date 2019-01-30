@@ -131,6 +131,10 @@ class CronetClientStream extends AbstractClientStream {
     @Override
     public void writeHeaders(Metadata metadata, byte[] payload) {
       startCallback.run();
+      // streamFactory will be set by startCallback, unless the transport is in go-away state
+      if (streamFactory == null) {
+        return;
+      }
 
       BidirectionalStreamCallback callback = new BidirectionalStreamCallback();
       String path = url;
@@ -247,6 +251,7 @@ class CronetClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     @Override
     protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
+      Preconditions.checkNotNull(stream, "stream must not be null");
       stream.cancel();
       transportReportStatus(status, stopDelivery, trailers);
     }
@@ -267,6 +272,7 @@ class CronetClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     @Override
     public void bytesRead(int processedBytes) {
+      Preconditions.checkNotNull(stream, "stream must not be null");
       bytesPendingProcess -= processedBytes;
       if (bytesPendingProcess == 0 && !readClosed) {
         if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
@@ -345,6 +351,9 @@ class CronetClientStream extends AbstractClientStream {
   }
 
   private void streamWrite(ByteBuffer buffer, boolean endOfStream, boolean flush) {
+    if (stream == null) {
+      return;
+    }
     if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
       Log.v(LOG_TAG, "BidirectionalStream.write");
     }

@@ -121,4 +121,36 @@ public final class CronetClientTransportTest {
     // All streams are gone now.
     verify(clientTransportListener, times(1)).transportTerminated();
   }
+
+  @Test
+  public void startStreamAfterShutdown() throws Exception {
+    CronetClientStream stream =
+        transport.newStream(descriptor, new Metadata(), CallOptions.DEFAULT);
+    transport.shutdown();
+    BaseClientStreamListener listener = new BaseClientStreamListener();
+    stream.start(listener);
+
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+  }
+
+  private static class BaseClientStreamListener implements ClientStreamListener {
+    private Status status;
+
+    @Override
+    public void messagesAvailable(MessageProducer producer) {}
+
+    @Override
+    public void onReady() {}
+
+    @Override
+    public void headersRead(Metadata headers) {}
+
+    @Override
+    public void closed(Status status, Metadata trailers) {}
+
+    @Override
+    public void closed(Status status, RpcProgress rpcProgress, Metadata trailers) {
+      this.status = status;
+    }
+  }
 }
