@@ -1060,7 +1060,9 @@ func testServerGoAway(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	// Finish an RPC to make sure the connection is good.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	ch := make(chan struct{})
@@ -1078,7 +1080,9 @@ func testServerGoAway(t *testing.T, e env) {
 		cancel()
 	}
 	// A new RPC should fail.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s or %s", err, codes.Unavailable, codes.Internal)
 	}
 	<-ch
