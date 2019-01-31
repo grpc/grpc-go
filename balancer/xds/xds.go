@@ -20,6 +20,7 @@
 package xds // import "google.golang.org/grpc/balancer/xds"
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,13 +42,15 @@ func init() {
 type xdsBalancerBuilder struct{}
 
 func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &xdsBalancer{
 		cc:           cc,
 		buildOpts:    opts,
 		timeout:      defaultTimeout,
 		connStateMgr: &connStateMgr{},
 		disconnected: make(chan struct{}),
-		closed:       make(chan struct{}),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
@@ -65,25 +68,23 @@ type fallBackData struct {
 }
 
 type xdsBalancer struct {
-	cc        balancer.ClientConn
-	buildOpts balancer.BuildOptions
-	// mutex to protect????
-	client   *client
-	LBPolicy string
-	timeout  time.Duration
+	cc           balancer.ClientConn   // won't change
+	buildOpts    balancer.BuildOptions // won't change
+	timeout      time.Duration         // won't change
+	connStateMgr *connStateMgr         // won't change
+	ctx          context.Context       // won't change
+	cancel       context.CancelFunc    // won't change
+
+	mu       sync.Mutex
+	client   *client // may change when passed a different service config
+	LBPolicy string  // may change upon new CDS response
 	// disconnected is nil when client maintains contact with the remote balancer. It is not nil, when
 	// contact is lost.
 	disconnected chan struct{}
-	connStateMgr *connStateMgr
-	closed       chan struct{}
-
-	configMu sync.RWMutex
-	config   *xdsConfig
-
-	lbMu         sync.Mutex
+	config       *xdsConfig // may change when passed a different service config
 	lb           balancer.Balancer
 	fallbackLB   balancer.Balancer
-	fallBackData *fallBackData
+	fallBackData *fallBackData // may change when HandleResolved address is called
 }
 
 type connStateMgr struct {
@@ -114,33 +115,31 @@ func (c *connStateMgr) notifyWhenNotReady() <-chan struct{} {
 	return c.notify
 }
 
-type wrappedClientConn struct {
+type xdsClientConn struct {
 	updateState func(s connectivity.State)
 	balancer.ClientConn
 }
 
-func (w *wrappedClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
+func (w *xdsClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
 	w.updateState(s)
 	w.ClientConn.UpdateBalancerState(s, p)
 }
 
 func (x *xdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	x.lbMu.Lock()
-	defer x.lbMu.Unlock()
+	x.mu.Lock()
+	defer x.mu.Unlock()
 	if x.lb != nil {
 		x.lb.HandleSubConnStateChange(sc, state)
-	}
-	if x.fallbackLB != nil {
-		x.fallbackLB.HandleSubConnStateChange(sc, state)
 	}
 }
 
 func (x *xdsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	x.lbMu.Lock()
-	defer x.lbMu.Unlock()
-	if x.fallbackLB != nil {
-		x.fallbackLB.HandleResolvedAddrs(addrs, err)
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if x.lb != nil {
+		x.lb.HandleResolvedAddrs(addrs, err)
 	}
+	// remember last returned fallback balancer initialization info.
 	x.fallBackData = &fallBackData{addrs, err}
 }
 
@@ -150,16 +149,26 @@ func (x *xdsBalancer) HandleBalancerConfig(config json.RawMessage) error {
 		return errors.New("unable to unmarshal balancer config into xds config")
 	}
 
-	x.configMu.Lock()
-	x.config = &cfg
-	balancerName := x.config.balancerName
-	doCDS := x.config.childPolicy != ""
-	x.configMu.Unlock()
-
-	if x.client != nil {
-		x.client.Close()
+	x.mu.Lock()
+	//x.config = &cfg
+	//balancerName := x.config.balancerName
+	//doCDS := x.config.childPolicy != ""
+	if x.config.balancerName != cfg.balancerName {
+		if x.client != nil {
+			x.client.Close()
+		}
+		x.client = newClient(cfg.balancerName, x.cc.Target(), x.config.childPolicy != "", x.buildOpts, x.newCDSResponse, x.newEDSResponse, x.loseContact)
 	}
-	x.client = newClient(balancerName, x.cc.Target(), doCDS, x.buildOpts, x.newCDSResponse, x.newEDSResponse, x.loseContact)
+
+	if x.config.childPolicy != cfg.childPolicy {
+		if x.lb != nil {
+		}
+	}
+
+	if x.config.fallBackPolicy != cfg.fallBackPolicy {
+
+	}
+	x.mu.Unlock()
 	x.client.Run()
 	return nil
 }
@@ -183,8 +192,8 @@ func (x *xdsBalancer) newEDSResponse(resp *api.ClusterLoadAssignment) error {
 		close(x.disconnected)
 	}
 	// let LB knows
-	x.lbMu.Lock()
-	defer x.lbMu.Unlock()
+	x.mu.Lock()
+	defer x.mu.Unlock()
 	if x.lb == nil {
 		if x.fallbackLB != nil {
 			x.fallbackLB.Close()
@@ -210,7 +219,7 @@ func (x *xdsBalancer) loseContact() {
 				return
 			case <-x.disconnected:
 				return
-			case <-x.closed:
+			case <-x.ctx.Done():
 				return
 			}
 		}
@@ -222,23 +231,23 @@ func (x *xdsBalancer) loseContact() {
 			x.switchFallBack()
 		case <-x.disconnected:
 			return
-		case <-x.closed:
+		case <-x.ctx.Done():
 			return
 		}
 	}()
 }
 
 func (x *xdsBalancer) switchFallBack() {
-	x.lbMu.Lock()
-	defer x.lbMu.Unlock()
+	x.mu.Lock()
+	defer x.mu.Unlock()
 	select {
 	case <-x.disconnected:
 		return
 	default:
 	}
-	x.configMu.RLock()
+	x.mu.Lock()
 	builder := balancer.Get(x.config.fallBackPolicy)
-	x.configMu.RUnlock()
+	x.mu.Unlock()
 	x.fallbackLB = builder.Build(x.cc, x.buildOpts)
 	if x.fallBackData != nil {
 		x.fallbackLB.HandleResolvedAddrs(x.fallBackData.addrs, x.fallBackData.err)
@@ -250,17 +259,13 @@ func (x *xdsBalancer) switchFallBack() {
 }
 
 func (x *xdsBalancer) Close() {
-	if x.fallbackLB != nil {
-		x.fallbackLB.Close()
-	}
+	x.cancel()
 	if x.lb != nil {
 		x.lb.Close()
 	}
 	if x.client != nil {
 		x.client.Close()
 	}
-	close(x.closed)
-	panic("implement me")
 }
 
 func (p *xdsConfig) UnmarshalJSON(data []byte) error {
