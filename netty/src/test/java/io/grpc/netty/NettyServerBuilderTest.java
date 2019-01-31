@@ -19,10 +19,10 @@ package io.grpc.netty;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import io.grpc.ServerStreamTracer.Factory;
 import io.netty.handler.ssl.SslContext;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
@@ -30,7 +30,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
 
 /**
  * Unit tests for {@link NettyServerBuilder}.
@@ -45,7 +44,7 @@ public class NettyServerBuilderTest {
   @Test
   public void createMultipleServers() {
     builder.addPort(8081);
-    List<NettyServer> servers = builder.buildTransportServers(Collections.<Factory>emptyList());
+    List<NettyServer> servers = builder.buildTransportServers(ImmutableList.<Factory>of());
 
     Truth.assertThat(servers).hasSize(2);
   }

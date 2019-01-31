@@ -16,12 +16,12 @@
 
 package io.grpc.inprocess;
 
+import com.google.common.collect.ImmutableList;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
-import java.util.Collections;
 import java.util.List;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -41,7 +41,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
     InProcessServerBuilder builder = InProcessServerBuilder
         .forName(TRANSPORT_NAME)
         .maxInboundMetadataSize(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
-    return Collections.singletonList(new InProcessServer(builder, streamTracerFactories));
+    return ImmutableList.of(new InProcessServer(builder, streamTracerFactories));
   }
 
   @Override

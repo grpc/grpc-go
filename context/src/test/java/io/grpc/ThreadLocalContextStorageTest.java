@@ -25,7 +25,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class ThreadLocalContextStorageTest {
   private static final Context.Key<Object> KEY = Context.key("test-key");
-  private ThreadLocalContextStorage storage = new ThreadLocalContextStorage();
+  private final ThreadLocalContextStorage storage = new ThreadLocalContextStorage();
 
   @Test
   public void detach_threadLocalClearedOnRoot() {
