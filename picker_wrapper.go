@@ -141,9 +141,16 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 					continue
 				}
 				return nil, nil, status.Errorf(codes.Unavailable, "%v, latest connection error: %v", err, bp.connectionError())
+			case context.DeadlineExceeded:
+				return nil, nil, status.Error(codes.DeadlineExceeded, err.Error())
+			case context.Canceled:
+				return nil, nil, status.Error(codes.Canceled, err.Error())
 			default:
+				if _, ok := status.FromError(err); ok {
+					return nil, nil, err
+				}
 				// err is some other error.
-				return nil, nil, toRPCErr(err)
+				return nil, nil, status.Error(codes.Unknown, err.Error())
 			}
 		}
 
