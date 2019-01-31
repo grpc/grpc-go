@@ -408,6 +408,8 @@ func (o ContentSubtypeCallOption) after(c *callInfo) {}
 //
 // This function is provided for advanced users; prefer to use only
 // CallContentSubtype to select a registered codec instead.
+//
+// This is an EXPERIMENTAL API.
 func ForceCodec(codec encoding.Codec) CallOption {
 	return ForceCodecCallOption{Codec: codec}
 }
