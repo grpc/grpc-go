@@ -16,11 +16,11 @@
  *
  */
 
- /*
+/*
  Package main provides a server used for benchmarking.  It launches a server
  which is listening on port 50051. An example to start the server would be to
  use:
- 
+
   go run benchmark/server/main.go -test_name=grpc_test
 
  After starting the server, the client can be ran seperately and used to test
