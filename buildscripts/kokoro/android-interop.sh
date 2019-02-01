@@ -19,7 +19,7 @@ export OS_NAME=$(uname)
 # Proto deps
 buildscripts/make_dependencies.sh
 
-./gradlew install
+./gradlew publishToMavenLocal
 
 
 # Build and run interop instrumentation tests on Firebase Test Lab

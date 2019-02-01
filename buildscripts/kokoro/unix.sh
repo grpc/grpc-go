@@ -46,7 +46,7 @@ export CXXFLAGS="-I/tmp/protobuf/include"
 
 if [[ -z "${SKIP_TESTS:-}" ]]; then
   # Ensure all *.proto changes include *.java generated code
-  ./gradlew assemble generateTestProto install $GRADLE_FLAGS
+  ./gradlew assemble generateTestProto publishToMavenLocal $GRADLE_FLAGS
 
   if [[ -z "${SKIP_CLEAN_CHECK:-}" && ! -z $(git status --porcelain) ]]; then
     git status
@@ -70,11 +70,11 @@ fi
 LOCAL_MVN_TEMP=$(mktemp -d)
 # Note that this disables parallel=true from GRADLE_FLAGS
 if [[ -z "${ALL_ARTIFACTS:-}" ]]; then
-  ./gradlew grpc-compiler:build grpc-compiler:uploadArchives $GRADLE_FLAGS \
-    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
+  ./gradlew grpc-compiler:build grpc-compiler:publishToMavenLocal $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -Dmaven.repo.local=$LOCAL_MVN_TEMP
 else
-  ./gradlew uploadArchives $GRADLE_FLAGS \
-    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
+  ./gradlew publishToMavenLocal $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -Dmaven.repo.local=$LOCAL_MVN_TEMP
 fi
 
 readonly MVN_ARTIFACT_DIR="${MVN_ARTIFACT_DIR:-$GRPC_JAVA_DIR/mvn-artifacts}"

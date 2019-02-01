@@ -19,7 +19,7 @@ export OS_NAME=$(uname)
 # Proto deps
 buildscripts/make_dependencies.sh
 
-./gradlew install
+./gradlew publishToMavenLocal
 
 # Build grpc-cronet
 
@@ -79,7 +79,7 @@ new_apk_size="$(stat --printf=%s $HELLO_WORLD_OUTPUT_DIR/apk/release/app-release
 
 cd $BASE_DIR/github/grpc-java
 git checkout HEAD^
-./gradlew install
+./gradlew publishToMavenLocal
 cd examples/android/helloworld/
 ../../gradlew build
 

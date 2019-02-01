@@ -20,15 +20,10 @@ dependencies {
     shadow project(':grpc-core')
 }
 
-artifacts { // We want uploadArchives to handle the shadowJar; we don't care about
-    // uploadShadow
-    archives shadowJar }
-
 jar {
     // Must use a different classifier to avoid conflicting with shadowJar
     classifier = 'original'
 }
-configurations.archives.artifacts.removeAll { it.classifier == "original" }
 
 shadowJar {
     classifier = null
@@ -46,13 +41,26 @@ shadowJar {
     mergeServiceFiles()
 }
 
-// This is a hack to have shadow plugin modify the uploadArchives POM's
-// dependencies. If we delete the uploadShadow task, then the plugin will no
-// longer modify the POM. This probably can break horribly with parallel build,
-// but that's broken anyway with install/uploadArchives
-uploadShadow.repositories.addAll(uploadArchives.repositories)
-// And then we use a further hack to share that POM with install
-install.repositories.mavenInstaller.pom = uploadArchives.repositories.mavenDeployer.pom
+publishing {
+    publications {
+        maven(MavenPublication) {
+            // Ideally swap to project.shadow.component(it) when it isn't broken for project deps
+            artifact shadowJar
+
+            pom.withXml {
+                def dependencies = asNode().appendNode('dependencies')
+                project.configurations.shadow.allDependencies.each { dep ->
+                    def dependencyNode = dependencies.appendNode('dependency')
+                    dependencyNode.appendNode('groupId', dep.group)
+                    dependencyNode.appendNode('artifactId', dep.name)
+                    def version = (dep.name == 'grpc-core') ? '[' + dep.version + ']' : dep.version
+                    dependencyNode.appendNode('version', version)
+                    dependencyNode.appendNode('scope', 'runtime')
+                }
+            }
+        }
+    }
+}
 
 task testShadow(type: Test) {
     testClassesDirs = sourceSets.testShadow.output.classesDirs

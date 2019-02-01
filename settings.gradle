@@ -47,3 +47,6 @@ if (settings.hasProperty('skipCodegen') && skipCodegen.toBoolean()) {
     include ":grpc-compiler"
     project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
 }
+
+// Gradle 5.0 changed the behavior of publishing block, use new stable behavior
+enableFeaturePreview('STABLE_PUBLISHING')

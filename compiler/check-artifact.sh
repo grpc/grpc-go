@@ -56,18 +56,18 @@ checkArch ()
     echo Format=$format
     if [[ "$OS" == linux ]]; then
       if [[ "$ARCH" == x86_32 ]]; then
-        assertEq $format "elf32-i386" $LINENO
+        assertEq "$format" "elf32-i386" $LINENO
       elif [[ "$ARCH" == x86_64 ]]; then
-        assertEq $format "elf64-x86-64" $LINENO
+        assertEq "$format" "elf64-x86-64" $LINENO
       else
         fail "Unsupported arch: $ARCH"
       fi
     else
       # $OS == windows
       if [[ "$ARCH" == x86_32 ]]; then
-        assertEq $format "pei-i386" $LINENO
+        assertEq "$format" "pei-i386" $LINENO
       elif [[ "$ARCH" == x86_64 ]]; then
-        assertEq $format "pei-x86-64" $LINENO
+        assertEq "$format" "pei-x86-64" $LINENO
       else
         fail "Unsupported arch: $ARCH"
       fi
@@ -76,9 +76,9 @@ checkArch ()
     format="$(file -b "$1" | grep -o "[^ ]*$")"
     echo Format=$format
     if [[ "$ARCH" == x86_32 ]]; then
-      assertEq $format "i386" $LINENO
+      assertEq "$format" "i386" $LINENO
     elif [[ "$ARCH" == x86_64 ]]; then
-      assertEq $format "x86_64" $LINENO
+      assertEq "$format" "x86_64" $LINENO
     else
       fail "Unsupported arch: $ARCH"
     fi

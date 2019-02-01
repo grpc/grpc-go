@@ -19,6 +19,7 @@ subprojects {
     apply plugin: "checkstyle"
     apply plugin: "java"
     apply plugin: "maven"
+    apply plugin: "maven-publish"
     apply plugin: "idea"
     apply plugin: "signing"
     apply plugin: "jacoco"
@@ -277,11 +278,6 @@ subprojects {
                 'org.openjdk.jmh:jmh-generator-bytecode:1.19'
     }
 
-    signing {
-        required false
-        sign configurations.archives
-    }
-
     // Disable JavaDoc doclint on Java 8. It's annoying.
     if (JavaVersion.current().isJava8Compatible()) {
         allprojects {
@@ -300,9 +296,7 @@ subprojects {
         }
     }
 
-    jacoco {
-        toolVersion = "0.8.2"
-    }
+    jacoco { toolVersion = "0.8.2" }
 
     checkstyle {
         configDir = file("$rootDir/buildscripts")
@@ -348,79 +342,99 @@ subprojects {
         from sourceSets.main.allSource
     }
 
-    artifacts { archives javadocJar, sourcesJar }
+    publishing {
+        publications {
+            // do not use mavenJava, as java plugin will modify it via "magic"
+            maven(MavenPublication) {
+                if (!project.name.contains("grpc-netty-shaded") && !name.contains("grpc-alts")
+                      && !name.contains("grpc-compiler")) {
+                    from components.java
+                }
 
-    uploadArchives.repositories.mavenDeployer {
-        beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-        if (rootProject.hasProperty('repositoryDir')) {
-            repository(url: new File(rootProject.repositoryDir).toURI())
-        } else {
-            String stagingUrl
-            if (rootProject.hasProperty('repositoryId')) {
-                stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
-                        rootProject.repositoryId
-            } else {
-                stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-            }
-            def configureAuth = {
-                if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
-                    authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
+                artifact javadocJar
+                artifact sourcesJar
+
+                pom {
+                    name = project.group + ":" + project.name
+                    url = 'https://github.com/grpc/grpc-java'
+                    afterEvaluate {
+                        // description is not available until evaluated.
+                        description = project.description
+                    }
+
+                    scm {
+                        connection = 'scm:git:https://github.com/grpc/grpc-java.git'
+                        developerConnection = 'scm:git:git@github.com:grpc/grpc-java.git'
+                        url = 'https://github.com/grpc/grpc-java'
+                    }
+
+                    licenses {
+                        license {
+                            name = 'Apache 2.0'
+                            url = 'https://opensource.org/licenses/Apache-2.0'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id = "grpc.io"
+                            name = "gRPC Contributors"
+                            email = "grpc-io@googlegroups.com"
+                            url = "https://grpc.io/"
+                            organization = "gRPC Authors"
+                            organizationUrl = "https://www.google.com"
+                        }
+                    }
+
+                    withXml {
+                        if (!(project.name in
+                        [
+                            "grpc-stub",
+                            "grpc-protobuf",
+                            "grpc-protobuf-lite",
+                            "grpc-protobuf-nano"
+                        ])) {
+                            asNode().dependencies.'*'.findAll() { dep ->
+                                dep.artifactId.text() == 'grpc-core'
+                            }.each() { core ->
+                                core.version*.value = "[" + core.version.text() + "]"
+                            }
+                        }
+                    }
                 }
             }
-            repository(url: stagingUrl, configureAuth)
-            snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
+        }
+        repositories {
+            maven {
+                String stagingUrl
+                if (rootProject.hasProperty('repositoryId')) {
+                    stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
+                            rootProject.repositoryId
+                } else {
+                    stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+                }
+                credentials {
+                    if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
+                        username = rootProject.ossrhUsername
+                        password = rootProject.ossrhPassword
+                    }
+                }
+                def releaseUrl = stagingUrl
+                def snapshotUrl = 'https://oss.sonatype.org/content/repositories/snapshots/'
+                url = version.endsWith('SNAPSHOT') ? snapshotUrl : releaseUrl
+            }
         }
     }
-    uploadArchives.onlyIf { !name.contains("grpc-gae-interop-testing") && !name.contains("grpc-xds") }
 
-    [
-        install.repositories.mavenInstaller,
-        uploadArchives.repositories.mavenDeployer,
-    ]*.pom*.whenConfigured { pom ->
-        pom.project {
-            name "$project.group:$project.name"
-            description project.description
-            url 'https://github.com/grpc/grpc-java'
-
-            scm {
-                connection 'scm:git:https://github.com/grpc/grpc-java.git'
-                developerConnection 'scm:git:git@github.com:grpc/grpc-java.git'
-                url 'https://github.com/grpc/grpc-java'
-            }
-
-            licenses {
-                license {
-                    name 'Apache 2.0'
-                    url 'https://opensource.org/licenses/Apache-2.0'
-                }
-            }
-
-            developers {
-                developer {
-                    id "grpc.io"
-                    name "gRPC Contributors"
-                    email "grpc-io@googlegroups.com"
-                    url "https://grpc.io/"
-                    // https://issues.gradle.org/browse/GRADLE-2719
-                    organization = "gRPC Authors"
-                    organizationUrl "https://www.google.com"
-                }
-            }
-        }
-        if (!(project.name in
-        [
-            "grpc-stub",
-            "grpc-protobuf",
-            "grpc-protobuf-lite",
-            "grpc-protobuf-nano"
-        ])) {
-            def core = pom.dependencies.find {dep -> dep.artifactId == 'grpc-core'}
-            if (core != null) {
-                // Depend on specific version of grpc-core because internal package is unstable
-                core.version = "[" + core.version + "]"
-            }
-        }
+    signing {
+        required false
+        sign publishing.publications.maven
     }
+
+    publishMavenPublicationToMavenRepository.onlyIf {
+        !name.contains("grpc-gae-interop-testing") && !name.contains("grpc-xds")
+    }
+
     // At a test failure, log the stack trace to the console so that we don't
     // have to open the HTML in a browser.
     test {

@@ -19,7 +19,7 @@ $ ./gradlew build
 To install the artifacts to your Maven local repository for use in your own
 project, run:
 ```
-$ ./gradlew install
+$ ./gradlew publishToMavenLocal
 ```
 
 ### Notes for IntelliJ
@@ -82,7 +82,7 @@ $ export CXXFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib"
 When building on Windows and VC++, you need to specify project properties for
 Gradle to find protobuf:
 ```
-.\gradlew install ^
+.\gradlew publishToMavenLocal ^
     -PvcProtobufInclude=C:\path\to\protobuf-3.5.1\src ^
     -PvcProtobufLibs=C:\path\to\protobuf-3.5.1\vsprojects\Release ^
     -PtargetArch=x86_32

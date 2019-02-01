@@ -20,7 +20,7 @@ before_install:
   - echo "errorProne=true" >> $HOME/.gradle/gradle.properties
 
 install:
-  - ./gradlew assemble generateTestProto install
+  - ./gradlew assemble generateTestProto publishToMavenLocal
   - pushd examples && ./gradlew build && popd
   - pushd examples && mvn verify && popd
   - pushd examples/example-alts && ../gradlew build && popd

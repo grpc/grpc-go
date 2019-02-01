@@ -134,7 +134,6 @@ uploadArchives.repositories.mavenDeployer {
                 name "gRPC Contributors"
                 email "grpc-io@googlegroups.com"
                 url "https://grpc.io/"
-                // https://issues.gradle.org/browse/GRADLE-2719
                 organization = "gRPC Authors"
                 organizationUrl "https://www.google.com"
             }

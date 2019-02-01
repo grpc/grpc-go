@@ -53,7 +53,7 @@ This will compile a codegen and put it under your ``~/.m2/repository``. This
 will make it available to any build tool that pulls codegens from Maven
 repostiories.
 ```
-$ ../gradlew install
+$ ../gradlew publishToMavenLocal
 ```
 
 ## Creating a release of GRPC Java
