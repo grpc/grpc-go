@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
@@ -500,7 +501,7 @@ type test struct {
 	streamServerInt             grpc.StreamServerInterceptor
 	unknownHandler              grpc.StreamHandler
 	sc                          <-chan grpc.ServiceConfig
-	customCodec                 grpc.Codec
+	customCodec                 encoding.Codec
 	serverInitialWindowSize     int32
 	serverInitialConnWindowSize int32
 	clientInitialWindowSize     int32
@@ -631,9 +632,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		sopts = append(sopts, grpc.Creds(creds))
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
-	}
-	if te.customCodec != nil {
-		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
 	}
 	if te.svrKeepAlive != nil {
 		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
@@ -866,7 +864,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
 	}
 	if te.customCodec != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(te.customCodec)))
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ForceCodec(te.customCodec)))
 	}
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
@@ -5736,7 +5734,7 @@ func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func (c *errCodec) String() string {
+func (c *errCodec) Name() string {
 	return "Fermat's near-miss."
 }
 

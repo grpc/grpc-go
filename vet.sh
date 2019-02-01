@@ -112,6 +112,7 @@ google.golang.org/grpc/balancer_test.go:SA1019
 google.golang.org/grpc/clientconn_test.go:SA1019
 google.golang.org/grpc/balancer/roundrobin/roundrobin_test.go:SA1019
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
+google.golang.org/grpc/benchmark/worker/benchmark_client.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server_test.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
