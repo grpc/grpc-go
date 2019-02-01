@@ -1007,25 +1007,28 @@ func (t *http2Server) Close() error {
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
-	if s.swapState(streamDone) == streamDone {
-		// If the stream was already done, return.
-		return
-	}
+	// Marks stream as done.
+	oldState := s.swapState(streamDone)
+
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
+
 	cleanup := &cleanupStream{
 		streamID: s.id,
 		rst:      rst,
 		rstCode:  rstCode,
 		onWrite: func() {
 			t.mu.Lock()
-			if t.activeStreams != nil {
-				delete(t.activeStreams, s.id)
-				if len(t.activeStreams) == 0 {
-					t.idle = time.Now()
-				}
+			if _, ok := t.activeStreams[s.id]; !ok {
+				t.mu.Unlock()
+				return
+			}
+
+			delete(t.activeStreams, s.id)
+			if len(t.activeStreams) == 0 {
+				t.idle = time.Now()
 			}
 			t.mu.Unlock()
 			if channelz.IsOn() {
@@ -1037,12 +1040,22 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 			}
 		},
 	}
-	if hdr != nil {
-		hdr.cleanup = cleanup
-		t.controlBuf.put(hdr)
-	} else {
+
+	// No trailer. Puts cleanupFrame into transport's control buffer.
+	if hdr == nil {
 		t.controlBuf.put(cleanup)
+		return
 	}
+
+	// Stream was already marked as done. So, we don't need to put the trailer
+	// into the buffer, because either a trailer was already put into the
+	// buffer or the stream was already closed without a trailer.
+	if oldState == streamDone {
+		return
+	}
+
+	hdr.cleanup = cleanup
+	t.controlBuf.put(hdr)
 }
 
 func (t *http2Server) RemoteAddr() net.Addr {
