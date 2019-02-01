@@ -447,9 +447,10 @@ subprojects {
 // Run with: ./gradlew japicmp --continue
 def baselineGrpcVersion = '1.6.1'
 def publicApiSubprojects = [
-    // TODO: uncomment after grpc-alts artifact is published.
+    // TODO: uncomment after grpc-alts, grpc-bom artifact is published.
     // ':grpc-alts',
     ':grpc-auth',
+    //':grpc-bom',
     ':grpc-context',
     ':grpc-core',
     ':grpc-grpclb',

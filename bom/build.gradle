@@ -1,0 +1,27 @@
+description = 'gRPC: BOM'
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            // remove all other artifacts since BOM doesn't generates any Jar
+            artifacts = []
+
+            pom.withXml {
+                // Generate bom using subprojects
+                def internalProjects = [project.name, 'grpc-xds', 'grpc-gae-interop-testing-jdk8']
+
+                def dependencyManagement = asNode().appendNode('dependencyManagement')
+                def dependencies = dependencyManagement.appendNode('dependencies')
+                rootProject.subprojects.each { subproject ->
+                    if (internalProjects.contains(subproject.name)) {
+		        return
+		    }
+                    def dependencyNode = dependencies.appendNode('dependency')
+                    dependencyNode.appendNode('groupId', subproject.group)
+                    dependencyNode.appendNode('artifactId', subproject.name)
+                    dependencyNode.appendNode('version', subproject.version)
+                }
+	    }
+        }
+    }
+}

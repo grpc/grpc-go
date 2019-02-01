@@ -9,6 +9,7 @@
   <version>1.19.0-SNAPSHOT</version><!-- CURRENT_GRPC_VERSION -->
   <name>example-tls</name>
   <url>https://github.com/grpc/grpc-java</url>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <grpc.version>1.19.0-SNAPSHOT</grpc.version><!-- CURRENT_GRPC_VERSION -->
@@ -18,16 +19,27 @@
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-bom</artifactId>
+        <version>${grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-protobuf</artifactId>
-      <version>${grpc.version}</version>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-stub</artifactId>
-      <version>${grpc.version}</version>
     </dependency>
     <dependency>
       <groupId>javax.annotation</groupId>
@@ -38,7 +50,6 @@
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-netty</artifactId>
-      <version>${grpc.version}</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
@@ -47,6 +58,7 @@
       <scope>runtime</scope>
     </dependency>
   </dependencies>
+
   <build>
     <extensions>
       <extension>
