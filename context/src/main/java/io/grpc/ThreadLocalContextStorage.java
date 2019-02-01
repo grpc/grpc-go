@@ -28,7 +28,8 @@ final class ThreadLocalContextStorage extends Context.Storage {
   /**
    * Currently bound context.
    */
-  private static final ThreadLocal<Context> localContext = new ThreadLocal<Context>();
+  // VisibleForTesting
+  static final ThreadLocal<Context> localContext = new ThreadLocal<Context>();
 
   @Override
   public Context doAttach(Context toAttach) {
@@ -63,6 +64,10 @@ final class ThreadLocalContextStorage extends Context.Storage {
 
   @Override
   public Context current() {
-    return localContext.get();
+    Context current = localContext.get();
+    if (current == null) {
+      return Context.ROOT;
+    }
+    return current;
   }
 }

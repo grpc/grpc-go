@@ -18,6 +18,13 @@ package io.grpc;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -25,16 +32,58 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class ThreadLocalContextStorageTest {
   private static final Context.Key<Object> KEY = Context.key("test-key");
-  private final ThreadLocalContextStorage storage = new ThreadLocalContextStorage();
+  private static final ThreadLocalContextStorage storage = new ThreadLocalContextStorage();
+
+  private Context contextBeforeTest;
+
+  @Before public void saveContext() {
+    contextBeforeTest = storage.doAttach(Context.ROOT);
+  }
+
+  @After public void restoreContext() {
+    storage.detach(Context.ROOT, contextBeforeTest);
+  }
 
   @Test
   public void detach_threadLocalClearedOnRoot() {
     Context context = Context.ROOT.withValue(KEY, new Object());
     Context old = storage.doAttach(context);
-    assertThat(old).isNull();
     assertThat(storage.current()).isSameAs(context);
-    // Users see nulls converted to ROOT, so they will pass non-null as the "old" value
-    storage.detach(context, Context.ROOT);
-    assertThat(storage.current()).isNull();
+    assertThat(ThreadLocalContextStorage.localContext.get()).isSameAs(context);
+    storage.detach(context, old);
+    // thread local must contain null to avoid leaking our ClassLoader via ROOT
+    assertThat(ThreadLocalContextStorage.localContext.get()).isNull();
+  }
+
+  @Test
+  public void detach_detachRoot() {
+    final List<LogRecord> logs = new ArrayList<>();
+    Handler handler = new Handler() {
+      @Override public void publish(LogRecord record) {
+        logs.add(record);
+      }
+
+      @Override public void flush() {}
+
+      @Override public void close() {}
+    };
+
+    // Explicitly choose ROOT as the current context
+    Context context = Context.ROOT;
+    Context old = storage.doAttach(context);
+
+    // Attach and detach a random context
+    Context innerContext = Context.ROOT.withValue(KEY, new Object());
+    storage.detach(innerContext, storage.doAttach(innerContext));
+
+    Logger logger = Logger.getLogger(ThreadLocalContextStorage.class.getName());
+    logger.addHandler(handler);
+    try {
+      // Make sure detaching ROOT doesn't log a warning
+      storage.detach(context, old);
+    } finally {
+      logger.removeHandler(handler);
+    }
+    assertThat(logs).isEmpty();
   }
 }
