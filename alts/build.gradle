@@ -29,7 +29,7 @@ dependencies {
     compile (libraries.google_auth_oauth2_http) {
         // prefer 3.0.2 from libraries instead of 1.3.9
         exclude group: 'com.google.code.findbugs', module: 'jsr305'
-        // prefer 25.1 from libraries instead of 19.0
+        // prefer 20.0 from libraries instead of 19.0
         exclude group: 'com.google.guava', module: 'guava'
     }
     compileOnly libraries.javax_annotation

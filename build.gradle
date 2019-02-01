@@ -109,9 +109,7 @@ subprojects {
 
         nettyVersion = '4.1.32.Final'
         googleauthVersion = '0.9.0'
-        // Temporarily use a slightly older version of Guava. Will want to bump
-        // to 27.0.1+ with grpc 1.19 or 1.20 for the listenablefuture dep changes.
-        guavaVersion = '25.1-android'
+        guavaVersion = '26.0-android'
         protobufVersion = '3.5.1'
         protocVersion = '3.5.1-1'
         protobufNanoVersion = '3.0.0-alpha-5'
@@ -196,7 +194,6 @@ subprojects {
         }
         libraries = [
             animalsniffer_annotations: "org.codehaus.mojo:animal-sniffer-annotations:1.17",
-            checker_compat_qual: "org.checkerframework:checker-compat-qual:2.5.2",
             errorprone: "com.google.errorprone:error_prone_annotations:2.2.0",
             gson: "com.google.code.gson:gson:2.7",
             guava: "com.google.guava:guava:${guavaVersion}",
