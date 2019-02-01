@@ -343,8 +343,7 @@ subprojects {
         publications {
             // do not use mavenJava, as java plugin will modify it via "magic"
             maven(MavenPublication) {
-                if (!project.name.contains("grpc-netty-shaded") && !name.contains("grpc-alts")
-                      && !name.contains("grpc-compiler")) {
+                if (project.name != 'grpc-netty-shaded') {
                     from components.java
                 }
 
