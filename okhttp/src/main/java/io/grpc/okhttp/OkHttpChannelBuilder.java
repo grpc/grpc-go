@@ -75,37 +75,6 @@ public class OkHttpChannelBuilder extends
     PLAINTEXT
   }
 
-  /**
-   * ConnectionSpec closely matching the default configuration that could be used as a basis for
-   * modification.
-   *
-   * <p>Since this field is the only reference in gRPC to ConnectionSpec that may not be ProGuarded,
-   * we are removing the field to reduce method count. We've been unable to find any existing users
-   * of the field, and any such user would highly likely at least be changing the cipher suites,
-   * which is sort of the only part that's non-obvious. Any existing user should instead create
-   * their own spec from scratch or base it off ConnectionSpec.MODERN_TLS if believed to be
-   * necessary. If this was providing you with value and don't want to see it removed, open a GitHub
-   * issue to discuss keeping it.
-   *
-   * @deprecated Deemed of little benefit and users weren't using it. Just define one yourself
-   */
-  @Deprecated
-  public static final com.squareup.okhttp.ConnectionSpec DEFAULT_CONNECTION_SPEC =
-      new com.squareup.okhttp.ConnectionSpec.Builder(com.squareup.okhttp.ConnectionSpec.MODERN_TLS)
-          .cipherSuites(
-              // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
-              com.squareup.okhttp.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-              com.squareup.okhttp.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-              com.squareup.okhttp.CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-              com.squareup.okhttp.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-              com.squareup.okhttp.CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
-              com.squareup.okhttp.CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
-              com.squareup.okhttp.CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
-              com.squareup.okhttp.CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
-          .tlsVersions(com.squareup.okhttp.TlsVersion.TLS_1_2)
-          .supportsTlsExtensions(true)
-          .build();
-
   @VisibleForTesting
   static final ConnectionSpec INTERNAL_DEFAULT_CONNECTION_SPEC =
       new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
