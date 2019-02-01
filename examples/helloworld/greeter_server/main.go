@@ -18,6 +18,7 @@
 
 //go:generate protoc -I ../helloworld --go_out=plugins=grpc:../helloworld ../helloworld/helloworld.proto
 
+// greeter_server command ...
 package main
 
 import (

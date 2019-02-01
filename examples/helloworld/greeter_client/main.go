@@ -16,6 +16,7 @@
  *
  */
 
+// greeter_client command ...
 package main
 
 import (
