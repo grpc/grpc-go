@@ -23,7 +23,7 @@ use:
 
 go run benchmark/server/main.go -test_name=grpc_test
 
-After starting the server, the client can be ran seperately and used to test
+After starting the server, the client can be ran separately and used to test
 qps and latency.
 */
 package main
