@@ -18,6 +18,7 @@ package io.grpc.testing.integration;
 
 import static org.junit.Assert.assertEquals;
 
+import com.google.common.io.ByteStreams;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -139,7 +140,6 @@ public class ProxyTest {
     proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
     proxy.start();
     client = new Socket("localhost", proxy.getPort());
-    OutputStream clientOut = client.getOutputStream();
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
 
     clientIn.readFully(new byte[100 * 1024]);
@@ -167,7 +167,6 @@ public class ProxyTest {
     proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
     proxy.start();
     client = new Socket("localhost", proxy.getPort());
-    OutputStream clientOut = client.getOutputStream();
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
 
     clientIn.readFully(new byte[100 * 1024]);
@@ -224,11 +223,7 @@ public class ProxyTest {
       InputStream serverIn = rcv.getInputStream();
       OutputStream serverOut = rcv.getOutputStream();
       if (mode.equals("echo")) {
-        byte[] response = new byte[1024];
-        int readable;
-        while ((readable = serverIn.read(response)) != -1) {
-          serverOut.write(response, 0, readable);
-        }
+        ByteStreams.copy(serverIn, serverOut);
       } else if (mode.equals("stream")) {
         byte[] message = new byte[1024];
         while (true) {
