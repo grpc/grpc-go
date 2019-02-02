@@ -304,6 +304,19 @@ public class TestServiceClient {
         break;
       }
 
+      case GOOGLE_DEFAULT_CREDENTIALS: {
+        ManagedChannel channel = GoogleDefaultChannelBuilder.forAddress(
+            serverHost, serverPort).build();
+        try {
+          TestServiceGrpc.TestServiceBlockingStub googleDefaultStub =
+              TestServiceGrpc.newBlockingStub(channel);
+          tester.googleDefaultCredentials(defaultServiceAccount, googleDefaultStub);
+        } finally {
+          channel.shutdownNow();
+        }
+        break;
+      }
+
       case CUSTOM_METADATA: {
         tester.customMetadata();
         break;

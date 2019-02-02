@@ -56,6 +56,7 @@ public class TestCasesTest {
       "jwt_token_creds",
       "oauth2_auth_token",
       "per_rpc_creds",
+      "google_default_credentials",
       "custom_metadata",
       "status_code_and_message",
       "special_status_message",

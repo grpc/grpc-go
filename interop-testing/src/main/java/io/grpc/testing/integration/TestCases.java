@@ -42,6 +42,8 @@ public enum TestCases {
   JWT_TOKEN_CREDS("JWT-based auth"),
   OAUTH2_AUTH_TOKEN("raw oauth2 access token auth"),
   PER_RPC_CREDS("per rpc raw oauth2 access token auth"),
+  GOOGLE_DEFAULT_CREDENTIALS(
+      "google default credentials, i.e. GoogleManagedChannel based auth"),
   CUSTOM_METADATA("unary and full duplex calls with metadata"),
   STATUS_CODE_AND_MESSAGE("request error code and message"),
   SPECIAL_STATUS_MESSAGE("special characters in status message"),
