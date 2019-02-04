@@ -17,7 +17,7 @@ See [COMPILING.md](COMPILING.md). Specifically, you'll generally want to set
 ## Code style
 
 We follow the [Google Java Style
-Guide](https://google-styleguide.googlecode.com/svn/trunk/javaguide.html). Our
+Guide](https://google.github.io/styleguide/javaguide.html). Our
 build automatically will provide warnings for style issues.
 [Eclipse](https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml)
 and
