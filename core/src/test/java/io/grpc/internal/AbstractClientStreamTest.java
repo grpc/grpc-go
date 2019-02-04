@@ -26,6 +26,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -390,7 +392,7 @@ public class AbstractClientStreamTest {
     assertSame(Status.Code.DATA_LOSS, statusCaptor.getValue().getCode());
     assertEquals("data___loss", statusCaptor.getValue().getDescription());
   }
-  
+
   @Test
   public void getRequest() {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
@@ -414,8 +416,7 @@ public class AbstractClientStreamTest {
     assertTrue(payloadCaptor.getValue() != null);
     // GET requests don't have BODY.
     verify(sink, never())
-        .writeFrame(
-            any(WritableBuffer.class), any(Boolean.class), any(Boolean.class), any(Integer.class));
+        .writeFrame(any(WritableBuffer.class), anyBoolean(), anyBoolean(), anyInt());
     assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
     assertThat(tracer.nextOutboundEvent()).matches("outboundMessageSent\\(0, [0-9]+, [0-9]+\\)");
     assertNull(tracer.nextOutboundEvent());

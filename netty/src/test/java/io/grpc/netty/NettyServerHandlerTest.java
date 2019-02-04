@@ -37,6 +37,8 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -690,9 +692,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     fakeClock().forwardTime(20, TimeUnit.MINUTES);
 
     // GO_AWAY not sent yet
-    verifyWrite(never()).writeGoAway(
-        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
-        any(ChannelPromise.class));
+    verifyWrite(never())
+        .writeGoAway(
+            any(ChannelHandlerContext.class),
+            anyInt(),
+            anyLong(),
+            any(ByteBuf.class),
+            any(ChannelPromise.class));
     assertTrue(channel().isOpen());
   }
 
@@ -770,9 +776,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     fakeClock().forwardNanos(maxConnectionIdleInNanos);
 
     // GO_AWAY not sent when active
-    verifyWrite(never()).writeGoAway(
-        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
-        any(ChannelPromise.class));
+    verifyWrite(never())
+        .writeGoAway(
+            any(ChannelHandlerContext.class),
+            anyInt(),
+            anyLong(),
+            any(ByteBuf.class),
+            any(ChannelPromise.class));
     assertTrue(channel().isOpen());
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
@@ -810,9 +820,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     fakeClock().forwardNanos(maxConnectionIdleInNanos);
 
     // GO_AWAY not sent when active
-    verifyWrite(never()).writeGoAway(
-        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
-        any(ChannelPromise.class));
+    verifyWrite(never())
+        .writeGoAway(
+            any(ChannelHandlerContext.class),
+            anyInt(),
+            anyLong(),
+            any(ByteBuf.class),
+            any(ChannelPromise.class));
     assertTrue(channel().isOpen());
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
@@ -849,9 +863,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     fakeClock().forwardTime(20, TimeUnit.MINUTES);
 
     // GO_AWAY not sent yet
-    verifyWrite(never()).writeGoAway(
-        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
-        any(ChannelPromise.class));
+    verifyWrite(never())
+        .writeGoAway(
+            any(ChannelHandlerContext.class),
+            anyInt(),
+            anyLong(),
+            any(ByteBuf.class),
+            any(ChannelPromise.class));
     assertTrue(channel().isOpen());
   }
 

@@ -30,6 +30,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
@@ -437,8 +438,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     Mockito.reset(writeQueue);
     ChannelPromise completedPromise = new DefaultChannelPromise(channel)
         .setSuccess();
-    when(writeQueue.enqueue(any(QueuedCommand.class), any(boolean.class)))
-        .thenReturn(completedPromise);
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(completedPromise);
 
     stream = new NettyClientStream(
         new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
