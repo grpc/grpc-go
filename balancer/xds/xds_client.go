@@ -22,44 +22,47 @@ import (
 	"context"
 	"net"
 
-	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	xdsdiscoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 )
 
+const (
+	grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
+	cdsType      = "type.googleapis.com/envoy.xdspb.v2.Cluster"
+	edsType      = "type.googleapis.com/envoy.xdspb.v2.ClusterLoadAssignment"
+)
+
 type client struct {
-	cc           *grpc.ClientConn
-	cancel       context.CancelFunc
-	balancerName string
-	serviceName  string
-	enableCDS    bool
-	opts         balancer.BuildOptions
-	newEDS       func(assignment *api.ClusterLoadAssignment) error
-	newCDS       func(cluster *api.Cluster) error
-	loseContact  func()
-	closeChan    chan struct{}
+	cc                 *grpc.ClientConn
+	ctx                context.Context
+	cancel             context.CancelFunc
+	opts               balancer.BuildOptions
+	balancerName       string // the traffic director name
+	serviceName        string // the user dial target name
+	xdsClientConnCreds credentials.Bundle
+	xdsBackendCreds    credentials.Bundle
+	enableCDS          bool
+	newADS             func(resp interface{}) error
+	loseContact        func(startup bool)
 }
 
-func (c *client) Run() {
-	c.loseContact()
+func (c *client) run() {
+	c.loseContact(true)
 	c.dial()
 	c.makeADSCall()
 }
 
-func (c *client) Close() {
-	select {
-	case <-c.closeChan:
-	default:
-		close(c.closeChan)
-		c.cancel()
-	}
+func (c *client) close() {
+	c.cancel()
 }
 
 func (c *client) dial() {
@@ -71,7 +74,7 @@ func (c *client) dial() {
 			grpclog.Warningf("xds: failed to override the server name in the credentials: %v, using Insecure", err)
 			dopts = append(dopts, grpc.WithInsecure())
 		}
-	} else if bundle := c.grpclbClientConnCreds; bundle != nil {
+	} else if bundle := c.xdsClientConnCreds; bundle != nil {
 		dopts = append(dopts, grpc.WithCredentialsBundle(bundle))
 	} else {
 		dopts = append(dopts, grpc.WithInsecure())
@@ -88,63 +91,55 @@ func (c *client) dial() {
 		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
 	}
 
-	// DialContext using manualResolver.Scheme, which is a random scheme
-	// generated when init grpclb. The target scheme here is not important.
-	//
-	// The grpc dial target will be used by the creds (ALTS) as the authority,
-	// so it has to be set to remoteLBName that comes from resolver.
 	var err error
-	c.cc, err = grpc.DialContext(context.Background(), c.balancerName, dopts...)
+	c.cc, err = grpc.DialContext(c.ctx, c.balancerName, dopts...)
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
 }
 
-func (c *client) newCDSRequest() *api.DiscoveryRequest {
-	cdsReq := &api.DiscoveryRequest{
-		Node: &core.Node{
+func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
+	cdsReq := &xdspb.DiscoveryRequest{
+		Node: &xdscorepb.Node{
 			Metadata: &types.Struct{
 				Fields: map[string]*types.Value{
-					"com.googleapis.trafficdirector.grpc_hostname": {
+					grpcHostname: {
 						Kind: &types.Value_StringValue{StringValue: c.serviceName},
 					},
 				},
 			},
 		},
-		TypeUrl: "type.googleapis.com/envoy.api.v2.Cluster",
+		TypeUrl: cdsType,
 	}
 	return cdsReq
 }
 
-func (c *client) newEDSRequest(endpointRequired bool) *api.DiscoveryRequest {
-	edsReq := &api.DiscoveryRequest{
-		Node: &core.Node{
+func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
+	edsReq := &xdspb.DiscoveryRequest{
+		Node: &xdscorepb.Node{
 			Metadata: &types.Struct{
 				Fields: map[string]*types.Value{
 					"endpoints_required": {
-						Kind: &types.Value_BoolValue{BoolValue: endpointRequired},
+						Kind: &types.Value_BoolValue{BoolValue: c.enableCDS},
 					},
 				},
 			},
 		},
 		ResourceNames: []string{c.serviceName},
-		TypeUrl:       "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment",
+		TypeUrl:       edsType,
 	}
 	return edsReq
 }
 
 func (c *client) makeADSCall() {
-	cli := discovery.NewAggregatedDiscoveryServiceClient(c.cc)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	c.cancel = cancel
-	for ; ; c.loseContact() {
+	cli := xdsdiscoverypb.NewAggregatedDiscoveryServiceClient(c.cc)
+	for ; ; c.loseContact(false) {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			break
 		}
-		sctx, scancel := context.WithCancel(ctx)
-		st, err := cli.StreamAggregatedResources(sctx, grpc.WaitForReady(true))
+		ctx, cancel := context.WithCancel(c.ctx)
+		st, err := cli.StreamAggregatedResources(ctx, grpc.WaitForReady(true))
 		if err != nil {
 			grpclog.Infof("xds: failed to initial ADS streaming RPC due to %v", err)
 			continue
@@ -154,15 +149,10 @@ func (c *client) makeADSCall() {
 				// current stream is broken, start a new one.
 				continue
 			}
-			if err := st.Send(c.newEDSRequest(true)); err != nil {
-				// current stream is broken, start a new one.
-				continue
-			}
-		} else {
-			if err := st.Send(c.newEDSRequest(false)); err != nil {
-				// current stream is broken, start a new one.
-				continue
-			}
+		}
+		if err := st.Send(c.newEDSRequest()); err != nil {
+			// current stream is broken, start a new one.
+			continue
 		}
 		for {
 			resp, err := st.Recv()
@@ -174,46 +164,61 @@ func (c *client) makeADSCall() {
 			if len(resources) < 1 {
 				grpclog.Warning("xds: ADS response contains 0 resource info.")
 				// cancel this RPC as server misbehaves by sending a ADS response with 0 resource info.
-				scancel()
+				cancel()
 				break
 			}
 			switch resp.GetTypeUrl() {
-			case "type.googleapis.com/envoy.api.v2.Cluster":
-				cdsResp := &api.Cluster{}
+			case cdsType:
+				cdsResp := &xdspb.Cluster{}
 				if err := proto.Unmarshal(resources[0].GetValue(), cdsResp); err != nil {
-					scancel()
+					cancel()
 					break
 				}
-				if err := c.newCDS(cdsResp); err != nil {
-					scancel()
+				if err := c.newADS(cdsResp); err != nil {
+					cancel()
 					break
 				}
-			case "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment":
-				edsResp := &api.ClusterLoadAssignment{}
+			case edsType:
+				edsResp := &xdspb.ClusterLoadAssignment{}
 				if err := proto.Unmarshal(resources[0].GetValue(), edsResp); err != nil {
-					scancel()
+					cancel()
 					break
 				}
-				if err := c.newEDS(edsResp); err != nil {
-					scancel()
+				if err := c.newADS(edsResp); err != nil {
+					cancel()
 					break
 				}
 			default:
 				grpclog.Warningf("xds: received response type not expected, type: %T, %v", resp, resp)
+				cancel()
 			}
 		}
 	}
 }
 
-func newClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, newCDS func(*api.Cluster) error, newEDS func(*api.ClusterLoadAssignment) error, loseContact func()) *client {
-	return &client{
+func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, newADS func(interface{}) error, loseContact func(bool)) *client {
+	c := &client{
 		balancerName: balancerName,
 		serviceName:  serviceName,
 		enableCDS:    enableCDS,
 		opts:         opts,
-		newEDS:       newEDS,
-		newCDS:       newCDS,
+		newADS:       newADS,
 		loseContact:  loseContact,
-		closeChan:    make(chan struct{}),
 	}
+
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+
+	var err error
+	if opts.CredsBundle != nil {
+		c.xdsClientConnCreds, err = opts.CredsBundle.NewWithMode(internal.CredsBundleModeBalancer)
+		if err != nil {
+			grpclog.Warningf("xdsClient: client connection creds NewWithMode failed: %v", err)
+		}
+		c.xdsBackendCreds, err = opts.CredsBundle.NewWithMode(internal.CredsBundleModeBackendFromBalancer)
+		if err != nil {
+			grpclog.Warningf("xdsClient: backend creds NewWithMode failed: %v", err)
+		}
+	}
+
+	return c
 }
