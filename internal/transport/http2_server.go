@@ -1007,38 +1007,39 @@ func (t *http2Server) Close() error {
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
-	// Marks stream as done.
-	oldState := s.swapState(streamDone)
-
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 
+	// Deletes stream from the active streams
+	func() {
+		t.mu.Lock()
+		if _, ok := t.activeStreams[s.id]; !ok {
+			t.mu.Unlock()
+			return
+		}
+
+		delete(t.activeStreams, s.id)
+		if len(t.activeStreams) == 0 {
+			t.idle = time.Now()
+		}
+		t.mu.Unlock()
+
+		if channelz.IsOn() {
+			if eosReceived {
+				atomic.AddInt64(&t.czData.streamsSucceeded, 1)
+			} else {
+				atomic.AddInt64(&t.czData.streamsFailed, 1)
+			}
+		}
+	}()
+
 	cleanup := &cleanupStream{
 		streamID: s.id,
 		rst:      rst,
 		rstCode:  rstCode,
-		onWrite: func() {
-			t.mu.Lock()
-			if _, ok := t.activeStreams[s.id]; !ok {
-				t.mu.Unlock()
-				return
-			}
-
-			delete(t.activeStreams, s.id)
-			if len(t.activeStreams) == 0 {
-				t.idle = time.Now()
-			}
-			t.mu.Unlock()
-			if channelz.IsOn() {
-				if eosReceived {
-					atomic.AddInt64(&t.czData.streamsSucceeded, 1)
-				} else {
-					atomic.AddInt64(&t.czData.streamsFailed, 1)
-				}
-			}
-		},
+		onWrite:  func() {},
 	}
 
 	// No trailer. Puts cleanupFrame into transport's control buffer.
@@ -1047,10 +1048,8 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 		return
 	}
 
-	// Stream was already marked as done. So, we don't need to put the trailer
-	// into the buffer, because either a trailer was already put into the
-	// buffer or the stream was already closed without a trailer.
-	if oldState == streamDone {
+	// If the stream is already done, don't send the trailer.
+	if s.swapState(streamDone) == streamDone {
 		return
 	}
 
