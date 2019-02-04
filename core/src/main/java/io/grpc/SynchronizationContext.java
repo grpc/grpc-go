@@ -56,7 +56,7 @@ public final class SynchronizationContext implements Executor {
   private final UncaughtExceptionHandler uncaughtExceptionHandler;
 
   @GuardedBy("lock")
-  private final Queue<Runnable> queue = new ArrayDeque<Runnable>();
+  private final Queue<Runnable> queue = new ArrayDeque<>();
   @GuardedBy("lock")
   private Thread drainingThread;
 

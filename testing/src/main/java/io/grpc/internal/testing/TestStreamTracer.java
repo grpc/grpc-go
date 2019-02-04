@@ -91,10 +91,10 @@ public interface TestStreamTracer {
     protected final AtomicLong inboundWireSize = new AtomicLong();
     protected final AtomicLong outboundUncompressedSize = new AtomicLong();
     protected final AtomicLong inboundUncompressedSize = new AtomicLong();
-    protected final LinkedBlockingQueue<String> outboundEvents = new LinkedBlockingQueue<String>();
-    protected final LinkedBlockingQueue<String> inboundEvents = new LinkedBlockingQueue<String>();
-    protected final AtomicReference<Status> streamClosedStatus = new AtomicReference<Status>();
-    protected final AtomicReference<Throwable> streamClosedStack = new AtomicReference<Throwable>();
+    protected final LinkedBlockingQueue<String> outboundEvents = new LinkedBlockingQueue<>();
+    protected final LinkedBlockingQueue<String> inboundEvents = new LinkedBlockingQueue<>();
+    protected final AtomicReference<Status> streamClosedStatus = new AtomicReference<>();
+    protected final AtomicReference<Throwable> streamClosedStack = new AtomicReference<>();
     protected final CountDownLatch streamClosed = new CountDownLatch(1);
     protected final AtomicBoolean failDuplicateCallbacks = new AtomicBoolean(true);
 

@@ -1925,7 +1925,7 @@ public class OkHttpClientTransportTest {
       THROW_ERROR
     }
 
-    final LinkedBlockingQueue<Result> nextResults = new LinkedBlockingQueue<Result>();
+    final LinkedBlockingQueue<Result> nextResults = new LinkedBlockingQueue<>();
 
     @Override
     public void close() throws IOException {

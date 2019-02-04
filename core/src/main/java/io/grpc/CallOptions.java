@@ -216,7 +216,7 @@ public final class CallOptions {
   public CallOptions withStreamTracerFactory(ClientStreamTracer.Factory factory) {
     CallOptions newOptions = new CallOptions(this);
     ArrayList<ClientStreamTracer.Factory> newList =
-        new ArrayList<ClientStreamTracer.Factory>(streamTracerFactories.size() + 1);
+        new ArrayList<>(streamTracerFactories.size() + 1);
     newList.addAll(streamTracerFactories);
     newList.add(factory);
     newOptions.streamTracerFactories = Collections.unmodifiableList(newList);
@@ -269,7 +269,7 @@ public final class CallOptions {
     @Deprecated
     public static <T> Key<T> of(String debugString, T defaultValue) {
       Preconditions.checkNotNull(debugString, "debugString");
-      return new Key<T>(debugString, defaultValue);
+      return new Key<>(debugString, defaultValue);
     }
 
     /**
@@ -283,7 +283,7 @@ public final class CallOptions {
      */
     public static <T> Key<T> create(String debugString) {
       Preconditions.checkNotNull(debugString, "debugString");
-      return new Key<T>(debugString, /*defaultValue=*/ null);
+      return new Key<>(debugString, /*defaultValue=*/ null);
     }
 
     /**
@@ -297,7 +297,7 @@ public final class CallOptions {
      */
     public static <T> Key<T> createWithDefault(String debugString, T defaultValue) {
       Preconditions.checkNotNull(debugString, "debugString");
-      return new Key<T>(debugString, defaultValue);
+      return new Key<>(debugString, defaultValue);
     }
   }
 

@@ -182,7 +182,7 @@ public class GrpcServerRuleTest {
   private static class TestServiceImpl extends SimpleServiceGrpc.SimpleServiceImplBase {
 
     private final Collection<SimpleRequest> unaryCallRequests =
-        new ConcurrentLinkedQueue<SimpleRequest>();
+        new ConcurrentLinkedQueue<>();
 
     private volatile Thread lastServerStreamingRpcThread;
 

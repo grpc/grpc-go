@@ -100,7 +100,7 @@ public class Context {
   private static final Logger log = Logger.getLogger(Context.class.getName());
 
   private static final PersistentHashArrayMappedTrie<Key<?>, Object> EMPTY_ENTRIES =
-      new PersistentHashArrayMappedTrie<Key<?>, Object>();
+      new PersistentHashArrayMappedTrie<>();
 
   // Long chains of contexts are suspicious and usually indicate a misuse of Context.
   // The threshold is arbitrarily chosen.
@@ -120,7 +120,7 @@ public class Context {
   // much easier to avoid circular loading since there can still be references to Context as long as
   // they don't depend on storage, like key() and currentContextExecutor(). It also makes it easier
   // to handle exceptions.
-  private static final AtomicReference<Storage> storage = new AtomicReference<Storage>();
+  private static final AtomicReference<Storage> storage = new AtomicReference<>();
 
   // For testing
   static Storage storage() {
@@ -159,7 +159,7 @@ public class Context {
    * the name is intended for debugging purposes and does not impact behavior.
    */
   public static <T> Key<T> key(String name) {
-    return new Key<T>(name);
+    return new Key<>(name);
   }
 
   /**
@@ -167,7 +167,7 @@ public class Context {
    * have the same name; the name is intended for debugging purposes and does not impact behavior.
    */
   public static <T> Key<T> keyWithDefault(String name, T defaultValue) {
-    return new Key<T>(name, defaultValue);
+    return new Key<>(name, defaultValue);
   }
 
   /**

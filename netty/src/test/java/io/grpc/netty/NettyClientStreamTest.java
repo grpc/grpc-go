@@ -92,7 +92,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
   @SuppressWarnings("unchecked")
   private MethodDescriptor.Marshaller<Void> marshaller = mock(MethodDescriptor.Marshaller.class);
-  private final Queue<InputStream> listenerMessageQueue = new LinkedList<InputStream>();
+  private final Queue<InputStream> listenerMessageQueue = new LinkedList<>();
 
   // Must be initialized before @Before, because it is used by createStream()
   private MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.<Void, Void>newBuilder()

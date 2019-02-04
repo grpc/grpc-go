@@ -51,7 +51,7 @@ class WriteQueue {
 
   public WriteQueue(Channel channel) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    queue = new ConcurrentLinkedQueue<QueuedCommand>();
+    queue = new ConcurrentLinkedQueue<>();
   }
 
   /**

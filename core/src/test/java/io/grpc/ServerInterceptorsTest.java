@@ -63,7 +63,7 @@ public class ServerInterceptorsTest {
 
   private MethodDescriptor<String, Integer> flowMethod;
 
-  private ServerCall<String, Integer> call = new NoopServerCall<String, Integer>();
+  private ServerCall<String, Integer> call = new NoopServerCall<>();
 
   private ServerServiceDefinition serviceDefinition;
 
@@ -269,7 +269,7 @@ public class ServerInterceptorsTest {
   @Test
   public void argumentsPassed() {
     @SuppressWarnings("unchecked")
-    final ServerCall<String, Integer> call2 = new NoopServerCall<String, Integer>();
+    final ServerCall<String, Integer> call2 = new NoopServerCall<>();
     @SuppressWarnings("unchecked")
     final ServerCall.Listener<String> listener2 = mock(ServerCall.Listener.class);
 
@@ -398,7 +398,7 @@ public class ServerInterceptorsTest {
         .intercept(inputStreamMessageService, interceptor2);
     ServerMethodDefinition<InputStream, InputStream> serverMethod =
         (ServerMethodDefinition<InputStream, InputStream>) intercepted2.getMethod("basic/wrapped");
-    ServerCall<InputStream, InputStream> call2 = new NoopServerCall<InputStream, InputStream>();
+    ServerCall<InputStream, InputStream> call2 = new NoopServerCall<>();
     byte[] bytes = {};
     serverMethod
         .getServerCallHandler()
@@ -425,7 +425,7 @@ public class ServerInterceptorsTest {
   }
 
   private ServerCallHandler<String, Integer> anyCallHandler() {
-    return Mockito.<ServerCallHandler<String, Integer>>any();
+    return Mockito.any();
   }
 
   private static class NoopInterceptor implements ServerInterceptor {

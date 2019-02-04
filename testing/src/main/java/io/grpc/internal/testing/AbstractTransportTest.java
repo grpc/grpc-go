@@ -2017,7 +2017,7 @@ public abstract class AbstractTransportTest {
 
   private static class MockServerListener implements ServerListener {
     public final BlockingQueue<MockServerTransportListener> listeners
-        = new LinkedBlockingQueue<MockServerTransportListener>();
+        = new LinkedBlockingQueue<>();
     private final SettableFuture<?> shutdown = SettableFuture.create();
 
     @Override
@@ -2048,7 +2048,7 @@ public abstract class AbstractTransportTest {
 
   private static class MockServerTransportListener implements ServerTransportListener {
     public final ServerTransport transport;
-    public final BlockingQueue<StreamCreation> streams = new LinkedBlockingQueue<StreamCreation>();
+    public final BlockingQueue<StreamCreation> streams = new LinkedBlockingQueue<>();
     private final SettableFuture<?> terminated = SettableFuture.create();
 
     public MockServerTransportListener(ServerTransport transport) {
@@ -2094,9 +2094,9 @@ public abstract class AbstractTransportTest {
   }
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
-    private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<InputStream>();
+    private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<>();
     // Would have used Void instead of Object, but null elements are not allowed
-    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<Object>();
+    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<>();
     private final CountDownLatch halfClosedLatch = new CountDownLatch(1);
     private final SettableFuture<Status> status = SettableFuture.create();
 
@@ -2154,9 +2154,9 @@ public abstract class AbstractTransportTest {
   }
 
   private static class ClientStreamListenerBase implements ClientStreamListener {
-    private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<InputStream>();
+    private final BlockingQueue<InputStream> messageQueue = new LinkedBlockingQueue<>();
     // Would have used Void instead of Object, but null elements are not allowed
-    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<Object>();
+    private final BlockingQueue<Object> readyQueue = new LinkedBlockingQueue<>();
     private final SettableFuture<Metadata> headers = SettableFuture.create();
     private final SettableFuture<Metadata> trailers = SettableFuture.create();
     private final SettableFuture<Status> status = SettableFuture.create();

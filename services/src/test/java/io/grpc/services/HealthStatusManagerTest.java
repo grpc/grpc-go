@@ -294,7 +294,7 @@ public class HealthStatusManagerTest {
   }
 
   private static class RespObserver implements StreamObserver<HealthCheckResponse> {
-    final ArrayDeque<Object> responses = new ArrayDeque<Object>();
+    final ArrayDeque<Object> responses = new ArrayDeque<>();
 
     @Override
     public void onNext(HealthCheckResponse value) {

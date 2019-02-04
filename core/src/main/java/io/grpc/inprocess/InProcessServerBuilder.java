@@ -120,7 +120,7 @@ public final class InProcessServerBuilder
    */
   public InProcessServerBuilder scheduledExecutorService(
       ScheduledExecutorService scheduledExecutorService) {
-    schedulerPool = new FixedObjectPool<ScheduledExecutorService>(
+    schedulerPool = new FixedObjectPool<>(
         checkNotNull(scheduledExecutorService, "scheduledExecutorService"));
     return this;
   }

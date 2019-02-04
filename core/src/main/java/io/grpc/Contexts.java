@@ -48,7 +48,7 @@ public final class Contexts {
         ServerCallHandler<ReqT, RespT> next) {
     Context previous = context.attach();
     try {
-      return new ContextualizedServerCallListener<ReqT>(
+      return new ContextualizedServerCallListener<>(
           next.startCall(call, headers),
           context);
     } finally {

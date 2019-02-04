@@ -88,7 +88,7 @@ public class ServerCallsTest {
     final AtomicBoolean onCancelCalled = new AtomicBoolean();
     final AtomicBoolean onReadyCalled = new AtomicBoolean();
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
@@ -111,7 +111,7 @@ public class ServerCallsTest {
                   }
                 });
                 invokeCalled.set(true);
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -139,7 +139,7 @@ public class ServerCallsTest {
   public void noCancellationExceptionIfOnCancelHandlerSet() throws Exception {
     final AtomicBoolean onCancelCalled = new AtomicBoolean();
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
@@ -154,7 +154,7 @@ public class ServerCallsTest {
                     onCancelCalled.set(true);
                   }
                 });
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -171,7 +171,7 @@ public class ServerCallsTest {
   @Test
   public void expectCancellationExceptionIfOnCancelHandlerNotSet() throws Exception {
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
@@ -180,7 +180,7 @@ public class ServerCallsTest {
                 ServerCallStreamObserver<Integer> serverCallObserver =
                     (ServerCallStreamObserver<Integer>) responseObserver;
                 callObserver.set(serverCallObserver);
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -206,14 +206,14 @@ public class ServerCallsTest {
   @Test
   public void cannotSetOnCancelHandlerAfterServiceInvocation() throws Exception {
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -234,14 +234,14 @@ public class ServerCallsTest {
   @Test
   public void cannotSetOnReadyHandlerAfterServiceInvocation() throws Exception {
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -262,14 +262,14 @@ public class ServerCallsTest {
   @Test
   public void cannotDisableAutoFlowControlAfterServiceInvocation() throws Exception {
     final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
+        new AtomicReference<>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -293,7 +293,7 @@ public class ServerCallsTest {
                 ServerCallStreamObserver<Integer> serverCallObserver =
                     (ServerCallStreamObserver<Integer>) responseObserver;
                 serverCallObserver.disableAutoInboundFlowControl();
-                return new ServerCalls.NoopStreamObserver<Integer>();
+                return new ServerCalls.NoopStreamObserver<>();
               }
             });
     ServerCall.Listener<Integer> callListener =

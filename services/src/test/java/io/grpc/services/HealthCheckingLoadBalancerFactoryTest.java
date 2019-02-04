@@ -941,16 +941,16 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
   @Test
   public void getHealthCheckedServiceName_healthCheckConfigMissingServiceName() {
-    HashMap<String, Object> serviceConfig = new HashMap<String, Object>();
-    HashMap<String, Object> hcConfig = new HashMap<String, Object>();
+    HashMap<String, Object> serviceConfig = new HashMap<>();
+    HashMap<String, Object> hcConfig = new HashMap<>();
     serviceConfig.put("healthCheckConfig", hcConfig);
     assertThat(ServiceConfigUtil.getHealthCheckedServiceName(serviceConfig)).isNull();
   }
 
   @Test
   public void getHealthCheckedServiceName_healthCheckConfigHasServiceName() {
-    HashMap<String, Object> serviceConfig = new HashMap<String, Object>();
-    HashMap<String, Object> hcConfig = new HashMap<String, Object>();
+    HashMap<String, Object> serviceConfig = new HashMap<>();
+    HashMap<String, Object> hcConfig = new HashMap<>();
     hcConfig.put("serviceName", "FooService");
     serviceConfig.put("healthCheckConfig", hcConfig);
     assertThat(ServiceConfigUtil.getHealthCheckedServiceName(serviceConfig))
@@ -1022,8 +1022,8 @@ public class HealthCheckingLoadBalancerFactoryTest {
   }
 
   private Attributes attrsWithHealthCheckService(@Nullable String serviceName) {
-    HashMap<String, Object> serviceConfig = new HashMap<String, Object>();
-    HashMap<String, Object> hcConfig = new HashMap<String, Object>();
+    HashMap<String, Object> serviceConfig = new HashMap<>();
+    HashMap<String, Object> hcConfig = new HashMap<>();
     hcConfig.put("serviceName", serviceName);
     serviceConfig.put("healthCheckConfig", hcConfig);
     return Attributes.newBuilder()
@@ -1068,7 +1068,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
   private static class HealthImpl extends HealthGrpc.HealthImplBase {
     boolean checkCalled;
-    final Queue<ServerSideCall> calls = new ArrayDeque<ServerSideCall>();
+    final Queue<ServerSideCall> calls = new ArrayDeque<>();
 
     @Override
     public void check(HealthCheckRequest request,
@@ -1108,7 +1108,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
     final List<EquivalentAddressGroup> eagList;
     final Attributes attrs;
     final Channel channel;
-    final ArrayList<String> logs = new ArrayList<String>();
+    final ArrayList<String> logs = new ArrayList<>();
     private final ChannelLogger logger = new ChannelLogger() {
         @Override
         public void log(ChannelLogLevel level, String msg) {
@@ -1222,7 +1222,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
   // In reality wrappedHelper.createSubchannel() is always called from syncContext.
   // Make sure it's the case in the test too.
   private Subchannel createSubchannel(final int index, final Attributes attrs) {
-    final AtomicReference<Subchannel> returnedSubchannel = new AtomicReference<Subchannel>();
+    final AtomicReference<Subchannel> returnedSubchannel = new AtomicReference<>();
     syncContext.execute(new Runnable() {
         @Override
         public void run() {

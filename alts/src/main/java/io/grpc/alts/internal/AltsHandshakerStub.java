@@ -29,7 +29,7 @@ class AltsHandshakerStub {
   private final StreamObserver<HandshakerResp> reader = new Reader();
   private final StreamObserver<HandshakerReq> writer;
   private final ArrayBlockingQueue<Optional<HandshakerResp>> responseQueue =
-      new ArrayBlockingQueue<Optional<HandshakerResp>>(1);
+      new ArrayBlockingQueue<>(1);
   private final AtomicReference<String> exceptionMessage = new AtomicReference<>();
 
   AltsHandshakerStub(HandshakerServiceStub serviceStub) {

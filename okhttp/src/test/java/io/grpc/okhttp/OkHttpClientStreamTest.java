@@ -109,7 +109,7 @@ public class OkHttpClientStreamTest {
 
   @Test
   public void cancel_notStarted() {
-    final AtomicReference<Status> statusRef = new AtomicReference<Status>();
+    final AtomicReference<Status> statusRef = new AtomicReference<>();
     stream.start(new BaseClientStreamListener() {
       @Override
       public void closed(

@@ -81,7 +81,7 @@ public final class ProtoLiteUtils {
    */
   public static <T extends MessageLite> Marshaller<T> marshaller(T defaultInstance) {
     // TODO(ejona): consider changing return type to PrototypeMarshaller (assuming ABI safe)
-    return new MessageMarshaller<T>(defaultInstance);
+    return new MessageMarshaller<>(defaultInstance);
   }
 
   /**
@@ -91,7 +91,7 @@ public final class ProtoLiteUtils {
    */
   public static <T extends MessageLite> Metadata.BinaryMarshaller<T> metadataMarshaller(
       T defaultInstance) {
-    return new MetadataMarshaller<T>(defaultInstance);
+    return new MetadataMarshaller<>(defaultInstance);
   }
 
   /** Copies the data from input stream to output stream. */
@@ -117,7 +117,7 @@ public final class ProtoLiteUtils {
 
   private static final class MessageMarshaller<T extends MessageLite>
       implements PrototypeMarshaller<T> {
-    private static final ThreadLocal<Reference<byte[]>> bufs = new ThreadLocal<Reference<byte[]>>();
+    private static final ThreadLocal<Reference<byte[]>> bufs = new ThreadLocal<>();
 
     private final Parser<T> parser;
     private final T defaultInstance;
@@ -179,7 +179,7 @@ public final class ProtoLiteUtils {
             byte[] buf;
             if ((ref = bufs.get()) == null || (buf = ref.get()) == null || buf.length < size) {
               buf = new byte[size];
-              bufs.set(new WeakReference<byte[]>(buf));
+              bufs.set(new WeakReference<>(buf));
             }
 
             int remaining = size;

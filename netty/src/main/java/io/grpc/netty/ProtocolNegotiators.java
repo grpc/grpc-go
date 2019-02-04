@@ -445,7 +445,7 @@ public final class ProtocolNegotiators {
   public abstract static class AbstractBufferingHandler extends ChannelDuplexHandler {
 
     private ChannelHandler[] handlers;
-    private Queue<ChannelWrite> bufferedWrites = new ArrayDeque<ChannelWrite>();
+    private Queue<ChannelWrite> bufferedWrites = new ArrayDeque<>();
     private boolean writing;
     private boolean flushRequested;
     private Throwable failCause;

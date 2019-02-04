@@ -417,7 +417,7 @@ final class DnsNameResolver extends NameResolver {
   @SuppressWarnings("unchecked")
   @VisibleForTesting
   static List<Map<String, Object>> parseTxtResults(List<String> txtRecords) {
-    List<Map<String, Object>> serviceConfigs = new ArrayList<Map<String, Object>>();
+    List<Map<String, Object>> serviceConfigs = new ArrayList<>();
     for (String txtRecord : txtRecords) {
       if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
         List<Map<String, Object>> choices;

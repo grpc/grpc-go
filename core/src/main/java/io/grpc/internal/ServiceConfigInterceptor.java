@@ -54,10 +54,10 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   // Map from method name to MethodInfo
   @VisibleForTesting
   final AtomicReference<Map<String, MethodInfo>> serviceMethodMap
-      = new AtomicReference<Map<String, MethodInfo>>();
+      = new AtomicReference<>();
   @VisibleForTesting
   final AtomicReference<Map<String, MethodInfo>> serviceMap
-      = new AtomicReference<Map<String, MethodInfo>>();
+      = new AtomicReference<>();
 
   private final boolean retryEnabled;
   private final int maxRetryAttemptsLimit;
@@ -74,8 +74,8 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   }
 
   void handleUpdate(@Nonnull Map<String, Object> serviceConfig) {
-    Map<String, MethodInfo> newServiceMethodConfigs = new HashMap<String, MethodInfo>();
-    Map<String, MethodInfo> newServiceConfigs = new HashMap<String, MethodInfo>();
+    Map<String, MethodInfo> newServiceMethodConfigs = new HashMap<>();
+    Map<String, MethodInfo> newServiceConfigs = new HashMap<>();
 
     // Try and do as much validation here before we swap out the existing configuration.  In case
     // the input is invalid, we don't want to lose the existing configuration.

@@ -74,7 +74,7 @@ class SerializeReentrantCallsDirectExecutor implements Executor {
 
   private void enqueue(Runnable r) {
     if (taskQueue == null) {
-      taskQueue = new ArrayDeque<Runnable>(4);
+      taskQueue = new ArrayDeque<>(4);
     }
     taskQueue.add(r);
   }

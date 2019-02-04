@@ -173,7 +173,7 @@ public class NettyClientTransportTest {
   @Test
   public void setSoLingerChannelOption() throws IOException {
     startServer();
-    Map<ChannelOption<?>, Object> channelOptions = new HashMap<ChannelOption<?>, Object>();
+    Map<ChannelOption<?>, Object> channelOptions = new HashMap<>();
     // set SO_LINGER option
     int soLinger = 123;
     channelOptions.put(ChannelOption.SO_LINGER, soLinger);

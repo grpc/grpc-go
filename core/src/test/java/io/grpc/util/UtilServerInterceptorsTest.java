@@ -76,7 +76,7 @@ public class UtilServerInterceptorsTest {
     final Status expectedStatus = Status.UNAVAILABLE;
     final Metadata expectedMetadata = new Metadata();
     FakeServerCall<Void, Void> call =
-        new FakeServerCall<Void, Void>(expectedStatus, expectedMetadata);
+        new FakeServerCall<>(expectedStatus, expectedMetadata);
     final StatusRuntimeException exception =
         new StatusRuntimeException(expectedStatus, expectedMetadata);
     listener = new VoidCallListener() {
@@ -126,7 +126,7 @@ public class UtilServerInterceptorsTest {
     final Metadata expectedMetadata = new Metadata();
 
     FakeServerCall<Void, Void> call =
-        new FakeServerCall<Void, Void>(expectedStatus, expectedMetadata);
+        new FakeServerCall<>(expectedStatus, expectedMetadata);
     final StatusRuntimeException exception =
         new StatusRuntimeException(expectedStatus, expectedMetadata);
 

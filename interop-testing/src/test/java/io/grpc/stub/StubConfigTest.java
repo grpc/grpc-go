@@ -60,7 +60,7 @@ public class StubConfigTest {
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
     ClientCall<SimpleRequest, SimpleResponse> call =
-        new NoopClientCall<SimpleRequest, SimpleResponse>();
+        new NoopClientCall<>();
     when(channel.newCall(
         Mockito.<MethodDescriptor<SimpleRequest, SimpleResponse>>any(), any(CallOptions.class)))
         .thenReturn(call);

@@ -135,7 +135,7 @@ public final class Attributes {
      */
     @Deprecated
     public static <T> Key<T> of(String debugString) {
-      return new Key<T>(debugString);
+      return new Key<>(debugString);
     }
 
     /**
@@ -146,7 +146,7 @@ public final class Attributes {
      * @return Key object
      */
     public static <T> Key<T> create(String debugString) {
-      return new Key<T>(debugString);
+      return new Key<>(debugString);
     }
   }
 
@@ -222,7 +222,7 @@ public final class Attributes {
 
     private Map<Key<?>, Object> data(int size) {
       if (newdata == null) {
-        newdata = new IdentityHashMap<Key<?>, Object>(size);
+        newdata = new IdentityHashMap<>(size);
       }
       return newdata;
     }

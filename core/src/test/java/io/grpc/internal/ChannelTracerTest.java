@@ -40,7 +40,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ChannelTracerTest {
   private static final Logger logger = Logger.getLogger(ChannelLogger.class.getName());
-  private final ArrayList<LogRecord> logs = new ArrayList<LogRecord>();
+  private final ArrayList<LogRecord> logs = new ArrayList<>();
   private final Handler handler = new Handler() {
       @Override
       public void publish(LogRecord record) {

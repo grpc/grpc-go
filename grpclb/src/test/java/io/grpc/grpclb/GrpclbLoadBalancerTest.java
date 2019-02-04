@@ -141,7 +141,7 @@ public class GrpclbLoadBalancerTest {
   private Helper helper;
   @Mock
   private SubchannelPool subchannelPool;
-  private final ArrayList<String> logs = new ArrayList<String>();
+  private final ArrayList<String> logs = new ArrayList<>();
   private final ChannelLogger channelLogger = new ChannelLogger() {
       @Override
       public void log(ChannelLogLevel level, String msg) {
@@ -159,9 +159,9 @@ public class GrpclbLoadBalancerTest {
   private ArgumentCaptor<StreamObserver<LoadBalanceResponse>> lbResponseObserverCaptor;
   private final FakeClock fakeClock = new FakeClock();
   private final LinkedList<StreamObserver<LoadBalanceRequest>> lbRequestObservers =
-      new LinkedList<StreamObserver<LoadBalanceRequest>>();
-  private final LinkedList<Subchannel> mockSubchannels = new LinkedList<Subchannel>();
-  private final LinkedList<ManagedChannel> fakeOobChannels = new LinkedList<ManagedChannel>();
+      new LinkedList<>();
+  private final LinkedList<Subchannel> mockSubchannels = new LinkedList<>();
+  private final LinkedList<ManagedChannel> fakeOobChannels = new LinkedList<>();
   private final ArrayList<Subchannel> subchannelTracker = new ArrayList<>();
   private final ArrayList<ManagedChannel> oobChannelTracker = new ArrayList<>();
   private final ArrayList<String> failingLbAuthorities = new ArrayList<>();

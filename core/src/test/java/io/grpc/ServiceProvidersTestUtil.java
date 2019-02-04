@@ -41,7 +41,7 @@ final class ServiceProvidersTestUtil {
       String callableClassName,
       ClassLoader cl,
       Set<String> hardcodedClassNames) throws Exception {
-    final Set<String> notLoaded = new HashSet<String>(hardcodedClassNames);
+    final Set<String> notLoaded = new HashSet<>(hardcodedClassNames);
     cl = new ClassLoader(cl) {
       @Override
       public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {

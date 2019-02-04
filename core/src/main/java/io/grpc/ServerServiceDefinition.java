@@ -44,8 +44,7 @@ public final class ServerServiceDefinition {
   private ServerServiceDefinition(
       ServiceDescriptor serviceDescriptor, Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
-    this.methods =
-        Collections.unmodifiableMap(new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
+    this.methods = Collections.unmodifiableMap(new HashMap<>(methods));
   }
 
   /**
@@ -78,8 +77,7 @@ public final class ServerServiceDefinition {
   public static final class Builder {
     private final String serviceName;
     private final ServiceDescriptor serviceDescriptor;
-    private final Map<String, ServerMethodDefinition<?, ?>> methods =
-        new HashMap<String, ServerMethodDefinition<?, ?>>();
+    private final Map<String, ServerMethodDefinition<?, ?>> methods = new HashMap<>();
 
     private Builder(String serviceName) {
       this.serviceName = checkNotNull(serviceName, "serviceName");
@@ -125,14 +123,13 @@ public final class ServerServiceDefinition {
       ServiceDescriptor serviceDescriptor = this.serviceDescriptor;
       if (serviceDescriptor == null) {
         List<MethodDescriptor<?, ?>> methodDescriptors
-            = new ArrayList<MethodDescriptor<?, ?>>(methods.size());
+            = new ArrayList<>(methods.size());
         for (ServerMethodDefinition<?, ?> serverMethod : methods.values()) {
           methodDescriptors.add(serverMethod.getMethodDescriptor());
         }
         serviceDescriptor = new ServiceDescriptor(serviceName, methodDescriptors);
       }
-      Map<String, ServerMethodDefinition<?, ?>> tmpMethods =
-          new HashMap<String, ServerMethodDefinition<?, ?>>(methods);
+      Map<String, ServerMethodDefinition<?, ?>> tmpMethods = new HashMap<>(methods);
       for (MethodDescriptor<?, ?> descriptorMethod : serviceDescriptor.getMethods()) {
         ServerMethodDefinition<?, ?> removed = tmpMethods.remove(
             descriptorMethod.getFullMethodName());

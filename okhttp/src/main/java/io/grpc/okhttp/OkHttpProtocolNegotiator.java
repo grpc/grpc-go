@@ -116,22 +116,22 @@ class OkHttpProtocolNegotiator {
   static final class AndroidNegotiator extends OkHttpProtocolNegotiator {
     // setUseSessionTickets(boolean)
     private static final OptionalMethod<Socket> SET_USE_SESSION_TICKETS =
-        new OptionalMethod<Socket>(null, "setUseSessionTickets", Boolean.TYPE);
+        new OptionalMethod<>(null, "setUseSessionTickets", Boolean.TYPE);
     // setHostname(String)
     private static final OptionalMethod<Socket> SET_HOSTNAME =
-        new OptionalMethod<Socket>(null, "setHostname", String.class);
+        new OptionalMethod<>(null, "setHostname", String.class);
     // byte[] getAlpnSelectedProtocol()
     private static final OptionalMethod<Socket> GET_ALPN_SELECTED_PROTOCOL =
-        new OptionalMethod<Socket>(byte[].class, "getAlpnSelectedProtocol");
+        new OptionalMethod<>(byte[].class, "getAlpnSelectedProtocol");
     // setAlpnProtocol(byte[])
     private static final OptionalMethod<Socket> SET_ALPN_PROTOCOLS =
-        new OptionalMethod<Socket>(null, "setAlpnProtocols", byte[].class);
+        new OptionalMethod<>(null, "setAlpnProtocols", byte[].class);
     // byte[] getNpnSelectedProtocol()
     private static final OptionalMethod<Socket> GET_NPN_SELECTED_PROTOCOL =
-        new OptionalMethod<Socket>(byte[].class, "getNpnSelectedProtocol");
+        new OptionalMethod<>(byte[].class, "getNpnSelectedProtocol");
     // setNpnProtocol(byte[])
     private static final OptionalMethod<Socket> SET_NPN_PROTOCOLS =
-        new OptionalMethod<Socket>(null, "setNpnProtocols", byte[].class);
+        new OptionalMethod<>(null, "setNpnProtocols", byte[].class);
 
     AndroidNegotiator(Platform platform) {
       super(platform);

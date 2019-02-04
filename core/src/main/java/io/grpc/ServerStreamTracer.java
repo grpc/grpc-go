@@ -94,7 +94,7 @@ public abstract class ServerStreamTracer extends StreamTracer {
 
     private static <ReqT, RespT> ReadOnlyServerCall<ReqT, RespT> create(
         ServerCallInfo<ReqT, RespT> callInfo) {
-      return new ReadOnlyServerCall<ReqT, RespT>(callInfo);
+      return new ReadOnlyServerCall<>(callInfo);
     }
 
     private ReadOnlyServerCall(ServerCallInfo<ReqT, RespT> callInfo) {

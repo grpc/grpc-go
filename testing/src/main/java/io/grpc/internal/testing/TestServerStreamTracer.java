@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class TestServerStreamTracer extends ServerStreamTracer implements TestStreamTracer {
   private final TestBaseStreamTracer delegate = new TestBaseStreamTracer();
   protected final AtomicReference<ServerCallInfo<?, ?>> serverCallInfo =
-      new AtomicReference<ServerCallInfo<?, ?>>();
+      new AtomicReference<>();
 
   @Override
   public void await() throws InterruptedException {

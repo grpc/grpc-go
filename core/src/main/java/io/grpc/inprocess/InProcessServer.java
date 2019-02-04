@@ -37,7 +37,7 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 final class InProcessServer implements InternalServer {
   private static final ConcurrentMap<String, InProcessServer> registry
-      = new ConcurrentHashMap<String, InProcessServer>();
+      = new ConcurrentHashMap<>();
 
   static InProcessServer findServer(String name) {
     return registry.get(name);

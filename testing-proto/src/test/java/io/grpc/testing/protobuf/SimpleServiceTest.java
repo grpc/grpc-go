@@ -111,7 +111,7 @@ public class SimpleServiceTest {
           continue;
         }
 
-        Map<String, RpcMethod> methodToAnnotation = new HashMap<String, RpcMethod>();
+        Map<String, RpcMethod> methodToAnnotation = new HashMap<>();
         for (Element enclosedElement : rootElement.getEnclosedElements()) {
           RpcMethod annotation = enclosedElement.getAnnotation(RpcMethod.class);
           if (annotation != null) {

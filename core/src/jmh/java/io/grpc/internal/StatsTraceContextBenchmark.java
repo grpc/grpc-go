@@ -40,7 +40,7 @@ public class StatsTraceContextBenchmark {
 
   private final Metadata emptyMetadata = new Metadata();
   private final List<ServerStreamTracer.Factory> serverStreamTracerFactories =
-      Collections.<ServerStreamTracer.Factory>emptyList();
+      Collections.emptyList();
 
   /**
    * Javadoc comment.

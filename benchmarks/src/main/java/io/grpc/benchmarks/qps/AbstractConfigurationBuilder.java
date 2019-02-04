@@ -109,7 +109,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
   public final T build(String[] args) {
     T config = newConfiguration();
     Map<String, Param> paramMap = getParamMap();
-    Set<String> appliedParams = new TreeSet<String>(CASE_INSENSITIVE_ORDER);
+    Set<String> appliedParams = new TreeSet<>(CASE_INSENSITIVE_ORDER);
 
     for (String arg : args) {
       if (!arg.startsWith("--")) {
@@ -197,7 +197,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
   protected abstract T build0(T config);
 
   private Map<String, Param> getParamMap() {
-    Map<String, Param> map = new TreeMap<String, Param>(CASE_INSENSITIVE_ORDER);
+    Map<String, Param> map = new TreeMap<>(CASE_INSENSITIVE_ORDER);
     for (Param param : getParams()) {
       map.put(param.getName(), param);
     }

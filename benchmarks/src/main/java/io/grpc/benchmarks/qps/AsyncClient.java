@@ -122,7 +122,7 @@ public class AsyncClient {
                                       long endTime) throws Exception {
     // Initiate the concurrent calls
     List<Future<Histogram>> futures =
-        new ArrayList<Future<Histogram>>(config.outstandingRpcsPerChannel);
+        new ArrayList<>(config.outstandingRpcsPerChannel);
     for (int i = 0; i < config.channels; i++) {
       for (int j = 0; j < config.outstandingRpcsPerChannel; j++) {
         Channel channel = channels.get(i);

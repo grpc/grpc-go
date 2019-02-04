@@ -40,7 +40,7 @@ public final class NanoUtils {
    * @since 1.0.0
    */
   public static <T extends MessageNano> Marshaller<T> marshaller(MessageNanoFactory<T> factory) {
-    return new MessageMarshaller<T>(factory);
+    return new MessageMarshaller<>(factory);
   }
 
   private static final class MessageMarshaller<T extends MessageNano> implements Marshaller<T> {

@@ -56,7 +56,7 @@ public class ForwardingLoadBalancerHelperTest {
             if (clazz.equals(EquivalentAddressGroup.class)) {
               return new EquivalentAddressGroup(Arrays.asList(mockAddr));
             } else if (clazz.equals(List.class)) {
-              return Collections.<Object>emptyList();
+              return Collections.emptyList();
             }
             return null;
           }

@@ -105,8 +105,8 @@ public class MoreInProcessTest {
     // implement a client
     final CountDownLatch finishLatch = new CountDownLatch(1);
     final AtomicReference<StreamingInputCallResponse> responseRef =
-        new AtomicReference<StreamingInputCallResponse>();
-    final AtomicReference<Throwable> throwableRef = new AtomicReference<Throwable>();
+        new AtomicReference<>();
+    final AtomicReference<Throwable> throwableRef = new AtomicReference<>();
     StreamObserver<StreamingInputCallResponse> responseObserver =
         new StreamObserver<StreamingInputCallResponse>() {
           @Override
@@ -164,8 +164,8 @@ public class MoreInProcessTest {
     // implement a client
     final CountDownLatch finishLatch = new CountDownLatch(1);
     final AtomicReference<StreamingInputCallResponse> responseRef =
-        new AtomicReference<StreamingInputCallResponse>();
-    final AtomicReference<Throwable> throwableRef = new AtomicReference<Throwable>();
+        new AtomicReference<>();
+    final AtomicReference<Throwable> throwableRef = new AtomicReference<>();
     StreamObserver<StreamingInputCallResponse> responseObserver =
         new StreamObserver<StreamingInputCallResponse>() {
           @Override
@@ -223,8 +223,8 @@ public class MoreInProcessTest {
     // implement a client
     final CountDownLatch finishLatch = new CountDownLatch(1);
     final AtomicReference<StreamingInputCallResponse> responseRef =
-        new AtomicReference<StreamingInputCallResponse>();
-    final AtomicReference<Throwable> throwableRef = new AtomicReference<Throwable>();
+        new AtomicReference<>();
+    final AtomicReference<Throwable> throwableRef = new AtomicReference<>();
     StreamObserver<StreamingInputCallResponse> responseObserver =
         new StreamObserver<StreamingInputCallResponse>() {
           @Override

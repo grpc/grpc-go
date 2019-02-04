@@ -122,7 +122,7 @@ public class NettyServerTest {
     final int originalLowWaterMark = 2097169;
     final int originalHighWaterMark = 2097211;
 
-    Map<ChannelOption<?>, Object> channelOptions = new HashMap<ChannelOption<?>, Object>();
+    Map<ChannelOption<?>, Object> channelOptions = new HashMap<>();
 
     channelOptions.put(ChannelOption.WRITE_BUFFER_WATER_MARK,
         new WriteBufferWaterMark(originalLowWaterMark, originalHighWaterMark));

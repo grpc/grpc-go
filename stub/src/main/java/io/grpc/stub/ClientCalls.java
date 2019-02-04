@@ -154,7 +154,7 @@ public final class ClientCalls {
   // TODO(louiscryan): Not clear if we want to use this idiom for 'simple' stubs.
   public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
       ClientCall<ReqT, RespT> call, ReqT req) {
-    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call);
+    BlockingResponseStream<RespT> result = new BlockingResponseStream<>(call);
     asyncUnaryRequestCall(call, req, result.listener(), true);
     return result;
   }
@@ -171,7 +171,7 @@ public final class ClientCalls {
       Channel channel, MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, ReqT req) {
     ThreadlessExecutor executor = new ThreadlessExecutor();
     ClientCall<ReqT, RespT> call = channel.newCall(method, callOptions.withExecutor(executor));
-    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call, executor);
+    BlockingResponseStream<RespT> result = new BlockingResponseStream<>(call, executor);
     asyncUnaryRequestCall(call, req, result.listener(), true);
     return result;
   }
@@ -185,8 +185,8 @@ public final class ClientCalls {
    */
   public static <ReqT, RespT> ListenableFuture<RespT> futureUnaryCall(
       ClientCall<ReqT, RespT> call, ReqT req) {
-    GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
-    asyncUnaryRequestCall(call, req, new UnaryStreamToFuture<RespT>(responseFuture), false);
+    GrpcFuture<RespT> responseFuture = new GrpcFuture<>(call);
+    asyncUnaryRequestCall(call, req, new UnaryStreamToFuture<>(responseFuture), false);
     return responseFuture;
   }
 
@@ -265,9 +265,9 @@ public final class ClientCalls {
     asyncUnaryRequestCall(
         call,
         req,
-        new StreamObserverToCallListenerAdapter<ReqT, RespT>(
+        new StreamObserverToCallListenerAdapter<>(
             responseObserver,
-            new CallToStreamObserverAdapter<ReqT>(call),
+            new CallToStreamObserverAdapter<>(call),
             streamingResponse),
         streamingResponse);
   }
@@ -292,10 +292,10 @@ public final class ClientCalls {
       ClientCall<ReqT, RespT> call,
       StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
-    CallToStreamObserverAdapter<ReqT> adapter = new CallToStreamObserverAdapter<ReqT>(call);
+    CallToStreamObserverAdapter<ReqT> adapter = new CallToStreamObserverAdapter<>(call);
     startCall(
         call,
-        new StreamObserverToCallListenerAdapter<ReqT, RespT>(
+        new StreamObserverToCallListenerAdapter<>(
             responseObserver, adapter, streamingResponse),
         streamingResponse);
     return adapter;
@@ -522,7 +522,7 @@ public final class ClientCalls {
   // TODO(ejona86): determine how to allow ClientCall.cancel() in case of application error.
   private static final class BlockingResponseStream<T> implements Iterator<T> {
     // Due to flow control, only needs to hold up to 2 items: 1 for value, 1 for close.
-    private final BlockingQueue<Object> buffer = new ArrayBlockingQueue<Object>(2);
+    private final BlockingQueue<Object> buffer = new ArrayBlockingQueue<>(2);
     private final ClientCall.Listener<T> listener = new QueuingListener();
     private final ClientCall<?, T> call;
     /** May be null. */
@@ -630,7 +630,7 @@ public final class ClientCalls {
   private static final class ThreadlessExecutor implements Executor {
     private static final Logger log = Logger.getLogger(ThreadlessExecutor.class.getName());
 
-    private final BlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>();
+    private final BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
 
     // Non private to avoid synthetic class
     ThreadlessExecutor() {}

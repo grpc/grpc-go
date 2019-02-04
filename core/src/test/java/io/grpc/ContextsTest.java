@@ -48,7 +48,7 @@ public class ContextsTest {
   /** For use in comparing context by reference. */
   private Context uniqueContext = Context.ROOT.withValue(contextKey, new Object());
   @SuppressWarnings("unchecked")
-  private ServerCall<Object, Object> call = new NoopServerCall<Object, Object>();
+  private ServerCall<Object, Object> call = new NoopServerCall<>();
   private Metadata headers = new Metadata();
 
   @Test

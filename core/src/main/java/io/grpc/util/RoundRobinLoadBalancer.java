@@ -72,7 +72,7 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
 
   private final Helper helper;
   private final Map<EquivalentAddressGroup, Subchannel> subchannels =
-      new HashMap<EquivalentAddressGroup, Subchannel>();
+      new HashMap<>();
   private final Random random;
 
   private ConnectivityState currentState;
@@ -122,11 +122,11 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
           // after creation but since we can mutate the values we leverage that and set
           // AtomicReference which will allow mutating state info for given channel.
           .set(STATE_INFO,
-              new Ref<ConnectivityStateInfo>(ConnectivityStateInfo.forNonError(IDLE)));
+              new Ref<>(ConnectivityStateInfo.forNonError(IDLE)));
 
       Ref<Subchannel> stickyRef = null;
       if (stickinessState != null) {
-        subchannelAttrs.set(STICKY_REF, stickyRef = new Ref<Subchannel>(null));
+        subchannelAttrs.set(STICKY_REF, stickyRef = new Ref<>(null));
       }
 
       Subchannel subchannel = checkNotNull(
@@ -248,7 +248,7 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
    * remove all attributes.
    */
   private static Set<EquivalentAddressGroup> stripAttrs(List<EquivalentAddressGroup> groupList) {
-    Set<EquivalentAddressGroup> addrs = new HashSet<EquivalentAddressGroup>(groupList.size());
+    Set<EquivalentAddressGroup> addrs = new HashSet<>(groupList.size());
     for (EquivalentAddressGroup group : groupList) {
       addrs.add(new EquivalentAddressGroup(group.getAddresses()));
     }
@@ -271,7 +271,7 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
   }
 
   private static <T> Set<T> setsDifference(Set<T> a, Set<T> b) {
-    Set<T> aCopy = new HashSet<T>(a);
+    Set<T> aCopy = new HashSet<>(a);
     aCopy.removeAll(b);
     return aCopy;
   }
@@ -293,9 +293,9 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
 
     final Key<String> key;
     final ConcurrentMap<String, Ref<Subchannel>> stickinessMap =
-        new ConcurrentHashMap<String, Ref<Subchannel>>();
+        new ConcurrentHashMap<>();
 
-    final Queue<String> evictionQueue = new ConcurrentLinkedQueue<String>();
+    final Queue<String> evictionQueue = new ConcurrentLinkedQueue<>();
 
     StickinessState(@Nonnull String stickinessKey) {
       this.key = Key.of(stickinessKey, Metadata.ASCII_STRING_MARSHALLER);
@@ -425,7 +425,7 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
       // the lists cannot contain duplicate subchannels
       return other == this || (stickinessState == other.stickinessState
           && list.size() == other.list.size()
-          && new HashSet<Subchannel>(list).containsAll(other.list));
+          && new HashSet<>(list).containsAll(other.list));
     }
   }
 

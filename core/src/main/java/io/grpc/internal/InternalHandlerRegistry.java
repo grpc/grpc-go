@@ -57,7 +57,7 @@ final class InternalHandlerRegistry extends HandlerRegistry {
 
     // Store per-service first, to make sure services are added/replaced atomically.
     private final HashMap<String, ServerServiceDefinition> services =
-        new LinkedHashMap<String, ServerServiceDefinition>();
+        new LinkedHashMap<>();
 
     Builder addService(ServerServiceDefinition service) {
       services.put(service.getServiceDescriptor().getName(), service);
@@ -66,7 +66,7 @@ final class InternalHandlerRegistry extends HandlerRegistry {
 
     InternalHandlerRegistry build() {
       Map<String, ServerMethodDefinition<?, ?>> map =
-          new HashMap<String, ServerMethodDefinition<?, ?>>();
+          new HashMap<>();
       for (ServerServiceDefinition service : services.values()) {
         for (ServerMethodDefinition<?, ?> method : service.getMethods()) {
           map.put(method.getMethodDescriptor().getFullMethodName(), method);

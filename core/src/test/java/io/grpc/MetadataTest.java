@@ -140,7 +140,7 @@ public class MetadataTest {
     Metadata metadata = new Metadata();
     metadata.put(KEY, lance);
     assertEquals(lance, metadata.get(KEY));
-    Iterator<Fish> fishes = metadata.<Fish>getAll(KEY).iterator();
+    Iterator<Fish> fishes = metadata.getAll(KEY).iterator();
     assertTrue(fishes.hasNext());
     assertEquals(fishes.next(), lance);
     assertFalse(fishes.hasNext());
@@ -192,7 +192,7 @@ public class MetadataTest {
 
     h1.merge(h2);
 
-    Iterator<Fish> fishes = h1.<Fish>getAll(KEY).iterator();
+    Iterator<Fish> fishes = h1.getAll(KEY).iterator();
     assertTrue(fishes.hasNext());
     assertEquals(fishes.next(), lance);
     assertFalse(fishes.hasNext());

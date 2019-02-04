@@ -57,30 +57,30 @@ public class OptionalMethodTest {
 
   @Test
   public void isSupported() {
-    OptionalMethod<DefaultClass> defaultClassMethod = new OptionalMethod<DefaultClass>(
+    OptionalMethod<DefaultClass> defaultClassMethod = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertTrue(defaultClassMethod.isSupported(new DefaultClass()));
 
-    OptionalMethod<PublicParent> privateImpl = new OptionalMethod<PublicParent>(
+    OptionalMethod<PublicParent> privateImpl = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertTrue(privateImpl.isSupported(new PrivateImpl()));
 
-    OptionalMethod<PrivateClass> privateClass = new OptionalMethod<PrivateClass>(
+    OptionalMethod<PrivateClass> privateClass = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertFalse(privateClass.isSupported(new PrivateClass()));
   }
 
   @Test
   public void invokeOptional() throws InvocationTargetException {
-    OptionalMethod<DefaultClass> defaultClassMethod = new OptionalMethod<DefaultClass>(
+    OptionalMethod<DefaultClass> defaultClassMethod = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertEquals("testArg", defaultClassMethod.invokeOptional(new DefaultClass(), "testArg"));
 
-    OptionalMethod<PublicParent> privateImpl = new OptionalMethod<PublicParent>(
+    OptionalMethod<PublicParent> privateImpl = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertEquals("testArg", privateImpl.invokeOptional(new PrivateImpl(), "testArg"));
 
-    OptionalMethod<PrivateClass> privateClass = new OptionalMethod<PrivateClass>(
+    OptionalMethod<PrivateClass> privateClass = new OptionalMethod<>(
         String.class, "testMethod", String.class);
     assertEquals(null, privateClass.invokeOptional(new PrivateClass(), "testArg"));
   }

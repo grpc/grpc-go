@@ -102,7 +102,7 @@ public abstract class ManagedChannelProvider {
   private static final class HardcodedClasses implements Iterable<Class<?>> {
     @Override
     public Iterator<Class<?>> iterator() {
-      List<Class<?>> list = new ArrayList<Class<?>>();
+      List<Class<?>> list = new ArrayList<>();
       try {
         list.add(Class.forName("io.grpc.okhttp.OkHttpChannelProvider"));
       } catch (ClassNotFoundException ex) {

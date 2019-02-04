@@ -43,7 +43,7 @@ public class ConnectivityStateManagerTest {
 
   private final FakeClock executor = new FakeClock();
   private final ConnectivityStateManager state = new ConnectivityStateManager();
-  private final LinkedList<ConnectivityState> sink = new LinkedList<ConnectivityState>();
+  private final LinkedList<ConnectivityState> sink = new LinkedList<>();
 
   @Test
   public void noCallback() {
@@ -147,7 +147,7 @@ public class ConnectivityStateManagerTest {
 
   @Test
   public void multipleCallbacks() {
-    final LinkedList<String> callbackRuns = new LinkedList<String>();
+    final LinkedList<String> callbackRuns = new LinkedList<>();
     state.notifyWhenStateChanged(new Runnable() {
         @Override
         public void run() {

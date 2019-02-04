@@ -186,7 +186,7 @@ public class RoundRobinLoadBalancerTest {
       List<EquivalentAddressGroup> eagList =
           Arrays.asList(new EquivalentAddressGroup(allAddrs.get(i)));
       when(subchannel.getAttributes()).thenReturn(Attributes.newBuilder().set(STATE_INFO,
-          new Ref<ConnectivityStateInfo>(
+          new Ref<>(
               ConnectivityStateInfo.forNonError(READY))).build());
       when(subchannel.getAllAddresses()).thenReturn(eagList);
     }
@@ -306,7 +306,7 @@ public class RoundRobinLoadBalancerTest {
     Subchannel subchannel2 = mock(Subchannel.class);
 
     ReadyPicker picker = new ReadyPicker(Collections.unmodifiableList(
-        Lists.<Subchannel>newArrayList(subchannel, subchannel1, subchannel2)),
+        Lists.newArrayList(subchannel, subchannel1, subchannel2)),
         0 /* startIndex */, null /* stickinessState */);
 
     assertThat(picker.getList()).containsExactly(subchannel, subchannel1, subchannel2);
@@ -438,7 +438,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickinessEnabled_withoutStickyHeader() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -470,7 +470,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickinessEnabled_withStickyHeader() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -500,7 +500,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickinessEnabled_withDifferentStickyHeaders() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -545,7 +545,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickiness_goToTransientFailure_pick_backToReady() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -593,7 +593,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickiness_goToTransientFailure_backToReady_pick() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -647,7 +647,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickiness_oneSubchannelShutdown() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("stickinessMetadataKey", "my-sticky-key");
     Attributes attributes = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -703,14 +703,14 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickiness_resolveTwice_metadataKeyChanged() {
-    Map<String, Object> serviceConfig1 = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig1 = new HashMap<>();
     serviceConfig1.put("stickinessMetadataKey", "my-sticky-key1");
     Attributes attributes1 = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig1).build();
     loadBalancer.handleResolvedAddressGroups(servers, attributes1);
     Map<String, ?> stickinessMap1 = loadBalancer.getStickinessMapForTest();
 
-    Map<String, Object> serviceConfig2 = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig2 = new HashMap<>();
     serviceConfig2.put("stickinessMetadataKey", "my-sticky-key2");
     Attributes attributes2 = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig2).build();
@@ -722,7 +722,7 @@ public class RoundRobinLoadBalancerTest {
 
   @Test
   public void stickiness_resolveTwice_metadataKeyUnChanged() {
-    Map<String, Object> serviceConfig1 = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig1 = new HashMap<>();
     serviceConfig1.put("stickinessMetadataKey", "my-sticky-key1");
     Attributes attributes1 = Attributes.newBuilder()
         .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig1).build();

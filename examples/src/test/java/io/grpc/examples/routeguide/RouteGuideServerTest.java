@@ -159,7 +159,7 @@ public class RouteGuideServerTest {
     assertTrue(latch.await(1, TimeUnit.SECONDS));
 
     // verify
-    assertEquals(new HashSet<Feature>(Arrays.asList(f2, f3)), result);
+    assertEquals(new HashSet<>(Arrays.asList(f2, f3)), result);
   }
 
   @Test

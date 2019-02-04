@@ -175,9 +175,9 @@ public final class ServerInterceptors {
       final ServerServiceDefinition serviceDef,
       final MethodDescriptor.Marshaller<T> marshaller) {
     List<ServerMethodDefinition<?, ?>> wrappedMethods =
-        new ArrayList<ServerMethodDefinition<?, ?>>();
+        new ArrayList<>();
     List<MethodDescriptor<?, ?>> wrappedDescriptors =
-        new ArrayList<MethodDescriptor<?, ?>>();
+        new ArrayList<>();
     // Wrap the descriptors
     for (final ServerMethodDefinition<?, ?> definition : serviceDef.getMethods()) {
       final MethodDescriptor<?, ?> originalMethodDescriptor = definition.getMethodDescriptor();
@@ -210,7 +210,7 @@ public final class ServerInterceptors {
   static final class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
     public static <ReqT, RespT> InterceptCallHandler<ReqT, RespT> create(
         ServerInterceptor interceptor, ServerCallHandler<ReqT, RespT> callHandler) {
-      return new InterceptCallHandler<ReqT, RespT>(interceptor, callHandler);
+      return new InterceptCallHandler<>(interceptor, callHandler);
     }
 
     private final ServerInterceptor interceptor;

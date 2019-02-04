@@ -59,7 +59,7 @@ public class LoadWorkerTest {
     worker.start();
     channel = NettyChannelBuilder.forAddress("localhost", port).usePlaintext().build();
     workerServiceStub = WorkerServiceGrpc.newStub(channel);
-    marksQueue = new LinkedBlockingQueue<Stats.ClientStats>();
+    marksQueue = new LinkedBlockingQueue<>();
   }
 
   @Test

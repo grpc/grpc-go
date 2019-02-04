@@ -210,7 +210,7 @@ public class AltsProtocolNegotiatorTest {
 
     // Capture the protected data written to the wire.
     assertEquals(1, channel.outboundMessages().size());
-    ByteBuf protectedData = channel.<ByteBuf>readOutbound();
+    ByteBuf protectedData = channel.readOutbound();
     assertEquals(message.length(), writeCount.get());
 
     // Read the protected message at the server and verify it matches the original message.
@@ -276,7 +276,7 @@ public class AltsProtocolNegotiatorTest {
     // Read the protected message at the client and verify that it matches the original message.
     assertEquals(1, channel.inboundMessages().size());
 
-    ByteBuf receivedData1 = channel.<ByteBuf>readInbound();
+    ByteBuf receivedData1 = channel.readInbound();
     int receivedLen1 = receivedData1.readableBytes();
     byte[] receivedBytes = new byte[receivedLen1];
     receivedData1.readBytes(receivedBytes, 0, receivedLen1);
@@ -364,7 +364,7 @@ public class AltsProtocolNegotiatorTest {
   private void doHandshake() throws Exception {
     // Capture the client frame and add to the server.
     assertEquals(1, channel.outboundMessages().size());
-    ByteBuf clientFrame = channel.<ByteBuf>readOutbound();
+    ByteBuf clientFrame = channel.readOutbound();
     assertTrue(serverHandshaker.processBytesFromPeer(clientFrame));
 
     // Get the server response handshake frames.
@@ -374,7 +374,7 @@ public class AltsProtocolNegotiatorTest {
 
     // Capture the next client frame and add to the server.
     assertEquals(1, channel.outboundMessages().size());
-    clientFrame = channel.<ByteBuf>readOutbound();
+    clientFrame = channel.readOutbound();
     assertTrue(serverHandshaker.processBytesFromPeer(clientFrame));
 
     // Get the server response handshake frames.

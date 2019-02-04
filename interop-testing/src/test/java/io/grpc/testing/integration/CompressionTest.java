@@ -147,7 +147,7 @@ public class CompressionTest {
   @Parameters
   public static Collection<Object[]> params() {
     boolean[] bools = new boolean[]{false, true};
-    List<Object[]> combos = new ArrayList<Object[]>(64);
+    List<Object[]> combos = new ArrayList<>(64);
     for (boolean enableClientMessageCompression : bools) {
       for (boolean clientAcceptEncoding : bools) {
         for (boolean clientEncoding : bools) {
@@ -280,7 +280,7 @@ public class CompressionTest {
       }
       ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
 
-      return new ClientCompressor<ReqT, RespT>(call);
+      return new ClientCompressor<>(call);
     }
   }
 
@@ -291,7 +291,7 @@ public class CompressionTest {
 
     @Override
     public void start(io.grpc.ClientCall.Listener<RespT> responseListener, Metadata headers) {
-      super.start(new ClientHeadersCapture<RespT>(responseListener), headers);
+      super.start(new ClientHeadersCapture<>(responseListener), headers);
       setMessageCompression(enableClientMessageCompression);
     }
   }

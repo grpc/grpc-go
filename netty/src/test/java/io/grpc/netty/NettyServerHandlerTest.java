@@ -130,7 +130,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private NettyServerStream stream;
   private KeepAliveManager spyKeepAliveManager;
 
-  final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+  final Queue<InputStream> streamListenerMessageQueue = new LinkedList<>();
 
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   private int maxHeaderListSize = Integer.MAX_VALUE;

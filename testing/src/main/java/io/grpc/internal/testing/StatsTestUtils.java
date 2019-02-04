@@ -151,7 +151,7 @@ public class StatsTestUtils {
      */
     // This needs to be synchronized with getCurrentRecordSink() which may run concurrently.
     public synchronized void rolloverRecords() {
-      records = new LinkedBlockingQueue<MetricsRecord>();
+      records = new LinkedBlockingQueue<>();
     }
 
     private synchronized BlockingQueue<MetricsRecord> getCurrentRecordSink() {

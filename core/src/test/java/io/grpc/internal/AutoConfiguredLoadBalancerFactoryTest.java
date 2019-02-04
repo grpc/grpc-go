@@ -191,7 +191,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
   @Test
   public void handleResolvedAddressGroups_shutsDownOldBalancer() {
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     Attributes serviceConfigAttrs =
         Attributes.newBuilder()
@@ -407,7 +407,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_grpclbOverridesServiceConfigLbPolicy() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(
@@ -590,7 +590,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     verify(channelLogger).log(
         eq(ChannelLogLevel.DEBUG),
         eq("{0} specified by Service Config are not available"),
-        eq(new LinkedHashSet<String>(Arrays.asList("magic_balancer"))));
+        eq(new LinkedHashSet<>(Arrays.asList("magic_balancer"))));
   }
 
   @Test
@@ -652,7 +652,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
     verifyNoMoreInteractions(channelLogger);
 
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     lb.handleResolvedAddressGroups(servers,
         Attributes.newBuilder()

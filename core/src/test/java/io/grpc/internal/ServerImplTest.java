@@ -504,8 +504,8 @@ public class ServerImplTest {
     final Metadata.Key<String> metadataKey
         = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
     final AtomicReference<ServerCall<String, Integer>> callReference
-        = new AtomicReference<ServerCall<String, Integer>>();
-    final AtomicReference<Context> callContextReference = new AtomicReference<Context>();
+        = new AtomicReference<>();
+    final AtomicReference<Context> callContextReference = new AtomicReference<>();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
         new ServiceDescriptor("Waiter", method))
         .addMethod(
@@ -545,7 +545,7 @@ public class ServerImplTest {
     ServerCall<String, Integer> call = callReference.get();
     assertNotNull(call);
     assertEquals(
-        new ServerCallInfoImpl<String, Integer>(
+        new ServerCallInfoImpl<>(
             call.getMethodDescriptor(),
             call.getAttributes(),
             call.getAuthority()),
@@ -606,9 +606,9 @@ public class ServerImplTest {
     final Attributes.Key<String> key2 = Attributes.Key.create("test-key2");
     final Attributes.Key<String> key3 = Attributes.Key.create("test-key3");
     final AtomicReference<Attributes> filter1TerminationCallbackArgument =
-        new AtomicReference<Attributes>();
+        new AtomicReference<>();
     final AtomicReference<Attributes> filter2TerminationCallbackArgument =
-        new AtomicReference<Attributes>();
+        new AtomicReference<>();
     final AtomicInteger readyCallbackCalled = new AtomicInteger(0);
     final AtomicInteger terminationCallbackCalled = new AtomicInteger(0);
     builder.addTransportFilter(new ServerTransportFilter() {
@@ -677,7 +677,7 @@ public class ServerImplTest {
 
   @Test
   public void interceptors() throws Exception {
-    final LinkedList<Context> capturedContexts = new LinkedList<Context>();
+    final LinkedList<Context> capturedContexts = new LinkedList<>();
     final Context.Key<String> key1 = Context.key("key1");
     final Context.Key<String> key2 = Context.key("key2");
     final Context.Key<String> key3 = Context.key("key3");
@@ -1024,9 +1024,9 @@ public class ServerImplTest {
   @Test
   public void testClientClose_cancelTriggersImmediateCancellation() throws Exception {
     AtomicBoolean contextCancelled = new AtomicBoolean(false);
-    AtomicReference<Context> context = new AtomicReference<Context>();
+    AtomicReference<Context> context = new AtomicReference<>();
     AtomicReference<ServerCall<String, Integer>> callReference
-        = new AtomicReference<ServerCall<String, Integer>>();
+        = new AtomicReference<>();
 
     ServerStreamListener streamListener = testClientClose_setup(callReference,
         context, contextCancelled);
@@ -1047,9 +1047,9 @@ public class ServerImplTest {
   @Test
   public void testClientClose_OkTriggersDelayedCancellation() throws Exception {
     AtomicBoolean contextCancelled = new AtomicBoolean(false);
-    AtomicReference<Context> context = new AtomicReference<Context>();
+    AtomicReference<Context> context = new AtomicReference<>();
     AtomicReference<ServerCall<String, Integer>> callReference
-        = new AtomicReference<ServerCall<String, Integer>>();
+        = new AtomicReference<>();
 
     ServerStreamListener streamListener = testClientClose_setup(callReference,
         context, contextCancelled);

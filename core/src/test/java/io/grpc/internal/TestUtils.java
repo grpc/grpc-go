@@ -69,7 +69,7 @@ final class TestUtils {
   static BlockingQueue<MockClientTransportInfo> captureTransports(
       ClientTransportFactory mockTransportFactory, @Nullable final Runnable startRunnable) {
     final BlockingQueue<MockClientTransportInfo> captor =
-        new LinkedBlockingQueue<MockClientTransportInfo>();
+        new LinkedBlockingQueue<>();
 
     doAnswer(new Answer<ConnectionClientTransport>() {
       @Override

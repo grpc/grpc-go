@@ -41,7 +41,7 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
   private final TransportExecutor transportExecutor;
 
   /** Queue for messages returned by the deframer when deframing in the application thread. */
-  private final Queue<InputStream> messageReadQueue = new ArrayDeque<InputStream>();
+  private final Queue<InputStream> messageReadQueue = new ArrayDeque<>();
 
   ApplicationThreadDeframer(
       MessageDeframer.Listener listener,

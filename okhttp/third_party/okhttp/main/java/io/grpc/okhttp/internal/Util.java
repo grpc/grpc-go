@@ -222,7 +222,7 @@ public final class Util {
 
   /** Returns an immutable copy of {@code map}. */
   public static <K, V> Map<K, V> immutableMap(Map<K, V> map) {
-    return Collections.unmodifiableMap(new LinkedHashMap<K, V>(map));
+    return Collections.unmodifiableMap(new LinkedHashMap<>(map));
   }
 
   public static ThreadFactory threadFactory(final String name, final boolean daemon) {

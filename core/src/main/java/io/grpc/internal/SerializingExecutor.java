@@ -62,7 +62,7 @@ public final class SerializingExecutor implements Executor, Runnable {
   private final Executor executor;
 
   /** A list of Runnables to be run in order. */
-  private final Queue<Runnable> runQueue = new ConcurrentLinkedQueue<Runnable>();
+  private final Queue<Runnable> runQueue = new ConcurrentLinkedQueue<>();
 
   private volatile int runState = STOPPED;
 

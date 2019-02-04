@@ -163,15 +163,15 @@ public class Platform {
     if (androidOrAppEngineProvider != null) {
       // Attempt to find Android 2.3+ APIs.
       OptionalMethod<Socket> setUseSessionTickets
-          = new OptionalMethod<Socket>(null, "setUseSessionTickets", boolean.class);
+          = new OptionalMethod<>(null, "setUseSessionTickets", boolean.class);
       OptionalMethod<Socket> setHostname
-          = new OptionalMethod<Socket>(null, "setHostname", String.class);
+          = new OptionalMethod<>(null, "setHostname", String.class);
       Method trafficStatsTagSocket = null;
       Method trafficStatsUntagSocket = null;
       OptionalMethod<Socket> getAlpnSelectedProtocol =
-          new OptionalMethod<Socket>(byte[].class, "getAlpnSelectedProtocol");
+          new OptionalMethod<>(byte[].class, "getAlpnSelectedProtocol");
       OptionalMethod<Socket> setAlpnProtocols =
-          new OptionalMethod<Socket>(null, "setAlpnProtocols", byte[].class);
+          new OptionalMethod<>(null, "setAlpnProtocols", byte[].class);
 
       // Attempt to find Android 4.0+ APIs.
       try {

@@ -209,7 +209,7 @@ public abstract class AbstractManagedChannelImplBuilder
   @Override
   public final T executor(Executor executor) {
     if (executor != null) {
-      this.executorPool = new FixedObjectPool<Executor>(executor);
+      this.executorPool = new FixedObjectPool<>(executor);
     } else {
       this.executorPool = DEFAULT_EXECUTOR_POOL;
     }

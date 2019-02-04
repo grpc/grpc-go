@@ -67,7 +67,7 @@ public final class ServiceDescriptor {
   private ServiceDescriptor(Builder b) {
     this.name = b.name;
     validateMethodNames(name, b.methods);
-    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(b.methods));
+    this.methods = Collections.unmodifiableList(new ArrayList<>(b.methods));
     this.schemaDescriptor = b.schemaDescriptor;
   }
 
@@ -107,7 +107,7 @@ public final class ServiceDescriptor {
   }
 
   static void validateMethodNames(String serviceName, Collection<MethodDescriptor<?, ?>> methods) {
-    Set<String> allNames = new HashSet<String>(methods.size());
+    Set<String> allNames = new HashSet<>(methods.size());
     for (MethodDescriptor<?, ?> method : methods) {
       checkNotNull(method, "method");
       String methodServiceName =
@@ -139,7 +139,7 @@ public final class ServiceDescriptor {
     }
 
     private String name;
-    private List<MethodDescriptor<?, ?>> methods = new ArrayList<MethodDescriptor<?, ?>>();
+    private List<MethodDescriptor<?, ?>> methods = new ArrayList<>();
     private Object schemaDescriptor;
 
     /**

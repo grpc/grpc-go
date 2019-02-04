@@ -66,7 +66,7 @@ public final class NettyChannelBuilder
   private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
 
   private final Map<ChannelOption<?>, Object> channelOptions =
-      new HashMap<ChannelOption<?>, Object>();
+      new HashMap<>();
 
   private NegotiationType negotiationType = NegotiationType.TLS;
   private OverrideAuthorityChecker authorityChecker;

@@ -91,7 +91,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   @GuardedBy("this")
   private Status shutdownStatus;
   @GuardedBy("this")
-  private Set<InProcessStream> streams = new HashSet<InProcessStream>();
+  private Set<InProcessStream> streams = new HashSet<>();
   @GuardedBy("this")
   private List<ServerStreamTracer.Factory> serverStreamTracerFactories;
   private final Attributes attributes = Attributes.newBuilder()
@@ -368,7 +368,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       private int clientRequested;
       @GuardedBy("this")
       private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue =
-          new ArrayDeque<StreamListener.MessageProducer>();
+          new ArrayDeque<>();
       @GuardedBy("this")
       private Status clientNotifyStatus;
       @GuardedBy("this")
@@ -614,7 +614,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       private int serverRequested;
       @GuardedBy("this")
       private ArrayDeque<StreamListener.MessageProducer> serverReceiveQueue =
-          new ArrayDeque<StreamListener.MessageProducer>();
+          new ArrayDeque<>();
       @GuardedBy("this")
       private boolean serverNotifyHalfClose;
       // Only is intended to prevent double-close when server closes.

@@ -45,9 +45,9 @@ public final class LoadBalancerRegistry {
   private static final Iterable<Class<?>> HARDCODED_CLASSES = getHardCodedClasses();
 
   private final LinkedHashSet<LoadBalancerProvider> allProviders =
-      new LinkedHashSet<LoadBalancerProvider>();
+      new LinkedHashSet<>();
   private final LinkedHashMap<String, LoadBalancerProvider> effectiveProviders =
-      new LinkedHashMap<String, LoadBalancerProvider>();
+      new LinkedHashMap<>();
 
   /**
    * Register a provider.
@@ -131,7 +131,7 @@ public final class LoadBalancerRegistry {
    */
   @VisibleForTesting
   synchronized Map<String, LoadBalancerProvider> providers() {
-    return new LinkedHashMap<String, LoadBalancerProvider>(effectiveProviders);
+    return new LinkedHashMap<>(effectiveProviders);
   }
 
   @VisibleForTesting
@@ -139,7 +139,7 @@ public final class LoadBalancerRegistry {
     // Class.forName(String) is used to remove the need for ProGuard configuration. Note that
     // ProGuard does not detect usages of Class.forName(String, boolean, ClassLoader):
     // https://sourceforge.net/p/proguard/bugs/418/
-    ArrayList<Class<?>> list = new ArrayList<Class<?>>();
+    ArrayList<Class<?>> list = new ArrayList<>();
     try {
       list.add(Class.forName("io.grpc.internal.PickFirstLoadBalancerProvider"));
     } catch (ClassNotFoundException e) {

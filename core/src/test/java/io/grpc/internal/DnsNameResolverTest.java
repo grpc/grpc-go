@@ -613,7 +613,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_failsOnMisspelling() {
-    Map<String, Object> bad = new LinkedHashMap<String, Object>();
+    Map<String, Object> bad = new LinkedHashMap<>();
     bad.put("parcentage", 1.0);
     thrown.expectMessage("Bad key");
 
@@ -622,7 +622,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageMatchesJava() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> langs = new ArrayList<>();
     langs.add("java");
     choice.put("clientLanguage", langs);
@@ -633,7 +633,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageDoesntMatchGo() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> langs = new ArrayList<>();
     langs.add("go");
     choice.put("clientLanguage", langs);
@@ -644,7 +644,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageCaseInsensitive() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> langs = new ArrayList<>();
     langs.add("JAVA");
     choice.put("clientLanguage", langs);
@@ -655,7 +655,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageMatchesEmtpy() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> langs = new ArrayList<>();
     choice.put("clientLanguage", langs);
     choice.put("serviceConfig", serviceConfig);
@@ -665,7 +665,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageMatchesMulti() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> langs = new ArrayList<>();
     langs.add("go");
     langs.add("java");
@@ -677,7 +677,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageZeroAlwaysFails() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 0D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -686,7 +686,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageHundredAlwaysSucceeds() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 100D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -695,7 +695,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAboveMatches50() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 50D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -711,7 +711,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAtFails50() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 50D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -727,7 +727,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAboveMatches99() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 99D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -743,7 +743,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAtFails99() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 99D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -759,7 +759,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAboveMatches1() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 1D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -775,7 +775,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_percentageAtFails1() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     choice.put("percentage", 1D);
     choice.put("serviceConfig", serviceConfig);
 
@@ -791,7 +791,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_hostnameMatches() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> hosts = new ArrayList<>();
     hosts.add("localhost");
     choice.put("clientHostname", hosts);
@@ -802,7 +802,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_hostnameDoesntMatch() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> hosts = new ArrayList<>();
     hosts.add("localhorse");
     choice.put("clientHostname", hosts);
@@ -813,7 +813,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_clientLanguageCaseSensitive() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> hosts = new ArrayList<>();
     hosts.add("LOCALHOST");
     choice.put("clientHostname", hosts);
@@ -824,7 +824,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_hostnameMatchesEmtpy() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> hosts = new ArrayList<>();
     choice.put("clientHostname", hosts);
     choice.put("serviceConfig", serviceConfig);
@@ -834,7 +834,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void maybeChooseServiceConfig_hostnameMatchesMulti() {
-    Map<String, Object> choice = new LinkedHashMap<String, Object>();
+    Map<String, Object> choice = new LinkedHashMap<>();
     List<Object> hosts = new ArrayList<>();
     hosts.add("localhorse");
     hosts.add("localhost");

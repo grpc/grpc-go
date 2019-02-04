@@ -231,7 +231,7 @@ public class CensusModulesTest {
                 }
               }).build());
 
-    final AtomicReference<CallOptions> capturedCallOptions = new AtomicReference<CallOptions>();
+    final AtomicReference<CallOptions> capturedCallOptions = new AtomicReference<>();
     ClientInterceptor callOptionsCaptureInterceptor = new ClientInterceptor() {
         @Override
         public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -830,7 +830,7 @@ public class CensusModulesTest {
     headers.put(
         Metadata.Key.of("never-used-key-bin", Metadata.BINARY_BYTE_MARSHALLER),
         new byte[] {});
-    Set<String> originalHeaderKeys = new HashSet<String>(headers.keys());
+    Set<String> originalHeaderKeys = new HashSet<>(headers.keys());
 
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(BlankSpan.INSTANCE, method);
@@ -1020,7 +1020,7 @@ public class CensusModulesTest {
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
 
     serverStreamTracer.serverCallStarted(
-        new ServerCallInfoImpl<String, String>(method, Attributes.EMPTY, null));
+        new ServerCallInfoImpl<>(method, Attributes.EMPTY, null));
 
     verify(spyServerSpan, never()).end(any(EndSpanOptions.class));
 
@@ -1063,7 +1063,7 @@ public class CensusModulesTest {
     serverStreamTracer.filterContext(Context.ROOT);
 
     serverStreamTracer.serverCallStarted(
-        new ServerCallInfoImpl<String, String>(sampledMethod, Attributes.EMPTY, null));
+        new ServerCallInfoImpl<>(sampledMethod, Attributes.EMPTY, null));
 
     serverStreamTracer.streamClosed(Status.CANCELLED);
 

@@ -41,7 +41,7 @@ public class NameResolverProviderTest {
 
   @Test
   public void getDefaultScheme_noProvider() {
-    List<NameResolverProvider> providers = Collections.<NameResolverProvider>emptyList();
+    List<NameResolverProvider> providers = Collections.emptyList();
     NameResolver.Factory factory = NameResolverProvider.asFactory(providers);
     try {
       factory.getDefaultScheme();
@@ -67,7 +67,7 @@ public class NameResolverProviderTest {
 
   @Test
   public void newNameResolver_noProvider() {
-    List<NameResolverProvider> providers = Collections.<NameResolverProvider>emptyList();
+    List<NameResolverProvider> providers = Collections.emptyList();
     NameResolver.Factory factory = NameResolverProvider.asFactory(providers);
     try {
       factory.newNameResolver(uri, attributes);

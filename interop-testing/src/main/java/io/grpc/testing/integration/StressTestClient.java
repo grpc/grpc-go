@@ -109,7 +109,7 @@ public class StressTestClient {
 
   private Server metricsServer;
   private final Map<String, Metrics.GaugeResponse> gauges =
-      new ConcurrentHashMap<String, Metrics.GaugeResponse>();
+      new ConcurrentHashMap<>();
 
   private volatile boolean shutdown;
 
@@ -117,7 +117,7 @@ public class StressTestClient {
    * List of futures that {@link #blockUntilStressTestComplete()} waits for.
    */
   private final List<ListenableFuture<?>> workerFutures =
-      new ArrayList<ListenableFuture<?>>();
+      new ArrayList<>();
   private final List<ManagedChannel> channels = new ArrayList<>();
   private ListeningExecutorService threadpool;
 
@@ -325,7 +325,7 @@ public class StressTestClient {
   }
 
   private static List<List<String>> parseCommaSeparatedTuples(String str) {
-    List<List<String>> tuples = new ArrayList<List<String>>();
+    List<List<String>> tuples = new ArrayList<>();
     for (String tupleStr : Splitter.on(',').split(str)) {
       int splitIdx = tupleStr.lastIndexOf(':');
       if (splitIdx == -1) {

@@ -195,10 +195,10 @@ final class ManagedChannelImpl extends ManagedChannel implements
   // Must be mutated from syncContext
   // If any monitoring hook to be added later needs to get a snapshot of this Set, we could
   // switch to a ConcurrentHashMap.
-  private final Set<InternalSubchannel> subchannels = new HashSet<InternalSubchannel>(16, .75f);
+  private final Set<InternalSubchannel> subchannels = new HashSet<>(16, .75f);
 
   // Must be mutated from syncContext
-  private final Set<OobChannel> oobChannels = new HashSet<OobChannel>(1, .75f);
+  private final Set<OobChannel> oobChannels = new HashSet<>(1, .75f);
 
   // reprocess() must be run from syncContext
   private final DelayedClientTransport delayedTransport;
@@ -815,14 +815,14 @@ final class ManagedChannelImpl extends ManagedChannel implements
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
-      return new ClientCallImpl<ReqT, RespT>(
-              method,
-              getCallExecutor(callOptions),
-              callOptions,
-              transportProvider,
-              terminated ? null : transportFactory.getScheduledExecutorService(),
-              channelCallTracer,
-              retryEnabled)
+      return new ClientCallImpl<>(
+          method,
+          getCallExecutor(callOptions),
+          callOptions,
+          transportProvider,
+          terminated ? null : transportFactory.getScheduledExecutorService(),
+          channelCallTracer,
+          retryEnabled)
           .setFullStreamDecompression(fullStreamDecompression)
           .setDecompressorRegistry(decompressorRegistry)
           .setCompressorRegistry(compressorRegistry);

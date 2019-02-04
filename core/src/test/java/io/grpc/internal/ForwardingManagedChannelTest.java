@@ -86,7 +86,7 @@ public final class ForwardingManagedChannelTest {
 
   @Test
   public void newCall() {
-    NoopClientCall<Void, Void> clientCall = new NoopClientCall<Void, Void>();
+    NoopClientCall<Void, Void> clientCall = new NoopClientCall<>();
     CallOptions callOptions = CallOptions.DEFAULT.withoutWaitForReady();
     MethodDescriptor<Void, Void> method = TestMethodDescriptors.voidMethod();
     when(mock.newCall(same(method), same(callOptions))).thenReturn(clientCall);

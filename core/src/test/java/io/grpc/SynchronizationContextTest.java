@@ -99,8 +99,8 @@ public class SynchronizationContextTest {
     final CountDownLatch task1Running = new CountDownLatch(1);
     final CountDownLatch task1Proceed = new CountDownLatch(1);
     final CountDownLatch sideThreadDone = new CountDownLatch(1);
-    final AtomicReference<Thread> task1Thread = new AtomicReference<Thread>();
-    final AtomicReference<Thread> task2Thread = new AtomicReference<Thread>();
+    final AtomicReference<Thread> task1Thread = new AtomicReference<>();
+    final AtomicReference<Thread> task2Thread = new AtomicReference<>();
 
     doAnswer(new Answer<Void>() {
         @Override

@@ -627,9 +627,9 @@ final class BinlogHelper {
     FactoryImpl(BinaryLogSink sink, String configurationString) {
       checkNotNull(sink, "sink");
       BinlogHelper globalLog = null;
-      Map<String, BinlogHelper> perServiceLogs = new HashMap<String, BinlogHelper>();
-      Map<String, BinlogHelper> perMethodLogs = new HashMap<String, BinlogHelper>();
-      Set<String> blacklistedMethods = new HashSet<String>();
+      Map<String, BinlogHelper> perServiceLogs = new HashMap<>();
+      Map<String, BinlogHelper> perMethodLogs = new HashMap<>();
+      Set<String> blacklistedMethods = new HashSet<>();
       if (configurationString != null && configurationString.length() > 0) {
         for (String configuration : Splitter.on(',').split(configurationString)) {
           Matcher configMatcher = configRe.matcher(configuration);
@@ -796,11 +796,11 @@ final class BinlogHelper {
     return builder.build();
   }
 
-  private static final Set<String> NEVER_INCLUDED_METADATA = new HashSet<String>(
+  private static final Set<String> NEVER_INCLUDED_METADATA = new HashSet<>(
       Collections.singletonList(
           // grpc-status-details-bin is already logged in a field of the binlog proto
           STATUS_DETAILS_KEY.name()));
-  private static final Set<String> ALWAYS_INCLUDED_METADATA = new HashSet<String>(
+  private static final Set<String> ALWAYS_INCLUDED_METADATA = new HashSet<>(
       Collections.singletonList(
           "grpc-trace-bin"));
 
@@ -846,7 +846,7 @@ final class BinlogHelper {
         }
       }
     }
-    return new MaybeTruncated<io.grpc.binarylog.v1.Metadata.Builder>(metaBuilder, truncated);
+    return new MaybeTruncated<>(metaBuilder, truncated);
   }
 
   @VisibleForTesting
@@ -861,6 +861,6 @@ final class BinlogHelper {
       int desiredBytes = Math.min(maxMessageBytes, message.length);
       msgBuilder.setData(ByteString.copyFrom(message, 0, desiredBytes));
     }
-    return new MaybeTruncated<Message.Builder>(msgBuilder, maxMessageBytes < message.length);
+    return new MaybeTruncated<>(msgBuilder, maxMessageBytes < message.length);
   }
 }

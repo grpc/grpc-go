@@ -49,9 +49,9 @@ public final class ManagedChannelOrphanWrapperTest {
     ManagedChannel mc = new TestManagedChannel();
     String channelString = mc.toString();
     final ReferenceQueue<ManagedChannelOrphanWrapper> refqueue =
-        new ReferenceQueue<ManagedChannelOrphanWrapper>();
+        new ReferenceQueue<>();
     ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs =
-        new ConcurrentHashMap<ManagedChannelReference, ManagedChannelReference>();
+        new ConcurrentHashMap<>();
 
     assertEquals(0, refs.size());
     ManagedChannelOrphanWrapper channel = new ManagedChannelOrphanWrapper(mc, refqueue, refs);
@@ -103,9 +103,9 @@ public final class ManagedChannelOrphanWrapperTest {
   @Test
   public void refCycleIsGCed() {
     ReferenceQueue<ManagedChannelOrphanWrapper> refqueue =
-        new ReferenceQueue<ManagedChannelOrphanWrapper>();
+        new ReferenceQueue<>();
     ConcurrentMap<ManagedChannelReference, ManagedChannelReference> refs =
-        new ConcurrentHashMap<ManagedChannelReference, ManagedChannelReference>();
+        new ConcurrentHashMap<>();
     ApplicationWithChannelRef app = new ApplicationWithChannelRef();
     ChannelWithApplicationRef channelImpl = new ChannelWithApplicationRef();
     ManagedChannelOrphanWrapper channel =
@@ -113,7 +113,7 @@ public final class ManagedChannelOrphanWrapperTest {
     app.channel = channel;
     channelImpl.application = app;
     WeakReference<ApplicationWithChannelRef> appWeakRef =
-        new WeakReference<ApplicationWithChannelRef>(app);
+        new WeakReference<>(app);
 
     // Simulate the application and channel going out of scope. A ref cycle between app and
     // channel remains, so ensure that our tracking of orphaned channels does not prevent this

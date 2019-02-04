@@ -64,7 +64,7 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
 
   // Specific finish types
   @GuardedBy("this")
-  private Map<String, LongHolder> callsDroppedPerToken = new HashMap<String, LongHolder>(1);
+  private Map<String, LongHolder> callsDroppedPerToken = new HashMap<>(1);
   @SuppressWarnings("unused")
   private volatile long callsFailedToSend;
   @SuppressWarnings("unused")
@@ -112,7 +112,7 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
     synchronized (this) {
       if (!callsDroppedPerToken.isEmpty()) {
         localCallsDroppedPerToken = callsDroppedPerToken;
-        callsDroppedPerToken = new HashMap<String, LongHolder>(localCallsDroppedPerToken.size());
+        callsDroppedPerToken = new HashMap<>(localCallsDroppedPerToken.size());
       }
     }
     for (Entry<String, LongHolder> entry : localCallsDroppedPerToken.entrySet()) {

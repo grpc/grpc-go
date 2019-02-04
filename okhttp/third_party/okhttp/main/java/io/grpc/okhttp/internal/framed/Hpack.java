@@ -118,7 +118,7 @@ final class Hpack {
   // http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-12#section-3.1
   static final class Reader {
 
-    private final List<io.grpc.okhttp.internal.framed.Header> headerList = new ArrayList<io.grpc.okhttp.internal.framed.Header>();
+    private final List<io.grpc.okhttp.internal.framed.Header> headerList = new ArrayList<>();
     private final BufferedSource source;
 
     private int headerTableSizeSetting;
@@ -222,7 +222,7 @@ final class Hpack {
     }
 
     public List<io.grpc.okhttp.internal.framed.Header> getAndResetHeaderList() {
-      List<io.grpc.okhttp.internal.framed.Header> result = new ArrayList<io.grpc.okhttp.internal.framed.Header>(headerList);
+      List<io.grpc.okhttp.internal.framed.Header> result = new ArrayList<>(headerList);
       headerList.clear();
       return result;
     }
@@ -362,7 +362,7 @@ final class Hpack {
 
   private static Map<ByteString, Integer> nameToFirstIndex() {
     Map<ByteString, Integer> result =
-        new LinkedHashMap<ByteString, Integer>(STATIC_HEADER_TABLE.length);
+        new LinkedHashMap<>(STATIC_HEADER_TABLE.length);
     for (int i = 0; i < STATIC_HEADER_TABLE.length; i++) {
       if (!result.containsKey(STATIC_HEADER_TABLE[i].name)) {
         result.put(STATIC_HEADER_TABLE[i].name, i);

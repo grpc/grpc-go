@@ -632,7 +632,7 @@ public class RetriableStreamTest {
     ArgumentCaptor<ClientStreamListener> sublistenerCaptor1 =
         ArgumentCaptor.forClass(ClientStreamListener.class);
     final AtomicReference<ClientStreamListener> sublistenerCaptor2 =
-        new AtomicReference<ClientStreamListener>();
+        new AtomicReference<>();
     final Status cancelStatus = Status.CANCELLED.withDescription("c");
     ClientStream mockStream1 =
         mock(
@@ -762,7 +762,7 @@ public class RetriableStreamTest {
   @Test
   public void isReady_whileDraining() {
     final AtomicReference<ClientStreamListener> sublistenerCaptor1 =
-        new AtomicReference<ClientStreamListener>();
+        new AtomicReference<>();
     final List<Boolean> readiness = new ArrayList<>();
     ClientStream mockStream1 =
         mock(

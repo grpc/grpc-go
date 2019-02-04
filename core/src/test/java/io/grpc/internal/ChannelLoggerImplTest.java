@@ -43,7 +43,7 @@ public class ChannelLoggerImplTest {
   private final FakeClock clock = new FakeClock();
   private final InternalLogId logId = InternalLogId.allocate("test", /*details=*/ null);
   private final String logPrefix = "[" + logId + "] ";
-  private final ArrayList<String> logs = new ArrayList<String>();
+  private final ArrayList<String> logs = new ArrayList<>();
   private final Handler handler = new Handler() {
       @Override
       public void publish(LogRecord record) {

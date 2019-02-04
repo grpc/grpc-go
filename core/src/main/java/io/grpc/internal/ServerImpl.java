@@ -554,7 +554,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         Context.CancellableContext context, StatsTraceContext statsTraceCtx) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       statsTraceCtx.serverCallStarted(
-          new ServerCallInfoImpl<ReqT, RespT>(
+          new ServerCallInfoImpl<>(
               methodDef.getMethodDescriptor(), // notify with original method descriptor
               stream.getAttributes(),
               stream.getAuthority()));
@@ -574,7 +574,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         ServerStream stream,
         Metadata headers,
         Context.CancellableContext context) {
-      ServerCallImpl<WReqT, WRespT> call = new ServerCallImpl<WReqT, WRespT>(
+      ServerCallImpl<WReqT, WRespT> call = new ServerCallImpl<>(
           stream,
           methodDef.getMethodDescriptor(),
           headers,

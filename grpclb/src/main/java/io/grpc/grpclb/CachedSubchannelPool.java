@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  */
 final class CachedSubchannelPool implements SubchannelPool {
   private final HashMap<EquivalentAddressGroup, CacheEntry> cache =
-      new HashMap<EquivalentAddressGroup, CacheEntry>();
+      new HashMap<>();
 
   private Helper helper;
 

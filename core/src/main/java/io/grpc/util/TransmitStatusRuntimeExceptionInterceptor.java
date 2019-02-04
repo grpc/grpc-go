@@ -56,7 +56,7 @@ public final class TransmitStatusRuntimeExceptionInterceptor implements ServerIn
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
       ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-    final ServerCall<ReqT, RespT> serverCall = new SerializingServerCall<ReqT, RespT>(call);
+    final ServerCall<ReqT, RespT> serverCall = new SerializingServerCall<>(call);
     ServerCall.Listener<ReqT> listener = next.startCall(serverCall, headers);
     return new ForwardingServerCallListener.SimpleForwardingServerCallListener<ReqT>(listener) {
       @Override

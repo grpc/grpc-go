@@ -41,7 +41,7 @@ public class StreamRecorder<T> implements StreamObserver<T> {
    * Creates a new recorder.
    */
   public static <T> StreamRecorder<T> create() {
-    return new StreamRecorder<T>();
+    return new StreamRecorder<>();
   }
 
   private final CountDownLatch latch;

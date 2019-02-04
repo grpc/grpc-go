@@ -69,7 +69,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   private NettyServerHandler handler;
 
   private Metadata trailers = new Metadata();
-  private final Queue<InputStream> listenerMessageQueue = new LinkedList<InputStream>();
+  private final Queue<InputStream> listenerMessageQueue = new LinkedList<>();
 
   @Before
   @Override

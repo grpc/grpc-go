@@ -326,7 +326,7 @@ public class ManagedChannelImplTest {
   @Test
   public void createSubchannelOutsideSynchronizationContextShouldLogWarning() {
     createChannel();
-    final AtomicReference<LogRecord> logRef = new AtomicReference<LogRecord>();
+    final AtomicReference<LogRecord> logRef = new AtomicReference<>();
     Handler handler = new Handler() {
       @Override
       public void publish(LogRecord record) {
@@ -1711,8 +1711,8 @@ public class ManagedChannelImplTest {
     CallOptions callOptions = CallOptions.DEFAULT.withCallCredentials(creds);
     final Context.Key<String> testKey = Context.key("testing");
     Context ctx = Context.current().withValue(testKey, "testValue");
-    final LinkedList<Context> credsApplyContexts = new LinkedList<Context>();
-    final LinkedList<Context> newStreamContexts = new LinkedList<Context>();
+    final LinkedList<Context> credsApplyContexts = new LinkedList<>();
+    final LinkedList<Context> newStreamContexts = new LinkedList<>();
     doAnswer(new Answer<Void>() {
         @Override
         public Void answer(InvocationOnMock in) throws Throwable {
@@ -2599,7 +2599,7 @@ public class ManagedChannelImplTest {
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
 
     prevSize = getStats(channel).channelTrace.events.size();
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("methodConfig", new HashMap<String, Object>());
     attributes =
         Attributes.newBuilder()
@@ -2943,18 +2943,18 @@ public class ManagedChannelImplTest {
 
   @Test
   public void retryBackoffThenChannelShutdown_retryShouldStillHappen_newCallShouldFail() {
-    Map<String, Object> retryPolicy = new HashMap<String, Object>();
+    Map<String, Object> retryPolicy = new HashMap<>();
     retryPolicy.put("maxAttempts", 3D);
     retryPolicy.put("initialBackoff", "10s");
     retryPolicy.put("maxBackoff", "30s");
     retryPolicy.put("backoffMultiplier", 2D);
     retryPolicy.put("retryableStatusCodes", Arrays.<Object>asList("UNAVAILABLE"));
-    Map<String, Object> methodConfig = new HashMap<String, Object>();
-    Map<String, Object> name = new HashMap<String, Object>();
+    Map<String, Object> methodConfig = new HashMap<>();
+    Map<String, Object> name = new HashMap<>();
     name.put("service", "service");
     methodConfig.put("name", Arrays.<Object>asList(name));
     methodConfig.put("retryPolicy", retryPolicy);
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("methodConfig", Arrays.<Object>asList(methodConfig));
     Attributes attributesWithRetryPolicy = Attributes
         .newBuilder().set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -3050,16 +3050,16 @@ public class ManagedChannelImplTest {
 
   @Test
   public void hedgingScheduledThenChannelShutdown_hedgeShouldStillHappen_newCallShouldFail() {
-    Map<String, Object> hedgingPolicy = new HashMap<String, Object>();
+    Map<String, Object> hedgingPolicy = new HashMap<>();
     hedgingPolicy.put("maxAttempts", 3D);
     hedgingPolicy.put("hedgingDelay", "10s");
     hedgingPolicy.put("nonFatalStatusCodes", Arrays.<Object>asList("UNAVAILABLE"));
-    Map<String, Object> methodConfig = new HashMap<String, Object>();
-    Map<String, Object> name = new HashMap<String, Object>();
+    Map<String, Object> methodConfig = new HashMap<>();
+    Map<String, Object> name = new HashMap<>();
     name.put("service", "service");
     methodConfig.put("name", Arrays.<Object>asList(name));
     methodConfig.put("hedgingPolicy", hedgingPolicy);
-    Map<String, Object> serviceConfig = new HashMap<String, Object>();
+    Map<String, Object> serviceConfig = new HashMap<>();
     serviceConfig.put("methodConfig", Arrays.<Object>asList(methodConfig));
     Attributes attributesWithRetryPolicy = Attributes
         .newBuilder().set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig).build();
@@ -3286,7 +3286,7 @@ public class ManagedChannelImplTest {
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<>();
     // The Attributes argument of the next invocation of listener.onAddresses(servers, attrs)
     final AtomicReference<Attributes> nextResolvedAttributes =
-        new AtomicReference<Attributes>(Attributes.EMPTY);
+        new AtomicReference<>(Attributes.EMPTY);
 
     FakeNameResolverFactory(
         URI expectedUri,
@@ -3367,7 +3367,7 @@ public class ManagedChannelImplTest {
 
     static final class Builder {
       final URI expectedUri;
-      List<EquivalentAddressGroup> servers = ImmutableList.<EquivalentAddressGroup>of();
+      List<EquivalentAddressGroup> servers = ImmutableList.of();
       boolean resolvedAtStart = true;
       Status error = null;
 
@@ -3412,7 +3412,7 @@ public class ManagedChannelImplTest {
   // We need this because createSubchannel() should be called from the SynchronizationContext
   private static Subchannel createSubchannelSafely(
       final Helper helper, final EquivalentAddressGroup addressGroup, final Attributes attrs) {
-    final AtomicReference<Subchannel> resultCapture = new AtomicReference<Subchannel>();
+    final AtomicReference<Subchannel> resultCapture = new AtomicReference<>();
     helper.getSynchronizationContext().execute(
         new Runnable() {
           @Override

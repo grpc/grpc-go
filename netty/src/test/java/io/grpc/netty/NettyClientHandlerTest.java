@@ -129,7 +129,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Mock
   private ClientStreamListener streamListener;
 
-  private final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+  private final Queue<InputStream> streamListenerMessageQueue = new LinkedList<>();
 
   @Override
   protected void manualSetUp() throws Exception {

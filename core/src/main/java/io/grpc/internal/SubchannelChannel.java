@@ -106,7 +106,7 @@ final class SubchannelChannel extends Channel {
         public void sendMessage(RequestT message) {}
       };
     }
-    return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
+    return new ClientCallImpl<>(methodDescriptor,
         effectiveExecutor,
         callOptions.withOption(GrpcUtil.CALL_OPTIONS_RPC_OWNED_BY_BALANCER, Boolean.TRUE),
         transportProvider, deadlineCancellationExecutor, callsTracer, false /* retryEnabled */);

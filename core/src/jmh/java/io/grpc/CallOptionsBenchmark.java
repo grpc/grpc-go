@@ -49,7 +49,7 @@ public class CallOptionsBenchmark {
    */
   @Setup
   public void setUp() throws Exception {
-    customOptions = new ArrayList<CallOptions.Key<String>>(customOptionsCount);
+    customOptions = new ArrayList<>(customOptionsCount);
     for (int i = 0; i < customOptionsCount; i++) {
       customOptions.add(CallOptions.Key.createWithDefault("name " + i, "defaultvalue"));
     }
@@ -59,7 +59,7 @@ public class CallOptionsBenchmark {
       allOpts = allOpts.withOption(customOptions.get(i), "value");
     }
 
-    shuffledCustomOptions = new ArrayList<CallOptions.Key<String>>(customOptions);
+    shuffledCustomOptions = new ArrayList<>(customOptions);
     // Make the shuffling deterministic
     Collections.shuffle(shuffledCustomOptions, new Random(1));
   }

@@ -51,7 +51,7 @@ public class Http2Ping {
    * The registered callbacks and the executor used to invoke them.
    */
   @GuardedBy("this") private Map<PingCallback, Executor> callbacks
-      = new LinkedHashMap<PingCallback, Executor>();
+      = new LinkedHashMap<>();
 
   /**
    * False until the operation completes, either successfully (other side sent acknowledgement) or

@@ -85,7 +85,7 @@ public class AbstractServerStreamTest {
    */
   @Test
   public void frameShouldBeIgnoredAfterDeframerClosed() {
-    final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+    final Queue<InputStream> streamListenerMessageQueue = new LinkedList<>();
     stream.transportState().setListener(new ServerStreamListenerBase() {
       @Override
       public void messagesAvailable(MessageProducer producer) {

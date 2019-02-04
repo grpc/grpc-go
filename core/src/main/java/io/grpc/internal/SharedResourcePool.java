@@ -27,7 +27,7 @@ public final class SharedResourcePool<T> implements ObjectPool<T> {
   }
 
   public static <T> SharedResourcePool<T> forResource(SharedResourceHolder.Resource<T> resource) {
-    return new SharedResourcePool<T>(resource);
+    return new SharedResourcePool<>(resource);
   }
 
   @Override

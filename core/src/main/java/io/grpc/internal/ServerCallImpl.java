@@ -190,7 +190,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   }
 
   ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener) {
-    return new ServerStreamListenerImpl<ReqT>(this, listener, context);
+    return new ServerStreamListenerImpl<>(this, listener, context);
   }
 
   @Override

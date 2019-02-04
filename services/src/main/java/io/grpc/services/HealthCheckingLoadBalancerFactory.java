@@ -101,7 +101,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     @Nullable String healthCheckedService;
     private boolean balancerShutdown;
 
-    final HashSet<HealthCheckState> hcStates = new HashSet<HealthCheckState>();
+    final HashSet<HealthCheckState> hcStates = new HashSet<>();
 
     HelperImpl(Helper delegate) {
       this.delegate = checkNotNull(delegate, "delegate");

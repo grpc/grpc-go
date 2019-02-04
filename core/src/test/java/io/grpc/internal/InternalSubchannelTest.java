@@ -102,7 +102,7 @@ public class InternalSubchannelTest {
   @Mock private BackoffPolicy.Provider mockBackoffPolicyProvider;
   @Mock private ClientTransportFactory mockTransportFactory;
 
-  private final LinkedList<String> callbackInvokes = new LinkedList<String>();
+  private final LinkedList<String> callbackInvokes = new LinkedList<>();
   private final InternalSubchannel.Callback mockInternalSubchannelCallback =
       new InternalSubchannel.Callback() {
         @Override

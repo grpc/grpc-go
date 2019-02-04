@@ -432,7 +432,7 @@ public abstract class AbstractBenchmark {
         final ClientCall<ByteBuf, ByteBuf> streamingCall =
             channel.newCall(pingPongMethod, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
-            new AtomicReference<StreamObserver<ByteBuf>>();
+            new AtomicReference<>();
         final AtomicBoolean ignoreMessages = new AtomicBoolean();
         StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncBidiStreamingCall(
             streamingCall,
@@ -486,7 +486,7 @@ public abstract class AbstractBenchmark {
         final ClientCall<ByteBuf, ByteBuf> streamingCall =
             channel.newCall(flowControlledStreaming, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
-            new AtomicReference<StreamObserver<ByteBuf>>();
+            new AtomicReference<>();
         final AtomicBoolean ignoreMessages = new AtomicBoolean();
         StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncBidiStreamingCall(
             streamingCall,

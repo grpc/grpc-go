@@ -372,7 +372,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
    * Breaks down the request and creates a queue of response chunks for the given request.
    */
   public Queue<Chunk> toChunkQueue(StreamingOutputCallRequest request) {
-    Queue<Chunk> chunkQueue = new ArrayDeque<Chunk>();
+    Queue<Chunk> chunkQueue = new ArrayDeque<>();
     int offset = 0;
     for (ResponseParameters params : request.getResponseParametersList()) {
       chunkQueue.add(new Chunk(params.getIntervalUs(), offset, params.getSize()));

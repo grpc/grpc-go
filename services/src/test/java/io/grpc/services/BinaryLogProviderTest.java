@@ -80,8 +80,8 @@ public class BinaryLogProviderTest {
           .setSafe(true)
           .setSampledToLocalTracing(true)
           .build();
-  private final List<byte[]> binlogReq = new ArrayList<byte[]>();
-  private final List<byte[]> binlogResp = new ArrayList<byte[]>();
+  private final List<byte[]> binlogReq = new ArrayList<>();
+  private final List<byte[]> binlogResp = new ArrayList<>();
   private final BinaryLogProvider binlogProvider = new BinaryLogProvider() {
     @Override
     public ServerInterceptor getServerInterceptor(String fullMethodName) {
@@ -98,13 +98,13 @@ public class BinaryLogProviderTest {
   @Test
   public void wrapChannel_methodDescriptor() throws Exception {
     final AtomicReference<MethodDescriptor<?, ?>> methodRef =
-        new AtomicReference<MethodDescriptor<?, ?>>();
+        new AtomicReference<>();
     Channel channel = new Channel() {
       @Override
       public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
           MethodDescriptor<RequestT, ResponseT> method, CallOptions callOptions) {
         methodRef.set(method);
-        return new NoopClientCall<RequestT, ResponseT>();
+        return new NoopClientCall<>();
       }
 
       @Override
@@ -119,9 +119,9 @@ public class BinaryLogProviderTest {
 
   @Test
   public void wrapChannel_handler() throws Exception {
-    final List<byte[]> serializedReq = new ArrayList<byte[]>();
+    final List<byte[]> serializedReq = new ArrayList<>();
     final AtomicReference<ClientCall.Listener<?>> listener =
-        new AtomicReference<ClientCall.Listener<?>>();
+        new AtomicReference<>();
     Channel channel = new Channel() {
       @Override
       public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
@@ -226,7 +226,7 @@ public class BinaryLogProviderTest {
     // The request as seen by the user supplied server code
     final List<String> observedRequest = new ArrayList<>();
     final AtomicReference<ServerCall<String, Integer>> serverCall =
-        new AtomicReference<ServerCall<String, Integer>>();
+        new AtomicReference<>();
     ServerMethodDefinition<String, Integer> methodDef =
         ServerMethodDefinition.create(
             method,

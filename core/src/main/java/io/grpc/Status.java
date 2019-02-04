@@ -234,7 +234,7 @@ public final class Status {
   private static final List<Status> STATUS_LIST = buildStatusList();
 
   private static List<Status> buildStatusList() {
-    TreeMap<Integer, Status> canonicalizer = new TreeMap<Integer, Status>();
+    TreeMap<Integer, Status> canonicalizer = new TreeMap<>();
     for (Code code : Code.values()) {
       Status replaced = canonicalizer.put(code.value(), new Status(code));
       if (replaced != null) {

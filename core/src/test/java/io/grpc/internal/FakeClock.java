@@ -268,7 +268,7 @@ public final class FakeClock {
    */
   public Collection<ScheduledTask> getDueTasks() {
     checkDueTasks();
-    return new ArrayList<ScheduledTask>(dueTasks);
+    return new ArrayList<>(dueTasks);
   }
 
   /**

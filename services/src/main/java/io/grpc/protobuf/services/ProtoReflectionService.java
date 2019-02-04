@@ -98,8 +98,8 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         return serverReflectionIndex;
       }
 
-      Set<FileDescriptor> serverFileDescriptors = new HashSet<FileDescriptor>();
-      Set<String> serverServiceNames = new HashSet<String>();
+      Set<FileDescriptor> serverFileDescriptors = new HashSet<>();
+      Set<String> serverServiceNames = new HashSet<>();
       List<ServerServiceDefinition> serverMutableServices = server.getMutableServices();
       for (ServerServiceDefinition mutableService : serverMutableServices) {
         io.grpc.ServiceDescriptor serviceDescriptor = mutableService.getServiceDescriptor();
@@ -299,8 +299,8 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         ServerReflectionRequest request, FileDescriptor fd) {
       FileDescriptorResponse.Builder fdRBuilder = FileDescriptorResponse.newBuilder();
 
-      Set<String> seenFiles = new HashSet<String>();
-      Queue<FileDescriptor> frontier = new ArrayDeque<FileDescriptor>();
+      Set<String> seenFiles = new HashSet<>();
+      Queue<FileDescriptor> frontier = new ArrayDeque<>();
       seenFiles.add(fd.getName());
       frontier.add(fd);
       while (!frontier.isEmpty()) {
@@ -348,7 +348,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       Set<String> immutableServiceNames = immutableServicesIndex.getServiceNames();
       Set<String> mutableServiceNames = mutableServicesIndex.getServiceNames();
       Set<String> serviceNames =
-          new HashSet<String>(immutableServiceNames.size() + mutableServiceNames.size());
+          new HashSet<>(immutableServiceNames.size() + mutableServiceNames.size());
       serviceNames.addAll(immutableServiceNames);
       serviceNames.addAll(mutableServiceNames);
       return serviceNames;
@@ -398,18 +398,18 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
    * mutable services.
    */
   private static final class FileDescriptorIndex {
-    private final Set<String> serviceNames = new HashSet<String>();
-    private final Set<FileDescriptor> serviceFileDescriptors = new HashSet<FileDescriptor>();
+    private final Set<String> serviceNames = new HashSet<>();
+    private final Set<FileDescriptor> serviceFileDescriptors = new HashSet<>();
     private final Map<String, FileDescriptor> fileDescriptorsByName =
-        new HashMap<String, FileDescriptor>();
+        new HashMap<>();
     private final Map<String, FileDescriptor> fileDescriptorsBySymbol =
-        new HashMap<String, FileDescriptor>();
+        new HashMap<>();
     private final Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber =
-        new HashMap<String, Map<Integer, FileDescriptor>>();
+        new HashMap<>();
 
     FileDescriptorIndex(List<ServerServiceDefinition> services) {
-      Queue<FileDescriptor> fileDescriptorsToProcess = new ArrayDeque<FileDescriptor>();
-      Set<String> seenFiles = new HashSet<String>();
+      Queue<FileDescriptor> fileDescriptorsToProcess = new ArrayDeque<>();
+      Set<String> seenFiles = new HashSet<>();
       for (ServerServiceDefinition service : services) {
         io.grpc.ServiceDescriptor serviceDescriptor = service.getServiceDescriptor();
         if (serviceDescriptor.getSchemaDescriptor() instanceof ProtoFileDescriptorSupplier) {

@@ -484,7 +484,7 @@ public class ManagedChannelImplIdlenessTest {
   // We need this because createSubchannel() should be called from the SynchronizationContext
   private static Subchannel createSubchannelSafely(
       final Helper helper, final EquivalentAddressGroup addressGroup, final Attributes attrs) {
-    final AtomicReference<Subchannel> resultCapture = new AtomicReference<Subchannel>();
+    final AtomicReference<Subchannel> resultCapture = new AtomicReference<>();
     helper.getSynchronizationContext().execute(
         new Runnable() {
           @Override

@@ -31,10 +31,10 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
   private final TestBaseStreamTracer delegate = new TestBaseStreamTracer();
   protected final CountDownLatch outboundHeadersLatch = new CountDownLatch(1);
   protected final AtomicReference<Throwable> outboundHeadersCalled =
-      new AtomicReference<Throwable>();
+      new AtomicReference<>();
   protected final AtomicReference<Throwable> inboundHeadersCalled =
-      new AtomicReference<Throwable>();
-  protected final AtomicReference<Metadata> inboundTrailers = new AtomicReference<Metadata>();
+      new AtomicReference<>();
+  protected final AtomicReference<Metadata> inboundTrailers = new AtomicReference<>();
 
   @Override
   public void await() throws InterruptedException {

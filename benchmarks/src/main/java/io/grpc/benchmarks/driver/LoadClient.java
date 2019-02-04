@@ -379,7 +379,7 @@ class LoadClient {
       while (!shutdown) {
         maxOutstanding.acquireUninterruptibly();
         final AtomicReference<StreamObserver<Messages.SimpleRequest>> requestObserver =
-            new AtomicReference<StreamObserver<Messages.SimpleRequest>>();
+            new AtomicReference<>();
         requestObserver.set(stub.streamingCall(
             new StreamObserver<Messages.SimpleResponse>() {
               long now = System.nanoTime();

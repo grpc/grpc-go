@@ -53,7 +53,7 @@ public final class SharedResourceHolder {
       });
 
   private final IdentityHashMap<Resource<?>, Instance> instances =
-      new IdentityHashMap<Resource<?>, Instance>();
+      new IdentityHashMap<>();
 
   private final ScheduledExecutorFactory destroyerFactory;
 

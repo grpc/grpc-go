@@ -46,7 +46,7 @@ import org.mockito.stubbing.Answer;
 public class SharedResourceHolderTest {
 
   private final LinkedList<MockScheduledFuture<?>> scheduledDestroyTasks =
-      new LinkedList<MockScheduledFuture<?>>();
+      new LinkedList<>();
 
   private SharedResourceHolder holder;
 
@@ -186,7 +186,7 @@ public class SharedResourceHolderTest {
               Runnable command = (Runnable) args[0];
               long delay = (Long) args[1];
               TimeUnit unit = (TimeUnit) args[2];
-              MockScheduledFuture<Void> future = new MockScheduledFuture<Void>(
+              MockScheduledFuture<Void> future = new MockScheduledFuture<>(
                   command, delay, unit);
               scheduledDestroyTasks.add(future);
               return future;

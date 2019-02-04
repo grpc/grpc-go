@@ -41,7 +41,7 @@ public final class ServerMethodDefinition<ReqT, RespT> {
   public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> create(
       MethodDescriptor<ReqT, RespT> method,
       ServerCallHandler<ReqT, RespT> handler) {
-    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+    return new ServerMethodDefinition<>(method, handler);
   }
 
   /** The {@code MethodDescriptor} for this method. */
@@ -62,6 +62,6 @@ public final class ServerMethodDefinition<ReqT, RespT> {
    */
   public ServerMethodDefinition<ReqT, RespT> withServerCallHandler(
       ServerCallHandler<ReqT, RespT> handler) {
-    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+    return new ServerMethodDefinition<>(method, handler);
   }
 }

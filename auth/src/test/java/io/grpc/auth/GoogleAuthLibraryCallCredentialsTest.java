@@ -221,7 +221,7 @@ public class GoogleAuthLibraryCallCredentialsTest {
     ListMultimap<String, String> values = LinkedListMultimap.create();
     values.put("Authorization", "token1");
     when(credentials.getRequestMetadata(eq(expectedUri)))
-        .thenReturn(null, Multimaps.<String, String>asMap(values), null);
+        .thenReturn(null, Multimaps.asMap(values), null);
 
     GoogleAuthLibraryCallCredentials callCredentials =
         new GoogleAuthLibraryCallCredentials(credentials);
