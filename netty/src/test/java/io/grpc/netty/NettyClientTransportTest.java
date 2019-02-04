@@ -62,8 +62,12 @@ import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.TestUtils;
 import io.grpc.netty.NettyChannelBuilder.LocalSocketPicker;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ReflectiveChannelFactory;
+import io.netty.channel.local.LocalChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannelConfig;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -178,10 +182,11 @@ public class NettyClientTransportTest {
     int soLinger = 123;
     channelOptions.put(ChannelOption.SO_LINGER, soLinger);
     NettyClientTransport transport = new NettyClientTransport(
-        address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
-        DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
-        KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */,
-        tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY, new SocketPicker());
+        address, new ReflectiveChannelFactory<>(NioSocketChannel.class), channelOptions, group,
+        newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
+        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority,
+        null /* user agent */, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY,
+        new SocketPicker());
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -418,7 +423,8 @@ public class NettyClientTransportTest {
     address = TestUtils.testServerAddress(12345);
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
     NettyClientTransport transport = new NettyClientTransport(
-        address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
+        address, new ReflectiveChannelFactory<>(CantConstructChannel.class),
+        new HashMap<ChannelOption<?>, Object>(), group,
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
         null, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY, new SocketPicker());
@@ -463,6 +469,32 @@ public class NettyClientTransportTest {
         throw new AssertionError("Could not find expected error", ex);
       }
     }
+  }
+
+  @Test
+  public void channelFactoryShouldSetSocketOptionKeepAlive() throws Exception {
+    startServer();
+    NettyClientTransport transport = newTransport(newNegotiator(),
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent", true,
+        new ReflectiveChannelFactory<>(NioSocketChannel.class));
+
+    callMeMaybe(transport.start(clientTransportListener));
+
+    assertThat(transport.channel().config().getOption(ChannelOption.SO_KEEPALIVE))
+        .isTrue();
+  }
+
+  @Test
+  public void channelFactoryShouldNNotSetSocketOptionKeepAlive() throws Exception {
+    startServer();
+    NettyClientTransport transport = newTransport(newNegotiator(),
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent", true,
+        new ReflectiveChannelFactory<>(LocalChannel.class));
+
+    callMeMaybe(transport.start(clientTransportListener));
+
+    assertThat(transport.channel().config().getOption(ChannelOption.SO_KEEPALIVE))
+        .isNull();
   }
 
   @Test
@@ -594,14 +626,21 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize,
       int maxHeaderListSize, String userAgent, boolean enableKeepAlive) {
+    return newTransport(negotiator, maxMsgSize, maxHeaderListSize, userAgent, enableKeepAlive,
+        new ReflectiveChannelFactory<>(NioSocketChannel.class));
+  }
+
+  private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize,
+      int maxHeaderListSize, String userAgent, boolean enableKeepAlive,
+      ChannelFactory<? extends Channel> channelFactory) {
     long keepAliveTimeNano = KEEPALIVE_TIME_NANOS_DISABLED;
     long keepAliveTimeoutNano = TimeUnit.SECONDS.toNanos(1L);
     if (enableKeepAlive) {
       keepAliveTimeNano = TimeUnit.SECONDS.toNanos(10L);
     }
     NettyClientTransport transport = new NettyClientTransport(
-        address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
-        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
+        address, channelFactory, new HashMap<ChannelOption<?>, Object>(), group,
+        negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
         keepAliveTimeNano, keepAliveTimeoutNano,
         false, authority, userAgent, tooManyPingsRunnable,
         new TransportTracer(), eagAttributes, new SocketPicker());

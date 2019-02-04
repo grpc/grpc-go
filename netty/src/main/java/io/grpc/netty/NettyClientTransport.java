@@ -43,13 +43,13 @@ import io.grpc.internal.TransportTracer;
 import io.grpc.netty.NettyChannelBuilder.LocalSocketPicker;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.StreamBufferingEncoder.Http2ChannelClosedException;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.Future;
@@ -67,7 +67,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final InternalLogId logId;
   private final Map<ChannelOption<?>, ?> channelOptions;
   private final SocketAddress remoteAddress;
-  private final Class<? extends Channel> channelType;
+  private final ChannelFactory<? extends Channel> channelFactory;
   private final EventLoopGroup group;
   private final ProtocolNegotiator negotiator;
   private final String authorityString;
@@ -96,7 +96,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final LocalSocketPicker localSocketPicker;
 
   NettyClientTransport(
-      SocketAddress address, Class<? extends Channel> channelType,
+      SocketAddress address, ChannelFactory<? extends Channel> channelFactory,
       Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
       int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
@@ -106,7 +106,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.remoteAddress = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
-    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    this.channelFactory = channelFactory;
     this.channelOptions = Preconditions.checkNotNull(channelOptions, "channelOptions");
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
@@ -212,10 +212,9 @@ class NettyClientTransport implements ConnectionClientTransport {
 
     Bootstrap b = new Bootstrap();
     b.group(eventLoop);
-    b.channel(channelType);
-    if (NioSocketChannel.class.isAssignableFrom(channelType)) {
-      b.option(SO_KEEPALIVE, true);
-    }
+    b.channelFactory(channelFactory);
+    // For non-socket based channel, the option will be ignored.
+    b.option(SO_KEEPALIVE, true);
     for (Map.Entry<ChannelOption<?>, ?> entry : channelOptions.entrySet()) {
       // Every entry in the map is obtained from
       // NettyChannelBuilder#withOption(ChannelOption<T> option, T value)
