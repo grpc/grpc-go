@@ -18,7 +18,8 @@ description = "gRPC: XDS plugin"
 
 dependencies {
     compile project(':grpc-protobuf'),
-            project(':grpc-stub')
+            project(':grpc-stub'),
+            project(':grpc-testing')
     compile (libraries.protobuf_util) {
         // prefer 20.0 from libraries instead of 19.0
         exclude group: 'com.google.guava', module: 'guava'
