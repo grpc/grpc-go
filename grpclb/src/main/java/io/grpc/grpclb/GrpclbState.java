@@ -589,14 +589,10 @@ final class GrpclbState {
       }
       closed = true;
       cleanUp();
-      try {
-        if (error == null) {
-          lbRequestWriter.onCompleted();
-        } else {
-          lbRequestWriter.onError(error);
-        }
-      } catch (Exception e) {
-        // Don't care
+      if (error == null) {
+        lbRequestWriter.onCompleted();
+      } else {
+        lbRequestWriter.onError(error);
       }
     }
 
