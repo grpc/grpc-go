@@ -72,7 +72,7 @@ func startTestServers(count int) (_ *test, err error) {
 	for i := 0; i < count; i++ {
 		lis, err := net.Listen("tcp", "localhost:0")
 		if err != nil {
-			return nil, fmt.Errorf("Failed to listen %v", err)
+			return nil, fmt.Errorf("failed to listen %v", err)
 		}
 
 		s := grpc.NewServer()

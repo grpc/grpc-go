@@ -312,7 +312,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -403,7 +403,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -463,7 +463,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -553,7 +553,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	// make some rpcs to make sure connection is working.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -752,7 +752,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -790,7 +790,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {
@@ -823,7 +823,7 @@ func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
 	// send some rpcs to make sure transport has been created and is ready for use.
 	if err := verifyResultWithDelay(func() (bool, error) {
 		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-			return false, fmt.Errorf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+			return false, fmt.Errorf("testService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 		}
 		return true, nil
 	}); err != nil {

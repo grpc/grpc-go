@@ -386,7 +386,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	cCheckElapsed := func(d time.Duration) clientOp {
 		return func(_ testpb.TestService_FullDuplexCallClient) error {
 			if elapsed := time.Since(curTime); elapsed < d {
-				return fmt.Errorf("Elapsed time: %v; want >= %v", elapsed, d)
+				return fmt.Errorf("elapsed time: %v; want >= %v", elapsed, d)
 			}
 			return nil
 		}

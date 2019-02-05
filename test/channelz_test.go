@@ -355,7 +355,7 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 
 			ns, end := channelz.GetServerSockets(ss[0].ID, startID, c.max)
 			if int64(len(ns)) != c.length || end != c.end {
-				return false, fmt.Errorf("GetServerSockets(%d) = %+v (len of which: %d), end: %+v, want len(GetServerSockets(%d)) = %d, end: %+v", c.start, ns, len(ns), end, c.start, c.length, c.end)
+				return false, fmt.Errorf("getServerSockets(%d) = %+v (len of which: %d), end: %+v, want len(GetServerSockets(%d)) = %d, end: %+v", c.start, ns, len(ns), end, c.start, c.length, c.end)
 			}
 
 			svrID = ss[0].ID
@@ -1320,14 +1320,14 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 			return false, fmt.Errorf("the SocketData.Security is of type: %T, want: *credentials.TLSChannelzSecurityValue", skt.SocketData.Security)
 		}
 		if !reflect.DeepEqual(securityVal.RemoteCertificate, cert.Certificate[0]) {
-			return false, fmt.Errorf("SocketData.Security.RemoteCertificate got: %v, want: %v", securityVal.RemoteCertificate, cert.Certificate[0])
+			return false, fmt.Errorf("socketData.Security.RemoteCertificate got: %v, want: %v", securityVal.RemoteCertificate, cert.Certificate[0])
 		}
 		for _, v := range cipherSuites {
 			if v == securityVal.StandardName {
 				return true, nil
 			}
 		}
-		return false, fmt.Errorf("SocketData.Security.StandardName got: %v, want it to be one of %v ", securityVal.StandardName, cipherSuites)
+		return false, fmt.Errorf("socketData.Security.StandardName got: %v, want it to be one of %v", securityVal.StandardName, cipherSuites)
 	}); err != nil {
 		t.Fatal(err)
 	}
