@@ -93,6 +93,8 @@ func (c *client) dial() {
 
 	var err error
 	c.cc, err = grpc.DialContext(c.ctx, c.balancerName, dopts...)
+	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
+	// related) error.
 	if err != nil {
 		grpclog.Fatalf("failed to dial: %v", err)
 	}
