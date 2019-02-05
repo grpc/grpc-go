@@ -31,29 +31,29 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type dummyEdsBalancer struct{}
+type DummyEdsBalancer struct{}
 
-func (d *dummyEdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (d *DummyEdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	panic("implement me")
 }
 
-func (d *dummyEdsBalancer) HandleResolvedAddrs([]resolver.Address, error) {
+func (d *DummyEdsBalancer) HandleResolvedAddrs([]resolver.Address, error) {
 	panic("implement me")
 }
 
-func (d *dummyEdsBalancer) Close() {
+func (d *DummyEdsBalancer) Close() {
 	panic("implement me")
 }
 
-func (d *dummyEdsBalancer) HandleEDSResponse(edsResp *v2.ClusterLoadAssignment) {
+func (d *DummyEdsBalancer) HandleEDSResponse(edsResp *v2.ClusterLoadAssignment) {
 	panic("implement me")
 }
 
-func (d *dummyEdsBalancer) HandleChildPolicy(name string, config json.RawMessage) {
+func (d *DummyEdsBalancer) HandleChildPolicy(name string, config json.RawMessage) {
 	panic("implement me")
 }
 
 // NewXDSBalancer creates an edsBalancer
-func NewXDSBalancer(cc balancer.ClientConn) *dummyEdsBalancer {
-	return &dummyEdsBalancer{}
+func NewXDSBalancer(cc balancer.ClientConn) *DummyEdsBalancer {
+	return &DummyEdsBalancer{}
 }
