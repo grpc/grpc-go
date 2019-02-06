@@ -67,11 +67,11 @@ public class TestUtils {
    * Creates a new {@link InetSocketAddress} on localhost that overrides the host with
    * {@link #TEST_SERVER_HOST}.
    */
-  public static InetSocketAddress testServerAddress(int port) {
+  public static InetSocketAddress testServerAddress(InetSocketAddress originalSockAddr) {
     try {
       InetAddress inetAddress = InetAddress.getByName("localhost");
       inetAddress = InetAddress.getByAddress(TEST_SERVER_HOST, inetAddress.getAddress());
-      return new InetSocketAddress(inetAddress, port);
+      return new InetSocketAddress(inetAddress, originalSockAddr.getPort());
     } catch (UnknownHostException e) {
       throw new RuntimeException(e);
     }

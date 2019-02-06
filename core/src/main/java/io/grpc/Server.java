@@ -17,6 +17,7 @@
 package io.grpc;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -41,13 +42,28 @@ public abstract class Server {
   /**
    * Returns the port number the server is listening on.  This can return -1 if there is no actual
    * port or the result otherwise does not make sense.  Result is undefined after the server is
-   * terminated.
+   * terminated.  If there are multiple possible ports, this will return one arbitrarily.
+   * Implementations are encouraged to return the same port on each call.
    *
+   * @see #getListenSockets()
    * @throws IllegalStateException if the server has not yet been started.
    * @since 1.0.0
    */
   public int getPort() {
     return -1;
+  }
+
+  /**
+   * Returns a list of listening sockets for this server.  May be different than the originally
+   * requested sockets (e.g. listening on port '0' may end up listening on a different port).
+   * The list is unmodifiable.
+   *
+   * @throws IllegalStateException if the server has not yet been started.
+   * @since 1.19.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/FIXME")
+  public List<? extends SocketAddress> getListenSockets() {
+    throw new UnsupportedOperationException();
   }
 
   /**

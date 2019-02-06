@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import io.grpc.ServerStreamTracer.Factory;
 import io.netty.handler.ssl.SslContext;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
@@ -43,7 +44,7 @@ public class NettyServerBuilderTest {
 
   @Test
   public void createMultipleServers() {
-    builder.addPort(8081);
+    builder.addListenAddress(new InetSocketAddress(8081));
     List<NettyServer> servers = builder.buildTransportServers(ImmutableList.<Factory>of());
 
     Truth.assertThat(servers).hasSize(2);

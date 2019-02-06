@@ -38,6 +38,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ServerStats;
+import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalInstrumented;
 import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
@@ -51,6 +52,8 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -136,9 +139,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     Preconditions.checkNotNull(transportServers, "transportServers");
     Preconditions.checkArgument(!transportServers.isEmpty(), "no servers provided");
     this.transportServers = new ArrayList<>(transportServers);
-    // TODO(notcarl): concatenate all listening ports in the Log Id.
     this.logId =
-        InternalLogId.allocate("Server", String.valueOf(transportServers.get(0).getPort()));
+        InternalLogId.allocate("Server", String.valueOf(getListenSocketsIgnoringLifecycle()));
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
     this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();
@@ -181,18 +183,38 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     }
   }
 
+
   @Override
   public int getPort() {
     synchronized (lock) {
       checkState(started, "Not started");
       checkState(!terminated, "Already terminated");
       for (InternalServer ts : transportServers) {
-        int port = ts.getPort();
-        if (port != -1) {
-          return port;
+        SocketAddress addr = ts.getListenSocketAddress();
+        if (addr instanceof InetSocketAddress) {
+          return ((InetSocketAddress) addr).getPort();
         }
       }
       return -1;
+    }
+  }
+
+  @Override
+  public List<SocketAddress> getListenSockets() {
+    synchronized (lock) {
+      checkState(started, "Not started");
+      checkState(!terminated, "Already terminated");
+      return getListenSocketsIgnoringLifecycle();
+    }
+  }
+
+  private List<SocketAddress> getListenSocketsIgnoringLifecycle() {
+    synchronized (lock) {
+      List<SocketAddress> addrs = new ArrayList<>(transportServers.size());
+      for (InternalServer ts : transportServers) {
+        addrs.add(ts.getListenSocketAddress());
+      }
+      return Collections.unmodifiableList(addrs);
     }
   }
 
@@ -602,7 +624,11 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
   public ListenableFuture<ServerStats> getStats() {
     ServerStats.Builder builder = new ServerStats.Builder();
     for (InternalServer ts : transportServers) {
-      builder.addListenSockets(ts.getListenSockets());
+      // TODO(carl-mastrangelo): remove the list and just add directly.
+      InternalInstrumented<SocketStats> stats = ts.getListenSocketStats();
+      if (stats != null ) {
+        builder.addListenSockets(Collections.singletonList(stats));
+      }
     }
     serverCallTracer.updateBuilder(builder);
     SettableFuture<ServerStats> ret = SettableFuture.create();

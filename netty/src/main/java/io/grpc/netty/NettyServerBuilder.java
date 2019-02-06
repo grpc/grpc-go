@@ -17,12 +17,12 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
@@ -121,11 +121,13 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     this.listenAddresses.add(address);
   }
 
-
-  // TODO(notcarl): expose this API at a higher level.
-  @VisibleForTesting
-  NettyServerBuilder addPort(int port) {
-    this.listenAddresses.add(new InetSocketAddress(port));
+  /**
+   * Adds an additional address for this server to listen on.  Callers must ensure that all socket
+   * addresses are compatible with the Netty channel type, and that they don't conflict with each
+   * other.
+   */
+  public NettyServerBuilder addListenAddress(SocketAddress listenAddress) {
+    this.listenAddresses.add(checkNotNull(listenAddress, "listenAddress"));
     return this;
   }
 

@@ -246,8 +246,8 @@ public abstract class AbstractInteropTest {
   }
 
   @VisibleForTesting
-  final int getPort() {
-    return server.getPort();
+  final SocketAddress getListenAddress() {
+    return server.getListenSockets().iterator().next();
   }
 
   protected ManagedChannel channel;

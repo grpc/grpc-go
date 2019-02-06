@@ -23,7 +23,6 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.InternalChannelz;
@@ -52,11 +51,11 @@ import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -94,9 +93,8 @@ class NettyServer implements InternalServer, InternalWithLogId {
   private final TransportTracer.Factory transportTracerFactory;
   private final InternalChannelz channelz;
   // Only modified in event loop but safe to read any time. Set at startup and unset at shutdown.
-  // In the future we may have >1 listen socket.
-  private volatile ImmutableList<InternalInstrumented<SocketStats>> listenSockets
-      = ImmutableList.of();
+  private final AtomicReference<InternalInstrumented<SocketStats>> listenSocketStats =
+      new AtomicReference<>();
 
   NettyServer(
       SocketAddress address, Class<? extends ServerChannel> channelType,
@@ -139,20 +137,17 @@ class NettyServer implements InternalServer, InternalWithLogId {
   }
 
   @Override
-  public int getPort() {
+  public SocketAddress getListenSocketAddress() {
     if (channel == null) {
-      return -1;
+      // server is not listening/bound yet, just return the original port.
+      return address;
     }
-    SocketAddress localAddr = channel.localAddress();
-    if (!(localAddr instanceof InetSocketAddress)) {
-      return -1;
-    }
-    return ((InetSocketAddress) localAddr).getPort();
+    return channel.localAddress();
   }
 
   @Override
-  public List<InternalInstrumented<SocketStats>> getListenSockets() {
-    return listenSockets;
+  public InternalInstrumented<SocketStats> getListenSocketStats() {
+    return listenSocketStats.get();
   }
 
   @Override
@@ -260,7 +255,7 @@ class NettyServer implements InternalServer, InternalWithLogId {
       @Override
       public void run() {
         InternalInstrumented<SocketStats> listenSocket = new ListenSocket(channel);
-        listenSockets = ImmutableList.of(listenSocket);
+        listenSocketStats.set(listenSocket);
         channelz.addListenSocket(listenSocket);
       }
     });
@@ -283,10 +278,10 @@ class NettyServer implements InternalServer, InternalWithLogId {
         if (!future.isSuccess()) {
           log.log(Level.WARNING, "Error shutting down server", future.cause());
         }
-        for (InternalInstrumented<SocketStats> listenSocket : listenSockets) {
-          channelz.removeListenSocket(listenSocket);
+        InternalInstrumented<SocketStats> stats = listenSocketStats.getAndSet(null);
+        if (stats != null) {
+          channelz.removeListenSocket(stats);
         }
-        listenSockets = null;
         synchronized (NettyServer.this) {
           listener.serverShutdown();
         }

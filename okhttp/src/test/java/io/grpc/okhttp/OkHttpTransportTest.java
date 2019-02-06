@@ -66,7 +66,7 @@ public class OkHttpTransportTest extends AbstractTransportTest {
       int port, List<ServerStreamTracer.Factory> streamTracerFactories) {
     return AccessProtectedHack.serverBuilderBuildTransportServer(
         NettyServerBuilder
-            .forPort(port)
+            .forAddress(new InetSocketAddress(port))
             .flowControlWindow(65 * 1024),
         streamTracerFactories,
         fakeClockTransportTracer);
@@ -74,12 +74,12 @@ public class OkHttpTransportTest extends AbstractTransportTest {
 
   @Override
   protected String testAuthority(InternalServer server) {
-    return "thebestauthority:" + server.getPort();
+    return "thebestauthority:" + server.getListenSocketAddress();
   }
 
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
-    int port = server.getPort();
+    int port = ((InetSocketAddress) server.getListenSocketAddress()).getPort();
     return clientFactory.newClientTransport(
         new InetSocketAddress("localhost", port),
         new ClientTransportFactory.ClientTransportOptions()

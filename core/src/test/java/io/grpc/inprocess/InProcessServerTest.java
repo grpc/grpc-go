@@ -38,7 +38,7 @@ public class InProcessServerTest {
     InProcessServer s =
         new InProcessServer(builder, Collections.<ServerStreamTracer.Factory>emptyList());
 
-    Truth.assertThat(s.getPort()).isEqualTo(-1);
+    Truth.assertThat(s.getListenSocketAddress()).isEqualTo(new InProcessSocketAddress("name"));
   }
 
   @Test

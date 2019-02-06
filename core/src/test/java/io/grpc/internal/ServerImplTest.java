@@ -83,6 +83,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1070,15 +1071,16 @@ public class ServerImplTest {
 
   @Test
   public void getPort() throws Exception {
+    final InetSocketAddress addr = new InetSocketAddress(65535);
     transportServer = new SimpleServer() {
       @Override
-      public int getPort() {
-        return 65535;
+      public SocketAddress getListenSocketAddress() {
+        return addr;
       }
     };
     createAndStartServer();
 
-    assertThat(server.getPort()).isEqualTo(65535);
+    assertThat(server.getPort()).isEqualTo(addr.getPort());
   }
 
   @Test
@@ -1397,13 +1399,13 @@ public class ServerImplTest {
     }
 
     @Override
-    public int getPort() {
-      return -1;
+    public SocketAddress getListenSocketAddress() {
+      return new InetSocketAddress(12345);
     }
 
     @Override
-    public List<InternalInstrumented<SocketStats>> getListenSockets() {
-      return Collections.emptyList();
+    public InternalInstrumented<SocketStats> getListenSocketStats() {
+      return null;
     }
 
     @Override

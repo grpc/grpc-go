@@ -43,7 +43,7 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("localhost", getPort())
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress(getListenAddress())
         .negotiationType(NegotiationType.PLAINTEXT)
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
     io.grpc.internal.TestingAccessor.setStatsImplementation(

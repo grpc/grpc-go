@@ -62,7 +62,7 @@ public class Http2NettyTest extends AbstractInteropTest {
   protected ManagedChannel createChannel() {
     try {
       NettyChannelBuilder builder = NettyChannelBuilder
-          .forAddress(TestUtils.testServerAddress(getPort()))
+          .forAddress(TestUtils.testServerAddress((InetSocketAddress) getListenAddress()))
           .flowControlWindow(65 * 1024)
           .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
           .sslContext(GrpcSslContexts
@@ -80,18 +80,18 @@ public class Http2NettyTest extends AbstractInteropTest {
   }
 
   @Test
-  public void remoteAddr() throws Exception {
+  public void remoteAddr() {
     InetSocketAddress isa = (InetSocketAddress) obtainRemoteClientAddr();
     assertEquals(InetAddress.getLoopbackAddress(), isa.getAddress());
     // It should not be the same as the server
-    assertNotEquals(getPort(), isa.getPort());
+    assertNotEquals(((InetSocketAddress) getListenAddress()).getPort(), isa.getPort());
   }
 
   @Test
   public void localAddr() throws Exception {
     InetSocketAddress isa = (InetSocketAddress) obtainLocalClientAddr();
     assertEquals(InetAddress.getLoopbackAddress(), isa.getAddress());
-    assertEquals(getPort(), isa.getPort());
+    assertEquals(((InetSocketAddress) getListenAddress()).getPort(), isa.getPort());
   }
 
   @Test

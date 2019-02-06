@@ -27,6 +27,7 @@ import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -77,13 +78,13 @@ final class InProcessServer implements InternalServer {
   }
 
   @Override
-  public int getPort() {
-    return -1;
+  public SocketAddress getListenSocketAddress() {
+    return new InProcessSocketAddress(name);
   }
 
   @Override
-  public List<InternalInstrumented<SocketStats>> getListenSockets() {
-    return Collections.emptyList();
+  public InternalInstrumented<SocketStats> getListenSocketStats() {
+    return null;
   }
 
   @Override
