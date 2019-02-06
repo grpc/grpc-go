@@ -61,7 +61,7 @@ public final class HandshakerServiceChannelTest {
     resource = HandshakerServiceChannel.SHARED_HANDSHAKER_CHANNEL;
     Channel channel = resource.create();
     try {
-      assertThat(channel.authority()).isEqualTo("metadata.google.internal:8080");
+      assertThat(channel.authority()).isEqualTo("metadata.google.internal.:8080");
     } finally {
       resource.close(channel);
     }
