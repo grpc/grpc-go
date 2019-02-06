@@ -681,7 +681,7 @@ public class ServerImplTest {
     final Context.Key<String> key1 = Context.key("key1");
     final Context.Key<String> key2 = Context.key("key2");
     final Context.Key<String> key3 = Context.key("key3");
-    ServerInterceptor intercepter1 = new ServerInterceptor() {
+    ServerInterceptor interceptor1 = new ServerInterceptor() {
         @Override
         public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> call,
@@ -697,7 +697,7 @@ public class ServerImplTest {
           }
         }
       };
-    ServerInterceptor intercepter2 = new ServerInterceptor() {
+    ServerInterceptor interceptor2 = new ServerInterceptor() {
         @Override
         public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> call,
@@ -726,8 +726,8 @@ public class ServerImplTest {
     mutableFallbackRegistry.addService(
         ServerServiceDefinition.builder(new ServiceDescriptor("Waiter", METHOD))
             .addMethod(METHOD, callHandler).build());
-    builder.intercept(intercepter2);
-    builder.intercept(intercepter1);
+    builder.intercept(interceptor2);
+    builder.intercept(interceptor1);
     createServer();
     server.start();
 
