@@ -46,7 +46,7 @@ func (tsc *testSubConn) String() string {
 }
 
 type testClientConn struct {
-	t *testing.T
+	t *testing.T // For logging only.
 
 	newSubConnAddrsCh chan []resolver.Address // The last 10 []Address to create subconn.
 	newSubConnCh      chan balancer.SubConn   // The last 10 subconn created.
@@ -54,7 +54,6 @@ type testClientConn struct {
 
 	newPickerCh chan balancer.Picker    // The last picker updated.
 	newStateCh  chan connectivity.State // The last state.
-	// resolveNowCh    chan struct{}
 
 	subConnIdx int
 }
@@ -121,35 +120,55 @@ func (tcc *testClientConn) Target() string {
 	panic("not implemented")
 }
 
-// isRoundRobin checks two conditions:
-//  1. if the return value of f is round-robin
-//  2. if the result value of f all comes from want
+// isRoundRobin checks whether f's return value is roundrobin of elements from
+// want. But it doesn't check for the order. Note that want can contain
+// duplicate items, which makes it weight-round-robin.
 //
-// Note that want can contain duplicate items, which results in
-// weight-round-robin.
+// Step 1. the return values of f should form a permutation of all elements in
+// want, but not necessary in the same order. E.g. if want is {a,a,b}, the check
+// fails if f returns:
+//  - {a,a,a}: third a is returned before b
+//  - {a,b,b}: second b is returned before the second a
+//
+// If error is found in this step, the returned error contains only the first
+// iteration until where it goes wrong.
+//
+// Step 2. the return values of f should be repetitions of the same permutation.
+// E.g. if want is {a,a,b}, the check failes if f returns:
+//  - {a,b,a,b,a,a}: though it satisfies step 1, the second iteration is not
+//  repeating the first iteration.
+//
+// If error is found in this step, the returned error contains the first
+// iteration + the second iteration until where it goes wrong.
 func isRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	wantSet := make(map[balancer.SubConn]int) // SubConn -> count, for weighted RR.
 	for _, sc := range want {
 		wantSet[sc]++
 	}
 
-	wantSlice := make([]balancer.SubConn, 0, len(want))
+	// The first iteration: makes sure f's return values form a permutation of
+	// elements in want.
+	//
+	// Also keep the returns values in a slice, so we can compare the order in
+	// the second iteration.
+	gotSliceFirstIteration := make([]balancer.SubConn, 0, len(want))
 	for range want {
 		got := f()
-		wantSlice = append(wantSlice, got)
+		gotSliceFirstIteration = append(gotSliceFirstIteration, got)
 		wantSet[got]--
 		if wantSet[got] < 0 {
-			return fmt.Errorf("got non-roundrobin result: %v", wantSlice)
+			return fmt.Errorf("non-roundrobin want: %v, result: %v", want, gotSliceFirstIteration)
 		}
 	}
 
-	var gotSlice []balancer.SubConn
+	// The second iteration should repeat the first iteration.
+	var gotSliceSecondIteration []balancer.SubConn
 	for i := 0; i < 2; i++ {
-		for _, w := range wantSlice {
+		for _, w := range gotSliceFirstIteration {
 			g := f()
-			gotSlice = append(gotSlice, g)
+			gotSliceSecondIteration = append(gotSliceSecondIteration, g)
 			if w != g {
-				return fmt.Errorf("got non-roundrobin result: %v + %v", wantSlice, gotSlice)
+				return fmt.Errorf("non-roundrobin, first iter: %v, second iter: %v", gotSliceFirstIteration, gotSliceSecondIteration)
 			}
 		}
 	}
@@ -262,7 +281,7 @@ func TestIsRoundRobin(t *testing.T) {
 			pass: false,
 		},
 		{
-			desc: "3 elements weighted RR not RR, mistake insecond iter",
+			desc: "3 elements weighted RR not RR, mistake in second iter",
 			want: []balancer.SubConn{sc1, sc1, sc1, sc2, sc2, sc3},
 			got:  []balancer.SubConn{sc1, sc2, sc3, sc1, sc2, sc1, sc1, sc1, sc3, sc1, sc2, sc1},
 			pass: false,
