@@ -222,7 +222,7 @@ func (rcw *rawConnWrapper) wantAnyFrame() (http2.Frame, error) {
 func (rcw *rawConnWrapper) encodeHeaderField(k, v string) error {
 	err := rcw.hpackEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 	if err != nil {
-		return fmt.Errorf("hPACK encoding error for %q/%q: %v", k, v, err)
+		return fmt.Errorf("HPACK encoding error for %q/%q: %v", k, v, err)
 	}
 	return nil
 }
