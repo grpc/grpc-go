@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -50,6 +51,7 @@ import javax.annotation.concurrent.Immutable;
  * back out.
  */
 @Immutable
+@CheckReturnValue
 public final class Status {
 
   /**
