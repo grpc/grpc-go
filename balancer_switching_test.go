@@ -86,7 +86,7 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 	for i := 0; i < 3; i++ {
 		err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
 		if errorDesc(err) != servers[0].port {
-			return fmt.Errorf("Index %d: want peer %v, got peer %v", i, servers[0].port, err)
+			return fmt.Errorf("index %d: want peer %v, got peer %v", i, servers[0].port, err)
 		}
 	}
 	return nil
@@ -122,7 +122,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 	for i := 0; i < 3*serverCount; i++ {
 		err = cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
 		if errorDesc(err) != servers[i%serverCount].port {
-			return fmt.Errorf("Index %d: want peer %v, got peer %v", i, servers[i%serverCount].port, err)
+			return fmt.Errorf("index %d: want peer %v, got peer %v", i, servers[i%serverCount].port, err)
 		}
 	}
 	return nil

@@ -56,7 +56,7 @@ type testingPicker struct {
 
 func (p *testingPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
-		return nil, nil, fmt.Errorf("Pick called to many times (> goroutineCount)")
+		return nil, nil, fmt.Errorf("pick called to many times (> goroutineCount)")
 	}
 	if p.err != nil {
 		return nil, nil, p.err

@@ -310,7 +310,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		// Start a backend.
 		beLis, e := net.Listen("tcp", "localhost:0")
 		if e != nil {
-			err = fmt.Errorf("Failed to listen %v", err)
+			err = fmt.Errorf("failed to listen %v", err)
 			return
 		}
 		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
@@ -323,7 +323,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 	// Start a load balancer.
 	lbLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		err = fmt.Errorf("Failed to create the listener for the load balancer %v", err)
+		err = fmt.Errorf("failed to create the listener for the load balancer %v", err)
 		return
 	}
 	lbCreds := &serverNameCheckCreds{
