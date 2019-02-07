@@ -142,7 +142,7 @@ public class NettyChannelBuilderTest {
         NegotiationType.PLAINTEXT,
         noSslContext);
     // just check that the classes are the same, and that negotiator is not null.
-    assertTrue(negotiator instanceof ProtocolNegotiators.PlaintextNegotiator);
+    assertTrue(negotiator instanceof ProtocolNegotiators.PlaintextProtocolNegotiator);
   }
 
   @Test

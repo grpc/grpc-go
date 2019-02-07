@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.netty.GrpcSslContexts.NEXT_PROTOCOL_VERSIONS;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -29,6 +30,7 @@ import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -37,6 +39,7 @@ import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -374,17 +377,7 @@ public final class ProtocolNegotiators {
    * is active.
    */
   public static ProtocolNegotiator plaintext() {
-    return new PlaintextNegotiator();
-  }
-
-  static final class PlaintextNegotiator implements ProtocolNegotiator {
-    @Override
-    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
-      return new BufferUntilChannelActiveHandler(handler);
-    }
-
-    @Override
-    public void close() {}
+    return new PlaintextProtocolNegotiator();
   }
 
   private static RuntimeException unavailableException(String msg) {
@@ -698,44 +691,6 @@ public final class ProtocolNegotiators {
   }
 
   /**
-   * Buffers all writes until the {@link io.netty.channel.Channel} is active.
-   */
-  private static class BufferUntilChannelActiveHandler extends AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
-
-    private final GrpcHttp2ConnectionHandler handler;
-
-    BufferUntilChannelActiveHandler(GrpcHttp2ConnectionHandler handler) {
-      super(handler);
-      this.handler = handler;
-    }
-
-    @Override
-    public AsciiString scheme() {
-      return Utils.HTTP;
-    }
-
-    @Override
-    public void handlerAdded(ChannelHandlerContext ctx) {
-      writeBufferedAndRemove(ctx);
-    }
-
-    @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-      writeBufferedAndRemove(ctx);
-      handler.handleProtocolNegotiationCompleted(
-          Attributes
-              .newBuilder()
-              .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-              .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-              .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
-              .build(),
-          /*securityInfo=*/ null);
-      super.channelActive(ctx);
-    }
-  }
-
-  /**
    * Buffers all writes until the HTTP to HTTP/2 upgrade is complete.
    */
   private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler
@@ -785,6 +740,156 @@ public final class ProtocolNegotiators {
         fail(ctx, unavailableException("HTTP/2 upgrade rejected"));
       }
       super.userEventTriggered(ctx, evt);
+    }
+  }
+
+
+  /**
+   * Adapts a {@link ProtocolNegotiationEvent} to the {@link GrpcHttp2ConnectionHandler}.
+   */
+  static final class GrpcNegotiationHandler extends ChannelInboundHandlerAdapter {
+    private final GrpcHttp2ConnectionHandler next;
+
+    public GrpcNegotiationHandler(GrpcHttp2ConnectionHandler next) {
+      this.next = checkNotNull(next, "next");
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof ProtocolNegotiationEvent) {
+        ProtocolNegotiationEvent protocolNegotiationEvent = (ProtocolNegotiationEvent) evt;
+        ctx.pipeline().replace(ctx.name(), null, next);
+        next.handleProtocolNegotiationCompleted(
+            protocolNegotiationEvent.getAttributes(), protocolNegotiationEvent.getSecurity());
+      } else {
+        super.userEventTriggered(ctx, evt);
+      }
+    }
+  }
+
+  /*
+   * Common {@link ProtocolNegotiator}s used by gRPC.  Protocol negotiation follows a pattern to
+   * simplify the pipeline.   The pipeline should look like:
+   *
+   * 1.  {@link ProtocolNegotiator#newHandler() PN.H}, created.
+   * 2.  [Tail], {@link WriteBufferingAndExceptionHandler WBAEH}, [Head]
+   * 3.  [Tail], WBAEH, PN.H, [Head]
+   *
+   * <p>Typically, PN.H with be an instance of {@link InitHandler IH}, which is a trivial handler
+   * that can return the {@code scheme()} of the negotiation.  IH, and each handler after,
+   * replaces itself with a "next" handler once its part of negotiation is complete.  This keeps
+   * the pipeline small, and limits the interaction between handlers.
+   *
+   * <p>Additionally, each handler may fire a {@link ProtocolNegotiationEvent PNE} just after
+   * replacing itself.  Handlers should capture user events of type PNE, and re-trigger the events
+   * once that handler's part of negotiation is complete.  This can be seen in the
+   * {@link WaitUntilActiveHandler WUAH}, which waits until the channel is active.  Once active, it
+   * replaces itself with the next handler, and fires a PNE containing the addresses.  Continuing
+   * with IH and WUAH:
+   *
+   * 3.  [Tail], WBAEH, IH, [Head]
+   * 4.  [Tail], WBAEH, WUAH, [Head]
+   * 5.  [Tail], WBAEH, {@link GrpcNegotiationHandler}, [Head]
+   * 6a. [Tail], WBAEH, {@link GrpcHttp2ConnectionHandler GHCH}, [Head]
+   * 6b. [Tail], GHCH, [Head]
+   */
+
+  /**
+   * A negotiator that only does plain text.
+   */
+  static final class PlaintextProtocolNegotiator implements ProtocolNegotiator {
+
+    @Override
+    public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      ChannelHandler grpcNegotiationHandler = new GrpcNegotiationHandler(grpcHandler);
+      ChannelHandler activeHandler = new WaitUntilActiveHandler(grpcNegotiationHandler);
+      PlaintextProtocolNegotiator.Handler initHandler = new InitHandler(Utils.HTTP, activeHandler);
+      return initHandler;
+    }
+
+    @Override
+    public void close() {}
+  }
+
+  /**
+   * A {@link ProtocolNegotiator.Handler} that installs the next handler in the pipeline.  This
+   * is likely the first handler returned by a {@link ProtocolNegotiator}.
+   */
+  static final class InitHandler extends ChannelInitializer<Channel>
+      implements ProtocolNegotiator.Handler {
+
+    private final AsciiString scheme;
+    private final ChannelHandler next;
+
+    public InitHandler(AsciiString scheme, ChannelHandler next) {
+      this.scheme = checkNotNull(scheme, "scheme");
+      this.next = checkNotNull(next, "next");
+    }
+
+    @Override
+    protected void initChannel(Channel ch) {
+      ch.pipeline().addFirst(/*name=*/ null, next);
+    }
+
+    @Override
+    public AsciiString scheme() {
+      return scheme;
+    }
+  }
+
+  /**
+   * Waits for the channel to be active, and then installs the next Handler.  Using this allows
+   * subsequent handlers to assume the channel is active and ready to send.  Additionally, this a
+   * {@link ProtocolNegotiationEvent}, with the connection addresses.
+   */
+  static final class WaitUntilActiveHandler extends ChannelInboundHandlerAdapter {
+    private final ChannelHandler next;
+    private ProtocolNegotiationEvent protocolNegotiationEvent;
+
+    public WaitUntilActiveHandler(ChannelHandler next) {
+      this.next = checkNotNull(next, "next");
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+      // This should be a noop, but just in case...
+      super.handlerAdded(ctx);
+      if (ctx.channel().isActive()) {
+        ctx.pipeline().replace(ctx.name(), null, next);
+        fireProtocolNegotiationEvent(ctx);
+      }
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+      ctx.pipeline().replace(ctx.name(), null, next);
+      // Still propagate channelActive to the new handler.
+      super.channelActive(ctx);
+      fireProtocolNegotiationEvent(ctx);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof ProtocolNegotiationEvent) {
+        assert !ctx.channel().isActive();
+        checkState(protocolNegotiationEvent == null, "protocolNegotiationEvent already sent");
+        protocolNegotiationEvent = (ProtocolNegotiationEvent) evt;
+      } else {
+        super.userEventTriggered(ctx, evt);
+      }
+    }
+
+    private void fireProtocolNegotiationEvent(ChannelHandlerContext ctx) {
+      if (protocolNegotiationEvent == null) {
+        protocolNegotiationEvent = ProtocolNegotiationEvent.DEFAULT;
+      }
+      Attributes attrs = protocolNegotiationEvent.getAttributes().toBuilder()
+          .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
+          .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+          // Later handlers are expected to overwrite this.
+          .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
+          .build();
+      ctx.fireUserEventTriggered(protocolNegotiationEvent.withAttributes(attrs));
     }
   }
 }

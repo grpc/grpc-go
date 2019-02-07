@@ -62,7 +62,7 @@ public class NettyServerTest {
         new HashMap<ChannelOption<?>, Object>(),
         null, // no boss group
         null, // no event group
-        new ProtocolNegotiators.PlaintextNegotiator(),
+        ProtocolNegotiators.plaintext(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
         TransportTracer.getDefaultFactory(),
         1, // ignore
@@ -100,7 +100,7 @@ public class NettyServerTest {
         new HashMap<ChannelOption<?>, Object>(),
         null, // no boss group
         null, // no event group
-        new ProtocolNegotiators.PlaintextNegotiator(),
+        ProtocolNegotiators.plaintext(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
         TransportTracer.getDefaultFactory(),
         1, // ignore
@@ -138,7 +138,7 @@ public class NettyServerTest {
         channelOptions,
         null, // no boss group
         null, // no event group
-        new ProtocolNegotiators.PlaintextNegotiator(),
+        ProtocolNegotiators.plaintext(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
         TransportTracer.getDefaultFactory(),
         1, // ignore
@@ -188,7 +188,7 @@ public class NettyServerTest {
         new HashMap<ChannelOption<?>, Object>(),
         null, // no boss group
         null, // no event group
-        new ProtocolNegotiators.PlaintextNegotiator(),
+        ProtocolNegotiators.plaintext(),
         Collections.<ServerStreamTracer.Factory>emptyList(),
         TransportTracer.getDefaultFactory(),
         1, // ignore
