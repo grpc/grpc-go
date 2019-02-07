@@ -661,7 +661,9 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 			}
-			d, err = ioutil.ReadAll(dcReader)
+			// Read from LimitReader with limit max+1. So if the underlying
+			// reader is over limit, the result will be bigger than max.
+			d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 			}
