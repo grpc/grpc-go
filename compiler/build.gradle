@@ -177,7 +177,10 @@ protobuf {
         if (project.hasProperty('protoc')) {
             path = project.protoc
         } else {
-            artifact = "com.google.protobuf:protoc:${protocVersion}"
+            // Since nano is removed from newer versions of protoc, use an older version for the
+            // while. This means we won't be able to test any descriptor.proto additions, but that
+            // should be fine for a while.
+            artifact = libraries.protoc_nano
         }
     }
     plugins {

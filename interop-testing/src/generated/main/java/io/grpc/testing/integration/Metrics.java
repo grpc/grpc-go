@@ -94,13 +94,6 @@ public final class Metrics {
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
 
@@ -123,6 +116,13 @@ public final class Metrics {
               value_ = s;
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -140,6 +140,7 @@ public final class Metrics {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_fieldAccessorTable
@@ -287,6 +288,7 @@ public final class Metrics {
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -296,6 +298,7 @@ public final class Metrics {
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getNameBytes().isEmpty()) {
@@ -315,6 +318,7 @@ public final class Metrics {
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -481,6 +485,7 @@ public final class Metrics {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -488,6 +493,7 @@ public final class Metrics {
     public static Builder newBuilder(io.grpc.testing.integration.Metrics.GaugeResponse prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -515,6 +521,7 @@ public final class Metrics {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_fieldAccessorTable
@@ -537,6 +544,7 @@ public final class Metrics {
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         name_ = "";
@@ -546,15 +554,18 @@ public final class Metrics {
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeResponse getDefaultInstanceForType() {
         return io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeResponse build() {
         io.grpc.testing.integration.Metrics.GaugeResponse result = buildPartial();
         if (!result.isInitialized()) {
@@ -563,6 +574,7 @@ public final class Metrics {
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeResponse buildPartial() {
         io.grpc.testing.integration.Metrics.GaugeResponse result = new io.grpc.testing.integration.Metrics.GaugeResponse(this);
         result.name_ = name_;
@@ -580,32 +592,39 @@ public final class Metrics {
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.testing.integration.Metrics.GaugeResponse) {
           return mergeFrom((io.grpc.testing.integration.Metrics.GaugeResponse)other);
@@ -645,10 +664,12 @@ public final class Metrics {
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -890,11 +911,13 @@ public final class Metrics {
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -916,6 +939,7 @@ public final class Metrics {
 
     private static final com.google.protobuf.Parser<GaugeResponse>
         PARSER = new com.google.protobuf.AbstractParser<GaugeResponse>() {
+      @java.lang.Override
       public GaugeResponse parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -933,6 +957,7 @@ public final class Metrics {
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.testing.integration.Metrics.GaugeResponse getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -997,17 +1022,17 @@ public final class Metrics {
             case 0:
               done = true;
               break;
+            case 10: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              name_ = s;
+              break;
+            }
             default: {
               if (!parseUnknownFieldProto3(
                   input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
-              break;
-            }
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              name_ = s;
               break;
             }
           }
@@ -1027,6 +1052,7 @@ public final class Metrics {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_fieldAccessorTable
@@ -1069,6 +1095,7 @@ public final class Metrics {
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -1078,6 +1105,7 @@ public final class Metrics {
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getNameBytes().isEmpty()) {
@@ -1086,6 +1114,7 @@ public final class Metrics {
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -1200,6 +1229,7 @@ public final class Metrics {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -1207,6 +1237,7 @@ public final class Metrics {
     public static Builder newBuilder(io.grpc.testing.integration.Metrics.GaugeRequest prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -1234,6 +1265,7 @@ public final class Metrics {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_fieldAccessorTable
@@ -1256,6 +1288,7 @@ public final class Metrics {
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         name_ = "";
@@ -1263,15 +1296,18 @@ public final class Metrics {
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeRequest getDefaultInstanceForType() {
         return io.grpc.testing.integration.Metrics.GaugeRequest.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeRequest build() {
         io.grpc.testing.integration.Metrics.GaugeRequest result = buildPartial();
         if (!result.isInitialized()) {
@@ -1280,6 +1316,7 @@ public final class Metrics {
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.GaugeRequest buildPartial() {
         io.grpc.testing.integration.Metrics.GaugeRequest result = new io.grpc.testing.integration.Metrics.GaugeRequest(this);
         result.name_ = name_;
@@ -1287,32 +1324,39 @@ public final class Metrics {
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.testing.integration.Metrics.GaugeRequest) {
           return mergeFrom((io.grpc.testing.integration.Metrics.GaugeRequest)other);
@@ -1333,10 +1377,12 @@ public final class Metrics {
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1423,11 +1469,13 @@ public final class Metrics {
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -1449,6 +1497,7 @@ public final class Metrics {
 
     private static final com.google.protobuf.Parser<GaugeRequest>
         PARSER = new com.google.protobuf.AbstractParser<GaugeRequest>() {
+      @java.lang.Override
       public GaugeRequest parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1466,6 +1515,7 @@ public final class Metrics {
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.testing.integration.Metrics.GaugeRequest getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -1538,6 +1588,7 @@ public final class Metrics {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_fieldAccessorTable
@@ -1546,6 +1597,7 @@ public final class Metrics {
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -1555,11 +1607,13 @@ public final class Metrics {
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -1667,6 +1721,7 @@ public final class Metrics {
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -1674,6 +1729,7 @@ public final class Metrics {
     public static Builder newBuilder(io.grpc.testing.integration.Metrics.EmptyMessage prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -1697,6 +1753,7 @@ public final class Metrics {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_fieldAccessorTable
@@ -1719,20 +1776,24 @@ public final class Metrics {
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.EmptyMessage getDefaultInstanceForType() {
         return io.grpc.testing.integration.Metrics.EmptyMessage.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.EmptyMessage build() {
         io.grpc.testing.integration.Metrics.EmptyMessage result = buildPartial();
         if (!result.isInitialized()) {
@@ -1741,38 +1802,46 @@ public final class Metrics {
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.testing.integration.Metrics.EmptyMessage buildPartial() {
         io.grpc.testing.integration.Metrics.EmptyMessage result = new io.grpc.testing.integration.Metrics.EmptyMessage(this);
         onBuilt();
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.testing.integration.Metrics.EmptyMessage) {
           return mergeFrom((io.grpc.testing.integration.Metrics.EmptyMessage)other);
@@ -1789,10 +1858,12 @@ public final class Metrics {
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1810,11 +1881,13 @@ public final class Metrics {
         }
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -1836,6 +1909,7 @@ public final class Metrics {
 
     private static final com.google.protobuf.Parser<EmptyMessage>
         PARSER = new com.google.protobuf.AbstractParser<EmptyMessage>() {
+      @java.lang.Override
       public EmptyMessage parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1853,6 +1927,7 @@ public final class Metrics {
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.testing.integration.Metrics.EmptyMessage getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }

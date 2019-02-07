@@ -28,6 +28,9 @@ configureProtoCompilation()
 
 if (project.hasProperty('protobuf')) {
     protobuf {
+        protoc {
+            artifact = libraries.protoc_nano
+        }
         generateProtoTasks {
             all().each { task ->
                 task.builtins {

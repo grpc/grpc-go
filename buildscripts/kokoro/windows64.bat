@@ -18,7 +18,7 @@ set PATH=C:\Program Files\java\jdk1.8.0_152\bin;%PATH%
 
 mkdir grpc-java-helper64
 cd grpc-java-helper64
-call "%VS120COMNTOOLS%\..\..\VC\bin\amd64\vcvars64.bat" || exit /b 1
+call "%VS140COMNTOOLS%\..\..\VC\bin\amd64\vcvars64.bat" || exit /b 1
 call "%WORKSPACE%\buildscripts\make_dependencies.bat" || exit /b 1
 
 cd "%WORKSPACE%"

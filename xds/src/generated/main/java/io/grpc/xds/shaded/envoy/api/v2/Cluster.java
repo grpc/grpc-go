@@ -59,13 +59,6 @@ private static final long serialVersionUID = 0L;
           case 0:
             done = true;
             break;
-          default: {
-            if (!parseUnknownFieldProto3(
-                input, unknownFields, extensionRegistry, tag)) {
-              done = true;
-            }
-            break;
-          }
           case 10: {
             java.lang.String s = input.readStringRequireUtf8();
 
@@ -454,6 +447,13 @@ private static final long serialVersionUID = 0L;
             lbConfigCase_ = 37;
             break;
           }
+          default: {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
+              done = true;
+            }
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -481,6 +481,7 @@ private static final long serialVersionUID = 0L;
   }
 
   @SuppressWarnings({"rawtypes"})
+  @java.lang.Override
   protected com.google.protobuf.MapField internalGetMapField(
       int number) {
     switch (number) {
@@ -493,6 +494,7 @@ private static final long serialVersionUID = 0L;
             "Invalid map field number: " + number);
     }
   }
+  @java.lang.Override
   protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_fieldAccessorTable
@@ -1228,13 +1230,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               io.grpc.xds.shaded.envoy.api.v2.core.ConfigSource.Builder subBuilder = null;
               if (edsConfig_ != null) {
@@ -1254,6 +1249,13 @@ private static final long serialVersionUID = 0L;
               serviceName_ = s;
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -1271,6 +1273,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_EdsClusterConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_EdsClusterConfig_fieldAccessorTable
@@ -1358,6 +1361,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -1367,6 +1371,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (edsConfig_ != null) {
@@ -1378,6 +1383,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -1505,6 +1511,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -1512,6 +1519,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -1539,6 +1547,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_EdsClusterConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_EdsClusterConfig_fieldAccessorTable
@@ -1561,6 +1570,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         if (edsConfigBuilder_ == null) {
@@ -1574,15 +1584,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_EdsClusterConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -1591,6 +1604,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig(this);
         if (edsConfigBuilder_ == null) {
@@ -1603,32 +1617,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig)other);
@@ -1652,10 +1673,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1925,11 +1948,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -1951,6 +1976,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<EdsClusterConfig>
         PARSER = new com.google.protobuf.AbstractParser<EdsClusterConfig>() {
+      @java.lang.Override
       public EdsClusterConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1968,6 +1994,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.EdsClusterConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -2215,13 +2242,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 8: {
               int rawValue = input.readEnum();
 
@@ -2260,6 +2280,13 @@ private static final long serialVersionUID = 0L;
               scaleLocalityWeight_ = input.readBool();
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -2280,6 +2307,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_fieldAccessorTable
@@ -2485,13 +2513,6 @@ private static final long serialVersionUID = 0L;
               case 0:
                 done = true;
                 break;
-              default: {
-                if (!parseUnknownFieldProto3(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
               case 10: {
                 java.lang.String s = input.readStringRequireUtf8();
                 if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
@@ -2499,6 +2520,13 @@ private static final long serialVersionUID = 0L;
                   mutable_bitField0_ |= 0x00000001;
                 }
                 keys_.add(s);
+                break;
+              }
+              default: {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
                 break;
               }
             }
@@ -2521,6 +2549,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_LbSubsetSelector_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_LbSubsetSelector_fieldAccessorTable
@@ -2574,6 +2603,7 @@ private static final long serialVersionUID = 0L;
       }
 
       private byte memoizedIsInitialized = -1;
+      @java.lang.Override
       public final boolean isInitialized() {
         byte isInitialized = memoizedIsInitialized;
         if (isInitialized == 1) return true;
@@ -2583,6 +2613,7 @@ private static final long serialVersionUID = 0L;
         return true;
       }
 
+      @java.lang.Override
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
         for (int i = 0; i < keys_.size(); i++) {
@@ -2591,6 +2622,7 @@ private static final long serialVersionUID = 0L;
         unknownFields.writeTo(output);
       }
 
+      @java.lang.Override
       public int getSerializedSize() {
         int size = memoizedSize;
         if (size != -1) return size;
@@ -2712,6 +2744,7 @@ private static final long serialVersionUID = 0L;
             .parseWithIOException(PARSER, input, extensionRegistry);
       }
 
+      @java.lang.Override
       public Builder newBuilderForType() { return newBuilder(); }
       public static Builder newBuilder() {
         return DEFAULT_INSTANCE.toBuilder();
@@ -2719,6 +2752,7 @@ private static final long serialVersionUID = 0L;
       public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector prototype) {
         return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
       }
+      @java.lang.Override
       public Builder toBuilder() {
         return this == DEFAULT_INSTANCE
             ? new Builder() : new Builder().mergeFrom(this);
@@ -2746,6 +2780,7 @@ private static final long serialVersionUID = 0L;
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_LbSubsetSelector_descriptor;
         }
 
+        @java.lang.Override
         protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
             internalGetFieldAccessorTable() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_LbSubsetSelector_fieldAccessorTable
@@ -2768,6 +2803,7 @@ private static final long serialVersionUID = 0L;
                   .alwaysUseFieldBuilders) {
           }
         }
+        @java.lang.Override
         public Builder clear() {
           super.clear();
           keys_ = com.google.protobuf.LazyStringArrayList.EMPTY;
@@ -2775,15 +2811,18 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public com.google.protobuf.Descriptors.Descriptor
             getDescriptorForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_LbSubsetSelector_descriptor;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector getDefaultInstanceForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector.getDefaultInstance();
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector build() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector result = buildPartial();
           if (!result.isInitialized()) {
@@ -2792,6 +2831,7 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector buildPartial() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector(this);
           int from_bitField0_ = bitField0_;
@@ -2804,32 +2844,39 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public Builder clone() {
           return (Builder) super.clone();
         }
+        @java.lang.Override
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
+        @java.lang.Override
         public Builder clearField(
             com.google.protobuf.Descriptors.FieldDescriptor field) {
           return (Builder) super.clearField(field);
         }
+        @java.lang.Override
         public Builder clearOneof(
             com.google.protobuf.Descriptors.OneofDescriptor oneof) {
           return (Builder) super.clearOneof(oneof);
         }
+        @java.lang.Override
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
+        @java.lang.Override
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
+        @java.lang.Override
         public Builder mergeFrom(com.google.protobuf.Message other) {
           if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector) {
             return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector)other);
@@ -2856,10 +2903,12 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public final boolean isInitialized() {
           return true;
         }
 
+        @java.lang.Override
         public Builder mergeFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3008,11 +3057,13 @@ private static final long serialVersionUID = 0L;
           onChanged();
           return this;
         }
+        @java.lang.Override
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.setUnknownFieldsProto3(unknownFields);
         }
 
+        @java.lang.Override
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.mergeUnknownFields(unknownFields);
@@ -3034,6 +3085,7 @@ private static final long serialVersionUID = 0L;
 
       private static final com.google.protobuf.Parser<LbSubsetSelector>
           PARSER = new com.google.protobuf.AbstractParser<LbSubsetSelector>() {
+        @java.lang.Override
         public LbSubsetSelector parsePartialFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3051,6 +3103,7 @@ private static final long serialVersionUID = 0L;
         return PARSER;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetSelector getDefaultInstanceForType() {
         return DEFAULT_INSTANCE;
       }
@@ -3082,6 +3135,7 @@ private static final long serialVersionUID = 0L;
      * <code>.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy fallback_policy = 1 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy getFallbackPolicy() {
+      @SuppressWarnings("deprecation")
       io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy result = io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy.valueOf(fallbackPolicy_);
       return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy.UNRECOGNIZED : result;
     }
@@ -3282,6 +3336,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -3291,6 +3346,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (fallbackPolicy_ != io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy.NO_FALLBACK.getNumber()) {
@@ -3311,6 +3367,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -3466,6 +3523,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -3473,6 +3531,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -3501,6 +3560,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_fieldAccessorTable
@@ -3524,6 +3584,7 @@ private static final long serialVersionUID = 0L;
           getSubsetSelectorsFieldBuilder();
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         fallbackPolicy_ = 0;
@@ -3547,15 +3608,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LbSubsetConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -3564,6 +3628,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig(this);
         int from_bitField0_ = bitField0_;
@@ -3590,32 +3655,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig)other);
@@ -3670,10 +3742,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3730,6 +3804,7 @@ private static final long serialVersionUID = 0L;
        * <code>.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy fallback_policy = 1 [(.validate.rules) = { ... }</code>
        */
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy getFallbackPolicy() {
+        @SuppressWarnings("deprecation")
         io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy result = io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy.valueOf(fallbackPolicy_);
         return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig.LbSubsetFallbackPolicy.UNRECOGNIZED : result;
       }
@@ -4580,11 +4655,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -4606,6 +4683,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<LbSubsetConfig>
         PARSER = new com.google.protobuf.AbstractParser<LbSubsetConfig>() {
+      @java.lang.Override
       public LbSubsetConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4623,6 +4701,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbSubsetConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -4704,13 +4783,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               com.google.protobuf.UInt32Value.Builder subBuilder = null;
               if (choiceCount_ != null) {
@@ -4722,6 +4794,13 @@ private static final long serialVersionUID = 0L;
                 choiceCount_ = subBuilder.buildPartial();
               }
 
+              break;
+            }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
               break;
             }
           }
@@ -4741,6 +4820,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LeastRequestLbConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LeastRequestLbConfig_fieldAccessorTable
@@ -4785,6 +4865,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -4794,6 +4875,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (choiceCount_ != null) {
@@ -4802,6 +4884,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -4922,6 +5005,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -4929,6 +5013,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -4956,6 +5041,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LeastRequestLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LeastRequestLbConfig_fieldAccessorTable
@@ -4978,6 +5064,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         if (choiceCountBuilder_ == null) {
@@ -4989,15 +5076,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_LeastRequestLbConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -5006,6 +5096,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig(this);
         if (choiceCountBuilder_ == null) {
@@ -5017,32 +5108,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig)other);
@@ -5062,10 +5160,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5245,11 +5345,13 @@ private static final long serialVersionUID = 0L;
         }
         return choiceCountBuilder_;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -5271,6 +5373,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<LeastRequestLbConfig>
         PARSER = new com.google.protobuf.AbstractParser<LeastRequestLbConfig>() {
+      @java.lang.Override
       public LeastRequestLbConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5288,6 +5391,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.LeastRequestLbConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -5410,13 +5514,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               com.google.protobuf.UInt64Value.Builder subBuilder = null;
               if (minimumRingSize_ != null) {
@@ -5443,6 +5540,13 @@ private static final long serialVersionUID = 0L;
 
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -5460,6 +5564,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_fieldAccessorTable
@@ -5542,13 +5647,6 @@ private static final long serialVersionUID = 0L;
               case 0:
                 done = true;
                 break;
-              default: {
-                if (!parseUnknownFieldProto3(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
               case 10: {
                 com.google.protobuf.BoolValue.Builder subBuilder = null;
                 if (useStdHash_ != null) {
@@ -5560,6 +5658,13 @@ private static final long serialVersionUID = 0L;
                   useStdHash_ = subBuilder.buildPartial();
                 }
 
+                break;
+              }
+              default: {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
                 break;
               }
             }
@@ -5579,6 +5684,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_DeprecatedV1_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_DeprecatedV1_fieldAccessorTable
@@ -5623,6 +5729,7 @@ private static final long serialVersionUID = 0L;
       }
 
       private byte memoizedIsInitialized = -1;
+      @java.lang.Override
       public final boolean isInitialized() {
         byte isInitialized = memoizedIsInitialized;
         if (isInitialized == 1) return true;
@@ -5632,6 +5739,7 @@ private static final long serialVersionUID = 0L;
         return true;
       }
 
+      @java.lang.Override
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
         if (useStdHash_ != null) {
@@ -5640,6 +5748,7 @@ private static final long serialVersionUID = 0L;
         unknownFields.writeTo(output);
       }
 
+      @java.lang.Override
       public int getSerializedSize() {
         int size = memoizedSize;
         if (size != -1) return size;
@@ -5760,6 +5869,7 @@ private static final long serialVersionUID = 0L;
             .parseWithIOException(PARSER, input, extensionRegistry);
       }
 
+      @java.lang.Override
       public Builder newBuilderForType() { return newBuilder(); }
       public static Builder newBuilder() {
         return DEFAULT_INSTANCE.toBuilder();
@@ -5767,6 +5877,7 @@ private static final long serialVersionUID = 0L;
       public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 prototype) {
         return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
       }
+      @java.lang.Override
       public Builder toBuilder() {
         return this == DEFAULT_INSTANCE
             ? new Builder() : new Builder().mergeFrom(this);
@@ -5794,6 +5905,7 @@ private static final long serialVersionUID = 0L;
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_DeprecatedV1_descriptor;
         }
 
+        @java.lang.Override
         protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
             internalGetFieldAccessorTable() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_DeprecatedV1_fieldAccessorTable
@@ -5816,6 +5928,7 @@ private static final long serialVersionUID = 0L;
                   .alwaysUseFieldBuilders) {
           }
         }
+        @java.lang.Override
         public Builder clear() {
           super.clear();
           if (useStdHashBuilder_ == null) {
@@ -5827,15 +5940,18 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public com.google.protobuf.Descriptors.Descriptor
             getDescriptorForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_DeprecatedV1_descriptor;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 getDefaultInstanceForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1.getDefaultInstance();
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 build() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 result = buildPartial();
           if (!result.isInitialized()) {
@@ -5844,6 +5960,7 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 buildPartial() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1(this);
           if (useStdHashBuilder_ == null) {
@@ -5855,32 +5972,39 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public Builder clone() {
           return (Builder) super.clone();
         }
+        @java.lang.Override
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
+        @java.lang.Override
         public Builder clearField(
             com.google.protobuf.Descriptors.FieldDescriptor field) {
           return (Builder) super.clearField(field);
         }
+        @java.lang.Override
         public Builder clearOneof(
             com.google.protobuf.Descriptors.OneofDescriptor oneof) {
           return (Builder) super.clearOneof(oneof);
         }
+        @java.lang.Override
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
+        @java.lang.Override
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
+        @java.lang.Override
         public Builder mergeFrom(com.google.protobuf.Message other) {
           if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1) {
             return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1)other);
@@ -5900,10 +6024,12 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public final boolean isInitialized() {
           return true;
         }
 
+        @java.lang.Override
         public Builder mergeFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6083,11 +6209,13 @@ private static final long serialVersionUID = 0L;
           }
           return useStdHashBuilder_;
         }
+        @java.lang.Override
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.setUnknownFieldsProto3(unknownFields);
         }
 
+        @java.lang.Override
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.mergeUnknownFields(unknownFields);
@@ -6109,6 +6237,7 @@ private static final long serialVersionUID = 0L;
 
       private static final com.google.protobuf.Parser<DeprecatedV1>
           PARSER = new com.google.protobuf.AbstractParser<DeprecatedV1>() {
+        @java.lang.Override
         public DeprecatedV1 parsePartialFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6126,6 +6255,7 @@ private static final long serialVersionUID = 0L;
         return PARSER;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.DeprecatedV1 getDefaultInstanceForType() {
         return DEFAULT_INSTANCE;
       }
@@ -6217,6 +6347,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -6226,6 +6357,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (minimumRingSize_ != null) {
@@ -6237,6 +6369,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -6370,6 +6503,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -6377,6 +6511,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -6405,6 +6540,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_fieldAccessorTable
@@ -6427,6 +6563,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         if (minimumRingSizeBuilder_ == null) {
@@ -6444,15 +6581,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_RingHashLbConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -6461,6 +6601,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig(this);
         if (minimumRingSizeBuilder_ == null) {
@@ -6477,32 +6618,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig)other);
@@ -6525,10 +6673,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6906,11 +7056,13 @@ private static final long serialVersionUID = 0L;
         }
         return deprecatedV1Builder_;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -6932,6 +7084,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<RingHashLbConfig>
         PARSER = new com.google.protobuf.AbstractParser<RingHashLbConfig>() {
+      @java.lang.Override
       public RingHashLbConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6949,6 +7102,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.RingHashLbConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -7020,16 +7174,16 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
+            case 8: {
+
+              useHttpHeader_ = input.readBool();
+              break;
+            }
             default: {
               if (!parseUnknownFieldProto3(
                   input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
-              break;
-            }
-            case 8: {
-
-              useHttpHeader_ = input.readBool();
               break;
             }
           }
@@ -7049,6 +7203,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_OriginalDstLbConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_OriginalDstLbConfig_fieldAccessorTable
@@ -7076,6 +7231,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -7085,6 +7241,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (useHttpHeader_ != false) {
@@ -7093,6 +7250,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -7209,6 +7367,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -7216,6 +7375,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -7245,6 +7405,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_OriginalDstLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_OriginalDstLbConfig_fieldAccessorTable
@@ -7267,6 +7428,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         useHttpHeader_ = false;
@@ -7274,15 +7436,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_OriginalDstLbConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -7291,6 +7456,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig(this);
         result.useHttpHeader_ = useHttpHeader_;
@@ -7298,32 +7464,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig)other);
@@ -7343,10 +7516,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -7420,11 +7595,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -7446,6 +7623,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<OriginalDstLbConfig>
         PARSER = new com.google.protobuf.AbstractParser<OriginalDstLbConfig>() {
+      @java.lang.Override
       public OriginalDstLbConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -7463,6 +7641,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.OriginalDstLbConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -7633,13 +7812,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               io.grpc.xds.shaded.envoy.type.Percent.Builder subBuilder = null;
               if (healthyPanicThreshold_ != null) {
@@ -7694,6 +7866,13 @@ private static final long serialVersionUID = 0L;
 
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -7711,6 +7890,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_fieldAccessorTable
@@ -7837,13 +8017,6 @@ private static final long serialVersionUID = 0L;
               case 0:
                 done = true;
                 break;
-              default: {
-                if (!parseUnknownFieldProto3(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
               case 10: {
                 io.grpc.xds.shaded.envoy.type.Percent.Builder subBuilder = null;
                 if (routingEnabled_ != null) {
@@ -7870,6 +8043,13 @@ private static final long serialVersionUID = 0L;
 
                 break;
               }
+              default: {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
+                  done = true;
+                }
+                break;
+              }
             }
           }
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -7887,6 +8067,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_ZoneAwareLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_ZoneAwareLbConfig_fieldAccessorTable
@@ -7982,6 +8163,7 @@ private static final long serialVersionUID = 0L;
       }
 
       private byte memoizedIsInitialized = -1;
+      @java.lang.Override
       public final boolean isInitialized() {
         byte isInitialized = memoizedIsInitialized;
         if (isInitialized == 1) return true;
@@ -7991,6 +8173,7 @@ private static final long serialVersionUID = 0L;
         return true;
       }
 
+      @java.lang.Override
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
         if (routingEnabled_ != null) {
@@ -8002,6 +8185,7 @@ private static final long serialVersionUID = 0L;
         unknownFields.writeTo(output);
       }
 
+      @java.lang.Override
       public int getSerializedSize() {
         int size = memoizedSize;
         if (size != -1) return size;
@@ -8135,6 +8319,7 @@ private static final long serialVersionUID = 0L;
             .parseWithIOException(PARSER, input, extensionRegistry);
       }
 
+      @java.lang.Override
       public Builder newBuilderForType() { return newBuilder(); }
       public static Builder newBuilder() {
         return DEFAULT_INSTANCE.toBuilder();
@@ -8142,6 +8327,7 @@ private static final long serialVersionUID = 0L;
       public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig prototype) {
         return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
       }
+      @java.lang.Override
       public Builder toBuilder() {
         return this == DEFAULT_INSTANCE
             ? new Builder() : new Builder().mergeFrom(this);
@@ -8170,6 +8356,7 @@ private static final long serialVersionUID = 0L;
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_ZoneAwareLbConfig_descriptor;
         }
 
+        @java.lang.Override
         protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
             internalGetFieldAccessorTable() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_ZoneAwareLbConfig_fieldAccessorTable
@@ -8192,6 +8379,7 @@ private static final long serialVersionUID = 0L;
                   .alwaysUseFieldBuilders) {
           }
         }
+        @java.lang.Override
         public Builder clear() {
           super.clear();
           if (routingEnabledBuilder_ == null) {
@@ -8209,15 +8397,18 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public com.google.protobuf.Descriptors.Descriptor
             getDescriptorForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_ZoneAwareLbConfig_descriptor;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig getDefaultInstanceForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig.getDefaultInstance();
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig build() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig result = buildPartial();
           if (!result.isInitialized()) {
@@ -8226,6 +8417,7 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig buildPartial() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig(this);
           if (routingEnabledBuilder_ == null) {
@@ -8242,32 +8434,39 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public Builder clone() {
           return (Builder) super.clone();
         }
+        @java.lang.Override
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
+        @java.lang.Override
         public Builder clearField(
             com.google.protobuf.Descriptors.FieldDescriptor field) {
           return (Builder) super.clearField(field);
         }
+        @java.lang.Override
         public Builder clearOneof(
             com.google.protobuf.Descriptors.OneofDescriptor oneof) {
           return (Builder) super.clearOneof(oneof);
         }
+        @java.lang.Override
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
+        @java.lang.Override
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
+        @java.lang.Override
         public Builder mergeFrom(com.google.protobuf.Message other) {
           if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig) {
             return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig)other);
@@ -8290,10 +8489,12 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public final boolean isInitialized() {
           return true;
         }
 
+        @java.lang.Override
         public Builder mergeFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -8680,11 +8881,13 @@ private static final long serialVersionUID = 0L;
           }
           return minClusterSizeBuilder_;
         }
+        @java.lang.Override
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.setUnknownFieldsProto3(unknownFields);
         }
 
+        @java.lang.Override
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.mergeUnknownFields(unknownFields);
@@ -8706,6 +8909,7 @@ private static final long serialVersionUID = 0L;
 
       private static final com.google.protobuf.Parser<ZoneAwareLbConfig>
           PARSER = new com.google.protobuf.AbstractParser<ZoneAwareLbConfig>() {
+        @java.lang.Override
         public ZoneAwareLbConfig parsePartialFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -8723,6 +8927,7 @@ private static final long serialVersionUID = 0L;
         return PARSER;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.ZoneAwareLbConfig getDefaultInstanceForType() {
         return DEFAULT_INSTANCE;
       }
@@ -8800,6 +9005,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_LocalityWeightedLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_LocalityWeightedLbConfig_fieldAccessorTable
@@ -8808,6 +9014,7 @@ private static final long serialVersionUID = 0L;
       }
 
       private byte memoizedIsInitialized = -1;
+      @java.lang.Override
       public final boolean isInitialized() {
         byte isInitialized = memoizedIsInitialized;
         if (isInitialized == 1) return true;
@@ -8817,11 +9024,13 @@ private static final long serialVersionUID = 0L;
         return true;
       }
 
+      @java.lang.Override
       public void writeTo(com.google.protobuf.CodedOutputStream output)
                           throws java.io.IOException {
         unknownFields.writeTo(output);
       }
 
+      @java.lang.Override
       public int getSerializedSize() {
         int size = memoizedSize;
         if (size != -1) return size;
@@ -8929,6 +9138,7 @@ private static final long serialVersionUID = 0L;
             .parseWithIOException(PARSER, input, extensionRegistry);
       }
 
+      @java.lang.Override
       public Builder newBuilderForType() { return newBuilder(); }
       public static Builder newBuilder() {
         return DEFAULT_INSTANCE.toBuilder();
@@ -8936,6 +9146,7 @@ private static final long serialVersionUID = 0L;
       public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig prototype) {
         return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
       }
+      @java.lang.Override
       public Builder toBuilder() {
         return this == DEFAULT_INSTANCE
             ? new Builder() : new Builder().mergeFrom(this);
@@ -8964,6 +9175,7 @@ private static final long serialVersionUID = 0L;
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_LocalityWeightedLbConfig_descriptor;
         }
 
+        @java.lang.Override
         protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
             internalGetFieldAccessorTable() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_LocalityWeightedLbConfig_fieldAccessorTable
@@ -8986,20 +9198,24 @@ private static final long serialVersionUID = 0L;
                   .alwaysUseFieldBuilders) {
           }
         }
+        @java.lang.Override
         public Builder clear() {
           super.clear();
           return this;
         }
 
+        @java.lang.Override
         public com.google.protobuf.Descriptors.Descriptor
             getDescriptorForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_LocalityWeightedLbConfig_descriptor;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig getDefaultInstanceForType() {
           return io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig.getDefaultInstance();
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig build() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig result = buildPartial();
           if (!result.isInitialized()) {
@@ -9008,38 +9224,46 @@ private static final long serialVersionUID = 0L;
           return result;
         }
 
+        @java.lang.Override
         public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig buildPartial() {
           io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig(this);
           onBuilt();
           return result;
         }
 
+        @java.lang.Override
         public Builder clone() {
           return (Builder) super.clone();
         }
+        @java.lang.Override
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
+        @java.lang.Override
         public Builder clearField(
             com.google.protobuf.Descriptors.FieldDescriptor field) {
           return (Builder) super.clearField(field);
         }
+        @java.lang.Override
         public Builder clearOneof(
             com.google.protobuf.Descriptors.OneofDescriptor oneof) {
           return (Builder) super.clearOneof(oneof);
         }
+        @java.lang.Override
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
+        @java.lang.Override
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
             java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
+        @java.lang.Override
         public Builder mergeFrom(com.google.protobuf.Message other) {
           if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig) {
             return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig)other);
@@ -9056,10 +9280,12 @@ private static final long serialVersionUID = 0L;
           return this;
         }
 
+        @java.lang.Override
         public final boolean isInitialized() {
           return true;
         }
 
+        @java.lang.Override
         public Builder mergeFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -9077,11 +9303,13 @@ private static final long serialVersionUID = 0L;
           }
           return this;
         }
+        @java.lang.Override
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.setUnknownFieldsProto3(unknownFields);
         }
 
+        @java.lang.Override
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
           return super.mergeUnknownFields(unknownFields);
@@ -9103,6 +9331,7 @@ private static final long serialVersionUID = 0L;
 
       private static final com.google.protobuf.Parser<LocalityWeightedLbConfig>
           PARSER = new com.google.protobuf.AbstractParser<LocalityWeightedLbConfig>() {
+        @java.lang.Override
         public LocalityWeightedLbConfig parsePartialFrom(
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -9120,6 +9349,7 @@ private static final long serialVersionUID = 0L;
         return PARSER;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.LocalityWeightedLbConfig getDefaultInstanceForType() {
         return DEFAULT_INSTANCE;
       }
@@ -9322,6 +9552,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -9331,6 +9562,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (healthyPanicThreshold_ != null) {
@@ -9348,6 +9580,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -9516,6 +9749,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -9523,6 +9757,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -9550,6 +9785,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_fieldAccessorTable
@@ -9572,6 +9808,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         if (healthyPanicThresholdBuilder_ == null) {
@@ -9591,15 +9828,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_CommonLbConfig_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig build() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig result = buildPartial();
         if (!result.isInitialized()) {
@@ -9608,6 +9848,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig result = new io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig(this);
         if (healthyPanicThresholdBuilder_ == null) {
@@ -9639,32 +9880,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig)other);
@@ -9700,10 +9948,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -10431,11 +10681,13 @@ private static final long serialVersionUID = 0L;
         }
         return updateMergeWindowBuilder_;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -10457,6 +10709,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<CommonLbConfig>
         PARSER = new com.google.protobuf.AbstractParser<CommonLbConfig>() {
+      @java.lang.Override
       public CommonLbConfig parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -10474,6 +10727,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.CommonLbConfig getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -10647,6 +10901,7 @@ private static final long serialVersionUID = 0L;
    * <code>.envoy.api.v2.Cluster.DiscoveryType type = 2 [(.validate.rules) = { ... }</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType getType() {
+    @SuppressWarnings("deprecation")
     io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType result = io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType.valueOf(type_);
     return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType.UNRECOGNIZED : result;
   }
@@ -10775,6 +11030,7 @@ private static final long serialVersionUID = 0L;
    * <code>.envoy.api.v2.Cluster.LbPolicy lb_policy = 6 [(.validate.rules) = { ... }</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy getLbPolicy() {
+    @SuppressWarnings("deprecation")
     io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy result = io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy.valueOf(lbPolicy_);
     return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy.UNRECOGNIZED : result;
   }
@@ -11535,6 +11791,7 @@ private static final long serialVersionUID = 0L;
    * <code>.envoy.api.v2.Cluster.DnsLookupFamily dns_lookup_family = 17 [(.validate.rules) = { ... }</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily getDnsLookupFamily() {
+    @SuppressWarnings("deprecation")
     io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily result = io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily.valueOf(dnsLookupFamily_);
     return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily.UNRECOGNIZED : result;
   }
@@ -12064,6 +12321,7 @@ private static final long serialVersionUID = 0L;
    * <code>.envoy.api.v2.Cluster.ClusterProtocolSelection protocol_selection = 26;</code>
    */
   public io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection getProtocolSelection() {
+    @SuppressWarnings("deprecation")
     io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection result = io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection.valueOf(protocolSelection_);
     return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection.UNRECOGNIZED : result;
   }
@@ -12140,6 +12398,7 @@ private static final long serialVersionUID = 0L;
   }
 
   private byte memoizedIsInitialized = -1;
+  @java.lang.Override
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
     if (isInitialized == 1) return true;
@@ -12149,6 +12408,7 @@ private static final long serialVersionUID = 0L;
     return true;
   }
 
+  @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     if (!getNameBytes().isEmpty()) {
@@ -12265,6 +12525,7 @@ private static final long serialVersionUID = 0L;
     unknownFields.writeTo(output);
   }
 
+  @java.lang.Override
   public int getSerializedSize() {
     int size = memoizedSize;
     if (size != -1) return size;
@@ -12788,6 +13049,7 @@ private static final long serialVersionUID = 0L;
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
+  @java.lang.Override
   public Builder newBuilderForType() { return newBuilder(); }
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
@@ -12795,6 +13057,7 @@ private static final long serialVersionUID = 0L;
   public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.Cluster prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
+  @java.lang.Override
   public Builder toBuilder() {
     return this == DEFAULT_INSTANCE
         ? new Builder() : new Builder().mergeFrom(this);
@@ -12849,6 +13112,7 @@ private static final long serialVersionUID = 0L;
               "Invalid map field number: " + number);
       }
     }
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_fieldAccessorTable
@@ -12874,6 +13138,7 @@ private static final long serialVersionUID = 0L;
         getDnsResolversFieldBuilder();
       }
     }
+    @java.lang.Override
     public Builder clear() {
       super.clear();
       name_ = "";
@@ -13031,15 +13296,18 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    @java.lang.Override
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
       return io.grpc.xds.shaded.envoy.api.v2.Cds.internal_static_envoy_api_v2_Cluster_descriptor;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster getDefaultInstanceForType() {
       return io.grpc.xds.shaded.envoy.api.v2.Cluster.getDefaultInstance();
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster build() {
       io.grpc.xds.shaded.envoy.api.v2.Cluster result = buildPartial();
       if (!result.isInitialized()) {
@@ -13048,6 +13316,7 @@ private static final long serialVersionUID = 0L;
       return result;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.Cluster buildPartial() {
       io.grpc.xds.shaded.envoy.api.v2.Cluster result = new io.grpc.xds.shaded.envoy.api.v2.Cluster(this);
       int from_bitField0_ = bitField0_;
@@ -13214,32 +13483,39 @@ private static final long serialVersionUID = 0L;
       return result;
     }
 
+    @java.lang.Override
     public Builder clone() {
       return (Builder) super.clone();
     }
+    @java.lang.Override
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
+    @java.lang.Override
     public Builder clearField(
         com.google.protobuf.Descriptors.FieldDescriptor field) {
       return (Builder) super.clearField(field);
     }
+    @java.lang.Override
     public Builder clearOneof(
         com.google.protobuf.Descriptors.OneofDescriptor oneof) {
       return (Builder) super.clearOneof(oneof);
     }
+    @java.lang.Override
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
+    @java.lang.Override
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
+    @java.lang.Override
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.xds.shaded.envoy.api.v2.Cluster) {
         return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.Cluster)other);
@@ -13438,10 +13714,12 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    @java.lang.Override
     public final boolean isInitialized() {
       return true;
     }
 
+    @java.lang.Override
     public Builder mergeFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -13739,6 +14017,7 @@ private static final long serialVersionUID = 0L;
      * <code>.envoy.api.v2.Cluster.DiscoveryType type = 2 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType getType() {
+      @SuppressWarnings("deprecation")
       io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType result = io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType.valueOf(type_);
       return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.DiscoveryType.UNRECOGNIZED : result;
     }
@@ -14276,6 +14555,7 @@ private static final long serialVersionUID = 0L;
      * <code>.envoy.api.v2.Cluster.LbPolicy lb_policy = 6 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy getLbPolicy() {
+      @SuppressWarnings("deprecation")
       io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy result = io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy.valueOf(lbPolicy_);
       return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.LbPolicy.UNRECOGNIZED : result;
     }
@@ -17015,6 +17295,7 @@ private static final long serialVersionUID = 0L;
      * <code>.envoy.api.v2.Cluster.DnsLookupFamily dns_lookup_family = 17 [(.validate.rules) = { ... }</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily getDnsLookupFamily() {
+      @SuppressWarnings("deprecation")
       io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily result = io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily.valueOf(dnsLookupFamily_);
       return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.DnsLookupFamily.UNRECOGNIZED : result;
     }
@@ -19324,6 +19605,7 @@ private static final long serialVersionUID = 0L;
      * <code>.envoy.api.v2.Cluster.ClusterProtocolSelection protocol_selection = 26;</code>
      */
     public io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection getProtocolSelection() {
+      @SuppressWarnings("deprecation")
       io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection result = io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection.valueOf(protocolSelection_);
       return result == null ? io.grpc.xds.shaded.envoy.api.v2.Cluster.ClusterProtocolSelection.UNRECOGNIZED : result;
     }
@@ -19621,11 +19903,13 @@ private static final long serialVersionUID = 0L;
       onChanged();
       return this;
     }
+    @java.lang.Override
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.setUnknownFieldsProto3(unknownFields);
     }
 
+    @java.lang.Override
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.mergeUnknownFields(unknownFields);
@@ -19647,6 +19931,7 @@ private static final long serialVersionUID = 0L;
 
   private static final com.google.protobuf.Parser<Cluster>
       PARSER = new com.google.protobuf.AbstractParser<Cluster>() {
+    @java.lang.Override
     public Cluster parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -19664,6 +19949,7 @@ private static final long serialVersionUID = 0L;
     return PARSER;
   }
 
+  @java.lang.Override
   public io.grpc.xds.shaded.envoy.api.v2.Cluster getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }

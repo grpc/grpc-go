@@ -19,7 +19,7 @@ set PATH=C:\Program Files\java\jdk1.8.0_152\bin;%PATH%
 
 mkdir grpc-java-helper32
 cd grpc-java-helper32
-call "%VS120COMNTOOLS%\vsvars32.bat" || exit /b 1
+call "%VS140COMNTOOLS%\vsvars32.bat" || exit /b 1
 call "%WORKSPACE%\buildscripts\make_dependencies.bat" || exit /b 1
 
 cd "%WORKSPACE%"

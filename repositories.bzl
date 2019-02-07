@@ -192,18 +192,18 @@ def com_google_protobuf():
     # This statement defines the @com_google_protobuf repo.
     http_archive(
         name = "com_google_protobuf",
-        sha256 = "1f8b9b202e9a4e467ff0b0f25facb1642727cdf5e69092038f15b37c75b99e45",
-        strip_prefix = "protobuf-3.5.1",
-        urls = ["https://github.com/google/protobuf/archive/v3.5.1.zip"],
+        sha256 = "d6618d117698132dadf0f830b762315807dc424ba36ab9183f1f436008a2fdb6",
+        strip_prefix = "protobuf-3.6.1.2",
+        urls = ["https://github.com/google/protobuf/archive/v3.6.1.2.zip"],
     )
 
 def com_google_protobuf_javalite():
     # java_lite_proto_library rules implicitly depend on @com_google_protobuf_javalite
     http_archive(
         name = "com_google_protobuf_javalite",
-        sha256 = "d8a2fed3708781196f92e1e7e7e713cf66804bd2944894401057214aff4f468e",
-        strip_prefix = "protobuf-5e8916e881c573c5d83980197a6f783c132d4276",
-        urls = ["https://github.com/google/protobuf/archive/5e8916e881c573c5d83980197a6f783c132d4276.zip"],
+        sha256 = "d8a2fed3708781196f92e1e7e7e713cf66804bd2944894401057214aff4f468f",
+        strip_prefix = "protobuf-384989534b2246d413dbcd750744faab2607b516",
+        urls = ["https://github.com/google/protobuf/archive/384989534b2246d413dbcd750744faab2607b516.zip"],
     )
 
 def com_google_protobuf_nano_protobuf_javanano():

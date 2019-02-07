@@ -45,13 +45,6 @@ private static final long serialVersionUID = 0L;
           case 0:
             done = true;
             break;
-          default: {
-            if (!parseUnknownFieldProto3(
-                input, unknownFields, extensionRegistry, tag)) {
-              done = true;
-            }
-            break;
-          }
           case 10: {
             com.google.protobuf.Duration.Builder subBuilder = null;
             if (timeout_ != null) {
@@ -267,6 +260,13 @@ private static final long serialVersionUID = 0L;
             alwaysLogHealthCheckFailures_ = input.readBool();
             break;
           }
+          default: {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
+              done = true;
+            }
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -284,6 +284,7 @@ private static final long serialVersionUID = 0L;
     return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_descriptor;
   }
 
+  @java.lang.Override
   protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_fieldAccessorTable
@@ -367,13 +368,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
               payloadCase_ = 1;
@@ -383,6 +377,13 @@ private static final long serialVersionUID = 0L;
             case 18: {
               payloadCase_ = 2;
               payload_ = input.readBytes();
+              break;
+            }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
               break;
             }
           }
@@ -402,6 +403,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_Payload_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_Payload_fieldAccessorTable
@@ -514,6 +516,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -523,6 +526,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (payloadCase_ == 1) {
@@ -535,6 +539,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -677,6 +682,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -684,6 +690,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -711,6 +718,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_Payload_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_Payload_fieldAccessorTable
@@ -733,6 +741,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         payloadCase_ = 0;
@@ -740,15 +749,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_Payload_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload result = buildPartial();
         if (!result.isInitialized()) {
@@ -757,6 +769,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload(this);
         if (payloadCase_ == 1) {
@@ -770,32 +783,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload)other);
@@ -827,10 +847,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1008,11 +1030,13 @@ private static final long serialVersionUID = 0L;
         }
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -1034,6 +1058,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<Payload>
         PARSER = new com.google.protobuf.AbstractParser<Payload>() {
+      @java.lang.Override
       public Payload parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1051,6 +1076,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -1331,13 +1357,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
 
@@ -1405,6 +1424,13 @@ private static final long serialVersionUID = 0L;
               requestHeadersToRemove_.add(s);
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -1428,6 +1454,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_HttpHealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_HttpHealthCheck_fieldAccessorTable
@@ -1771,6 +1798,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -1780,6 +1808,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getHostBytes().isEmpty()) {
@@ -1809,6 +1838,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -1996,6 +2026,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -2003,6 +2034,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -2030,6 +2062,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_HttpHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_HttpHealthCheck_fieldAccessorTable
@@ -2053,6 +2086,7 @@ private static final long serialVersionUID = 0L;
           getRequestHeadersToAddFieldBuilder();
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         host_ = "";
@@ -2086,15 +2120,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_HttpHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck result = buildPartial();
         if (!result.isInitialized()) {
@@ -2103,6 +2140,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck(this);
         int from_bitField0_ = bitField0_;
@@ -2140,32 +2178,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck)other);
@@ -2239,10 +2284,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3402,11 +3449,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -3428,6 +3477,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<HttpHealthCheck>
         PARSER = new com.google.protobuf.AbstractParser<HttpHealthCheck>() {
+      @java.lang.Override
       public HttpHealthCheck parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3445,6 +3495,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.HttpHealthCheck getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -3574,13 +3625,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload.Builder subBuilder = null;
               if (send_ != null) {
@@ -3603,6 +3647,13 @@ private static final long serialVersionUID = 0L;
                   input.readMessage(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.Payload.parser(), extensionRegistry));
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -3623,6 +3674,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_TcpHealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_TcpHealthCheck_fieldAccessorTable
@@ -3730,6 +3782,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -3739,6 +3792,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (send_ != null) {
@@ -3750,6 +3804,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -3880,6 +3935,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -3887,6 +3943,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -3910,6 +3967,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_TcpHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_TcpHealthCheck_fieldAccessorTable
@@ -3933,6 +3991,7 @@ private static final long serialVersionUID = 0L;
           getReceiveFieldBuilder();
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         if (sendBuilder_ == null) {
@@ -3950,15 +4009,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_TcpHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck result = buildPartial();
         if (!result.isInitialized()) {
@@ -3967,6 +4029,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck(this);
         int from_bitField0_ = bitField0_;
@@ -3990,32 +4053,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck)other);
@@ -4061,10 +4131,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4584,11 +4656,13 @@ private static final long serialVersionUID = 0L;
         }
         return receiveBuilder_;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -4610,6 +4684,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<TcpHealthCheck>
         PARSER = new com.google.protobuf.AbstractParser<TcpHealthCheck>() {
+      @java.lang.Override
       public TcpHealthCheck parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4627,6 +4702,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.TcpHealthCheck getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -4701,17 +4777,17 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
+            case 10: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              key_ = s;
+              break;
+            }
             default: {
               if (!parseUnknownFieldProto3(
                   input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
-              break;
-            }
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              key_ = s;
               break;
             }
           }
@@ -4731,6 +4807,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_RedisHealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_RedisHealthCheck_fieldAccessorTable
@@ -4787,6 +4864,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -4796,6 +4874,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getKeyBytes().isEmpty()) {
@@ -4804,6 +4883,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -4918,6 +4998,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -4925,6 +5006,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -4948,6 +5030,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_RedisHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_RedisHealthCheck_fieldAccessorTable
@@ -4970,6 +5053,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         key_ = "";
@@ -4977,15 +5061,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_RedisHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck result = buildPartial();
         if (!result.isInitialized()) {
@@ -4994,6 +5081,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck(this);
         result.key_ = key_;
@@ -5001,32 +5089,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck)other);
@@ -5047,10 +5142,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5172,11 +5269,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -5198,6 +5297,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<RedisHealthCheck>
         PARSER = new com.google.protobuf.AbstractParser<RedisHealthCheck>() {
+      @java.lang.Override
       public RedisHealthCheck parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5215,6 +5315,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.RedisHealthCheck getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -5321,13 +5422,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
 
@@ -5338,6 +5432,13 @@ private static final long serialVersionUID = 0L;
               java.lang.String s = input.readStringRequireUtf8();
 
               authority_ = s;
+              break;
+            }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
               break;
             }
           }
@@ -5357,6 +5458,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_fieldAccessorTable
@@ -5461,6 +5563,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -5470,6 +5573,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getServiceNameBytes().isEmpty()) {
@@ -5481,6 +5585,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -5602,6 +5707,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -5609,6 +5715,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -5639,6 +5746,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_fieldAccessorTable
@@ -5661,6 +5769,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         serviceName_ = "";
@@ -5670,15 +5779,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_GrpcHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck result = buildPartial();
         if (!result.isInitialized()) {
@@ -5687,6 +5799,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck(this);
         result.serviceName_ = serviceName_;
@@ -5695,32 +5808,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck)other);
@@ -5745,10 +5865,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5974,11 +6096,13 @@ private static final long serialVersionUID = 0L;
         onChanged();
         return this;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -6000,6 +6124,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<GrpcHealthCheck>
         PARSER = new com.google.protobuf.AbstractParser<GrpcHealthCheck>() {
+      @java.lang.Override
       public GrpcHealthCheck parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6017,6 +6142,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.GrpcHealthCheck getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -6129,13 +6255,6 @@ private static final long serialVersionUID = 0L;
             case 0:
               done = true;
               break;
-            default: {
-              if (!parseUnknownFieldProto3(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
             case 10: {
               java.lang.String s = input.readStringRequireUtf8();
 
@@ -6170,6 +6289,13 @@ private static final long serialVersionUID = 0L;
               configTypeCase_ = 3;
               break;
             }
+            default: {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -6187,6 +6313,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_fieldAccessorTable
@@ -6339,6 +6466,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private byte memoizedIsInitialized = -1;
+    @java.lang.Override
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
       if (isInitialized == 1) return true;
@@ -6348,6 +6476,7 @@ private static final long serialVersionUID = 0L;
       return true;
     }
 
+    @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getNameBytes().isEmpty()) {
@@ -6362,6 +6491,7 @@ private static final long serialVersionUID = 0L;
       unknownFields.writeTo(output);
     }
 
+    @java.lang.Override
     public int getSerializedSize() {
       int size = memoizedSize;
       if (size != -1) return size;
@@ -6511,6 +6641,7 @@ private static final long serialVersionUID = 0L;
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
+    @java.lang.Override
     public Builder newBuilderForType() { return newBuilder(); }
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
@@ -6518,6 +6649,7 @@ private static final long serialVersionUID = 0L;
     public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
+    @java.lang.Override
     public Builder toBuilder() {
       return this == DEFAULT_INSTANCE
           ? new Builder() : new Builder().mergeFrom(this);
@@ -6545,6 +6677,7 @@ private static final long serialVersionUID = 0L;
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_fieldAccessorTable
@@ -6567,6 +6700,7 @@ private static final long serialVersionUID = 0L;
                 .alwaysUseFieldBuilders) {
         }
       }
+      @java.lang.Override
       public Builder clear() {
         super.clear();
         name_ = "";
@@ -6576,15 +6710,18 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_CustomHealthCheck_descriptor;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck getDefaultInstanceForType() {
         return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck.getDefaultInstance();
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck build() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck result = buildPartial();
         if (!result.isInitialized()) {
@@ -6593,6 +6730,7 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck buildPartial() {
         io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck(this);
         result.name_ = name_;
@@ -6615,32 +6753,39 @@ private static final long serialVersionUID = 0L;
         return result;
       }
 
+      @java.lang.Override
       public Builder clone() {
         return (Builder) super.clone();
       }
+      @java.lang.Override
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
+      @java.lang.Override
       public Builder clearField(
           com.google.protobuf.Descriptors.FieldDescriptor field) {
         return (Builder) super.clearField(field);
       }
+      @java.lang.Override
       public Builder clearOneof(
           com.google.protobuf.Descriptors.OneofDescriptor oneof) {
         return (Builder) super.clearOneof(oneof);
       }
+      @java.lang.Override
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
+      @java.lang.Override
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
           java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
+      @java.lang.Override
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck) {
           return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck)other);
@@ -6674,10 +6819,12 @@ private static final long serialVersionUID = 0L;
         return this;
       }
 
+      @java.lang.Override
       public final boolean isInitialized() {
         return true;
       }
 
+      @java.lang.Override
       public Builder mergeFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -7107,11 +7254,13 @@ private static final long serialVersionUID = 0L;
         onChanged();;
         return typedConfigBuilder_;
       }
+      @java.lang.Override
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFieldsProto3(unknownFields);
       }
 
+      @java.lang.Override
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.mergeUnknownFields(unknownFields);
@@ -7133,6 +7282,7 @@ private static final long serialVersionUID = 0L;
 
     private static final com.google.protobuf.Parser<CustomHealthCheck>
         PARSER = new com.google.protobuf.AbstractParser<CustomHealthCheck>() {
+      @java.lang.Override
       public CustomHealthCheck parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -7150,6 +7300,7 @@ private static final long serialVersionUID = 0L;
       return PARSER;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.CustomHealthCheck getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
@@ -7856,6 +8007,7 @@ private static final long serialVersionUID = 0L;
   }
 
   private byte memoizedIsInitialized = -1;
+  @java.lang.Override
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
     if (isInitialized == 1) return true;
@@ -7865,6 +8017,7 @@ private static final long serialVersionUID = 0L;
     return true;
   }
 
+  @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     if (timeout_ != null) {
@@ -7924,6 +8077,7 @@ private static final long serialVersionUID = 0L;
     unknownFields.writeTo(output);
   }
 
+  @java.lang.Override
   public int getSerializedSize() {
     int size = memoizedSize;
     if (size != -1) return size;
@@ -8257,6 +8411,7 @@ private static final long serialVersionUID = 0L;
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
+  @java.lang.Override
   public Builder newBuilderForType() { return newBuilder(); }
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
@@ -8264,6 +8419,7 @@ private static final long serialVersionUID = 0L;
   public static Builder newBuilder(io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
+  @java.lang.Override
   public Builder toBuilder() {
     return this == DEFAULT_INSTANCE
         ? new Builder() : new Builder().mergeFrom(this);
@@ -8287,6 +8443,7 @@ private static final long serialVersionUID = 0L;
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_descriptor;
     }
 
+    @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_fieldAccessorTable
@@ -8309,6 +8466,7 @@ private static final long serialVersionUID = 0L;
               .alwaysUseFieldBuilders) {
       }
     }
+    @java.lang.Override
     public Builder clear() {
       super.clear();
       if (timeoutBuilder_ == null) {
@@ -8388,15 +8546,18 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    @java.lang.Override
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheckOuterClass.internal_static_envoy_api_v2_core_HealthCheck_descriptor;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck getDefaultInstanceForType() {
       return io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck.getDefaultInstance();
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck build() {
       io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck result = buildPartial();
       if (!result.isInitialized()) {
@@ -8405,6 +8566,7 @@ private static final long serialVersionUID = 0L;
       return result;
     }
 
+    @java.lang.Override
     public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck buildPartial() {
       io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck result = new io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck(this);
       if (timeoutBuilder_ == null) {
@@ -8498,32 +8660,39 @@ private static final long serialVersionUID = 0L;
       return result;
     }
 
+    @java.lang.Override
     public Builder clone() {
       return (Builder) super.clone();
     }
+    @java.lang.Override
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
+    @java.lang.Override
     public Builder clearField(
         com.google.protobuf.Descriptors.FieldDescriptor field) {
       return (Builder) super.clearField(field);
     }
+    @java.lang.Override
     public Builder clearOneof(
         com.google.protobuf.Descriptors.OneofDescriptor oneof) {
       return (Builder) super.clearOneof(oneof);
     }
+    @java.lang.Override
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
+    @java.lang.Override
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
         java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
+    @java.lang.Override
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck) {
         return mergeFrom((io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck)other);
@@ -8604,10 +8773,12 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    @java.lang.Override
     public final boolean isInitialized() {
       return true;
     }
 
+    @java.lang.Override
     public Builder mergeFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -11397,11 +11568,13 @@ private static final long serialVersionUID = 0L;
       onChanged();
       return this;
     }
+    @java.lang.Override
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.setUnknownFieldsProto3(unknownFields);
     }
 
+    @java.lang.Override
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.mergeUnknownFields(unknownFields);
@@ -11423,6 +11596,7 @@ private static final long serialVersionUID = 0L;
 
   private static final com.google.protobuf.Parser<HealthCheck>
       PARSER = new com.google.protobuf.AbstractParser<HealthCheck>() {
+    @java.lang.Override
     public HealthCheck parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -11440,6 +11614,7 @@ private static final long serialVersionUID = 0L;
     return PARSER;
   }
 
+  @java.lang.Override
   public io.grpc.xds.shaded.envoy.api.v2.core.HealthCheck getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
