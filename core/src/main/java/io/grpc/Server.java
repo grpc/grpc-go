@@ -61,7 +61,7 @@ public abstract class Server {
    * @throws IllegalStateException if the server has not yet been started.
    * @since 1.19.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/FIXME")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5332")
   public List<? extends SocketAddress> getListenSockets() {
     throw new UnsupportedOperationException();
   }
