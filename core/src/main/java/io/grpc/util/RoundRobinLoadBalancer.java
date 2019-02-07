@@ -138,13 +138,19 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
       subchannel.requestConnection();
     }
 
-    // Shutdown subchannels for removed addresses.
+    ArrayList<Subchannel> removedSubchannels = new ArrayList<>();
     for (EquivalentAddressGroup addressGroup : removedAddrs) {
-      Subchannel subchannel = subchannels.remove(addressGroup);
-      shutdownSubchannel(subchannel);
+      removedSubchannels.add(subchannels.remove(addressGroup));
     }
 
+    // Update the picker before shutting down the subchannels, to reduce the chance of the race
+    // between picking a subchannel and shutting it down.
     updateBalancingState();
+
+    // Shutdown removed subchannels
+    for (Subchannel removedSubchannel : removedSubchannels) {
+      shutdownSubchannel(removedSubchannel);
+    }
   }
 
   @Override
