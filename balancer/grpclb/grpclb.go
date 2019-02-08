@@ -258,11 +258,14 @@ func (lb *lbBalancer) regeneratePicker() {
 		}
 	}
 
+	if len(readySCs) <= 0 {
+		// If there's no ready SubConns, always re-pick. This is to avoid drops
+		// unless at least one SubConn is ready. Otherwise we may drop more
+		// often than want because of drops + re-picks(which become re-drops).
+		lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+		return
+	}
 	if len(lb.fullServerList) <= 0 {
-		if len(readySCs) <= 0 {
-			lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
-			return
-		}
 		lb.picker = &rrPicker{subConns: readySCs}
 		return
 	}
