@@ -279,10 +279,7 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 		dopts = append(dopts, grpc.WithInsecure())
 	}
 	if lb.opt.Dialer != nil {
-		// WithDialer takes a different type of function, so we instead use a
-		// special DialOption here.
-		wcd := internal.WithContextDialer.(func(func(context.Context, string) (net.Conn, error)) grpc.DialOption)
-		dopts = append(dopts, wcd(lb.opt.Dialer))
+		dopts = append(dopts, grpc.WithContextDialer(lb.opt.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
