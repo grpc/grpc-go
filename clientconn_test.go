@@ -624,6 +624,92 @@ func (s) TestWithAuthorityAndTLS(t *testing.T) {
 	}
 }
 
+// When creating a transport configured with n addresses, only calculate the
+// backoff once per "round" of attempts instead of once per address (n times
+// per "round" of attempts).
+func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
+	getMinConnectTimeoutBackup := getMinConnectTimeout
+	defer func() {
+		getMinConnectTimeout = getMinConnectTimeoutBackup
+	}()
+	var attempts uint32
+	getMinConnectTimeout = func() time.Duration {
+		if atomic.AddUint32(&attempts, 1) == 1 {
+			// Once all addresses are exhausted, hang around and wait for the
+			// client.Close to happen rather than re-starting a new round of
+			// attempts.
+			return time.Hour
+		}
+		t.Error("only one attempt backoff calculation, but got more")
+		return 0
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis1.Close()
+
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis2.Close()
+
+	server1Done := make(chan struct{})
+	server2Done := make(chan struct{})
+
+	// Launch server 1.
+	go func() {
+		conn, err := lis1.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		conn.Close()
+		close(server1Done)
+	}()
+	// Launch server 2.
+	go func() {
+		conn, err := lis2.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		conn.Close()
+		close(server2Done)
+	}()
+
+	rb := manual.NewBuilderWithScheme("whatever")
+	rb.InitialAddrs([]resolver.Address{
+		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
+	})
+	client, err := DialContext(ctx, "this-gets-overwritten", WithInsecure(), WithBalancerName(stateRecordingBalancerName), withResolverBuilder(rb))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	timeout := time.After(15 * time.Second)
+
+	select {
+	case <-timeout:
+		t.Fatal("timed out waiting for test to finish")
+	case <-server1Done:
+	}
+
+	select {
+	case <-timeout:
+		t.Fatal("timed out waiting for test to finish")
+	case <-server2Done:
+	}
+}
+
 func (s) TestDialContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
