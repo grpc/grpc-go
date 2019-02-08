@@ -322,7 +322,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		}
 	}
 
-	t.framer.writer.Flush()
+	if err := t.framer.writer.Flush(); err != nil {
+		return nil, err
+	}
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
 		err := t.loopy.run()
