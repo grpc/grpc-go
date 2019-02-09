@@ -37,27 +37,34 @@ const (
 var (
 	errMissingAddr  = errors.New("missing address")
 	errWatcherClose = errors.New("watcher has been closed")
-
-	lookupHost = net.DefaultResolver.LookupHost
-	lookupSRV  = net.DefaultResolver.LookupSRV
 )
+
+// NewDNSResolverWithOptions creates a DNS Resolver that can resolve DNS names using
+// the options provided.
+func NewDNSResolverWithOptions(opts ...Option) (Resolver, error) {
+	o := defaultOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &dnsResolver{options: o}, nil
+}
 
 // NewDNSResolverWithFreq creates a DNS Resolver that can resolve DNS names, and
 // create watchers that poll the DNS server using the frequency set by freq.
+// Deprecated: use NewDNSResolverWithOptions(WithFrequency).
 func NewDNSResolverWithFreq(freq time.Duration) (Resolver, error) {
-	return &dnsResolver{freq: freq}, nil
+	return NewDNSResolverWithOptions(Freq(freq))
 }
 
 // NewDNSResolver creates a DNS Resolver that can resolve DNS names, and create
 // watchers that poll the DNS server using the default frequency defined by defaultFreq.
 func NewDNSResolver() (Resolver, error) {
-	return NewDNSResolverWithFreq(defaultFreq)
+	return NewDNSResolverWithOptions()
 }
 
 // dnsResolver handles name resolution for names following the DNS scheme
 type dnsResolver struct {
-	// frequency of polling the DNS server that the watchers created by this resolver will use.
-	freq time.Duration
+	options
 }
 
 // formatIP returns ok = false if addr is not a valid textual representation of an IP address.
@@ -213,13 +220,13 @@ func (w *dnsWatcher) compileUpdate(newAddrs map[string]*Update) []*Update {
 
 func (w *dnsWatcher) lookupSRV() map[string]*Update {
 	newAddrs := make(map[string]*Update)
-	_, srvs, err := lookupSRV(w.ctx, "grpclb", "tcp", w.host)
+	_, srvs, err := w.r.lookupSRV(w.ctx, "grpclb", "tcp", w.host)
 	if err != nil {
 		grpclog.Infof("grpc: failed dns SRV record lookup due to %v.\n", err)
 		return nil
 	}
 	for _, s := range srvs {
-		lbAddrs, err := lookupHost(w.ctx, s.Target)
+		lbAddrs, err := w.r.lookupHost(w.ctx, s.Target)
 		if err != nil {
 			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
 			continue
@@ -240,7 +247,7 @@ func (w *dnsWatcher) lookupSRV() map[string]*Update {
 
 func (w *dnsWatcher) lookupHost() map[string]*Update {
 	newAddrs := make(map[string]*Update)
-	addrs, err := lookupHost(w.ctx, w.host)
+	addrs, err := w.r.lookupHost(w.ctx, w.host)
 	if err != nil {
 		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
 		return nil

@@ -220,7 +220,7 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 	}
 
 	for _, a := range tests {
-		r, err := NewDNSResolverWithFreq(freq)
+		r, err := NewDNSResolverWithOptions(Freq(freq), LookupHost(lookupHost), LookupSRV(lookupSRV))
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -254,23 +254,15 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 	}
 }
 
-func replaceNetFunc() func() {
-	oldLookupHost := lookupHost
-	oldLookupSRV := lookupSRV
-	lookupHost = func(ctx context.Context, host string) ([]string, error) {
-		return hostLookup(host)
-	}
-	lookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
-		return srvLookup(service, proto, name)
-	}
-	return func() {
-		lookupHost = oldLookupHost
-		lookupSRV = oldLookupSRV
-	}
+func lookupHost(ctx context.Context, host string) ([]string, error) {
+	return hostLookup(host)
+}
+
+func lookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+	return srvLookup(service, proto, name)
 }
 
 func TestResolve(t *testing.T) {
-	defer replaceNetFunc()()
 	testResolver(t, time.Millisecond*5, time.Millisecond*10)
 }
 
