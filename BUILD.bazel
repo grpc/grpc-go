@@ -24,3 +24,30 @@ java_grpc_library(
     srcs = ["@com_google_protobuf//:api_proto"],
     deps = [":api_proto_java"],
 )
+
+java_library(
+    name = "java_grpc_library_deps__do_not_reference",
+    visibility = ["//visibility:public"],
+    exports = [
+        "//core",
+        "//protobuf",
+        "//stub",
+        "//stub:javax_annotation",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+    ],
+)
+
+java_library(
+    name = "java_lite_grpc_library_deps__do_not_reference",
+    visibility = ["//visibility:public"],
+    exports = [
+        "//core",
+        "//protobuf-lite",
+        "//stub",
+        "//stub:javax_annotation",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+    ],
+)
