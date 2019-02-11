@@ -25,14 +25,41 @@ import javax.annotation.Nullable;
  * {@link java.net.SocketAddress}. This class performs network requests to resolve address names,
  * and should only be used in places that are expected to do IO such as the
  * {@link io.grpc.NameResolver}.
+ *
+ * <h1>How Proxies work in gRPC</h1>
+ *
+ * <p>In order for gRPC to use a proxy, {@link NameResolver}, {@link ProxyDetector} and the
+ * underlying transport need to work together.
+ *
+ * <p>The {@link NameResolver} should invoke the {@link ProxyDetector} retrieved from the {@code
+ * params} of {@link NameResolver.Factory#newNameResolver} using {@link
+ * io.grpc.NameResolver.Factory#PARAMS_PROXY_DETECTOR PARAMS_PROXY_DETECTOR}, and pass the returned
+ * {@link ProxiedSocketAddress} to {@link NameResolver.Listener#onAddresses}.  The DNS name resolver
+ * shipped with gRPC is already doing so.
+ *
+ * <p>The default {@code ProxyDetector} uses Java's standard {@link java.net.ProxySelector} and
+ * {@link java.net.Authenticator} to detect proxies and authentication credentials and produce
+ * {@link HttpConnectProxiedSocketAddress}, which is for using an HTTP CONNECT proxy.  A custom
+ * {@code ProxyDetector} can be passed to {@link ManagedChannelBuilder#proxyDetector}.
+ *
+ * <p>The {@link ProxiedSocketAddress} is then handled by the transport.  The transport needs to
+ * support whatever type of {@code ProxiedSocketAddress} returned by {@link ProxyDetector}.  The
+ * Netty transport and the OkHttp transport currently only support {@link
+ * HttpConnectProxiedSocketAddress} which is returned by the default {@code ProxyDetector}.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/5279")
 public interface ProxyDetector {
   /**
-   * Given a target address, returns which proxy address should be used. If no proxy should be
-   * used, then return value will be null. The address of the {@link ProxyParameters} is always
-   * resolved. This throws if the proxy address cannot be resolved.
+   * Given a target address, returns a proxied address if a proxy should be used. If no proxy should
+   * be used, then return value will be {@code null}.
+   *
+   * <p>If the returned {@code ProxiedSocketAddress} contains any address that needs to be resolved
+   * locally, it should be resolved before it's returned, and this method throws if unable to
+   * resolve it.
+   *
+   * @param targetServerAddress the target address, which is generally unresolved, because the proxy
+   *                            will resolve it.
    */
   @Nullable
-  ProxyParameters proxyFor(SocketAddress targetServerAddress) throws IOException;
+  ProxiedSocketAddress proxyFor(SocketAddress targetServerAddress) throws IOException;
 }

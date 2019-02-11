@@ -37,8 +37,8 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ProxiedSocketAddress;
 import io.grpc.ProxyDetector;
-import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.SharedResourceHolder.Resource;
@@ -245,7 +245,7 @@ public final class GrpcUtil {
   public static final ProxyDetector NOOP_PROXY_DETECTOR = new ProxyDetector() {
     @Nullable
     @Override
-    public ProxyParameters proxyFor(SocketAddress targetServerAddress) {
+    public ProxiedSocketAddress proxyFor(SocketAddress targetServerAddress) {
       return null;
     }
   };

@@ -547,7 +547,7 @@ public class OkHttpChannelBuilder extends
           connectionSpec,
           maxMessageSize,
           flowControlWindow,
-          options.getProxyParameters(),
+          options.getHttpConnectProxiedSocketAddress(),
           tooManyPingsRunnable,
           maxInboundMetadataSize,
           transportTracerFactory.create());

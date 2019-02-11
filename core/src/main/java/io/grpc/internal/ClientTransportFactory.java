@@ -19,7 +19,7 @@ package io.grpc.internal;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
-import io.grpc.ProxyParameters;
+import io.grpc.HttpConnectProxiedSocketAddress;
 import java.io.Closeable;
 import java.net.SocketAddress;
 import java.util.concurrent.ScheduledExecutorService;
@@ -69,7 +69,7 @@ public interface ClientTransportFactory extends Closeable {
     private String authority = "unknown-authority";
     private Attributes eagAttributes = Attributes.EMPTY;
     private @Nullable String userAgent;
-    private @Nullable ProxyParameters proxyParameters;
+    private @Nullable HttpConnectProxiedSocketAddress connectProxiedSocketAddr;
 
     public String getAuthority() {
       return authority;
@@ -103,18 +103,19 @@ public interface ClientTransportFactory extends Closeable {
     }
 
     @Nullable
-    public ProxyParameters getProxyParameters() {
-      return proxyParameters;
+    public HttpConnectProxiedSocketAddress getHttpConnectProxiedSocketAddress() {
+      return connectProxiedSocketAddr;
     }
 
-    public ClientTransportOptions setProxyParameters(@Nullable ProxyParameters proxyParameters) {
-      this.proxyParameters = proxyParameters;
+    public ClientTransportOptions setHttpConnectProxiedSocketAddress(
+        @Nullable HttpConnectProxiedSocketAddress connectProxiedSocketAddr) {
+      this.connectProxiedSocketAddr = connectProxiedSocketAddr;
       return this;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(authority, eagAttributes, userAgent, proxyParameters);
+      return Objects.hashCode(authority, eagAttributes, userAgent, connectProxiedSocketAddr);
     }
 
     @Override
@@ -126,7 +127,7 @@ public interface ClientTransportFactory extends Closeable {
       return this.authority.equals(that.authority)
           && this.eagAttributes.equals(that.eagAttributes)
           && Objects.equal(this.userAgent, that.userAgent)
-          && Objects.equal(this.proxyParameters, that.proxyParameters);
+          && Objects.equal(this.connectProxiedSocketAddr, that.connectProxiedSocketAddr);
     }
   }
 }

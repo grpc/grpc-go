@@ -37,6 +37,7 @@ import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalChannelz.ChannelStats;
 import io.grpc.InternalInstrumented;
@@ -44,7 +45,6 @@ import io.grpc.InternalLogId;
 import io.grpc.InternalWithLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext;
 import java.net.SocketAddress;
@@ -246,10 +246,10 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     }
     SocketAddress address = addressIndex.getCurrentAddress();
 
-    ProxyParameters proxy = null;
-    if (address instanceof ProxySocketAddress) {
-      proxy = ((ProxySocketAddress) address).getProxyParameters();
-      address = ((ProxySocketAddress) address).getAddress();
+    HttpConnectProxiedSocketAddress proxiedAddr = null;
+    if (address instanceof HttpConnectProxiedSocketAddress) {
+      proxiedAddr = (HttpConnectProxiedSocketAddress) address;
+      address = proxiedAddr.getTargetAddress();
     }
 
     ClientTransportFactory.ClientTransportOptions options =
@@ -257,7 +257,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           .setAuthority(authority)
           .setEagAttributes(addressIndex.getCurrentEagAttributes())
           .setUserAgent(userAgent)
-          .setProxyParameters(proxy);
+          .setHttpConnectProxiedSocketAddress(proxiedAddr);
     ConnectionClientTransport transport =
         new CallTracingTransport(
             transportFactory.newClientTransport(address, options), callsTracer);

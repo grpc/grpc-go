@@ -100,7 +100,8 @@ public abstract class NameResolver {
         Attributes.Key.create("params-default-port");
 
     /**
-     * Proxy detector used in name resolution.
+     * If the NameResolver wants to support proxy, it should inquire this {@link ProxyDetector}.
+     * See documentation on {@link ProxyDetector} about how proxies work in gRPC.
      */
     @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
     public static final Attributes.Key<ProxyDetector> PARAMS_PROXY_DETECTOR =

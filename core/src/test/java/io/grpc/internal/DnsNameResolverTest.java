@@ -37,9 +37,9 @@ import com.google.common.net.InetAddresses;
 import com.google.common.testing.FakeTicker;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.NameResolver;
 import io.grpc.ProxyDetector;
-import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
@@ -584,14 +584,18 @@ public class DnsNameResolverTest {
   public void doNotResolveWhenProxyDetected() throws Exception {
     final String name = "foo.googleapis.com";
     final int port = 81;
-    ProxyDetector alwaysDetectProxy = mock(ProxyDetector.class);
-    ProxyParameters proxyParameters = ProxyParameters
-        .forAddress(
-          new InetSocketAddress(InetAddress.getByName("10.0.0.1"), 1000))
-        .username("username")
-        .password("password").build();
-    when(alwaysDetectProxy.proxyFor(any(SocketAddress.class)))
-        .thenReturn(proxyParameters);
+    final InetSocketAddress proxyAddress =
+        new InetSocketAddress(InetAddress.getByName("10.0.0.1"), 1000);
+    ProxyDetector alwaysDetectProxy = new ProxyDetector() {
+        @Override
+        public HttpConnectProxiedSocketAddress proxyFor(SocketAddress targetAddress) {
+          return HttpConnectProxiedSocketAddress.newBuilder()
+              .setTargetAddress((InetSocketAddress) targetAddress)
+              .setProxyAddress(proxyAddress)
+              .setUsername("username")
+              .setPassword("password").build();
+        }
+      };
     DnsNameResolver resolver =
         newResolver(name, port, alwaysDetectProxy, Stopwatch.createUnstarted());
     AddressResolver mockAddressResolver = mock(AddressResolver.class);
@@ -606,9 +610,12 @@ public class DnsNameResolverTest {
     EquivalentAddressGroup eag = result.get(0);
     assertThat(eag.getAddresses()).hasSize(1);
 
-    ProxySocketAddress socketAddress = (ProxySocketAddress) eag.getAddresses().get(0);
-    assertSame(proxyParameters, socketAddress.getProxyParameters());
-    assertTrue(((InetSocketAddress) socketAddress.getAddress()).isUnresolved());
+    HttpConnectProxiedSocketAddress socketAddress =
+        (HttpConnectProxiedSocketAddress) eag.getAddresses().get(0);
+    assertSame(proxyAddress, socketAddress.getProxyAddress());
+    assertEquals("username", socketAddress.getUsername());
+    assertEquals("password", socketAddress.getPassword());
+    assertTrue(socketAddress.getTargetAddress().isUnresolved());
   }
 
   @Test

@@ -27,8 +27,8 @@ import com.google.common.base.Verify;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
+import io.grpc.ProxiedSocketAddress;
 import io.grpc.ProxyDetector;
-import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.io.IOException;
@@ -242,22 +242,20 @@ final class DnsNameResolver extends NameResolver {
     void resolveInternal(Listener savedListener) {
       InetSocketAddress destination =
           InetSocketAddress.createUnresolved(resolver.host, resolver.port);
-      ProxyParameters proxy;
+      ProxiedSocketAddress proxiedAddr;
       try {
-        proxy = resolver.proxyDetector.proxyFor(destination);
+        proxiedAddr = resolver.proxyDetector.proxyFor(destination);
       } catch (IOException e) {
         savedListener.onError(
             Status.UNAVAILABLE.withDescription("Unable to resolve host " + resolver.host)
                 .withCause(e));
         return;
       }
-      if (proxy != null) {
+      if (proxiedAddr != null) {
         if (logger.isLoggable(Level.FINER)) {
-          logger.finer("Using proxy " + proxy.getProxyAddress() + " for " + resolver.host);
+          logger.finer("Using proxy address " + proxiedAddr);
         }
-        EquivalentAddressGroup server =
-            new EquivalentAddressGroup(
-                new ProxySocketAddress(destination, proxy));
+        EquivalentAddressGroup server = new EquivalentAddressGroup(proxiedAddr);
         savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
         return;
       }

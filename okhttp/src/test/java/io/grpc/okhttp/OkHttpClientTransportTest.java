@@ -55,6 +55,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
+import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
 import io.grpc.InternalInstrumented;
@@ -62,7 +63,6 @@ import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.ProxyParameters;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
@@ -133,7 +133,7 @@ public class OkHttpClientTransportTest {
   // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
   private static final int HEADER_LENGTH = 5;
   private static final Status SHUTDOWN_REASON = Status.UNAVAILABLE.withDescription("for test");
-  private static final ProxyParameters NO_PROXY = null;
+  private static final HttpConnectProxiedSocketAddress NO_PROXY = null;
   private static final int DEFAULT_START_STREAM_ID = 3;
   private static final int DEFAULT_MAX_INBOUND_METADATA_SIZE = Integer.MAX_VALUE;
 
@@ -1582,8 +1582,9 @@ public class OkHttpClientTransportTest {
   @Test
   public void proxy_200() throws Exception {
     ServerSocket serverSocket = new ServerSocket(0);
+    InetSocketAddress targetAddress = InetSocketAddress.createUnresolved("theservice", 80);
     clientTransport = new OkHttpClientTransport(
-        InetSocketAddress.createUnresolved("theservice", 80),
+        targetAddress,
         "authority",
         "userAgent",
         executor,
@@ -1592,7 +1593,9 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        ProxyParameters.forAddress(serverSocket.getLocalSocketAddress()).build(),
+        HttpConnectProxiedSocketAddress.newBuilder()
+            .setTargetAddress(targetAddress)
+            .setProxyAddress(serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
@@ -1633,8 +1636,9 @@ public class OkHttpClientTransportTest {
   @Test
   public void proxy_500() throws Exception {
     ServerSocket serverSocket = new ServerSocket(0);
+    InetSocketAddress targetAddress = InetSocketAddress.createUnresolved("theservice", 80);
     clientTransport = new OkHttpClientTransport(
-        InetSocketAddress.createUnresolved("theservice", 80),
+        targetAddress,
         "authority",
         "userAgent",
         executor,
@@ -1643,7 +1647,9 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        ProxyParameters.forAddress(serverSocket.getLocalSocketAddress()).build(),
+        HttpConnectProxiedSocketAddress.newBuilder()
+            .setTargetAddress(targetAddress)
+            .setProxyAddress(serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);
@@ -1683,8 +1689,9 @@ public class OkHttpClientTransportTest {
   @Test
   public void proxy_immediateServerClose() throws Exception {
     ServerSocket serverSocket = new ServerSocket(0);
+    InetSocketAddress targetAddress = InetSocketAddress.createUnresolved("theservice", 80);
     clientTransport = new OkHttpClientTransport(
-        InetSocketAddress.createUnresolved("theservice", 80),
+        targetAddress,
         "authority",
         "userAgent",
         executor,
@@ -1693,7 +1700,9 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         INITIAL_WINDOW_SIZE,
-        ProxyParameters.forAddress(serverSocket.getLocalSocketAddress()).build(),
+        HttpConnectProxiedSocketAddress.newBuilder()
+            .setTargetAddress(targetAddress)
+            .setProxyAddress(serverSocket.getLocalSocketAddress()).build(),
         tooManyPingsRunnable,
         DEFAULT_MAX_INBOUND_METADATA_SIZE,
         transportTracer);

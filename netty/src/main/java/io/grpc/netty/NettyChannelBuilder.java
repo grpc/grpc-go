@@ -28,9 +28,9 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
+import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.Internal;
 import io.grpc.NameResolver;
-import io.grpc.ProxyParameters;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AtomicBackoff;
 import io.grpc.internal.ClientTransportFactory;
@@ -561,12 +561,13 @@ public final class NettyChannelBuilder
       checkState(!closed, "The transport factory is closed.");
 
       ProtocolNegotiator localNegotiator = protocolNegotiator;
-      ProxyParameters proxyParams = options.getProxyParameters();
-      if (proxyParams != null) {
+      HttpConnectProxiedSocketAddress proxiedAddr = options.getHttpConnectProxiedSocketAddress();
+      if (proxiedAddr != null) {
+        serverAddress = proxiedAddr.getTargetAddress();
         localNegotiator = ProtocolNegotiators.httpProxy(
-            proxyParams.getProxyAddress(),
-            proxyParams.getUsername(),
-            proxyParams.getPassword(),
+            proxiedAddr.getProxyAddress(),
+            proxiedAddr.getUsername(),
+            proxiedAddr.getPassword(),
             protocolNegotiator);
       }
 

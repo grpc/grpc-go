@@ -526,7 +526,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
 
   /**
    * Sets the proxy detector to be used in addresses name resolution. If <code>null</code> is passed
-   * the default proxy detector will be used.
+   * the default proxy detector will be used.  For how proxies work in gRPC, please refer to the
+   * documentation on {@link ProxyDetector}.
    *
    * @return this
    * @since 1.19.0
