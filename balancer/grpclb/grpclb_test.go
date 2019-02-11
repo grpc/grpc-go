@@ -117,9 +117,9 @@ func (c *serverNameCheckCreds) OverrideServerName(s string) error {
 
 // fakeNameDialer replaces fakeName with localhost when dialing.
 // This will test that custom dialer is passed from Dial to grpclb.
-func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
+func fakeNameDialer(ctx context.Context, addr string) (net.Conn, error) {
 	addr = strings.Replace(addr, fakeName, "localhost", 1)
-	return net.DialTimeout("tcp", addr, timeout)
+	return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 }
 
 // merge merges the new client stats into current stats.
@@ -382,7 +382,7 @@ func TestGRPCLB(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -433,7 +433,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -498,7 +498,7 @@ func TestDropRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -585,7 +585,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -666,7 +666,7 @@ func TestFallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -760,7 +760,7 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
 		grpc.WithTransportCredentials(&creds),
 		grpc.WithPerRPCCredentials(failPreRPCCred{}),
-		grpc.WithDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
