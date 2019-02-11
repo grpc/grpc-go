@@ -328,7 +328,10 @@ func WithTimeout(d time.Duration) DialOption {
 	})
 }
 
-// WithContextDialer returns a DialOption that sets a dialer.
+// WithContextDialer returns a DialOption that sets a dialer. If
+// FailOnNonTempDialError() is set to true, and an error is returned by f, gRPC
+// checks the error's Temporary() method to decide if it should try to reconnect
+// to the network address.
 func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.Dialer = f
@@ -344,6 +347,8 @@ func init() {
 // network addresses. If FailOnNonTempDialError() is set to true, and an error
 // is returned by f, gRPC checks the error's Temporary() method to decide if it
 // should try to reconnect to the network address.
+//
+// Deprecated: use WithContextDialer instead
 func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 	return WithContextDialer(
 		func(ctx context.Context, addr string) (net.Conn, error) {
