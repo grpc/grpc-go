@@ -37,6 +37,7 @@ import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.MessageEvent.Type;
 import io.opencensus.trace.Span;
+import io.opencensus.trace.Span.Kind;
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
@@ -234,10 +235,9 @@ final class CensusTracingModule {
       this.isSampledToLocalTracing = method.isSampledToLocalTracing();
       this.span =
           censusTracer
-              .spanBuilderWithExplicitParent(
-                  generateTraceSpanName(false, method.getFullMethodName()),
-                  parentSpan)
+              .spanBuilderWithExplicitParent(method.getFullMethodName(), parentSpan)
               .setRecordEvents(true)
+              .setSpanKind(Kind.CLIENT)
               .startSpan();
     }
 
@@ -303,10 +303,9 @@ final class CensusTracingModule {
       checkNotNull(fullMethodName, "fullMethodName");
       this.span =
           censusTracer
-              .spanBuilderWithRemoteParent(
-                  generateTraceSpanName(true, fullMethodName),
-                  remoteSpan)
+              .spanBuilderWithRemoteParent(fullMethodName, remoteSpan)
               .setRecordEvents(true)
+              .setSpanKind(Kind.SERVER)
               .startSpan();
     }
 
@@ -402,19 +401,4 @@ final class CensusTracingModule {
       };
     }
   }
-
-  /**
-   * Convert a full method name to a tracing span name.
-   *
-   * @param isServer {@code false} if the span is on the client-side, {@code true} if on the
-   *                 server-side
-   * @param fullMethodName the method name as returned by
-   *        {@link MethodDescriptor#getFullMethodName}.
-   */
-  @VisibleForTesting
-  static String generateTraceSpanName(boolean isServer, String fullMethodName) {
-    String prefix = isServer ? "Recv" : "Sent";
-    return prefix + "." + fullMethodName.replace('/', '.');
-  }
-
 }

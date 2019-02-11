@@ -72,6 +72,7 @@ import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.MessageEvent;
 import io.opencensus.trace.MessageEvent.Type;
 import io.opencensus.trace.Span;
+import io.opencensus.trace.Span.Kind;
 import io.opencensus.trace.SpanBuilder;
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Tracer;
@@ -294,12 +295,14 @@ public class CensusModulesTest {
 
     if (nonDefaultContext) {
       verify(tracer).spanBuilderWithExplicitParent(
-          eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+          eq("package1.service2/method3"), same(fakeClientParentSpan));
       verify(spyClientSpanBuilder).setRecordEvents(eq(true));
+      verify(spyClientSpanBuilder).setSpanKind(eq(Kind.CLIENT));
     } else {
       verify(tracer).spanBuilderWithExplicitParent(
-          eq("Sent.package1.service2.method3"), isNull(Span.class));
+          eq("package1.service2/method3"), isNull(Span.class));
       verify(spyClientSpanBuilder).setRecordEvents(eq(true));
+      verify(spyClientSpanBuilder).setSpanKind(eq(Kind.CLIENT));
     }
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
 
@@ -497,7 +500,7 @@ public class CensusModulesTest {
     ClientStreamTracer clientStreamTracer =
         callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
     verify(tracer).spanBuilderWithExplicitParent(
-        eq("Sent.package1.service2.method3"), isNull(Span.class));
+        eq("package1.service2/method3"), isNull(Span.class));
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
 
     clientStreamTracer.outboundMessage(0);
@@ -604,8 +607,9 @@ public class CensusModulesTest {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(fakeClientParentSpan, method);
     verify(tracer).spanBuilderWithExplicitParent(
-        eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+        eq("package1.service2/method3"), same(fakeClientParentSpan));
     verify(spyClientSpanBuilder).setRecordEvents(eq(true));
+    verify(spyClientSpanBuilder).setSpanKind(eq(Kind.CLIENT));
 
     callTracer.callEnded(Status.DEADLINE_EXCEEDED.withDescription("3 seconds"));
     verify(spyClientSpan).end(
@@ -780,8 +784,9 @@ public class CensusModulesTest {
     verify(mockTracingPropagationHandler).toByteArray(same(fakeClientSpanContext));
     verifyNoMoreInteractions(mockTracingPropagationHandler);
     verify(tracer).spanBuilderWithExplicitParent(
-        eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+        eq("package1.service2/method3"), same(fakeClientParentSpan));
     verify(spyClientSpanBuilder).setRecordEvents(eq(true));
+    verify(spyClientSpanBuilder).setSpanKind(eq(Kind.CLIENT));
     verifyNoMoreInteractions(tracer);
     assertTrue(headers.containsKey(censusTracing.tracingHeader));
 
@@ -790,8 +795,9 @@ public class CensusModulesTest {
             method.getFullMethodName(), headers);
     verify(mockTracingPropagationHandler).fromByteArray(same(binarySpanContext));
     verify(tracer).spanBuilderWithRemoteParent(
-        eq("Recv.package1.service2.method3"), same(spyClientSpan.getContext()));
+        eq("package1.service2/method3"), same(spyClientSpan.getContext()));
     verify(spyServerSpanBuilder).setRecordEvents(eq(true));
+    verify(spyServerSpanBuilder).setSpanKind(eq(Kind.SERVER));
 
     Context filteredContext = serverTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
@@ -861,8 +867,10 @@ public class CensusModulesTest {
     censusTracing.getServerTracerFactory().newServerStreamTracer(
         method.getFullMethodName(), headers);
     verify(tracer).spanBuilderWithRemoteParent(
-        eq("Recv.package1.service2.method3"), isNull(SpanContext.class));
+        eq("package1.service2/method3"), isNull(SpanContext.class));
     verify(spyServerSpanBuilder).setRecordEvents(eq(true));
+    verify(spyServerSpanBuilder).setSpanKind(eq(Kind.SERVER));
+
   }
 
   @Test
@@ -1013,8 +1021,9 @@ public class CensusModulesTest {
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
     verifyZeroInteractions(mockTracingPropagationHandler);
     verify(tracer).spanBuilderWithRemoteParent(
-        eq("Recv.package1.service2.method3"), isNull(SpanContext.class));
+        eq("package1.service2/method3"), isNull(SpanContext.class));
     verify(spyServerSpanBuilder).setRecordEvents(eq(true));
+    verify(spyServerSpanBuilder).setSpanKind(eq(Kind.SERVER));
 
     Context filteredContext = serverStreamTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
@@ -1108,15 +1117,6 @@ public class CensusModulesTest {
       assertEquals(grpcCode.toString(), tracingStatus.getCanonicalCode().toString());
       assertEquals(grpcStatus.getDescription(), tracingStatus.getDescription());
     }
-  }
-
-
-  @Test
-  public void generateTraceSpanName() {
-    assertEquals(
-        "Sent.io.grpc.Foo", CensusTracingModule.generateTraceSpanName(false, "io.grpc/Foo"));
-    assertEquals(
-        "Recv.io.grpc.Bar", CensusTracingModule.generateTraceSpanName(true, "io.grpc/Bar"));
   }
 
   private static void assertNoServerContent(StatsTestUtils.MetricsRecord record) {
