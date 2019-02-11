@@ -1155,7 +1155,7 @@ func (t *http2Server) IncrMsgRecv() {
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {
-	resp := make(chan uint32)
+	resp := make(chan uint32, 1)
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
 	t.controlBuf.put(&outFlowControlSizeRequest{resp})
