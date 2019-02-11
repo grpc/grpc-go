@@ -353,18 +353,18 @@ def io_netty_transport():
 def io_opencensus_api():
     jvm_maven_import_external(
         name = "io_opencensus_opencensus_api",
-        artifact = "io.opencensus:opencensus-api:0.18.0",
+        artifact = "io.opencensus:opencensus-api:0.19.2",
         server_urls = ["http://central.maven.org/maven2"],
-        artifact_sha256 = "45421ffe95271aba94686ed8d4c5070fe77dc2ff0b922688097f0dd40f1931b1",
+        artifact_sha256 = "0e2e5d3f4f6fd296017a00b1cd8fb8e4261331cc0c3b6818c0533b01bf7945dc",
         licenses = ["notice"],  # Apache 2.0
     )
 
 def io_opencensus_grpc_metrics():
     jvm_maven_import_external(
         name = "io_opencensus_opencensus_contrib_grpc_metrics",
-        artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.18.0",
+        artifact = "io.opencensus:opencensus-contrib-grpc-metrics:0.19.2",
         server_urls = ["http://central.maven.org/maven2"],
-        artifact_sha256 = "1f90585e777b1e0493dbf22e678303369a8d5b7c750b4eda070a34ca99271607",
+        artifact_sha256 = "0e23c03414612c7fbef1fdb347076eb69368e596de768cd4b98e081d92206f15",
         licenses = ["notice"],  # Apache 2.0
     )
 
