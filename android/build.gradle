@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 group = "io.grpc"
-version = "1.19.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+version = "1.20.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 description = 'gRPC: Android'
 
 buildscript {
@@ -44,9 +44,9 @@ dependencies {
     errorprone 'com.google.errorprone:error_prone_core:2.3.2'
     errorproneJavac 'com.google.errorprone:javac:9+181-r4173-1'
 
-    implementation 'io.grpc:grpc-core:1.19.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-core:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
-    testImplementation 'io.grpc:grpc-okhttp:1.19.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    testImplementation 'io.grpc:grpc-okhttp:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     testImplementation 'junit:junit:4.12'
     testImplementation 'org.robolectric:robolectric:3.7.1'
     testImplementation 'com.google.truth:truth:0.39'
