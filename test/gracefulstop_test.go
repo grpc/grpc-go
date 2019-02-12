@@ -76,7 +76,7 @@ func (d *delayListener) allowClientRead() {
 	d.cc.allowRead()
 }
 
-func (d *delayListener) Dial(to time.Duration) (net.Conn, error) {
+func (d *delayListener) Dial(ctx context.Context) (net.Conn, error) {
 	if d.dialed {
 		// Only hand out one connection (net.Dial can return more even after the
 		// listener is closed).  This is not thread-safe, but Dial should never be
@@ -84,7 +84,7 @@ func (d *delayListener) Dial(to time.Duration) (net.Conn, error) {
 		return nil, fmt.Errorf("no more conns")
 	}
 	d.dialed = true
-	c, err := net.DialTimeout("tcp", d.Listener.Addr().String(), to)
+	c, err := (&net.Dialer{}).DialContext(ctx, "tcp", d.Listener.Addr().String())
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		closeCalled:  make(chan struct{}),
 		allowCloseCh: make(chan struct{}),
 	}
-	d := func(_ string, to time.Duration) (net.Conn, error) { return dlis.Dial(to) }
+	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 	serverGotReq := make(chan struct{})
 
 	ss := &stubServer{
@@ -180,7 +180,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	// even though GracefulStop has closed the listener.
 	ctx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer dialCancel()
-	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithDialer(d))
+	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithContextDialer(d))
 	if err != nil {
 		dlis.allowClientRead()
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
