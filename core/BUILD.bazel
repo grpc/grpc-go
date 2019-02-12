@@ -7,6 +7,7 @@ java_library(
     deps = [
         "//context",
         "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_failureaccess//jar",  # future transitive dep of Guava. See #5214
         "@com_google_guava_guava//jar",
         "@com_google_j2objc_j2objc_annotations//jar",
     ],
@@ -34,8 +35,8 @@ java_library(
         "src/main/java/io/grpc/internal/*.java",
     ]),
     resources = glob([
-            "src/bazel-internal/resources/**",
-        ]),
+        "src/bazel-internal/resources/**",
+    ]),
     visibility = ["//:__subpackages__"],
     deps = [
         ":core",
@@ -57,8 +58,8 @@ java_library(
         "src/main/java/io/grpc/util/*.java",
     ]),
     resources = glob([
-            "src/bazel-util/resources/**",
-        ]),
+        "src/bazel-util/resources/**",
+    ]),
     visibility = ["//visibility:public"],
     deps = [
         ":core",

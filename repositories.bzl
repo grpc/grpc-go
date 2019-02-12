@@ -11,6 +11,7 @@ def grpc_java_repositories(
         omit_com_google_code_gson = False,
         omit_com_google_errorprone_error_prone_annotations = False,
         omit_com_google_guava = False,
+        omit_com_google_guava_failureaccess = False,
         omit_com_google_j2objc_j2objc_annotations = False,
         omit_com_google_protobuf = False,
         omit_com_google_protobuf_java = False,
@@ -52,6 +53,8 @@ def grpc_java_repositories(
         com_google_errorprone_error_prone_annotations()
     if not omit_com_google_guava:
         com_google_guava()
+    if not omit_com_google_guava_failureaccess:
+        com_google_guava_failureaccess()
     if not omit_com_google_j2objc_j2objc_annotations:
         com_google_j2objc_j2objc_annotations()
     if not omit_com_google_protobuf:
@@ -174,6 +177,16 @@ def com_google_guava():
         artifact = "com.google.guava:guava:26.0-android",
         server_urls = ["http://central.maven.org/maven2"],
         artifact_sha256 = "1d044ebb866ef08b7d04e998b4260c9b52fab6e6d6b68d207859486bb3686cd5",
+        licenses = ["notice"],  # Apache 2.0
+    )
+
+def com_google_guava_failureaccess():
+    # Not needed until Guava 27.0, but including now to ease upgrading of users. See #5214
+    jvm_maven_import_external(
+        name = "com_google_guava_failureaccess",
+        artifact = "com.google.guava:failureaccess:1.0.1",
+        server_urls = ["http://central.maven.org/maven2"],
+        artifact_sha256 = "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
         licenses = ["notice"],  # Apache 2.0
     )
 
