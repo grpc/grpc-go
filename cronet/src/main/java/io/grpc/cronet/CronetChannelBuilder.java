@@ -23,9 +23,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
-import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
-import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
@@ -191,12 +189,6 @@ public final class CronetChannelBuilder extends
         maxMessageSize,
         alwaysUsePut,
         transportTracerFactory.create());
-  }
-
-  @Override
-  protected Attributes getNameResolverParams() {
-    return Attributes.newBuilder()
-        .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, GrpcUtil.DEFAULT_PORT_SSL).build();
   }
 
   @VisibleForTesting

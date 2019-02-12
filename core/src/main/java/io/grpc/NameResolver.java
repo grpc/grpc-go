@@ -94,16 +94,24 @@ public abstract class NameResolver {
      * The port number used in case the target or the underlying naming system doesn't provide a
      * port number.
      *
+     * @deprecated this will be deleted along with {@link #newNameResolver(URI, Attributes)} in
+     *             a future release.
+     *
      * @since 1.0.0
      */
+    @Deprecated
     public static final Attributes.Key<Integer> PARAMS_DEFAULT_PORT =
         Attributes.Key.create("params-default-port");
 
     /**
      * If the NameResolver wants to support proxy, it should inquire this {@link ProxyDetector}.
      * See documentation on {@link ProxyDetector} about how proxies work in gRPC.
+     *
+     * @deprecated this will be deleted along with {@link #newNameResolver(URI, Attributes)} in
+     *             a future release
      */
     @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
+    @Deprecated
     public static final Attributes.Key<ProxyDetector> PARAMS_PROXY_DETECTOR =
         Attributes.Key.create("params-proxy-detector");
 
@@ -114,11 +122,39 @@ public abstract class NameResolver {
      *
      * @param targetUri the target URI to be resolved, whose scheme must not be {@code null}
      * @param params optional parameters. Canonical keys are defined as {@code PARAMS_*} fields in
-     * {@link Factory}.
+     *               {@link Factory}.
+     *
+     * @deprecated Implement {@link #newNameResolver(URI, NameResolver.Helper)} instead.  This is
+     *             going to be deleted in a future release.
+     *
      * @since 1.0.0
      */
     @Nullable
-    public abstract NameResolver newNameResolver(URI targetUri, Attributes params);
+    @Deprecated
+    public NameResolver newNameResolver(URI targetUri, Attributes params) {
+      throw new UnsupportedOperationException("This method is going to be deleted");
+    }
+
+    /**
+     * Creates a {@link NameResolver} for the given target URI, or {@code null} if the given URI
+     * cannot be resolved by this factory. The decision should be solely based on the scheme of the
+     * URI.
+     *
+     * @param targetUri the target URI to be resolved, whose scheme must not be {@code null}
+     * @param helper utility that may be used by the NameResolver implementation
+     *
+     * @since 1.19.0
+     */
+    // TODO(zhangkun83): make this abstract when the other override is deleted
+    @Nullable
+    public NameResolver newNameResolver(URI targetUri, Helper helper) {
+      return newNameResolver(
+          targetUri,
+          Attributes.newBuilder()
+              .set(PARAMS_DEFAULT_PORT, helper.getDefaultPort())
+              .set(PARAMS_PROXY_DETECTOR, helper.getProxyDetector())
+              .build());
+    }
 
     /**
      * Returns the default scheme, which will be used to construct a URI when {@link
@@ -170,4 +206,21 @@ public abstract class NameResolver {
   @Retention(RetentionPolicy.SOURCE)
   @Documented
   public @interface ResolutionResultAttr {}
+
+  /**
+   * A utility object passed to {@link Factory#newNameResolver(URI, NameResolver.Helper)}.
+   */
+  public abstract static class Helper {
+    /**
+     * The port number used in case the target or the underlying naming system doesn't provide a
+     * port number.
+     */
+    public abstract int getDefaultPort();
+
+    /**
+     * If the NameResolver wants to support proxy, it should inquire this {@link ProxyDetector}.
+     * See documentation on {@link ProxyDetector} about how proxies work in gRPC.
+     */
+    public abstract ProxyDetector getProxyDetector();
+  }
 }

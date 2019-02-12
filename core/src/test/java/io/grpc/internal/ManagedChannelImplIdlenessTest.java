@@ -142,7 +142,7 @@ public class ManagedChannelImplIdlenessTest {
     LoadBalancerRegistry.getDefaultRegistry().register(mockLoadBalancerProvider);
     when(mockNameResolver.getServiceAuthority()).thenReturn(AUTHORITY);
     when(mockNameResolverFactory
-        .newNameResolver(any(URI.class), any(Attributes.class)))
+        .newNameResolver(any(URI.class), any(NameResolver.Helper.class)))
         .thenReturn(mockNameResolver);
     when(mockTransportFactory.getScheduledExecutorService())
         .thenReturn(timer.getScheduledExecutorService());
@@ -181,7 +181,7 @@ public class ManagedChannelImplIdlenessTest {
       }
       servers.add(new EquivalentAddressGroup(addrs));
     }
-    verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
+    verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(NameResolver.Helper.class));
     // Verify the initial idleness
     verify(mockLoadBalancerProvider, never()).newLoadBalancer(any(Helper.class));
     verify(mockTransportFactory, never()).newClientTransport(

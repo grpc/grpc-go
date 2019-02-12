@@ -20,8 +20,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import io.grpc.Attributes;
 import io.grpc.NameResolver;
+import io.grpc.ProxyDetector;
 import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,10 +31,17 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class DnsNameResolverProviderTest {
 
-  private static final Attributes ATTRIBUTES =
-      Attributes.newBuilder()
-          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
-          .build();
+  private static final NameResolver.Helper HELPER = new NameResolver.Helper() {
+      @Override
+      public int getDefaultPort() {
+        throw new UnsupportedOperationException("Should not be called");
+      }
+
+      @Override
+      public ProxyDetector getProxyDetector() {
+        return GrpcUtil.getDefaultProxyDetector();
+      }
+    };
 
   private DnsNameResolverProvider provider = new DnsNameResolverProvider();
 
@@ -46,8 +53,8 @@ public class DnsNameResolverProviderTest {
   @Test
   public void newNameResolver() {
     assertSame(DnsNameResolver.class,
-        provider.newNameResolver(URI.create("dns:///localhost:443"), ATTRIBUTES).getClass());
+        provider.newNameResolver(URI.create("dns:///localhost:443"), HELPER).getClass());
     assertNull(
-        provider.newNameResolver(URI.create("notdns:///localhost:443"), ATTRIBUTES));
+        provider.newNameResolver(URI.create("notdns:///localhost:443"), HELPER));
   }
 }

@@ -22,6 +22,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 import io.grpc.internal.DnsNameResolverProvider;
 import java.net.URI;
@@ -29,6 +31,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -37,7 +40,13 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class NameResolverProviderTest {
   private final URI uri = URI.create("dns:///localhost");
-  private final Attributes attributes = Attributes.EMPTY;
+  private final NameResolver.Helper helper = mock(NameResolver.Helper.class);
+
+  @After
+  public void wrapUp() {
+    // The helper is not implemented.  Make sure it's not used in the test.
+    verifyZeroInteractions(helper);
+  }
 
   @Test
   public void getDefaultScheme_noProvider() {
@@ -56,13 +65,13 @@ public class NameResolverProviderTest {
     List<NameResolverProvider> providers = Collections.<NameResolverProvider>singletonList(
         new BaseProvider(true, 5) {
           @Override
-          public NameResolver newNameResolver(URI passedUri, Attributes passedAttributes) {
+          public NameResolver newNameResolver(URI passedUri, NameResolver.Helper passedHelper) {
             assertSame(uri, passedUri);
-            assertSame(attributes, passedAttributes);
+            assertSame(helper, passedHelper);
             return null;
           }
         });
-    assertNull(NameResolverProvider.asFactory(providers).newNameResolver(uri, attributes));
+    assertNull(NameResolverProvider.asFactory(providers).newNameResolver(uri, helper));
   }
 
   @Test
@@ -70,7 +79,7 @@ public class NameResolverProviderTest {
     List<NameResolverProvider> providers = Collections.emptyList();
     NameResolver.Factory factory = NameResolverProvider.asFactory(providers);
     try {
-      factory.newNameResolver(uri, attributes);
+      factory.newNameResolver(uri, helper);
       fail("Expected exception");
     } catch (RuntimeException ex) {
       assertTrue(ex.toString(), ex.getMessage().contains("No NameResolverProviders found"));
@@ -142,7 +151,7 @@ public class NameResolverProviderTest {
     }
 
     @Override
-    public NameResolver newNameResolver(URI targetUri, Attributes params) {
+    public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
       throw new UnsupportedOperationException();
     }
 

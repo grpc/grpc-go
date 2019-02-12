@@ -23,7 +23,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.squareup.okhttp.ConnectionSpec;
-import io.grpc.NameResolver;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcUtil;
@@ -120,8 +119,7 @@ public class OkHttpChannelBuilderTest {
   @Test
   public void usePlaintextDefaultPort() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext();
-    assertEquals(GrpcUtil.DEFAULT_PORT_PLAINTEXT,
-        builder.getNameResolverParams().get(NameResolver.Factory.PARAMS_DEFAULT_PORT).intValue());
+    assertEquals(GrpcUtil.DEFAULT_PORT_PLAINTEXT, builder.getDefaultPort());
   }
 
   @Test

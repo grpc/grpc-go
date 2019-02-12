@@ -20,9 +20,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
-import io.grpc.Attributes;
 import io.grpc.NameResolver;
 import io.grpc.NameResolver.Factory;
+import io.grpc.ProxyDetector;
 import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,8 +31,17 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link ManagedChannelImpl#getNameResolver}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelImplGetNameResolverTest {
-  private static final Attributes NAME_RESOLVER_PARAMS =
-      Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
+  private static final NameResolver.Helper NAMERESOLVER_HELPER = new NameResolver.Helper() {
+      @Override
+      public int getDefaultPort() {
+        return 447;
+      }
+
+      @Override
+      public ProxyDetector getProxyDetector() {
+        throw new UnsupportedOperationException("Should not be called");
+      }
+    };
 
   @Test
   public void invalidUriTarget() {
@@ -96,7 +105,7 @@ public class ManagedChannelImplGetNameResolverTest {
   public void validTargetNoResovler() {
     Factory nameResolverFactory = new NameResolver.Factory() {
       @Override
-      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+      public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
         return null;
       }
 
@@ -107,7 +116,7 @@ public class ManagedChannelImplGetNameResolverTest {
     };
     try {
       ManagedChannelImpl.getNameResolver(
-          "foo.googleapis.com:8080", nameResolverFactory, NAME_RESOLVER_PARAMS);
+          "foo.googleapis.com:8080", nameResolverFactory, NAMERESOLVER_HELPER);
       fail("Should fail");
     } catch (IllegalArgumentException e) {
       // expected
@@ -117,7 +126,7 @@ public class ManagedChannelImplGetNameResolverTest {
   private void testValidTarget(String target, String expectedUriString, URI expectedUri) {
     Factory nameResolverFactory = new FakeNameResolverFactory(expectedUri.getScheme());
     FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl.getNameResolver(
-        target, nameResolverFactory, NAME_RESOLVER_PARAMS);
+        target, nameResolverFactory, NAMERESOLVER_HELPER);
     assertNotNull(nameResolver);
     assertEquals(expectedUri, nameResolver.uri);
     assertEquals(expectedUriString, nameResolver.uri.toString());
@@ -128,7 +137,7 @@ public class ManagedChannelImplGetNameResolverTest {
 
     try {
       FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl.getNameResolver(
-          target, nameResolverFactory, NAME_RESOLVER_PARAMS);
+          target, nameResolverFactory, NAMERESOLVER_HELPER);
       fail("Should have failed, but got resolver with " + nameResolver.uri);
     } catch (IllegalArgumentException e) {
       // expected
@@ -143,7 +152,7 @@ public class ManagedChannelImplGetNameResolverTest {
     }
 
     @Override
-    public NameResolver newNameResolver(URI targetUri, Attributes params) {
+    public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
       if (expectedScheme.equals(targetUri.getScheme())) {
         return new FakeNameResolver(targetUri);
       }

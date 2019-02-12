@@ -488,12 +488,12 @@ public abstract class AbstractManagedChannelImplBuilder
   protected abstract ClientTransportFactory buildTransportFactory();
 
   /**
-   * Subclasses can override this method to provide additional parameters to {@link
-   * NameResolver.Factory#newNameResolver}. The default implementation returns {@link
-   * Attributes#EMPTY}.
+   * Subclasses can override this method to provide a default port to {@link NameResolver} for use
+   * in cases where the target string doesn't include a port.  The default implementation returns
+   * {@link GrpcUtil.DEFAULT_PORT_SSL}.
    */
-  protected Attributes getNameResolverParams() {
-    return Attributes.EMPTY;
+  protected int getDefaultPort() {
+    return GrpcUtil.DEFAULT_PORT_SSL;
   }
 
   /**
@@ -517,7 +517,7 @@ public abstract class AbstractManagedChannelImplBuilder
     }
 
     @Override
-    public NameResolver newNameResolver(URI notUsedUri, Attributes params) {
+    public NameResolver newNameResolver(URI notUsedUri, NameResolver.Helper helper) {
       return new NameResolver() {
         @Override
         public String getServiceAuthority() {

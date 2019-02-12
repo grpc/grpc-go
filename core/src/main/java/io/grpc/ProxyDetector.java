@@ -31,11 +31,10 @@ import javax.annotation.Nullable;
  * <p>In order for gRPC to use a proxy, {@link NameResolver}, {@link ProxyDetector} and the
  * underlying transport need to work together.
  *
- * <p>The {@link NameResolver} should invoke the {@link ProxyDetector} retrieved from the {@code
- * params} of {@link NameResolver.Factory#newNameResolver} using {@link
- * io.grpc.NameResolver.Factory#PARAMS_PROXY_DETECTOR PARAMS_PROXY_DETECTOR}, and pass the returned
- * {@link ProxiedSocketAddress} to {@link NameResolver.Listener#onAddresses}.  The DNS name resolver
- * shipped with gRPC is already doing so.
+ * <p>The {@link NameResolver} should invoke the {@link ProxyDetector} retrieved from the {@link
+ * NameResolver.Helper#getProxyDetector}, and pass the returned {@link ProxiedSocketAddress} to
+ * {@link NameResolver.Listener#onAddresses}.  The DNS name resolver shipped with gRPC is already
+ * doing so.
  *
  * <p>The default {@code ProxyDetector} uses Java's standard {@link java.net.ProxySelector} and
  * {@link java.net.Authenticator} to detect proxies and authentication credentials and produce

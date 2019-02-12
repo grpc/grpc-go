@@ -23,8 +23,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.grpc.Attributes;
 import io.grpc.NameResolver;
+import io.grpc.ProxyDetector;
 import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,17 +33,28 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link OverrideAuthorityNameResolverFactory}. */
 @RunWith(JUnit4.class)
 public class OverrideAuthorityNameResolverTest {
+  private static final NameResolver.Helper HELPER = new NameResolver.Helper() {
+      @Override
+      public int getDefaultPort() {
+        throw new UnsupportedOperationException("Should not be called");
+      }
+
+      @Override
+      public ProxyDetector getProxyDetector() {
+        throw new UnsupportedOperationException("Should not be called");
+      }
+    };
+
   @Test
   public void overridesAuthority() {
     NameResolver nameResolverMock = mock(NameResolver.class);
     NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
-    when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class)))
+    when(wrappedFactory.newNameResolver(any(URI.class), any(NameResolver.Helper.class)))
         .thenReturn(nameResolverMock);
     String override = "override:5678";
     NameResolver.Factory factory =
         new OverrideAuthorityNameResolverFactory(wrappedFactory, override);
-    NameResolver nameResolver = factory.newNameResolver(URI.create("dns:///localhost:443"),
-        Attributes.EMPTY);
+    NameResolver nameResolver = factory.newNameResolver(URI.create("dns:///localhost:443"), HELPER);
     assertNotNull(nameResolver);
     assertEquals(override, nameResolver.getServiceAuthority());
   }
@@ -51,23 +62,24 @@ public class OverrideAuthorityNameResolverTest {
   @Test
   public void wontWrapNull() {
     NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
-    when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class))).thenReturn(null);
+    when(wrappedFactory.newNameResolver(any(URI.class), any(NameResolver.Helper.class)))
+        .thenReturn(null);
     NameResolver.Factory factory =
         new OverrideAuthorityNameResolverFactory(wrappedFactory, "override:5678");
     assertEquals(null,
-        factory.newNameResolver(URI.create("dns:///localhost:443"), Attributes.EMPTY));
+        factory.newNameResolver(URI.create("dns:///localhost:443"), HELPER));
   }
 
   @Test
   public void forwardsNonOverridenCalls() {
     NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
     NameResolver mockResolver = mock(NameResolver.class);
-    when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class)))
+    when(wrappedFactory.newNameResolver(any(URI.class), any(NameResolver.Helper.class)))
         .thenReturn(mockResolver);
     NameResolver.Factory factory =
         new OverrideAuthorityNameResolverFactory(wrappedFactory, "override:5678");
     NameResolver overrideResolver =
-        factory.newNameResolver(URI.create("dns:///localhost:443"), Attributes.EMPTY);
+        factory.newNameResolver(URI.create("dns:///localhost:443"), HELPER);
     assertNotNull(overrideResolver);
     NameResolver.Listener listener = mock(NameResolver.Listener.class);
 

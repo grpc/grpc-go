@@ -89,6 +89,8 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
+import io.grpc.ProxiedSocketAddress;
+import io.grpc.ProxyDetector;
 import io.grpc.SecurityLevel;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
@@ -142,11 +144,7 @@ import org.mockito.stubbing.Answer;
 /** Unit tests for {@link ManagedChannelImpl}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelImplTest {
-  private static final Attributes NAME_RESOLVER_PARAMS =
-      Attributes.newBuilder()
-          .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447)
-          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
-          .build();
+  private static final int DEFAULT_PORT = 447;
 
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
@@ -3175,7 +3173,7 @@ public class ManagedChannelImplTest {
 
       @Nullable
       @Override
-      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+      public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
         return (resolver = new FakeNameResolver());
       }
 
@@ -3241,6 +3239,93 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void nameResolverHelperPropagation() {
+    final AtomicReference<NameResolver.Helper> capturedHelper = new AtomicReference<>();
+    final NameResolver noopResolver = new NameResolver() {
+        @Override
+        public String getServiceAuthority() {
+          return "fake-authority";
+        }
+
+        @Override
+        public void start(Listener listener) {
+        }
+
+        @Override
+        public void shutdown() {}
+      };
+    ProxyDetector neverProxy = new ProxyDetector() {
+        @Override
+        public ProxiedSocketAddress proxyFor(SocketAddress targetAddress) {
+          return null;
+        }
+      };
+    NameResolver.Factory oldApiFactory = new NameResolver.Factory() {
+        @Override
+        public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
+          capturedHelper.set(helper);
+          return noopResolver;
+        }
+
+        @Override
+        public String getDefaultScheme() {
+          return "fakescheme";
+        }
+      };
+    channelBuilder.nameResolverFactory(oldApiFactory).proxyDetector(neverProxy);
+    createChannel();
+
+    NameResolver.Helper helper = capturedHelper.get();
+    assertThat(helper).isNotNull();
+    assertThat(helper.getDefaultPort()).isEqualTo(DEFAULT_PORT);
+    assertThat(helper.getProxyDetector()).isSameAs(neverProxy);
+  }
+
+  @Test
+  @Deprecated
+  public void nameResolverParams_oldApi() {
+    final AtomicReference<Attributes> capturedParams = new AtomicReference<>();
+    final NameResolver noopResolver = new NameResolver() {
+        @Override
+        public String getServiceAuthority() {
+          return "fake-authority";
+        }
+
+        @Override
+        public void start(Listener listener) {
+        }
+
+        @Override
+        public void shutdown() {}
+      };
+    ProxyDetector neverProxy = new ProxyDetector() {
+        @Override
+        public ProxiedSocketAddress proxyFor(SocketAddress targetAddress) {
+          return null;
+        }
+      };
+    NameResolver.Factory oldApiFactory = new NameResolver.Factory() {
+        @Override
+        public NameResolver newNameResolver(URI targetUri, Attributes params) {
+          capturedParams.set(params);
+          return noopResolver;
+        }
+
+        @Override
+        public String getDefaultScheme() {
+          return "fakescheme";
+        }
+      };
+    channelBuilder.nameResolverFactory(oldApiFactory).proxyDetector(neverProxy);
+    createChannel();
+
+    Attributes attrs = capturedParams.get();
+    assertThat(attrs).isNotNull();
+    assertThat(attrs.get(NameResolver.Factory.PARAMS_DEFAULT_PORT)).isEqualTo(DEFAULT_PORT);
+    assertThat(attrs.get(NameResolver.Factory.PARAMS_PROXY_DETECTOR)).isSameAs(neverProxy);
+  }
+
+  @Test
   public void getAuthorityAfterShutdown() throws Exception {
     createChannel();
     assertEquals(SERVICE_NAME, channel.authority());
@@ -3259,8 +3344,8 @@ public class ManagedChannelImplTest {
       throw new UnsupportedOperationException();
     }
 
-    @Override protected Attributes getNameResolverParams() {
-      return NAME_RESOLVER_PARAMS;
+    @Override protected int getDefaultPort() {
+      return DEFAULT_PORT;
     }
   }
 
@@ -3300,11 +3385,11 @@ public class ManagedChannelImplTest {
     }
 
     @Override
-    public NameResolver newNameResolver(final URI targetUri, Attributes params) {
+    public NameResolver newNameResolver(final URI targetUri, NameResolver.Helper helper) {
       if (!expectedUri.equals(targetUri)) {
         return null;
       }
-      assertSame(NAME_RESOLVER_PARAMS, params);
+      assertEquals(DEFAULT_PORT, helper.getDefaultPort());
       FakeNameResolver resolver = new FakeNameResolver(error);
       resolvers.add(resolver);
       return resolver;

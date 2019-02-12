@@ -95,11 +95,17 @@ public class DnsNameResolverTest {
   private final Map<String, Object> serviceConfig = new LinkedHashMap<>();
 
   private static final int DEFAULT_PORT = 887;
-  private static final Attributes NAME_RESOLVER_PARAMS =
-      Attributes.newBuilder()
-          .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, DEFAULT_PORT)
-          .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
-          .build();
+  private static final NameResolver.Helper HELPER = new NameResolver.Helper() {
+      @Override
+      public int getDefaultPort() {
+        return DEFAULT_PORT;
+      }
+
+      @Override
+      public ProxyDetector getProxyDetector() {
+        return GrpcUtil.getDefaultProxyDetector();
+      }
+    };
 
   private final DnsNameResolverProvider provider = new DnsNameResolverProvider();
   private final FakeClock fakeClock = new FakeClock();
@@ -146,16 +152,25 @@ public class DnsNameResolverTest {
 
   private DnsNameResolver newResolver(
       String name,
-      int port,
-      ProxyDetector proxyDetector,
+      final int port,
+      final ProxyDetector proxyDetector,
       Stopwatch stopwatch,
       boolean isAndroid) {
     DnsNameResolver dnsResolver = new DnsNameResolver(
         null,
         name,
-        Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, port).build(),
+        new NameResolver.Helper() {
+          @Override
+          public int getDefaultPort() {
+            return port;
+          }
+
+          @Override
+          public ProxyDetector getProxyDetector() {
+            return proxyDetector;
+          }
+        },
         fakeExecutorResource,
-        proxyDetector,
         stopwatch,
         isAndroid);
     // By default, using the mocked ResourceResolver to avoid I/O
@@ -279,9 +294,7 @@ public class DnsNameResolverTest {
   public void resolveAll_failsOnEmptyResult() throws Exception {
     String hostname = "dns:///addr.fake:1234";
     DnsNameResolver nrf =
-        new DnsNameResolverProvider().newNameResolver(new URI(hostname),  Attributes.newBuilder()
-            .set(NameResolver.Factory.PARAMS_PROXY_DETECTOR, GrpcUtil.getDefaultProxyDetector())
-            .build());
+        new DnsNameResolverProvider().newNameResolver(new URI(hostname),  HELPER);
     nrf.setAddressResolver(new AddressResolver() {
       @Override
       public List<InetAddress> resolveAddress(String host) throws Exception {
@@ -993,7 +1006,7 @@ public class DnsNameResolverTest {
 
   private void testInvalidUri(URI uri) {
     try {
-      provider.newNameResolver(uri, NAME_RESOLVER_PARAMS);
+      provider.newNameResolver(uri, HELPER);
       fail("Should have failed");
     } catch (IllegalArgumentException e) {
       // expected
@@ -1001,7 +1014,7 @@ public class DnsNameResolverTest {
   }
 
   private void testValidUri(URI uri, String exportedAuthority, int expectedPort) {
-    DnsNameResolver resolver = provider.newNameResolver(uri, NAME_RESOLVER_PARAMS);
+    DnsNameResolver resolver = provider.newNameResolver(uri, HELPER);
     assertNotNull(resolver);
     assertEquals(expectedPort, resolver.getPort());
     assertEquals(exportedAuthority, resolver.getServiceAuthority());
