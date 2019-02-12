@@ -41,6 +41,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -71,7 +72,6 @@ import io.grpc.internal.testing.TestServerStreamTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -331,12 +331,21 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  public void closeShouldCloseChannel() throws Exception {
+  public void closeShouldGracefullyCloseChannel() throws Exception {
     manualSetUp();
     handler().close(ctx(), newPromise());
 
+    verifyWrite().writeGoAway(eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()),
+        isA(ByteBuf.class), any(ChannelPromise.class));
+    verifyWrite().writePing(
+        eq(ctx()),
+        eq(false),
+        eq(NettyServerHandler.GRACEFUL_SHUTDOWN_PING),
+        isA(ChannelPromise.class));
+    channelRead(pingFrame(/*ack=*/ true , NettyServerHandler.GRACEFUL_SHUTDOWN_PING));
+
     verifyWrite().writeGoAway(eq(ctx()), eq(0), eq(Http2Error.NO_ERROR.code()),
-        eq(Unpooled.EMPTY_BUFFER), any(ChannelPromise.class));
+        isA(ByteBuf.class), any(ChannelPromise.class));
 
     // Verify that the channel was closed.
     assertFalse(channel().isOpen());

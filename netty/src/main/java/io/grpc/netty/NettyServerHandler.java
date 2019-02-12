@@ -98,7 +98,8 @@ import javax.annotation.Nullable;
 class NettyServerHandler extends AbstractNettyHandler {
   private static final Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
   private static final long KEEPALIVE_PING = 0xDEADL;
-  private static final long GRACEFUL_SHUTDOWN_PING = 0x97ACEF001L;
+  @VisibleForTesting
+  static final long GRACEFUL_SHUTDOWN_PING = 0x97ACEF001L;
   private static final long GRACEFUL_SHUTDOWN_PING_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(10);
 
   private final Http2Connection.PropertyKey streamKey;
@@ -586,6 +587,15 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
+  @Override
+  public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+    if (gracefulShutdown == null) {
+      gracefulShutdown = new GracefulShutdown("app_requested", null);
+      gracefulShutdown.start(ctx);
+      ctx.flush();
+    }
+  }
+
   /**
    * Returns the given processed bytes back to inbound flow control.
    */
@@ -648,7 +658,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,
       ChannelPromise promise) throws Exception {
-    close(ctx, promise);
+    super.close(ctx, promise);
     connection().forEachActiveStream(new Http2StreamVisitor() {
       @Override
       public boolean visit(Http2Stream stream) throws Http2Exception {
@@ -906,7 +916,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       }
       try {
         gracefulShutdownTimeoutMillis(gracefulShutdownTimeoutMillis);
-        close(ctx, ctx.newPromise());
+        NettyServerHandler.super.close(ctx, ctx.newPromise());
       } catch (Exception e) {
         onError(ctx, /* outbound= */ true, e);
       } finally {
