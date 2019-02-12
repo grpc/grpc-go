@@ -20,10 +20,10 @@
 Package main provides a client used for benchmarking.  Before running the
 client, the user would need to launch the grpc server.
 
-To start the server before running the client, you can run something similar
-to the command below:
+To start the server before running the client, you can run look for the command
+under the following file:
 
-go run benchmark/server/main.go -test_name=grpc_test
+	benchmark/server/main.go
 
 After starting the server, the client can be run.  An example of how to run this
 command is:
@@ -32,9 +32,9 @@ go run benchmark/client/main.go -test_name=grpc_test
 
 If the server is running on a different port than 50051, then use the port flag
 for the client to hit the server on the correct port.
-An example for how to run this command on a different port can be found under:
+An example for how to run this command on a different port can be found here:
 
-benchmark/server/main.go
+go run benchmark/client/main.go -test_name=grpc_test -port=8080
 */
 package main
 
