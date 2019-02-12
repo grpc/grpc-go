@@ -328,10 +328,10 @@ func WithTimeout(d time.Duration) DialOption {
 	})
 }
 
-// WithContextDialer returns a DialOption that sets a dialer. If
-// FailOnNonTempDialError() is set to true, and an error is returned by f, gRPC
-// checks the error's Temporary() method to decide if it should try to reconnect
-// to the network address.
+// WithContextDialer returns a DialOption that sets a dialer to create
+// connections. If FailOnNonTempDialError() is set to true, and an error is
+// returned by f, gRPC checks the error's Temporary() method to decide if it
+// should try to reconnect to the network address.
 func WithContextDialer(f func(context.Context, string) (net.Conn, error)) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.Dialer = f

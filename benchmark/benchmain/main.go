@@ -194,24 +194,20 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	if *useBufconn {
 		bcLis := bufconn.Listen(256 * 1024)
 		lis = bcLis
-		opts = append(opts,
-			grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
-				return nw.ContextDialer(func(context.Context, string, string) (net.Conn, error) {
-					return bcLis.Dial()
-				})(ctx, "", "")
-			}),
-		)
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+			return nw.ContextDialer(func(context.Context, string, string) (net.Conn, error) {
+				return bcLis.Dial()
+			})(ctx, "", "")
+		}))
 	} else {
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
 			grpclog.Fatalf("Failed to listen: %v", err)
 		}
-		opts = append(opts,
-			grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
-				return nw.ContextDialer((&net.Dialer{}).DialContext)(ctx, "tcp", lis.Addr().String())
-			}),
-		)
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+			return nw.ContextDialer((&net.Dialer{}).DialContext)(ctx, "tcp", lis.Addr().String())
+		}))
 	}
 	lis = nw.Listener(lis)
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
