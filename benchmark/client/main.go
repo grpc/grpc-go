@@ -32,9 +32,9 @@ go run benchmark/client/main.go -test_name=grpc_test
 
 If the server is running on a different port than 50051, then use the port flag
 for the client to hit the server on the correct port.
-An example for how to run this command on a different port is:
+An example for how to run this command on a different port can be found under:
 
-go run benchmark/client/main.go -test_name=grpc_test -port=8080
+benchmark/server/main.go
 */
 package main
 
