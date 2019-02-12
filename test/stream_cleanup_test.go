@@ -22,23 +22,17 @@ import (
 	"context"
 	"testing"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// Must be higher than default 64K, ignored otherwise
-const initialWindowSize uint = 70 * 1024
-
-// Something that is not going to fit in a single window
-const bodySize uint = 2 * initialWindowSize
-
-// The maximum message size the client can receive
-const callRecvMsgSize uint = 1
-
 func (s) TestStreamCleanup(t *testing.T) {
+	const initialWindowSize uint = 70 * 1024    // Must be higher than default 64K, ignored otherwise
+	const bodySize uint = 2 * initialWindowSize // Something that is not going to fit in a single window
+	const callRecvMsgSize uint = 1              // The maximum message size the client can receive
+
 	ss := &stubServer{
 		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
