@@ -937,7 +937,6 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State) {
 	}
 
 	updateMsg := fmt.Sprintf("Subchannel Connectivity change to %v", s)
-	grpclog.Infof(updateMsg)
 	ac.state = s
 	if channelz.IsOn() {
 		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
