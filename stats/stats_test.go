@@ -652,6 +652,16 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	if actual.Code() != expectedStatus.Code() || actual.Message() != expectedStatus.Message() {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
+
+	if st.Client {
+		if !reflect.DeepEqual(st.Trailer, testTrailerMetadata) {
+			t.Fatalf("st.Trailer = %v, want %v", st.Trailer, testTrailerMetadata)
+		}
+	} else {
+		if st.Trailer != nil {
+			t.Fatalf("st.Trailer = %v, want nil", st.Trailer)
+		}
+	}
 }
 
 func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
