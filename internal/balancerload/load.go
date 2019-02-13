@@ -14,28 +14,31 @@
  * limitations under the License.
  */
 
+// Package balancerload defines APIs to parse server loads in trailers. The
+// parsed loads are sent to balancers in DoneInfo.
 package balancerload
 
 import (
 	"google.golang.org/grpc/metadata"
 )
 
-// ServerLoadParser converts loads from metadata into a concrete type.
-type ServerLoadParser interface {
+// Parser converts loads from metadata into a concrete type.
+type Parser interface {
+	// Parse parses loads from metadata.
 	Parse(md metadata.MD) interface{}
 }
 
-var parser ServerLoadParser
+var parser Parser
 
-// SetServerLoadReader sets the load parser.
+// SetParser sets the load parser.
 //
 // Not mutex-protected, should be called before any gRPC functions.
-func SetServerLoadReader(lr ServerLoadParser) {
+func SetParser(lr Parser) {
 	parser = lr
 }
 
-// ParseServerLoad calls parser.Read().
-func ParseServerLoad(md metadata.MD) interface{} {
+// Parse calls parser.Read().
+func Parse(md metadata.MD) interface{} {
 	if parser == nil {
 		return nil
 	}

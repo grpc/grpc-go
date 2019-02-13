@@ -80,5 +80,5 @@ func (*loadParser) Parse(md metadata.MD) interface{} {
 }
 
 func init() {
-	balancerload.SetServerLoadReader(&loadParser{})
+	balancerload.SetParser(&loadParser{})
 }

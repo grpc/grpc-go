@@ -941,7 +941,7 @@ func (a *csAttempt) finish(err error) {
 			Trailer:       tr,
 			BytesSent:     a.s != nil,
 			BytesReceived: br,
-			ServerLoad:    balancerload.ParseServerLoad(tr),
+			ServerLoad:    balancerload.Parse(tr),
 		})
 	}
 	if a.statsHandler != nil {

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//go:generate protoc -I ./orca_v1 --go_out=plugins=grpc:./orca_v1 ./orca_v1/orca.proto
-
 package orca
 
 import (
