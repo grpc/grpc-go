@@ -58,4 +58,5 @@ func main() {
 		log.Fatal("unexpected error from UnaryEcho: %v", err)
 	}
 	fmt.Println("RPC response:", res)
+	select {} // Block forever; run with GODEBUG=http2debug=2 to observe ping frames and GOAWAYs due to idleness.
 }
