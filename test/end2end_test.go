@@ -62,7 +62,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -510,8 +509,6 @@ type test struct {
 	customDialOptions           []grpc.DialOption
 	customServerOptions         []grpc.ServerOption
 	resolverScheme              string
-	cliKeepAlive                *keepalive.ClientParameters
-	svrKeepAlive                *keepalive.ServerParameters
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -632,9 +629,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		sopts = append(sopts, grpc.Creds(creds))
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
-	}
-	if te.svrKeepAlive != nil {
-		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
@@ -872,9 +866,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
-	}
-	if te.cliKeepAlive != nil {
-		opts = append(opts, grpc.WithKeepaliveParams(*te.cliKeepAlive))
 	}
 	opts = append(opts, te.customDialOptions...)
 	return opts, scheme

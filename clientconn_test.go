@@ -939,12 +939,38 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Failed to listen. Err: %v", err)
 	}
 	defer lis.Close()
+	connected := make(chan struct{})
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("error accepting connection: %v", err)
+			return
+		}
+		defer conn.Close()
+		f := http2.NewFramer(conn, conn)
+		go func() {
+			for {
+				fr, err := f.ReadFrame()
+				if err != nil {
+					return
+				}
+			}
+		}()
+		if err := f.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("error writing settings: %v", err)
+			return
+		}
+		<-connected
+		if err := f.WriteGoAway(0, http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings")); err != nil {
+			t.Errorf("error writing GOAWAY: %v", err)
+			return
+		}
+	}()
 	addr := lis.Addr().String()
-	s := NewServer()
-	go s.Serve(lis)
-	defer s.Stop()
-	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
-		Time:                50 * time.Millisecond,
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cc, err := DialContext(ctx, addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                10 * time.Second,
 		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
 	}))
@@ -952,12 +978,21 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	time.Sleep(1 * time.Second)
-	cc.mu.RLock()
-	defer cc.mu.RUnlock()
-	v := cc.mkp.Time
-	if v < 100*time.Millisecond {
-		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	close(connected)
+	for {
+		time.Sleep(10 * time.Millisecond)
+		cc.mu.RLock()
+		v := cc.mkp.Time
+		if v == 20*time.Second {
+			// Success
+			cc.mu.RUnlock()
+			return
+		}
+		if ctx.Err() != nil {
+			// Timeout
+			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 20s", v)
+		}
+		cc.mu.RUnlock()
 	}
 }
 

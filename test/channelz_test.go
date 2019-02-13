@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -847,8 +848,8 @@ func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
-	// 2500ms allow for 2 keepalives (1000ms per round trip)
-	time.Sleep(2500 * time.Millisecond)
+	// Allow for at least 2 keepalives (1s per ping interval)
+	time.Sleep(4000 * time.Millisecond)
 	cancel()
 }
 
@@ -1125,15 +1126,24 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 
 func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
+	defer func(t time.Duration) { internal.KeepaliveMinPingTime = t }(internal.KeepaliveMinPingTime)
+	internal.KeepaliveMinPingTime = time.Second
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.cliKeepAlive = &keepalive.ClientParameters{Time: 500 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	te.customDialOptions = append(te.customDialOptions, grpc.WithKeepaliveParams(
+		keepalive.ClientParameters{
+			Time:                time.Second,
+			Timeout:             500 * time.Millisecond,
+			PermitWithoutStream: true,
+		}))
+	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveEnforcementPolicy(
+		keepalive.EnforcementPolicy{
+			MinTime:             500 * time.Millisecond,
+			PermitWithoutStream: true,
+		}))
 	te.startServer(&testServer{security: e.security})
+	te.clientConn() // Dial the server
 	defer te.tearDown()
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	doIdleCallToInvokeKeepAlive(tc, t)
-
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0, 0)
 		if len(tchan) != 1 {
@@ -1157,7 +1167,7 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(id)
-		if skt.SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
+		if skt.SocketData.KeepAlivesSent != 2 {
 			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
 		}
 		return true, nil
@@ -1230,7 +1240,7 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.svrKeepAlive = &keepalive.ServerParameters{Time: 500 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Second, Timeout: 500 * time.Millisecond}))
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
