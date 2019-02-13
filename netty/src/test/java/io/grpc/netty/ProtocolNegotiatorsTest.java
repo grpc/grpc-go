@@ -32,6 +32,7 @@ import io.grpc.Grpc;
 import io.grpc.SecurityLevel;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.testing.TestUtils;
+import io.grpc.netty.ProtocolNegotiators.AbstractBufferingHandler;
 import io.grpc.netty.ProtocolNegotiators.HostPort;
 import io.grpc.netty.ProtocolNegotiators.ServerTlsHandler;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
@@ -584,6 +585,24 @@ public class ProtocolNegotiatorsTest {
     elg.shutdownGracefully();
   }
 
+  @Test(expected = Test.None.class /* no exception expected */)
+  @SuppressWarnings("TestExceptionChecker")
+  public void bufferingHandler_shouldNotThrowForEmptyHandler() throws Exception {
+    LocalAddress addr = new LocalAddress("local");
+    ChannelFuture unused = new Bootstrap()
+        .channel(LocalChannel.class)
+        .handler(new BufferingHandlerWithoutHandlers())
+        .group(group)
+        .register().sync();
+    ChannelFuture sf = new ServerBootstrap()
+        .channel(LocalServerChannel.class)
+        .childHandler(new ChannelHandlerAdapter() {})
+        .group(group)
+        .bind(addr);
+    // sync will trigger client's NoHandlerBufferingHandler which should not throw
+    sf.sync();
+  }
+
   private static class FakeGrpcHttp2ConnectionHandler extends GrpcHttp2ConnectionHandler {
 
     static GrpcHttp2ConnectionHandler noopHandler() {
@@ -628,5 +647,12 @@ public class ProtocolNegotiatorsTest {
 
   private static ByteBuf bb(String s, Channel c) {
     return ByteBufUtil.writeUtf8(c.alloc(), s);
+  }
+
+  private static class BufferingHandlerWithoutHandlers extends AbstractBufferingHandler {
+
+    public BufferingHandlerWithoutHandlers(ChannelHandler... handlers) {
+      super(handlers);
+    }
   }
 }

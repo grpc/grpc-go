@@ -465,7 +465,7 @@ final class ProtocolNegotiators {
        * This check is necessary as a channel may be registered with different event loops during it
        * lifetime and we only want to configure it once.
        */
-      if (handlers != null) {
+      if (handlers != null && handlers.length > 0) {
         for (ChannelHandler handler : handlers) {
           ctx.pipeline().addBefore(ctx.name(), null, handler);
         }
