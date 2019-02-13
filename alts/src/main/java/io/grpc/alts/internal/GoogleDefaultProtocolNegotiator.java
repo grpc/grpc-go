@@ -20,8 +20,8 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.alts.internal.AltsProtocolNegotiator.LazyChannel;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
+import io.grpc.netty.InternalProtocolNegotiators;
 import io.grpc.netty.ProtocolNegotiator;
-import io.grpc.netty.ProtocolNegotiators;
 import io.netty.handler.ssl.SslContext;
 
 /** A client-side GPRC {@link ProtocolNegotiator} for Google Default Channel. */
@@ -35,7 +35,7 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
       TsiHandshakerFactory altsFactory, LazyChannel lazyHandshakerChannel, SslContext sslContext) {
     altsProtocolNegotiator =
         AltsProtocolNegotiator.createClientNegotiator(altsFactory, lazyHandshakerChannel);
-    tlsProtocolNegotiator = ProtocolNegotiators.tls(sslContext);
+    tlsProtocolNegotiator = InternalProtocolNegotiators.tls(sslContext);
   }
 
   @VisibleForTesting

@@ -24,7 +24,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.Grpc;
-import io.grpc.Internal;
 import io.grpc.InternalChannelz;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
@@ -74,8 +73,7 @@ import javax.net.ssl.SSLSession;
 /**
  * Common {@link ProtocolNegotiator}s used by gRPC.
  */
-@Internal
-public final class ProtocolNegotiators {
+final class ProtocolNegotiators {
   private static final Logger log = Logger.getLogger(ProtocolNegotiators.class.getName());
 
   private ProtocolNegotiators() {
