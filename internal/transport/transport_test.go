@@ -64,6 +64,13 @@ var (
 	expectedInvalidHeaderField = "invalid/content-type"
 )
 
+func init() {
+	expectedRequestLarge[0] = 'g'
+	expectedRequestLarge[len(expectedRequestLarge)-1] = 'r'
+	expectedResponseLarge[0] = 'p'
+	expectedResponseLarge[len(expectedResponseLarge)-1] = 'c'
+}
+
 type testStreamHandler struct {
 	t           *http2Server
 	notify      chan struct{}
