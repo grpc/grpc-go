@@ -65,6 +65,7 @@ import io.grpc.netty.NettyChannelBuilder.LocalSocketPicker;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelFactory;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ReflectiveChannelFactory;
 import io.netty.channel.local.LocalChannel;
@@ -851,15 +852,9 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static class NoopHandler extends ProtocolNegotiators.AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
+  private static class NoopHandler extends ProtocolNegotiators.AbstractBufferingHandler {
     public NoopHandler(GrpcHttp2ConnectionHandler grpcHandler) {
       super(grpcHandler);
-    }
-
-    @Override
-    public AsciiString scheme() {
-      return Utils.HTTP;
     }
   }
 
@@ -868,9 +863,14 @@ public class NettyClientTransportTest {
     NoopHandler handler;
 
     @Override
-    public Handler newHandler(final GrpcHttp2ConnectionHandler grpcHandler) {
+    public ChannelHandler newHandler(final GrpcHttp2ConnectionHandler grpcHandler) {
       this.grpcHandler = grpcHandler;
       return handler = new NoopHandler(grpcHandler);
+    }
+
+    @Override
+    public AsciiString scheme() {
+      return Utils.HTTP;
     }
 
     @Override

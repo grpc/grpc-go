@@ -39,7 +39,11 @@ public final class InternalNettyChannelBuilder {
 
   /** A class that provides a Netty handler to control protocol negotiation. */
   public interface ProtocolNegotiatorFactory
-      extends NettyChannelBuilder.ProtocolNegotiatorFactory {}
+      extends NettyChannelBuilder.ProtocolNegotiatorFactory {
+
+    @Override
+    InternalProtocolNegotiator.ProtocolNegotiator buildProtocolNegotiator();
+  }
 
   /**
    * Sets the {@link ProtocolNegotiatorFactory} to be used. Overrides any specified negotiation type

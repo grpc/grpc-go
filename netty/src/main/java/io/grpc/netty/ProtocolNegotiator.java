@@ -16,25 +16,18 @@
 
 package io.grpc.netty;
 
-import io.grpc.Internal;
 import io.netty.channel.ChannelHandler;
 import io.netty.util.AsciiString;
 
 /**
- * A class that provides a Netty handler to control protocol negotiation.
+ * An class that provides a Netty handler to control protocol negotiation.
  */
-@Internal
-public interface ProtocolNegotiator {
+interface ProtocolNegotiator {
 
   /**
-   * The Netty handler to control the protocol negotiation.
+   * The HTTP/2 scheme to be used when sending {@code HEADERS}.
    */
-  interface Handler extends ChannelHandler {
-    /**
-     * The HTTP/2 scheme to be used when sending {@code HEADERS}.
-     */
-    AsciiString scheme();
-  }
+  AsciiString scheme();
 
   /**
    * Creates a new handler to control the protocol negotiation. Once the negotiation has completed
@@ -42,7 +35,7 @@ public interface ProtocolNegotiator {
    * grpcHandler.onHandleProtocolNegotiationCompleted()} at certain point if the negotiation has
    * completed successfully.
    */
-  Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler);
+  ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler);
 
   /**
    * Releases resources held by this negotiator. Called when the Channel transitions to terminated.

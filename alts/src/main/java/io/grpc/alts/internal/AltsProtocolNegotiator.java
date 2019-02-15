@@ -31,8 +31,8 @@ import io.grpc.alts.internal.TsiHandshakeHandler.TsiHandshakeCompletionEvent;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ObjectPool;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
+import io.grpc.netty.InternalProtocolNegotiator.ProtocolNegotiator;
 import io.grpc.netty.InternalProtocolNegotiators.AbstractBufferingHandler;
-import io.grpc.netty.ProtocolNegotiator;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AsciiString;
@@ -62,7 +62,7 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
     final class ClientAltsProtocolNegotiator extends AltsProtocolNegotiator {
 
       @Override
-      public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
         TsiHandshaker handshaker = handshakerFactory.newHandshaker(grpcHandler.getAuthority());
         return new BufferUntilAltsNegotiatedHandler(
             grpcHandler,
@@ -80,13 +80,18 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
     return new ClientAltsProtocolNegotiator();
   }
 
+  @Override
+  public final AsciiString scheme() {
+    return scheme;
+  }
+
   /** Creates a negotiator used for ALTS server. */
   public static AltsProtocolNegotiator createServerNegotiator(
       final TsiHandshakerFactory handshakerFactory, final LazyChannel lazyHandshakerChannel) {
     final class ServerAltsProtocolNegotiator extends AltsProtocolNegotiator {
 
       @Override
-      public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
         TsiHandshaker handshaker = handshakerFactory.newHandshaker(/*authority=*/ null);
         return new BufferUntilAltsNegotiatedHandler(
             grpcHandler,
@@ -134,8 +139,7 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
 
   /** Buffers all writes until the ALTS handshake is complete. */
   @VisibleForTesting
-  static final class BufferUntilAltsNegotiatedHandler extends AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
+  static final class BufferUntilAltsNegotiatedHandler extends AbstractBufferingHandler {
 
     private final GrpcHttp2ConnectionHandler grpcHandler;
 
@@ -153,11 +157,6 @@ public abstract class AltsProtocolNegotiator implements ProtocolNegotiator {
       logger.log(Level.FINEST, "Exception while buffering for ALTS Negotiation", cause);
       fail(ctx, cause);
       ctx.fireExceptionCaught(cause);
-    }
-
-    @Override
-    public AsciiString scheme() {
-      return scheme;
     }
 
     @Override

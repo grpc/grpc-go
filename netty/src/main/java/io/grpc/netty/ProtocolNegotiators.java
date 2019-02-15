@@ -29,7 +29,6 @@ import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -38,7 +37,6 @@ import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -85,8 +83,8 @@ final class ProtocolNegotiators {
   public static ProtocolNegotiator serverPlaintext() {
     return new ProtocolNegotiator() {
       @Override
-      public Handler newHandler(final GrpcHttp2ConnectionHandler handler) {
-        class PlaintextHandler extends ChannelHandlerAdapter implements Handler {
+      public ChannelHandler newHandler(final GrpcHttp2ConnectionHandler handler) {
+        class PlaintextHandler extends ChannelHandlerAdapter {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
             // Set sttributes before replace to be sure we pass it before accepting any requests.
@@ -98,11 +96,6 @@ final class ProtocolNegotiators {
             // Just replace this handler with the gRPC handler.
             ctx.pipeline().replace(this, null, handler);
           }
-
-          @Override
-          public AsciiString scheme() {
-            return Utils.HTTP;
-          }
         }
 
         return new PlaintextHandler();
@@ -110,6 +103,11 @@ final class ProtocolNegotiators {
 
       @Override
       public void close() {}
+
+      @Override
+      public AsciiString scheme() {
+        return Utils.HTTP;
+      }
     };
   }
 
@@ -120,18 +118,23 @@ final class ProtocolNegotiators {
     Preconditions.checkNotNull(sslContext, "sslContext");
     return new ProtocolNegotiator() {
       @Override
-      public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
+      public ChannelHandler newHandler(GrpcHttp2ConnectionHandler handler) {
         return new ServerTlsHandler(sslContext, handler);
       }
 
       @Override
       public void close() {}
+
+
+      @Override
+      public AsciiString scheme() {
+        return Utils.HTTPS;
+      }
     };
   }
 
   @VisibleForTesting
-  static final class ServerTlsHandler extends ChannelInboundHandlerAdapter
-      implements ProtocolNegotiator.Handler {
+  static final class ServerTlsHandler extends ChannelInboundHandlerAdapter {
     private final GrpcHttp2ConnectionHandler grpcHandler;
     private final SslContext sslContext;
 
@@ -191,11 +194,6 @@ final class ProtocolNegotiators {
       logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
       ctx.close();
     }
-
-    @Override
-    public AsciiString scheme() {
-      return Utils.HTTPS;
-    }
   }
 
   /**
@@ -204,11 +202,12 @@ final class ProtocolNegotiators {
   public static ProtocolNegotiator httpProxy(final SocketAddress proxyAddress,
       final @Nullable String proxyUsername, final @Nullable String proxyPassword,
       final ProtocolNegotiator negotiator) {
+    final AsciiString scheme = negotiator.scheme();
     Preconditions.checkNotNull(proxyAddress, "proxyAddress");
     Preconditions.checkNotNull(negotiator, "negotiator");
     class ProxyNegotiator implements ProtocolNegotiator {
       @Override
-      public Handler newHandler(GrpcHttp2ConnectionHandler http2Handler) {
+      public ChannelHandler newHandler(GrpcHttp2ConnectionHandler http2Handler) {
         HttpProxyHandler proxyHandler;
         if (proxyUsername == null || proxyPassword == null) {
           proxyHandler = new HttpProxyHandler(proxyAddress);
@@ -217,6 +216,11 @@ final class ProtocolNegotiators {
         }
         return new BufferUntilProxyTunnelledHandler(
             proxyHandler, negotiator.newHandler(http2Handler));
+      }
+
+      @Override
+      public AsciiString scheme() {
+        return scheme;
       }
 
       // This method is not normally called, because we use httpProxy on a per-connection basis in
@@ -233,20 +237,12 @@ final class ProtocolNegotiators {
   /**
    * Buffers all writes until the HTTP CONNECT tunnel is established.
    */
-  static final class BufferUntilProxyTunnelledHandler extends AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
-    private final ProtocolNegotiator.Handler originalHandler;
+  static final class BufferUntilProxyTunnelledHandler extends AbstractBufferingHandler {
+    private final ChannelHandler originalHandler;
 
-    public BufferUntilProxyTunnelledHandler(
-        ProxyHandler proxyHandler, ProtocolNegotiator.Handler handler) {
+    public BufferUntilProxyTunnelledHandler(ProxyHandler proxyHandler, ChannelHandler handler) {
       super(proxyHandler, handler);
       this.originalHandler = handler;
-    }
-
-
-    @Override
-    public AsciiString scheme() {
-      return originalHandler.scheme();
     }
 
     @Override
@@ -313,7 +309,7 @@ final class ProtocolNegotiators {
     }
 
     @Override
-    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
+    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler handler) {
       final HostPort hostPort = parseAuthority(handler.getAuthority());
 
       ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
@@ -327,6 +323,11 @@ final class ProtocolNegotiators {
         }
       };
       return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
+    }
+
+    @Override
+    public AsciiString scheme() {
+      return Utils.HTTPS;
     }
 
     @Override
@@ -355,7 +356,7 @@ final class ProtocolNegotiators {
   static final class PlaintextUpgradeNegotiator implements ProtocolNegotiator {
 
     @Override
-    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
+    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler handler) {
       // Register the plaintext upgrader
       Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
       HttpClientCodec httpClientCodec = new HttpClientCodec();
@@ -363,6 +364,11 @@ final class ProtocolNegotiators {
           new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
       return new BufferingHttp2UpgradeHandler(httpClientCodec, upgrader, handler,
           handler.getAuthority());
+    }
+
+    @Override
+    public AsciiString scheme() {
+      return Utils.HTTP;
     }
 
     @Override
@@ -632,8 +638,7 @@ final class ProtocolNegotiators {
   /**
    * Buffers all writes until the TLS Handshake is complete.
    */
-  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
+  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler {
 
     private final GrpcHttp2ConnectionHandler grpcHandler;
 
@@ -641,11 +646,6 @@ final class ProtocolNegotiators {
         ChannelHandler bootstrapHandler, GrpcHttp2ConnectionHandler grpcHandler) {
       super(bootstrapHandler);
       this.grpcHandler = grpcHandler;
-    }
-
-    @Override
-    public AsciiString scheme() {
-      return Utils.HTTPS;
     }
 
     @Override
@@ -691,8 +691,7 @@ final class ProtocolNegotiators {
   /**
    * Buffers all writes until the HTTP to HTTP/2 upgrade is complete.
    */
-  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler
-      implements ProtocolNegotiator.Handler {
+  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler {
 
     private final GrpcHttp2ConnectionHandler grpcHandler;
 
@@ -703,11 +702,6 @@ final class ProtocolNegotiators {
       super(handler, upgradeHandler);
       this.grpcHandler = grpcHandler;
       this.authority = authority;
-    }
-
-    @Override
-    public AsciiString scheme() {
-      return Utils.HTTP;
     }
 
     @Override
@@ -798,40 +792,18 @@ final class ProtocolNegotiators {
   static final class PlaintextProtocolNegotiator implements ProtocolNegotiator {
 
     @Override
-    public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
       ChannelHandler grpcNegotiationHandler = new GrpcNegotiationHandler(grpcHandler);
       ChannelHandler activeHandler = new WaitUntilActiveHandler(grpcNegotiationHandler);
-      PlaintextProtocolNegotiator.Handler initHandler = new InitHandler(Utils.HTTP, activeHandler);
-      return initHandler;
+      return activeHandler;
     }
 
     @Override
     public void close() {}
-  }
-
-  /**
-   * A {@link ProtocolNegotiator.Handler} that installs the next handler in the pipeline.  This
-   * is likely the first handler returned by a {@link ProtocolNegotiator}.
-   */
-  static final class InitHandler extends ChannelInitializer<Channel>
-      implements ProtocolNegotiator.Handler {
-
-    private final AsciiString scheme;
-    private final ChannelHandler next;
-
-    public InitHandler(AsciiString scheme, ChannelHandler next) {
-      this.scheme = checkNotNull(scheme, "scheme");
-      this.next = checkNotNull(next, "next");
-    }
-
-    @Override
-    protected void initChannel(Channel ch) {
-      ch.pipeline().addFirst(/*name=*/ null, next);
-    }
 
     @Override
     public AsciiString scheme() {
-      return scheme;
+      return Utils.HTTP;
     }
   }
 

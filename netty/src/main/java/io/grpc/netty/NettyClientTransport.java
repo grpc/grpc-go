@@ -80,8 +80,8 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final long keepAliveTimeNanos;
   private final long keepAliveTimeoutNanos;
   private final boolean keepAliveWithoutCalls;
+  private final AsciiString negotiationScheme;
   private final Runnable tooManyPingsRunnable;
-  private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
@@ -104,6 +104,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       Runnable tooManyPingsRunnable, TransportTracer transportTracer, Attributes eagAttributes,
       LocalSocketPicker localSocketPicker) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
+    this.negotiationScheme = this.negotiator.scheme();
     this.remoteAddress = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelFactory = channelFactory;
@@ -177,7 +178,7 @@ class NettyClientTransport implements ConnectionClientTransport {
         headers,
         channel,
         authority,
-        negotiationHandler.scheme(),
+        negotiationScheme,
         userAgent,
         statsTraceCtx,
         transportTracer,
@@ -208,7 +209,7 @@ class NettyClientTransport implements ConnectionClientTransport {
         authorityString);
     NettyHandlerSettings.setAutoWindow(handler);
 
-    negotiationHandler = negotiator.newHandler(handler);
+    ChannelHandler negotiationHandler = negotiator.newHandler(handler);
 
     Bootstrap b = new Bootstrap();
     b.group(eventLoop);

@@ -25,8 +25,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Attributes;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
-import io.grpc.netty.ProtocolNegotiator;
-import io.grpc.netty.ProtocolNegotiator.Handler;
+import io.grpc.netty.InternalProtocolNegotiator.ProtocolNegotiator;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,7 +51,7 @@ public final class GoogleDefaultProtocolNegotiatorTest {
         Attributes.newBuilder().set(GrpcAttributes.ATTR_LB_PROVIDED_BACKEND, true).build();
     GrpcHttp2ConnectionHandler mockHandler = mock(GrpcHttp2ConnectionHandler.class);
     when(mockHandler.getEagAttributes()).thenReturn(eagAttributes);
-    Handler handler = googleProtocolNegotiator.newHandler(mockHandler);
+    googleProtocolNegotiator.newHandler(mockHandler);
     verify(altsProtocolNegotiator, times(1)).newHandler(mockHandler);
     verify(tlsProtocolNegotiator, never()).newHandler(mockHandler);
   }
@@ -62,7 +61,7 @@ public final class GoogleDefaultProtocolNegotiatorTest {
     Attributes eagAttributes = Attributes.EMPTY;
     GrpcHttp2ConnectionHandler mockHandler = mock(GrpcHttp2ConnectionHandler.class);
     when(mockHandler.getEagAttributes()).thenReturn(eagAttributes);
-    Handler handler = googleProtocolNegotiator.newHandler(mockHandler);
+    googleProtocolNegotiator.newHandler(mockHandler);
     verify(altsProtocolNegotiator, never()).newHandler(mockHandler);
     verify(tlsProtocolNegotiator, times(1)).newHandler(mockHandler);
   }

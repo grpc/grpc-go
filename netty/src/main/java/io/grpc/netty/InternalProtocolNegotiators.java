@@ -19,6 +19,7 @@ package io.grpc.netty;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.ssl.SslContext;
+import io.netty.util.AsciiString;
 
 /**
  * Internal accessor for {@link ProtocolNegotiators}.
@@ -46,7 +47,26 @@ public final class InternalProtocolNegotiators {
    * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
    * may happen immediately, even before the TLS Handshake is complete.
    */
-  public static ProtocolNegotiator tls(SslContext sslContext) {
-    return ProtocolNegotiators.tls(sslContext);
+  public static InternalProtocolNegotiator.ProtocolNegotiator tls(SslContext sslContext) {
+    final io.grpc.netty.ProtocolNegotiator negotiator = ProtocolNegotiators.tls(sslContext);
+    final class TlsNegotiator implements InternalProtocolNegotiator.ProtocolNegotiator {
+
+      @Override
+      public AsciiString scheme() {
+        return negotiator.scheme();
+      }
+
+      @Override
+      public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+        return negotiator.newHandler(grpcHandler);
+      }
+
+      @Override
+      public void close() {
+        negotiator.close();
+      }
+    }
+    
+    return new TlsNegotiator();
   }
 }

@@ -20,9 +20,11 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.alts.internal.AltsProtocolNegotiator.LazyChannel;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.netty.GrpcHttp2ConnectionHandler;
+import io.grpc.netty.InternalProtocolNegotiator.ProtocolNegotiator;
 import io.grpc.netty.InternalProtocolNegotiators;
-import io.grpc.netty.ProtocolNegotiator;
+import io.netty.channel.ChannelHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.util.AsciiString;
 
 /** A client-side GPRC {@link ProtocolNegotiator} for Google Default Channel. */
 public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator {
@@ -38,6 +40,12 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
     tlsProtocolNegotiator = InternalProtocolNegotiators.tls(sslContext);
   }
 
+  @Override
+  public AsciiString scheme() {
+    assert tlsProtocolNegotiator.scheme().equals(altsProtocolNegotiator.scheme());
+    return tlsProtocolNegotiator.scheme();
+  }
+
   @VisibleForTesting
   GoogleDefaultProtocolNegotiator(
       ProtocolNegotiator altsProtocolNegotiator, ProtocolNegotiator tlsProtocolNegotiator) {
@@ -46,7 +54,7 @@ public final class GoogleDefaultProtocolNegotiator implements ProtocolNegotiator
   }
 
   @Override
-  public Handler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+  public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
     if (grpcHandler.getEagAttributes().get(GrpcAttributes.ATTR_LB_ADDR_AUTHORITY) != null
         || grpcHandler.getEagAttributes().get(GrpcAttributes.ATTR_LB_PROVIDED_BACKEND) != null) {
       return altsProtocolNegotiator.newHandler(grpcHandler);
