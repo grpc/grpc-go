@@ -849,7 +849,7 @@ func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
 	// Allow for at least 2 keepalives (1s per ping interval)
-	time.Sleep(4000 * time.Millisecond)
+	time.Sleep(4 * time.Second)
 	cancel()
 }
 

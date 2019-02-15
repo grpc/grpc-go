@@ -948,10 +948,11 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		}
 		defer conn.Close()
 		f := http2.NewFramer(conn, conn)
+		// Start a goroutine to read from the conn to prevent the client from
+		// blocking after it writes its preface.
 		go func() {
 			for {
-				fr, err := f.ReadFrame()
-				if err != nil {
+				if _, err := f.ReadFrame(); err != nil {
 					return
 				}
 			}
