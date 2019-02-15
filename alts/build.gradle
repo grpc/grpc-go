@@ -27,10 +27,10 @@ dependencies {
             libraries.lang,
             libraries.protobuf
     compile (libraries.google_auth_oauth2_http) {
-        // prefer 3.0.2 from libraries instead of 1.3.9
-        exclude group: 'com.google.code.findbugs', module: 'jsr305'
-        // prefer 20.0 from libraries instead of 19.0
+        // prefer 26.0-android from libraries instead of 25.1-android
         exclude group: 'com.google.guava', module: 'guava'
+        // prefer 0.19.2 from libraries instead of 0.18.0
+        exclude group: 'io.opencensus', module: 'opencensus-api'
     }
     compileOnly libraries.javax_annotation
     runtime project(':grpc-grpclb')
