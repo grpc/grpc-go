@@ -55,7 +55,7 @@ func main() {
 	fmt.Println("Performing unary request")
 	res, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "keepalive demo"})
 	if err != nil {
-		log.Fatal("unexpected error from UnaryEcho: %v", err)
+		log.Fatalf("unexpected error from UnaryEcho: %v", err)
 	}
 	fmt.Println("RPC response:", res)
 	select {} // Block forever; run with GODEBUG=http2debug=2 to observe ping frames and GOAWAYs due to idleness.
