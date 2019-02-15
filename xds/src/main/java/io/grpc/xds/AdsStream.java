@@ -18,11 +18,11 @@ package io.grpc.xds;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import io.envoyproxy.envoy.api.v2.DiscoveryRequest;
+import io.envoyproxy.envoy.api.v2.DiscoveryResponse;
+import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceStub;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import io.grpc.xds.shaded.envoy.api.v2.DiscoveryRequest;
-import io.grpc.xds.shaded.envoy.api.v2.DiscoveryResponse;
-import io.grpc.xds.shaded.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceStub;
 
 /**
  * ADS client implementation.

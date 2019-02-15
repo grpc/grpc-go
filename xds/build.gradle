@@ -3,9 +3,15 @@ buildscript {
     repositories {
         maven { // The google mirror is less flaky than mavenCentral()
             url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
+        gradlePluginPortal()
     }
-    dependencies { classpath libraries.protobuf_plugin }
+    dependencies {
+        classpath libraries.protobuf_plugin
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    }
 }
+
+apply plugin: 'com.github.johnrengelman.shadow'
 
 description = "gRPC: XDS plugin"
 
@@ -18,14 +24,15 @@ description = "gRPC: XDS plugin"
 
 dependencies {
     compile project(':grpc-protobuf'),
-            project(':grpc-stub'),
-            project(':grpc-testing')
+            project(':grpc-stub')
     compile (libraries.protobuf_util) {
         // prefer 20.0 from libraries instead of 19.0
         exclude group: 'com.google.guava', module: 'guava'
     }
 
     compileOnly libraries.javax_annotation
+    
+    testCompile project(':grpc-testing')
     signature "org.codehaus.mojo.signature:java17:1.0@signature"
 }
 
@@ -42,3 +49,26 @@ if (rootProject.childProjects.containsKey('grpc-compiler')) {
 }
 
 configureProtoCompilation()
+
+jar {
+    classifier = 'original'
+}
+
+shadowJar {
+    classifier = null
+    dependencies {
+        include(project(':grpc-xds'))
+    }
+    relocate 'io.envoyproxy', 'io.grpc.xds.shaded.io.envoyproxy'
+    relocate 'validate', 'io.grpc.xds.shaded.com.lyft.pgv.validate'
+    exclude "**/*.proto"
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifact shadowJar
+            artifacts.removeAll { it.classifier == 'original' }
+        }
+    }
+}
