@@ -40,19 +40,20 @@ type Features struct {
 	RespSizeBytes      int
 	EnableCompressor   bool
 	EnableChannelz     bool
+	EnablePreloader    bool
 }
 
 // String returns the textual output of the Features as string.
 func (f Features) String() string {
 	return fmt.Sprintf("traceMode_%t-latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t", f.EnableTrace,
-		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor)
+		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t-Preloader_%t", f.EnableTrace,
+		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor, f.EnablePreloader)
 }
 
 // ConciseString returns the concise textual output of the Features as string, skipping
 // setting with default value.
 func (f Features) ConciseString() string {
-	noneEmptyPos := []bool{f.EnableTrace, f.Latency != 0, f.Kbps != 0, f.Mtu != 0, true, true, true, f.EnableCompressor, f.EnableChannelz}
+	noneEmptyPos := []bool{f.EnableTrace, f.Latency != 0, f.Kbps != 0, f.Mtu != 0, true, true, true, f.EnableCompressor, f.EnableChannelz, f.EnablePreloader}
 	return PartialPrintString(noneEmptyPos, f, false)
 }
 
@@ -102,6 +103,9 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 	}
 	if noneEmptyPos[8] {
 		s += fmt.Sprintf("%sChannelz%s%t%s", prefix, linker, f.EnableChannelz, suffix)
+	}
+	if noneEmptyPos[9] {
+		s += fmt.Sprintf("%sPreloader%s%t%s", prefix, linker, f.EnablePreloader, suffix)
 	}
 	return s
 }
