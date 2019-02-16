@@ -45,8 +45,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -627,23 +625,23 @@ func after(data []stats.BenchResults) {
 }
 
 // nopCompressor is a compressor that just copies data.
-type nopCompressor struct{}
+// type nopCompressor struct{}
 
-func (nopCompressor) Do(w io.Writer, p []byte) error {
-	n, err := w.Write(p)
-	if err != nil {
-		return err
-	}
-	if n != len(p) {
-		return fmt.Errorf("nopCompressor.Write: wrote %v bytes; want %v", n, len(p))
-	}
-	return nil
-}
+// func (nopCompressor) Do(w io.Writer, p []byte) error {
+// 	n, err := w.Write(p)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if n != len(p) {
+// 		return fmt.Errorf("nopCompressor.Write: wrote %v bytes; want %v", n, len(p))
+// 	}
+// 	return nil
+// }
 
-func (nopCompressor) Type() string { return "nop" }
+// func (nopCompressor) Type() string { return "nop" }
 
-// nopDecompressor is a decompressor that just copies data.
-type nopDecompressor struct{}
+// // nopDecompressor is a decompressor that just copies data.
+// type nopDecompressor struct{}
 
-func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return ioutil.ReadAll(r) }
-func (nopDecompressor) Type() string                   { return "nop" }
+// func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return ioutil.ReadAll(r) }
+// func (nopDecompressor) Type() string                   { return "nop" }

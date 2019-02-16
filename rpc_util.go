@@ -686,9 +686,9 @@ func (r *rpcInfo) SetEncodingCompressor(e encoding.Compressor) {
 
 type rpcInfoContextKey struct{}
 
-func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
-	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{failfast: failfast})
-}
+// func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
+// 	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{failfast: failfast})
+// }
 
 func newContextWithRPCInfoPreloader(ctx context.Context, failfast bool, codec baseCodec, cp Compressor, comp encoding.Compressor) context.Context {
 	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{
