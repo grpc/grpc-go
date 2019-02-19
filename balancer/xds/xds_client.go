@@ -21,6 +21,8 @@ package xds
 import (
 	"context"
 	"net"
+	"sync"
+	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -32,37 +34,58 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 )
 
 const (
-	grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
-	cdsType      = "type.googleapis.com/envoy.xdspb.v2.Cluster"
-	edsType      = "type.googleapis.com/envoy.xdspb.v2.ClusterLoadAssignment"
+	grpcHostname     = "com.googleapis.trafficdirector.grpc_hostname"
+	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
+	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
+	endpointRequired = "endpoints_required"
 )
 
+var (
+	defaultBackoffConfig = backoff.Exponential{
+		MaxDelay: 120 * time.Second,
+	}
+)
+
+// client is responsible for connecting to the specified traffic director, passing the received
+// ADS response from the traffic director, and sending notification when communication with the
+// traffic director is lost.
 type client struct {
-	cc                 *grpc.ClientConn
 	ctx                context.Context
 	cancel             context.CancelFunc
+	cli                xdsdiscoverypb.AggregatedDiscoveryServiceClient
 	opts               balancer.BuildOptions
 	balancerName       string // the traffic director name
 	serviceName        string // the user dial target name
 	xdsClientConnCreds credentials.Bundle
 	xdsBackendCreds    credentials.Bundle
 	enableCDS          bool
-	newADS             func(resp interface{}) error
-	loseContact        func(startup bool)
+	newADS             func(ctx context.Context, resp proto.Message) error
+	loseContact        func(ctx context.Context)
+	cleanup            func()
+	backoff            backoff.Strategy
+
+	mu sync.Mutex
+	cc *grpc.ClientConn
 }
 
 func (c *client) run() {
-	c.loseContact(true)
 	c.dial()
 	c.makeADSCall()
 }
 
 func (c *client) close() {
 	c.cancel()
+	c.mu.Lock()
+	if c.cc != nil {
+		c.cc.Close()
+	}
+	c.mu.Unlock()
+	c.cleanup()
 }
 
 func (c *client) dial() {
@@ -91,13 +114,15 @@ func (c *client) dial() {
 		dopts = append(dopts, grpc.WithChannelzParentID(c.opts.ChannelzParentID))
 	}
 
-	var err error
-	c.cc, err = grpc.DialContext(c.ctx, c.balancerName, dopts...)
+	cc, err := grpc.DialContext(c.ctx, c.balancerName, dopts...)
 	// Since this is a non-blocking dial, so if it fails, it due to some serious error (not network
 	// related) error.
 	if err != nil {
-		grpclog.Fatalf("failed to dial: %v", err)
+		grpclog.Fatalf("xds: failed to dial: %v", err)
 	}
+	c.mu.Lock()
+	c.cc = cc
+	c.mu.Unlock()
 }
 
 func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
@@ -121,7 +146,7 @@ func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
 		Node: &xdscorepb.Node{
 			Metadata: &types.Struct{
 				Fields: map[string]*types.Value{
-					"endpoints_required": {
+					endpointRequired: {
 						Kind: &types.Value_BoolValue{BoolValue: c.enableCDS},
 					},
 				},
@@ -134,71 +159,98 @@ func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
 }
 
 func (c *client) makeADSCall() {
-	cli := xdsdiscoverypb.NewAggregatedDiscoveryServiceClient(c.cc)
-	for ; ; c.loseContact(false) {
+	c.cli = xdsdiscoverypb.NewAggregatedDiscoveryServiceClient(c.cc)
+	retryCount := 0
+	var doRetry bool
+
+	for {
 		select {
 		case <-c.ctx.Done():
-			break
+			return
+		default:
 		}
-		ctx, cancel := context.WithCancel(c.ctx)
-		st, err := cli.StreamAggregatedResources(ctx, grpc.WaitForReady(true))
-		if err != nil {
-			grpclog.Infof("xds: failed to initial ADS streaming RPC due to %v", err)
-			continue
-		}
-		if c.enableCDS {
-			if err := st.Send(c.newCDSRequest()); err != nil {
-				// current stream is broken, start a new one.
-				continue
+
+		if doRetry {
+			backoffTimer := time.NewTimer(c.backoff.Backoff(retryCount))
+			select {
+			case <-backoffTimer.C:
+			case <-c.ctx.Done():
+				backoffTimer.Stop()
+				return
 			}
+			retryCount++
 		}
-		if err := st.Send(c.newEDSRequest()); err != nil {
-			// current stream is broken, start a new one.
-			continue
+
+		firstRespReceived := c.adsCallAttempt()
+		if firstRespReceived {
+			retryCount = 0
+			doRetry = false
+		} else {
+			doRetry = true
 		}
-		for {
-			resp, err := st.Recv()
-			if err != nil {
-				// current stream is broken, start a new one.
-				break
-			}
-			resources := resp.GetResources()
-			if len(resources) < 1 {
-				grpclog.Warning("xds: ADS response contains 0 resource info.")
-				// cancel this RPC as server misbehaves by sending a ADS response with 0 resource info.
-				cancel()
-				break
-			}
-			switch resp.GetTypeUrl() {
-			case cdsType:
-				cdsResp := &xdspb.Cluster{}
-				if err := proto.Unmarshal(resources[0].GetValue(), cdsResp); err != nil {
-					cancel()
-					break
-				}
-				if err := c.newADS(cdsResp); err != nil {
-					cancel()
-					break
-				}
-			case edsType:
-				edsResp := &xdspb.ClusterLoadAssignment{}
-				if err := proto.Unmarshal(resources[0].GetValue(), edsResp); err != nil {
-					cancel()
-					break
-				}
-				if err := c.newADS(edsResp); err != nil {
-					cancel()
-					break
-				}
-			default:
-				grpclog.Warningf("xds: received response type not expected, type: %T, %v", resp, resp)
-				cancel()
-			}
-		}
+		c.loseContact(c.ctx)
 	}
 }
 
-func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, newADS func(interface{}) error, loseContact func(bool)) *client {
+func (c *client) adsCallAttempt() (firstRespReceived bool) {
+	firstRespReceived = false
+	ctx, cancel := context.WithCancel(c.ctx)
+	defer cancel()
+	st, err := c.cli.StreamAggregatedResources(ctx, grpc.WaitForReady(true))
+	if err != nil {
+		grpclog.Infof("xds: failed to initial ADS streaming RPC due to %v", err)
+		return
+	}
+	if c.enableCDS {
+		if err := st.Send(c.newCDSRequest()); err != nil {
+			// current stream is broken, start a new one.
+			return
+		}
+	}
+	if err := st.Send(c.newEDSRequest()); err != nil {
+		// current stream is broken, start a new one.
+		return
+	}
+	expectCDS := c.enableCDS
+	for {
+		resp, err := st.Recv()
+		if err != nil {
+			// current stream is broken, start a new one.
+			return
+		}
+		firstRespReceived = true
+		resources := resp.GetResources()
+		if len(resources) < 1 {
+			grpclog.Warning("xds: ADS response contains 0 resource info.")
+			// start a new call as server misbehaves by sending a ADS response with 0 resource info.
+			return
+		}
+		if resp.GetTypeUrl() == cdsType && !c.enableCDS {
+			grpclog.Warning("xds: received CDS response in custom plugin mode.")
+			// start a new call as we receive CDS response when in EDS-only mode.
+			return
+		}
+		var adsResp types.DynamicAny
+		if err := types.UnmarshalAny(&resources[0], &adsResp); err != nil {
+			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
+			return
+		}
+		switch adsResp.Message.(type) {
+		case *xdspb.Cluster:
+			expectCDS = false
+		case *xdspb.ClusterLoadAssignment:
+			if expectCDS {
+				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
+				return
+			}
+		}
+		if err := c.newADS(c.ctx, adsResp.Message); err != nil {
+			grpclog.Warningf("xds: processing new ADS message failed due to %v.", err)
+			return
+		}
+	}
+}
+func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		balancerName: balancerName,
 		serviceName:  serviceName,
@@ -206,6 +258,8 @@ func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts 
 		opts:         opts,
 		newADS:       newADS,
 		loseContact:  loseContact,
+		cleanup:      exitCleanup,
+		backoff:      defaultBackoffConfig,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())

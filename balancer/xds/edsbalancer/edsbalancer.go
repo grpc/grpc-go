@@ -16,7 +16,6 @@
  *
  */
 
-// Package edsbalancer ...
 package edsbalancer
 
 // TODO: this file is used as a place holder. It should be deleted after edsbalancer implementation
@@ -31,29 +30,29 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type DummyEdsBalancer struct{}
+type dummyEdsBalancer struct{}
 
-func (d *DummyEdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (d *dummyEdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	panic("implement me")
 }
 
-func (d *DummyEdsBalancer) HandleResolvedAddrs([]resolver.Address, error) {
+func (d *dummyEdsBalancer) HandleResolvedAddrs([]resolver.Address, error) {
 	panic("implement me")
 }
 
-func (d *DummyEdsBalancer) Close() {
+func (d *dummyEdsBalancer) Close() {
 	panic("implement me")
 }
 
-func (d *DummyEdsBalancer) HandleEDSResponse(edsResp *v2.ClusterLoadAssignment) {
+func (d *dummyEdsBalancer) HandleEDSResponse(edsResp *v2.ClusterLoadAssignment) {
 	panic("implement me")
 }
 
-func (d *DummyEdsBalancer) HandleChildPolicy(name string, config json.RawMessage) {
+func (d *dummyEdsBalancer) HandleChildPolicy(name string, config json.RawMessage) {
 	panic("implement me")
 }
 
 // NewXDSBalancer creates an edsBalancer
-func NewXDSBalancer(cc balancer.ClientConn) *DummyEdsBalancer {
-	return &DummyEdsBalancer{}
+func NewXDSBalancer(cc balancer.ClientConn) interface{} {
+	return &dummyEdsBalancer{}
 }
