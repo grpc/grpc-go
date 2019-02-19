@@ -64,6 +64,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -7128,30 +7129,10 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 }
 
-// A copy from http_util.go for testing.
-var httpStatusConvTab = map[int]codes.Code{
-	// 400 Bad Request - INTERNAL.
-	http.StatusBadRequest: codes.Internal,
-	// 401 Unauthorized  - UNAUTHENTICATED.
-	http.StatusUnauthorized: codes.Unauthenticated,
-	// 403 Forbidden - PERMISSION_DENIED.
-	http.StatusForbidden: codes.PermissionDenied,
-	// 404 Not Found - UNIMPLEMENTED.
-	http.StatusNotFound: codes.Unimplemented,
-	// 429 Too Many Requests - UNAVAILABLE.
-	http.StatusTooManyRequests: codes.Unavailable,
-	// 502 Bad Gateway - UNAVAILABLE.
-	http.StatusBadGateway: codes.Unavailable,
-	// 503 Service Unavailable - UNAVAILABLE.
-	http.StatusServiceUnavailable: codes.Unavailable,
-	// 504 Gateway timeout - UNAVAILABLE.
-	http.StatusGatewayTimeout: codes.Unavailable,
-}
-
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	// Non-gRPC content-type fallback path.
-	for httpCode := range httpStatusConvTab {
-		doHTTPHeaderTest(t, httpStatusConvTab[int(httpCode)], []string{
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
@@ -7160,8 +7141,8 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	}
 
 	// Missing content-type fallback path.
-	for httpCode := range httpStatusConvTab {
-		doHTTPHeaderTest(t, httpStatusConvTab[int(httpCode)], []string{
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			// Omitting content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
