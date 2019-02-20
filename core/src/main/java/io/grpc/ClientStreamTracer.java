@@ -53,24 +53,13 @@ public abstract class ClientStreamTracer extends StreamTracer {
     /**
      * Creates a {@link ClientStreamTracer} for a new client stream.
      *
-     * @deprecated Override/call {@link #newClientStreamTracer(CallOptions, Metadata)} instead. 
-     */
-    @Deprecated
-    public ClientStreamTracer newClientStreamTracer(Metadata headers) {
-      throw new UnsupportedOperationException("This method will be deleted. Do not call.");
-    }
-
-    /**
-     * Creates a {@link ClientStreamTracer} for a new client stream.
-     *
      * @param callOptions the effective CallOptions of the call
      * @param headers the mutable headers of the stream. It can be safely mutated within this
      *        method.  It should not be saved because it is not safe for read or write after the
      *        method returns.
      */
-    @SuppressWarnings("deprecation")
     public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
-      return newClientStreamTracer(headers);
+      throw new UnsupportedOperationException("Not implemented");
     }
   }
 }
