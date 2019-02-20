@@ -37,10 +37,14 @@ import javax.annotation.concurrent.ThreadSafe;
  * {@link Listener} is responsible for eventually (after an appropriate backoff period) invoking
  * {@link #refresh()}.
  *
+ * <p>Implementations <strong>don't need to be thread-safe</strong>.  All methods are guaranteed to
+ * be called sequentially.  Additionally, all methods that have side-effects, i.e., {@link #start},
+ * {@link #shutdown} and {@link #refresh} are called from the same {@link SynchronizationContext} as
+ * returned by {@link Helper#getSynchronizationContext}.
+ *
  * @since 1.0.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
-@ThreadSafe
 public abstract class NameResolver {
   /**
    * Returns the authority used to authenticate connections to servers.  It <strong>must</strong> be
@@ -209,18 +213,34 @@ public abstract class NameResolver {
 
   /**
    * A utility object passed to {@link Factory#newNameResolver(URI, NameResolver.Helper)}.
+   *
+   * @since 1.19.0
    */
   public abstract static class Helper {
     /**
      * The port number used in case the target or the underlying naming system doesn't provide a
      * port number.
+     *
+     * @since 1.19.0
      */
     public abstract int getDefaultPort();
 
     /**
      * If the NameResolver wants to support proxy, it should inquire this {@link ProxyDetector}.
      * See documentation on {@link ProxyDetector} about how proxies work in gRPC.
+     *
+     * @since 1.19.0
      */
     public abstract ProxyDetector getProxyDetector();
+
+    /**
+     * Returns the {@link SynchronizationContext} where {@link #start}, {@link #shutdown} and {@link
+     * #refresh} are run from.
+     *
+     * @since 1.20.0
+     */
+    public SynchronizationContext getSynchronizationContext() {
+      throw new UnsupportedOperationException("Not implemented");
+    }
   }
 }

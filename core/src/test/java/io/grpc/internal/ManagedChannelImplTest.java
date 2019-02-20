@@ -262,7 +262,12 @@ public class ManagedChannelImplTest {
       int numExpectedTasks = 0;
 
       // Force-exit the initial idle-mode
-      channel.exitIdleMode();
+      channel.syncContext.execute(new Runnable() {
+          @Override
+          public void run() {
+            channel.exitIdleMode();
+          }
+        });
       if (channelBuilder.idleTimeoutMillis != ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE) {
         numExpectedTasks += 1;
       }

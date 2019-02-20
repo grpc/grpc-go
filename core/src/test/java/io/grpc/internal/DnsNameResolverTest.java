@@ -42,6 +42,7 @@ import io.grpc.NameResolver;
 import io.grpc.ProxyDetector;
 import io.grpc.Status;
 import io.grpc.Status.Code;
+import io.grpc.SynchronizationContext;
 import io.grpc.internal.DnsNameResolver.AddressResolver;
 import io.grpc.internal.DnsNameResolver.ResolutionResults;
 import io.grpc.internal.DnsNameResolver.ResourceResolver;
@@ -95,7 +96,14 @@ public class DnsNameResolverTest {
   private final Map<String, Object> serviceConfig = new LinkedHashMap<>();
 
   private static final int DEFAULT_PORT = 887;
-  private static final NameResolver.Helper HELPER = new NameResolver.Helper() {
+  private final SynchronizationContext syncContext = new SynchronizationContext(
+      new Thread.UncaughtExceptionHandler() {
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+          throw new AssertionError(e);
+        }
+      });
+  private final NameResolver.Helper helper = new NameResolver.Helper() {
       @Override
       public int getDefaultPort() {
         return DEFAULT_PORT;
@@ -104,6 +112,11 @@ public class DnsNameResolverTest {
       @Override
       public ProxyDetector getProxyDetector() {
         return GrpcUtil.getDefaultProxyDetector();
+      }
+
+      @Override
+      public SynchronizationContext getSynchronizationContext() {
+        return syncContext;
       }
     };
 
@@ -132,27 +145,27 @@ public class DnsNameResolverTest {
   @Mock
   private RecordFetcher recordFetcher;
 
-  private DnsNameResolver newResolver(String name, int port) {
-    return newResolver(name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted());
+  private DnsNameResolver newResolver(String name, int defaultPort) {
+    return newResolver(
+        name, defaultPort, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted());
   }
 
-  private DnsNameResolver newResolver(String name, int port, boolean isAndroid) {
-    return
-        newResolver(
-            name, port, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(), isAndroid);
+  private DnsNameResolver newResolver(String name, int defaultPort, boolean isAndroid) {
+    return newResolver(
+        name, defaultPort, GrpcUtil.NOOP_PROXY_DETECTOR, Stopwatch.createUnstarted(), isAndroid);
   }
 
   private DnsNameResolver newResolver(
       String name,
-      int port,
+      int defaultPort,
       ProxyDetector proxyDetector,
       Stopwatch stopwatch) {
-    return newResolver(name, port, proxyDetector, stopwatch, false);
+    return newResolver(name, defaultPort, proxyDetector, stopwatch, false);
   }
 
   private DnsNameResolver newResolver(
       String name,
-      final int port,
+      final int defaultPort,
       final ProxyDetector proxyDetector,
       Stopwatch stopwatch,
       boolean isAndroid) {
@@ -162,12 +175,17 @@ public class DnsNameResolverTest {
         new NameResolver.Helper() {
           @Override
           public int getDefaultPort() {
-            return port;
+            return defaultPort;
           }
 
           @Override
           public ProxyDetector getProxyDetector() {
             return proxyDetector;
+          }
+
+          @Override
+          public SynchronizationContext getSynchronizationContext() {
+            return syncContext;
           }
         },
         fakeExecutorResource,
@@ -292,17 +310,16 @@ public class DnsNameResolverTest {
 
   @Test
   public void resolveAll_failsOnEmptyResult() throws Exception {
-    String hostname = "dns:///addr.fake:1234";
-    DnsNameResolver nrf =
-        new DnsNameResolverProvider().newNameResolver(new URI(hostname),  HELPER);
-    nrf.setAddressResolver(new AddressResolver() {
+    DnsNameResolver nr = newResolver("dns:///addr.fake:1234", 443);
+    nr.setAddressResolver(new AddressResolver() {
       @Override
       public List<InetAddress> resolveAddress(String host) throws Exception {
         return Collections.emptyList();
       }
     });
 
-    new DnsNameResolver.Resolve(nrf, Stopwatch.createUnstarted(), 0).resolveInternal(mockListener);
+    nr.start(mockListener);
+    assertThat(fakeExecutor.runDueTasks()).isEqualTo(1);
 
     ArgumentCaptor<Status> ac = ArgumentCaptor.forClass(Status.class);
     verify(mockListener).onError(ac.capture());
@@ -334,10 +351,9 @@ public class DnsNameResolverTest {
 
     fakeTicker.advance(1, TimeUnit.DAYS);
     resolver.refresh();
-    assertEquals(1, fakeExecutor.runDueTasks());
-    verifyNoMoreInteractions(mockListener);
-    assertAnswerMatches(answer1, 81, resultCaptor.getValue());
+    assertEquals(0, fakeExecutor.runDueTasks());
     assertEquals(0, fakeClock.numPendingTasks());
+    verifyNoMoreInteractions(mockListener);
 
     resolver.shutdown();
 
@@ -369,10 +385,9 @@ public class DnsNameResolverTest {
     // this refresh should return cached result
     fakeTicker.advance(ttl - 1, TimeUnit.SECONDS);
     resolver.refresh();
-    assertEquals(1, fakeExecutor.runDueTasks());
-    verifyNoMoreInteractions(mockListener);
-    assertAnswerMatches(answer, 81, resultCaptor.getValue());
+    assertEquals(0, fakeExecutor.runDueTasks());
     assertEquals(0, fakeClock.numPendingTasks());
+    verifyNoMoreInteractions(mockListener);
 
     resolver.shutdown();
 
@@ -444,10 +459,9 @@ public class DnsNameResolverTest {
 
     fakeTicker.advance(DnsNameResolver.DEFAULT_NETWORK_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
     resolver.refresh();
-    assertEquals(1, fakeExecutor.runDueTasks());
-    verifyNoMoreInteractions(mockListener);
-    assertAnswerMatches(answer1, 81, resultCaptor.getValue());
+    assertEquals(0, fakeExecutor.runDueTasks());
     assertEquals(0, fakeClock.numPendingTasks());
+    verifyNoMoreInteractions(mockListener);
 
     fakeTicker.advance(1, TimeUnit.SECONDS);
     resolver.refresh();
@@ -1006,7 +1020,7 @@ public class DnsNameResolverTest {
 
   private void testInvalidUri(URI uri) {
     try {
-      provider.newNameResolver(uri, HELPER);
+      provider.newNameResolver(uri, helper);
       fail("Should have failed");
     } catch (IllegalArgumentException e) {
       // expected
@@ -1014,7 +1028,7 @@ public class DnsNameResolverTest {
   }
 
   private void testValidUri(URI uri, String exportedAuthority, int expectedPort) {
-    DnsNameResolver resolver = provider.newNameResolver(uri, HELPER);
+    DnsNameResolver resolver = provider.newNameResolver(uri, helper);
     assertNotNull(resolver);
     assertEquals(expectedPort, resolver.getPort());
     assertEquals(exportedAuthority, resolver.getServiceAuthority());

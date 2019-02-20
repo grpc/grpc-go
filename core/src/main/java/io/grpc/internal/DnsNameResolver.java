@@ -30,6 +30,7 @@ import io.grpc.NameResolver;
 import io.grpc.ProxiedSocketAddress;
 import io.grpc.ProxyDetector;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -52,7 +53,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A DNS-based {@link NameResolver}.
@@ -138,19 +138,23 @@ final class DnsNameResolver extends NameResolver {
   private final String host;
   private final int port;
   private final Resource<Executor> executorResource;
-  @GuardedBy("this")
-  private boolean shutdown;
-  @GuardedBy("this")
-  private Executor executor;
-  @GuardedBy("this")
-  private boolean resolving;
-  @GuardedBy("this")
-  private Listener listener;
+  private final long cacheTtlNanos;
+  private final SynchronizationContext syncContext;
 
-  private final Runnable resolveRunnable;
+  // Following fields must be accessed from syncContext
+  private final Stopwatch stopwatch;
+  private ResolutionResults cachedResolutionResults;
+  private boolean shutdown;
+  private Executor executor;
+  private boolean resolving;
+
+  // The field must be accessed from syncContext, although the methods on a Listener can be called
+  // from any thread.
+  private Listener listener;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Helper helper,
       Resource<Executor> executorResource, Stopwatch stopwatch, boolean isAndroid) {
+    Preconditions.checkNotNull(helper, "helper");
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
     this.executorResource = executorResource;
@@ -167,16 +171,19 @@ final class DnsNameResolver extends NameResolver {
       port = nameUri.getPort();
     }
     this.proxyDetector = Preconditions.checkNotNull(helper.getProxyDetector(), "proxyDetector");
-    this.resolveRunnable = new Resolve(this, stopwatch, getNetworkAddressCacheTtlNanos(isAndroid));
+    this.cacheTtlNanos = getNetworkAddressCacheTtlNanos(isAndroid);
+    this.stopwatch = Preconditions.checkNotNull(stopwatch, "stopwatch");
+    this.syncContext =
+        Preconditions.checkNotNull(helper.getSynchronizationContext(), "syncContext");
   }
 
   @Override
-  public final String getServiceAuthority() {
+  public String getServiceAuthority() {
     return authority;
   }
 
   @Override
-  public final synchronized void start(Listener listener) {
+  public void start(Listener listener) {
     Preconditions.checkState(this.listener == null, "already started");
     executor = SharedResourceHolder.get(executorResource);
     this.listener = Preconditions.checkNotNull(listener, "listener");
@@ -184,64 +191,45 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Override
-  public final synchronized void refresh() {
+  public void refresh() {
     Preconditions.checkState(listener != null, "not started");
     resolve();
   }
 
-  @VisibleForTesting
-  static final class Resolve implements Runnable {
+  private final class Resolve implements Runnable {
+    private final Listener savedListener;
 
-    private final DnsNameResolver resolver;
-    private final Stopwatch stopwatch;
-    private final long cacheTtlNanos;
-    private ResolutionResults cachedResolutionResults = null;
-
-    Resolve(DnsNameResolver resolver, Stopwatch stopwatch, long cacheTtlNanos) {
-      this.resolver = resolver;
-      this.stopwatch = Preconditions.checkNotNull(stopwatch, "stopwatch");
-      this.cacheTtlNanos = cacheTtlNanos;
+    Resolve(Listener savedListener) {
+      this.savedListener = Preconditions.checkNotNull(savedListener, "savedListener");
     }
 
     @Override
     public void run() {
       if (logger.isLoggable(Level.FINER)) {
-        logger.finer("Attempting DNS resolution of " + resolver.host);
-      }
-      Listener savedListener;
-      synchronized (resolver) {
-        if (resolver.shutdown || !cacheRefreshRequired()) {
-          return;
-        }
-        savedListener = resolver.listener;
-        resolver.resolving = true;
+        logger.finer("Attempting DNS resolution of " + host);
       }
       try {
-        resolveInternal(savedListener);
+        resolveInternal();
       } finally {
-        synchronized (resolver) {
-          resolver.resolving = false;
-        }
+        syncContext.execute(new Runnable() {
+            @Override
+            public void run() {
+              resolving = false;
+            }
+          });
       }
-    }
-
-    private boolean cacheRefreshRequired() {
-      return cachedResolutionResults == null
-          || cacheTtlNanos == 0
-          || (cacheTtlNanos > 0 && stopwatch.elapsed(TimeUnit.NANOSECONDS) > cacheTtlNanos);
     }
 
     @VisibleForTesting
-    void resolveInternal(Listener savedListener) {
+    void resolveInternal() {
       InetSocketAddress destination =
-          InetSocketAddress.createUnresolved(resolver.host, resolver.port);
+          InetSocketAddress.createUnresolved(host, port);
       ProxiedSocketAddress proxiedAddr;
       try {
-        proxiedAddr = resolver.proxyDetector.proxyFor(destination);
+        proxiedAddr = proxyDetector.proxyFor(destination);
       } catch (IOException e) {
         savedListener.onError(
-            Status.UNAVAILABLE.withDescription("Unable to resolve host " + resolver.host)
-                .withCause(e));
+            Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
         return;
       }
       if (proxiedAddr != null) {
@@ -256,37 +244,42 @@ final class DnsNameResolver extends NameResolver {
       ResolutionResults resolutionResults;
       try {
         ResourceResolver resourceResolver = null;
-        if (shouldUseJndi(enableJndi, enableJndiLocalhost, resolver.host)) {
-          resourceResolver = resolver.getResourceResolver();
+        if (shouldUseJndi(enableJndi, enableJndiLocalhost, host)) {
+          resourceResolver = getResourceResolver();
         }
-        resolutionResults = resolveAll(
-            resolver.addressResolver,
+        final ResolutionResults results = resolveAll(
+            addressResolver,
             resourceResolver,
             enableSrv,
             enableTxt,
-            resolver.host);
-        cachedResolutionResults = resolutionResults;
-        if (cacheTtlNanos > 0) {
-          stopwatch.reset().start();
-        }
+            host);
+        resolutionResults = results;
+        syncContext.execute(new Runnable() {
+            @Override
+            public void run() {
+              cachedResolutionResults = results;
+              if (cacheTtlNanos > 0) {
+                stopwatch.reset().start();
+              }
+            }
+          });
         if (logger.isLoggable(Level.FINER)) {
-          logger.finer("Found DNS results " + resolutionResults + " for " + resolver.host);
+          logger.finer("Found DNS results " + resolutionResults + " for " + host);
         }
       } catch (Exception e) {
         savedListener.onError(
-            Status.UNAVAILABLE.withDescription("Unable to resolve host " + resolver.host)
-                .withCause(e));
+            Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
         return;
       }
       // Each address forms an EAG
       List<EquivalentAddressGroup> servers = new ArrayList<>();
       for (InetAddress inetAddr : resolutionResults.addresses) {
-        servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, resolver.port)));
+        servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
       }
       servers.addAll(resolutionResults.balancerAddresses);
       if (servers.isEmpty()) {
         savedListener.onError(Status.UNAVAILABLE.withDescription(
-            "No DNS backend or balancer addresses found for " + resolver.host));
+            "No DNS backend or balancer addresses found for " + host));
         return;
       }
 
@@ -298,7 +291,7 @@ final class DnsNameResolver extends NameResolver {
               parseTxtResults(resolutionResults.txtRecords)) {
             try {
               serviceConfig =
-                  maybeChooseServiceConfig(possibleConfig, resolver.random, getLocalHostname());
+                  maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
             } catch (RuntimeException e) {
               logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
             }
@@ -313,22 +306,28 @@ final class DnsNameResolver extends NameResolver {
           attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig);
         }
       } else {
-        logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{resolver.host});
+        logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
       }
       savedListener.onAddresses(servers, attrs.build());
     }
   }
 
-  @GuardedBy("this")
   private void resolve() {
-    if (resolving || shutdown) {
+    if (resolving || shutdown || !cacheRefreshRequired()) {
       return;
     }
-    executor.execute(resolveRunnable);
+    resolving = true;
+    executor.execute(new Resolve(listener));
+  }
+
+  private boolean cacheRefreshRequired() {
+    return cachedResolutionResults == null
+        || cacheTtlNanos == 0
+        || (cacheTtlNanos > 0 && stopwatch.elapsed(TimeUnit.NANOSECONDS) > cacheTtlNanos);
   }
 
   @Override
-  public final synchronized void shutdown() {
+  public void shutdown() {
     if (shutdown) {
       return;
     }

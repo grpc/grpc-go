@@ -310,6 +310,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
   // Must be called from syncContext
   private void shutdownNameResolverAndLoadBalancer(boolean channelIsActive) {
+    syncContext.throwIfNotInThisSynchronizationContext();
     if (channelIsActive) {
       checkState(nameResolverStarted, "nameResolver is not started");
       checkState(lbHelper != null, "lbHelper is null");
@@ -338,6 +339,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
    */
   @VisibleForTesting
   void exitIdleMode() {
+    syncContext.throwIfNotInThisSynchronizationContext();
     if (shutdown.get() || panicMode) {
       return;
     }
@@ -556,6 +558,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
         @Override
         public ProxyDetector getProxyDetector() {
           return proxyDetector;
+        }
+
+        @Override
+        public SynchronizationContext getSynchronizationContext() {
+          return syncContext;
         }
       };
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverHelper);
