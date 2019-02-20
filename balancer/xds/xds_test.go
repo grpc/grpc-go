@@ -316,6 +316,11 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	}
 
 	var cleanups []func()
+	defer func() {
+		for _, cleanup := range cleanups {
+			cleanup()
+		}
+	}()
 	// In the first iteration, an eds balancer takes over fallback balancer
 	// In the second iteration, a new xds client takes over previous one.
 	for i := 0; i < 2; i++ {
@@ -334,10 +339,14 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 
 		var j int
 		for j = 0; j < 10; j++ {
-			if edsLB := getLatestEdsalancer(); edsLB != nil { //edsLB won't change between the two iterations
-				gotEDS := <-edsLB.edsChan
-				if !reflect.DeepEqual(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
-					t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignmentWithoutEndpoints)
+			if edsLB := getLatestEdsalancer(); edsLB != nil { // edsLB won't change between the two iterations
+				select {
+				case gotEDS := <-edsLB.edsChan:
+					if !reflect.DeepEqual(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
+						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignmentWithoutEndpoints)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("haven't got EDS update after 1s")
 				}
 				break
 			}
@@ -346,9 +355,6 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 		if j == 10 {
 			t.Fatal("edsBalancer instance has not been created or updated after 1s")
 		}
-	}
-	for _, cleanup := range cleanups {
-		cleanup()
 	}
 }
 
@@ -369,6 +375,11 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 	defer lb.Close()
 
 	var cleanups []func()
+	defer func() {
+		for _, cleanup := range cleanups {
+			cleanup()
+		}
+	}()
 	for _, test := range []struct {
 		cfg                 *testBalancerConfig
 		responseToSend      *xdspb.DiscoveryResponse
@@ -415,9 +426,13 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		var i int
 		for i = 0; i < 10; i++ {
 			if edsLB := getLatestEdsalancer(); edsLB != nil {
-				childPolicy := <-edsLB.childPolicy
-				if !reflect.DeepEqual(childPolicy, test.expectedChildPolicy) {
-					t.Fatalf("got childPolicy %v, want %v", childPolicy, test.expectedChildPolicy)
+				select {
+				case childPolicy := <-edsLB.childPolicy:
+					if !reflect.DeepEqual(childPolicy, test.expectedChildPolicy) {
+						t.Fatalf("got childPolicy %v, want %v", childPolicy, test.expectedChildPolicy)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("haven't got policy update after 1s")
 				}
 				break
 			}
@@ -426,9 +441,6 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		if i == 10 {
 			t.Fatal("edsBalancer instance has not been created or updated after 1s")
 		}
-	}
-	for _, cleanup := range cleanups {
-		cleanup()
 	}
 }
 
@@ -526,7 +538,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	defer lb.Close()
 
 	addr, td, cleanup := setupServer(t)
-
+	defer cleanup()
 	cfg := &testBalancerConfig{
 		BalancerName:   addr,
 		ChildPolicy:    []lbPolicy{fakeBalancerA},
@@ -549,9 +561,13 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	for i = 0; i < 10; i++ {
 		if edsLB := getLatestEdsalancer(); edsLB != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
-			scsc := <-edsLB.subconnStateChange
-			if !reflect.DeepEqual(scsc, expectedScStateChange) {
-				t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+			select {
+			case scsc := <-edsLB.subconnStateChange:
+				if !reflect.DeepEqual(scsc, expectedScStateChange) {
+					t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("haven't got subconn state change after 1s")
 			}
 			break
 		}
@@ -571,13 +587,20 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	for i = 0; i < 10; i++ {
 		if fblb := lbABuilder.getLastBalancer(); fblb != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
-			scsc := <-fblb.subconnStateChange
-			if !reflect.DeepEqual(scsc, expectedScStateChange) {
-				t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+			select {
+			case scsc := <-fblb.subconnStateChange:
+				if !reflect.DeepEqual(scsc, expectedScStateChange) {
+					t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("haven't got subconn state change after 1s")
 			}
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if i == 10 {
+		t.Fatal("balancerA instance has not been created after 1s")
 	}
 }
 
@@ -595,7 +618,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	defer lb.Close()
 
 	addr, td, cleanup := setupServer(t)
-
+	defer cleanup()
 	cfg := &testBalancerConfig{
 		BalancerName:   addr,
 		ChildPolicy:    []lbPolicy{fakeBalancerA},
@@ -618,9 +641,13 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	for i = 0; i < 10; i++ {
 		if edsLB := getLatestEdsalancer(); edsLB != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
-			scsc := <-edsLB.subconnStateChange
-			if !reflect.DeepEqual(scsc, expectedScStateChange) {
-				t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+			select {
+			case scsc := <-edsLB.subconnStateChange:
+				if !reflect.DeepEqual(scsc, expectedScStateChange) {
+					t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("haven't got subconn state change after 1s")
 			}
 			break
 		}
@@ -640,13 +667,20 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	for i = 0; i < 10; i++ {
 		if fblb := lbABuilder.getLastBalancer(); fblb != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
-			scsc := <-fblb.subconnStateChange
-			if !reflect.DeepEqual(scsc, expectedScStateChange) {
-				t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+			select {
+			case scsc := <-fblb.subconnStateChange:
+				if !reflect.DeepEqual(scsc, expectedScStateChange) {
+					t.Fatalf("got subconn state change %v, want %v", scsc, expectedScStateChange)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("haven't got subconn state change after 1s")
 			}
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if i == 10 {
+		t.Fatal("balancerA instance has not been created after 1s")
 	}
 }
 
