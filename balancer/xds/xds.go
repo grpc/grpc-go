@@ -138,7 +138,6 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 				prevClient.close()
 			}
 			haveGotADS = true
-			x.xdsStaleTimeout = nil // clears out previous xds client's xds stale timeout value.
 		})
 		return x.newADSResponse(ctx, resp)
 	}
@@ -237,7 +236,8 @@ func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *xdspb.Cluster:
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
-		// TODO: Get the optional xds record stale timeout from OutlierDetection message.
+		// TODO: Get the optional xds record stale timeout from OutlierDetection message. If not exist,
+		// reset to 0.
 		// x.xdsStaleTimeout = u.OutlierDetection.TO_BE_DEFINED_AND_ADDED
 		x.xdsLB.HandleChildPolicy(u.LbPolicy.String(), nil)
 	case *xdspb.ClusterLoadAssignment:
