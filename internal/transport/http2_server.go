@@ -1030,6 +1030,9 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
+	// Mark the stream as done
+	oldState := s.swapState(streamDone)
+
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
@@ -1052,7 +1055,7 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 	}
 
 	// If the stream is already done, don't send the trailer.
-	if s.swapState(streamDone) == streamDone {
+	if oldState == streamDone {
 		return
 	}
 
