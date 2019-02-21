@@ -751,6 +751,107 @@ func TestFallback(t *testing.T) {
 	t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
 }
 
+// The remote balancer sends response with duplicates to grpclb client.
+func TestGRPCLBPickFirst(t *testing.T) {
+	balancer.Register(newLBBuilderWithPickFirst())
+	defer balancer.Register(newLBBuilder())
+
+	defer leakcheck.Check(t)
+
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+
+	tss, cleanup, err := newLoadBalancer(3)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	beServers := []*lbpb.Server{{
+		IpAddress:        tss.beIPs[0],
+		Port:             int32(tss.bePorts[0]),
+		LoadBalanceToken: lbToken,
+	}, {
+		IpAddress:        tss.beIPs[1],
+		Port:             int32(tss.bePorts[1]),
+		LoadBalanceToken: lbToken,
+	}, {
+		IpAddress:        tss.beIPs[2],
+		Port:             int32(tss.bePorts[2]),
+		LoadBalanceToken: lbToken,
+	}}
+	portsToIndex := make(map[int]int)
+	for i := range beServers {
+		portsToIndex[tss.bePorts[i]] = i
+	}
+
+	creds := serverNameCheckCreds{
+		expected: beServerName,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+	testC := testpb.NewTestServiceClient(cc)
+
+	r.NewAddress([]resolver.Address{{
+		Addr:       tss.lbAddr,
+		Type:       resolver.GRPCLB,
+		ServerName: lbServerName,
+	}})
+
+	var p peer.Peer
+
+	portPicked1 := 0
+	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[1:2]}
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		if portPicked1 == 0 {
+			portPicked1 = p.Addr.(*net.TCPAddr).Port
+			continue
+		}
+		if portPicked1 != p.Addr.(*net.TCPAddr).Port {
+			t.Fatalf("Different backends are picked for RPCs: %v vs %v", portPicked1, p.Addr.(*net.TCPAddr).Port)
+		}
+	}
+
+	portPicked2 := portPicked1
+	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[:1]}
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		if portPicked2 == portPicked1 {
+			portPicked2 = p.Addr.(*net.TCPAddr).Port
+			continue
+		}
+		if portPicked2 != p.Addr.(*net.TCPAddr).Port {
+			t.Fatalf("Different backends are picked for RPCs: %v vs %v", portPicked2, p.Addr.(*net.TCPAddr).Port)
+		}
+	}
+
+	portPicked := portPicked2
+	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[1:]}
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		if portPicked == portPicked2 {
+			portPicked = p.Addr.(*net.TCPAddr).Port
+			continue
+		}
+		if portPicked != p.Addr.(*net.TCPAddr).Port {
+			t.Fatalf("Different backends are picked for RPCs: %v vs %v", portPicked, p.Addr.(*net.TCPAddr).Port)
+		}
+	}
+}
+
 type failPreRPCCred struct{}
 
 func (failPreRPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {

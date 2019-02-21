@@ -129,8 +129,19 @@ func newLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Bui
 	}
 }
 
+// newLBBuilderWithPickFirst creates a grpclb builder with pick-first.
+func newLBBuilderWithPickFirst() balancer.Builder {
+	return &lbBuilder{
+		usePickFirst: true,
+	}
+}
+
 type lbBuilder struct {
 	fallbackTimeout time.Duration
+
+	// TODO: delete this when balancer can handle service config. This should be
+	//  updated by service config.
+	usePickFirst bool // Use roundrobin or pickfirst for backends.
 }
 
 func (b *lbBuilder) Name() string {
@@ -156,6 +167,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		cc:              newLBCacheClientConn(cc),
 		target:          target,
 		opt:             opt,
+		usePickFirst:    b.usePickFirst,
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
@@ -187,6 +199,8 @@ type lbBalancer struct {
 	cc     *lbCacheClientConn
 	target string
 	opt    balancer.BuildOptions
+
+	usePickFirst bool
 
 	// grpclbClientConnCreds is the creds bundle to be used to connect to grpclb
 	// servers. If it's nil, use the TransportCredentials from BuildOptions
@@ -245,6 +259,34 @@ type lbBalancer struct {
 //  - does two layer roundrobin pick otherwise.
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
+	// Keep pickfirst logic in a separate if statement, even though it means
+	// some duplicate code.
+	if lb.usePickFirst {
+		switch lb.state {
+		case connectivity.Ready, connectivity.Idle:
+			readySCs := make([]balancer.SubConn, 0, 1)
+			for _, sc := range lb.subConns {
+				readySCs = append(readySCs, sc)
+				break
+			}
+			if len(lb.fullServerList) <= 0 {
+				lb.picker = &rrPicker{subConns: readySCs}
+			} else {
+				// TODO: not reset drop. After the reset-drop PR.
+				lb.picker = &lbPicker{
+					serverList: lb.fullServerList,
+					subConns:   readySCs,
+					stats:      lb.clientStats,
+				}
+			}
+		case connectivity.Connecting:
+			lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+		case connectivity.TransientFailure:
+			lb.picker = &errPicker{err: balancer.ErrTransientFailure}
+		}
+		return
+	}
+
 	if lb.state == connectivity.TransientFailure {
 		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
