@@ -86,6 +86,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -103,6 +104,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
+import javax.net.SocketFactory;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLSocketFactory;
 import okio.Buffer;
@@ -146,6 +148,7 @@ public class OkHttpClientTransportTest {
   @Mock
   private ManagedClientTransport.Listener transportListener;
 
+  private final SocketFactory socketFactory = null;
   private final SSLSocketFactory sslSocketFactory = null;
   private final HostnameVerifier hostnameVerifier = null;
   private final TransportTracer transportTracer = new TransportTracer();
@@ -242,6 +245,7 @@ public class OkHttpClientTransportTest {
         "hostname",
         /*agent=*/ null,
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         OkHttpChannelBuilder.INTERNAL_DEFAULT_CONNECTION_SPEC,
@@ -1531,6 +1535,7 @@ public class OkHttpClientTransportTest {
         "invalid_authority",
         "userAgent",
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
@@ -1555,6 +1560,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
@@ -1580,6 +1586,37 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
+  public void customSocketFactory() throws Exception {
+    RuntimeException exception = new RuntimeException("thrown by socket factory");
+    SocketFactory socketFactory = new RuntimeExceptionThrowingSocketFactory(exception);
+
+    clientTransport =
+        new OkHttpClientTransport(
+            new InetSocketAddress("localhost", 0),
+            "authority",
+            "userAgent",
+            executor,
+            socketFactory,
+            sslSocketFactory,
+            hostnameVerifier,
+            ConnectionSpec.CLEARTEXT,
+            DEFAULT_MAX_MESSAGE_SIZE,
+            INITIAL_WINDOW_SIZE,
+            NO_PROXY,
+            tooManyPingsRunnable,
+            DEFAULT_MAX_INBOUND_METADATA_SIZE,
+            new TransportTracer());
+
+    ManagedClientTransport.Listener listener = mock(ManagedClientTransport.Listener.class);
+    clientTransport.start(listener);
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(listener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
+    Status status = captor.getValue();
+    assertEquals(Status.UNAVAILABLE.getCode(), status.getCode());
+    assertSame(exception, status.getCause());
+  }
+
+  @Test
   public void proxy_200() throws Exception {
     ServerSocket serverSocket = new ServerSocket(0);
     InetSocketAddress targetAddress = InetSocketAddress.createUnresolved("theservice", 80);
@@ -1588,6 +1625,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
@@ -1642,6 +1680,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
@@ -1695,6 +1734,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        socketFactory,
         sslSocketFactory,
         hostnameVerifier,
         ConnectionSpec.CLEARTEXT,
@@ -2215,5 +2255,33 @@ public class OkHttpClientTransportTest {
 
     @Override
     public void windowUpdate(int streamId, long windowSizeIncrement) throws IOException {}
+  }
+
+  private static class RuntimeExceptionThrowingSocketFactory extends SocketFactory {
+    RuntimeException exception;
+
+    private RuntimeExceptionThrowingSocketFactory(RuntimeException exception) {
+      this.exception = exception;
+    }
+
+    @Override
+    public Socket createSocket(String s, int i) {
+      throw exception;
+    }
+
+    @Override
+    public Socket createSocket(String s, int i, InetAddress inetAddress, int i1) {
+      throw exception;
+    }
+
+    @Override
+    public Socket createSocket(InetAddress inetAddress, int i) {
+      throw exception;
+    }
+
+    @Override
+    public Socket createSocket(InetAddress inetAddress, int i, InetAddress inetAddress1, int i1) {
+      throw exception;
+    }
   }
 }

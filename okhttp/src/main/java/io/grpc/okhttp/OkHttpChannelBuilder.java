@@ -49,6 +49,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
+import javax.net.SocketFactory;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -120,6 +121,7 @@ public class OkHttpChannelBuilder extends
   private Executor transportExecutor;
   private ScheduledExecutorService scheduledExecutorService;
 
+  private SocketFactory socketFactory;
   private SSLSocketFactory sslSocketFactory;
   private HostnameVerifier hostnameVerifier;
   private ConnectionSpec connectionSpec = INTERNAL_DEFAULT_CONNECTION_SPEC;
@@ -153,6 +155,17 @@ public class OkHttpChannelBuilder extends
    */
   public final OkHttpChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
     this.transportExecutor = transportExecutor;
+    return this;
+  }
+
+  /**
+   * Override the default {@link SocketFactory} used to create sockets. If the socket factory is not
+   * set or set to null, a default one will be used.
+   *
+   * @since 1.20.0
+   */
+  public final OkHttpChannelBuilder socketFactory(@Nullable SocketFactory socketFactory) {
+    this.socketFactory = socketFactory;
     return this;
   }
 
@@ -397,10 +410,21 @@ public class OkHttpChannelBuilder extends
   @Internal
   protected final ClientTransportFactory buildTransportFactory() {
     boolean enableKeepAlive = keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED;
-    return new OkHttpTransportFactory(transportExecutor, scheduledExecutorService,
-        createSocketFactory(), hostnameVerifier, connectionSpec, maxInboundMessageSize(),
-        enableKeepAlive, keepAliveTimeNanos, keepAliveTimeoutNanos, flowControlWindow,
-        keepAliveWithoutCalls, maxInboundMetadataSize, transportTracerFactory);
+    return new OkHttpTransportFactory(
+        transportExecutor,
+        scheduledExecutorService,
+        socketFactory,
+        createSslSocketFactory(),
+        hostnameVerifier,
+        connectionSpec,
+        maxInboundMessageSize(),
+        enableKeepAlive,
+        keepAliveTimeNanos,
+        keepAliveTimeoutNanos,
+        flowControlWindow,
+        keepAliveWithoutCalls,
+        maxInboundMetadataSize,
+        transportTracerFactory);
   }
 
   @Override
@@ -417,7 +441,7 @@ public class OkHttpChannelBuilder extends
 
   @VisibleForTesting
   @Nullable
-  SSLSocketFactory createSocketFactory() {
+  SSLSocketFactory createSslSocketFactory() {
     switch (negotiationType) {
       case TLS:
         try {
@@ -463,8 +487,8 @@ public class OkHttpChannelBuilder extends
     private final boolean usingSharedExecutor;
     private final boolean usingSharedScheduler;
     private final TransportTracer.Factory transportTracerFactory;
-    @Nullable
-    private final SSLSocketFactory socketFactory;
+    private final SocketFactory socketFactory;
+    @Nullable private final SSLSocketFactory sslSocketFactory;
     @Nullable
     private final HostnameVerifier hostnameVerifier;
     private final ConnectionSpec connectionSpec;
@@ -478,9 +502,11 @@ public class OkHttpChannelBuilder extends
     private final ScheduledExecutorService timeoutService;
     private boolean closed;
 
-    private OkHttpTransportFactory(Executor executor,
+    private OkHttpTransportFactory(
+        Executor executor,
         @Nullable ScheduledExecutorService timeoutService,
-        @Nullable SSLSocketFactory socketFactory,
+        @Nullable SocketFactory socketFactory,
+        @Nullable SSLSocketFactory sslSocketFactory,
         @Nullable HostnameVerifier hostnameVerifier,
         ConnectionSpec connectionSpec,
         int maxMessageSize,
@@ -495,6 +521,7 @@ public class OkHttpChannelBuilder extends
       this.timeoutService = usingSharedScheduler
           ? SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE) : timeoutService;
       this.socketFactory = socketFactory;
+      this.sslSocketFactory = sslSocketFactory;
       this.hostnameVerifier = hostnameVerifier;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
@@ -536,6 +563,7 @@ public class OkHttpChannelBuilder extends
           options.getUserAgent(),
           executor,
           socketFactory,
+          sslSocketFactory,
           hostnameVerifier,
           connectionSpec,
           maxMessageSize,

@@ -27,8 +27,11 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.net.SocketFactory;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -125,10 +128,10 @@ public class OkHttpChannelBuilderTest {
   @Test
   public void usePlaintextCreatesNullSocketFactory() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234);
-    assertNotNull(builder.createSocketFactory());
+    assertNotNull(builder.createSslSocketFactory());
 
     builder.usePlaintext();
-    assertNull(builder.createSocketFactory());
+    assertNull(builder.createSslSocketFactory());
   }
 
   @Test
@@ -159,5 +162,56 @@ public class OkHttpChannelBuilderTest {
 
     clientTransportFactory.close();
   }
-}
 
+  @Test
+  public void socketFactory_default() {
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forTarget("foo");
+    ClientTransportFactory transportFactory = builder.buildTransportFactory();
+    OkHttpClientTransport transport =
+        (OkHttpClientTransport)
+            transportFactory.newClientTransport(
+                new InetSocketAddress(5678), new ClientTransportFactory.ClientTransportOptions());
+
+    assertSame(SocketFactory.getDefault(), transport.getSocketFactory());
+
+    transportFactory.close();
+  }
+
+  @Test
+  public void socketFactory_custom() {
+    SocketFactory socketFactory =
+        new SocketFactory() {
+          @Override
+          public Socket createSocket(String s, int i) {
+            return null;
+          }
+
+          @Override
+          public Socket createSocket(String s, int i, InetAddress inetAddress, int i1) {
+            return null;
+          }
+
+          @Override
+          public Socket createSocket(InetAddress inetAddress, int i) {
+            return null;
+          }
+
+          @Override
+          public Socket createSocket(
+              InetAddress inetAddress, int i, InetAddress inetAddress1, int i1) {
+            return null;
+          }
+        };
+    OkHttpChannelBuilder builder =
+        OkHttpChannelBuilder.forTarget("foo").socketFactory(socketFactory);
+    ClientTransportFactory transportFactory = builder.buildTransportFactory();
+    OkHttpClientTransport transport =
+        (OkHttpClientTransport)
+            transportFactory.newClientTransport(
+                new InetSocketAddress(5678), new ClientTransportFactory.ClientTransportOptions());
+
+    assertSame(socketFactory, transport.getSocketFactory());
+
+    transportFactory.close();
+  }
+}
