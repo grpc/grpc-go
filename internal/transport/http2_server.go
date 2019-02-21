@@ -1054,6 +1054,17 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, hd
 		return
 	}
 
+	// We do the check here, because of the following scenario:
+	// 1. closeStream is called first with a trailer. A trailer item with a piggybacked cleanup item
+	// is put to control buffer.
+	// 2. Loopy writer is waiting on a stream quota. It will never get it because client errored at
+	// some point. So loopy can't act on trailer
+	// 3. Client sends a RST_STREAM due to the error. Then closeStream is called without a trailer as
+	// the result of the received RST_STREAM.
+	// If we do this check at the beginning of the closeStream, then we won't put a cleanup item in
+	// response to received RST_STREAM into the control buffer and outStream in loopy writer will
+	// never get cleaned up.
+
 	// If the stream is already done, don't send the trailer.
 	if oldState == streamDone {
 		return
