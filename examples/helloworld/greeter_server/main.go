@@ -18,6 +18,7 @@
 
 //go:generate protoc -I ../helloworld --go_out=plugins=grpc:../helloworld ../helloworld/helloworld.proto
 
+// Package main implements a server for Greeter service.
 package main
 
 import (
