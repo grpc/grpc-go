@@ -25,12 +25,26 @@ at:
   * LOCATION_IN_GRPC:
     * okhttp/third_party/okhttp
 
-This product contains a modified portion of 'Netty', an open source
-networking library, which can be obtained at:
+This product contains a modified portion of 'Envoy', an open source
+cloud-native high-performance edge/middle/service proxy, which can be
+obtained at:
 
   * LICENSE:
-    * netty/third_party/netty/LICENSE.txt (Apache License 2.0)
+    * xds/third_party/envoy/LICENSE (Apache License 2.0)
+  * NOTICE:
+    * xds/third_party/envoy/NOTICE
   * HOMEPAGE:
-    * https://netty.io
+    * https://www.envoyproxy.io
   * LOCATION_IN_GRPC:
-    * netty/third_party/netty
+    * xds/third_party/envoy
+
+This product contains a modified portion of 'protoc-gen-validate (PGV)',
+an open source protoc plugin to generate polyglot message validators,
+which can be obtained at:
+
+  * LICENSE:
+    * xds/third_party/protoc-gen-validate/LICENSE (Apache License 2.0)
+  * HOMEPAGE:
+    * https://github.com/lyft/protoc-gen-validate
+  * LOCATION_IN_GRPC:
+    * xds/third_party/protoc-gen-validate
