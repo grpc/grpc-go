@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -49,7 +50,7 @@ public class StatsTraceContextBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public StatsTraceContext newClientContext() {
-    return StatsTraceContext.newClientContext(CallOptions.DEFAULT, emptyMetadata);
+    return StatsTraceContext.newClientContext(CallOptions.DEFAULT, Attributes.EMPTY, emptyMetadata);
   }
 
   /**

@@ -187,7 +187,7 @@ public abstract class AbstractTransportTest {
     server = Iterables.getOnlyElement(newServer(Arrays.asList(serverStreamTracerFactory)));
     OngoingStubbing<ClientStreamTracer> clientStubbing =
         when(clientStreamTracerFactory
-            .newClientStreamTracer(any(CallOptions.class), any(Metadata.class)))
+            .newClientStreamTracer(any(ClientStreamTracer.StreamInfo.class), any(Metadata.class)))
                 .thenReturn(clientStreamTracer1)
                 .thenReturn(clientStreamTracer2);
     OngoingStubbing<ServerStreamTracer> serverStubbing =
@@ -581,7 +581,7 @@ public abstract class AbstractTransportTest {
     // Stream prevents termination
     ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(
-        any(CallOptions.class), any(Metadata.class));
+        any(ClientStreamTracer.StreamInfo.class), any(Metadata.class));
     ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
     stream.start(clientStreamListener);
     client.shutdown(Status.UNAVAILABLE);
@@ -589,7 +589,7 @@ public abstract class AbstractTransportTest {
 
     ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
     inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(
-        any(CallOptions.class), any(Metadata.class));
+        any(ClientStreamTracer.StreamInfo.class), any(Metadata.class));
     ClientStreamListenerBase clientStreamListener2 = new ClientStreamListenerBase();
     stream2.start(clientStreamListener2);
     Status clientStreamStatus2 =
@@ -632,7 +632,7 @@ public abstract class AbstractTransportTest {
     assertNotNull(clientStreamListener.trailers.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
     verify(clientStreamTracerFactory).newClientStreamTracer(
-        any(CallOptions.class), any(Metadata.class));
+        any(ClientStreamTracer.StreamInfo.class), any(Metadata.class));
     assertNull(clientStreamTracer1.getInboundTrailers());
     assertSame(shutdownReason, clientStreamTracer1.getStatus());
     // Assert no interactions
@@ -753,8 +753,13 @@ public abstract class AbstractTransportTest {
 
     clientHeadersCopy.merge(clientHeaders);
     ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders, callOptions);
+    ArgumentCaptor<ClientStreamTracer.StreamInfo> streamInfoCaptor = ArgumentCaptor.forClass(null);
     clientInOrder.verify(clientStreamTracerFactory).newClientStreamTracer(
-        same(callOptions), same(clientHeaders));
+        streamInfoCaptor.capture(), same(clientHeaders));
+    ClientStreamTracer.StreamInfo streamInfo = streamInfoCaptor.getValue();
+    assertThat(streamInfo.getTransportAttrs()).isSameAs(
+        ((ConnectionClientTransport) client).getAttributes());
+    assertThat(streamInfo.getCallOptions()).isSameAs(callOptions);
 
     ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
     clientStream.start(clientStreamListener);
@@ -1278,7 +1283,7 @@ public abstract class AbstractTransportTest {
     assertNull(clientStreamStatus.getCause());
 
     verify(clientStreamTracerFactory).newClientStreamTracer(
-        any(CallOptions.class), any(Metadata.class));
+        any(ClientStreamTracer.StreamInfo.class), any(Metadata.class));
     assertTrue(clientStreamTracer1.getOutboundHeaders());
     assertNull(clientStreamTracer1.getInboundTrailers());
     assertSame(clientStreamStatus, clientStreamTracer1.getStatus());

@@ -172,6 +172,19 @@ public class GrpclbLoadBalancerTest {
           throw new AssertionError(e);
         }
       });
+  private static final ClientStreamTracer.StreamInfo STREAM_INFO =
+      new ClientStreamTracer.StreamInfo() {
+        @Override
+        public Attributes getTransportAttrs() {
+          return Attributes.EMPTY;
+        }
+
+        @Override
+        public CallOptions getCallOptions() {
+          return CallOptions.DEFAULT;
+        }
+      };
+
   private io.grpc.Server fakeLbServer;
   @Captor
   private ArgumentCaptor<SubchannelPicker> pickerCaptor;
@@ -467,7 +480,7 @@ public class GrpclbLoadBalancerTest {
         ClientStats.newBuilder().build());
 
     ClientStreamTracer tracer1 =
-        pick1.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+        pick1.getStreamTracerFactory().newClientStreamTracer(STREAM_INFO, new Metadata());
 
     PickResult pick2 = picker.pickSubchannel(args);
     assertNull(pick2.getSubchannel());
@@ -490,7 +503,7 @@ public class GrpclbLoadBalancerTest {
     assertSame(subchannel2, pick3.getSubchannel());
     assertSame(getLoadRecorder(), pick3.getStreamTracerFactory());
     ClientStreamTracer tracer3 =
-        pick3.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+        pick3.getStreamTracerFactory().newClientStreamTracer(STREAM_INFO, new Metadata());
 
     // pick3 has sent out headers
     tracer3.outboundHeaders();
@@ -527,7 +540,7 @@ public class GrpclbLoadBalancerTest {
     assertSame(subchannel1, pick1.getSubchannel());
     assertSame(getLoadRecorder(), pick5.getStreamTracerFactory());
     ClientStreamTracer tracer5 =
-        pick5.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+        pick5.getStreamTracerFactory().newClientStreamTracer(STREAM_INFO, new Metadata());
 
     // pick3 ended without receiving response headers
     tracer3.streamClosed(Status.DEADLINE_EXCEEDED);
@@ -602,7 +615,7 @@ public class GrpclbLoadBalancerTest {
     PickResult pick1p = picker.pickSubchannel(args);
     assertSame(subchannel1, pick1p.getSubchannel());
     assertSame(getLoadRecorder(), pick1p.getStreamTracerFactory());
-    pick1p.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+    pick1p.getStreamTracerFactory().newClientStreamTracer(STREAM_INFO, new Metadata());
 
     // The pick from the new stream will be included in the report
     assertNextReport(

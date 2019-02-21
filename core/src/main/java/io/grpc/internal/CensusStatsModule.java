@@ -367,7 +367,8 @@ public final class CensusStatsModule {
     }
 
     @Override
-    public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
+    public ClientStreamTracer newClientStreamTracer(
+        ClientStreamTracer.StreamInfo info, Metadata headers) {
       ClientTracer tracer = new ClientTracer(module, startCtx);
       // TODO(zhangkun83): Once retry or hedging is implemented, a ClientCall may start more than
       // one streams.  We will need to update this file to support them.

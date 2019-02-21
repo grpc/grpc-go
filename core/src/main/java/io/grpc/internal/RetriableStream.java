@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import io.grpc.Attributes;
-import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Compressor;
 import io.grpc.Deadline;
@@ -194,7 +193,8 @@ abstract class RetriableStream<ReqT> implements ClientStream {
     final ClientStreamTracer bufferSizeTracer = new BufferSizeTracer(sub);
     ClientStreamTracer.Factory tracerFactory = new ClientStreamTracer.Factory() {
       @Override
-      public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
+      public ClientStreamTracer newClientStreamTracer(
+          ClientStreamTracer.StreamInfo info, Metadata headers) {
         return bufferSizeTracer;
       }
     };

@@ -242,7 +242,8 @@ final class CensusTracingModule {
     }
 
     @Override
-    public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
+    public ClientStreamTracer newClientStreamTracer(
+        ClientStreamTracer.StreamInfo info, Metadata headers) {
       if (span != BlankSpan.INSTANCE) {
         headers.discardAll(tracingHeader);
         headers.put(tracingHeader, span.getContext());

@@ -167,7 +167,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
     if (shutdownStatus != null) {
       return failedClientStream(
-          StatsTraceContext.newClientContext(callOptions, headers), shutdownStatus);
+          StatsTraceContext.newClientContext(callOptions, attributes, headers), shutdownStatus);
     }
 
     headers.put(GrpcUtil.USER_AGENT_KEY, userAgent);
@@ -186,7 +186,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
                 serverMaxInboundMetadataSize,
                 metadataSize));
         return failedClientStream(
-            StatsTraceContext.newClientContext(callOptions, headers), status);
+            StatsTraceContext.newClientContext(callOptions, attributes, headers), status);
       }
     }
 
@@ -625,7 +625,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       InProcessClientStream(CallOptions callOptions, Metadata headers) {
         this.callOptions = callOptions;
-        statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
+        statsTraceCtx = StatsTraceContext.newClientContext(callOptions, attributes, headers);
       }
 
       private synchronized void setListener(ServerStreamListener listener) {

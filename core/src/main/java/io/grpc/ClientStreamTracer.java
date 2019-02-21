@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import io.grpc.Grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -57,9 +58,44 @@ public abstract class ClientStreamTracer extends StreamTracer {
      * @param headers the mutable headers of the stream. It can be safely mutated within this
      *        method.  It should not be saved because it is not safe for read or write after the
      *        method returns.
+     *
+     * @deprecated use {@link #newClientStreamTracer(StreamInfo, Metadata)} instead
      */
+    @Deprecated
     public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
       throw new UnsupportedOperationException("Not implemented");
     }
+
+    /**
+     * Creates a {@link ClientStreamTracer} for a new client stream.  This is called inside the
+     * transport when it's creating the stream.
+     *
+     * @param info information about the stream
+     * @param headers the mutable headers of the stream. It can be safely mutated within this
+     *        method.  Changes made to it will be sent by the stream.  It should not be saved
+     *        because it is not safe for read or write after the method returns.
+     *
+     * @since 1.20.0
+     */
+    @SuppressWarnings("deprecation")
+    public ClientStreamTracer newClientStreamTracer(StreamInfo info, Metadata headers) {
+      return newClientStreamTracer(info.getCallOptions(), headers);
+    }
+  }
+
+  /**
+   * Information about a stream.
+   */
+  public abstract static class StreamInfo {
+    /**
+     * Returns the attributes of the transport that this stream was created on.
+     */
+    @Grpc.TransportAttr
+    public abstract Attributes getTransportAttrs();
+
+    /**
+     * Returns the effective CallOptions of the call.
+     */
+    public abstract CallOptions getCallOptions();
   }
 }

@@ -105,6 +105,18 @@ public class CensusModulesTest {
       CallOptions.Key.createWithDefault("option1", "default");
   private static final CallOptions CALL_OPTIONS =
       CallOptions.DEFAULT.withOption(CUSTOM_OPTION, "customvalue");
+  private static final ClientStreamTracer.StreamInfo STREAM_INFO =
+      new ClientStreamTracer.StreamInfo() {
+        @Override
+        public Attributes getTransportAttrs() {
+          return Attributes.EMPTY;
+        }
+
+        @Override
+        public CallOptions getCallOptions() {
+          return CallOptions.DEFAULT;
+        }
+      };
 
   private static class StringInputStream extends InputStream {
     final String string;
@@ -370,7 +382,7 @@ public class CensusModulesTest {
         localCensusStats.newClientCallTracer(
             tagger.empty(), method.getFullMethodName());
     Metadata headers = new Metadata();
-    ClientStreamTracer tracer = callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    ClientStreamTracer tracer = callTracer.newClientStreamTracer(STREAM_INFO, headers);
 
     if (recordStarts) {
       StatsTestUtils.MetricsRecord record = statsRecorder.pollRecord();
@@ -494,8 +506,7 @@ public class CensusModulesTest {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(null, method);
     Metadata headers = new Metadata();
-    ClientStreamTracer clientStreamTracer =
-        callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    ClientStreamTracer clientStreamTracer = callTracer.newClientStreamTracer(STREAM_INFO, headers);
     verify(tracer).spanBuilderWithExplicitParent(
         eq("Sent.package1.service2.method3"), isNull(Span.class));
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
@@ -655,7 +666,7 @@ public class CensusModulesTest {
     CensusStatsModule.ClientCallTracer callTracer =
         census.newClientCallTracer(clientCtx, method.getFullMethodName());
     // This propagates clientCtx to headers if propagates==true
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
     if (recordStats) {
       // Client upstart record
       StatsTestUtils.MetricsRecord clientRecord = statsRecorder.pollRecord();
@@ -744,7 +755,7 @@ public class CensusModulesTest {
     CensusStatsModule.ClientCallTracer callTracer =
         censusStats.newClientCallTracer(tagger.empty(), method.getFullMethodName());
     Metadata headers = new Metadata();
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
     assertFalse(headers.containsKey(censusStats.statsHeader));
     // Clear recorded stats to satisfy the assertions in wrapUp() 
     statsRecorder.rolloverRecords();
@@ -775,7 +786,7 @@ public class CensusModulesTest {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(fakeClientParentSpan, method);
     Metadata headers = new Metadata();
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
 
     verify(mockTracingPropagationHandler).toByteArray(same(fakeClientSpanContext));
     verifyNoMoreInteractions(mockTracingPropagationHandler);
@@ -803,7 +814,7 @@ public class CensusModulesTest {
         censusTracing.newClientCallTracer(fakeClientParentSpan, method);
     Metadata headers = new Metadata();
 
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
 
     assertThat(headers.keys()).isNotEmpty();
   }
@@ -817,7 +828,7 @@ public class CensusModulesTest {
 
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(BlankSpan.INSTANCE, method);
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
 
     assertThat(headers.keys()).isEmpty();
   }
@@ -834,7 +845,7 @@ public class CensusModulesTest {
 
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(BlankSpan.INSTANCE, method);
-    callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
+    callTracer.newClientStreamTracer(STREAM_INFO, headers);
 
     assertThat(headers.keys()).containsExactlyElementsIn(originalHeaderKeys);
   }

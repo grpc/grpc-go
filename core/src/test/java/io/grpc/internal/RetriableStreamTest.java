@@ -41,6 +41,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Codec;
@@ -90,6 +91,18 @@ public class RetriableStreamTest {
   private static final long MAX_BACKOFF_IN_SECONDS = 700;
   private static final double BACKOFF_MULTIPLIER = 2D;
   private static final double FAKE_RANDOM = .5D;
+  private static final ClientStreamTracer.StreamInfo STREAM_INFO =
+      new ClientStreamTracer.StreamInfo() {
+        @Override
+        public Attributes getTransportAttrs() {
+          return Attributes.EMPTY;
+        }
+
+        @Override
+        public CallOptions getCallOptions() {
+          return CallOptions.DEFAULT;
+        }
+      };
 
   static {
     RetriableStream.setRandom(
@@ -168,7 +181,7 @@ public class RetriableStreamTest {
     @Override
     ClientStream newSubstream(ClientStreamTracer.Factory tracerFactory, Metadata metadata) {
       bufferSizeTracer =
-          tracerFactory.newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
+          tracerFactory.newClientStreamTracer(STREAM_INFO, new Metadata());
       int actualPreviousRpcAttemptsInHeader = metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS) == null
           ? 0 : Integer.valueOf(metadata.get(GRPC_PREVIOUS_RPC_ATTEMPTS));
       return retriableStreamRecorder.newSubstream(actualPreviousRpcAttemptsInHeader);
