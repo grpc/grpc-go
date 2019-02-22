@@ -29,9 +29,9 @@ import (
 )
 
 func (s) TestStreamCleanup(t *testing.T) {
-	const initialWindowSize uint = 70 * 1024    // Must be higher than default 64K, ignored otherwise
-	const bodySize uint = 2 * initialWindowSize // Something that is not going to fit in a single window
-	const callRecvMsgSize uint = 1              // The maximum message size the client can receive
+	const initialWindowSize uint = 70 * 1024 // Must be higher than default 64K, ignored otherwise
+	const bodySize = 2 * initialWindowSize   // Something that is not going to fit in a single window
+	const callRecvMsgSize uint = 1           // The maximum message size the client can receive
 
 	ss := &stubServer{
 		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
