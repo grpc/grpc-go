@@ -365,7 +365,7 @@ public final class MethodDescriptor<ReqT, RespT> {
   }
 
   /**
-   * Generate the fully qualified method name.  This matches the the name
+   * Generate the fully qualified method name.  This matches the name
    *
    * @param fullServiceName the fully qualified service name that is prefixed with the package name
    * @param methodName the short method name
