@@ -172,7 +172,6 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		doneCh:          make(chan struct{}),
 
 		manualResolver: r,
-		csEvltr:        &balancer.ConnectivityStateEvaluator{},
 		subConns:       make(map[resolver.Address]balancer.SubConn),
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
@@ -238,15 +237,15 @@ type lbBalancer struct {
 	// but with only READY SCs will be gerenated.
 	backendAddrs []resolver.Address
 	// Roundrobin functionalities.
-	csEvltr  *balancer.ConnectivityStateEvaluator
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
 	scStates map[balancer.SubConn]connectivity.State // Used to filter READY SubConns.
 	picker   balancer.Picker
 	// Support fallback to resolved backend addresses if there's no response
 	// from remote balancer within fallbackTimeout.
-	fallbackTimerExpired bool
-	serverListReceived   bool
+	remoteBalancerConnected bool
+	serverListReceived      bool
+	inFallback              bool
 	// resolvedBackendAddrs is resolvedAddrs minus remote balancers. It's set
 	// when resolved address updates are received, and read in the goroutine
 	// handling fallback.
@@ -305,6 +304,34 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 	prevLBPicker.updateReadySCs(readySCs)
 }
 
+// aggregateSubConnStats calculate the aggregated state of SubConns in
+// lb.SubConns. These SubConns are subconns in use (when switching between
+// fallback and grpclb). lb.scState contains states for all SubConns, including
+// those in cache (SubConns are cached for 10 seconds after remove).
+//
+// The aggregated state is:
+//  - If at least one SubConn in Ready, the aggregated state is Ready;
+//  - Else if at least one SubConn in Connecting, the aggregated state is Connecting;
+//  - Else the aggregated state is TransientFailure.
+func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
+	var numConnecting uint64
+
+	for _, sc := range lb.subConns {
+		if state, ok := lb.scStates[sc]; ok {
+			switch state {
+			case connectivity.Ready:
+				return connectivity.Ready
+			case connectivity.Connecting:
+				numConnecting++
+			}
+		}
+	}
+	if numConnecting > 0 {
+		return connectivity.Connecting
+	}
+	return connectivity.TransientFailure
+}
+
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	if grpclog.V(2) {
 		grpclog.Infof("lbBalancer: handle SubConn state change: %p, %v", sc, s)
@@ -330,7 +357,15 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	}
 
 	oldAggrState := lb.state
-	lb.state = lb.csEvltr.RecordTransition(oldS, s)
+	lb.state = lb.aggregateSubConnStates()
+
+	// Enter fallback when the aggregated state is not Ready and the connection
+	// to remote balancer is lost.
+	if lb.state != connectivity.Ready {
+		if !lb.inFallback && !lb.remoteBalancerConnected {
+			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+		}
+	}
 
 	// Regenerate picker when one of the following happens:
 	//  - this sc became ready from not-ready
@@ -357,11 +392,10 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 		return
 	}
 	lb.mu.Lock()
-	if lb.serverListReceived {
+	if lb.inFallback || lb.serverListReceived {
 		lb.mu.Unlock()
 		return
 	}
-	lb.fallbackTimerExpired = true
 	lb.refreshSubConns(lb.resolvedBackendAddrs, false)
 	lb.mu.Unlock()
 }
@@ -405,10 +439,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	lb.mu.Lock()
 	lb.resolvedBackendAddrs = backendAddrs
-	// If serverListReceived is true, connection to remote balancer was
-	// successful and there's no need to do fallback anymore.
-	// If fallbackTimerExpired is false, fallback hasn't happened yet.
-	if !lb.serverListReceived && lb.fallbackTimerExpired {
+	if lb.inFallback {
 		// This means we received a new list of resolved backends, and we are
 		// still in fallback mode. Need to update the list of backends we are
 		// using to the new list of backends.

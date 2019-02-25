@@ -103,6 +103,8 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 // backendAddrs (whether any SubConn was newed/removed).
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
+	lb.inFallback = !fromGRPCLBServer
+
 	opts := balancer.NewSubConnOptions{}
 	if fromGRPCLBServer {
 		opts.CredsBundle = lb.grpclbBackendCreds
@@ -214,10 +216,13 @@ func (lb *lbBalancer) callRemoteBalancer() (backoff bool, _ error) {
 	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stream, err := lbClient.BalanceLoad(ctx, grpc.WaitForReady(true))
+	stream, err := lbClient.BalanceLoad(ctx)
 	if err != nil {
 		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 	}
+	lb.mu.Lock()
+	lb.remoteBalancerConnected = true
+	lb.mu.Unlock()
 
 	// grpclb handshake on the stream.
 	initReq := &lbpb.LoadBalanceRequest{
@@ -269,6 +274,16 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		}
 		// Trigger a re-resolve when the stream errors.
 		lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
+
+		lb.mu.Lock()
+		lb.remoteBalancerConnected = false
+		lb.fullServerList = nil
+		// Enter fallback when connection to remote balancer is lost, and the
+		// aggregated state is not Ready.
+		if !lb.inFallback && lb.state != connectivity.Ready {
+			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+		}
+		lb.mu.Unlock()
 
 		if !doBackoff {
 			retryCount = 0
