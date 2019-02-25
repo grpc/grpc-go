@@ -5,7 +5,7 @@ This examples shows how `ClientConn` can pick different name resolvers.
 ## What is a name resolver
 
 A name resolver can be seen as a `map[service-name][]backend-ip`. It takes a
-service name, and returns a list of IPs of the backends. A commen used name
+service name, and returns a list of IPs of the backends. A common used name
 resolver is DNS.
 
 In this example, a resolver is created to resolve `resolver.example.grpc.io` to
