@@ -194,11 +194,10 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	if *useBufconn {
 		bcLis := bufconn.Listen(256 * 1024)
 		lis = bcLis
-		opts = append(opts, grpc.WithDialer(func(string, time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(
-				func(string, string, time.Duration) (net.Conn, error) {
-					return bcLis.Dial()
-				})("", "", 0)
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+			return nw.ContextDialer(func(context.Context, string, string) (net.Conn, error) {
+				return bcLis.Dial()
+			})(ctx, "", "")
 		}))
 	} else {
 		var err error
@@ -206,8 +205,8 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 		if err != nil {
 			grpclog.Fatalf("Failed to listen: %v", err)
 		}
-		opts = append(opts, grpc.WithDialer(func(_ string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", lis.Addr().String(), timeout)
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
+			return nw.ContextDialer((&net.Dialer{}).DialContext)(ctx, "tcp", lis.Addr().String())
 		}))
 	}
 	lis = nw.Listener(lis)

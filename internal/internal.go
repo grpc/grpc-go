@@ -26,8 +26,6 @@ import (
 )
 
 var (
-	// WithContextDialer is exported by dialoptions.go
-	WithContextDialer interface{} // func(context.Context, string) (net.Conn, error) grpc.DialOption
 	// WithResolverBuilder is exported by dialoptions.go
 	WithResolverBuilder interface{} // func (resolver.Builder) grpc.DialOption
 	// WithHealthCheckFunc is not exported by dialoptions.go
