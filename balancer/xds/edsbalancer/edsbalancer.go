@@ -93,18 +93,19 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 	if xdsB.subBalancerBuilder.Name() == subBalancerName {
 		return
 	}
-	var subBalancerChanged bool
 	newSubBalancerBuilder := balancer.Get(subBalancerName)
 	if newSubBalancerBuilder == nil {
 		grpclog.Infof("EDSBalancer: failed to find balancer with name %q, keep using %q", subBalancerName, xdsB.subBalancerBuilder.Name())
-	} else {
-		xdsB.subBalancerBuilder = newSubBalancerBuilder
-		subBalancerChanged = true
+		return
 	}
-	if subBalancerChanged && xdsB.bg != nil {
+	xdsB.subBalancerBuilder = newSubBalancerBuilder
+	if xdsB.bg != nil {
 		// xdsB.bg == nil until the first EDS response is handled. There's no
 		// need to update balancer group before that.
 		for id, config := range xdsB.lidToConfig {
+			// TODO: (eds) add support to balancer group to support smoothly
+			//  switching sub-balancers (keep old balancer around until new
+			//  balancer becomes ready).
 			xdsB.bg.remove(id)
 			xdsB.bg.add(id, config.weight, xdsB.subBalancerBuilder)
 			xdsB.bg.handleResolvedAddrs(id, config.addrs)
@@ -186,10 +187,13 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	newLocalitiesSet := make(map[string]struct{})
 	for _, locality := range edsResp.Endpoints {
 		// One balancer for each locality.
-		if locality.GetLocality() == nil {
-			panic("locality is nil")
+
+		l := locality.GetLocality()
+		if l == nil {
+			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
+			continue
 		}
-		lid := locality.Locality.String()
+		lid := fmt.Sprintf("%s-%s-%s", l.Region, l.Zone, l.SubZone)
 		newLocalitiesSet[lid] = struct{}{}
 
 		newWeight := locality.GetLoadBalancingWeight().GetValue()
@@ -260,9 +264,7 @@ func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Pi
 	defer xdsB.pickerMu.Unlock()
 	xdsB.innerPicker = p
 	xdsB.innerState = s
-	// TODO: (eds) this resets the drop index, which is unnecessary when it's a
-	// state change. Drop index should be kept in this case (or just replace
-	// inner picker). Similar to https://github.com/grpc/grpc-go/issues/2623.
+	// Don't reset drops when it's a state change.
 	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops))
 }
 
