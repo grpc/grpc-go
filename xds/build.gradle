@@ -30,6 +30,8 @@ dependencies {
         exclude group: 'com.google.guava', module: 'guava'
     }
 
+    testCompile project(':grpc-core').sourceSets.test.output
+
     compileOnly libraries.javax_annotation
     
     testCompile project(':grpc-testing')

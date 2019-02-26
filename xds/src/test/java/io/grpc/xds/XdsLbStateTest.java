@@ -19,22 +19,24 @@ package io.grpc.xds;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.envoyproxy.envoy.api.v2.DiscoveryRequest;
 import io.envoyproxy.envoy.api.v2.DiscoveryResponse;
-import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc;
 import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceImplBase;
-import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceStub;
+import io.grpc.LoadBalancer.Helper;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
+import io.grpc.SynchronizationContext;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.internal.FakeClock;
 import io.grpc.internal.testing.StreamRecorder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
-import io.grpc.xds.XdsLbState.XdsComms;
+import io.grpc.xds.XdsComms.AdsStreamCallback;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
@@ -42,6 +44,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 /**
@@ -51,8 +54,21 @@ import org.mockito.MockitoAnnotations;
 public class XdsLbStateTest {
   @Rule
   public final GrpcCleanupRule cleanupRule = new GrpcCleanupRule();
+  @Mock
+  private Helper helper;
+  @Mock
+  private AdsStreamCallback adsStreamCallback;
 
+  private final FakeClock fakeClock = new FakeClock();
   private final StreamRecorder<DiscoveryRequest> streamRecorder = StreamRecorder.create();
+
+  private final SynchronizationContext syncContext = new SynchronizationContext(
+      new Thread.UncaughtExceptionHandler() {
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+          throw new AssertionError(e);
+        }
+      });
 
   private XdsComms xdsComms;
 
@@ -61,6 +77,8 @@ public class XdsLbStateTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+    doReturn(syncContext).when(helper).getSynchronizationContext();
+    doReturn(fakeClock.getScheduledExecutorService()).when(helper).getScheduledExecutorService();
 
     String serverName = InProcessServerBuilder.generateName();
 
@@ -97,10 +115,7 @@ public class XdsLbStateTest {
             .start());
     channel =
         cleanupRule.register(InProcessChannelBuilder.forName(serverName).build());
-    AggregatedDiscoveryServiceStub stub = AggregatedDiscoveryServiceGrpc.newStub(channel);
-    AdsStream adsStream = new AdsStream(stub);
-    adsStream.start();
-    xdsComms = new XdsComms(channel, adsStream);
+    xdsComms = new XdsComms(channel, helper, adsStreamCallback);
   }
 
   @After

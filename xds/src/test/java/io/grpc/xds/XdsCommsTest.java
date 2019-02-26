@@ -21,9 +21,8 @@ import static org.junit.Assert.assertTrue;
 
 import io.envoyproxy.envoy.api.v2.DiscoveryRequest;
 import io.envoyproxy.envoy.api.v2.DiscoveryResponse;
-import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc;
 import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceImplBase;
-import io.envoyproxy.envoy.service.discovery.v2.AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceStub;
+import io.grpc.LoadBalancer.Helper;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -31,27 +30,36 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.internal.testing.StreamRecorder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
+import io.grpc.xds.XdsComms.AdsStreamCallback;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /**
- * Unit tests for {@link AdsStream}.
+ * Unit tests for {@link XdsComms}.
  */
 @RunWith(JUnit4.class)
-public class AdsStreamTest {
+public class XdsCommsTest {
   @Rule
   public final GrpcCleanupRule cleanupRule = new GrpcCleanupRule();
+  @Mock
+  Helper helper;
+  @Mock
+  AdsStreamCallback adsStreamCallback;
 
   private final StreamRecorder<DiscoveryRequest> streamRecorder = StreamRecorder.create();
 
-  private AdsStream adsStream;
+  private XdsComms xdsComms;
 
   @Before
   public void setUp() throws Exception {
+    MockitoAnnotations.initMocks(this);
+
     String serverName = InProcessServerBuilder.generateName();
 
     AggregatedDiscoveryServiceImplBase serviceImpl = new AggregatedDiscoveryServiceImplBase() {
@@ -87,14 +95,12 @@ public class AdsStreamTest {
             .start());
     ManagedChannel channel =
         cleanupRule.register(InProcessChannelBuilder.forName(serverName).build());
-    AggregatedDiscoveryServiceStub stub = AggregatedDiscoveryServiceGrpc.newStub(channel);
-    adsStream = new AdsStream(stub);
-    adsStream.start();
+    xdsComms = new XdsComms(channel, helper, adsStreamCallback);
   }
 
   @Test
   public void cancel() throws Exception {
-    adsStream.cancel("cause1");
+    xdsComms.shutdownLbRpc("cause1");
     assertTrue(streamRecorder.awaitCompletion(1, TimeUnit.SECONDS));
     assertEquals(Status.Code.CANCELLED, Status.fromThrowable(streamRecorder.getError()).getCode());
   }
