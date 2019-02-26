@@ -428,7 +428,7 @@ subprojects {
         sign publishing.publications.maven
     }
 
-    publishMavenPublicationToMavenRepository.onlyIf {
+    [publishMavenPublicationToMavenRepository, publishMavenPublicationToMavenLocal]*.onlyIf {
         !name.contains("grpc-gae-interop-testing") && !name.contains("grpc-xds")
     }
 
