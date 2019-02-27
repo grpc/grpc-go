@@ -54,10 +54,14 @@ public abstract class ServerCallStreamObserver<V> extends CallStreamObserver<V> 
   public abstract void setOnCancelHandler(Runnable onCancelHandler);
 
   /**
-   * Sets the compression algorithm to use for the call.  May only be called before sending any
-   * messages.
+   * Sets the compression algorithm to use for the call. May only be called before sending any
+   * messages. Default gRPC servers support the "gzip" compressor.
+   *
+   * <p>It is safe to call this even if the client does not support the compression format chosen.
+   * The implementation will handle negotiation with the client and may fall back to no compression.
    *
    * @param compression the compression algorithm to use.
+   * @throws IllegalArgumentException if the compressor name can not be found.
    */
   public abstract void setCompression(String compression);
 }

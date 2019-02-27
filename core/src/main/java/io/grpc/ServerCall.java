@@ -180,6 +180,9 @@ public abstract class ServerCall<ReqT, RespT> {
    * The compressor to use will be looked up in the {@link CompressorRegistry}.  Default gRPC
    * servers support the "gzip" compressor.
    *
+   * <p>It is safe to call this even if the client does not support the compression format chosen.
+   * The implementation will handle negotiation with the client and may fall back to no compression.
+   *
    * @param compressor the name of the compressor to use.
    * @throws IllegalArgumentException if the compressor name can not be found.
    */
