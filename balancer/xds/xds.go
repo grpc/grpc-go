@@ -38,7 +38,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const defaultTimeout = 10 * time.Second
+const (
+	defaultTimeout = 10 * time.Second
+	xdsName        = "xds"
+)
 
 var (
 	// This field is for testing purpose.
@@ -80,7 +83,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 }
 
 func (b *xdsBalancerBuilder) Name() string {
-	return "xds"
+	return xdsName
 }
 
 // EdsBalancer defines the interface that edsBalancer must implement to communicate with xdsBalancer.
@@ -125,24 +128,30 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 		x.startFallbackMonitoring()
 	}
 
+	// Whenever service config gives a new traffic director name, we need to create an xds client to
+	// connect to it. However, previous xds client should not be closed until the new one successfully
+	// connects to the traffic director (i.e. get an ADS response from the traffic director). Therefore,
+	// we let each new client to be responsible to close its immediate predecessor. In this way,
+	// xdsBalancer does not to implement complex synchronization to achieve the same purpose.
 	prevClient := x.client
-	var once sync.Once
 	// haveGotADS is true means, this xdsClient has got ADS response from director in the past, which
-	// means it can send lose contact signal for fallback monitoring.
+	// means it can close previous client if it hasn't and it now can send lose contact signal for
+	// fallback monitoring.
 	var haveGotADS bool
+
+	// set up callbacks for the xds client.
 	newADS := func(ctx context.Context, resp proto.Message) error {
-		once.Do(func() {
-			// It is the new xdsClient's responsibility to close previous client when it is connected to
-			// the new traffic director. Also declares itself as primary.
+		if !haveGotADS {
 			if prevClient != nil {
 				prevClient.close()
 			}
 			haveGotADS = true
-		})
+		}
 		return x.newADSResponse(ctx, resp)
 	}
 	loseContact := func(ctx context.Context) {
-		// loseContact signal is only useful when the current xds client
+		// loseContact signal is only useful when the current xds client has received ADS response before,
+		// and has not been closed by later xds client.
 		if haveGotADS {
 			select {
 			case <-ctx.Done():
@@ -153,6 +162,13 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 		}
 	}
 	exitCleanup := func() {
+		// Each xds client is responsible to close its predecessor if there's one. There are two paths
+		// for a xds client to close its predecessor:
+		// 1. Once it receives its first ADS response.
+		// 2. It hasn't received its first ADS response yet, but its own successor has received ADS
+		//    response (which triggers the exit of it). Therefore, it needs to close its predecessor if
+		//    it has one.
+		// Here the exitCleanup is for the 2nd path.
 		if !haveGotADS && prevClient != nil {
 			prevClient.close()
 		}
@@ -214,7 +230,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 		// With a different BalancerName, we need to create a new xdsClient.
 		// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
 		// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
-		if u.BalancerName != x.config.BalancerName || xor(u.ChildPolicy == nil, x.config.ChildPolicy == nil) {
+		if u.BalancerName != x.config.BalancerName || (u.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
 			x.startNewXDSClient(u)
 		}
 		// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
@@ -233,22 +249,33 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 	}
 }
 
-func xor(a bool, b bool) bool {
-	return (a && !b) || (!a && b)
-}
-
 func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 	switch u := update.(type) {
-	case *xdspb.Cluster:
+	case *cdsResp:
+		select {
+		case <-u.ctx.Done():
+			return
+		default:
+		}
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
 		// TODO: Get the optional xds record stale timeout from OutlierDetection message. If not exist,
 		// reset to 0.
 		// x.xdsStaleTimeout = u.OutlierDetection.TO_BE_DEFINED_AND_ADDED
-		x.xdsLB.HandleChildPolicy(u.LbPolicy.String(), nil)
-	case *xdspb.ClusterLoadAssignment:
+		x.xdsLB.HandleChildPolicy(u.resp.LbPolicy.String(), nil)
+	case *edsResp:
+		select {
+		case <-u.ctx.Done():
+			return
+		default:
+		}
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
-		x.xdsLB.HandleEDSResponse(u)
+		x.xdsLB.HandleEDSResponse(u.resp)
 	case *loseContact:
+		select {
+		case <-u.ctx.Done():
+			return
+		default:
+		}
 		// if we are already doing fallback monitoring, then we ignore new loseContact signal.
 		if x.inFallbackMonitor {
 			return
@@ -346,7 +373,18 @@ func (x *xdsBalancer) HandleBalancerConfig(config json.RawMessage) error {
 	return nil
 }
 
+type cdsResp struct {
+	ctx  context.Context
+	resp *xdspb.Cluster
+}
+
+type edsResp struct {
+	ctx  context.Context
+	resp *xdspb.ClusterLoadAssignment
+}
+
 func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) error {
+	var update interface{}
 	switch u := resp.(type) {
 	case *xdspb.Cluster:
 		if u.GetName() != x.cc.Target() {
@@ -355,14 +393,16 @@ func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) er
 		if u.GetType() != xdspb.Cluster_EDS {
 			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), xdspb.Cluster_EDS)
 		}
+		update = &cdsResp{ctx: ctx, resp: u}
 	case *xdspb.ClusterLoadAssignment:
 		// nothing to check
+		update = &edsResp{ctx: ctx, resp: u}
 	default:
 		grpclog.Warningf("xdsBalancer: got a response that's neither CDS nor EDS, type = %T", u)
 	}
 
 	select {
-	case x.xdsClientUpdate <- resp:
+	case x.xdsClientUpdate <- update:
 	case <-x.ctx.Done():
 	case <-ctx.Done():
 	}
@@ -370,11 +410,13 @@ func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) er
 	return nil
 }
 
-type loseContact struct{}
+type loseContact struct {
+	ctx context.Context
+}
 
 func (x *xdsBalancer) loseContact(ctx context.Context) {
 	select {
-	case x.xdsClientUpdate <- &loseContact{}:
+	case x.xdsClientUpdate <- &loseContact{ctx: ctx}:
 	case <-x.ctx.Done():
 	case <-ctx.Done():
 	}

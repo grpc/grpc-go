@@ -20,7 +20,6 @@ package xds
 
 import (
 	"context"
-	"net"
 	"sync"
 	"time"
 
@@ -31,9 +30,7 @@ import (
 	"github.com/gogo/protobuf/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 )
@@ -55,19 +52,17 @@ var (
 // ADS response from the traffic director, and sending notification when communication with the
 // traffic director is lost.
 type client struct {
-	ctx                context.Context
-	cancel             context.CancelFunc
-	cli                xdsdiscoverypb.AggregatedDiscoveryServiceClient
-	opts               balancer.BuildOptions
-	balancerName       string // the traffic director name
-	serviceName        string // the user dial target name
-	xdsClientConnCreds credentials.Bundle
-	xdsBackendCreds    credentials.Bundle
-	enableCDS          bool
-	newADS             func(ctx context.Context, resp proto.Message) error
-	loseContact        func(ctx context.Context)
-	cleanup            func()
-	backoff            backoff.Strategy
+	ctx          context.Context
+	cancel       context.CancelFunc
+	cli          xdsdiscoverypb.AggregatedDiscoveryServiceClient
+	opts         balancer.BuildOptions
+	balancerName string // the traffic director name
+	serviceName  string // the user dial target name
+	enableCDS    bool
+	newADS       func(ctx context.Context, resp proto.Message) error
+	loseContact  func(ctx context.Context)
+	cleanup      func()
+	backoff      backoff.Strategy
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -97,16 +92,11 @@ func (c *client) dial() {
 			grpclog.Warningf("xds: failed to override the server name in the credentials: %v, using Insecure", err)
 			dopts = append(dopts, grpc.WithInsecure())
 		}
-	} else if bundle := c.xdsClientConnCreds; bundle != nil {
-		dopts = append(dopts, grpc.WithCredentialsBundle(bundle))
 	} else {
 		dopts = append(dopts, grpc.WithInsecure())
 	}
 	if c.opts.Dialer != nil {
-		// WithDialer takes a different type of function, so we instead use a
-		// special DialOption here.
-		wcd := internal.WithContextDialer.(func(func(context.Context, string) (net.Conn, error)) grpc.DialOption)
-		dopts = append(dopts, wcd(c.opts.Dialer))
+		dopts = append(dopts, grpc.WithContextDialer(c.opts.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, grpc.WithBalancerName(grpc.PickFirstBalancerName))
@@ -121,7 +111,12 @@ func (c *client) dial() {
 		grpclog.Fatalf("xds: failed to dial: %v", err)
 	}
 	c.mu.Lock()
-	c.cc = cc
+	select {
+	case <-c.ctx.Done():
+	default:
+		// only assign c.cc when xds client has not been closed, to prevent ClientConn leak.
+		c.cc = cc
+	}
 	c.mu.Unlock()
 }
 
@@ -263,18 +258,6 @@ func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts 
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
-
-	var err error
-	if opts.CredsBundle != nil {
-		c.xdsClientConnCreds, err = opts.CredsBundle.NewWithMode(internal.CredsBundleModeBalancer)
-		if err != nil {
-			grpclog.Warningf("xdsClient: client connection creds NewWithMode failed: %v", err)
-		}
-		c.xdsBackendCreds, err = opts.CredsBundle.NewWithMode(internal.CredsBundleModeBackendFromBalancer)
-		if err != nil {
-			grpclog.Warningf("xdsClient: backend creds NewWithMode failed: %v", err)
-		}
-	}
 
 	return c
 }
