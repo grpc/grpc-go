@@ -849,7 +849,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
-			if err == ErrConnClosing {
+			if _, ok := err.(ConnectionError); ok {
 				return err
 			}
 			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
