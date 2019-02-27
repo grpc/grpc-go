@@ -90,7 +90,7 @@ popd
 
 ```bash
 # Run the server:
-./build/install/example-tls/bin/hello-world-tls-serverlocalhost 54440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem /tmp/sslcert/ca.crt
+./build/install/example-tls/bin/hello-world-tls-server localhost 54440 /tmp/sslcert/server.crt /tmp/sslcert/server.pem /tmp/sslcert/ca.crt
 # In another terminal run the client
 ./build/install/example-tls/bin/hello-world-tls-client localhost 54440 /tmp/sslcert/ca.crt /tmp/sslcert/client.crt /tmp/sslcert/client.pem
 ```
