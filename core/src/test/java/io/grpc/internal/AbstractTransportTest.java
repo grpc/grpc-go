@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal.testing;
+package io.grpc.internal;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.truth.Truth.assertThat;
@@ -55,22 +55,8 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
-import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.ConnectionClientTransport;
-import io.grpc.internal.GrpcAttributes;
-import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.InternalServer;
-import io.grpc.internal.IoUtils;
-import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.ServerListener;
-import io.grpc.internal.ServerStream;
-import io.grpc.internal.ServerStreamListener;
-import io.grpc.internal.ServerTransport;
-import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.TimeProvider;
-import io.grpc.internal.TransportTracer;
+import io.grpc.internal.testing.TestClientStreamTracer;
+import io.grpc.internal.testing.TestServerStreamTracer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
