@@ -53,8 +53,8 @@ support or have 2% the performance of OpenSSL.
 
 We recommend most users use grpc-netty-shaded, which includes netty-tcnative on
 BoringSSL. It includes pre-built libraries for 64 bit Windows, OS X, and 64 bit
-Linux. For 32 bit Windows, Conscrypt may be an option. For all other platforms,
-Java 9+ is required.
+Linux. For 32 bit Windows, Conscrypt is an option. For all other platforms, Java
+9+ is required.
 
 For users of grpc-netty we recommend [netty-tcnative with
 BoringSSL](#tls-with-netty-tcnative-on-boringssl), although using the built-in
@@ -330,7 +330,11 @@ If you aren't using gRPC on Android devices, you are most likely using `grpc-net
 
 If you are developing for Android and have a dependency on `grpc-netty`, you should remove it as `grpc-netty` is unsupported on Android. Use `grpc-okhttp` instead.
 
-If you are on a 32-bit operating system, or not on a [Transport Security supported platform](#transport-security-tls), you should use Jetty ALPN (and beware of potential issues), or you'll need to build your own 32-bit version of `netty-tcnative`.
+If you are on a 32-bit operating system, using Java 11+ may be the easiest
+solution, as ALPN was added to Java in Java 9. If on 32-bit Windows, [Conscrypt
+is an option](#tls-with-conscrypt). Otherwise you need to [build your own 32-bit
+version of
+`netty-tcnative`](https://netty.io/wiki/forked-tomcat-native.html#wiki-h2-6).
 
 If on Alpine Linux and you see "Error loading shared library libcrypt.so.1: No
 such file or directory". Run `apk update && apk add libc6-compat` to install the
