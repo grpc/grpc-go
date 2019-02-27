@@ -750,7 +750,7 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 		LoadBalanceToken: lbToken,
 	}}
 	if drop {
-		servers = append(servers, &lbpb.Server{IpAddress: tss.beIPs[0],
+		servers = append(servers, &lbpb.Server{
 			LoadBalanceToken: lbToken,
 			Drop:             drop,
 		})
@@ -893,7 +893,6 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 
 func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	defer leakcheck.Check(t)
-	c := 0
 	stats := runAndGetStats(t, true, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -920,8 +919,8 @@ func TestGRPCLBStatsStreamingDrop(t *testing.T) {
 	})
 
 	if err := checkStats(stats, &rpcStats{
-		numCallsStarted:               int64(countRPC + c),
-		numCallsFinished:              int64(countRPC + c),
+		numCallsStarted:               int64(countRPC),
+		numCallsFinished:              int64(countRPC),
 		numCallsFinishedKnownReceived: int64(countRPC) / 2,
 		numCallsDropped:               map[string]int64{lbToken: int64(countRPC) / 2},
 	}); err != nil {
