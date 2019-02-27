@@ -322,7 +322,8 @@ If you received an error message "ALPN is not configured properly" or "Jetty ALP
  - ALPN related dependencies are either not present in the classpath
  - or that there is a classpath conflict
  - or that a wrong version is used due to dependency management
- - or you are on an unsupported platform (e.g., 32-bit OS, Alpine with `musl` libc). See [Transport Security](#transport-security-tls) for supported platforms.
+ - or you are on an unsupported platform (e.g., 32-bit OS). See [Transport
+   Security](#transport-security-tls) for supported platforms.
 
 ### Netty
 If you aren't using gRPC on Android devices, you are most likely using `grpc-netty` transport.
@@ -331,10 +332,14 @@ If you are developing for Android and have a dependency on `grpc-netty`, you sho
 
 If you are on a 32-bit operating system, or not on a [Transport Security supported platform](#transport-security-tls), you should use Jetty ALPN (and beware of potential issues), or you'll need to build your own 32-bit version of `netty-tcnative`.
 
-If you are using `musl` libc (e.g., with Alpine Linux), then
-`netty-tcnative-boringssl-static` won't work. There are several alternatives:
- - Use [netty-tcnative-alpine](https://github.com/pires/netty-tcnative-alpine)
- - Use a distribution with `glibc`
+If on Alpine Linux and you see "Error loading shared library libcrypt.so.1: No
+such file or directory". Run `apk update && apk add libc6-compat` to install the
+necessary dependency.
+
+If on Alpine Linux, try to use `grpc-netty-shaded` instead of `grpc-netty` or
+(if you need `grpc-netty`) `netty-tcnative-boringssl-static` instead of
+`netty-tcnative`. If those are not an option, you may consider using
+[netty-tcnative-alpine](https://github.com/pires/netty-tcnative-alpine).
 
 If you are running inside of an embedded Tomcat runtime (e.g., Spring Boot),
 then some versions of `netty-tcnative-boringssl-static` will have conflicts and
