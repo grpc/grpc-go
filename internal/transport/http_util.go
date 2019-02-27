@@ -275,12 +275,6 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) error {
 	}
 
 	for _, hf := range frame.Fields {
-		if hf.Name != "content-type" && hf.Name != ":status" && d.data.grpcErr != nil {
-			// if we've already encountered grpc related field parsing error, then we skip processing
-			// all following grpc related field.
-			continue
-		}
-
 		d.processHeaderField(hf)
 	}
 
