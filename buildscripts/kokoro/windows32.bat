@@ -48,4 +48,4 @@ IF NOT %GRADLEEXIT% == 0 (
 @rem make sure no daemons have any files open
 cmd.exe /C "%WORKSPACE%\gradlew.bat --stop"
 
-cmd.exe /C "%WORKSPACE%\gradlew.bat  %GRADLE_FLAGS% -Dorg.gradle.parallel=false -Dmaven.repo.local=%WORKSPACE%\artifacts clean grpc-compiler:build grpc-compiler:publishToMavenLocal" || exit /b 1
+cmd.exe /C "%WORKSPACE%\gradlew.bat  %GRADLE_FLAGS% -Dorg.gradle.parallel=false -PrepositoryDir=%WORKSPACE%\artifacts clean grpc-compiler:build grpc-compiler:publish" || exit /b 1

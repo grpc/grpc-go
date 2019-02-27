@@ -70,11 +70,11 @@ fi
 LOCAL_MVN_TEMP=$(mktemp -d)
 # Note that this disables parallel=true from GRADLE_FLAGS
 if [[ -z "${ALL_ARTIFACTS:-}" ]]; then
-  ./gradlew grpc-compiler:build grpc-compiler:publishToMavenLocal $GRADLE_FLAGS \
-    -Dorg.gradle.parallel=false -Dmaven.repo.local=$LOCAL_MVN_TEMP
+  ./gradlew grpc-compiler:build grpc-compiler:publish $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
 else
-  ./gradlew publishToMavenLocal $GRADLE_FLAGS \
-    -Dorg.gradle.parallel=false -Dmaven.repo.local=$LOCAL_MVN_TEMP
+  ./gradlew publish $GRADLE_FLAGS \
+    -Dorg.gradle.parallel=false -PrepositoryDir=$LOCAL_MVN_TEMP
 fi
 
 readonly MVN_ARTIFACT_DIR="${MVN_ARTIFACT_DIR:-$GRPC_JAVA_DIR/mvn-artifacts}"
