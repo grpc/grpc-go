@@ -22,24 +22,27 @@ import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Unit tests for {@link ForwardingServerCallListener}.
  */
 @RunWith(JUnit4.class)
 public class ForwardingServerCallListenerTest {
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   @Mock private ServerCall.Listener<Integer> serverCallListener;
   private ForwardingServerCallListener<Integer> forwarder;
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     forwarder = new SimpleForwardingServerCallListener<Integer>(serverCallListener) {};
   }
 

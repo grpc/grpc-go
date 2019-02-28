@@ -60,8 +60,9 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 /**
@@ -71,6 +72,7 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class AbstractClientStreamTest {
 
+  @Rule public final MockitoRule mocks = MockitoJUnit.rule();
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
@@ -79,8 +81,6 @@ public class AbstractClientStreamTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
-
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) throws Throwable {

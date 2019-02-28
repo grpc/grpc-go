@@ -46,13 +46,15 @@ import java.util.Date;
 import java.util.concurrent.Executor;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Tests for {@link ClientAuthInterceptor}.
@@ -67,6 +69,9 @@ public class ClientAuthInterceptorTest {
       "Extra-Authorization", Metadata.ASCII_STRING_MARSHALLER);
 
   private final Executor executor = MoreExecutors.directExecutor();
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   @Mock
   Credentials credentials;
@@ -92,7 +97,6 @@ public class ClientAuthInterceptorTest {
   /** Set up for test. */
   @Before
   public void startUp() {
-    MockitoAnnotations.initMocks(this);
     descriptor = MethodDescriptor.<String, Integer>newBuilder()
         .setType(MethodDescriptor.MethodType.UNKNOWN)
         .setFullMethodName("a.service/method")

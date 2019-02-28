@@ -32,18 +32,22 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 @RunWith(JUnit4.class)
 public final class KeepAliveManagerTest {
   private final FakeTicker ticker = new FakeTicker();
   private KeepAliveManager keepAliveManager;
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
   @Mock private KeepAlivePinger keepAlivePinger;
   @Mock private ConnectionClientTransport transport;
   @Mock private ScheduledExecutorService scheduler;
@@ -61,7 +65,6 @@ public final class KeepAliveManagerTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     keepAliveManager = new KeepAliveManager(keepAlivePinger, scheduler, ticker, 1000, 2000, false);
   }
 

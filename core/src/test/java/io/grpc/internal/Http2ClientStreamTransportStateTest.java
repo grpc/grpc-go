@@ -32,6 +32,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,13 +40,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 /** Unit tests for {@link Http2ClientStreamTransportState}. */
 @RunWith(JUnit4.class)
 public class Http2ClientStreamTransportStateTest {
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   private final Metadata.Key<String> testStatusMashaller =
       InternalMetadata.keyOf(":status", Metadata.ASCII_STRING_MARSHALLER);
@@ -56,7 +61,6 @@ public class Http2ClientStreamTransportStateTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     transportTracer = new TransportTracer();
 
     doAnswer(new Answer<Void>() {

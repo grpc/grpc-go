@@ -70,6 +70,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -77,7 +78,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Test for {@link ClientCallImpl}.
@@ -97,6 +99,9 @@ public class ClientCallImplTest {
       .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
       .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
       .build();
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   @Mock private ClientStreamListener streamListener;
   @Mock private ClientTransport clientTransport;
@@ -127,7 +132,6 @@ public class ClientCallImplTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     when(provider.get(any(PickSubchannelArgsImpl.class))).thenReturn(transport);
     when(transport.newStream(
             any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class)))

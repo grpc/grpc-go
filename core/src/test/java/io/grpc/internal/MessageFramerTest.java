@@ -35,19 +35,23 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Tests for {@link MessageFramer}.
  */
 @RunWith(JUnit4.class)
 public class MessageFramerTest {
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
   @Mock
   private MessageFramer.Sink sink;
 
@@ -67,7 +71,6 @@ public class MessageFramerTest {
   /** Set up for test. */
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     // MessageDeframerTest tests with a client-side StatsTraceContext, so here we test with a
     // server-side StatsTraceContext.
     statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});

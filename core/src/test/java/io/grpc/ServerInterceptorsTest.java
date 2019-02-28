@@ -39,16 +39,21 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /** Unit tests for {@link ServerInterceptors}. */
 @RunWith(JUnit4.class)
 public class ServerInterceptorsTest {
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
+
   @Mock
   private Marshaller<String> requestMarshaller;
 
@@ -72,7 +77,6 @@ public class ServerInterceptorsTest {
   /** Set up for test. */
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     flowMethod = MethodDescriptor.<String, Integer>newBuilder()
         .setType(MethodType.UNKNOWN)
         .setFullMethodName("basic/flow")

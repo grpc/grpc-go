@@ -19,12 +19,13 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
-import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.OngoingStubbing;
 
 /**
@@ -33,13 +34,11 @@ import org.mockito.stubbing.OngoingStubbing;
 @RunWith(JUnit4.class)
 public class AbstractReadableBufferTest {
 
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
+
   @Mock
   private AbstractReadableBuffer buffer;
-
-  @Before
-  public void setup() {
-    MockitoAnnotations.initMocks(this);
-  }
 
   @Test
   public void readPositiveIntShouldSucceed() {

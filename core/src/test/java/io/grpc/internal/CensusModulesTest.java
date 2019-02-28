@@ -94,7 +94,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Test for {@link CensusStatsModule} and {@link CensusTracingModule}.
@@ -146,6 +147,9 @@ public class CensusModulesTest {
         }
       };
 
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
+
   private final MethodDescriptor<String, String> method =
       MethodDescriptor.<String, String>newBuilder()
           .setType(MethodDescriptor.MethodType.UNKNOWN)
@@ -192,7 +196,6 @@ public class CensusModulesTest {
   @Before
   @SuppressWarnings("unchecked")
   public void setUp() throws Exception {
-    MockitoAnnotations.initMocks(this);
     when(spyClientSpanBuilder.startSpan()).thenReturn(spyClientSpan);
     when(tracer.spanBuilderWithExplicitParent(anyString(), any(Span.class)))
         .thenReturn(spyClientSpanBuilder);

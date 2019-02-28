@@ -41,17 +41,22 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /** Unit tests for {@link ClientInterceptors}. */
 @RunWith(JUnit4.class)
 public class ClientInterceptorsTest {
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   @Mock
   private Channel channel;
@@ -64,7 +69,6 @@ public class ClientInterceptorsTest {
    * Sets up mocks.
    */
   @Before public void setUp() {
-    MockitoAnnotations.initMocks(this);
     when(channel.newCall(
         Mockito.<MethodDescriptor<String, Integer>>any(), any(CallOptions.class)))
         .thenReturn(call);

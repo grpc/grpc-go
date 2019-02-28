@@ -63,14 +63,16 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Unit tests for {@link InternalSubchannel}.
  */
 @RunWith(JUnit4.class)
 public class InternalSubchannelTest {
-
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
   @Rule
   public final ExpectedException thrown = ExpectedException.none();
 
@@ -134,8 +136,6 @@ public class InternalSubchannelTest {
   private BlockingQueue<MockClientTransportInfo> transports;
 
   @Before public void setUp() {
-    MockitoAnnotations.initMocks(this);
-
     when(mockBackoffPolicyProvider.get())
         .thenReturn(mockBackoffPolicy1, mockBackoffPolicy2, mockBackoffPolicy3);
     when(mockBackoffPolicy1.nextBackoffNanos()).thenReturn(10L, 100L);

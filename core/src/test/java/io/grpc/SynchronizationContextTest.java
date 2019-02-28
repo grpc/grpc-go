@@ -34,14 +34,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
-import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 /**
@@ -58,6 +59,9 @@ public class SynchronizationContextTest {
         }
       });
 
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
+
   @Mock
   private Runnable task1;
 
@@ -66,11 +70,7 @@ public class SynchronizationContextTest {
 
   @Mock
   private Runnable task3;
-
-  @Before public void setUp() {
-    MockitoAnnotations.initMocks(this);
-  }
-
+  
   @After public void tearDown() {
     assertThat(uncaughtErrors).isEmpty();
   }

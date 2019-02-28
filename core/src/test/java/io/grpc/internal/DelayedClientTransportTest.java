@@ -51,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -58,8 +59,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 /**
@@ -67,6 +69,9 @@ import org.mockito.stubbing.Answer;
  */
 @RunWith(JUnit4.class)
 public class DelayedClientTransportTest {
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
+
   @Mock private ManagedClientTransport.Listener transportListener;
   @Mock private SubchannelPicker mockPicker;
   @Mock private AbstractSubchannel mockSubchannel;
@@ -112,7 +117,6 @@ public class DelayedClientTransportTest {
           }));
 
   @Before public void setUp() {
-    MockitoAnnotations.initMocks(this);
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(mockSubchannel));
     when(mockSubchannel.obtainActiveTransport()).thenReturn(mockRealTransport);

@@ -58,14 +58,16 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 /**
@@ -73,6 +75,9 @@ import org.mockito.stubbing.Answer;
  */
 @RunWith(JUnit4.class)
 public class GoogleAuthLibraryCallCredentialsTest {
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
 
   private static final Metadata.Key<String> AUTHORIZATION = Metadata.Key.of("Authorization",
       Metadata.ASCII_STRING_MARSHALLER);
@@ -112,7 +117,6 @@ public class GoogleAuthLibraryCallCredentialsTest {
 
   @Before
   public void setUp() throws Exception {
-    MockitoAnnotations.initMocks(this);
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) {

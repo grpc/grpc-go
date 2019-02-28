@@ -82,16 +82,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /** Unit tests for {@link DnsNameResolver}. */
 @RunWith(JUnit4.class)
 public class DnsNameResolverTest {
 
   @Rule public final TestRule globalTimeout = new DisableOnDebug(Timeout.seconds(10));
-
-  @Rule
-  public final ExpectedException thrown = ExpectedException.none();
+  @Rule public final MockitoRule mocks = MockitoJUnit.rule();
+  @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private final Map<String, Object> serviceConfig = new LinkedHashMap<>();
 
@@ -198,7 +198,6 @@ public class DnsNameResolverTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     DnsNameResolver.enableJndi = true;
     networkaddressCacheTtlPropertyValue =
         System.getProperty(DnsNameResolver.NETWORKADDRESS_CACHE_TTL_PROPERTY);

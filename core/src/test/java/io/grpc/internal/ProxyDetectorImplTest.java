@@ -40,14 +40,19 @@ import java.net.ProxySelector;
 import java.net.SocketAddress;
 import java.net.URI;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 @RunWith(JUnit4.class)
 public class ProxyDetectorImplTest {
+
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
   @Mock private ProxySelector proxySelector;
   @Mock private ProxyDetectorImpl.AuthenticationProvider authenticator;
   private InetSocketAddress destination = InetSocketAddress.createUnresolved("10.10.10.10", 5678);
@@ -59,7 +64,6 @@ public class ProxyDetectorImplTest {
 
   @Before
   public void setUp() throws Exception {
-    MockitoAnnotations.initMocks(this);
     proxySelectorSupplier = new Supplier<ProxySelector>() {
       @Override
       public ProxySelector get() {

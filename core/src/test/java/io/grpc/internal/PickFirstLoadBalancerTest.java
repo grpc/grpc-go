@@ -48,6 +48,7 @@ import java.net.SocketAddress;
 import java.util.List;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -55,7 +56,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 
 /** Unit test for {@link PickFirstLoadBalancer}. */
@@ -67,7 +69,8 @@ public class PickFirstLoadBalancerTest {
 
   private static final Attributes.Key<String> FOO = Attributes.Key.create("foo");
   private Attributes affinity = Attributes.newBuilder().set(FOO, "bar").build();
-
+  @Rule
+  public final MockitoRule mocks = MockitoJUnit.rule();
   @Captor
   private ArgumentCaptor<SubchannelPicker> pickerCaptor;
   @Captor
@@ -81,7 +84,6 @@ public class PickFirstLoadBalancerTest {
 
   @Before
   public void setUp() {
-    MockitoAnnotations.initMocks(this);
     for (int i = 0; i < 3; i++) {
       SocketAddress addr = new FakeSocketAddress("server" + i);
       servers.add(new EquivalentAddressGroup(addr));
