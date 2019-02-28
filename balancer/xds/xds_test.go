@@ -239,7 +239,7 @@ func newFakeEDSBalancer(cc balancer.ClientConn) interface{} {
 	return lb
 }
 
-func getLatestEdsalancer() *fakeEDSBalancer {
+func getLatestEdsBalancer() *fakeEDSBalancer {
 	mu.Lock()
 	defer mu.Unlock()
 	return latestFakeEdsBalancer
@@ -339,7 +339,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 
 		var j int
 		for j = 0; j < 10; j++ {
-			if edsLB := getLatestEdsalancer(); edsLB != nil { // edsLB won't change between the two iterations
+			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
 					if !reflect.DeepEqual(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
@@ -425,7 +425,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		}
 		var i int
 		for i = 0; i < 10; i++ {
-			if edsLB := getLatestEdsalancer(); edsLB != nil {
+			if edsLB := getLatestEdsBalancer(); edsLB != nil {
 				select {
 				case childPolicy := <-edsLB.childPolicy:
 					if !reflect.DeepEqual(childPolicy, test.expectedChildPolicy) {
@@ -483,7 +483,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 
 	var i int
 	for i = 0; i < 10; i++ {
-		if edsLB := getLatestEdsalancer(); edsLB != nil {
+		if edsLB := getLatestEdsBalancer(); edsLB != nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -559,7 +559,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 
 	var i int
 	for i = 0; i < 10; i++ {
-		if edsLB := getLatestEdsalancer(); edsLB != nil {
+		if edsLB := getLatestEdsBalancer(); edsLB != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
 			select {
 			case scsc := <-edsLB.subconnStateChange:
@@ -639,7 +639,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 
 	var i int
 	for i = 0; i < 10; i++ {
-		if edsLB := getLatestEdsalancer(); edsLB != nil {
+		if edsLB := getLatestEdsBalancer(); edsLB != nil {
 			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
 			select {
 			case scsc := <-edsLB.subconnStateChange:

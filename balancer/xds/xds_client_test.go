@@ -21,10 +21,8 @@ package xds
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"testing"
 	"time"
 
@@ -312,7 +310,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		if req.err != nil {
 			t.Fatalf("ads RPC failed with err: %v", req.err)
 		}
-		if !reflect.DeepEqual(req.req, expectedReq) {
+		if !proto.Equal(req.req, expectedReq) {
 			t.Fatalf("got ADS request %T %v, expected: %T %v", req.req, req.req, expectedReq, expectedReq)
 		}
 	}
@@ -320,32 +318,10 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 	for i, resp := range test.responsesToSend {
 		td.sendResp(&response{resp: resp})
 		ads := <-adsChan
-		if err := verifyResp(ads, test.expectedADSResponses[i]); err != nil {
-			t.Fatal(err)
+		if !proto.Equal(ads, test.expectedADSResponses[i]) {
+			t.Fatalf("received unexpected ads response, got %v, want %v", ads, test.expectedADSResponses[i])
 		}
 	}
-}
-
-func verifyResp(got proto.Message, want interface{}) error {
-	switch g := got.(type) {
-	case *xdspb.Cluster:
-		if _, ok := want.(*xdspb.Cluster); !ok {
-			return fmt.Errorf("different message types, got %T, want %T", g, want)
-		}
-		if !reflect.DeepEqual(g, want) {
-			return fmt.Errorf("different message, got %v, want %v", g, want)
-		}
-	case *xdspb.ClusterLoadAssignment:
-		if _, ok := want.(*xdspb.ClusterLoadAssignment); !ok {
-			return fmt.Errorf("different message types, got %T, want %T", g, want)
-		}
-		if !reflect.DeepEqual(g, want) {
-			return fmt.Errorf("different message, got %v, want %v", g, want)
-		}
-	default:
-		return fmt.Errorf("got unexpected message type %T", g)
-	}
-	return nil
 }
 
 func (s) TestXdsClientLoseContact(t *testing.T) {
