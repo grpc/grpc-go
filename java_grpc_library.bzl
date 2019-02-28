@@ -26,9 +26,10 @@ def _java_rpc_library_impl(ctx):
     args.add_all(includes, map_each = _create_include_path)
     args.add_all(srcs, map_each = _path_ignoring_repository)
 
-    ctx.action(
-        inputs = depset([ctx.executable._java_plugin] + srcs, transitive = [includes]),
+    ctx.actions.run(
+        inputs = depset(srcs, transitive = [includes]),
         outputs = [ctx.outputs.srcjar],
+        tools = [ctx.executable._java_plugin],
         executable = ctx.executable._protoc,
         arguments = [args],
     )
@@ -52,12 +53,12 @@ _java_rpc_library = rule(
     attrs = {
         "srcs": attr.label_list(
             mandatory = True,
-            non_empty = True,
+            allow_empty = False,
             providers = ["proto"],
         ),
         "deps": attr.label_list(
             mandatory = True,
-            non_empty = True,
+            allow_empty = False,
             providers = [JavaInfo],
         ),
         "flavor": attr.string(
