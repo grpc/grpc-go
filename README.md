@@ -212,9 +212,9 @@ to gRPC and has weaker API guarantees than the core API under package `io.grpc`.
 gRPC comes with three Transport implementations:
 
 1. The Netty-based transport is the main transport implementation based on
-   [Netty](http://netty.io). It is for both the client and the server.
+   [Netty](https://netty.io). It is for both the client and the server.
 2. The OkHttp-based transport is a lightweight transport based on
-   [OkHttp](http://square.github.io/okhttp/). It is mainly for use on Android
+   [OkHttp](https://square.github.io/okhttp/). It is mainly for use on Android
    and is for client only.
 3. The in-process transport is for when a server is in the same process as the
    client. It is useful for testing, while also being safe for production use.

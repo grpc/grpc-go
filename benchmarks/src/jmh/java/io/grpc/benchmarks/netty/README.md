@@ -16,7 +16,7 @@ ethernet interface with a packet delay of 0.1ms.
 Linux
 =====
 
-On Linux we can use [netem](http://www.linuxfoundation.org/collaborate/workgroups/networking/netem)  to shape the traffic appropriately.
+On Linux we can use [netem](https://www.linuxfoundation.org/collaborate/workgroups/networking/netem)  to shape the traffic appropriately.
 
 ```sh
 # Remove all traffic shaping from loopback

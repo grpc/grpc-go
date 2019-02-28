@@ -8,7 +8,7 @@ Prerequisites
 ==========================
 
 - Install the Google Cloud SDK and ensure that `gcloud` is in the path
-- Set up an [App Engine app](http://appengine.google.com) with your
+- Set up an [App Engine app](https://appengine.google.com) with your
   choice of a PROJECT_ID.
 - Associate your `gcloud` environment with your app:
   ```bash

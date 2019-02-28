@@ -62,7 +62,7 @@ JDK support in Java 9+, [Conscrypt](#tls-with-conscrypt), and [netty-tcnative
 with OpenSSL](#tls-with-netty-tcnative-on-openssl) are other valid options.
 
 [Netty TCNative](https://github.com/netty/netty-tcnative) is a fork of
-[Apache Tomcat's tcnative](http://tomcat.apache.org/native-doc/) and is a JNI
+[Apache Tomcat's tcnative](https://tomcat.apache.org/native-doc/) and is a JNI
 wrapper around OpenSSL/BoringSSL/LibreSSL.
 
 We recommend BoringSSL for its simplicitly and low occurrence of security
@@ -252,7 +252,7 @@ of the other options due to a slow AES GCM implementation in Java.
 
 #### Configuring Jetty ALPN in Web Containers
 
-Some web containers, such as [Jetty](http://www.eclipse.org/jetty/documentation/current/jetty-classloading.html) restrict access to server classes for web applications. A gRPC client running within such a container must be properly configured to allow access to the ALPN classes. In Jetty, this is done by including a `WEB-INF/jetty-env.xml` file containing the following:
+Some web containers, such as [Jetty](https://www.eclipse.org/jetty/documentation/current/jetty-classloading.html) restrict access to server classes for web applications. A gRPC client running within such a container must be properly configured to allow access to the ALPN classes. In Jetty, this is done by including a `WEB-INF/jetty-env.xml` file containing the following:
 
 ```xml
 <?xml version="1.0"  encoding="ISO-8859-1"?>
