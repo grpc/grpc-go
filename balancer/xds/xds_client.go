@@ -113,6 +113,7 @@ func (c *client) dial() {
 	c.mu.Lock()
 	select {
 	case <-c.ctx.Done():
+		cc.Close()
 	default:
 		// only assign c.cc when xds client has not been closed, to prevent ClientConn leak.
 		c.cc = cc

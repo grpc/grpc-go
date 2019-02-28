@@ -317,6 +317,8 @@ func (c *connStateMgr) notifyWhenNotReady() <-chan struct{} {
 
 // xdsClientConn wraps around the balancer.ClientConn passed in from grpc. The wrapping is to add
 // functionality to get notification when no subconn is in READY state.
+// TODO: once we have the change that keeps both edsbalancer and fallback balancer alive at the same
+// time, we need to make sure to synchronize updates from both entities on the ClientConn.
 type xdsClientConn struct {
 	updateState func(s connectivity.State)
 	balancer.ClientConn
@@ -500,9 +502,6 @@ func (x *xdsBalancer) startFallbackMonitoring() {
 // 1. xDS client returns a new ADS message.
 // 2. fallback has been triggered.
 func (x *xdsBalancer) cancelFallbackMonitoring() {
-	if x.startup {
-		x.startup = false
-	}
 	if !x.timer.Stop() {
 		select {
 		case <-x.timer.C:
