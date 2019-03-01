@@ -25,6 +25,8 @@ import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
+import io.grpc.InternalChannelz.Security;
+import io.grpc.InternalChannelz.Tls;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.internal.GrpcAttributes;
@@ -268,62 +270,13 @@ final class ProtocolNegotiators {
     }
   }
 
-  /**
-   * Returns a {@link ProtocolNegotiator} that ensures the pipeline is set up so that TLS will
-   * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
-   * may happen immediately, even before the TLS Handshake is complete.
-   */
-  public static ProtocolNegotiator tls(SslContext sslContext) {
-    return new TlsNegotiator(sslContext);
-  }
+  static final class ClientTlsProtocolNegotiator implements ProtocolNegotiator {
 
-  @VisibleForTesting
-  static final class TlsNegotiator implements ProtocolNegotiator {
-    private final SslContext sslContext;
-
-    TlsNegotiator(SslContext sslContext) {
+    public ClientTlsProtocolNegotiator(SslContext sslContext) {
       this.sslContext = checkNotNull(sslContext, "sslContext");
     }
 
-    @VisibleForTesting
-    HostPort parseAuthority(String authority) {
-      URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
-      String host;
-      int port;
-      if (uri.getHost() != null) {
-        host = uri.getHost();
-        port = uri.getPort();
-      } else {
-        /*
-         * Implementation note: We pick -1 as the port here rather than deriving it from the
-         * original socket address.  The SSL engine doesn't use this port number when contacting the
-         * remote server, but rather it is used for other things like SSL Session caching.  When an
-         * invalid authority is provided (like "bad_cert"), picking the original port and passing it
-         * in would mean that the port might used under the assumption that it was correct.   By
-         * using -1 here, it forces the SSL implementation to treat it as invalid.
-         */
-        host = authority;
-        port = -1;
-      }
-      return new HostPort(host, port);
-    }
-
-    @Override
-    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler handler) {
-      final HostPort hostPort = parseAuthority(handler.getAuthority());
-
-      ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
-        @Override
-        public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-          SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), hostPort.host, hostPort.port);
-          SSLParameters sslParams = sslEngine.getSSLParameters();
-          sslParams.setEndpointIdentificationAlgorithm("HTTPS");
-          sslEngine.setSSLParameters(sslParams);
-          ctx.pipeline().replace(this, null, new SslHandler(sslEngine, false));
-        }
-      };
-      return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
-    }
+    private final SslContext sslContext;
 
     @Override
     public AsciiString scheme() {
@@ -331,7 +284,111 @@ final class ProtocolNegotiators {
     }
 
     @Override
+    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      ChannelHandler gnh = new GrpcNegotiationHandler(grpcHandler);
+      ChannelHandler cth = new ClientTlsHandler(gnh, sslContext, grpcHandler.getAuthority());
+      WaitUntilActiveHandler wuah = new WaitUntilActiveHandler(cth);
+      return wuah;
+    }
+
+    @Override
     public void close() {}
+  }
+
+  static final class ClientTlsHandler extends ChannelDuplexHandler {
+
+    private final ChannelHandler next;
+    private final SslContext sslContext;
+    private final String host;
+    private final int port;
+
+    private ProtocolNegotiationEvent pne = ProtocolNegotiationEvent.DEFAULT;
+
+    ClientTlsHandler(ChannelHandler next, SslContext sslContext, String authority) {
+      this.next = checkNotNull(next, "next");
+      this.sslContext = checkNotNull(sslContext, "sslContext");
+      HostPort hostPort = parseAuthority(authority);
+      this.host = hostPort.host;
+      this.port = hostPort.port;
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+      SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), host, port);
+      SSLParameters sslParams = sslEngine.getSSLParameters();
+      sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+      sslEngine.setSSLParameters(sslParams);
+      ctx.pipeline().addBefore(ctx.name(), /* name= */ null, new SslHandler(sslEngine, false));
+      super.handlerAdded(ctx);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof ProtocolNegotiationEvent) {
+        pne = (ProtocolNegotiationEvent) evt;
+      } else if (evt instanceof SslHandshakeCompletionEvent) {
+        SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
+        if (handshakeEvent.isSuccess()) {
+          SslHandler handler = ctx.pipeline().get(SslHandler.class);
+          if (NEXT_PROTOCOL_VERSIONS.contains(handler.applicationProtocol())) {
+            // Successfully negotiated the protocol.
+            logSslEngineDetails(Level.FINER, ctx, "TLS negotiation succeeded.", null);
+            ctx.pipeline().replace(ctx.name(), null, next);
+            fireProtocolNegotiationEvent(ctx, handler.engine().getSession());
+          } else {
+            Exception ex = new Exception(
+                "Failed ALPN negotiation: Unable to find compatible protocol.");
+            logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed.", ex);
+            ctx.fireExceptionCaught(ex);
+          }
+        } else {
+          ctx.fireExceptionCaught(handshakeEvent.cause());
+        }
+      } else {
+        super.userEventTriggered(ctx, evt);
+      }
+    }
+
+    private void fireProtocolNegotiationEvent(ChannelHandlerContext ctx, SSLSession session) {
+      Security security = new Security(new Tls(session));
+      Attributes attrs = pne.getAttributes().toBuilder()
+          .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+          .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
+          .build();
+      ctx.fireUserEventTriggered(pne.withAttributes(attrs).withSecurity(security));
+    }
+  }
+
+  @VisibleForTesting
+  static HostPort parseAuthority(String authority) {
+    URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
+    String host;
+    int port;
+    if (uri.getHost() != null) {
+      host = uri.getHost();
+      port = uri.getPort();
+    } else {
+      /*
+       * Implementation note: We pick -1 as the port here rather than deriving it from the
+       * original socket address.  The SSL engine doens't use this port number when contacting the
+       * remote server, but rather it is used for other things like SSL Session caching.  When an
+       * invalid authority is provided (like "bad_cert"), picking the original port and passing it
+       * in would mean that the port might used under the assumption that it was correct.   By
+       * using -1 here, it forces the SSL implementation to treat it as invalid.
+       */
+      host = authority;
+      port = -1;
+    }
+    return new HostPort(host, port);
+  }
+
+  /**
+   * Returns a {@link ProtocolNegotiator} that ensures the pipeline is set up so that TLS will
+   * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
+   * may happen immediately, even before the TLS Handshake is complete.
+   */
+  public static ProtocolNegotiator tls(SslContext sslContext) {
+    return new ClientTlsProtocolNegotiator(sslContext);
   }
 
   /** A tuple of (host, port). */
@@ -632,59 +689,6 @@ final class ProtocolNegotiators {
         this.msg = msg;
         this.promise = promise;
       }
-    }
-  }
-
-  /**
-   * Buffers all writes until the TLS Handshake is complete.
-   */
-  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler {
-
-    private final GrpcHttp2ConnectionHandler grpcHandler;
-
-    BufferUntilTlsNegotiatedHandler(
-        ChannelHandler bootstrapHandler, GrpcHttp2ConnectionHandler grpcHandler) {
-      super(bootstrapHandler);
-      this.grpcHandler = grpcHandler;
-    }
-
-    @Override
-    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-      if (evt instanceof SslHandshakeCompletionEvent) {
-        SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
-        if (handshakeEvent.isSuccess()) {
-          SslHandler handler = ctx.pipeline().get(SslHandler.class);
-          if (NEXT_PROTOCOL_VERSIONS.contains(handler.applicationProtocol())) {
-            // Successfully negotiated the protocol.
-            logSslEngineDetails(Level.FINER, ctx, "TLS negotiation succeeded.", null);
-
-            // Wait until negotiation is complete to add gRPC.   If added too early, HTTP/2 writes
-            // will fail before we see the userEvent, and the channel is closed down prematurely.
-            ctx.pipeline().addBefore(ctx.name(), null, grpcHandler);
-
-            SSLSession session = handler.engine().getSession();
-            // Successfully negotiated the protocol.
-            // Notify about completion and pass down SSLSession in attributes.
-            grpcHandler.handleProtocolNegotiationCompleted(
-                Attributes.newBuilder()
-                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, session)
-                    .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                    .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-                    .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
-                    .build(),
-                new InternalChannelz.Security(new InternalChannelz.Tls(session)));
-            writeBufferedAndRemove(ctx);
-          } else {
-            Exception ex = new Exception(
-                "Failed ALPN negotiation: Unable to find compatible protocol.");
-            logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed.", ex);
-            fail(ctx, ex);
-          }
-        } else {
-          fail(ctx, handshakeEvent.cause());
-        }
-      }
-      super.userEventTriggered(ctx, evt);
     }
   }
 
