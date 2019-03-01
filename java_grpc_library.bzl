@@ -14,8 +14,8 @@ def _java_rpc_library_impl(ctx):
         print(("in srcs attribute of {0}: Proto source with label {1} should be in " +
                "same package as consuming rule").format(ctx.label, ctx.attr.srcs[0].label))
 
-    srcs = ctx.attr.srcs[0].proto.direct_sources
-    includes = ctx.attr.srcs[0].proto.transitive_imports
+    srcs = ctx.attr.srcs[0][ProtoInfo].direct_sources
+    includes = ctx.attr.srcs[0][ProtoInfo].transitive_imports
     flavor = ctx.attr.flavor
     if flavor == "normal":
         flavor = ""
@@ -54,7 +54,7 @@ _java_rpc_library = rule(
         "srcs": attr.label_list(
             mandatory = True,
             allow_empty = False,
-            providers = ["proto"],
+            providers = [ProtoInfo],
         ),
         "deps": attr.label_list(
             mandatory = True,
