@@ -30,7 +30,6 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/xds/edsbalancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
@@ -204,10 +203,6 @@ func (f *fakeEDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, state co
 	f.subconnStateChange <- &scStateChange{sc: sc, state: state}
 }
 
-func (f *fakeEDSBalancer) HandleResolvedAddrs([]resolver.Address, error) {
-	panic("implement me")
-}
-
 func (f *fakeEDSBalancer) Close() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -225,7 +220,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 	}
 }
 
-func newFakeEDSBalancer(cc balancer.ClientConn) interface{} {
+func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
 		edsChan:            make(chan *xdspb.ClusterLoadAssignment, 10),
@@ -286,10 +281,11 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 
 func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	startupTimeout = 500 * time.Millisecond
+	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
 		startupTimeout = defaultTimeout
-		newEDSBalancer = edsbalancer.NewXDSBalancer
+		newEDSBalancer = originalNewEDSBalancer
 	}()
 
 	builder := balancer.Get("xds")
@@ -361,9 +357,10 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 // switch child policy, lb stays the same
 // cds->eds or eds -> cds, restart xdsClient, lb stays the same
 func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
+	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
-		newEDSBalancer = edsbalancer.NewXDSBalancer
+		newEDSBalancer = originalNewEDSBalancer
 	}()
 
 	builder := balancer.Get("xds")
@@ -447,10 +444,12 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 // not in fallback mode, overwrite fallback info.
 // in fallback mode, update config or switch balancer.
 func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
+	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
-		newEDSBalancer = edsbalancer.NewXDSBalancer
+		newEDSBalancer = originalNewEDSBalancer
 	}()
+
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
@@ -525,10 +524,12 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 }
 
 func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
+	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
-		newEDSBalancer = edsbalancer.NewXDSBalancer
+		newEDSBalancer = originalNewEDSBalancer
 	}()
+
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
@@ -605,10 +606,12 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 }
 
 func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
+	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
-		newEDSBalancer = edsbalancer.NewXDSBalancer
+		newEDSBalancer = originalNewEDSBalancer
 	}()
+
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)

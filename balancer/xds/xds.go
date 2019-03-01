@@ -48,7 +48,9 @@ var (
 	// TODO: if later we make startupTimeout configurable through BuildOptions(maybe?), then we can remove
 	// this field and configure through BuildOptions instead.
 	startupTimeout = defaultTimeout
-	newEDSBalancer = edsbalancer.NewXDSBalancer
+	newEDSBalancer = func(cc balancer.ClientConn) edsBalancerInterface {
+		return edsbalancer.NewXDSBalancer(cc)
+	}
 )
 
 func init() {
@@ -86,13 +88,19 @@ func (b *xdsBalancerBuilder) Name() string {
 	return xdsName
 }
 
-// EdsBalancer defines the interface that edsBalancer must implement to communicate with xdsBalancer.
-type EdsBalancer interface {
-	balancer.Balancer
+// edsBalancerInterface defines the interface that edsBalancer must implement to
+// communicate with xdsBalancer.
+//
+// It's implemented by the real eds balancer and a fake testing eds balancer.
+type edsBalancerInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
 	HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	HandleChildPolicy(name string, config json.RawMessage)
+	// HandleSubConnStateChange handles state change for SubConn.
+	HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
+	// Close closes the eds balancer.
+	Close()
 }
 
 // xdsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
@@ -116,7 +124,7 @@ type xdsBalancer struct {
 
 	client           *client    // may change when passed a different service config
 	config           *xdsConfig // may change when passed a different service config
-	xdsLB            EdsBalancer
+	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *addressUpdate // may change when HandleResolved address is called
 }
@@ -447,7 +455,7 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 			x.fallbackLB.Close()
 			x.fallbackLB = nil
 		}
-		x.xdsLB = newEDSBalancer(x.cc).(EdsBalancer)
+		x.xdsLB = newEDSBalancer(x.cc)
 		if x.config.ChildPolicy != nil {
 			x.xdsLB.HandleChildPolicy(x.config.ChildPolicy.Name, x.config.ChildPolicy.Config)
 		}

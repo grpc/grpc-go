@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// TODO: move package comment to edsbalancer.go.
-
-// Package edsbalancer implements balancer generated from an eds response.
 package edsbalancer
 
 import (
@@ -237,6 +234,10 @@ func (bg *balancerGroup) close() {
 	bg.mu.Lock()
 	for _, b := range bg.idToBalancer {
 		b.Close()
+	}
+	// Also remove all SubConns.
+	for sc := range bg.scToID {
+		bg.cc.RemoveSubConn(sc)
 	}
 	bg.mu.Unlock()
 }
