@@ -147,12 +147,10 @@ type lbPicker struct {
 
 func newLBPicker(serverList []*lbpb.Server, readySCs []balancer.SubConn, stats *rpcStats) *lbPicker {
 	return &lbPicker{
-		serverList: serverList,
-		subConns:   readySCs,
-		// TODO: add this after adding len check before calling this function.
-		//  It's being done in another PR.
-		//  subConnsNext: grpcrand.Intn(len(readySCs)),
-		stats: stats,
+		serverList:   serverList,
+		subConns:     readySCs,
+		subConnsNext: grpcrand.Intn(len(readySCs)),
+		stats:        stats,
 	}
 }
 
@@ -189,7 +187,6 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balance
 }
 
 func (p *lbPicker) updateReadySCs(readySCs []balancer.SubConn) {
-	// panic("sssssss")
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
