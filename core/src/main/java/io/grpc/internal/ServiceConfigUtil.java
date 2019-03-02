@@ -21,6 +21,8 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.math.LongMath.checkedAdd;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import io.grpc.internal.RetriableStream.Throttle;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -345,35 +347,75 @@ public final class ServiceConfigUtil {
   }
 
   /**
-   * Extracts the loadbalancing policy name from loadbalancer config.
+   * Unwrap a LoadBalancingConfig JSON object into a {@link LbConfig}.  The input is a JSON object
+   * (map) with exactly one entry, where the key is the policy name and the value is a config object
+   * for that policy.
    */
-  public static String getBalancerPolicyNameFromLoadBalancingConfig(Map<String, Object> lbConfig) {
-    return lbConfig.entrySet().iterator().next().getKey();
+  @SuppressWarnings("unchecked")
+  public static LbConfig unwrapLoadBalancingConfig(Object lbConfig) {
+    Map<String, Object> map;
+    try {
+      map = (Map<String, Object>) lbConfig;
+    } catch (ClassCastException e) {
+      ClassCastException ex = new ClassCastException("Invalid type. Config=" + lbConfig);
+      ex.initCause(e);
+      throw ex;
+    }
+    if (map.size() != 1) {
+      throw new RuntimeException(
+          "There are " + map.size() + " fields in a LoadBalancingConfig object. Exactly one"
+          + " is expected. Config=" + lbConfig);
+    }
+    Map.Entry<String, Object> entry = map.entrySet().iterator().next();
+    Map<String, Object> configValue;
+    try {
+      configValue = (Map<String, Object>) entry.getValue();
+    } catch (ClassCastException e) {
+      ClassCastException ex =
+          new ClassCastException("Invalid value type.  value=" + entry.getValue());
+      ex.initCause(e);
+      throw ex;
+    }
+    return new LbConfig(entry.getKey(), configValue);
+  }
+
+  /**
+   * Given a JSON list of LoadBalancingConfigs, and convert it into a list of LbConfig.
+   */
+  @SuppressWarnings("unchecked")
+  public static List<LbConfig> unwrapLoadBalancingConfigList(Object listObject) {
+    List<?> list;
+    try {
+      list = (List<?>) listObject;
+    } catch (ClassCastException e) {
+      ClassCastException ex = new ClassCastException("List expected, but is " + listObject);
+      ex.initCause(e);
+      throw ex;
+    }
+    ArrayList<LbConfig> result = new ArrayList<>();
+    for (Object rawChildPolicy : list) {
+      result.add(unwrapLoadBalancingConfig(rawChildPolicy));
+    }
+    return Collections.unmodifiableList(result);
   }
 
   /**
    * Extracts the loadbalancer name from xds loadbalancer config.
    */
-  @SuppressWarnings("unchecked")
-  public static String getBalancerNameFromXdsConfig(
-      Map<String, Object> xdsConfig) {
-    Object entry = xdsConfig.entrySet().iterator().next().getValue();
-    return getString((Map<String, Object>) entry, XDS_CONFIG_BALANCER_NAME_KEY);
+  public static String getBalancerNameFromXdsConfig(LbConfig xdsConfig) {
+    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    return getString(map, XDS_CONFIG_BALANCER_NAME_KEY);
   }
 
   /**
    * Extracts list of child policies from xds loadbalancer config.
    */
-  @SuppressWarnings("unchecked")
   @Nullable
-  public static List<Map<String, Object>> getChildPolicyFromXdsConfig(
-      Map<String, Object> xdsConfig) {
-    Object rawEntry = xdsConfig.entrySet().iterator().next().getValue();
-    if (rawEntry instanceof Map) {
-      Map<String, Object> entry = (Map<String, Object>) rawEntry;
-      if (entry.containsKey(XDS_CONFIG_CHILD_POLICY_KEY)) {
-        return (List<Map<String, Object>>) (List<?>) getList(entry, XDS_CONFIG_CHILD_POLICY_KEY);
-      }
+  public static List<LbConfig> getChildPolicyFromXdsConfig(LbConfig xdsConfig) {
+    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    Object rawChildPolicies = map.get(XDS_CONFIG_CHILD_POLICY_KEY);
+    if (rawChildPolicies != null) {
+      return unwrapLoadBalancingConfigList(rawChildPolicies);
     }
     return null;
   }
@@ -381,16 +423,12 @@ public final class ServiceConfigUtil {
   /**
    * Extracts list of fallback policies from xds loadbalancer config.
    */
-  @SuppressWarnings("unchecked")
   @Nullable
-  public static List<Map<String, Object>> getFallbackPolicyFromXdsConfig(
-      Map<String, Object> lbConfig) {
-    Object rawEntry = lbConfig.entrySet().iterator().next().getValue();
-    if (rawEntry instanceof Map) {
-      Map<String, Object> entry = (Map<String, Object>) rawEntry;
-      if (entry.containsKey(XDS_CONFIG_FALLBACK_POLICY_KEY)) {
-        return (List<Map<String, Object>>) (List<?>) getList(entry, XDS_CONFIG_FALLBACK_POLICY_KEY);
-      }
+  public static List<LbConfig> getFallbackPolicyFromXdsConfig(LbConfig xdsConfig) {
+    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    Object rawFallbackPolicies = map.get(XDS_CONFIG_FALLBACK_POLICY_KEY);
+    if (rawFallbackPolicies != null) {
+      return unwrapLoadBalancingConfigList(rawFallbackPolicies);
     }
     return null;
   }
@@ -641,5 +679,50 @@ public final class ServiceConfigUtil {
     }
     // we did over/under flow, if the sign is negative we should return MAX otherwise MIN
     return Long.MAX_VALUE + ((naiveSum >>> (Long.SIZE - 1)) ^ 1);
+  }
+
+  /**
+   * A LoadBalancingConfig that includes the policy name (the key) and its raw config value (parsed
+   * JSON).
+   */
+  public static final class LbConfig {
+    private final String policyName;
+    private final Map<String, Object> rawConfigValue;
+
+    public LbConfig(String policyName, Map<String, Object> rawConfigValue) {
+      this.policyName = checkNotNull(policyName, "policyName");
+      this.rawConfigValue = checkNotNull(rawConfigValue, "rawConfigValue");
+    }
+
+    public String getPolicyName() {
+      return policyName;
+    }
+
+    public Map<String, Object> getRawConfigValue() {
+      return rawConfigValue;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o instanceof LbConfig) {
+        LbConfig other = (LbConfig) o;
+        return policyName.equals(other.policyName)
+            && rawConfigValue.equals(other.rawConfigValue);
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(policyName, rawConfigValue);
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("policyName", policyName)
+          .add("rawConfigValue", rawConfigValue)
+          .toString();
+    }
   }
 }

@@ -32,12 +32,12 @@ import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
 import io.grpc.SynchronizationContext;
 import io.grpc.internal.FakeClock;
+import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import io.grpc.xds.XdsLbState.SubchannelStoreImpl;
 import io.grpc.xds.XdsLoadBalancer.FallbackManager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
@@ -97,7 +97,7 @@ public class FallbackManagerTest {
   private ChannelLogger channelLogger;
 
   private FallbackManager fallbackManager;
-  private Map<String, Object> fallbackPolicy;
+  private LbConfig fallbackPolicy;
 
   @Before
   public void setUp() {
@@ -106,8 +106,7 @@ public class FallbackManagerTest {
     doReturn(fakeClock.getScheduledExecutorService()).when(helper).getScheduledExecutorService();
     doReturn(channelLogger).when(helper).getChannelLogger();
     fallbackManager = new FallbackManager(helper, new SubchannelStoreImpl(), lbRegistry);
-    fallbackPolicy = new HashMap<>();
-    fallbackPolicy.put("test_policy", new HashMap<>());
+    fallbackPolicy = new LbConfig("test_policy", new HashMap<String, Object>());
     lbRegistry.register(fakeLbProvider);
   }
 
@@ -131,7 +130,7 @@ public class FallbackManagerTest {
     verify(fakeLb).handleResolvedAddressGroups(
         same(eags),
         eq(Attributes.newBuilder()
-            .set(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, fallbackPolicy)
+            .set(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, fallbackPolicy.getRawConfigValue())
             .build()));
   }
 

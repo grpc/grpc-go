@@ -26,10 +26,10 @@ import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
+import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import io.grpc.xds.XdsComms.AdsStreamCallback;
 import java.net.SocketAddress;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
@@ -54,7 +54,7 @@ class XdsLbState {
   final String balancerName;
 
   @Nullable
-  final Map<String, Object> childPolicy;
+  final LbConfig childPolicy;
 
   private final SubchannelStore subchannelStore;
   private final Helper helper;
@@ -66,7 +66,7 @@ class XdsLbState {
 
   XdsLbState(
       String balancerName,
-      @Nullable Map<String, Object> childPolicy,
+      @Nullable LbConfig childPolicy,
       @Nullable XdsComms xdsComms,
       Helper helper,
       SubchannelStore subchannelStore,

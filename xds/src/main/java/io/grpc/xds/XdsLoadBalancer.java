@@ -19,7 +19,6 @@ package io.grpc.xds;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
-import static io.grpc.internal.ServiceConfigUtil.getBalancerPolicyNameFromLoadBalancingConfig;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -33,6 +32,7 @@ import io.grpc.LoadBalancerRegistry;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext.ScheduledHandle;
 import io.grpc.internal.ServiceConfigUtil;
+import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import io.grpc.xds.XdsComms.AdsStreamCallback;
 import io.grpc.xds.XdsLbState.SubchannelStore;
 import java.util.List;
@@ -51,8 +51,8 @@ final class XdsLoadBalancer extends LoadBalancer {
   static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.create("io.grpc.xds.XdsLoadBalancer.stateInfo");
 
-  private static final ImmutableMap<String, Object> DEFAULT_FALLBACK_POLICY =
-      ImmutableMap.of("round_robin", (Object) ImmutableMap.<String, Object>of());
+  private static final LbConfig DEFAULT_FALLBACK_POLICY =
+      new LbConfig("round_robin", ImmutableMap.<String, Object>of());
 
   private final SubchannelStore subchannelStore;
   private final Helper helper;
@@ -77,7 +77,7 @@ final class XdsLoadBalancer extends LoadBalancer {
   @Nullable
   private XdsLbState xdsLbState;
 
-  private Map<String, Object> fallbackPolicy;
+  private LbConfig fallbackPolicy;
 
   XdsLoadBalancer(Helper helper, LoadBalancerRegistry lbRegistry, SubchannelStore subchannelStore) {
     this.helper = checkNotNull(helper, "helper");
@@ -89,8 +89,9 @@ final class XdsLoadBalancer extends LoadBalancer {
   @Override
   public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> servers, Attributes attributes) {
-    Map<String, Object> newLbConfig = checkNotNull(
+    Map<String, Object> newRawLbConfig = checkNotNull(
         attributes.get(ATTR_LOAD_BALANCING_CONFIG), "ATTR_LOAD_BALANCING_CONFIG not available");
+    LbConfig newLbConfig = ServiceConfigUtil.unwrapLoadBalancingConfig(newRawLbConfig);
     fallbackPolicy = selectFallbackPolicy(newLbConfig, lbRegistry);
     fallbackManager.updateFallbackServers(servers, attributes, fallbackPolicy);
     fallbackManager.maybeStartFallbackTimer();
@@ -98,9 +99,9 @@ final class XdsLoadBalancer extends LoadBalancer {
     xdsLbState.handleResolvedAddressGroups(servers, attributes);
   }
 
-  private void handleNewConfig(Map<String, Object> newLbConfig) {
+  private void handleNewConfig(LbConfig newLbConfig) {
     String newBalancerName = ServiceConfigUtil.getBalancerNameFromXdsConfig(newLbConfig);
-    Map<String, Object> childPolicy = selectChildPolicy(newLbConfig, lbRegistry);
+    LbConfig childPolicy = selectChildPolicy(newLbConfig, lbRegistry);
     XdsComms xdsComms = null;
     if (xdsLbState != null) { // may release and re-use/shutdown xdsComms from current xdsLbState
       if (!newBalancerName.equals(xdsLbState.balancerName)) {
@@ -130,43 +131,37 @@ final class XdsLoadBalancer extends LoadBalancer {
   }
 
   @Nullable
-  private static String getPolicyNameOrNull(@Nullable Map<String, Object> config) {
+  private static String getPolicyNameOrNull(@Nullable LbConfig config) {
     if (config == null) {
       return null;
     }
-    return getBalancerPolicyNameFromLoadBalancingConfig(config);
+    return config.getPolicyName();
   }
 
   @Nullable
   @VisibleForTesting
-  static Map<String, Object> selectChildPolicy(
-      Map<String, Object> lbConfig, LoadBalancerRegistry lbRegistry) {
-    List<Map<String, Object>> childConfigs =
-        ServiceConfigUtil.getChildPolicyFromXdsConfig(lbConfig);
+  static LbConfig selectChildPolicy(LbConfig lbConfig, LoadBalancerRegistry lbRegistry) {
+    List<LbConfig> childConfigs = ServiceConfigUtil.getChildPolicyFromXdsConfig(lbConfig);
     return selectSupportedLbPolicy(childConfigs, lbRegistry);
   }
 
   @VisibleForTesting
-  static Map<String, Object> selectFallbackPolicy(
-      Map<String, Object> lbConfig, LoadBalancerRegistry lbRegistry) {
-    List<Map<String, Object>> fallbackConfigs =
-        ServiceConfigUtil.getFallbackPolicyFromXdsConfig(lbConfig);
-    Map<String, Object> fallbackPolicy = selectSupportedLbPolicy(fallbackConfigs, lbRegistry);
+  static LbConfig selectFallbackPolicy(LbConfig lbConfig, LoadBalancerRegistry lbRegistry) {
+    List<LbConfig> fallbackConfigs = ServiceConfigUtil.getFallbackPolicyFromXdsConfig(lbConfig);
+    LbConfig fallbackPolicy = selectSupportedLbPolicy(fallbackConfigs, lbRegistry);
     return fallbackPolicy == null ? DEFAULT_FALLBACK_POLICY : fallbackPolicy;
   }
 
   @Nullable
-  private static Map<String, Object> selectSupportedLbPolicy(
-      List<Map<String, Object>> lbConfigs, LoadBalancerRegistry lbRegistry) {
+  private static LbConfig selectSupportedLbPolicy(
+      @Nullable List<LbConfig> lbConfigs, LoadBalancerRegistry lbRegistry) {
     if (lbConfigs == null) {
       return null;
     }
-    for (Object lbConfig : lbConfigs) {
-      @SuppressWarnings("unchecked")
-      Map<String, Object> candidate = (Map<String, Object>) lbConfig;
-      String lbPolicy = ServiceConfigUtil.getBalancerPolicyNameFromLoadBalancingConfig(candidate);
+    for (LbConfig lbConfig : lbConfigs) {
+      String lbPolicy = lbConfig.getPolicyName();
       if (lbRegistry.getProvider(lbPolicy) != null) {
-        return candidate;
+        return lbConfig;
       }
     }
     return null;
@@ -239,7 +234,7 @@ final class XdsLoadBalancer extends LoadBalancer {
     private final SubchannelStore subchannelStore;
     private final LoadBalancerRegistry lbRegistry;
 
-    private Map<String, Object> fallbackPolicy;
+    private LbConfig fallbackPolicy;
 
     // read-only for outer class
     private LoadBalancer fallbackBalancer;
@@ -281,9 +276,7 @@ final class XdsLoadBalancer extends LoadBalancer {
 
       helper.getChannelLogger().log(
           ChannelLogLevel.INFO, "Using fallback policy");
-      String fallbackPolicyName = ServiceConfigUtil.getBalancerPolicyNameFromLoadBalancingConfig(
-          fallbackPolicy);
-      fallbackBalancer = lbRegistry.getProvider(fallbackPolicyName)
+      fallbackBalancer = lbRegistry.getProvider(fallbackPolicy.getPolicyName())
           .newLoadBalancer(helper);
       fallbackBalancer.handleResolvedAddressGroups(fallbackServers, fallbackAttributes);
       // TODO: maybe update picker
@@ -291,20 +284,16 @@ final class XdsLoadBalancer extends LoadBalancer {
 
     void updateFallbackServers(
         List<EquivalentAddressGroup> servers, Attributes attributes,
-        Map<String, Object> fallbackPolicy) {
+        LbConfig fallbackPolicy) {
       this.fallbackServers = servers;
       this.fallbackAttributes = Attributes.newBuilder()
           .setAll(attributes)
-          .set(ATTR_LOAD_BALANCING_CONFIG, fallbackPolicy)
+          .set(ATTR_LOAD_BALANCING_CONFIG, fallbackPolicy.getRawConfigValue())
           .build();
-      Map<String, Object> currentFallbackPolicy = this.fallbackPolicy;
+      LbConfig currentFallbackPolicy = this.fallbackPolicy;
       this.fallbackPolicy = fallbackPolicy;
       if (fallbackBalancer != null) {
-        String currentPolicyName =
-            ServiceConfigUtil.getBalancerPolicyNameFromLoadBalancingConfig(currentFallbackPolicy);
-        String newPolicyName =
-            ServiceConfigUtil.getBalancerPolicyNameFromLoadBalancingConfig(fallbackPolicy);
-        if (newPolicyName.equals(currentPolicyName)) {
+        if (fallbackPolicy.getPolicyName().equals(currentFallbackPolicy.getPolicyName())) {
           fallbackBalancer.handleResolvedAddressGroups(fallbackServers, fallbackAttributes);
         } else {
           fallbackBalancer.shutdown();

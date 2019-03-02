@@ -32,12 +32,12 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
 import io.grpc.Status;
+import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -215,6 +215,8 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
       }
 
       if (haveBalancerAddress) {
+        // This is a special case where the existence of balancer address in the resolved address
+        // selects "grpclb" policy regardless of the service config.
         LoadBalancerProvider grpclbProvider = registry.getProvider("grpclb");
         if (grpclbProvider == null) {
           if (backendAddrs.isEmpty()) {
@@ -238,21 +240,16 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
       }
       roundRobinDueToGrpclbDepMissing = false;
 
-      List<Map<String, Object>> lbConfigs = null;
+      List<LbConfig> lbConfigs = null;
       if (config != null) {
-        lbConfigs = ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(config);
+        List<Map<String, Object>> rawLbConfigs =
+            ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(config);
+        lbConfigs = ServiceConfigUtil.unwrapLoadBalancingConfigList(rawLbConfigs);
       }
       if (lbConfigs != null && !lbConfigs.isEmpty()) {
         LinkedHashSet<String> policiesTried = new LinkedHashSet<>();
-        for (Map<String, Object> lbConfig : lbConfigs) {
-          if (lbConfig.size() != 1) {
-            throw new PolicyException(
-                "There are " + lbConfig.size()
-                + " load-balancing configs in a list item. Exactly one is expected. Config="
-                + lbConfig);
-          }
-          Entry<String, Object> entry = lbConfig.entrySet().iterator().next();
-          String policy = entry.getKey();
+        for (LbConfig lbConfig : lbConfigs) {
+          String policy = lbConfig.getPolicyName();
           LoadBalancerProvider provider = registry.getProvider(policy);
           if (provider != null) {
             if (!policiesTried.isEmpty()) {
@@ -260,7 +257,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
                   ChannelLogLevel.DEBUG,
                   "{0} specified by Service Config are not available", policiesTried);
             }
-            return new PolicySelection(provider, servers, (Map) entry.getValue());
+            return new PolicySelection(provider, servers, lbConfig.getRawConfigValue());
           }
           policiesTried.add(policy);
         }
@@ -297,13 +294,12 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
     final List<EquivalentAddressGroup> serverList;
     @Nullable final Map<String, Object> config;
 
-    @SuppressWarnings("unchecked")
     PolicySelection(
         LoadBalancerProvider provider, List<EquivalentAddressGroup> serverList,
-        @Nullable Map<?, ?> config) {
+        @Nullable Map<String, Object> config) {
       this.provider = checkNotNull(provider, "provider");
       this.serverList = Collections.unmodifiableList(checkNotNull(serverList, "serverList"));
-      this.config = (Map<String, Object>) config;
+      this.config = config;
     }
   }
 
