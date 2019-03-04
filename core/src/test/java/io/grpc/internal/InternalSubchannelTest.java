@@ -167,8 +167,10 @@ public class InternalSubchannelTest {
     // First attempt
     assertNull(internalSubchannel.obtainActiveTransport());
     assertEquals(CONNECTING, internalSubchannel.getState());
-    verify(mockTransportFactory)
-        .newClientTransport(addr, createClientTransportOptions().setEagAttributes(attr));
+    verify(mockTransportFactory).newClientTransport(
+        addr,
+        createClientTransportOptions().setEagAttributes(attr),
+        internalSubchannel.getChannelLogger());
   }
 
   @Test public void singleAddressReconnect() {
@@ -189,7 +191,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Fail this one. Because there is only one address to try, enter TRANSIENT_FAILURE.
     assertNoCallbackInvoke();
@@ -205,7 +210,10 @@ public class InternalSubchannelTest {
     fakeClock.forwardNanos(9);
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
 
     assertNoCallbackInvoke();
@@ -213,7 +221,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Fail this one too
     assertNoCallbackInvoke();
     // Here we use a different status from the first failure, and verify that it's passed to
@@ -230,7 +241,10 @@ public class InternalSubchannelTest {
     fakeClock.forwardNanos(99);
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
     fakeClock.forwardNanos(1);
@@ -238,7 +252,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Let this one succeed, will enter READY state.
     assertNoCallbackInvoke();
     transports.peek().listener.transportReady();
@@ -260,7 +277,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Final checks for consultations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffNanos();
@@ -286,7 +306,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Let this one fail without success
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -298,7 +321,10 @@ public class InternalSubchannelTest {
     // Second attempt will start immediately. Still no back-off policy.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertNull(internalSubchannel.obtainActiveTransport());
     // Fail this one too
     assertNoCallbackInvoke();
@@ -318,14 +344,20 @@ public class InternalSubchannelTest {
     // Third attempt is the first address, thus controlled by the first back-off interval.
     fakeClock.forwardNanos(9);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
     fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
@@ -335,7 +367,10 @@ public class InternalSubchannelTest {
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Fail this one too
     assertNoCallbackInvoke();
     transports.poll().listener.transportShutdown(Status.RESOURCE_EXHAUSTED);
@@ -350,14 +385,20 @@ public class InternalSubchannelTest {
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
     fakeClock.forwardNanos(99);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
     fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Let it through
     assertNoCallbackInvoke();
     transports.peek().listener.transportReady();
@@ -380,7 +421,10 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Fail the transport
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
@@ -388,7 +432,10 @@ public class InternalSubchannelTest {
     // Second attempt will start immediately. Still no new back-off policy.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     // Fail this one too
     assertEquals(CONNECTING, internalSubchannel.getState());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -402,14 +449,20 @@ public class InternalSubchannelTest {
     // Third attempt is the first address, thus controlled by the first back-off interval.
     fakeClock.forwardNanos(9);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertEquals(TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
     fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Final checks on invocations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffNanos();
@@ -444,12 +497,20 @@ public class InternalSubchannelTest {
     // First address fails
     assertNull(internalSubchannel.obtainActiveTransport());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr1, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Second address connects
-    verify(mockTransportFactory).newClientTransport(addr2, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.peek().listener.transportReady();
     assertExactCallbackInvokes("onStateChange:READY");
     assertEquals(READY, internalSubchannel.getState());
@@ -469,9 +530,16 @@ public class InternalSubchannelTest {
     assertNull(internalSubchannel.obtainActiveTransport());
     assertEquals(0, fakeClock.numPendingTasks());
     verify(mockTransportFactory, times(2))
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockTransportFactory).newClientTransport(addr3, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr3,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     verifyNoMoreInteractions(mockTransportFactory);
 
@@ -488,12 +556,20 @@ public class InternalSubchannelTest {
     // First address fails
     assertNull(internalSubchannel.obtainActiveTransport());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr1, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Second address connecting
-    verify(mockTransportFactory).newClientTransport(addr2, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
 
@@ -514,9 +590,16 @@ public class InternalSubchannelTest {
     assertNull(internalSubchannel.obtainActiveTransport());
     assertEquals(0, fakeClock.numPendingTasks());
     verify(mockTransportFactory, times(2))
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockTransportFactory).newClientTransport(addr3, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr3,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     verifyNoMoreInteractions(mockTransportFactory);
 
@@ -532,9 +615,15 @@ public class InternalSubchannelTest {
 
     // Nothing happened on address update
     verify(mockTransportFactory, never())
-        .newClientTransport(addr1, createClientTransportOptions());
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     verify(mockTransportFactory, never())
-        .newClientTransport(addr2, createClientTransportOptions());
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     verifyNoMoreInteractions(mockTransportFactory);
     assertNoCallbackInvoke();
     assertEquals(IDLE, internalSubchannel.getState());
@@ -542,7 +631,11 @@ public class InternalSubchannelTest {
     // But new address chosen when connecting
     assertNull(internalSubchannel.obtainActiveTransport());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr2, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // And no other addresses attempted
     assertEquals(0, fakeClock.numPendingTasks());
@@ -565,12 +658,20 @@ public class InternalSubchannelTest {
     // First address fails
     assertNull(internalSubchannel.obtainActiveTransport());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr1, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Second address connects
-    verify(mockTransportFactory).newClientTransport(addr2, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.peek().listener.transportReady();
     assertExactCallbackInvokes("onStateChange:READY");
     assertEquals(READY, internalSubchannel.getState());
@@ -589,9 +690,17 @@ public class InternalSubchannelTest {
 
     assertNull(internalSubchannel.obtainActiveTransport());
     assertEquals(0, fakeClock.numPendingTasks());
-    verify(mockTransportFactory).newClientTransport(addr3, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr3,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockTransportFactory).newClientTransport(addr4, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr4,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     verifyNoMoreInteractions(mockTransportFactory);
 
@@ -609,12 +718,20 @@ public class InternalSubchannelTest {
     // First address fails
     assertNull(internalSubchannel.obtainActiveTransport());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr1, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr1,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // Second address connecting
-    verify(mockTransportFactory).newClientTransport(addr2, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr2,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
 
@@ -631,9 +748,17 @@ public class InternalSubchannelTest {
 
     assertNull(internalSubchannel.obtainActiveTransport());
     assertEquals(0, fakeClock.numPendingTasks());
-    verify(mockTransportFactory).newClientTransport(addr3, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr3,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockTransportFactory).newClientTransport(addr4, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr4,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     verifyNoMoreInteractions(mockTransportFactory);
 
@@ -650,13 +775,19 @@ public class InternalSubchannelTest {
 
     // Won't connect until requested
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // First attempt
     internalSubchannel.obtainActiveTransport();
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Fail this one
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -666,7 +797,10 @@ public class InternalSubchannelTest {
     fakeClock.forwardNanos(10);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Make this one proceed
     transports.peek().listener.transportReady();
@@ -683,7 +817,10 @@ public class InternalSubchannelTest {
     internalSubchannel.obtainActiveTransport();
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
   }
 
   @Test
@@ -713,7 +850,11 @@ public class InternalSubchannelTest {
     // First transport is created immediately
     internalSubchannel.obtainActiveTransport();
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
 
     // Fail this one
     MockClientTransportInfo transportInfo = transports.poll();
@@ -814,7 +955,10 @@ public class InternalSubchannelTest {
     assertEquals(SHUTDOWN, internalSubchannel.getState());
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(0))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertNoCallbackInvoke();
     assertEquals(SHUTDOWN, internalSubchannel.getState());
   }
@@ -930,7 +1074,11 @@ public class InternalSubchannelTest {
     // Move into TRANSIENT_FAILURE to schedule reconnect
     internalSubchannel.obtainActiveTransport();
     assertExactCallbackInvokes("onStateChange:CONNECTING");
-    verify(mockTransportFactory).newClientTransport(addr, createClientTransportOptions());
+    verify(mockTransportFactory)
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertExactCallbackInvokes("onStateChange:" + UNAVAILABLE_STATE);
 
@@ -948,7 +1096,10 @@ public class InternalSubchannelTest {
     internalSubchannel.resetConnectBackoff();
 
     verify(mockTransportFactory, times(2))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertTrue(reconnectTask.isCancelled());
 
@@ -956,7 +1107,10 @@ public class InternalSubchannelTest {
     reconnectTask.command.run();
     assertNoCallbackInvoke();
     verify(mockTransportFactory, times(2))
-        .newClientTransport(addr, createClientTransportOptions());
+        .newClientTransport(
+            addr,
+            createClientTransportOptions(),
+            internalSubchannel.getChannelLogger());
     verify(mockBackoffPolicyProvider, times(1)).get();
 
     // Fail the reconnect attempt to verify that a fresh reconnect policy is generated after

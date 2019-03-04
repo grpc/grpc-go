@@ -23,6 +23,7 @@ import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.ChannelLogger;
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
@@ -545,7 +546,7 @@ public class OkHttpChannelBuilder extends
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress addr, ClientTransportOptions options) {
+        SocketAddress addr, ClientTransportOptions options, ChannelLogger channelLogger) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
@@ -557,6 +558,7 @@ public class OkHttpChannelBuilder extends
         }
       };
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
+      // TODO(carl-mastrangelo): Pass channelLogger in.
       OkHttpClientTransport transport = new OkHttpClientTransport(
           inetSocketAddr,
           options.getAuthority(),

@@ -23,6 +23,7 @@ import io.grpc.Attributes;
 import io.grpc.CallCredentials;
 import io.grpc.CallCredentials.RequestInfo;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
@@ -43,9 +44,9 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
 
   @Override
   public ConnectionClientTransport newClientTransport(
-      SocketAddress serverAddress, ClientTransportOptions options) {
+      SocketAddress serverAddress, ClientTransportOptions options, ChannelLogger channelLogger) {
     return new CallCredentialsApplyingTransport(
-        delegate.newClientTransport(serverAddress, options), options.getAuthority());
+        delegate.newClientTransport(serverAddress, options, channelLogger), options.getAuthority());
   }
 
   @Override

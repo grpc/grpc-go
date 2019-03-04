@@ -91,11 +91,13 @@ public class NettyTransportTest extends AbstractTransportTest {
 
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
+
     return clientFactory.newClientTransport(
         server.getListenSocketAddress(),
         new ClientTransportFactory.ClientTransportOptions()
-          .setAuthority(testAuthority(server))
-          .setEagAttributes(eagAttrs()));
+            .setAuthority(testAuthority(server))
+            .setEagAttributes(eagAttrs()),
+        transportLogger());
   }
 
   @org.junit.Ignore

@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.cronet.CronetChannelBuilder.CronetTransportFactory;
@@ -44,6 +45,7 @@ import org.robolectric.RobolectricTestRunner;
 public final class CronetChannelBuilderTest {
 
   @Mock private ExperimentalCronetEngine mockEngine;
+  @Mock private ChannelLogger channelLogger;
 
   private MethodDescriptor<?, ?> method = TestMethodDescriptors.voidMethod();
 
@@ -61,7 +63,9 @@ public final class CronetChannelBuilderTest {
     CronetClientTransport transport =
         (CronetClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress("localhost", 443), new ClientTransportOptions());
+                new InetSocketAddress("localhost", 443),
+                new ClientTransportOptions(),
+                channelLogger);
     CronetClientStream stream = transport.newStream(method, new Metadata(), CallOptions.DEFAULT);
 
     assertTrue(stream.idempotent);
@@ -75,7 +79,9 @@ public final class CronetChannelBuilderTest {
     CronetClientTransport transport =
         (CronetClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress("localhost", 443), new ClientTransportOptions());
+                new InetSocketAddress("localhost", 443),
+                new ClientTransportOptions(),
+                channelLogger);
     CronetClientStream stream = transport.newStream(method, new Metadata(), CallOptions.DEFAULT);
 
     assertFalse(stream.idempotent);

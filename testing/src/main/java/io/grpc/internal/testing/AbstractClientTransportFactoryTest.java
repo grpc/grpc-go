@@ -16,6 +16,7 @@
 
 package io.grpc.internal.testing;
 
+import io.grpc.ChannelLogger;
 import io.grpc.internal.ClientTransportFactory;
 import java.net.InetSocketAddress;
 import org.junit.Test;
@@ -41,6 +42,15 @@ public abstract class AbstractClientTransportFactoryTest {
     transportFactory.close();
     transportFactory.newClientTransport(
         new InetSocketAddress("localhost", 12345),
-        new ClientTransportFactory.ClientTransportOptions());
+        new ClientTransportFactory.ClientTransportOptions(),
+        new ChannelLogger() {
+
+          @Override
+          public void log(ChannelLogLevel level, String message) {}
+
+          @Override
+          public void log(ChannelLogLevel level, String messageFormat, Object... args) {}
+        }
+    );
   }
 }

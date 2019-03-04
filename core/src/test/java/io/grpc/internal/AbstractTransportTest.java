@@ -46,6 +46,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.ClientStreamTracer;
 import io.grpc.ClientStreamTracer.StreamInfo;
 import io.grpc.Grpc;
@@ -138,6 +139,16 @@ public abstract class AbstractTransportTest {
 
   protected final Attributes eagAttrs() {
     return EAG_ATTRS;
+  }
+
+  protected final ChannelLogger transportLogger() {
+    return new ChannelLogger() {
+      @Override
+      public void log(ChannelLogLevel level, String message) {}
+
+      @Override
+      public void log(ChannelLogLevel level, String messageFormat, Object... args) {}
+    };
   }
 
   /**

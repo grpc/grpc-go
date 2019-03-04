@@ -22,6 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.InternalLogId;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -94,7 +95,8 @@ final class TestUtils {
     }).when(mockTransportFactory)
         .newClientTransport(
             any(SocketAddress.class),
-            any(ClientTransportFactory.ClientTransportOptions.class));
+            any(ClientTransportFactory.ClientTransportOptions.class),
+            any(ChannelLogger.class));
 
     return captor;
   }

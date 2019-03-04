@@ -19,6 +19,7 @@ package io.grpc.internal;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger;
 import io.grpc.HttpConnectProxiedSocketAddress;
 import java.io.Closeable;
 import java.net.SocketAddress;
@@ -33,10 +34,12 @@ public interface ClientTransportFactory extends Closeable {
    *
    * @param serverAddress the address that the transport is connected to
    * @param options additional configuration
+   * @param channelLogger logger for the transport.
    */
   ConnectionClientTransport newClientTransport(
       SocketAddress serverAddress,
-      ClientTransportOptions options);
+      ClientTransportOptions options,
+      ChannelLogger channelLogger);
 
   /**
    * Returns an executor for scheduling provided by the transport. The service should be configured
@@ -65,11 +68,21 @@ public interface ClientTransportFactory extends Closeable {
    * copied and then the options object is discarded. This allows using {@code final} for those
    * fields as well as avoids retaining unused objects contained in the options.
    */
-  public static final class ClientTransportOptions {
+  final class ClientTransportOptions {
+    private ChannelLogger channelLogger;
     private String authority = "unknown-authority";
     private Attributes eagAttributes = Attributes.EMPTY;
     @Nullable private String userAgent;
     @Nullable private HttpConnectProxiedSocketAddress connectProxiedSocketAddr;
+
+    public ChannelLogger getChannelLogger() {
+      return channelLogger;
+    }
+
+    public ClientTransportOptions setChannelLogger(ChannelLogger channelLogger) {
+      this.channelLogger = channelLogger;
+      return this;
+    }
 
     public String getAuthority() {
       return authority;

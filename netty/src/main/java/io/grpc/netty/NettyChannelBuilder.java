@@ -26,6 +26,7 @@ import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.Attributes;
+import io.grpc.ChannelLogger;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.HttpConnectProxiedSocketAddress;
@@ -551,7 +552,7 @@ public final class NettyChannelBuilder
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress serverAddress, ClientTransportOptions options) {
+        SocketAddress serverAddress, ClientTransportOptions options, ChannelLogger channelLogger) {
       checkState(!closed, "The transport factory is closed.");
 
       ProtocolNegotiator localNegotiator = protocolNegotiator;
@@ -573,6 +574,7 @@ public final class NettyChannelBuilder
         }
       };
 
+      // TODO(carl-mastrangelo): Pass channelLogger in.
       NettyClientTransport transport = new NettyClientTransport(
           serverAddress, channelFactory, channelOptions, group,
           localNegotiator, flowControlWindow,

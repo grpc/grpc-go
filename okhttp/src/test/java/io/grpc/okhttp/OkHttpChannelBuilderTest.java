@@ -23,6 +23,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.squareup.okhttp.ConnectionSpec;
+import io.grpc.ChannelLogger;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcUtil;
@@ -115,8 +116,9 @@ public class OkHttpChannelBuilderTest {
   @Test
   public void usePlaintext_newClientTransportAllowed() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("host", 1234).usePlaintext();
-    builder.buildTransportFactory().newClientTransport(new InetSocketAddress(5678),
-        new ClientTransportFactory.ClientTransportOptions());
+    builder.buildTransportFactory().newClientTransport(
+        new InetSocketAddress(5678),
+        new ClientTransportFactory.ClientTransportOptions(), new FakeChannelLogger());
   }
 
   @Test
@@ -170,7 +172,9 @@ public class OkHttpChannelBuilderTest {
     OkHttpClientTransport transport =
         (OkHttpClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress(5678), new ClientTransportFactory.ClientTransportOptions());
+                new InetSocketAddress(5678),
+                new ClientTransportFactory.ClientTransportOptions(),
+                new FakeChannelLogger());
 
     assertSame(SocketFactory.getDefault(), transport.getSocketFactory());
 
@@ -208,10 +212,25 @@ public class OkHttpChannelBuilderTest {
     OkHttpClientTransport transport =
         (OkHttpClientTransport)
             transportFactory.newClientTransport(
-                new InetSocketAddress(5678), new ClientTransportFactory.ClientTransportOptions());
+                new InetSocketAddress(5678),
+                new ClientTransportFactory.ClientTransportOptions(),
+                new FakeChannelLogger());
 
     assertSame(socketFactory, transport.getSocketFactory());
 
     transportFactory.close();
+  }
+
+  private static final class FakeChannelLogger extends ChannelLogger {
+
+    @Override
+    public void log(ChannelLogLevel level, String message) {
+
+    }
+
+    @Override
+    public void log(ChannelLogLevel level, String messageFormat, Object... args) {
+
+    }
   }
 }

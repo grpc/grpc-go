@@ -260,7 +260,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           .setHttpConnectProxiedSocketAddress(proxiedAddr);
     ConnectionClientTransport transport =
         new CallTracingTransport(
-            transportFactory.newClientTransport(address, options), callsTracer);
+            transportFactory.newClientTransport(address, options, channelLogger), callsTracer);
     channelz.addClientSocket(transport);
     pendingTransport = transport;
     transports.add(transport);

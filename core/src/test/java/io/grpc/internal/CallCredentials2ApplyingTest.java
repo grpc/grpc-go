@@ -32,6 +32,7 @@ import io.grpc.Attributes;
 import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials.RequestInfo;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -80,6 +81,10 @@ public class CallCredentials2ApplyingTest {
   @Mock
   private SocketAddress address;
 
+  // Noop logger;
+  @Mock
+  private ChannelLogger channelLogger;
+
   private static final String AUTHORITY = "testauthority";
   private static final String USER_AGENT = "testuseragent";
   private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.create("somekey");
@@ -110,16 +115,16 @@ public class CallCredentials2ApplyingTest {
           .setUserAgent(USER_AGENT);
 
     origHeaders.put(ORIG_HEADER_KEY, ORIG_HEADER_VALUE);
-    when(mockTransportFactory.newClientTransport(address, clientTransportOptions))
+    when(mockTransportFactory.newClientTransport(address, clientTransportOptions, channelLogger))
         .thenReturn(mockTransport);
     when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
         .thenReturn(mockStream);
     ClientTransportFactory transportFactory = new CallCredentialsApplyingTransportFactory(
         mockTransportFactory, mockExecutor);
     transport = (ForwardingConnectionClientTransport)
-        transportFactory.newClientTransport(address, clientTransportOptions);
+        transportFactory.newClientTransport(address, clientTransportOptions, channelLogger);
     callOptions = CallOptions.DEFAULT.withCallCredentials(mockCreds);
-    verify(mockTransportFactory).newClientTransport(address, clientTransportOptions);
+    verify(mockTransportFactory).newClientTransport(address, clientTransportOptions, channelLogger);
     assertSame(mockTransport, transport.delegate());
   }
 

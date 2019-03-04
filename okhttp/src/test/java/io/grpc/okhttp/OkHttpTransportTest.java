@@ -84,7 +84,8 @@ public class OkHttpTransportTest extends AbstractTransportTest {
         new InetSocketAddress("localhost", port),
         new ClientTransportFactory.ClientTransportOptions()
           .setAuthority(testAuthority(server))
-          .setEagAttributes(eagAttrs()));
+          .setEagAttributes(eagAttrs()),
+        transportLogger());
   }
 
   @Override

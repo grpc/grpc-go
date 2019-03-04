@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.Lists;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.EquivalentAddressGroup;
@@ -189,7 +190,8 @@ public class ManagedChannelImplIdlenessTest {
     verify(mockLoadBalancerProvider, never()).newLoadBalancer(any(Helper.class));
     verify(mockTransportFactory, never()).newClientTransport(
         any(SocketAddress.class),
-        any(ClientTransportFactory.ClientTransportOptions.class));
+        any(ClientTransportFactory.ClientTransportOptions.class),
+        any(ChannelLogger.class));
     verify(mockNameResolver, never()).start(any(NameResolver.Listener.class));
   }
 
@@ -398,7 +400,8 @@ public class ManagedChannelImplIdlenessTest {
             any(SocketAddress.class),
             eq(new ClientTransportFactory.ClientTransportOptions()
               .setAuthority("oobauthority")
-              .setUserAgent(USER_AGENT)));
+              .setUserAgent(USER_AGENT)),
+            any(ChannelLogger.class));
     ClientCall<String, Integer> oobCall = oob.newCall(method, CallOptions.DEFAULT);
     oobCall.start(mockCallListener2, new Metadata());
     verify(mockTransportFactory)
@@ -406,7 +409,8 @@ public class ManagedChannelImplIdlenessTest {
             any(SocketAddress.class),
             eq(new ClientTransportFactory.ClientTransportOptions()
               .setAuthority("oobauthority")
-              .setUserAgent(USER_AGENT)));
+              .setUserAgent(USER_AGENT)),
+            any(ChannelLogger.class));
     MockClientTransportInfo oobTransportInfo = newTransports.poll();
     assertEquals(0, newTransports.size());
     // The OOB transport reports in-use state
