@@ -240,11 +240,9 @@ final class ProtocolNegotiators {
    * Buffers all writes until the HTTP CONNECT tunnel is established.
    */
   static final class BufferUntilProxyTunnelledHandler extends AbstractBufferingHandler {
-    private final ChannelHandler originalHandler;
 
     public BufferUntilProxyTunnelledHandler(ProxyHandler proxyHandler, ChannelHandler handler) {
       super(proxyHandler, handler);
-      this.originalHandler = handler;
     }
 
     @Override
@@ -370,7 +368,7 @@ final class ProtocolNegotiators {
     } else {
       /*
        * Implementation note: We pick -1 as the port here rather than deriving it from the
-       * original socket address.  The SSL engine doens't use this port number when contacting the
+       * original socket address.  The SSL engine doesn't use this port number when contacting the
        * remote server, but rather it is used for other things like SSL Session caching.  When an
        * invalid authority is provided (like "bad_cert"), picking the original port and passing it
        * in would mean that the port might used under the assumption that it was correct.   By

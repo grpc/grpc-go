@@ -163,10 +163,6 @@ public class NettyChannelBuilderTest {
 
   @Test
   public void createProtocolNegotiatorByType_tlsWithClientContext() throws SSLException {
-    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiatorByType(
-        NegotiationType.TLS,
-        GrpcSslContexts.forClient().build());
-
     ProtocolNegotiators.HostPort hostPort = ProtocolNegotiators.parseAuthority("authority:1234");
 
     assertEquals("authority", hostPort.host);
