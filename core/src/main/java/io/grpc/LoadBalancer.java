@@ -659,7 +659,11 @@ public abstract class LoadBalancer {
      * Returns the NameResolver of the channel.
      *
      * @since 1.2.0
+     *
+     * @deprecated this method will be deleted in a future release.  If you think it shouldn't be
+     *     deleted, please file an issue on <a href="https://github.com/grpc/grpc-java">github</a>.
      */
+    @Deprecated
     public abstract NameResolver.Factory getNameResolverFactory();
 
     /**

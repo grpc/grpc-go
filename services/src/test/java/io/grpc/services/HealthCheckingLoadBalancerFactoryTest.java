@@ -1190,6 +1190,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
       return clock.getScheduledExecutorService();
     }
 
+    @Deprecated
     @Override
     public NameResolver.Factory getNameResolverFactory() {
       throw new AssertionError("Should not be called");

@@ -1256,6 +1256,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       return ManagedChannelImpl.this.authority();
     }
 
+    @Deprecated
     @Override
     public NameResolver.Factory getNameResolverFactory() {
       return nameResolverFactory;

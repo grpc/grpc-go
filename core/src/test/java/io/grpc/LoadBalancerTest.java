@@ -211,7 +211,9 @@ public class LoadBalancerTest {
       return null;
     }
 
-    @Override public NameResolver.Factory getNameResolverFactory() {
+    @Deprecated
+    @Override
+    public NameResolver.Factory getNameResolverFactory() {
       return null;
     }
 
