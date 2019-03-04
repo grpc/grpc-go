@@ -191,5 +191,5 @@ func (p *lbPicker) updateReadySCs(readySCs []balancer.SubConn) {
 	defer p.mu.Unlock()
 
 	p.subConns = readySCs
-	p.subConnsNext = grpcrand.Intn(len(readySCs))
+	p.subConnsNext = p.subConnsNext % len(readySCs)
 }
