@@ -76,9 +76,9 @@ var (
 )
 
 type testBalancerConfig struct {
-	BalancerName   string
-	ChildPolicy    []lbPolicy
-	FallbackPolicy []lbPolicy
+	BalancerName   string     `json:"balancerName,omitempty"`
+	ChildPolicy    []lbPolicy `json:"childPolicy,omitempty"`
+	FallbackPolicy []lbPolicy `json:"fallbackPolicy,omitempty"`
 }
 
 func (l *lbPolicy) UnmarshalJSON(b []byte) error {
