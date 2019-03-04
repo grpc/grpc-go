@@ -405,21 +405,10 @@ final class ProtocolNegotiators {
    * Returns a {@link ProtocolNegotiator} used for upgrading to HTTP/2 from HTTP/1.x.
    */
   public static ProtocolNegotiator plaintextUpgrade() {
-    return new PlaintextUpgradeNegotiator();
+    return new PlaintextUpgradeProtocolNegotiator();
   }
 
-  static final class PlaintextUpgradeNegotiator implements ProtocolNegotiator {
-
-    @Override
-    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler handler) {
-      // Register the plaintext upgrader
-      Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
-      HttpClientCodec httpClientCodec = new HttpClientCodec();
-      final HttpClientUpgradeHandler upgrader =
-          new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
-      return new BufferingHttp2UpgradeHandler(httpClientCodec, upgrader, handler,
-          handler.getAuthority());
-    }
+  static final class PlaintextUpgradeProtocolNegotiator implements ProtocolNegotiator {
 
     @Override
     public AsciiString scheme() {
@@ -427,7 +416,67 @@ final class ProtocolNegotiators {
     }
 
     @Override
+    public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      ChannelHandler upgradeHandler =
+          new Http2UpgradeAndGrpcHandler(grpcHandler.getAuthority(), grpcHandler);
+      ChannelHandler wuah = new WaitUntilActiveHandler(upgradeHandler);
+      return wuah;
+    }
+
+    @Override
     public void close() {}
+  }
+
+  /**
+   * Acts as a combination of Http2Upgrade and {@link GrpcNegotiationHandler}.  Unfortunately,
+   * this negotiator doesn't follow the pattern of "just one handler doing negotiation at a time."
+   * This is due to the tight coupling between the upgrade handler and the HTTP/2 handler.
+   */
+  static final class Http2UpgradeAndGrpcHandler extends ChannelInboundHandlerAdapter {
+
+    private final String authority;
+    private final GrpcHttp2ConnectionHandler next;
+
+    private ProtocolNegotiationEvent pne = ProtocolNegotiationEvent.DEFAULT;
+
+    Http2UpgradeAndGrpcHandler(String authority, GrpcHttp2ConnectionHandler next) {
+      this.authority = checkNotNull(authority, "authority");
+      this.next = checkNotNull(next, "next");
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+      HttpClientCodec httpClientCodec = new HttpClientCodec();
+      ctx.pipeline().addBefore(ctx.name(), null, httpClientCodec);
+
+      Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(next);
+      HttpClientUpgradeHandler upgrader =
+          new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, /*maxContentLength=*/ 1000);
+      ctx.pipeline().addBefore(ctx.name(), null, upgrader);
+
+      // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
+      // which causes the upgrade headers to be added
+      DefaultHttpRequest upgradeTrigger =
+          new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+      upgradeTrigger.headers().add(HttpHeaderNames.HOST, authority);
+      ctx.writeAndFlush(upgradeTrigger).addListener(
+          ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+      super.handlerAdded(ctx);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof ProtocolNegotiationEvent) {
+        pne = (ProtocolNegotiationEvent) evt;
+      } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_SUCCESSFUL) {
+        ctx.pipeline().remove(ctx.name());
+        next.handleProtocolNegotiationCompleted(pne.getAttributes(), pne.getSecurity());
+      } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
+        ctx.fireExceptionCaught(unavailableException("HTTP/2 upgrade rejected"));
+      } else {
+        super.userEventTriggered(ctx, evt);
+      }
+    }
   }
 
   /**
@@ -445,7 +494,7 @@ final class ProtocolNegotiators {
 
   @VisibleForTesting
   static void logSslEngineDetails(Level level, ChannelHandlerContext ctx, String msg,
-                                                @Nullable Throwable t) {
+      @Nullable Throwable t) {
     if (!log.isLoggable(level)) {
       return;
     }
@@ -689,54 +738,6 @@ final class ProtocolNegotiators {
       }
     }
   }
-
-  /**
-   * Buffers all writes until the HTTP to HTTP/2 upgrade is complete.
-   */
-  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler {
-
-    private final GrpcHttp2ConnectionHandler grpcHandler;
-
-    private final String authority;
-
-    BufferingHttp2UpgradeHandler(ChannelHandler handler, ChannelHandler upgradeHandler,
-        GrpcHttp2ConnectionHandler grpcHandler, String authority) {
-      super(handler, upgradeHandler);
-      this.grpcHandler = grpcHandler;
-      this.authority = authority;
-    }
-
-    @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-      // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
-      // which causes the upgrade headers to be added
-      DefaultHttpRequest upgradeTrigger =
-          new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-      upgradeTrigger.headers().add(HttpHeaderNames.HOST, authority);
-      ctx.writeAndFlush(upgradeTrigger);
-      super.channelActive(ctx);
-    }
-
-    @Override
-    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-      if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_SUCCESSFUL) {
-        writeBufferedAndRemove(ctx);
-        grpcHandler.handleProtocolNegotiationCompleted(
-            Attributes
-                .newBuilder()
-                .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
-                .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
-                .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
-                .build(),
-            /*securityInfo=*/ null);
-      } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
-        fail(ctx, unavailableException("HTTP/2 upgrade rejected"));
-      }
-      super.userEventTriggered(ctx, evt);
-    }
-  }
-
 
   /**
    * Adapts a {@link ProtocolNegotiationEvent} to the {@link GrpcHttp2ConnectionHandler}.

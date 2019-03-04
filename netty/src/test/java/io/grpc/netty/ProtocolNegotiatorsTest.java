@@ -49,6 +49,7 @@ import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultEventLoop;
@@ -58,6 +59,10 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.HttpServerUpgradeHandler;
+import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodec;
+import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodecFactory;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
@@ -65,6 +70,7 @@ import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
+import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.proxy.ProxyConnectException;
 import io.netty.handler.ssl.SslContext;
@@ -637,7 +643,7 @@ public class ProtocolNegotiatorsTest {
 
     boolean completed = gh.negotiated.await(5, TimeUnit.SECONDS);
     if (!completed) {
-      assertTrue("failed to negotiated", write.await(5, TimeUnit.SECONDS));
+      assertTrue("failed to negotiated", write.await(1, TimeUnit.SECONDS));
       // sync should fail if we are in this block.
       write.sync();
       throw new AssertionError("neither wrote nor negotiated");
@@ -652,6 +658,65 @@ public class ProtocolNegotiatorsTest {
     assertThat(gh.attrs.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)).isInstanceOf(SSLSession.class);
     // This is not part of the ClientTls negotiation, but shows that the negotiation event happens
     // in the right order.
+    assertThat(gh.attrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)).isEqualTo(addr);
+  }
+
+  @Test
+  public void plaintextUpgradeNegotiator() throws Exception {
+    LocalAddress addr = new LocalAddress("plaintextUpgradeNegotiator");
+    UpgradeCodecFactory ucf = new UpgradeCodecFactory() {
+
+      @Override
+      public UpgradeCodec newUpgradeCodec(CharSequence protocol) {
+        return new Http2ServerUpgradeCodec(FakeGrpcHttp2ConnectionHandler.newHandler());
+      }
+    };
+    final HttpServerCodec serverCodec = new HttpServerCodec();
+    final HttpServerUpgradeHandler serverUpgradeHandler =
+        new HttpServerUpgradeHandler(serverCodec, ucf);
+    Channel serverChannel = new ServerBootstrap()
+        .group(group)
+        .channel(LocalServerChannel.class)
+        .childHandler(new ChannelInitializer<Channel>() {
+
+          @Override
+          protected void initChannel(Channel ch) throws Exception {
+            ch.pipeline().addLast(serverCodec, serverUpgradeHandler);
+          }
+        })
+        .bind(addr)
+        .sync()
+        .channel();
+
+    FakeGrpcHttp2ConnectionHandler gh = FakeGrpcHttp2ConnectionHandler.newHandler();
+    ProtocolNegotiator nego = ProtocolNegotiators.plaintextUpgrade();
+    ChannelHandler ch = nego.newHandler(gh);
+    WriteBufferingAndExceptionHandler wbaeh = new WriteBufferingAndExceptionHandler(ch);
+
+    Channel channel = new Bootstrap()
+        .group(group)
+        .channel(LocalChannel.class)
+        .handler(wbaeh)
+        .register()
+        .sync()
+        .channel();
+
+    ChannelFuture write = channel.writeAndFlush(NettyClientHandler.NOOP_MESSAGE);
+    channel.connect(serverChannel.localAddress());
+
+    boolean completed = gh.negotiated.await(5, TimeUnit.SECONDS);
+    if (!completed) {
+      assertTrue("failed to negotiated", write.await(1, TimeUnit.SECONDS));
+      // sync should fail if we are in this block.
+      write.sync();
+      throw new AssertionError("neither wrote nor negotiated");
+    }
+
+    channel.close().sync();
+    serverChannel.close();
+
+    assertThat(gh.securityInfo).isNull();
+    assertThat(gh.attrs.get(GrpcAttributes.ATTR_SECURITY_LEVEL)).isEqualTo(SecurityLevel.NONE);
     assertThat(gh.attrs.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)).isEqualTo(addr);
   }
 
