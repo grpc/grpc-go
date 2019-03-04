@@ -60,6 +60,11 @@ public abstract class ForwardingLoadBalancerHelper extends LoadBalancer.Helper {
   }
 
   @Override
+  public ManagedChannel createResolvingOobChannel(String target) {
+    return delegate().createResolvingOobChannel(target);
+  }
+
+  @Override
   public void updateBalancingState(
       ConnectivityState newState, SubchannelPicker newPicker) {
     delegate().updateBalancingState(newState, newPicker);

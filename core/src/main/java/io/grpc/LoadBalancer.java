@@ -551,9 +551,10 @@ public abstract class LoadBalancer {
     public abstract ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority);
 
     /**
-     * Updates the addresses used for connections in the {@code Channel}. This is supperior to
-     * {@link #createOobChannel} when the old and new addresses overlap, since the channel can
-     * continue using an existing connection.
+     * Updates the addresses used for connections in the {@code Channel} that was created by {@link
+     * #createOobChannel(EquivalentAddressGroup, String)}. This is supperior to {@link
+     * #createOobChannel(EquivalentAddressGroup, String)} when the old and new addresses overlap,
+     * since the channel can continue using an existing connection.
      *
      * @throws IllegalArgumentException if {@code channel} was not returned from {@link
      *     #createOobChannel}
@@ -561,6 +562,26 @@ public abstract class LoadBalancer {
      */
     public void updateOobChannelAddresses(ManagedChannel channel, EquivalentAddressGroup eag) {
       throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Creates an out-of-band channel for LoadBalancer's own RPC needs, e.g., talking to an external
+     * load-balancer service, that is specified by a target string.  See the documentation on
+     * {@link ManagedChannelBuilder#forTarget} for the format of a target string.
+     *
+     * <p>The target string will be resolved by a {@link NameResolver} created according to the
+     * target string.  The out-of-band channel doesn't have load-balancing.  If multiple addresses
+     * are resolved for the target, the first working address will be used.
+     *
+     * <p>The LoadBalancer is responsible for closing unused OOB channels, and closing all OOB
+     * channels within {@link #shutdown}.
+     *
+     * <P>NOT IMPLEMENTED: this method is currently a stub and not yet implemented by gRPC.
+     *
+     * @since 1.20.0
+     */
+    public ManagedChannel createResolvingOobChannel(String target) {
+      throw new UnsupportedOperationException("Not implemented");
     }
 
     /**
