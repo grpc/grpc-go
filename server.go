@@ -806,6 +806,7 @@ func (s *Server) incrCallsFailed() {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
+	beginTime := time.Now()
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
@@ -823,7 +824,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	}
 	err = t.Write(stream, hdr, payload, opts)
 	if err == nil && s.opts.statsHandler != nil {
-		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
+		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, beginTime, time.Now()))
 	}
 	return err
 }
@@ -929,6 +930,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 	}
 
+	var inPayload *stats.InPayload
+	if sh != nil {
+		inPayload = &stats.InPayload{
+			BeginTime: time.Now(),
+		}
+	}
 	var payInfo *payloadInfo
 	if sh != nil || binlog != nil {
 		payInfo = &payloadInfo{}
@@ -949,13 +956,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
-		if sh != nil {
-			sh.HandleRPC(stream.Context(), &stats.InPayload{
-				RecvTime: time.Now(),
-				Payload:  v,
-				Data:     d,
-				Length:   len(d),
-			})
+		if sh != nil && inPayload != nil {
+			inPayload.RecvTime = time.Now()
+			inPayload.Payload = v
+			inPayload.Data = d
+			inPayload.Length = len(d)
+			sh.HandleRPC(stream.Context(), inPayload)
 		}
 		if binlog != nil {
 			binlog.Log(&binarylog.ClientMessage{

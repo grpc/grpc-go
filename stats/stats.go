@@ -64,6 +64,8 @@ type InPayload struct {
 	Length int
 	// WireLength is the length of data on wire (compressed, signed, encrypted).
 	WireLength int
+	// BeginTime is the time when the payload began to be received.
+	BeginTime time.Time
 	// RecvTime is the time when the payload is received.
 	RecvTime time.Time
 }
@@ -121,6 +123,8 @@ type OutPayload struct {
 	Length int
 	// WireLength is the length of data on wire (compressed, signed, encrypted).
 	WireLength int
+	// BeginTime is the time when the payload began to be sent.
+	BeginTime time.Time
 	// SentTime is the time when the payload is sent.
 	SentTime time.Time
 }

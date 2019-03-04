@@ -512,6 +512,9 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 		}
 	}
 	// TODO check WireLength and ReceivedTime.
+	if st.BeginTime.IsZero() {
+		t.Fatalf("st.BeginTime = %v, want <non-zero>", st.BeginTime)
+	}
 	if st.RecvTime.IsZero() {
 		t.Fatalf("st.ReceivedTime = %v, want <non-zero>", st.RecvTime)
 	}
@@ -604,6 +607,9 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 		}
 	}
 	// TODO check WireLength and ReceivedTime.
+	if st.BeginTime.IsZero() {
+		t.Fatalf("st.BeginTime = %v, want <non-zero>", st.BeginTime)
+	}
 	if st.SentTime.IsZero() {
 		t.Fatalf("st.SentTime = %v, want <non-zero>", st.SentTime)
 	}

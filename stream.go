@@ -810,6 +810,7 @@ func (cs *clientStream) finish(err error) {
 }
 
 func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
+	beginTime := time.Now()
 	cs := a.cs
 	if EnableTracing {
 		a.mu.Lock()
@@ -828,7 +829,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 		return io.EOF
 	}
 	if a.statsHandler != nil {
-		a.statsHandler.HandleRPC(cs.ctx, outPayload(true, m, data, payld, time.Now()))
+		a.statsHandler.HandleRPC(cs.ctx, outPayload(true, m, data, payld, beginTime, time.Now()))
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgSent()
@@ -838,8 +839,14 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 
 func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 	cs := a.cs
-	if a.statsHandler != nil && payInfo == nil {
-		payInfo = &payloadInfo{}
+	var inPayload *stats.InPayload
+	if a.statsHandler != nil {
+		inPayload = &stats.InPayload{
+			BeginTime: time.Now(),
+		}
+		if payInfo == nil {
+			payInfo = &payloadInfo{}
+		}
 	}
 
 	if !a.decompSet {
@@ -875,15 +882,14 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	if a.statsHandler != nil {
-		a.statsHandler.HandleRPC(cs.ctx, &stats.InPayload{
-			Client:   true,
-			RecvTime: time.Now(),
-			Payload:  m,
-			// TODO truncate large payload.
-			Data:   payInfo.uncompressedBytes,
-			Length: len(payInfo.uncompressedBytes),
-		})
+	if a.statsHandler != nil && inPayload != nil {
+		inPayload.Client = true
+		inPayload.RecvTime = time.Now()
+		inPayload.Payload = m
+		// TODO truncate large payload.
+		inPayload.Data = payInfo.uncompressedBytes
+		inPayload.Length = len(payInfo.uncompressedBytes)
+		a.statsHandler.HandleRPC(cs.ctx, inPayload)
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgRecv()
@@ -1383,6 +1389,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.t.IncrMsgSent()
 		}
 	}()
+	beginTime := time.Now()
 	data, err := encode(ss.codec, m)
 	if err != nil {
 		return err
@@ -1412,7 +1419,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		})
 	}
 	if ss.statsHandler != nil {
-		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, time.Now()))
+		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, beginTime, time.Now()))
 	}
 	return nil
 }
@@ -1445,6 +1452,12 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.t.IncrMsgRecv()
 		}
 	}()
+	var inPayload *stats.InPayload
+	if ss.statsHandler != nil {
+		inPayload = &stats.InPayload{
+			BeginTime: time.Now(),
+		}
+	}
 	var payInfo *payloadInfo
 	if ss.statsHandler != nil || ss.binlog != nil {
 		payInfo = &payloadInfo{}
@@ -1461,14 +1474,13 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		}
 		return toRPCErr(err)
 	}
-	if ss.statsHandler != nil {
-		ss.statsHandler.HandleRPC(ss.s.Context(), &stats.InPayload{
-			RecvTime: time.Now(),
-			Payload:  m,
-			// TODO truncate large payload.
-			Data:   payInfo.uncompressedBytes,
-			Length: len(payInfo.uncompressedBytes),
-		})
+	if ss.statsHandler != nil && inPayload != nil {
+		inPayload.RecvTime = time.Now()
+		inPayload.Payload = m
+		// TODO truncate large payload.
+		inPayload.Data = payInfo.uncompressedBytes
+		inPayload.Length = len(payInfo.uncompressedBytes)
+		ss.statsHandler.HandleRPC(ss.s.Context(), inPayload)
 	}
 	if ss.binlog != nil {
 		ss.binlog.Log(&binarylog.ClientMessage{

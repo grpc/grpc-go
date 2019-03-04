@@ -603,14 +603,15 @@ func msgHeader(data, compData []byte) (hdr []byte, payload []byte) {
 	return hdr, data
 }
 
-func outPayload(client bool, msg interface{}, data, payload []byte, t time.Time) *stats.OutPayload {
+func outPayload(client bool, msg interface{}, data, payload []byte, beginTime, sentTime time.Time) *stats.OutPayload {
 	return &stats.OutPayload{
 		Client:     client,
 		Payload:    msg,
 		Data:       data,
 		Length:     len(data),
 		WireLength: len(payload) + headerLen,
-		SentTime:   t,
+		BeginTime:  beginTime,
+		SentTime:   sentTime,
 	}
 }
 
