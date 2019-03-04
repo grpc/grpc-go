@@ -94,9 +94,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   private Set<InProcessStream> streams = new HashSet<>();
   @GuardedBy("this")
   private List<ServerStreamTracer.Factory> serverStreamTracerFactories;
-  private final Attributes attributes = Attributes.newBuilder()
-      .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
-      .build();
+  private final Attributes attributes;
+
   @GuardedBy("this")
   private final InUseStateAggregator<InProcessStream> inUseState =
       new InUseStateAggregator<InProcessStream>() {
@@ -112,11 +111,17 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       };
 
   public InProcessTransport(
-      String name, int maxInboundMetadataSize, String authority, String userAgent) {
+      String name, int maxInboundMetadataSize, String authority, String userAgent,
+      Attributes eagAttrs) {
     this.name = name;
     this.clientMaxInboundMetadataSize = maxInboundMetadataSize;
     this.authority = authority;
     this.userAgent = GrpcUtil.getGrpcUserAgent("inprocess", userAgent);
+    checkNotNull(eagAttrs, "eagAttrs");
+    this.attributes = Attributes.newBuilder()
+        .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
+        .set(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS, eagAttrs)
+        .build();
     logId = InternalLogId.allocate(getClass(), name);
   }
 

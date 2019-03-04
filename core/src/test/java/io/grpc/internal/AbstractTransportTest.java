@@ -91,6 +91,12 @@ public abstract class AbstractTransportTest {
   private static final Attributes.Key<String> ADDITIONAL_TRANSPORT_ATTR_KEY =
       Attributes.Key.create("additional-attr");
 
+  private static final Attributes.Key<String> EAG_ATTR_KEY =
+      Attributes.Key.create("eag-attr");
+
+  private static final Attributes EAG_ATTRS =
+      Attributes.newBuilder().set(EAG_ATTR_KEY, "value").build();
+
   protected final TransportTracer.Factory fakeClockTransportTracer = new TransportTracer.Factory(
       new TimeProvider() {
         @Override
@@ -127,6 +133,10 @@ public abstract class AbstractTransportTest {
    */
   protected boolean sizesReported() {
     return true;
+  }
+
+  protected final Attributes eagAttrs() {
+    return EAG_ATTRS;
   }
 
   /**
@@ -724,7 +734,13 @@ public abstract class AbstractTransportTest {
     InOrder serverInOrder = inOrder(serverStreamTracerFactory);
     server.start(serverListener);
     client = newClientTransport(server);
+
     startTransport(client, mockClientTransportListener);
+
+    // This attribute is available right after transport is started
+    assertThat(((ConnectionClientTransport) client).getAttributes()
+        .get(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS)).isSameAs(EAG_ATTRS);
+
     MockServerTransportListener serverTransportListener
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
@@ -767,6 +783,10 @@ public abstract class AbstractTransportTest {
         serverStream.getAttributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
     assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
     assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_LOCAL_ADDR));
+
+    // This attribute is still available when the transport is connected
+    assertThat(((ConnectionClientTransport) client).getAttributes()
+        .get(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS)).isSameAs(EAG_ATTRS);
 
     serverStream.request(1);
     assertTrue(clientStreamListener.awaitOnReadyAndDrain(TIMEOUT_MS, TimeUnit.MILLISECONDS));

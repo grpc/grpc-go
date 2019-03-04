@@ -94,7 +94,8 @@ public class NettyTransportTest extends AbstractTransportTest {
     return clientFactory.newClientTransport(
         server.getListenSocketAddress(),
         new ClientTransportFactory.ClientTransportOptions()
-          .setAuthority(testAuthority(server)));
+          .setAuthority(testAuthority(server))
+          .setEagAttributes(eagAttrs()));
   }
 
   @org.junit.Ignore

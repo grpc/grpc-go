@@ -30,6 +30,7 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStreamListener.RpcProgress;
 import io.grpc.internal.ClientTransport.PingCallback;
+import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.InUseStateAggregator;
@@ -121,7 +122,7 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
-  private Attributes attributes = Attributes.EMPTY;
+  private Attributes attributes;
   private InternalChannelz.Security securityInfo;
 
   static NettyClientHandler newHandler(
@@ -247,6 +248,8 @@ class NettyClientHandler extends AbstractNettyHandler {
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
     this.eagAttributes = eagAttributes;
     this.authority = authority;
+    this.attributes = Attributes.newBuilder()
+        .set(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS, eagAttributes).build();
 
     // Set the frame listener on the decoder.
     decoder().frameListener(new FrameListener());
@@ -439,7 +442,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   @Override
   public void handleProtocolNegotiationCompleted(
       Attributes attributes, InternalChannelz.Security securityInfo) {
-    this.attributes = attributes;
+    this.attributes = this.attributes.toBuilder().setAll(attributes).build();
     this.securityInfo = securityInfo;
     super.handleProtocolNegotiationCompleted(attributes, securityInfo);
     // Once protocol negotiator is complete, release all writes and remove the buffer.

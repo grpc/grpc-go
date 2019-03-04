@@ -54,6 +54,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.InternalChannelz.SocketStats;
@@ -138,6 +139,7 @@ public class OkHttpClientTransportTest {
   private static final HttpConnectProxiedSocketAddress NO_PROXY = null;
   private static final int DEFAULT_START_STREAM_ID = 3;
   private static final int DEFAULT_MAX_INBOUND_METADATA_SIZE = Integer.MAX_VALUE;
+  private static final Attributes EAG_ATTRS = Attributes.EMPTY;
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
@@ -244,6 +246,7 @@ public class OkHttpClientTransportTest {
         address,
         "hostname",
         /*agent=*/ null,
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,
@@ -1534,6 +1537,7 @@ public class OkHttpClientTransportTest {
         new InetSocketAddress("host", 1234),
         "invalid_authority",
         "userAgent",
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,
@@ -1559,6 +1563,7 @@ public class OkHttpClientTransportTest {
         new InetSocketAddress("localhost", 0),
         "authority",
         "userAgent",
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,
@@ -1595,6 +1600,7 @@ public class OkHttpClientTransportTest {
             new InetSocketAddress("localhost", 0),
             "authority",
             "userAgent",
+            EAG_ATTRS,
             executor,
             socketFactory,
             sslSocketFactory,
@@ -1624,6 +1630,7 @@ public class OkHttpClientTransportTest {
         targetAddress,
         "authority",
         "userAgent",
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,
@@ -1679,6 +1686,7 @@ public class OkHttpClientTransportTest {
         targetAddress,
         "authority",
         "userAgent",
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,
@@ -1733,6 +1741,7 @@ public class OkHttpClientTransportTest {
         targetAddress,
         "authority",
         "userAgent",
+        EAG_ATTRS,
         executor,
         socketFactory,
         sslSocketFactory,

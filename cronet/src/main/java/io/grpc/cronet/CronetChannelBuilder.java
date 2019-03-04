@@ -223,7 +223,8 @@ public final class CronetChannelBuilder extends
         SocketAddress addr, ClientTransportOptions options) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       return new CronetClientTransport(streamFactory, inetSocketAddr, options.getAuthority(),
-          options.getUserAgent(), executor, maxMessageSize, alwaysUsePut, transportTracer);
+          options.getUserAgent(), options.getEagAttributes(), executor, maxMessageSize,
+          alwaysUsePut, transportTracer);
     }
 
     @Override

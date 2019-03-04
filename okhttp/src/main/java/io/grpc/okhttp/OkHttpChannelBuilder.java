@@ -561,6 +561,7 @@ public class OkHttpChannelBuilder extends
           inetSocketAddr,
           options.getAuthority(),
           options.getUserAgent(),
+          options.getEagAttributes(),
           executor,
           socketFactory,
           sslSocketFactory,

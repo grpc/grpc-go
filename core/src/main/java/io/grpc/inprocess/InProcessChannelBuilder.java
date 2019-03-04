@@ -202,7 +202,8 @@ public final class InProcessChannelBuilder extends
         throw new IllegalStateException("The transport factory is closed.");
       }
       return new InProcessTransport(
-          name, maxInboundMetadataSize, options.getAuthority(), options.getUserAgent());
+          name, maxInboundMetadataSize, options.getAuthority(), options.getUserAgent(),
+          options.getEagAttributes());
     }
 
     @Override

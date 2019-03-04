@@ -58,5 +58,14 @@ public final class GrpcAttributes {
   public static final Attributes.Key<SecurityLevel> ATTR_SECURITY_LEVEL =
       Attributes.Key.create("io.grpc.internal.GrpcAttributes.securityLevel");
 
+  /**
+   * Attribute key for the attributes of the {@link EquivalentAddressGroup} ({@link
+   * EquivalentAddressGroup#getAttributes}) that the transport's server address is from.  This is a
+   * client-side-only transport attribute, and available right after the transport is started.
+   */
+  @Grpc.TransportAttr
+  public static final Attributes.Key<Attributes> ATTR_CLIENT_EAG_ATTRS =
+      Attributes.Key.create("io.grpc.internal.GrpcAttributes.clientEagAttrs");
+
   private GrpcAttributes() {}
 }

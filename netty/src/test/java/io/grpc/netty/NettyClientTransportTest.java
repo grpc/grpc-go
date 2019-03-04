@@ -546,7 +546,7 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = newTransport(new NoopProtocolNegotiator());
     callMeMaybe(transport.start(clientTransportListener));
 
-    assertEquals(Attributes.EMPTY, transport.getAttributes());
+    assertNotNull(transport.getAttributes());
   }
 
   @Test

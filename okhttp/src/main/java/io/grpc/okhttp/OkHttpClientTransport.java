@@ -161,7 +161,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
   private int connectionUnacknowledgedBytesRead;
   private ClientFrameHandler clientFrameHandler;
   // Caution: Not synchronized, new value can only be safely read after the connection is complete.
-  private Attributes attributes = Attributes.EMPTY;
+  private Attributes attributes;
   /**
    * Indicates the transport is in go-away state: no new streams will be processed, but existing
    * streams may continue.
@@ -225,6 +225,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
       InetSocketAddress address,
       String authority,
       @Nullable String userAgent,
+      Attributes eagAttrs,
       Executor executor,
       @Nullable SocketFactory socketFactory,
       @Nullable SSLSocketFactory sslSocketFactory,
@@ -257,6 +258,8 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     this.maxInboundMetadataSize = maxInboundMetadataSize;
     this.transportTracer = Preconditions.checkNotNull(transportTracer);
     this.logId = InternalLogId.allocate(getClass(), address.toString());
+    this.attributes = Attributes.newBuilder()
+        .set(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS, eagAttrs).build();
     initTransportTracer();
   }
 
@@ -547,8 +550,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
           asyncSink.becomeConnected(Okio.sink(sock), sock);
 
           // The return value of OkHttpTlsUpgrader.upgrade is an SSLSocket that has this info
-          attributes = Attributes
-              .newBuilder()
+          attributes = attributes.toBuilder()
               .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, sock.getRemoteSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, sock.getLocalSocketAddress())
               .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)

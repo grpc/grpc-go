@@ -51,6 +51,11 @@ import org.robolectric.RobolectricTestRunner;
 public final class CronetClientTransportTest {
 
   private static final String AUTHORITY = "test.example.com";
+  private static final Attributes.Key<String> EAG_ATTR_KEY =
+      Attributes.Key.create("eag-attr");
+
+  private static final Attributes EAG_ATTRS =
+      Attributes.newBuilder().set(EAG_ATTR_KEY, "value").build();
 
   private CronetClientTransport transport;
   @Mock private StreamBuilderFactory streamFactory;
@@ -69,6 +74,7 @@ public final class CronetClientTransportTest {
             new InetSocketAddress("localhost", 443),
             AUTHORITY,
             null,
+            EAG_ATTRS,
             executor,
             5000,
             false,
@@ -84,6 +90,7 @@ public final class CronetClientTransportTest {
     Attributes attrs = transport.getAttributes();
     assertEquals(
         SecurityLevel.PRIVACY_AND_INTEGRITY, attrs.get(GrpcAttributes.ATTR_SECURITY_LEVEL));
+    assertEquals(EAG_ATTRS, attrs.get(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS));
   }
 
   @Test
