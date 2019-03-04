@@ -551,11 +551,11 @@ func (p *xdsConfig) UnmarshalJSON(data []byte) error {
 	}
 	for k, v := range val {
 		switch k {
-		case "BalancerName":
+		case "balancerName":
 			if err := json.Unmarshal(v, &p.BalancerName); err != nil {
 				return err
 			}
-		case "ChildPolicy":
+		case "childPolicy":
 			var lbcfgs []*loadBalancingConfig
 			if err := json.Unmarshal(v, &lbcfgs); err != nil {
 				return err
@@ -566,7 +566,7 @@ func (p *xdsConfig) UnmarshalJSON(data []byte) error {
 					break
 				}
 			}
-		case "FallbackPolicy":
+		case "fallbackPolicy":
 			var lbcfgs []*loadBalancingConfig
 			if err := json.Unmarshal(v, &lbcfgs); err != nil {
 				return err
