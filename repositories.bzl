@@ -4,6 +4,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:jvm.bzl", "jvm_maven_import_external")
 
 def grpc_java_repositories(
+        omit_com_google_android_annotations = False,
         omit_com_google_api_grpc_google_common_protos = False,
         omit_com_google_auth_google_auth_library_credentials = False,
         omit_com_google_auth_google_auth_library_oauth2_http = False,
@@ -39,6 +40,8 @@ def grpc_java_repositories(
         omit_org_apache_commons_lang3 = False,
         omit_org_codehaus_mojo_animal_sniffer_annotations = False):
     """Imports dependencies for grpc-java."""
+    if not omit_com_google_android_annotations:
+        com_google_android_annotations()
     if not omit_com_google_api_grpc_google_common_protos:
         com_google_api_grpc_google_common_protos()
     if not omit_com_google_auth_google_auth_library_credentials:
@@ -115,6 +118,15 @@ def grpc_java_repositories(
     native.bind(
         name = "gson",
         actual = "@com_google_code_gson_gson//jar",
+    )
+
+def com_google_android_annotations():
+    jvm_maven_import_external(
+        name = "com_google_android_annotations",
+        artifact = "com.google.android:annotations:4.1.1.4",
+        server_urls = ["http://central.maven.org/maven2"],
+        artifact_sha256 = "ba734e1e84c09d615af6a09d33034b4f0442f8772dec120efb376d86a565ae15",
+        licenses = ["notice"],  # Apache 2.0
     )
 
 def com_google_api_grpc_google_common_protos():

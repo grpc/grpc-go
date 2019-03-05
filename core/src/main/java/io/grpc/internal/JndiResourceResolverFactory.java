@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import android.annotation.SuppressLint;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Verify;
 import io.grpc.Attributes;
@@ -243,6 +244,10 @@ final class JndiResourceResolverFactory implements DnsNameResolver.ResourceResol
 
   @VisibleForTesting
   @IgnoreJRERequirement
+  // javax.naming.* is only loaded reflectively and is never loaded for Android
+  // The lint issue id is supposed to be "InvalidPackage" but it doesn't work, don't know why.
+  // Use "all" as the lint issue id to suppress all types of lint error.
+  @SuppressLint("all")
   static final class JndiRecordFetcher implements RecordFetcher {
     @Override
     public List<String> getAllRecords(String recordType, String name) throws NamingException {

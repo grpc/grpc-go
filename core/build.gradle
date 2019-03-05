@@ -5,6 +5,7 @@ dependencies {
             libraries.gson,
             libraries.errorprone,
             libraries.jsr305,
+            libraries.android_annotations,
             libraries.animalsniffer_annotations
     compile (libraries.guava) {
         // prefer 2.2.0 from libraries instead of 2.1.3
