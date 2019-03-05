@@ -17,7 +17,6 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.netty.GrpcSslContexts.NEXT_PROTOCOL_VERSIONS;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -817,7 +816,7 @@ final class ProtocolNegotiators {
    */
   static final class WaitUntilActiveHandler extends ChannelInboundHandlerAdapter {
     private final ChannelHandler next;
-    private ProtocolNegotiationEvent protocolNegotiationEvent;
+    private ProtocolNegotiationEvent pne = ProtocolNegotiationEvent.DEFAULT;
 
     public WaitUntilActiveHandler(ChannelHandler next) {
       this.next = checkNotNull(next, "next");
@@ -844,25 +843,20 @@ final class ProtocolNegotiators {
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
       if (evt instanceof ProtocolNegotiationEvent) {
-        assert !ctx.channel().isActive();
-        checkState(protocolNegotiationEvent == null, "protocolNegotiationEvent already sent");
-        protocolNegotiationEvent = (ProtocolNegotiationEvent) evt;
+        pne = (ProtocolNegotiationEvent) evt;
       } else {
         super.userEventTriggered(ctx, evt);
       }
     }
 
     private void fireProtocolNegotiationEvent(ChannelHandlerContext ctx) {
-      if (protocolNegotiationEvent == null) {
-        protocolNegotiationEvent = ProtocolNegotiationEvent.DEFAULT;
-      }
-      Attributes attrs = protocolNegotiationEvent.getAttributes().toBuilder()
+      Attributes attrs = pne.getAttributes().toBuilder()
           .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, ctx.channel().localAddress())
           .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
           // Later handlers are expected to overwrite this.
           .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
           .build();
-      ctx.fireUserEventTriggered(protocolNegotiationEvent.withAttributes(attrs));
+      ctx.fireUserEventTriggered(pne.withAttributes(attrs));
     }
   }
 }
