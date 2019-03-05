@@ -44,6 +44,7 @@ import javax.annotation.Nullable;
 public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factory {
   private static final Logger logger =
       Logger.getLogger(AutoConfiguredLoadBalancerFactory.class.getName());
+  private static final String GRPCLB_POLICY_NAME = "grpclb";
 
   private final LoadBalancerRegistry registry;
   private final String defaultPolicy;
@@ -214,32 +215,6 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
         }
       }
 
-      if (haveBalancerAddress) {
-        // This is a special case where the existence of balancer address in the resolved address
-        // selects "grpclb" policy regardless of the service config.
-        LoadBalancerProvider grpclbProvider = registry.getProvider("grpclb");
-        if (grpclbProvider == null) {
-          if (backendAddrs.isEmpty()) {
-            throw new PolicyException(
-                "Received ONLY balancer addresses but grpclb runtime is missing");
-          }
-          if (!roundRobinDueToGrpclbDepMissing) {
-            roundRobinDueToGrpclbDepMissing = true;
-            String errorMsg = "Found balancer addresses but grpclb runtime is missing."
-                + " Will use round_robin. Please include grpc-grpclb in your runtime depedencies.";
-            helper.getChannelLogger().log(ChannelLogLevel.ERROR, errorMsg);
-            logger.warning(errorMsg);
-          }
-          return new PolicySelection(
-              getProviderOrThrow(
-                  "round_robin", "received balancer addresses but grpclb runtime is missing"),
-              backendAddrs, null);
-        } else {
-          return new PolicySelection(grpclbProvider, servers, null);
-        }
-      }
-      roundRobinDueToGrpclbDepMissing = false;
-
       List<LbConfig> lbConfigs = null;
       if (config != null) {
         List<Map<String, Object>> rawLbConfigs =
@@ -251,19 +226,56 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
         for (LbConfig lbConfig : lbConfigs) {
           String policy = lbConfig.getPolicyName();
           LoadBalancerProvider provider = registry.getProvider(policy);
-          if (provider != null) {
+          if (provider == null) {
+            policiesTried.add(policy);
+          } else {
             if (!policiesTried.isEmpty()) {
+              // Before returning, log all previously tried policies
               helper.getChannelLogger().log(
                   ChannelLogLevel.DEBUG,
                   "{0} specified by Service Config are not available", policiesTried);
             }
-            return new PolicySelection(provider, servers, lbConfig.getRawConfigValue());
+            return new PolicySelection(
+                provider,
+                policy.equals(GRPCLB_POLICY_NAME) ? servers : backendAddrs,
+                lbConfig.getRawConfigValue());
           }
-          policiesTried.add(policy);
         }
-        throw new PolicyException(
+        if (!haveBalancerAddress) {
+          throw new PolicyException(
             "None of " + policiesTried + " specified by Service Config are available.");
+        }
       }
+
+      if (haveBalancerAddress) {
+        // This is a special case where the existence of balancer address in the resolved address
+        // selects "grpclb" policy if the service config couldn't select a policy
+        LoadBalancerProvider grpclbProvider = registry.getProvider(GRPCLB_POLICY_NAME);
+        if (grpclbProvider == null) {
+          if (backendAddrs.isEmpty()) {
+            throw new PolicyException(
+                "Received ONLY balancer addresses but grpclb runtime is missing");
+          }
+          if (!roundRobinDueToGrpclbDepMissing) {
+            // We don't log the warning every time we have an update.
+            roundRobinDueToGrpclbDepMissing = true;
+            String errorMsg = "Found balancer addresses but grpclb runtime is missing."
+                + " Will use round_robin. Please include grpc-grpclb in your runtime depedencies.";
+            helper.getChannelLogger().log(ChannelLogLevel.ERROR, errorMsg);
+            logger.warning(errorMsg);
+          }
+          return new PolicySelection(
+              getProviderOrThrow(
+                  "round_robin", "received balancer addresses but grpclb runtime is missing"),
+              backendAddrs, null);
+        }
+        return new PolicySelection(grpclbProvider, servers, null);
+      }
+      // No balancer address this time.  If balancer address shows up later, we want to make sure
+      // the warning is logged one more time.
+      roundRobinDueToGrpclbDepMissing = false;
+
+      // No config nor balancer address. Use default.
       return new PolicySelection(
           getProviderOrThrow(defaultPolicy, "using default policy"), servers, null);
     }
