@@ -20,15 +20,17 @@ def _java_rpc_library_impl(ctx):
     if flavor == "normal":
         flavor = ""
 
+    srcjar = ctx.actions.declare_file("%s-proto-gensrc.jar" % ctx.label.name)
+
     args = ctx.actions.args()
     args.add(ctx.executable._java_plugin.path, format = "--plugin=protoc-gen-grpc-java=%s")
-    args.add("--grpc-java_out={0}:{1}".format(flavor, ctx.outputs.srcjar.path))
+    args.add("--grpc-java_out={0}:{1}".format(flavor, srcjar.path))
     args.add_all(includes, map_each = _create_include_path)
     args.add_all(srcs, map_each = _path_ignoring_repository)
 
     ctx.actions.run(
         inputs = depset(srcs, transitive = [includes]),
-        outputs = [ctx.outputs.srcjar],
+        outputs = [srcjar],
         tools = [ctx.executable._java_plugin],
         executable = ctx.executable._protoc,
         arguments = [args],
@@ -40,7 +42,8 @@ def _java_rpc_library_impl(ctx):
         ctx,
         java_toolchain = ctx.attr._java_toolchain,
         host_javabase = ctx.attr._host_javabase,
-        source_jars = [ctx.outputs.srcjar],
+        source_jars = [srcjar],
+        output_source_jar = ctx.outputs.srcjar,
         output = ctx.outputs.jar,
         deps = [
             java_common.make_non_strict(deps_java_info),
