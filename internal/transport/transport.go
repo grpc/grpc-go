@@ -327,8 +327,7 @@ func (s *Stream) TrailersOnly() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	// if !headerDone, some other connection error occurred.
-	return s.noHeaders && atomic.LoadUint32(&s.headerDone) == 1, nil
+	return s.noHeaders, nil
 }
 
 // Trailer returns the cached trailer metedata. Note that if it is not called

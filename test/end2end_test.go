@@ -22,6 +22,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -45,6 +46,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -62,6 +64,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -6892,7 +6895,7 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	time.Sleep(100 * time.Millisecond)
 	rcw.writeHeaders(http2.HeadersFrameParam{
 		StreamID:      tc.getCurrentStreamID(),
-		BlockFragment: rcw.encodeHeader("oversize", strings.Join(val, "")),
+		BlockFragment: rcw.encodeRawHeader("oversize", strings.Join(val, "")),
 		EndStream:     false,
 		EndHeaders:    true,
 	})
@@ -7123,5 +7126,223 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, nil", err)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
+	// Non-gRPC content-type fallback path.
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Missing content-type fallback path.
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			// Omitting content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Malformed HTTP status when fallback.
+	doHTTPHeaderTest(t, codes.Internal, []string{
+		":status", "abc",
+		// Omitting content type to switch to HTTP mode.
+		"grpc-status", "1", // Make up a gRPC status error
+		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+	})
+}
+
+// Testing erroneous ReponseHeader or Trailers-only (delivered in the first HEADERS frame).
+func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
+	for _, test := range []struct {
+		header  []string
+		errCode codes.Code
+	}{
+		{
+			// missing gRPC status.
+			header: []string{
+				":status", "403",
+				"content-type", "application/grpc",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			// malformed grpc-status.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "abc",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// Malformed grpc-tags-bin field.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "0",
+				"grpc-tags-bin", "???",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// gRPC status error.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "3",
+			},
+			errCode: codes.InvalidArgument,
+		},
+	} {
+		doHTTPHeaderTest(t, test.errCode, test.header)
+	}
+}
+
+// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
+	for _, test := range []struct {
+		responseHeader []string
+		trailer        []string
+		errCode        codes.Code
+	}{
+		{
+			responseHeader: []string{
+				":status", "200",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// trailer missing grpc-status
+				":status", "502",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			responseHeader: []string{
+				":status", "404",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Internal,
+		},
+	} {
+		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
+	header := []string{
+		":status", "200",
+		"content-type", "application/grpc",
+	}
+	doHTTPHeaderTest(t, codes.Internal, header, header, header)
+}
+
+type httpServer struct {
+	headerFields [][]string
+}
+
+func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
+	if len(headerFields)%2 == 1 {
+		panic("odd number of kv args")
+	}
+
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	for len(headerFields) > 0 {
+		k, v := headerFields[0], headerFields[1]
+		headerFields = headerFields[2:]
+		henc.WriteField(hpack.HeaderField{Name: k, Value: v})
+	}
+
+	return framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndStream:     endStream,
+		EndHeaders:    true,
+	})
+}
+
+func (s *httpServer) start(t *testing.T, lis net.Listener) {
+	// Launch an HTTP server to send back header.
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error accepting connection: %v", err)
+			return
+		}
+		defer conn.Close()
+		// Read preface sent by client.
+		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
+			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
+			return
+		}
+		reader := bufio.NewReader(conn)
+		writer := bufio.NewWriter(conn)
+		framer := http2.NewFramer(writer, reader)
+		if err = framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
+			return
+		}
+		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
+
+		var sid uint32
+		// Read frames until a header is received.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Errorf("Error at server-side while reading frame. Err: %v", err)
+				return
+			}
+			if hframe, ok := frame.(*http2.HeadersFrame); ok {
+				sid = hframe.Header().StreamID
+				break
+			}
+		}
+		for i, headers := range s.headerFields {
+			if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
+				t.Errorf("Error at server-side while writing headers. Err: %v", err)
+				return
+			}
+			writer.Flush()
+		}
+	}()
+}
+
+func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	server := &httpServer{
+		headerFields: headerFields,
+	}
+	server.start(t, lis)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("failed to dial due to err: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("error creating stream due to err: %v", err)
+	}
+	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
+		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
 }
