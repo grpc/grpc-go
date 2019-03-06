@@ -1032,6 +1032,7 @@ func (ac *addrConn) resetTransport() {
 				continue
 			}
 
+			backoffFor = 0
 			ac.mu.Lock()
 			ac.curAddr = addr
 			ac.transport = newTr
