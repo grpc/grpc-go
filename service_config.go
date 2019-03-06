@@ -299,7 +299,7 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 
 	if sc.retryThrottling != nil {
 		if sc.retryThrottling.MaxTokens <= 0 ||
-			sc.retryThrottling.MaxTokens >= 1000 ||
+			sc.retryThrottling.MaxTokens > 1000 ||
 			sc.retryThrottling.TokenRatio <= 0 {
 			// Illegal throttling config; disable throttling.
 			sc.retryThrottling = nil
