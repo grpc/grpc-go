@@ -39,6 +39,7 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.Metadata;
@@ -187,7 +188,7 @@ public class NettyClientTransportTest {
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority,
         null /* user agent */, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY,
-        new SocketPicker());
+        new SocketPicker(), new FakeChannelLogger());
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -428,7 +429,8 @@ public class NettyClientTransportTest {
         new HashMap<ChannelOption<?>, Object>(), group,
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
-        null, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY, new SocketPicker());
+        null, tooManyPingsRunnable, new TransportTracer(), Attributes.EMPTY, new SocketPicker(),
+        new FakeChannelLogger());
     transports.add(transport);
 
     // Should not throw
@@ -644,7 +646,7 @@ public class NettyClientTransportTest {
         negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
         keepAliveTimeNano, keepAliveTimeoutNano,
         false, authority, userAgent, tooManyPingsRunnable,
-        new TransportTracer(), eagAttributes, new SocketPicker());
+        new TransportTracer(), eagAttributes, new SocketPicker(), new FakeChannelLogger());
     transports.add(transport);
     return transport;
   }
@@ -884,5 +886,14 @@ public class NettyClientTransportTest {
     public SocketAddress createSocketAddress(SocketAddress remoteAddress, Attributes attrs) {
       return null;
     }
+  }
+
+  private static final class FakeChannelLogger extends ChannelLogger {
+
+    @Override
+    public void log(ChannelLogLevel level, String message) {}
+
+    @Override
+    public void log(ChannelLogLevel level, String messageFormat, Object... args) {}
   }
 }

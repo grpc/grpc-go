@@ -78,7 +78,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   private final InternalChannelz channelz;
   private final CallTracer callsTracer;
   private final ChannelTracer channelTracer;
-  private final ChannelLogger channelLogger;
+  private final ChannelLoggerImpl channelLogger;
 
   // File-specific convention: methods without GuardedBy("lock") MUST NOT be called under the lock.
   private final Object lock = new Object();
@@ -258,9 +258,13 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
           .setEagAttributes(addressIndex.getCurrentEagAttributes())
           .setUserAgent(userAgent)
           .setHttpConnectProxiedSocketAddress(proxiedAddr);
+    TransportLogger transportLogger = new TransportLogger();
+    // In case the transport logs in the constructor, use the subchannel logId
+    transportLogger.logId = getLogId();
     ConnectionClientTransport transport =
         new CallTracingTransport(
-            transportFactory.newClientTransport(address, options, channelLogger), callsTracer);
+            transportFactory.newClientTransport(address, options, transportLogger), callsTracer);
+    transportLogger.logId = transport.getLogId();
     channelz.addClientSocket(transport);
     pendingTransport = transport;
     transports.add(transport);
@@ -268,6 +272,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
     if (runnable != null) {
       syncContext.executeLater(runnable);
     }
+    channelLogger.log(ChannelLogLevel.INFO, "Started transport {0}", transportLogger.logId);
   }
 
   /**
@@ -504,7 +509,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
   public InternalLogId getLogId() {
     return logId;
   }
-
 
   @Override
   public ListenableFuture<ChannelStats> getStats() {
@@ -796,5 +800,21 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats> {
       buffer.append("(").append(status.getDescription()).append(")");
     }
     return buffer.toString();
+  }
+
+  @VisibleForTesting
+  static final class TransportLogger extends ChannelLogger {
+    // Changed just after construction to break a cyclic dependency.
+    InternalLogId logId;
+
+    @Override
+    public void log(ChannelLogLevel level, String message) {
+      ChannelLoggerImpl.logOnly(logId, level, message);
+    }
+
+    @Override
+    public void log(ChannelLogLevel level, String messageFormat, Object... args) {
+      ChannelLoggerImpl.logOnly(logId, level, messageFormat, args);
+    }
   }
 }

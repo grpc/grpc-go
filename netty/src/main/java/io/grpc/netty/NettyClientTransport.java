@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
+import io.grpc.ChannelLogger;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalLogId;
 import io.grpc.Metadata;
@@ -94,6 +95,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final TransportTracer transportTracer;
   private final Attributes eagAttributes;
   private final LocalSocketPicker localSocketPicker;
+  private final ChannelLogger channelLogger;
 
   NettyClientTransport(
       SocketAddress address, ChannelFactory<? extends Channel> channelFactory,
@@ -102,7 +104,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
       boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent,
       Runnable tooManyPingsRunnable, TransportTracer transportTracer, Attributes eagAttributes,
-      LocalSocketPicker localSocketPicker) {
+      LocalSocketPicker localSocketPicker, ChannelLogger channelLogger) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.negotiationScheme = this.negotiator.scheme();
     this.remoteAddress = Preconditions.checkNotNull(address, "address");
@@ -124,6 +126,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.eagAttributes = Preconditions.checkNotNull(eagAttributes, "eagAttributes");
     this.localSocketPicker = Preconditions.checkNotNull(localSocketPicker, "localSocketPicker");
     this.logId = InternalLogId.allocate(getClass(), remoteAddress.toString());
+    this.channelLogger = Preconditions.checkNotNull(channelLogger, "channelLogger");
   }
 
   @Override

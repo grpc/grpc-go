@@ -581,7 +581,7 @@ public final class NettyChannelBuilder
           maxMessageSize, maxHeaderListSize, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos,
           keepAliveWithoutCalls, options.getAuthority(), options.getUserAgent(),
           tooManyPingsRunnable, transportTracer, options.getEagAttributes(),
-          localSocketPicker);
+          localSocketPicker, channelLogger);
       return transport;
     }
 

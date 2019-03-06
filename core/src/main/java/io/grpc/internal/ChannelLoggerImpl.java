@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import io.grpc.ChannelLogger;
 import io.grpc.InternalChannelz.ChannelTrace.Event;
 import io.grpc.InternalChannelz.ChannelTrace.Event.Severity;
+import io.grpc.InternalLogId;
 import java.text.MessageFormat;
 import java.util.logging.Level;
 
@@ -35,10 +36,7 @@ final class ChannelLoggerImpl extends ChannelLogger {
 
   @Override
   public void log(ChannelLogLevel level, String msg) {
-    Level javaLogLevel = toJavaLogLevel(level);
-    if (ChannelTracer.logger.isLoggable(javaLogLevel)) {
-      tracer.logOnly(javaLogLevel, msg);
-    }
+    logOnly(tracer.getLogId(), level, msg);
     if (isTraceable(level)) {
       trace(level, msg);
     }
@@ -46,19 +44,27 @@ final class ChannelLoggerImpl extends ChannelLogger {
 
   @Override
   public void log(ChannelLogLevel level, String messageFormat, Object... args) {
-    Level javaLogLevel = toJavaLogLevel(level);
     String msg = null;
-    if (ChannelTracer.logger.isLoggable(javaLogLevel)) {
-      if (msg == null) {
-        msg = MessageFormat.format(messageFormat, args);
-      }
-      tracer.logOnly(javaLogLevel, msg);
+    Level javaLogLevel = toJavaLogLevel(level);
+    if (isTraceable(level) || ChannelTracer.logger.isLoggable(javaLogLevel)) {
+      msg = MessageFormat.format(messageFormat, args);
     }
-    if (isTraceable(level)) {
-      if (msg == null) {
-        msg = MessageFormat.format(messageFormat, args);
-      }
-      trace(level, msg);
+    log(level, msg);
+  }
+
+  static void logOnly(InternalLogId logId, ChannelLogLevel level, String msg) {
+    Level javaLogLevel = toJavaLogLevel(level);
+    if (ChannelTracer.logger.isLoggable(javaLogLevel)) {
+      ChannelTracer.logOnly(logId, javaLogLevel, msg);
+    }
+  }
+
+  static void logOnly(
+      InternalLogId logId, ChannelLogLevel level, String messageFormat, Object... args) {
+    Level javaLogLevel = toJavaLogLevel(level);
+    if (ChannelTracer.logger.isLoggable(javaLogLevel)) {
+      String msg = MessageFormat.format(messageFormat, args);
+      ChannelTracer.logOnly(logId, javaLogLevel, msg);
     }
   }
 
@@ -77,7 +83,7 @@ final class ChannelLoggerImpl extends ChannelLogger {
         .build());
   }
 
-  private Severity toTracerSeverity(ChannelLogLevel level) {
+  private static Severity toTracerSeverity(ChannelLogLevel level) {
     switch (level) {
       case ERROR:
         return Severity.CT_ERROR;
@@ -88,7 +94,7 @@ final class ChannelLoggerImpl extends ChannelLogger {
     }
   }
 
-  private Level toJavaLogLevel(ChannelLogLevel level) {
+  private static Level toJavaLogLevel(ChannelLogLevel level) {
     switch (level) {
       case ERROR:
         return Level.FINE;

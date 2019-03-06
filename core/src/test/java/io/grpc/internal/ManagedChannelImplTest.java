@@ -98,6 +98,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
+import io.grpc.internal.InternalSubchannel.TransportLogger;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 import io.grpc.stub.ClientCalls;
 import io.grpc.testing.TestMethodDescriptors;
@@ -1256,16 +1257,24 @@ public class ManagedChannelImplTest {
     // requestConnection()
     verify(mockTransportFactory, never())
         .newClientTransport(
-            any(SocketAddress.class), any(ClientTransportOptions.class), any(ChannelLogger.class));
+            any(SocketAddress.class),
+            any(ClientTransportOptions.class),
+            any(TransportLogger.class));
     sub1.requestConnection();
     verify(mockTransportFactory)
-        .newClientTransport(socketAddress, clientTransportOptions, sub1.getChannelLogger());
+        .newClientTransport(
+            eq(socketAddress),
+            eq(clientTransportOptions),
+            isA(TransportLogger.class));
     MockClientTransportInfo transportInfo1 = transports.poll();
     assertNotNull(transportInfo1);
 
     sub2.requestConnection();
-    verify(mockTransportFactory, times(1))
-        .newClientTransport(socketAddress, clientTransportOptions, sub2.getChannelLogger());
+    verify(mockTransportFactory, times(2))
+        .newClientTransport(
+            eq(socketAddress),
+            eq(clientTransportOptions),
+            isA(TransportLogger.class));
     MockClientTransportInfo transportInfo2 = transports.poll();
     assertNotNull(transportInfo2);
 
@@ -1274,7 +1283,7 @@ public class ManagedChannelImplTest {
     // The subchannel doesn't matter since this isn't called
     verify(mockTransportFactory, times(2))
         .newClientTransport(
-            eq(socketAddress), eq(clientTransportOptions), isA(ChannelLogger.class));
+            eq(socketAddress), eq(clientTransportOptions), isA(TransportLogger.class));
 
     // shutdown() has a delay
     sub1.shutdown();

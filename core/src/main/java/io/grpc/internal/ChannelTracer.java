@@ -102,7 +102,7 @@ final class ChannelTracer {
         logLevel = Level.FINEST;
     }
     traceOnly(event);
-    logOnly(logLevel, event.description);
+    logOnly(logId, logLevel, event.description);
   }
 
   boolean isTraceEnabled() {
@@ -119,7 +119,7 @@ final class ChannelTracer {
     }
   }
 
-  void logOnly(Level logLevel, String msg) {
+  static void logOnly(InternalLogId logId, Level logLevel, String msg) {
     if (logger.isLoggable(logLevel)) {
       logger.log(logLevel, "[" + logId + "] " + msg);
     }
