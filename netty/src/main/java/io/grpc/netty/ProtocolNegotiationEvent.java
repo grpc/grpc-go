@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import io.grpc.Attributes;
+import io.grpc.Internal;
 import io.grpc.InternalChannelz.Security;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -29,9 +30,10 @@ import javax.annotation.Nullable;
  * Represents a completion of a protocol negotiation stage.
  */
 @CheckReturnValue
-final class ProtocolNegotiationEvent {
+@Internal
+public final class ProtocolNegotiationEvent {
 
-  public static final ProtocolNegotiationEvent DEFAULT =
+  static final ProtocolNegotiationEvent DEFAULT =
       new ProtocolNegotiationEvent(Attributes.EMPTY, /*security=*/ null);
 
   private final Attributes attributes;
@@ -44,19 +46,19 @@ final class ProtocolNegotiationEvent {
   }
 
   @Nullable
-  public Security getSecurity() {
+  Security getSecurity() {
     return security;
   }
 
-  public Attributes getAttributes() {
+  Attributes getAttributes() {
     return attributes;
   }
 
-  public ProtocolNegotiationEvent withAttributes(Attributes attributes) {
+  ProtocolNegotiationEvent withAttributes(Attributes attributes) {
     return new ProtocolNegotiationEvent(attributes, this.security);
   }
 
-  public ProtocolNegotiationEvent withSecurity(@Nullable Security security) {
+  ProtocolNegotiationEvent withSecurity(@Nullable Security security) {
     return new ProtocolNegotiationEvent(this.attributes, security);
   }
 
