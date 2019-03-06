@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -121,7 +122,13 @@ final class ChannelTracer {
 
   static void logOnly(InternalLogId logId, Level logLevel, String msg) {
     if (logger.isLoggable(logLevel)) {
-      logger.log(logLevel, "[" + logId + "] " + msg);
+      LogRecord lr = new LogRecord(logLevel, "[" + logId + "] " + msg);
+      // No resource bundle as gRPC is not localized.
+      lr.setLoggerName(logger.getName());
+      lr.setSourceClassName(logger.getName());
+      // Both logger methods are called log in ChannelLogger.
+      lr.setSourceMethodName("log");
+      logger.log(lr);
     }
   }
 
