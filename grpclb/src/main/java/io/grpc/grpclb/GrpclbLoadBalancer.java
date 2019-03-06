@@ -17,6 +17,7 @@
 package io.grpc.grpclb;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
@@ -51,7 +52,11 @@ class GrpclbLoadBalancer extends LoadBalancer {
   private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer.class.getName());
 
   private final Helper helper;
+  private final TimeProvider time;
   private final SubchannelPool subchannelPool;
+  private final BackoffPolicy.Provider backoffPolicyProvider;
+
+  private Mode mode = Mode.ROUND_ROBIN;
 
   // All mutable states in this class are mutated ONLY from Channel Executor
   @Nullable
@@ -63,12 +68,12 @@ class GrpclbLoadBalancer extends LoadBalancer {
       TimeProvider time,
       BackoffPolicy.Provider backoffPolicyProvider) {
     this.helper = checkNotNull(helper, "helper");
-    checkNotNull(time, "time provider");
-    checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
+    this.time = checkNotNull(time, "time provider");
+    this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
     this.subchannelPool.init(helper);
-    grpclbState =
-        new GrpclbState(helper, subchannelPool, time, backoffPolicyProvider);
+    recreateStates();
+    checkNotNull(grpclbState, "grpclbState");
   }
 
   @Override
@@ -97,7 +102,12 @@ class GrpclbLoadBalancer extends LoadBalancer {
     newBackendServers = Collections.unmodifiableList(newBackendServers);
     Map<String, Object> rawLbConfigValue = attributes.get(ATTR_LOAD_BALANCING_CONFIG);
     Mode newMode = retrieveModeFromLbConfig(rawLbConfigValue, helper.getChannelLogger());
-    grpclbState.handleAddresses(newLbAddressGroups, newBackendServers, newMode);
+    if (!mode.equals(newMode)) {
+      mode = newMode;
+      helper.getChannelLogger().log(ChannelLogLevel.INFO, "Mode: " + newMode);
+      recreateStates();
+    }
+    grpclbState.handleAddresses(newLbAddressGroups, newBackendServers);
   }
 
   @VisibleForTesting
@@ -139,6 +149,12 @@ class GrpclbLoadBalancer extends LoadBalancer {
       grpclbState.shutdown();
       grpclbState = null;
     }
+  }
+
+  private void recreateStates() {
+    resetStates();
+    checkState(grpclbState == null, "Should've been cleared");
+    grpclbState = new GrpclbState(mode, helper, subchannelPool, time, backoffPolicyProvider);
   }
 
   @Override

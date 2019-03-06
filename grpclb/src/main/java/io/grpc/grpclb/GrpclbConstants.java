@@ -16,6 +16,8 @@
 
 package io.grpc.grpclb;
 
+import io.grpc.Attributes;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 
@@ -31,6 +33,13 @@ public final class GrpclbConstants {
    */
   public static final Metadata.Key<String> TOKEN_METADATA_KEY =
       Metadata.Key.of("lb-token", Metadata.ASCII_STRING_MARSHALLER);
+
+  /**
+   * For passing LB tokens via the EAG attributes.
+   */
+  @EquivalentAddressGroup.Attr
+  static final Attributes.Key<String> TOKEN_ATTRIBUTE_KEY =
+      Attributes.Key.create("lb-token");
 
   private GrpclbConstants() { }
 }

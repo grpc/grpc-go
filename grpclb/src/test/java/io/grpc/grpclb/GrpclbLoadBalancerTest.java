@@ -56,6 +56,7 @@ import io.grpc.ClientStreamTracer;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -68,7 +69,9 @@ import io.grpc.SynchronizationContext;
 import io.grpc.grpclb.GrpclbState.BackendEntry;
 import io.grpc.grpclb.GrpclbState.DropEntry;
 import io.grpc.grpclb.GrpclbState.ErrorEntry;
+import io.grpc.grpclb.GrpclbState.IdleSubchannelEntry;
 import io.grpc.grpclb.GrpclbState.Mode;
+import io.grpc.grpclb.GrpclbState.RoundRobinEntry;
 import io.grpc.grpclb.GrpclbState.RoundRobinPicker;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -166,7 +169,8 @@ public class GrpclbLoadBalancerTest {
       new LinkedList<>();
   private final LinkedList<Subchannel> mockSubchannels = new LinkedList<>();
   private final LinkedList<ManagedChannel> fakeOobChannels = new LinkedList<>();
-  private final ArrayList<Subchannel> subchannelTracker = new ArrayList<>();
+  private final ArrayList<Subchannel> pooledSubchannelTracker = new ArrayList<>();
+  private final ArrayList<Subchannel> unpooledSubchannelTracker = new ArrayList<>();
   private final ArrayList<ManagedChannel> oobChannelTracker = new ArrayList<>();
   private final ArrayList<String> failingLbAuthorities = new ArrayList<>();
   private final SynchronizationContext syncContext = new SynchronizationContext(
@@ -251,11 +255,25 @@ public class GrpclbLoadBalancerTest {
           when(subchannel.getAllAddresses()).thenReturn(Arrays.asList(eag));
           when(subchannel.getAttributes()).thenReturn(attrs);
           mockSubchannels.add(subchannel);
-          subchannelTracker.add(subchannel);
+          pooledSubchannelTracker.add(subchannel);
           return subchannel;
         }
       }).when(subchannelPool).takeOrCreateSubchannel(
           any(EquivalentAddressGroup.class), any(Attributes.class));
+    doAnswer(new Answer<Subchannel>() {
+        @Override
+        public Subchannel answer(InvocationOnMock invocation) throws Throwable {
+          Subchannel subchannel = mock(Subchannel.class);
+          List<EquivalentAddressGroup> eagList =
+              (List<EquivalentAddressGroup>) invocation.getArguments()[0];
+          Attributes attrs = (Attributes) invocation.getArguments()[1];
+          when(subchannel.getAllAddresses()).thenReturn(eagList);
+          when(subchannel.getAttributes()).thenReturn(attrs);
+          mockSubchannels.add(subchannel);
+          unpooledSubchannelTracker.add(subchannel);
+          return subchannel;
+        }
+      }).when(helper).createSubchannel(any(List.class), any(Attributes.class));
     when(helper.getSynchronizationContext()).thenReturn(syncContext);
     when(helper.getScheduledExecutorService()).thenReturn(fakeClock.getScheduledExecutorService());
     when(helper.getChannelLogger()).thenReturn(channelLogger);
@@ -294,14 +312,15 @@ public class GrpclbLoadBalancerTest {
         assertTrue(channel + " is terminated", channel.isTerminated());
       }
       // GRPCLB manages subchannels only through subchannelPool
-      for (Subchannel subchannel: subchannelTracker) {
+      for (Subchannel subchannel : pooledSubchannelTracker) {
         verify(subchannelPool).returnSubchannel(same(subchannel));
         // Our mock subchannelPool never calls Subchannel.shutdown(), thus we can tell if
         // LoadBalancer has called it expectedly.
         verify(subchannel, never()).shutdown();
       }
-      verify(helper, never())
-          .createSubchannel(any(List.class), any(Attributes.class));
+      for (Subchannel subchannel : unpooledSubchannelTracker) {
+        verify(subchannel).shutdown();
+      }
       // No timer should linger after shutdown
       assertThat(fakeClock.getPendingTasks()).isEmpty();
     } finally {
@@ -404,6 +423,65 @@ public class GrpclbLoadBalancerTest {
     assertThat(headers5.getAll(GrpclbConstants.TOKEN_METADATA_KEY)).containsExactly("LBTOKEN0001");
 
     verify(subchannel, never()).getAttributes();
+  }
+
+  @Test
+  public void roundRobinPickerWithIdleEntry_noDrop() {
+    Subchannel subchannel = mock(Subchannel.class);
+    IdleSubchannelEntry entry = new IdleSubchannelEntry(subchannel);
+
+    RoundRobinPicker picker =
+        new RoundRobinPicker(Collections.<DropEntry>emptyList(), Collections.singletonList(entry));
+    PickSubchannelArgs args = mock(PickSubchannelArgs.class);
+
+    verify(subchannel, never()).requestConnection();
+    assertThat(picker.pickSubchannel(args)).isSameAs(PickResult.withNoResult());
+    verify(subchannel).requestConnection();
+  }
+
+  @Test
+  public void roundRobinPickerWithIdleEntry_andDrop() {
+    GrpclbClientLoadRecorder loadRecorder =
+        new GrpclbClientLoadRecorder(fakeClock.getTimeProvider());
+    // 1 out of 2 requests are to be dropped
+    DropEntry d = new DropEntry(loadRecorder, "LBTOKEN0003");
+    List<DropEntry> dropList = Arrays.asList(null, d);
+
+    Subchannel subchannel = mock(Subchannel.class);
+    IdleSubchannelEntry entry = new IdleSubchannelEntry(subchannel);
+
+    RoundRobinPicker picker = new RoundRobinPicker(dropList, Collections.singletonList(entry));
+    PickSubchannelArgs args = mock(PickSubchannelArgs.class);
+
+    verify(subchannel, never()).requestConnection();
+    assertThat(picker.pickSubchannel(args)).isSameAs(PickResult.withNoResult());
+    verify(subchannel).requestConnection();
+
+    assertThat(picker.pickSubchannel(args)).isSameAs(DROP_PICK_RESULT);
+
+    verify(subchannel).requestConnection();
+    assertThat(picker.pickSubchannel(args)).isSameAs(PickResult.withNoResult());
+    verify(subchannel, times(2)).requestConnection();
+  }
+
+  @Test
+  public void roundRobinPicker_requestConnection() {
+    // requestConnection() on RoundRobinPicker is only passed to IdleSubchannelEntry
+
+    Subchannel subchannel1 = mock(Subchannel.class);
+    Subchannel subchannel2 = mock(Subchannel.class);
+
+    RoundRobinPicker picker = new RoundRobinPicker(
+        Collections.<DropEntry>emptyList(),
+        Arrays.<RoundRobinEntry>asList(
+            new BackendEntry(subchannel1), new IdleSubchannelEntry(subchannel2),
+            new ErrorEntry(Status.UNAVAILABLE)));
+
+    verify(subchannel2, never()).requestConnection();
+
+    picker.requestConnection();
+    verify(subchannel2).requestConnection();
+    verify(subchannel1, never()).requestConnection();
   }
 
   @Test
@@ -1589,6 +1667,297 @@ public class GrpclbLoadBalancerTest {
     verify(backoffPolicy1, times(2)).nextBackoffNanos();
     verify(backoffPolicy2, times(1)).nextBackoffNanos();
     verify(helper, times(4)).refreshNameResolution();
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  public void grpclbWorking_pickFirstMode() throws Exception {
+    InOrder inOrder = inOrder(helper);
+
+    String lbConfig = "{\"childPolicy\" : [ {\"pick_first\" : {}} ]}";
+    List<EquivalentAddressGroup> grpclbResolutionList = createResolvedServerAddresses(true);
+    Attributes grpclbResolutionAttrs = Attributes.newBuilder().set(
+        LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, parseJsonObject(lbConfig)).build();
+
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+    assertEquals(1, fakeOobChannels.size());
+    ManagedChannel oobChannel = fakeOobChannels.poll();
+    verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
+    StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
+    assertEquals(1, lbRequestObservers.size());
+    StreamObserver<LoadBalanceRequest> lbRequestObserver = lbRequestObservers.poll();
+    verify(lbRequestObserver).onNext(
+        eq(LoadBalanceRequest.newBuilder().setInitialRequest(
+                InitialLoadBalanceRequest.newBuilder().setName(SERVICE_AUTHORITY).build())
+            .build()));
+
+    // Simulate receiving LB response
+    List<ServerEntry> backends1 = Arrays.asList(
+        new ServerEntry("127.0.0.1", 2000, "token0001"),
+        new ServerEntry("127.0.0.1", 2010, "token0002"));
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
+    lbResponseObserver.onNext(buildInitialResponse());
+    lbResponseObserver.onNext(buildLbResponse(backends1));
+
+    inOrder.verify(helper).createSubchannel(
+        eq(Arrays.asList(
+                new EquivalentAddressGroup(backends1.get(0).addr, eagAttrsWithToken("token0001")),
+                new EquivalentAddressGroup(backends1.get(1).addr, eagAttrsWithToken("token0002")))),
+        any(Attributes.class));
+
+    // Initially IDLE
+    inOrder.verify(helper).updateBalancingState(eq(IDLE), pickerCaptor.capture());
+    RoundRobinPicker picker0 = (RoundRobinPicker) pickerCaptor.getValue();
+
+    // Only one subchannel is created
+    assertThat(mockSubchannels).hasSize(1);
+    Subchannel subchannel = mockSubchannels.poll();
+    assertThat(picker0.dropList).containsExactly(null, null);
+    assertThat(picker0.pickList).containsExactly(new IdleSubchannelEntry(subchannel));
+
+    // PICK_FIRST doesn't eagerly connect
+    verify(subchannel, never()).requestConnection();
+
+    // CONNECTING
+    deliverSubchannelState(subchannel, ConnectivityStateInfo.forNonError(CONNECTING));
+
+    inOrder.verify(helper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
+    RoundRobinPicker picker1 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker1.dropList).containsExactly(null, null);
+    assertThat(picker1.pickList).containsExactly(BUFFER_ENTRY);
+
+    // TRANSIENT_FAILURE
+    Status error = Status.UNAVAILABLE.withDescription("Simulated connection error");
+    deliverSubchannelState(subchannel, ConnectivityStateInfo.forTransientFailure(error));
+    inOrder.verify(helper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
+    RoundRobinPicker picker2 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker2.dropList).containsExactly(null, null);
+    assertThat(picker2.pickList).containsExactly(new ErrorEntry(error));
+
+    // READY
+    deliverSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
+    RoundRobinPicker picker3 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker3.dropList).containsExactly(null, null);
+    assertThat(picker3.pickList).containsExactly(
+        new BackendEntry(subchannel, new TokenAttachingTracerFactory(getLoadRecorder())));
+
+
+    // New server list with drops
+    List<ServerEntry> backends2 = Arrays.asList(
+        new ServerEntry("127.0.0.1", 2000, "token0001"),
+        new ServerEntry("token0003"),  // drop
+        new ServerEntry("127.0.0.1", 2020, "token0004"));
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
+    lbResponseObserver.onNext(buildLbResponse(backends2));
+
+    // new addresses will be updated to the existing subchannel
+    // createSubchannel() has ever been called only once
+    verify(helper, times(1)).createSubchannel(any(List.class), any(Attributes.class));
+    assertThat(mockSubchannels).isEmpty();
+    inOrder.verify(helper).updateSubchannelAddresses(
+        same(subchannel),
+        eq(Arrays.asList(
+                new EquivalentAddressGroup(backends2.get(0).addr, eagAttrsWithToken("token0001")),
+                new EquivalentAddressGroup(backends2.get(2).addr,
+                    eagAttrsWithToken("token0004")))));
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
+    RoundRobinPicker picker4 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker4.dropList).containsExactly(
+        null, new DropEntry(getLoadRecorder(), "token0003"), null);
+    assertThat(picker4.pickList).containsExactly(
+        new BackendEntry(subchannel, new TokenAttachingTracerFactory(getLoadRecorder())));
+
+    // Subchannel goes IDLE, but PICK_FIRST will not try to reconnect
+    deliverSubchannelState(subchannel, ConnectivityStateInfo.forNonError(IDLE));
+    inOrder.verify(helper).updateBalancingState(eq(IDLE), pickerCaptor.capture());
+    RoundRobinPicker picker5 = (RoundRobinPicker) pickerCaptor.getValue();
+    verify(subchannel, never()).requestConnection();
+
+    // ... until it's selected
+    PickSubchannelArgs args = mock(PickSubchannelArgs.class);
+    PickResult pick = picker5.pickSubchannel(args);
+    assertThat(pick).isSameAs(PickResult.withNoResult());
+    verify(subchannel).requestConnection();
+
+    // ... or requested by application
+    picker5.requestConnection();
+    verify(subchannel, times(2)).requestConnection();
+
+    // PICK_FIRST doesn't use subchannelPool
+    verify(subchannelPool, never())
+        .takeOrCreateSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
+    verify(subchannelPool, never()).returnSubchannel(any(Subchannel.class));
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  public void pickFirstMode_fallback() throws Exception {
+    InOrder inOrder = inOrder(helper);
+
+    String lbConfig = "{\"childPolicy\" : [ {\"pick_first\" : {}} ]}";
+
+    // Name resolver returns a mix of balancer and backend addresses
+    List<EquivalentAddressGroup> grpclbResolutionList =
+        createResolvedServerAddresses(false, true, false);
+    Attributes grpclbResolutionAttrs = Attributes.newBuilder().set(
+        LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, parseJsonObject(lbConfig)).build();
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+    // Attempted to connect to balancer
+    assertEquals(1, fakeOobChannels.size());
+    ManagedChannel oobChannel = fakeOobChannels.poll();
+    verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
+    StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
+    assertEquals(1, lbRequestObservers.size());
+
+    // Fallback timer expires with no response
+    fakeClock.forwardTime(GrpclbState.FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    // Entering fallback mode
+    inOrder.verify(helper).createSubchannel(
+        eq(Arrays.asList(grpclbResolutionList.get(0), grpclbResolutionList.get(2))),
+        any(Attributes.class));
+
+    assertThat(mockSubchannels).hasSize(1);
+    Subchannel subchannel = mockSubchannels.poll();
+
+    // Initially IDLE
+    inOrder.verify(helper).updateBalancingState(eq(IDLE), pickerCaptor.capture());
+    RoundRobinPicker picker0 = (RoundRobinPicker) pickerCaptor.getValue();
+
+    // READY
+    deliverSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
+    RoundRobinPicker picker1 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker1.dropList).containsExactly(null, null);
+    assertThat(picker1.pickList).containsExactly(
+        new BackendEntry(subchannel, new TokenAttachingTracerFactory(null)));
+
+    assertThat(picker0.dropList).containsExactly(null, null);
+    assertThat(picker0.pickList).containsExactly(new IdleSubchannelEntry(subchannel));
+
+
+    // Finally, an LB response, which brings us out of fallback
+    List<ServerEntry> backends1 = Arrays.asList(
+        new ServerEntry("127.0.0.1", 2000, "token0001"),
+        new ServerEntry("127.0.0.1", 2010, "token0002"));
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
+    lbResponseObserver.onNext(buildInitialResponse());
+    lbResponseObserver.onNext(buildLbResponse(backends1));
+
+    // new addresses will be updated to the existing subchannel
+    // createSubchannel() has ever been called only once
+    verify(helper, times(1)).createSubchannel(any(List.class), any(Attributes.class));
+    assertThat(mockSubchannels).isEmpty();
+    inOrder.verify(helper).updateSubchannelAddresses(
+        same(subchannel),
+        eq(Arrays.asList(
+                new EquivalentAddressGroup(backends1.get(0).addr, eagAttrsWithToken("token0001")),
+                new EquivalentAddressGroup(backends1.get(1).addr,
+                    eagAttrsWithToken("token0002")))));
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
+    RoundRobinPicker picker2 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertThat(picker2.dropList).containsExactly(null, null);
+    assertThat(picker2.pickList).containsExactly(
+        new BackendEntry(subchannel, new TokenAttachingTracerFactory(getLoadRecorder())));
+
+    // PICK_FIRST doesn't use subchannelPool
+    verify(subchannelPool, never())
+        .takeOrCreateSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class));
+    verify(subchannelPool, never()).returnSubchannel(any(Subchannel.class));
+  }
+
+  @Test
+  public void switchMode() throws Exception {
+    InOrder inOrder = inOrder(helper);
+
+    String lbConfig = "{\"childPolicy\" : [ {\"round_robin\" : {}} ]}";
+    List<EquivalentAddressGroup> grpclbResolutionList = createResolvedServerAddresses(true);
+    Attributes grpclbResolutionAttrs = Attributes.newBuilder().set(
+        LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, parseJsonObject(lbConfig)).build();
+
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+    assertEquals(1, fakeOobChannels.size());
+    ManagedChannel oobChannel = fakeOobChannels.poll();
+    verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
+    StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
+    assertEquals(1, lbRequestObservers.size());
+    StreamObserver<LoadBalanceRequest> lbRequestObserver = lbRequestObservers.poll();
+    verify(lbRequestObserver).onNext(
+        eq(LoadBalanceRequest.newBuilder().setInitialRequest(
+                InitialLoadBalanceRequest.newBuilder().setName(SERVICE_AUTHORITY).build())
+            .build()));
+
+    // Simulate receiving LB response
+    List<ServerEntry> backends1 = Arrays.asList(
+        new ServerEntry("127.0.0.1", 2000, "token0001"),
+        new ServerEntry("127.0.0.1", 2010, "token0002"));
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
+    lbResponseObserver.onNext(buildInitialResponse());
+    lbResponseObserver.onNext(buildLbResponse(backends1));
+
+    // ROUND_ROBIN: create one subchannel per server
+    verify(subchannelPool).takeOrCreateSubchannel(
+        eq(new EquivalentAddressGroup(backends1.get(0).addr, LB_BACKEND_ATTRS)),
+        any(Attributes.class));
+    verify(subchannelPool).takeOrCreateSubchannel(
+        eq(new EquivalentAddressGroup(backends1.get(1).addr, LB_BACKEND_ATTRS)),
+        any(Attributes.class));
+    inOrder.verify(helper).updateBalancingState(eq(CONNECTING), any(SubchannelPicker.class));
+    assertEquals(2, mockSubchannels.size());
+    Subchannel subchannel1 = mockSubchannels.poll();
+    Subchannel subchannel2 = mockSubchannels.poll();
+    verify(subchannelPool, never()).returnSubchannel(any(Subchannel.class));
+
+    // Switch to PICK_FIRST
+    lbConfig = "{\"childPolicy\" : [ {\"pick_first\" : {}} ]}";
+    grpclbResolutionAttrs = Attributes.newBuilder().set(
+        LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, parseJsonObject(lbConfig)).build();
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+
+    // GrpclbState will be shutdown, and a new one will be created
+    assertThat(oobChannel.isShutdown()).isTrue();
+    verify(subchannelPool).returnSubchannel(same(subchannel1));
+    verify(subchannelPool).returnSubchannel(same(subchannel2));
+
+    // A new LB stream is created
+    assertEquals(1, fakeOobChannels.size());
+    oobChannel = fakeOobChannels.poll();
+    verify(mockLbService, times(2)).balanceLoad(lbResponseObserverCaptor.capture());
+    lbResponseObserver = lbResponseObserverCaptor.getValue();
+    assertEquals(1, lbRequestObservers.size());
+    lbRequestObserver = lbRequestObservers.poll();
+    verify(lbRequestObserver).onNext(
+        eq(LoadBalanceRequest.newBuilder().setInitialRequest(
+                InitialLoadBalanceRequest.newBuilder().setName(SERVICE_AUTHORITY).build())
+            .build()));
+
+    // Simulate receiving LB response
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
+    lbResponseObserver.onNext(buildInitialResponse());
+    lbResponseObserver.onNext(buildLbResponse(backends1));
+
+    // PICK_FIRST Subchannel
+    inOrder.verify(helper).createSubchannel(
+        eq(Arrays.asList(
+                new EquivalentAddressGroup(backends1.get(0).addr, eagAttrsWithToken("token0001")),
+                new EquivalentAddressGroup(backends1.get(1).addr, eagAttrsWithToken("token0002")))),
+        any(Attributes.class));
+    
+    inOrder.verify(helper).updateBalancingState(eq(IDLE), any(SubchannelPicker.class));
+  }
+
+  private static Attributes eagAttrsWithToken(String token) {
+    return LB_BACKEND_ATTRS.toBuilder().set(GrpclbConstants.TOKEN_ATTRIBUTE_KEY, token).build();
   }
 
   @Test
