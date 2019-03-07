@@ -71,7 +71,7 @@ class GrpclbLoadBalancer extends LoadBalancer {
     this.time = checkNotNull(time, "time provider");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
-    this.subchannelPool.init(helper);
+    this.subchannelPool.init(helper, this);
     recreateStates();
     checkNotNull(grpclbState, "grpclbState");
   }

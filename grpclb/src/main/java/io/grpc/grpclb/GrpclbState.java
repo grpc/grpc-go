@@ -159,7 +159,8 @@ final class GrpclbState {
     this.mode = checkNotNull(mode, "mode");
     this.helper = checkNotNull(helper, "helper");
     this.syncContext = checkNotNull(helper.getSynchronizationContext(), "syncContext");
-    this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
+    this.subchannelPool =
+        mode == Mode.ROUND_ROBIN ? checkNotNull(subchannelPool, "subchannelPool") : null;
     this.time = checkNotNull(time, "time provider");
     this.timerService = checkNotNull(helper.getScheduledExecutorService(), "timerService");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
@@ -168,7 +169,13 @@ final class GrpclbState {
   }
 
   void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newState) {
-    if (newState.getState() == SHUTDOWN || !subchannels.values().contains(subchannel)) {
+    if (newState.getState() == SHUTDOWN) {
+      return;
+    }
+    if (!subchannels.values().contains(subchannel)) {
+      if (subchannelPool != null ) {
+        subchannelPool.handleSubchannelState(subchannel, newState);
+      }
       return;
     }
     if (mode == Mode.ROUND_ROBIN && newState.getState() == IDLE) {
@@ -311,8 +318,9 @@ final class GrpclbState {
         // We close the subchannels through subchannelPool instead of helper just for convenience of
         // testing.
         for (Subchannel subchannel : subchannels.values()) {
-          subchannelPool.returnSubchannel(subchannel);
+          returnSubchannelToPool(subchannel);
         }
+        subchannelPool.clear();
         break;
       case PICK_FIRST:
         checkState(subchannels.size() == 1, "Excessive Subchannels: %s", subchannels);
@@ -322,7 +330,6 @@ final class GrpclbState {
         throw new AssertionError("Missing case for " + mode);
     }
     subchannels = Collections.emptyMap();
-    subchannelPool.clear();
     cancelFallbackTimer();
     cancelLbRpcRetryTimer();
   }
@@ -333,6 +340,10 @@ final class GrpclbState {
       maybeUpdatePicker(
           TRANSIENT_FAILURE, new RoundRobinPicker(dropList, Arrays.asList(new ErrorEntry(status))));
     }
+  }
+
+  private void returnSubchannelToPool(Subchannel subchannel) {
+    subchannelPool.returnSubchannel(subchannel, subchannel.getAttributes().get(STATE_INFO).get());
   }
 
   @VisibleForTesting
@@ -383,7 +394,7 @@ final class GrpclbState {
         for (Entry<List<EquivalentAddressGroup>, Subchannel> entry : subchannels.entrySet()) {
           List<EquivalentAddressGroup> eagList = entry.getKey();
           if (!newSubchannelMap.containsKey(eagList)) {
-            subchannelPool.returnSubchannel(entry.getValue());
+            returnSubchannelToPool(entry.getValue());
           }
         }
         subchannels = Collections.unmodifiableMap(newSubchannelMap);

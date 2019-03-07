@@ -21,7 +21,9 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
+import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.SynchronizationContext.ScheduledHandle;
@@ -37,31 +39,51 @@ final class CachedSubchannelPool implements SubchannelPool {
       new HashMap<>();
 
   private Helper helper;
+  private LoadBalancer lb;
 
   @VisibleForTesting
   static final long SHUTDOWN_TIMEOUT_MS = 10000;
 
   @Override
-  public void init(Helper helper) {
+  public void init(Helper helper, LoadBalancer lb) {
     this.helper = checkNotNull(helper, "helper");
+    this.lb = checkNotNull(lb, "lb");
   }
 
   @Override
   public Subchannel takeOrCreateSubchannel(
       EquivalentAddressGroup eag, Attributes defaultAttributes) {
-    CacheEntry entry = cache.remove(eag);
-    Subchannel subchannel;
+    final CacheEntry entry = cache.remove(eag);
+    final Subchannel subchannel;
     if (entry == null) {
       subchannel = helper.createSubchannel(eag, defaultAttributes);
     } else {
       subchannel = entry.subchannel;
       entry.shutdownTimer.cancel();
+      // Make the balancer up-to-date with the latest state in case it has changed while it's
+      // in the cache.
+      helper.getSynchronizationContext().execute(new Runnable() {
+          @Override
+          public void run() {
+            lb.handleSubchannelState(subchannel, entry.state);
+          }
+        });
     }
     return subchannel;
   }
 
   @Override
-  public void returnSubchannel(Subchannel subchannel) {
+  public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newStateInfo) {
+    CacheEntry cached = cache.get(subchannel.getAddresses());
+    if (cached == null || cached.subchannel != subchannel) {
+      // Given subchannel is not cached.  Not our responsibility.
+      return;
+    }
+    cached.state = newStateInfo;
+  }
+
+  @Override
+  public void returnSubchannel(Subchannel subchannel, ConnectivityStateInfo lastKnownState) {
     CacheEntry prev = cache.get(subchannel.getAddresses());
     if (prev != null) {
       // Returning the same Subchannel twice has no effect.
@@ -77,7 +99,7 @@ final class CachedSubchannelPool implements SubchannelPool {
         helper.getSynchronizationContext().schedule(
             shutdownTask, SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS,
             helper.getScheduledExecutorService());
-    CacheEntry entry = new CacheEntry(subchannel, shutdownTimer);
+    CacheEntry entry = new CacheEntry(subchannel, shutdownTimer, lastKnownState);
     cache.put(subchannel.getAddresses(), entry);
   }
 
@@ -110,10 +132,12 @@ final class CachedSubchannelPool implements SubchannelPool {
   private static class CacheEntry {
     final Subchannel subchannel;
     final ScheduledHandle shutdownTimer;
+    ConnectivityStateInfo state;
 
-    CacheEntry(Subchannel subchannel, ScheduledHandle shutdownTimer) {
+    CacheEntry(Subchannel subchannel, ScheduledHandle shutdownTimer, ConnectivityStateInfo state) {
       this.subchannel = checkNotNull(subchannel, "subchannel");
       this.shutdownTimer = checkNotNull(shutdownTimer, "shutdownTimer");
+      this.state = checkNotNull(state, "state");
     }
   }
 }

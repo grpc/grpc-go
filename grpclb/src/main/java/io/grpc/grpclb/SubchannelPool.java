@@ -17,7 +17,9 @@
 package io.grpc.grpclb;
 
 import io.grpc.Attributes;
+import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.Subchannel;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -30,9 +32,9 @@ import javax.annotation.concurrent.NotThreadSafe;
 @NotThreadSafe
 interface SubchannelPool {
   /**
-   * Pass essential utilities.
+   * Pass essential utilities and the balancer that's using this pool.
    */
-  void init(Helper helper);
+  void init(Helper helper, LoadBalancer lb);
 
   /**
    * Takes a {@link Subchannel} from the pool for the given {@code eag} if there is one available.
@@ -42,10 +44,16 @@ interface SubchannelPool {
   Subchannel takeOrCreateSubchannel(EquivalentAddressGroup eag, Attributes defaultAttributes);
 
   /**
-   * Puts a {@link Subchannel} back to the pool.  From this point the Subchannel is owned by the
-   * pool.
+   * Gets notified about a state change of Subchannel that is possibly cached in this pool.  Do
+   * nothing if this pool doesn't own this Subchannel.
    */
-  void returnSubchannel(Subchannel subchannel);
+  void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newStateInfo);
+
+  /**
+   * Puts a {@link Subchannel} back to the pool.  From this point the Subchannel is owned by the
+   * pool, and the caller should stop referencing to this Subchannel.
+   */
+  void returnSubchannel(Subchannel subchannel, ConnectivityStateInfo lastKnownState);
 
   /**
    * Shuts down all subchannels in the pool immediately.
