@@ -300,17 +300,18 @@ Server server = NettyServerBuilder.forPort(8443)
 Negotiated client certificates are available in the SSLSession, which is found in the `TRANSPORT_ATTR_SSL_SESSION` attribute of <a href="https://github.com/grpc/grpc-java/blob/master/core/src/main/java/io/grpc/Grpc.java">Grpc</a>.  A server interceptor can provide details in the current Context.
 
 ```java
+// The application uses this in its handlers
 public final static Context.Key<SSLSession> SSL_SESSION_CONTEXT = Context.key("SSLSession");
 
 @Override
-public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<RespT> call, 
+public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
     Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-    SSLSession sslSession = call.attributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
+    SSLSession sslSession = call.getAttributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
     if (sslSession == null) {
-        return next.startCall(call, headers)
+        return next.startCall(call, headers);
     }
     return Contexts.interceptCall(
-        Context.current().withValue(SSL_SESSION_CONTEXT, clientContext), call, headers, next);
+        Context.current().withValue(SSL_SESSION_CONTEXT, sslSession), call, headers, next);
 }
 ```
 
