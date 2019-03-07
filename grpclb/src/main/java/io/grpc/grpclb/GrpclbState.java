@@ -193,25 +193,27 @@ final class GrpclbState {
   void handleAddresses(
       List<LbAddressGroup> newLbAddressGroups, List<EquivalentAddressGroup> newBackendServers) {
     if (newLbAddressGroups.isEmpty()) {
-      propagateError(Status.UNAVAILABLE.withDescription(
-              "NameResolver returned no LB address while asking for GRPCLB"));
-      return;
-    }
-    LbAddressGroup newLbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
-    startLbComm(newLbAddressGroup);
-    // Avoid creating a new RPC just because the addresses were updated, as it can cause a
-    // stampeding herd. The current RPC may be on a connection to an address not present in
-    // newLbAddressGroups, but we're considering that "okay". If we detected the RPC is to an
-    // outdated backend, we could choose to re-create the RPC.
-    if (lbStream == null) {
-      startLbRpc();
+      // No balancer address: close existing balancer connection and enter fallback mode
+      // immediately.
+      shutdownLbComm();
+      syncContext.execute(new FallbackModeTask());
+    } else {
+      LbAddressGroup newLbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
+      startLbComm(newLbAddressGroup);
+      // Avoid creating a new RPC just because the addresses were updated, as it can cause a
+      // stampeding herd. The current RPC may be on a connection to an address not present in
+      // newLbAddressGroups, but we're considering that "okay". If we detected the RPC is to an
+      // outdated backend, we could choose to re-create the RPC.
+      if (lbStream == null) {
+        startLbRpc();
+      }
+      // Start the fallback timer if it's never started
+      if (fallbackTimer == null) {
+        fallbackTimer = syncContext.schedule(
+            new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS, timerService);
+      }
     }
     fallbackBackendList = newBackendServers;
-    // Start the fallback timer if it's never started
-    if (fallbackTimer == null) {
-      fallbackTimer = syncContext.schedule(
-          new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS, timerService);
-    }
     if (usingFallbackBackends) {
       // Populate the new fallback backends to round-robin list.
       useFallbackBackends();

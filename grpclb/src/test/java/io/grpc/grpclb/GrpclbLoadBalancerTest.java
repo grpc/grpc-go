@@ -32,6 +32,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeast;
@@ -1386,6 +1387,31 @@ public class GrpclbLoadBalancerTest {
         eq(LoadBalanceRequest.newBuilder().setInitialRequest(
                 InitialLoadBalanceRequest.newBuilder().setName(SERVICE_AUTHORITY).build())
             .build()));
+  }
+
+  @Test
+  public void grpclbFallback_noBalancerAddress() {
+    long loadReportIntervalMillis = 1983;
+    InOrder inOrder = inOrder(helper, subchannelPool);
+
+    // Create a resolution list with just backend addresses
+    List<EquivalentAddressGroup> resolutionList = createResolvedServerAddresses(false, false);
+    Attributes resolutionAttrs = Attributes.EMPTY;
+    deliverResolvedAddresses(resolutionList, resolutionAttrs);
+
+    assertThat(logs).containsExactly(
+          "INFO: Using fallback backends",
+          "INFO: Using RR list=[[[FakeSocketAddress-fake-address-0]/{}], "
+              + "[[FakeSocketAddress-fake-address-1]/{}]], drop=[null, null]",
+          "INFO: CONNECTING: picks=[BUFFER_ENTRY], drops=[null, null]").inOrder();
+
+    // Fall back to the backends from resolver
+    fallbackTestVerifyUseOfFallbackBackendLists(inOrder, resolutionList);
+
+    // No fallback timeout timer scheduled.
+    assertEquals(0, fakeClock.numPendingTasks(FALLBACK_MODE_TASK_FILTER));
+    verify(helper, never())
+        .createOobChannel(any(EquivalentAddressGroup.class), anyString());
   }
 
   @Test
