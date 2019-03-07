@@ -921,8 +921,6 @@ type addrConn struct {
 	// Use updateConnectivityState for updating addrConn's connectivity state.
 	state connectivity.State
 
-	tearDownErr error // The reason this addrConn is torn down.
-
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
 
@@ -987,7 +985,6 @@ func (ac *addrConn) resetTransport() {
 
 		for _, addr := range addrs {
 			ac.mu.Lock()
-
 			if ac.state == connectivity.Shutdown {
 				ac.mu.Unlock()
 				return
@@ -1021,6 +1018,11 @@ func (ac *addrConn) resetTransport() {
 
 			backoffFor = 0
 			ac.mu.Lock()
+			if ac.state == connectivity.Shutdown {
+				newTr.Close()
+				ac.mu.Unlock()
+				return
+			}
 			ac.curAddr = addr
 			ac.transport = newTr
 			ac.backoffIdx = 0
@@ -1240,7 +1242,6 @@ func (ac *addrConn) tearDown(err error) {
 	// between setting the state and logic that waits on context cancelation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown)
 	ac.cancel()
-	ac.tearDownErr = err
 	ac.curAddr = resolver.Address{}
 	if err == errConnDrain && curTr != nil {
 		// GracefulClose(...) may be executed multiple times when
