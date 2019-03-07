@@ -1,4 +1,4 @@
-// +build android linux !appengine
+// +build linux !appengine
 
 /*
  *
