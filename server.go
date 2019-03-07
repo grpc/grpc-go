@@ -614,12 +614,13 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 	rawConn.SetDeadline(time.Now().Add(s.opts.connectionTimeout))
 	conn, authInfo, err := s.useTransportAuthenticator(rawConn)
 	if err != nil {
-		s.mu.Lock()
-		s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
-		s.mu.Unlock()
-		grpclog.Warningf("grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
-		// If serverHandshake returns ErrConnDispatched, keep rawConn open.
+		// ErrConnDispatched means that the connection was dispatched away from
+		// gRPC; those connections should be left open.
 		if err != credentials.ErrConnDispatched {
+			s.mu.Lock()
+			s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
+			s.mu.Unlock()
+			grpclog.Warningf("grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
 			rawConn.Close()
 		}
 		rawConn.SetDeadline(time.Time{})
