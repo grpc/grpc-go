@@ -363,12 +363,8 @@ final class ManagedChannelImpl extends ManagedChannel implements
     this.lbHelper = lbHelper;
 
     NameResolverListenerImpl listener = new NameResolverListenerImpl(lbHelper, nameResolver);
-    try {
-      nameResolver.start(listener);
-      nameResolverStarted = true;
-    } catch (Throwable t) {
-      listener.onError(Status.fromThrowable(t));
-    }
+    nameResolver.start(listener);
+    nameResolverStarted = true;
   }
 
   // Must be run from syncContext
