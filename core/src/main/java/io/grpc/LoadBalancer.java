@@ -109,7 +109,7 @@ public abstract class LoadBalancer {
    * <p>{@link NameResolver}s should not produce this attribute.
    */
   @NameResolver.ResolutionResultAttr
-  public static final Attributes.Key<Map<String, Object>> ATTR_LOAD_BALANCING_CONFIG =
+  public static final Attributes.Key<Map<String, ?>> ATTR_LOAD_BALANCING_CONFIG =
       Attributes.Key.create("io.grpc.LoadBalancer.loadBalancingConfig");
 
   /**

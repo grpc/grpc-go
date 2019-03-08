@@ -285,10 +285,9 @@ final class DnsNameResolver extends NameResolver {
 
       Attributes.Builder attrs = Attributes.newBuilder();
       if (!resolutionResults.txtRecords.isEmpty()) {
-        Map<String, Object> serviceConfig = null;
+        Map<String, ?> serviceConfig = null;
         try {
-          for (Map<String, Object> possibleConfig :
-              parseTxtResults(resolutionResults.txtRecords)) {
+          for (Map<String, ?> possibleConfig : parseTxtResults(resolutionResults.txtRecords)) {
             try {
               serviceConfig =
                   maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
@@ -406,23 +405,23 @@ final class DnsNameResolver extends NameResolver {
 
   @SuppressWarnings("unchecked")
   @VisibleForTesting
-  static List<Map<String, Object>> parseTxtResults(List<String> txtRecords) {
-    List<Map<String, Object>> serviceConfigs = new ArrayList<>();
+  static List<Map<String, ?>> parseTxtResults(List<String> txtRecords) {
+    List<Map<String, ?>> serviceConfigs = new ArrayList<>();
     for (String txtRecord : txtRecords) {
       if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
-        List<Map<String, Object>> choices;
+        List<Map<String, ?>> choices;
         try {
           Object rawChoices = JsonParser.parse(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()));
           if (!(rawChoices instanceof List)) {
             throw new IOException("wrong type " + rawChoices);
           }
-          List<Object> listChoices = (List<Object>) rawChoices;
+          List<?> listChoices = (List<?>) rawChoices;
           for (Object obj : listChoices) {
             if (!(obj instanceof Map)) {
               throw new IOException("wrong element type " + rawChoices);
             }
           }
-          choices = (List<Map<String, Object>>) (List<?>) listChoices;
+          choices = (List<Map<String, ?>>) listChoices;
         } catch (IOException e) {
           logger.log(Level.WARNING, "Bad service config: " + txtRecord, e);
           continue;
@@ -436,8 +435,7 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Nullable
-  private static final Double getPercentageFromChoice(
-      Map<String, Object> serviceConfigChoice) {
+  private static final Double getPercentageFromChoice(Map<String, ?> serviceConfigChoice) {
     if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_PERCENTAGE_KEY)) {
       return null;
     }
@@ -446,7 +444,7 @@ final class DnsNameResolver extends NameResolver {
 
   @Nullable
   private static final List<String> getClientLanguagesFromChoice(
-      Map<String, Object> serviceConfigChoice) {
+      Map<String, ?> serviceConfigChoice) {
     if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_CLIENT_LANGUAGE_KEY)) {
       return null;
     }
@@ -455,8 +453,7 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Nullable
-  private static final List<String> getHostnamesFromChoice(
-      Map<String, Object> serviceConfigChoice) {
+  private static final List<String> getHostnamesFromChoice(Map<String, ?> serviceConfigChoice) {
     if (!serviceConfigChoice.containsKey(SERVICE_CONFIG_CHOICE_CLIENT_HOSTNAME_KEY)) {
       return null;
     }
@@ -499,8 +496,8 @@ final class DnsNameResolver extends NameResolver {
    */
   @Nullable
   @VisibleForTesting
-  static Map<String, Object> maybeChooseServiceConfig(
-      Map<String, Object> choice, Random random, String hostname) {
+  static Map<String, ?> maybeChooseServiceConfig(
+      Map<String, ?> choice, Random random, String hostname) {
     for (Entry<String, ?> entry : choice.entrySet()) {
       Verify.verify(SERVICE_CONFIG_CHOICE_KEYS.contains(entry.getKey()), "Bad key: %s", entry);
     }

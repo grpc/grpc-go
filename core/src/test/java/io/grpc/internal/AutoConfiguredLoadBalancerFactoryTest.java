@@ -191,7 +191,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
   @Test
   public void handleResolvedAddressGroups_shutsDownOldBalancer() {
-    Map<String, Object> serviceConfig = new HashMap<>();
+    Map<String, String> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     Attributes serviceConfigAttrs =
         Attributes.newBuilder()
@@ -237,7 +237,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
   @Test
   public void handleResolvedAddressGroups_propagateLbConfigToDelegate() throws Exception {
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"test_lb\": { \"setting1\": \"high\" } } ] }");
     Attributes serviceConfigAttrs =
         Attributes.newBuilder()
@@ -310,7 +310,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(helper);
 
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"test_lb\": { \"setting1\": \"high\" } } ] }");
     lb.handleResolvedAddressGroups(
         Collections.<EquivalentAddressGroup>emptyList(),
@@ -333,7 +333,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(helper);
 
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"test_lb2\": { \"setting1\": \"high\" } } ] }");
     lb.handleResolvedAddressGroups(
         Collections.<EquivalentAddressGroup>emptyList(),
@@ -345,7 +345,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
     verify(testLbBalancer2).handleResolvedAddressGroups(
         eq(Collections.<EquivalentAddressGroup>emptyList()), attrsCaptor.capture());
-    Map<String, Object> lbConfig =
+    Map<String, ?> lbConfig =
         attrsCaptor.getValue().get(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG);
     assertThat(lbConfig).isEqualTo(Collections.<String, Object>singletonMap("setting1", "high"));
     assertThat(attrsCaptor.getValue().get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG))
@@ -357,7 +357,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
       throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = null;
+    Map<String, ?> serviceConfig = null;
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
     PolicySelection selection = lb.decideLoadBalancerProvider(servers, serviceConfig);
@@ -374,7 +374,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) new AutoConfiguredLoadBalancerFactory("test_lb")
             .newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = null;
+    Map<String, ?> serviceConfig = null;
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
     PolicySelection selection = lb.decideLoadBalancerProvider(servers, serviceConfig);
@@ -389,7 +389,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_oneBalancer_noServiceConfig_grpclb() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = null;
+    Map<String, ?> serviceConfig = null;
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(
             new EquivalentAddressGroup(
@@ -407,7 +407,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbPolicy() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<>();
+    Map<String, String> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     List<EquivalentAddressGroup> servers =
         Arrays.asList(
@@ -431,7 +431,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbConfig() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"round_robin\": {} } ] }");
     List<EquivalentAddressGroup> servers =
         Arrays.asList(
@@ -454,7 +454,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_grpclbConfigPropagated() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig(
             "{\"loadBalancingConfig\": ["
             + "{\"grpclb\": {\"childPolicy\": [ {\"pick_first\": {} } ] } }"
@@ -477,7 +477,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_policyUnavailButGrpclbAddressPresent() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig(
             "{\"loadBalancingConfig\": ["
             + "{\"unavail\": {} }"
@@ -506,7 +506,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) new AutoConfiguredLoadBalancerFactory(
             registry, GrpcUtil.DEFAULT_LB_POLICY).newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"grpclb\": {} } ] }");
     List<EquivalentAddressGroup> servers =
         Arrays.asList(
@@ -541,7 +541,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) new AutoConfiguredLoadBalancerFactory(
             registry, GrpcUtil.DEFAULT_LB_POLICY).newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"grpclb\": {} } ] }");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(
@@ -562,7 +562,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbPolicyOverridesDefault() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<>();
+    Map<String, String> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -578,7 +578,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbConfigOverridesDefault() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"round_robin\": {\"setting1\": \"high\"} } ] }");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -595,7 +595,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbPolicyFailsOnUnknown() {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig = new HashMap<>();
+    Map<String, String> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "MAGIC_BALANCER");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -612,7 +612,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbConfigFailsOnUnknown() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig("{\"loadBalancingConfig\": [ {\"magic_balancer\": {} } ] }");
     List<EquivalentAddressGroup> servers =
         Collections.singletonList(new EquivalentAddressGroup(new SocketAddress(){}));
@@ -629,7 +629,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   public void decideLoadBalancerProvider_serviceConfigLbConfigSkipUnknown() throws Exception {
     AutoConfiguredLoadBalancer lb =
         (AutoConfiguredLoadBalancer) lbf.newLoadBalancer(new TestHelper());
-    Map<String, Object> serviceConfig =
+    Map<String, ?> serviceConfig =
         parseConfig(
             "{\"loadBalancingConfig\": [ {\"magic_balancer\": {} }, {\"round_robin\": {} } ] }");
     List<EquivalentAddressGroup> servers =
@@ -705,7 +705,7 @@ public class AutoConfiguredLoadBalancerFactoryTest {
 
     verifyNoMoreInteractions(channelLogger);
 
-    Map<String, Object> serviceConfig = new HashMap<>();
+    Map<String, String> serviceConfig = new HashMap<>();
     serviceConfig.put("loadBalancingPolicy", "round_robin");
     lb.handleResolvedAddressGroups(servers,
         Attributes.newBuilder()
@@ -778,8 +778,8 @@ public class AutoConfiguredLoadBalancerFactoryTest {
   }
 
   @SuppressWarnings("unchecked")
-  private static Map<String, Object> parseConfig(String json) throws Exception {
-    return (Map<String, Object>) JsonParser.parse(json);
+  private static Map<String, ?> parseConfig(String json) throws Exception {
+    return (Map<String, ?>) JsonParser.parse(json);
   }
 
   private static class TestLoadBalancer extends ForwardingLoadBalancer {

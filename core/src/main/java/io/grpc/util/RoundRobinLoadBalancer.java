@@ -94,8 +94,7 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
     Set<EquivalentAddressGroup> addedAddrs = setsDifference(latestAddrs, currentAddrs);
     Set<EquivalentAddressGroup> removedAddrs = setsDifference(currentAddrs, latestAddrs);
 
-    Map<String, Object> serviceConfig =
-        attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+    Map<String, ?> serviceConfig = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
     if (serviceConfig != null) {
       String stickinessMetadataKey =
           ServiceConfigUtil.getStickinessMetadataKeyFromServiceConfig(serviceConfig);

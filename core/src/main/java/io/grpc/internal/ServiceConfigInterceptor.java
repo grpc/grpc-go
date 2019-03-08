@@ -73,14 +73,14 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     this.maxHedgedAttemptsLimit = maxHedgedAttemptsLimit;
   }
 
-  void handleUpdate(@Nonnull Map<String, Object> serviceConfig) {
+  void handleUpdate(@Nonnull Map<String, ?> serviceConfig) {
     Map<String, MethodInfo> newServiceMethodConfigs = new HashMap<>();
     Map<String, MethodInfo> newServiceConfigs = new HashMap<>();
 
     // Try and do as much validation here before we swap out the existing configuration.  In case
     // the input is invalid, we don't want to lose the existing configuration.
 
-    List<Map<String, Object>> methodConfigs =
+    List<Map<String, ?>> methodConfigs =
         ServiceConfigUtil.getMethodConfigFromServiceConfig(serviceConfig);
     if (methodConfigs == null) {
       logger.log(Level.FINE, "No method configs found, skipping");
@@ -88,16 +88,16 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
       return;
     }
 
-    for (Map<String, Object> methodConfig : methodConfigs) {
+    for (Map<String, ?> methodConfig : methodConfigs) {
       MethodInfo info = new MethodInfo(
           methodConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit);
 
-      List<Map<String, Object>> nameList =
+      List<Map<String, ?>> nameList =
           ServiceConfigUtil.getNameListFromMethodConfig(methodConfig);
 
       checkArgument(
           nameList != null && !nameList.isEmpty(), "no names in method config %s", methodConfig);
-      for (Map<String, Object> name : nameList) {
+      for (Map<String, ?> name : nameList) {
         String serviceName = ServiceConfigUtil.getServiceFromName(name);
         checkArgument(!Strings.isNullOrEmpty(serviceName), "missing service name");
         String methodName = ServiceConfigUtil.getMethodFromName(name);
@@ -141,7 +141,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
      * @param retryEnabled when false, the argument maxRetryAttemptsLimit will have no effect.
      */
     MethodInfo(
-        Map<String, Object> methodConfig, boolean retryEnabled, int maxRetryAttemptsLimit,
+        Map<String, ?> methodConfig, boolean retryEnabled, int maxRetryAttemptsLimit,
         int maxHedgedAttemptsLimit) {
       timeoutNanos = ServiceConfigUtil.getTimeoutFromMethodConfig(methodConfig);
       waitForReady = ServiceConfigUtil.getWaitForReadyFromMethodConfig(methodConfig);
@@ -160,12 +160,12 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
             "maxOutboundMessageSize %s exceeds bounds", maxOutboundMessageSize);
       }
 
-      Map<String, Object> retryPolicyMap =
+      Map<String, ?> retryPolicyMap =
           retryEnabled ? ServiceConfigUtil.getRetryPolicyFromMethodConfig(methodConfig) : null;
       retryPolicy = retryPolicyMap == null
           ? RetryPolicy.DEFAULT : retryPolicy(retryPolicyMap, maxRetryAttemptsLimit);
 
-      Map<String, Object> hedgingPolicyMap =
+      Map<String, ?> hedgingPolicyMap =
           retryEnabled ? ServiceConfigUtil.getHedgingPolicyFromMethodConfig(methodConfig) : null;
       hedgingPolicy = hedgingPolicyMap == null
           ? HedgingPolicy.DEFAULT : hedgingPolicy(hedgingPolicyMap, maxHedgedAttemptsLimit);
@@ -201,7 +201,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
           .toString();
     }
 
-    private static RetryPolicy retryPolicy(Map<String, Object> retryPolicy, int maxAttemptsLimit) {
+    private static RetryPolicy retryPolicy(Map<String, ?> retryPolicy, int maxAttemptsLimit) {
       int maxAttempts = checkNotNull(
           ServiceConfigUtil.getMaxAttemptsFromRetryPolicy(retryPolicy),
           "maxAttempts cannot be empty");
@@ -249,7 +249,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   }
 
   private static HedgingPolicy hedgingPolicy(
-      Map<String, Object> hedgingPolicy, int maxAttemptsLimit) {
+      Map<String, ?> hedgingPolicy, int maxAttemptsLimit) {
     int maxAttempts = checkNotNull(
         ServiceConfigUtil.getMaxAttemptsFromHedgingPolicy(hedgingPolicy),
         "maxAttempts cannot be empty");

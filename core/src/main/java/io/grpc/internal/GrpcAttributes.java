@@ -31,7 +31,7 @@ public final class GrpcAttributes {
    * Attribute key for service config.
    */
   @NameResolver.ResolutionResultAttr
-  public static final Attributes.Key<Map<String, Object>> NAME_RESOLVER_SERVICE_CONFIG =
+  public static final Attributes.Key<Map<String, ?>> NAME_RESOLVER_SERVICE_CONFIG =
       Attributes.Key.create("service-config");
 
   /**

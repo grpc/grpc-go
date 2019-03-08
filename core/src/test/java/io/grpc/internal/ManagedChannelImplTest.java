@@ -889,9 +889,9 @@ public class ManagedChannelImplTest {
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(null);
     verify(mockLoadBalancer).handleResolvedAddressGroups(
         eq(ImmutableList.<EquivalentAddressGroup>of()), attrsCaptor.capture());
-    Map<String, Object> lbConfig =
+    Map<String, ?> lbConfig =
         attrsCaptor.getValue().get(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG);
-    assertEquals(ImmutableMap.<String, Object>of("setting1", "high"), lbConfig);
+    assertEquals(ImmutableMap.<String, String>of("setting1", "high"), lbConfig);
     assertSame(
         serviceConfig, attrsCaptor.getValue().get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG));
   }

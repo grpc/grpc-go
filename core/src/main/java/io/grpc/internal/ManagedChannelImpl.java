@@ -237,7 +237,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
   @CheckForNull
   private Boolean haveBackends; // a flag for doing channel tracing when flipped
   @Nullable
-  private Map<String, Object> lastServiceConfig; // used for channel tracing when value changed
+  private Map<String, ?> lastServiceConfig; // used for channel tracing when value changed
 
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
@@ -1296,8 +1296,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         channelLogger.log(ChannelLogLevel.INFO, "Address resolved: {0}", servers);
         haveBackends = true;
       }
-      final Map<String, Object> serviceConfig =
-          config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+      final Map<String, ?> serviceConfig = config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
       if (serviceConfig != null && !serviceConfig.equals(lastServiceConfig)) {
         channelLogger.log(ChannelLogLevel.INFO, "Service config changed");
         lastServiceConfig = serviceConfig;

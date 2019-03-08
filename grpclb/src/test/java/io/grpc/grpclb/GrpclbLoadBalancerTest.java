@@ -2167,8 +2167,8 @@ public class GrpclbLoadBalancerTest {
   }
 
   @SuppressWarnings("unchecked")
-  private static Map<String, Object> parseJsonObject(String json) throws Exception {
-    return (Map<String, Object>) JsonParser.parse(json);
+  private static Map<String, ?> parseJsonObject(String json) throws Exception {
+    return (Map<String, ?>) JsonParser.parse(json);
   }
 
   private static class ServerEntry {

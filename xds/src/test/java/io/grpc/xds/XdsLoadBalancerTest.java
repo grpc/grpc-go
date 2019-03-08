@@ -311,7 +311,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -328,7 +328,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig2 = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig2 = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig2).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -352,7 +352,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -366,7 +366,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig2 = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig2 = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig2).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -388,7 +388,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -404,7 +404,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig2 = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig2 = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig2).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -426,7 +426,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -442,7 +442,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig2 = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig2 = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig2).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -463,7 +463,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -477,7 +477,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig2 = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig2 = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig2).build();
 
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
@@ -588,7 +588,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"supported_1\" : { \"supported_1_option\" : \"yes\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     return Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
   }
 
@@ -600,7 +600,7 @@ public class XdsLoadBalancerTest {
         + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}}]"
         + "}}";
     @SuppressWarnings("unchecked")
-    Map<String, Object> lbConfig = (Map<String, Object>) JsonParser.parse(lbConfigRaw);
+    Map<String, ?> lbConfig = (Map<String, ?>) JsonParser.parse(lbConfigRaw);
     Attributes attrs = Attributes.newBuilder().set(ATTR_LOAD_BALANCING_CONFIG, lbConfig).build();
     lb.handleResolvedAddressGroups(Collections.<EquivalentAddressGroup>emptyList(), attrs);
 

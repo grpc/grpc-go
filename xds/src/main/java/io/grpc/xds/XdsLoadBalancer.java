@@ -52,7 +52,7 @@ final class XdsLoadBalancer extends LoadBalancer {
       Attributes.Key.create("io.grpc.xds.XdsLoadBalancer.stateInfo");
 
   private static final LbConfig DEFAULT_FALLBACK_POLICY =
-      new LbConfig("round_robin", ImmutableMap.<String, Object>of());
+      new LbConfig("round_robin", ImmutableMap.<String, Void>of());
 
   private final SubchannelStore subchannelStore;
   private final Helper helper;
@@ -89,7 +89,7 @@ final class XdsLoadBalancer extends LoadBalancer {
   @Override
   public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> servers, Attributes attributes) {
-    Map<String, Object> newRawLbConfig = checkNotNull(
+    Map<String, ?> newRawLbConfig = checkNotNull(
         attributes.get(ATTR_LOAD_BALANCING_CONFIG), "ATTR_LOAD_BALANCING_CONFIG not available");
     LbConfig newLbConfig = ServiceConfigUtil.unwrapLoadBalancingConfig(newRawLbConfig);
     fallbackPolicy = selectFallbackPolicy(newLbConfig, lbRegistry);

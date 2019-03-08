@@ -106,7 +106,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
             "Unexpected ATTR_LOAD_BALANCING_CONFIG from upstream: "
             + attributes.get(ATTR_LOAD_BALANCING_CONFIG));
       }
-      Map<String, Object> configMap = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+      Map<String, ?> configMap = attributes.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
       PolicySelection selection;
       try {
         selection = decideLoadBalancerProvider(servers, configMap);
@@ -202,7 +202,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
      */
     @VisibleForTesting
     PolicySelection decideLoadBalancerProvider(
-        List<EquivalentAddressGroup> servers, @Nullable Map<String, Object> config)
+        List<EquivalentAddressGroup> servers, @Nullable Map<String, ?> config)
         throws PolicyException {
       // Check for balancer addresses
       boolean haveBalancerAddress = false;
@@ -217,7 +217,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
 
       List<LbConfig> lbConfigs = null;
       if (config != null) {
-        List<Map<String, Object>> rawLbConfigs =
+        List<Map<String, ?>> rawLbConfigs =
             ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(config);
         lbConfigs = ServiceConfigUtil.unwrapLoadBalancingConfigList(rawLbConfigs);
       }
@@ -304,11 +304,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
   static final class PolicySelection {
     final LoadBalancerProvider provider;
     final List<EquivalentAddressGroup> serverList;
-    @Nullable final Map<String, Object> config;
+    @Nullable final Map<String, ?> config;
 
     PolicySelection(
         LoadBalancerProvider provider, List<EquivalentAddressGroup> serverList,
-        @Nullable Map<String, Object> config) {
+        @Nullable Map<String, ?> config) {
       this.provider = checkNotNull(provider, "provider");
       this.serverList = Collections.unmodifiableList(checkNotNull(serverList, "serverList"));
       this.config = config;

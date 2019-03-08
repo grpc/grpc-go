@@ -74,7 +74,7 @@ public final class ServiceConfigUtil {
    * Fetch the health-checked service name from service config. {@code null} if can't find one.
    */
   @Nullable
-  public static String getHealthCheckedServiceName(@Nullable Map<String, Object> serviceConfig) {
+  public static String getHealthCheckedServiceName(@Nullable Map<String, ?> serviceConfig) {
     String healthCheckKey = "healthCheckConfig";
     String serviceNameKey = "serviceName";
     if (serviceConfig == null || !serviceConfig.containsKey(healthCheckKey)) {
@@ -89,7 +89,7 @@ public final class ServiceConfigUtil {
       }
     }
     */
-    Map<String, Object> healthCheck = getObject(serviceConfig, healthCheckKey);
+    Map<String, ?> healthCheck = getObject(serviceConfig, healthCheckKey);
     if (!healthCheck.containsKey(serviceNameKey)) {
       return null;
     }
@@ -97,7 +97,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Throttle getThrottlePolicy(@Nullable Map<String, Object> serviceConfig) {
+  static Throttle getThrottlePolicy(@Nullable Map<String, ?> serviceConfig) {
     String retryThrottlingKey = "retryThrottling";
     if (serviceConfig == null || !serviceConfig.containsKey(retryThrottlingKey)) {
       return null;
@@ -122,7 +122,7 @@ public final class ServiceConfigUtil {
     }
     */
 
-    Map<String, Object> throttling = getObject(serviceConfig, retryThrottlingKey);
+    Map<String, ?> throttling = getObject(serviceConfig, retryThrottlingKey);
 
     float maxTokens = getDouble(throttling, "maxTokens").floatValue();
     float tokenRatio = getDouble(throttling, "tokenRatio").floatValue();
@@ -132,7 +132,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Integer getMaxAttemptsFromRetryPolicy(Map<String, Object> retryPolicy) {
+  static Integer getMaxAttemptsFromRetryPolicy(Map<String, ?> retryPolicy) {
     if (!retryPolicy.containsKey(RETRY_POLICY_MAX_ATTEMPTS_KEY)) {
       return null;
     }
@@ -140,7 +140,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Long getInitialBackoffNanosFromRetryPolicy(Map<String, Object> retryPolicy) {
+  static Long getInitialBackoffNanosFromRetryPolicy(Map<String, ?> retryPolicy) {
     if (!retryPolicy.containsKey(RETRY_POLICY_INITIAL_BACKOFF_KEY)) {
       return null;
     }
@@ -153,7 +153,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Long getMaxBackoffNanosFromRetryPolicy(Map<String, Object> retryPolicy) {
+  static Long getMaxBackoffNanosFromRetryPolicy(Map<String, ?> retryPolicy) {
     if (!retryPolicy.containsKey(RETRY_POLICY_MAX_BACKOFF_KEY)) {
       return null;
     }
@@ -166,7 +166,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Double getBackoffMultiplierFromRetryPolicy(Map<String, Object> retryPolicy) {
+  static Double getBackoffMultiplierFromRetryPolicy(Map<String, ?> retryPolicy) {
     if (!retryPolicy.containsKey(RETRY_POLICY_BACKOFF_MULTIPLIER_KEY)) {
       return null;
     }
@@ -174,7 +174,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static List<String> getRetryableStatusCodesFromRetryPolicy(Map<String, Object> retryPolicy) {
+  static List<String> getRetryableStatusCodesFromRetryPolicy(Map<String, ?> retryPolicy) {
     if (!retryPolicy.containsKey(RETRY_POLICY_RETRYABLE_STATUS_CODES_KEY)) {
       return null;
     }
@@ -182,7 +182,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Integer getMaxAttemptsFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+  static Integer getMaxAttemptsFromHedgingPolicy(Map<String, ?> hedgingPolicy) {
     if (!hedgingPolicy.containsKey(HEDGING_POLICY_MAX_ATTEMPTS_KEY)) {
       return null;
     }
@@ -190,7 +190,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Long getHedgingDelayNanosFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+  static Long getHedgingDelayNanosFromHedgingPolicy(Map<String, ?> hedgingPolicy) {
     if (!hedgingPolicy.containsKey(HEDGING_POLICY_HEDGING_DELAY_KEY)) {
       return null;
     }
@@ -203,7 +203,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static List<String> getNonFatalStatusCodesFromHedgingPolicy(Map<String, Object> hedgingPolicy) {
+  static List<String> getNonFatalStatusCodesFromHedgingPolicy(Map<String, ?> hedgingPolicy) {
     if (!hedgingPolicy.containsKey(HEDGING_POLICY_NON_FATAL_STATUS_CODES_KEY)) {
       return null;
     }
@@ -211,7 +211,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static String getServiceFromName(Map<String, Object> name) {
+  static String getServiceFromName(Map<String, ?> name) {
     if (!name.containsKey(NAME_SERVICE_KEY)) {
       return null;
     }
@@ -219,7 +219,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static String getMethodFromName(Map<String, Object> name) {
+  static String getMethodFromName(Map<String, ?> name) {
     if (!name.containsKey(NAME_METHOD_KEY)) {
       return null;
     }
@@ -227,7 +227,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Map<String, Object> getRetryPolicyFromMethodConfig(Map<String, Object> methodConfig) {
+  static Map<String, ?> getRetryPolicyFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_RETRY_POLICY_KEY)) {
       return null;
     }
@@ -235,7 +235,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Map<String, Object> getHedgingPolicyFromMethodConfig(Map<String, Object> methodConfig) {
+  static Map<String, ?> getHedgingPolicyFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_HEDGING_POLICY_KEY)) {
       return null;
     }
@@ -243,7 +243,8 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static List<Map<String, Object>> getNameListFromMethodConfig(Map<String, Object> methodConfig) {
+  static List<Map<String, ?>> getNameListFromMethodConfig(
+      Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_NAME_KEY)) {
       return null;
     }
@@ -256,7 +257,7 @@ public final class ServiceConfigUtil {
    * @return duration nanoseconds, or {@code null} if it isn't present.
    */
   @Nullable
-  static Long getTimeoutFromMethodConfig(Map<String, Object> methodConfig) {
+  static Long getTimeoutFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_TIMEOUT_KEY)) {
       return null;
     }
@@ -269,7 +270,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Boolean getWaitForReadyFromMethodConfig(Map<String, Object> methodConfig) {
+  static Boolean getWaitForReadyFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_WAIT_FOR_READY_KEY)) {
       return null;
     }
@@ -277,7 +278,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Integer getMaxRequestMessageBytesFromMethodConfig(Map<String, Object> methodConfig) {
+  static Integer getMaxRequestMessageBytesFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_MAX_REQUEST_MESSAGE_BYTES_KEY)) {
       return null;
     }
@@ -285,7 +286,7 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static Integer getMaxResponseMessageBytesFromMethodConfig(Map<String, Object> methodConfig) {
+  static Integer getMaxResponseMessageBytesFromMethodConfig(Map<String, ?> methodConfig) {
     if (!methodConfig.containsKey(METHOD_CONFIG_MAX_RESPONSE_MESSAGE_BYTES_KEY)) {
       return null;
     }
@@ -293,8 +294,8 @@ public final class ServiceConfigUtil {
   }
 
   @Nullable
-  static List<Map<String, Object>> getMethodConfigFromServiceConfig(
-      Map<String, Object> serviceConfig) {
+  static List<Map<String, ?>> getMethodConfigFromServiceConfig(
+      Map<String, ?> serviceConfig) {
     if (!serviceConfig.containsKey(SERVICE_CONFIG_METHOD_CONFIG_KEY)) {
       return null;
     }
@@ -306,8 +307,8 @@ public final class ServiceConfigUtil {
    */
   @SuppressWarnings("unchecked")
   @VisibleForTesting
-  public static List<Map<String, Object>> getLoadBalancingConfigsFromServiceConfig(
-      Map<String, Object> serviceConfig) {
+  public static List<Map<String, ?>> getLoadBalancingConfigsFromServiceConfig(
+      Map<String, ?> serviceConfig) {
     /* schema as follows
     {
       "loadBalancingConfig": {
@@ -325,11 +326,11 @@ public final class ServiceConfigUtil {
       "loadBalancingPolicy": "ROUND_ROBIN"  // The deprecated policy key
     }
     */
-    List<Map<String, Object>> lbConfigs = new ArrayList<>();
+    List<Map<String, ?>> lbConfigs = new ArrayList<>();
     if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY)) {
-      List<Object> configs = getList(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY);
+      List<?> configs = getList(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY);
       for (Object config : configs) {
-        lbConfigs.add((Map<String, Object>) config);
+        lbConfigs.add((Map<String, ?>) config);
       }
     }
     if (lbConfigs.isEmpty()) {
@@ -338,7 +339,7 @@ public final class ServiceConfigUtil {
         String policy = getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
         // Convert the policy to a config, so that the caller can handle them in the same way.
         policy = policy.toLowerCase(Locale.ROOT);
-        Map<String, Object> fakeConfig =
+        Map<String, ?> fakeConfig =
             Collections.singletonMap(policy, (Object) Collections.emptyMap());
         lbConfigs.add(fakeConfig);
       }
@@ -353,9 +354,9 @@ public final class ServiceConfigUtil {
    */
   @SuppressWarnings("unchecked")
   public static LbConfig unwrapLoadBalancingConfig(Object lbConfig) {
-    Map<String, Object> map;
+    Map<String, ?> map;
     try {
-      map = (Map<String, Object>) lbConfig;
+      map = (Map<String, ?>) lbConfig;
     } catch (ClassCastException e) {
       ClassCastException ex = new ClassCastException("Invalid type. Config=" + lbConfig);
       ex.initCause(e);
@@ -366,10 +367,10 @@ public final class ServiceConfigUtil {
           "There are " + map.size() + " fields in a LoadBalancingConfig object. Exactly one"
           + " is expected. Config=" + lbConfig);
     }
-    Map.Entry<String, Object> entry = map.entrySet().iterator().next();
-    Map<String, Object> configValue;
+    Map.Entry<String, ?> entry = map.entrySet().iterator().next();
+    Map<String, ?> configValue;
     try {
-      configValue = (Map<String, Object>) entry.getValue();
+      configValue = (Map<String, ?>) entry.getValue();
     } catch (ClassCastException e) {
       ClassCastException ex =
           new ClassCastException("Invalid value type.  value=" + entry.getValue());
@@ -403,7 +404,7 @@ public final class ServiceConfigUtil {
    * Extracts the loadbalancer name from xds loadbalancer config.
    */
   public static String getBalancerNameFromXdsConfig(LbConfig xdsConfig) {
-    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    Map<String, ?> map = xdsConfig.getRawConfigValue();
     return getString(map, XDS_CONFIG_BALANCER_NAME_KEY);
   }
 
@@ -412,7 +413,7 @@ public final class ServiceConfigUtil {
    */
   @Nullable
   public static List<LbConfig> getChildPolicyFromXdsConfig(LbConfig xdsConfig) {
-    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    Map<String, ?> map = xdsConfig.getRawConfigValue();
     Object rawChildPolicies = map.get(XDS_CONFIG_CHILD_POLICY_KEY);
     if (rawChildPolicies != null) {
       return unwrapLoadBalancingConfigList(rawChildPolicies);
@@ -425,7 +426,7 @@ public final class ServiceConfigUtil {
    */
   @Nullable
   public static List<LbConfig> getFallbackPolicyFromXdsConfig(LbConfig xdsConfig) {
-    Map<String, Object> map = xdsConfig.getRawConfigValue();
+    Map<String, ?> map = xdsConfig.getRawConfigValue();
     Object rawFallbackPolicies = map.get(XDS_CONFIG_FALLBACK_POLICY_KEY);
     if (rawFallbackPolicies != null) {
       return unwrapLoadBalancingConfigList(rawFallbackPolicies);
@@ -438,7 +439,7 @@ public final class ServiceConfigUtil {
    */
   @Nullable
   public static String getStickinessMetadataKeyFromServiceConfig(
-      Map<String, Object> serviceConfig) {
+      Map<String, ?> serviceConfig) {
     if (!serviceConfig.containsKey(SERVICE_CONFIG_STICKINESS_METADATA_KEY)) {
       return null;
     }
@@ -449,11 +450,11 @@ public final class ServiceConfigUtil {
    * Gets a list from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  static List<Object> getList(Map<String, Object> obj, String key) {
+  static List<?> getList(Map<String, ?> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof List) {
-      return (List<Object>) value;
+      return (List<?>) value;
     }
     throw new ClassCastException(
         String.format("value %s for key %s in %s is not List", value, key, obj));
@@ -463,11 +464,11 @@ public final class ServiceConfigUtil {
    * Gets an object from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  static Map<String, Object> getObject(Map<String, Object> obj, String key) {
+  static Map<String, ?> getObject(Map<String, ?> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof Map) {
-      return (Map<String, Object>) value;
+      return (Map<String, ?>) value;
     }
     throw new ClassCastException(
         String.format("value %s for key %s in %s is not object", value, key, obj));
@@ -477,7 +478,7 @@ public final class ServiceConfigUtil {
    * Gets a double from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  static Double getDouble(Map<String, Object> obj, String key) {
+  static Double getDouble(Map<String, ?> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof Double) {
@@ -491,7 +492,7 @@ public final class ServiceConfigUtil {
    * Gets a string from an object for the given key.
    */
   @SuppressWarnings("unchecked")
-  static String getString(Map<String, Object> obj, String key) {
+  static String getString(Map<String, ?> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof String) {
@@ -505,7 +506,7 @@ public final class ServiceConfigUtil {
    * Gets a string from an object for the given index.
    */
   @SuppressWarnings("unchecked")
-  static String getString(List<Object> list, int i) {
+  static String getString(List<?> list, int i) {
     assert i >= 0 && i < list.size();
     Object value = checkNotNull(list.get(i), "idx %s in %s is null", i, list);
     if (value instanceof String) {
@@ -518,7 +519,7 @@ public final class ServiceConfigUtil {
   /**
    * Gets a boolean from an object for the given key.
    */
-  static Boolean getBoolean(Map<String, Object> obj, String key) {
+  static Boolean getBoolean(Map<String, ?> obj, String key) {
     assert obj.containsKey(key);
     Object value = checkNotNull(obj.get(key), "no such key %s", key);
     if (value instanceof Boolean) {
@@ -529,25 +530,25 @@ public final class ServiceConfigUtil {
   }
 
   @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> checkObjectList(List<Object> rawList) {
+  private static List<Map<String, ?>> checkObjectList(List<?> rawList) {
     for (int i = 0; i < rawList.size(); i++) {
       if (!(rawList.get(i) instanceof Map)) {
         throw new ClassCastException(
             String.format("value %s for idx %d in %s is not object", rawList.get(i), i, rawList));
       }
     }
-    return (List<Map<String, Object>>) (List<?>) rawList;
+    return (List<Map<String, ?>>) rawList;
   }
 
   @SuppressWarnings("unchecked")
-  static List<String> checkStringList(List<Object> rawList) {
+  static List<String> checkStringList(List<?> rawList) {
     for (int i = 0; i < rawList.size(); i++) {
       if (!(rawList.get(i) instanceof String)) {
         throw new ClassCastException(
             String.format("value %s for idx %d in %s is not string", rawList.get(i), i, rawList));
       }
     }
-    return (List<String>) (List<?>) rawList;
+    return (List<String>) rawList;
   }
 
   /**
@@ -687,9 +688,9 @@ public final class ServiceConfigUtil {
    */
   public static final class LbConfig {
     private final String policyName;
-    private final Map<String, Object> rawConfigValue;
+    private final Map<String, ?> rawConfigValue;
 
-    public LbConfig(String policyName, Map<String, Object> rawConfigValue) {
+    public LbConfig(String policyName, Map<String, ?> rawConfigValue) {
       this.policyName = checkNotNull(policyName, "policyName");
       this.rawConfigValue = checkNotNull(rawConfigValue, "rawConfigValue");
     }
@@ -698,7 +699,7 @@ public final class ServiceConfigUtil {
       return policyName;
     }
 
-    public Map<String, Object> getRawConfigValue() {
+    public Map<String, ?> getRawConfigValue() {
       return rawConfigValue;
     }
 

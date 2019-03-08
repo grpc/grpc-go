@@ -100,7 +100,7 @@ class GrpclbLoadBalancer extends LoadBalancer {
 
     newLbAddressGroups = Collections.unmodifiableList(newLbAddressGroups);
     newBackendServers = Collections.unmodifiableList(newBackendServers);
-    Map<String, Object> rawLbConfigValue = attributes.get(ATTR_LOAD_BALANCING_CONFIG);
+    Map<String, ?> rawLbConfigValue = attributes.get(ATTR_LOAD_BALANCING_CONFIG);
     Mode newMode = retrieveModeFromLbConfig(rawLbConfigValue, helper.getChannelLogger());
     if (!mode.equals(newMode)) {
       mode = newMode;
@@ -112,7 +112,7 @@ class GrpclbLoadBalancer extends LoadBalancer {
 
   @VisibleForTesting
   static Mode retrieveModeFromLbConfig(
-      @Nullable Map<String, Object> rawLbConfigValue, ChannelLogger channelLogger) {
+      @Nullable Map<String, ?> rawLbConfigValue, ChannelLogger channelLogger) {
     try {
       if (rawLbConfigValue == null) {
         return DEFAULT_MODE;

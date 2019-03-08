@@ -935,8 +935,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
   @Test
   public void getHealthCheckedServiceName_noHealthCheckConfig() {
-    assertThat(ServiceConfigUtil.getHealthCheckedServiceName(new HashMap<String, Object>()))
-        .isNull();
+    assertThat(ServiceConfigUtil.getHealthCheckedServiceName(new HashMap<String, Void>())).isNull();
   }
 
   @Test
