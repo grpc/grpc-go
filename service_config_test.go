@@ -79,8 +79,8 @@ func (s) TestParseLoadBalancer(t *testing.T) {
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
-			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(*sc, c.wantSC) {
+			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, *sc, err, c.wantSC, c.wantErr)
 		}
 	}
 }
@@ -167,7 +167,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(*sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -249,7 +249,7 @@ func (s) TestPraseTimeOut(t *testing.T) {
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(*sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -318,7 +318,7 @@ func (s) TestPraseMsgSize(t *testing.T) {
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(*sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -383,4 +383,10 @@ func newDuration(b time.Duration) *time.Duration {
 
 func newString(b string) *string {
 	return &b
+}
+
+func scCompareWithRawJSONSkipped(s1, s2 ServiceConfig) bool {
+	s1.rawJSONString = nil
+	s2.rawJSONString = nil
+	return reflect.DeepEqual(s1, s2)
 }

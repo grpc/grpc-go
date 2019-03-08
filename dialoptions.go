@@ -63,6 +63,7 @@ type dialOptions struct {
 	disableHealthCheck   bool
 	healthCheckFunc      internal.HealthChecker
 	minConnectTimeout    func() time.Duration
+	defaultServiceConfig *ServiceConfig
 }
 
 // DialOption configures how we set up the connection.
@@ -444,6 +445,23 @@ func WithChannelzParentID(id int64) DialOption {
 func WithDisableServiceConfig() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.disableServiceConfig = true
+	})
+}
+
+// WithDefaultServiceConfig returns a DialOption that configures the default service config, which
+// will be used in cases where:
+// 1. WithDisableServiceConfig is called.
+// 2. Resolver does not return service config or if the resolver gets and invalid config.
+// It is strongly recommended that caller of this function verifies the validity of the input string
+// by using the grpc.ValidateServiceConfig function.
+func WithDefaultServiceConfig(s string) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		sc, err := parseServiceConfig(s)
+		if err != nil {
+			grpclog.Warningf("the provided service config is invalid, err: %v", err)
+			return
+		}
+		o.defaultServiceConfig = sc
 	})
 }
 

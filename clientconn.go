@@ -383,7 +383,6 @@ type ClientConn struct {
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
 	sc              ServiceConfig
-	scRaw           string
 	conns           map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
@@ -430,7 +429,8 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
 			cc.sc = sc
-			cc.scRaw = ""
+			s := ""
+			cc.sc.rawJSONString = &s
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -457,6 +457,29 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
+// Apply default service config when default service config is configured and:
+// * resolver service config is disabled
+// * or, resolver does not return a service config or returns an invalid one.
+func (cc *ClientConn) shouldApplyDefaultServiceConfig(sc string) bool {
+	if cc.dopts.defaultServiceConfig != nil {
+		if cc.dopts.disableServiceConfig {
+			return true
+		}
+		// The logic below is temporary, will be removed once we change the resolver.State ServiceConfig field type.
+		// Right now, we assume that empty service config string means resolver does not return a config.
+		if sc == "" {
+			return false
+		}
+		// TODO: the logic below is temporary. Once we finish the logic to validate service config
+		// in resolver, we will replace the logic below.
+		_, err := parseServiceConfig(sc)
+		if err != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -467,26 +490,18 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
-	if !cc.dopts.disableServiceConfig && cc.scRaw != s.ServiceConfig {
-		// New service config; apply it.
+	if cc.shouldApplyDefaultServiceConfig(s.ServiceConfig) {
+		if cc.sc.rawJSONString == nil {
+			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
+		}
+	} else {
+		// TODO: the parsing logic below will be moved inside resolver.
 		sc, err := parseServiceConfig(s.ServiceConfig)
-		if err != nil {
-			fmt.Println("error parsing config: ", err)
+		if err != nil && s.ServiceConfig != "" { // s.ServiceConfig != "" is a temporary special case.
 			return err
 		}
-		cc.scRaw = s.ServiceConfig
-		cc.sc = sc
-
-		if cc.sc.retryThrottling != nil {
-			newThrottler := &retryThrottler{
-				tokens: cc.sc.retryThrottling.MaxTokens,
-				max:    cc.sc.retryThrottling.MaxTokens,
-				thresh: cc.sc.retryThrottling.MaxTokens / 2,
-				ratio:  cc.sc.retryThrottling.TokenRatio,
-			}
-			cc.retryThrottler.Store(newThrottler)
-		} else {
-			cc.retryThrottler.Store((*retryThrottler)(nil))
+		if cc.sc.rawJSONString == nil || *cc.sc.rawJSONString != s.ServiceConfig {
+			cc.applyServiceConfig(sc)
 		}
 	}
 
@@ -746,6 +761,30 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 		return nil, nil, toRPCErr(err)
 	}
 	return t, done, nil
+}
+
+// Parse and apply the service config. If sc is passed as a non-nil pointer, which indicates we have
+// a parsed service config, we will skip the parsing. It will also skip the whole processing if
+// the new service config is the same as the old one.
+func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
+	if sc == nil {
+		return fmt.Errorf("got nil pointer for service config")
+	}
+	cc.sc = *sc
+
+	if cc.sc.retryThrottling != nil {
+		newThrottler := &retryThrottler{
+			tokens: cc.sc.retryThrottling.MaxTokens,
+			max:    cc.sc.retryThrottling.MaxTokens,
+			thresh: cc.sc.retryThrottling.MaxTokens / 2,
+			ratio:  cc.sc.retryThrottling.TokenRatio,
+		}
+		cc.retryThrottler.Store(newThrottler)
+	} else {
+		cc.retryThrottler.Store((*retryThrottler)(nil))
+	}
+
+	return nil
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {

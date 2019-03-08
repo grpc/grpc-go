@@ -1232,3 +1232,66 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		t.Fatal("timed out waiting for any server to be contacted after tryUpdateAddrs")
 	}
 }
+
+func (s) TestDefaultServiceConfig(t *testing.T) {
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	addr := r.Scheme() + ":///non.existent"
+	js := `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`
+	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
+	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
+}
+
+func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
+	var i int
+	for i = 0; i < 10; i++ {
+		mc := cc.GetMethodConfig("/foo/bar")
+		if mc.WaitForReady != nil && *mc.WaitForReady == true {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return i != 10
+}
+
+func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r resolver.Resolver, addr string, js string) {
+	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithDefaultServiceConfig(js))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	// Resolver service config gets ignored since resolver service config is disabled.
+	r.(*manual.Resolver).UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: addr}},
+		ServiceConfig: "{}",
+	})
+	if !verifyWaitForReadyEqualsTrue(cc) {
+		t.Fatal("default service config failed to be applied after 1s")
+	}
+}
+
+func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r resolver.Resolver, addr string, js string) {
+	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(js))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	r.(*manual.Resolver).UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: addr}},
+	})
+	if !verifyWaitForReadyEqualsTrue(cc) {
+		t.Fatal("default service config failed to be applied after 1s")
+	}
+}
