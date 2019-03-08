@@ -1,3 +1,5 @@
+load("@bazel_tools//tools/jdk:toolchain_utils.bzl", "find_java_runtime_toolchain", "find_java_toolchain")
+
 # "repository" here is for Bazel builds that span multiple WORKSPACES.
 def _path_ignoring_repository(f):
     if len(f.owner.workspace_root) == 0:
@@ -40,8 +42,8 @@ def _java_rpc_library_impl(ctx):
 
     java_info = java_common.compile(
         ctx,
-        java_toolchain = ctx.attr._java_toolchain,
-        host_javabase = ctx.attr._host_javabase,
+        java_toolchain = find_java_toolchain(ctx, ctx.attr._java_toolchain),
+        host_javabase = find_java_runtime_toolchain(ctx, ctx.attr._host_javabase),
         source_jars = [srcjar],
         output_source_jar = ctx.outputs.srcjar,
         output = ctx.outputs.jar,
