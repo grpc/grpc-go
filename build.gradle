@@ -107,7 +107,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
-        nettyVersion = '4.1.32.Final'
+        nettyVersion = '4.1.34.Final'
         googleauthVersion = '0.13.0'
         guavaVersion = '26.0-android'
         protobufVersion = '3.6.1'
@@ -225,7 +225,7 @@ subprojects {
             // SECURITY.md (multiple occurrences)
             // examples/example-tls/build.gradle
             // examples/example-tls/pom.xml
-            netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.20.Final',
+            netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.22.Final',
 
             conscrypt: 'org.conscrypt:conscrypt-openjdk-uber:1.0.1',
             re2j: 'com.google.re2j:re2j:1.2',
