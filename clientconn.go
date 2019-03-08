@@ -1058,6 +1058,10 @@ func (ac *addrConn) resetTransport() {
 
 		// Need to reconnect after a READY, the addrConn enters
 		// TRANSIENT_FAILURE.
+		//
+		// This will set addrConn to TRANSIENT_FAILURE for a very short period
+		// of time, and turns CONNECTING. It seems reasonable to skip this, but
+		// READY-CONNECTING is not a valid transition.
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
