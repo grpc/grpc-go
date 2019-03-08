@@ -1026,7 +1026,6 @@ func (ac *addrConn) resetTransport() {
 			ac.curAddr = addr
 			ac.transport = newTr
 			ac.backoffIdx = 0
-			// TODO: skip backoff in this case. It's being done in another PR, rebase.
 			ac.mu.Unlock()
 
 			healthCheckConfig := ac.cc.healthCheckConfig()
