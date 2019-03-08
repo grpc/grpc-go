@@ -259,6 +259,11 @@ type lbBalancer struct {
 //  - does two layer roundrobin pick otherwise.
 // Caller must hold lb.mu.
 func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
+	if lb.state == connectivity.TransientFailure {
+		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
+		return
+	}
+
 	// Keep pickfirst logic in a separate if statement, even though it means
 	// some duplicate code.
 	if lb.usePickFirst {
@@ -272,7 +277,7 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 			if len(lb.fullServerList) <= 0 {
 				lb.picker = &rrPicker{subConns: readySCs}
 			} else {
-				// TODO: not reset drop. After the reset-drop PR.
+				// TODO: TODOTODOTODO Rebase. Not reset drop. After the reset-drop PR.
 				lb.picker = &lbPicker{
 					serverList: lb.fullServerList,
 					subConns:   readySCs,
@@ -281,16 +286,10 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 			}
 		case connectivity.Connecting:
 			lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
-		case connectivity.TransientFailure:
-			lb.picker = &errPicker{err: balancer.ErrTransientFailure}
 		}
 		return
 	}
 
-	if lb.state == connectivity.TransientFailure {
-		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
-		return
-	}
 	var readySCs []balancer.SubConn
 	for _, a := range lb.backendAddrs {
 		if sc, ok := lb.subConns[a]; ok {

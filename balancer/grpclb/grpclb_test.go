@@ -791,7 +791,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
-		grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
