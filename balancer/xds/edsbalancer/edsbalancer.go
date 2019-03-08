@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"reflect"
+	"strconv"
 	"sync"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -206,7 +208,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
 		for _, lbEndpoint := range locality.GetLbEndpoints() {
 			socketAddress := lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()
 			newAddrs = append(newAddrs, resolver.Address{
-				Addr: fmt.Sprintf("%s:%d", socketAddress.GetAddress(), socketAddress.GetPortValue()),
+				Addr: net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue()))),
 			})
 		}
 		var weightChanged, addrsChanged bool
