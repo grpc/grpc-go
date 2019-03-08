@@ -338,7 +338,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 	}()
 
 	tss = &testServers{
-		lbAddr:   fakeName + ":" + strconv.Itoa(lbLis.Addr().(*net.TCPAddr).Port),
+		lbAddr:   net.JoinHostPort(fakeName, strconv.Itoa(lbLis.Addr().(*net.TCPAddr).Port)),
 		ls:       ls,
 		lb:       lb,
 		backends: backends,
@@ -558,18 +558,27 @@ func TestDropRequest(t *testing.T) {
 	}
 	tss.backends[0].Stop()
 	// This last pick was backend 0. Closing backend 0 doesn't reset drop index
-	// (for level 1 picking), so the following picks will be (backend, drop,
-	// backend), instead of (backend, backend, drop) if drop index was reset.
+	// (for level 1 picking), so the following picks will be (backend1, drop,
+	// backend1), instead of (backend, backend, drop) if drop index was reset.
 	time.Sleep(time.Second)
 	for i := 0; i < 3; i++ {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		var p peer.Peer
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
+		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
+			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
+		}
+
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.Unavailable {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
 		}
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
+			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
 		}
 	}
 }
