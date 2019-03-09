@@ -226,7 +226,7 @@ def com_google_protobuf_javalite():
     # java_lite_proto_library rules implicitly depend on @com_google_protobuf_javalite
     http_archive(
         name = "com_google_protobuf_javalite",
-        sha256 = "d8a2fed3708781196f92e1e7e7e713cf66804bd2944894401057214aff4f468f",
+        sha256 = "79d102c61e2a479a0b7e5fc167bcfaa4832a0c6aad4a75fa7da0480564931bcc",
         strip_prefix = "protobuf-384989534b2246d413dbcd750744faab2607b516",
         urls = ["https://github.com/google/protobuf/archive/384989534b2246d413dbcd750744faab2607b516.zip"],
     )
