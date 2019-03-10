@@ -542,25 +542,17 @@ final class ManagedChannelImpl extends ManagedChannel implements
     this.target = checkNotNull(builder.target, "target");
     this.logId = InternalLogId.allocate("Channel", target);
     this.nameResolverFactory = builder.getNameResolverFactory();
-    final ProxyDetector proxyDetector =
+    ProxyDetector proxyDetector =
         builder.proxyDetector != null ? builder.proxyDetector : GrpcUtil.getDefaultProxyDetector();
-    final int defaultPort = builder.getDefaultPort();
-    this.nameResolverHelper = new NameResolver.Helper() {
-        @Override
-        public int getDefaultPort() {
-          return defaultPort;
-        }
-
-        @Override
-        public ProxyDetector getProxyDetector() {
-          return proxyDetector;
-        }
-
-        @Override
-        public SynchronizationContext getSynchronizationContext() {
-          return syncContext;
-        }
-      };
+    this.retryEnabled = builder.retryEnabled && !builder.temporarilyDisableRetry;
+    this.nameResolverHelper =
+        new NrHelper(
+            builder.getDefaultPort(),
+            proxyDetector,
+            syncContext,
+            retryEnabled,
+            builder.maxRetryAttempts,
+            builder.maxHedgedAttempts);
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverHelper);
     this.timeProvider = checkNotNull(timeProvider, "timeProvider");
     maxTraceEvents = builder.maxTraceEvents;
@@ -584,7 +576,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         new CallCredentialsApplyingTransportFactory(clientTransportFactory, this.executor);
     this.scheduledExecutorForBalancer =
         new ScheduledExecutorForBalancer(transportFactory.getScheduledExecutorService());
-    this.retryEnabled = builder.retryEnabled && !builder.temporarilyDisableRetry;
+
     serviceConfigInterceptor = new ServiceConfigInterceptor(
         retryEnabled, builder.maxRetryAttempts, builder.maxHedgedAttempts);
     Channel channel = new RealChannel(nameResolver.getServiceAuthority());
@@ -1659,6 +1651,66 @@ final class ManagedChannelImpl extends ManagedChannel implements
     @Override
     public void execute(Runnable command) {
       delegate.execute(command);
+    }
+  }
+
+  @VisibleForTesting
+  static final class NrHelper extends NameResolver.Helper {
+
+    private final int defaultPort;
+    private final ProxyDetector proxyDetector;
+    private final SynchronizationContext syncCtx;
+    private final boolean retryEnabled;
+    private final int maxRetryAttemptsLimit;
+    private final int maxHedgedAttemptsLimit;
+
+    NrHelper(
+        int defaultPort,
+        ProxyDetector proxyDetector,
+        SynchronizationContext syncCtx,
+        boolean retryEnabled,
+        int maxRetryAttemptsLimit,
+        int maxHedgedAttemptsLimit) {
+      this.defaultPort = defaultPort;
+      this.proxyDetector = checkNotNull(proxyDetector, "proxyDetector");
+      this.syncCtx = checkNotNull(syncCtx, "syncCtx");
+      this.retryEnabled = retryEnabled;
+      this.maxRetryAttemptsLimit = maxRetryAttemptsLimit;
+      this.maxHedgedAttemptsLimit = maxHedgedAttemptsLimit;
+    }
+
+    @Override
+    public int getDefaultPort() {
+      return defaultPort;
+    }
+
+    @Override
+    public ProxyDetector getProxyDetector() {
+      return proxyDetector;
+    }
+
+    @Override
+    public SynchronizationContext getSynchronizationContext() {
+      return syncCtx;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public ConfigOrError<ManagedChannelServiceConfig> parseServiceConfig(
+        Map<String, ?> rawServiceConfig) {
+      // TODO(carl-mastrangelo): Change the type from Map<String, Object> to Map<String, ?>
+      Map<String, Object> cfg = (Map<String, Object>) rawServiceConfig;
+      try {
+        return ConfigOrError.fromConfig(
+            ManagedChannelServiceConfig.fromServiceConfig(
+                cfg,
+                retryEnabled,
+                maxRetryAttemptsLimit,
+                maxHedgedAttemptsLimit));
+      } catch (RuntimeException e) {
+        return ConfigOrError.fromError(
+            Status.UNKNOWN.withDescription("failed to parse service config").withCause(e));
+      }
     }
   }
 }

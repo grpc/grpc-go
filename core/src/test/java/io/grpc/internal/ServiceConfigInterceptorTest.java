@@ -27,7 +27,7 @@ import io.grpc.Channel;
 import io.grpc.Deadline;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.internal.ServiceConfigInterceptor.MethodInfo;
+import io.grpc.internal.ManagedChannelServiceConfig.MethodInfo;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -345,13 +345,13 @@ public class ServiceConfigInterceptorTest {
 
     interceptor.handleUpdate(serviceConfig1);
 
-    assertThat(interceptor.serviceMap.get()).isNotEmpty();
-    assertThat(interceptor.serviceMethodMap.get()).isEmpty();
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMap()).isNotEmpty();
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMethodMap()).isEmpty();
 
     interceptor.handleUpdate(serviceConfig2);
 
-    assertThat(interceptor.serviceMap.get()).isEmpty();
-    assertThat(interceptor.serviceMethodMap.get()).isNotEmpty();
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMap()).isEmpty();
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMethodMap()).isNotEmpty();
   }
 
   @Test
@@ -363,11 +363,11 @@ public class ServiceConfigInterceptorTest {
 
     interceptor.handleUpdate(serviceConfig);
 
-    assertThat(interceptor.serviceMethodMap.get())
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMethodMap())
         .containsExactly(
             methodDescriptor.getFullMethodName(),
             new MethodInfo(methodConfig, false, 1, 1));
-    assertThat(interceptor.serviceMap.get()).containsExactly(
+    assertThat(interceptor.managedChannelServiceConfig.get().getServiceMap()).containsExactly(
         "service2", new MethodInfo(methodConfig, false, 1, 1));
   }
 

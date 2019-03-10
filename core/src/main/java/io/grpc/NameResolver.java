@@ -16,11 +16,16 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.base.MoreObjects;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -241,6 +246,95 @@ public abstract class NameResolver {
      */
     public SynchronizationContext getSynchronizationContext() {
       throw new UnsupportedOperationException("Not implemented");
+    }
+
+    /**
+     * Parses and validates the service configuration chosen by the name resolver.  This will
+     * return a {@link ConfigOrError} which contains either the successfully parsed config, or the
+     * {@link Status} representing the failure to parse.  Implementations are expected to not throw
+     * exceptions but return a Status representing the failure.
+     *
+     * @param rawServiceConfig The {@link Map} representation of the service config
+     * @return a tuple of the fully parsed and validated channel configuration, else the Status.
+     * @since 1.20.0
+     */
+    public ConfigOrError<?> parseServiceConfig(Map<String, ?> rawServiceConfig) {
+      return ConfigOrError.fromError(
+          Status.INTERNAL.withDescription("service config parsing not supported"));
+    }
+
+    /**
+     * Represents either a successfully parsed service config, containing all necessary parts to be
+     * later applied by the channel, or a Status containing the error encountered while parsing.
+     *
+     * @param <T> The message type of the config.
+     * @since 1.20.0
+     */
+    public static final class ConfigOrError<T> {
+
+      /**
+       * Returns a {@link ConfigOrError} for the successfully parsed config.
+       *
+       * @since 1.20.0
+       */
+      public static <T> ConfigOrError<T> fromConfig(T config) {
+        return new ConfigOrError<>(config);
+      }
+
+      /**
+       * Returns a {@link ConfigOrError} for the failure to parse the config.
+       *
+       * @param status a non-OK status
+       *
+       * @since 1.20.0
+       */
+      public static <T> ConfigOrError<T> fromError(Status status) {
+        return new ConfigOrError<>(status);
+      }
+
+      private final Status status;
+      private final T config;
+
+      private ConfigOrError(T config) {
+        this.config = checkNotNull(config, "config");
+        this.status = null;
+      }
+
+      private ConfigOrError(Status status) {
+        this.config = null;
+        this.status = checkNotNull(status, "status");
+        checkArgument(!status.isOk(), "cannot use OK status: %s", status);
+      }
+
+      /**
+       * @since 1.20.0
+       */
+      @Nullable
+      public T getConfig() {
+        return config;
+      }
+
+      /**
+       * @since 1.20.0
+       */
+      @Nullable
+      public Status getError() {
+        return status;
+      }
+
+      @Override
+      public String toString() {
+        if (config != null) {
+          return MoreObjects.toStringHelper(this)
+              .add("config", config)
+              .toString();
+        } else {
+          assert status != null;
+          return MoreObjects.toStringHelper(this)
+              .add("error", status)
+              .toString();
+        }
+      }
     }
   }
 }
