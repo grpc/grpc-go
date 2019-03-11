@@ -8,7 +8,7 @@ publishing {
 
             pom.withXml {
                 // Generate bom using subprojects
-                def internalProjects = [project.name, 'grpc-xds', 'grpc-gae-interop-testing-jdk8']
+                def internalProjects = [project.name, 'grpc-xds', 'grpc-gae-interop-testing-jdk8', 'grpc-compiler']
 
                 def dependencyManagement = asNode().appendNode('dependencyManagement')
                 def dependencies = dependencyManagement.appendNode('dependencies')
@@ -21,6 +21,11 @@ publishing {
                     dependencyNode.appendNode('artifactId', subproject.name)
                     dependencyNode.appendNode('version', subproject.version)
                 }
+		// add protoc gen (produced by grpc-compiler with different artifact name)
+		def dependencyNode = dependencies.appendNode('dependency')
+	        dependencyNode.appendNode('groupId', project.group)
+	        dependencyNode.appendNode('artifactId', 'protoc-gen-grpc-java')
+	        dependencyNode.appendNode('version', project.version)
 	    }
         }
     }
