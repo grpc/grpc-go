@@ -264,37 +264,20 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 		return
 	}
 
-	// Keep pickfirst logic in a separate if statement, even though it means
-	// some duplicate code.
+	var readySCs []balancer.SubConn
 	if lb.usePickFirst {
-		switch lb.state {
-		case connectivity.Ready, connectivity.Idle:
-			readySCs := make([]balancer.SubConn, 0, 1)
+		if lb.state == connectivity.Ready || lb.state == connectivity.Idle {
 			for _, sc := range lb.subConns {
 				readySCs = append(readySCs, sc)
 				break
 			}
-			if len(lb.fullServerList) <= 0 {
-				lb.picker = &rrPicker{subConns: readySCs}
-			} else {
-				// TODO: TODOTODOTODO Rebase. Not reset drop. After the reset-drop PR.
-				lb.picker = &lbPicker{
-					serverList: lb.fullServerList,
-					subConns:   readySCs,
-					stats:      lb.clientStats,
-				}
-			}
-		case connectivity.Connecting:
-			lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
 		}
-		return
-	}
-
-	var readySCs []balancer.SubConn
-	for _, a := range lb.backendAddrs {
-		if sc, ok := lb.subConns[a]; ok {
-			if st, ok := lb.scStates[sc]; ok && st == connectivity.Ready {
-				readySCs = append(readySCs, sc)
+	} else {
+		for _, a := range lb.backendAddrs {
+			if sc, ok := lb.subConns[a]; ok {
+				if st, ok := lb.scStates[sc]; ok && st == connectivity.Ready {
+					readySCs = append(readySCs, sc)
+				}
 			}
 		}
 	}
