@@ -7159,7 +7159,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	})
 }
 
-// Testing erroneous ReponseHeader or Trailers-only (delivered in the first HEADERS frame).
+// Testing erroneous ResponseHeader or Trailers-only (delivered in the first HEADERS frame).
 func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 	for _, test := range []struct {
 		header  []string
