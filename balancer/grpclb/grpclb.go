@@ -244,7 +244,7 @@ type lbBalancer struct {
 //  - always returns ErrTransientFailure if the balancer is in TransientFailure,
 //  - does two layer roundrobin pick otherwise.
 // Caller must hold lb.mu.
-func (lb *lbBalancer) regeneratePicker() {
+func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 	if lb.state == connectivity.TransientFailure {
 		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
@@ -266,14 +266,19 @@ func (lb *lbBalancer) regeneratePicker() {
 		return
 	}
 	if len(lb.fullServerList) <= 0 {
-		lb.picker = &rrPicker{subConns: readySCs}
+		lb.picker = newRRPicker(readySCs)
 		return
 	}
-	lb.picker = &lbPicker{
-		serverList: lb.fullServerList,
-		subConns:   readySCs,
-		stats:      lb.clientStats,
+	if resetDrop {
+		lb.picker = newLBPicker(lb.fullServerList, readySCs, lb.clientStats)
+		return
 	}
+	prevLBPicker, ok := lb.picker.(*lbPicker)
+	if !ok {
+		lb.picker = newLBPicker(lb.fullServerList, readySCs, lb.clientStats)
+		return
+	}
+	prevLBPicker.updateReadySCs(readySCs)
 }
 
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -306,7 +311,7 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
 	if (oldS == connectivity.Ready) != (s == connectivity.Ready) ||
 		(lb.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		lb.regeneratePicker()
+		lb.regeneratePicker(false)
 	}
 
 	lb.cc.UpdateBalancerState(lb.state, lb.picker)

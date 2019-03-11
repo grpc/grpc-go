@@ -291,11 +291,12 @@ func stopBackends(servers []*grpc.Server) {
 }
 
 type testServers struct {
-	lbAddr  string
-	ls      *remoteBalancer
-	lb      *grpc.Server
-	beIPs   []net.IP
-	bePorts []int
+	lbAddr   string
+	ls       *remoteBalancer
+	lb       *grpc.Server
+	backends []*grpc.Server
+	beIPs    []net.IP
+	bePorts  []int
 }
 
 func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), err error) {
@@ -337,11 +338,12 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 	}()
 
 	tss = &testServers{
-		lbAddr:  fakeName + ":" + strconv.Itoa(lbLis.Addr().(*net.TCPAddr).Port),
-		ls:      ls,
-		lb:      lb,
-		beIPs:   beIPs,
-		bePorts: bePorts,
+		lbAddr:   net.JoinHostPort(fakeName, strconv.Itoa(lbLis.Addr().(*net.TCPAddr).Port)),
+		ls:       ls,
+		lb:       lb,
+		backends: backends,
+		beIPs:    beIPs,
+		bePorts:  bePorts,
 	}
 	cleanup = func() {
 		defer stopBackends(backends)
@@ -477,7 +479,7 @@ func TestDropRequest(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 
-	tss, cleanup, err := newLoadBalancer(1)
+	tss, cleanup, err := newLoadBalancer(2)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -486,6 +488,11 @@ func TestDropRequest(t *testing.T) {
 		Servers: []*lbpb.Server{{
 			IpAddress:        tss.beIPs[0],
 			Port:             int32(tss.bePorts[0]),
+			LoadBalanceToken: lbToken,
+			Drop:             false,
+		}, {
+			IpAddress:        tss.beIPs[1],
+			Port:             int32(tss.bePorts[1]),
 			LoadBalanceToken: lbToken,
 			Drop:             false,
 		}, {
@@ -512,8 +519,7 @@ func TestDropRequest(t *testing.T) {
 	}})
 
 	// Wait for the 1st, non-fail-fast RPC to succeed. This ensures both server
-	// connections are made, because the first one has DropForLoadBalancing set
-	// to true.
+	// connections are made, because the first one has Drop set to true.
 	var i int
 	for i = 0; i < 1000; i++ {
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err == nil {
@@ -531,16 +537,48 @@ func TestDropRequest(t *testing.T) {
 	}
 	for _, failfast := range []bool{true, false} {
 		for i := 0; i < 3; i++ {
-			// Even RPCs should fail, because the 2st backend has
-			// DropForLoadBalancing set to true.
-			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); status.Code(err) != codes.Unavailable {
-				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
-			}
-			// Odd RPCs should succeed since they choose the non-drop-request
-			// backend according to the round robin policy.
+			// 1st RPCs pick the second item in server list. They should succeed
+			// since they choose the non-drop-request backend according to the
+			// round robin policy.
 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
 				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
+			// 2st RPCs should fail, because they pick last item in server list,
+			// with Drop set to true.
+			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); status.Code(err) != codes.Unavailable {
+				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
+			}
+			// 3rd RPCs pick the first item in server list. They should succeed
+			// since they choose the non-drop-request backend according to the
+			// round robin policy.
+			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(!failfast)); err != nil {
+				t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			}
+		}
+	}
+	tss.backends[0].Stop()
+	// This last pick was backend 0. Closing backend 0 doesn't reset drop index
+	// (for level 1 picking), so the following picks will be (backend1, drop,
+	// backend1), instead of (backend, backend, drop) if drop index was reset.
+	time.Sleep(time.Second)
+	for i := 0; i < 3; i++ {
+		var p peer.Peer
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
+			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
+		}
+
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.Unavailable {
+			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
+		}
+
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
+			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
 		}
 	}
 }
