@@ -4,6 +4,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:jvm.bzl", "jvm_maven_import_external")
 
 def grpc_java_repositories(
+        omit_bazel_skylib = False,
         omit_com_google_android_annotations = False,
         omit_com_google_api_grpc_google_common_protos = False,
         omit_com_google_auth_google_auth_library_credentials = False,
@@ -37,9 +38,12 @@ def grpc_java_repositories(
         omit_io_opencensus_grpc_metrics = False,
         omit_javax_annotation = False,
         omit_junit_junit = False,
+        omit_net_zlib = False,
         omit_org_apache_commons_lang3 = False,
         omit_org_codehaus_mojo_animal_sniffer_annotations = False):
     """Imports dependencies for grpc-java."""
+    if not omit_bazel_skylib:
+        bazel_skylib()
     if not omit_com_google_android_annotations:
         com_google_android_annotations()
     if not omit_com_google_api_grpc_google_common_protos:
@@ -106,6 +110,8 @@ def grpc_java_repositories(
         javax_annotation()
     if not omit_junit_junit:
         junit_junit()
+    if not omit_net_zlib:
+        net_zlib()
     if not omit_org_apache_commons_lang3:
         org_apache_commons_lang3()
     if not omit_org_codehaus_mojo_animal_sniffer_annotations:
@@ -118,6 +124,22 @@ def grpc_java_repositories(
     native.bind(
         name = "gson",
         actual = "@com_google_code_gson_gson//jar",
+    )
+    native.bind(
+        name = "zlib",
+        actual = "@net_zlib//:zlib",
+    )
+    native.bind(
+        name = "error_prone_annotations",
+        actual = "@com_google_errorprone_error_prone_annotations//jar",
+    )
+
+def bazel_skylib():
+    http_archive(
+        name = "bazel_skylib",
+        sha256 = "bce240a0749dfc52fab20dce400b4d5cf7c28b239d64f8fd1762b3c9470121d8",
+        strip_prefix = "bazel-skylib-0.7.0",
+        urls = ["https://github.com/bazelbuild/bazel-skylib/archive/0.7.0.zip"],
     )
 
 def com_google_android_annotations():
@@ -177,9 +199,9 @@ def com_google_code_gson():
 def com_google_errorprone_error_prone_annotations():
     jvm_maven_import_external(
         name = "com_google_errorprone_error_prone_annotations",
-        artifact = "com.google.errorprone:error_prone_annotations:2.2.0",
+        artifact = "com.google.errorprone:error_prone_annotations:2.3.2",
         server_urls = ["http://central.maven.org/maven2"],
-        artifact_sha256 = "6ebd22ca1b9d8ec06d41de8d64e0596981d9607b42035f9ed374f9de271a481a",
+        artifact_sha256 = "357cd6cfb067c969226c442451502aee13800a24e950fdfde77bcdb4565a668d",
         licenses = ["notice"],  # Apache 2.0
     )
 
@@ -217,9 +239,10 @@ def com_google_protobuf():
     # This statement defines the @com_google_protobuf repo.
     http_archive(
         name = "com_google_protobuf",
-        sha256 = "d6618d117698132dadf0f830b762315807dc424ba36ab9183f1f436008a2fdb6",
-        strip_prefix = "protobuf-3.6.1.2",
-        urls = ["https://github.com/google/protobuf/archive/v3.6.1.2.zip"],
+        sha256 = "8955eb28f9c6db71d013bfe8255e485837d473db8a5786f6a017e40934f304a7",
+        strip_prefix = "protobuf-4b9a5df4e8ba2066794da56598ad2905dc42051e",
+        # This is v3.7.0 with a Bazel compilation failure fix
+        urls = ["https://github.com/google/protobuf/archive/4b9a5df4e8ba2066794da56598ad2905dc42051e.zip"],
     )
 
 def com_google_protobuf_javalite():
@@ -410,6 +433,15 @@ def junit_junit():
         server_urls = ["http://central.maven.org/maven2"],
         artifact_sha256 = "59721f0805e223d84b90677887d9ff567dc534d7c502ca903c0c2b17f05c116a",
         licenses = ["notice"],  # EPL 1.0
+    )
+
+def net_zlib():
+    http_archive(
+        name = "net_zlib",
+        build_file = "@com_google_protobuf//:third_party/zlib.BUILD",
+        sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
+        strip_prefix = "zlib-1.2.11",
+        urls = ["https://zlib.net/zlib-1.2.11.tar.gz"],
     )
 
 def org_apache_commons_lang3():
