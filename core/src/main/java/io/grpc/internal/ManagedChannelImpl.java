@@ -234,8 +234,10 @@ final class ManagedChannelImpl extends ManagedChannel implements
   private final ChannelTracer channelTracer;
   private final ChannelLogger channelLogger;
   private final InternalChannelz channelz;
+  // Must be mutated and read from syncContext
   @CheckForNull
   private Boolean haveBackends; // a flag for doing channel tracing when flipped
+  // Must be mutated and read from syncContext
   @Nullable
   private Map<String, ?> lastServiceConfig; // used for channel tracing when value changed
 
@@ -1277,22 +1279,22 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     @Override
     public void onAddresses(final List<EquivalentAddressGroup> servers, final Attributes config) {
-      channelLogger.log(
-          ChannelLogLevel.DEBUG, "Resolved address: {0}, config={1}", servers, config);
-
-      if (haveBackends == null || !haveBackends) {
-        channelLogger.log(ChannelLogLevel.INFO, "Address resolved: {0}", servers);
-        haveBackends = true;
-      }
-      final Map<String, ?> serviceConfig = config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
-      if (serviceConfig != null && !serviceConfig.equals(lastServiceConfig)) {
-        channelLogger.log(ChannelLogLevel.INFO, "Service config changed");
-        lastServiceConfig = serviceConfig;
-      }
-
       final class NamesResolved implements Runnable {
         @Override
         public void run() {
+          channelLogger.log(
+              ChannelLogLevel.DEBUG, "Resolved address: {0}, config={1}", servers, config);
+
+          if (haveBackends == null || !haveBackends) {
+            channelLogger.log(ChannelLogLevel.INFO, "Address resolved: {0}", servers);
+            haveBackends = true;
+          }
+          final Map<String, ?> serviceConfig =
+              config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+          if (serviceConfig != null && !serviceConfig.equals(lastServiceConfig)) {
+            channelLogger.log(ChannelLogLevel.INFO, "Service config changed");
+            lastServiceConfig = serviceConfig;
+          }
           // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
           if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
             return;
@@ -1315,7 +1317,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
           }
 
           if (servers.isEmpty() && !helper.lb.canHandleEmptyAddressListFromNameResolution()) {
-            onError(Status.UNAVAILABLE.withDescription(
+            handleErrorInSyncContext(Status.UNAVAILABLE.withDescription(
                     "Name resolver " + resolver + " returned an empty list"));
           } else {
             helper.lb.handleResolvedAddressGroups(servers, config);
@@ -1329,42 +1331,46 @@ final class ManagedChannelImpl extends ManagedChannel implements
     @Override
     public void onError(final Status error) {
       checkArgument(!error.isOk(), "the error status must not be OK");
+      final class NameResolverErrorHandler implements Runnable {
+        @Override
+        public void run() {
+          handleErrorInSyncContext(error);
+        }
+      }
+
+      syncContext.execute(new NameResolverErrorHandler());
+    }
+
+    private void handleErrorInSyncContext(Status error) {
       logger.log(Level.WARNING, "[{0}] Failed to resolve name. status={1}",
           new Object[] {getLogId(), error});
       if (haveBackends == null || haveBackends) {
         channelLogger.log(ChannelLogLevel.WARNING, "Failed to resolve name: {0}", error);
         haveBackends = false;
       }
-      final class NameResolverErrorHandler implements Runnable {
-        @Override
-        public void run() {
-          // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
-          if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
-            return;
-          }
-          helper.lb.handleNameResolutionError(error);
-          if (scheduledNameResolverRefresh != null && scheduledNameResolverRefresh.isPending()) {
-            // The name resolver may invoke onError multiple times, but we only want to
-            // schedule one backoff attempt
-            // TODO(ericgribkoff) Update contract of NameResolver.Listener or decide if we
-            // want to reset the backoff interval upon repeated onError() calls
-            return;
-          }
-          if (nameResolverBackoffPolicy == null) {
-            nameResolverBackoffPolicy = backoffPolicyProvider.get();
-          }
-          long delayNanos = nameResolverBackoffPolicy.nextBackoffNanos();
-          channelLogger.log(
-                ChannelLogLevel.DEBUG,
-                "Scheduling DNS resolution backoff for {0} ns", delayNanos);
-          scheduledNameResolverRefresh =
-              syncContext.schedule(
-                  new DelayedNameResolverRefresh(), delayNanos, TimeUnit.NANOSECONDS,
-                  transportFactory .getScheduledExecutorService());
-        }
+      // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+      if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
+        return;
       }
-
-      syncContext.execute(new NameResolverErrorHandler());
+      helper.lb.handleNameResolutionError(error);
+      if (scheduledNameResolverRefresh != null && scheduledNameResolverRefresh.isPending()) {
+        // The name resolver may invoke onError multiple times, but we only want to
+        // schedule one backoff attempt
+        // TODO(ericgribkoff) Update contract of NameResolver.Listener or decide if we
+        // want to reset the backoff interval upon repeated onError() calls
+        return;
+      }
+      if (nameResolverBackoffPolicy == null) {
+        nameResolverBackoffPolicy = backoffPolicyProvider.get();
+      }
+      long delayNanos = nameResolverBackoffPolicy.nextBackoffNanos();
+      channelLogger.log(
+          ChannelLogLevel.DEBUG,
+          "Scheduling DNS resolution backoff for {0} ns", delayNanos);
+      scheduledNameResolverRefresh =
+          syncContext.schedule(
+              new DelayedNameResolverRefresh(), delayNanos, TimeUnit.NANOSECONDS,
+              transportFactory .getScheduledExecutorService());
     }
   }
 
