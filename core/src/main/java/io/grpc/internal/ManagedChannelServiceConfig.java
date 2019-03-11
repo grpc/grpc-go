@@ -31,16 +31,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Logger;
 
 /**
  * {@link ManagedChannelServiceConfig} is a fully parsed and validated representation of service
  * configuration data.
  */
 final class ManagedChannelServiceConfig {
-
-  private static final Logger logger =
-      Logger.getLogger(ManagedChannelServiceConfig.class.getName());
 
   private final Map<String, MethodInfo> serviceMethodMap;
   private final Map<String, MethodInfo> serviceMap;
