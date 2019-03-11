@@ -1391,7 +1391,6 @@ public class GrpclbLoadBalancerTest {
 
   @Test
   public void grpclbFallback_noBalancerAddress() {
-    long loadReportIntervalMillis = 1983;
     InOrder inOrder = inOrder(helper, subchannelPool);
 
     // Create a resolution list with just backend addresses

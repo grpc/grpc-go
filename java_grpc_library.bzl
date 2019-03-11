@@ -1,3 +1,5 @@
+"""Build rule for java_grpc_library."""
+
 load("@bazel_tools//tools/jdk:toolchain_utils.bzl", "find_java_runtime_toolchain", "find_java_toolchain")
 
 # "repository" here is for Bazel builds that span multiple WORKSPACES.

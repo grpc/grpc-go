@@ -307,6 +307,8 @@ public abstract class NameResolver {
       }
 
       /**
+       * Returns config if exists, otherwise null.
+       *
        * @since 1.20.0
        */
       @Nullable
@@ -315,6 +317,8 @@ public abstract class NameResolver {
       }
 
       /**
+       * Returns error status if exists, otherwise null.
+       *
        * @since 1.20.0
        */
       @Nullable
