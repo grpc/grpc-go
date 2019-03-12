@@ -79,9 +79,9 @@ var (
 		TypeUrl:       edsType,
 	}
 	testCluster = &xdspb.Cluster{
-		Name:     testServiceName,
-		Type:     xdspb.Cluster_EDS,
-		LbPolicy: xdspb.Cluster_ROUND_ROBIN,
+		Name:                 testServiceName,
+		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
+		LbPolicy:             xdspb.Cluster_ROUND_ROBIN,
 	}
 	marshaledCluster, _ = proto.Marshal(testCluster)
 	testCDSResp         = &xdspb.DiscoveryResponse{
@@ -231,7 +231,7 @@ func (ttd *testTrafficDirector) StreamAggregatedResources(s xdsdiscoverypb.Aggre
 	}
 }
 
-func (ttd *testTrafficDirector) IncrementalAggregatedResources(xdsdiscoverypb.AggregatedDiscoveryService_IncrementalAggregatedResourcesServer) error {
+func (ttd *testTrafficDirector) DeltaAggregatedResources(xdsdiscoverypb.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
 	return status.Error(codes.Unimplemented, "")
 }
 
