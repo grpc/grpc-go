@@ -20,7 +20,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A Channel-specific logger provided by GRPC library to {@link LoadBalancer} implementations.
- * Information logged here goes to <string>Channelz</strong>, and to the Java logger of this class
+ * Information logged here goes to <strong>Channelz</strong>, and to the Java logger of this class
  * as well.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5029")
