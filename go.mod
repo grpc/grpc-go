@@ -4,7 +4,7 @@ require (
 	cloud.google.com/go v0.26.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/client9/misspell v0.3.4
-	github.com/envoyproxy/go-control-plane v0.6.7
+	github.com/envoyproxy/go-control-plane v0.6.9
 	github.com/gogo/googleapis v1.1.0 // indirect
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
