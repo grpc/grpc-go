@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,10 +104,10 @@ type picker struct {
 }
 
 func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
-	p.bal.pickOptions = append(p.bal.pickOptions, opts)
 	if p.err != nil {
 		return nil, nil, p.err
 	}
+	p.bal.pickOptions = append(p.bal.pickOptions, opts)
 	return p.sc, func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }, nil
 }
 
@@ -183,5 +184,26 @@ func testPickAndDone(t *testing.T, e env) {
 	}
 	if len(b.doneInfo) < 2 || !reflect.DeepEqual(b.doneInfo[1].Trailer, testTrailerMetadata) {
 		t.Fatalf("b.doneInfo = %v; want b.doneInfo[1].Trailer = %v", b.doneInfo, testTrailerMetadata)
+	}
+	if len(b.pickOptions) != len(b.doneInfo) {
+		t.Fatalf("Got %d picks, but %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
+	}
+	// To test done() is always called, even if it's returned with a non-Ready
+	// SubConn.
+	//
+	// Stop server and at the same time send RPCs. There are chances that picker
+	// is not updated in time, causing a non-Ready SubConn to be returned.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for i := 0; i < 20; i++ {
+			tc.UnaryCall(ctx, &testpb.SimpleRequest{})
+		}
+		wg.Done()
+	}()
+	te.srv.Stop()
+	wg.Wait()
+	if len(b.pickOptions) != len(b.doneInfo) {
+		t.Fatalf("Got %d picks, %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
 	}
 }

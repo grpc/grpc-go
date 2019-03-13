@@ -165,6 +165,14 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 			}
 			return t, done, nil
 		}
+		if done != nil {
+			done(balancer.DoneInfo{
+				Err:           nil,
+				Trailer:       nil,
+				BytesSent:     false,
+				BytesReceived: false,
+			})
+		}
 		grpclog.Infof("blockingPicker: the picked transport is not ready, loop back to repick")
 		// If ok == false, ac.state is not READY.
 		// A valid picker always returns READY subConn. This means the state of ac
