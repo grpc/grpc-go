@@ -55,13 +55,14 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder      resolver.Builder
-	reqHandshake         envconfig.RequireHandshakeSetting
-	channelzParentID     int64
-	disableServiceConfig bool
-	disableRetry         bool
-	disableHealthCheck   bool
-	healthCheckFunc      internal.HealthChecker
+	resolverBuilder          resolver.Builder
+	reqHandshake             envconfig.RequireHandshakeSetting
+	channelzParentID         int64
+	disableServiceConfig     bool
+	disableRetry             bool
+	disableHealthCheck       bool
+	healthCheckFunc          internal.HealthChecker
+	getMinConnectTimeoutFunc func() time.Duration
 }
 
 // DialOption configures how we set up the connection.
@@ -470,7 +471,8 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 	})
 }
 
-// WithDisableHealthCheck disables the LB channel health checking for all SubConns of this ClientConn.
+// WithDisableHealthCheck disables the LB channel health checking for all
+// SubConns of this ClientConn.
 //
 // This API is EXPERIMENTAL.
 func WithDisableHealthCheck() DialOption {
@@ -479,8 +481,8 @@ func WithDisableHealthCheck() DialOption {
 	})
 }
 
-// withHealthCheckFunc replaces the default health check function with the provided one. It makes
-// tests easier to change the health check function.
+// withHealthCheckFunc replaces the default health check function with the
+// provided one. It makes tests easier to change the health check function.
 //
 // For testing purpose only.
 func withHealthCheckFunc(f internal.HealthChecker) DialOption {
@@ -499,4 +501,15 @@ func defaultDialOptions() dialOptions {
 			ReadBufferSize:  defaultReadBufSize,
 		},
 	}
+}
+
+// withGetMinConnectDeadline specifies the function that clientconn uses to
+// get minConnectDeadline. This can be used to make connection attempts happen
+// faster/slower.
+//
+// For testing purpose only.
+func withGetMinConnectDeadline(f func() time.Duration) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.getMinConnectTimeoutFunc = f
+	})
 }
