@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 The gRPC Authors
+ * Copyright 2019 The gRPC Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package io.grpc.alts;
 
-import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallCredentials;
 import io.grpc.ForwardingChannelBuilder;
@@ -37,44 +37,39 @@ import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.InternalNettyChannelBuilder;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
-import java.io.IOException;
-import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 
 /**
- * Google default version of {@code ManagedChannelBuilder}. This class sets up a secure channel
+ * {@code ManagedChannelBuilder} for Google Compute Engine. This class sets up a secure channel
  * using ALTS if applicable and using TLS as fallback.
  */
-public final class GoogleDefaultChannelBuilder
+public final class ComputeEngineChannelBuilder
     extends ForwardingChannelBuilder<GoogleDefaultChannelBuilder> {
 
   private final NettyChannelBuilder delegate;
   private GoogleDefaultProtocolNegotiator negotiatorForTest;
 
-  private GoogleDefaultChannelBuilder(String target) {
+  private ComputeEngineChannelBuilder(String target) {
     delegate = NettyChannelBuilder.forTarget(target);
     InternalNettyChannelBuilder.setProtocolNegotiatorFactory(
         delegate(), new ProtocolNegotiatorFactory());
-    @Nullable CallCredentials credentials = null;
+    CallCredentials credentials = MoreCallCredentials.from(ComputeEngineCredentials.create());
     Status status = Status.OK;
-    try {
-      credentials = MoreCallCredentials.from(GoogleCredentials.getApplicationDefault());
-    } catch (IOException e) {
+    if (!CheckGcpEnvironment.isOnGcp()) {
       status =
-          Status.UNAUTHENTICATED
-              .withDescription("Failed to get Google default credentials")
-              .withCause(e);
+          Status.INTERNAL.withDescription(
+              "Compute Engine Credentials can only be used on Google Cloud Platform");
     }
     delegate().intercept(new CallCredentialsInterceptor(credentials, status));
   }
 
   /** "Overrides" the static method in {@link ManagedChannelBuilder}. */
-  public static final GoogleDefaultChannelBuilder forTarget(String target) {
-    return new GoogleDefaultChannelBuilder(target);
+  public static final ComputeEngineChannelBuilder forTarget(String target) {
+    return new ComputeEngineChannelBuilder(target);
   }
 
   /** "Overrides" the static method in {@link ManagedChannelBuilder}. */
-  public static GoogleDefaultChannelBuilder forAddress(String name, int port) {
+  public static ComputeEngineChannelBuilder forAddress(String name, int port) {
     return forTarget(GrpcUtil.authorityFromHostAndPort(name, port));
   }
 
