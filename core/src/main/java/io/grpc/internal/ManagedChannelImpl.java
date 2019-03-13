@@ -1295,10 +1295,6 @@ final class ManagedChannelImpl extends ManagedChannel implements
             channelLogger.log(ChannelLogLevel.INFO, "Service config changed");
             lastServiceConfig = serviceConfig;
           }
-          // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
-          if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
-            return;
-          }
 
           nameResolverBackoffPolicy = null;
 
@@ -1316,11 +1312,14 @@ final class ManagedChannelImpl extends ManagedChannel implements
             }
           }
 
-          if (servers.isEmpty() && !helper.lb.canHandleEmptyAddressListFromNameResolution()) {
-            handleErrorInSyncContext(Status.UNAVAILABLE.withDescription(
-                    "Name resolver " + resolver + " returned an empty list"));
-          } else {
-            helper.lb.handleResolvedAddressGroups(servers, config);
+          // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+          if (NameResolverListenerImpl.this.helper == ManagedChannelImpl.this.lbHelper) {
+            if (servers.isEmpty() && !helper.lb.canHandleEmptyAddressListFromNameResolution()) {
+              handleErrorInSyncContext(Status.UNAVAILABLE.withDescription(
+                  "Name resolver " + resolver + " returned an empty list"));
+            } else {
+              helper.lb.handleResolvedAddressGroups(servers, config);
+            }
           }
         }
       }
