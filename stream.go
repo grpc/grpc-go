@@ -915,16 +915,16 @@ func (a *csAttempt) finish(err error) {
 		// Ending a stream with EOF indicates a success.
 		err = nil
 	}
+	var tr metadata.MD
 	if a.s != nil {
 		a.t.CloseStream(a.s, err)
+		tr = a.s.Trailer()
 	}
 
 	if a.done != nil {
 		br := false
-		var tr metadata.MD
 		if a.s != nil {
 			br = a.s.BytesReceived()
-			tr = a.s.Trailer()
 		}
 		a.done(balancer.DoneInfo{
 			Err:           err,
@@ -938,6 +938,7 @@ func (a *csAttempt) finish(err error) {
 			Client:    true,
 			BeginTime: a.cs.beginTime,
 			EndTime:   time.Now(),
+			Trailer:   tr,
 			Error:     err,
 		}
 		a.statsHandler.HandleRPC(a.cs.ctx, end)
