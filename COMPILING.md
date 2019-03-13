@@ -46,7 +46,7 @@ $ git clone https://github.com/google/protobuf.git
 $ cd protobuf
 $ git checkout v3.7.0
 $ ./autogen.sh
-$ ./configure
+$ ./configure --disable-shared
 $ make
 $ make check
 $ sudo make install
@@ -54,7 +54,7 @@ $ sudo make install
 
 If you are comfortable with C++ compilation and autotools, you can specify a
 ``--prefix`` for Protobuf and use ``-I`` in ``CXXFLAGS``, ``-L`` in
-``LDFLAGS``, ``LD_LIBRARY_PATH``, and ``PATH`` to reference it. The
+``LDFLAGS`` to reference it. The
 environment variables will be used when building grpc-java.
 
 Protobuf installs to ``/usr/local`` by default.
