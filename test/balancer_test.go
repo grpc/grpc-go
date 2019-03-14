@@ -21,7 +21,6 @@ package test
 import (
 	"context"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -193,16 +192,15 @@ func testPickAndDone(t *testing.T, e env) {
 	//
 	// Stop server and at the same time send RPCs. There are chances that picker
 	// is not updated in time, causing a non-Ready SubConn to be returned.
-	var wg sync.WaitGroup
-	wg.Add(1)
+	finished := make(chan struct{})
 	go func() {
 		for i := 0; i < 20; i++ {
 			tc.UnaryCall(ctx, &testpb.SimpleRequest{})
 		}
-		wg.Done()
+		close(finished)
 	}()
 	te.srv.Stop()
-	wg.Wait()
+	<-finished
 	if len(b.pickOptions) != len(b.doneInfo) {
 		t.Fatalf("Got %d picks, %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
 	}
