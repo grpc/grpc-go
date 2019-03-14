@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
 import io.grpc.ManagedChannel;
 import io.grpc.alts.AltsChannelBuilder;
+import io.grpc.alts.ComputeEngineChannelBuilder;
 import io.grpc.alts.GoogleDefaultChannelBuilder;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.GrpcUtil;
@@ -372,6 +373,10 @@ public class TestServiceClient {
       if (customCredentialsType != null
           && customCredentialsType.equals("google_default_credentials")) {
         return GoogleDefaultChannelBuilder.forAddress(serverHost, serverPort).build();
+      }
+      if (customCredentialsType != null
+          && customCredentialsType.equals("compute_engine_channel_creds")) {
+        return ComputeEngineChannelBuilder.forAddress(serverHost, serverPort).build();
       }
       if (useAlts) {
         return AltsChannelBuilder.forAddress(serverHost, serverPort).build();
