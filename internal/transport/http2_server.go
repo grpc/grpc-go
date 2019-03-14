@@ -840,7 +840,9 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		t.closeStream(s, true, http2.ErrCodeInternal, nil, false)
 		return ErrHeaderListSizeLimitViolation
 	}
-	t.closeStream(s, false, 0, trailingHeader, true)
+	// Send a RST_STREAM after the trailers if the client has not already half-closed.
+	rst := s.getState() == streamActive
+	t.closeStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
 	if t.stats != nil {
 		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 	}
