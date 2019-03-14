@@ -41,7 +41,9 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -138,6 +140,10 @@ public abstract class AbstractManagedChannelImplBuilder
 
   InternalChannelz channelz = InternalChannelz.instance();
   int maxTraceEvents;
+
+  @Nullable
+  Map<String, ?> defaultServiceConfig;
+  boolean lookUpServiceConfig = true;
 
   protected TransportTracer.Factory transportTracerFactory = TransportTracer.getDefaultFactory();
 
@@ -379,6 +385,78 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Override
+  public T defaultServiceConfig(@Nullable Map<String, ?> serviceConfig) {
+    // TODO(notcarl): use real parsing
+    defaultServiceConfig = checkMapEntryTypes(serviceConfig);
+    return thisT();
+  }
+
+  @Nullable
+  private static Map<String, ?> checkMapEntryTypes(@Nullable Map<?, ?> map) {
+    if (map == null) {
+      return null;
+    }
+    // Not using ImmutableMap.Builder because of extra guava dependency for Android.
+    Map<String, Object> parsedMap = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      checkArgument(
+          entry.getKey() instanceof String,
+          "The key of the entry '%s' is not of String type", entry);
+
+      String key = (String) entry.getKey();
+      Object value = entry.getValue();
+      if (value == null) {
+        parsedMap.put(key, null);
+      } else if (value instanceof Map) {
+        parsedMap.put(key, checkMapEntryTypes((Map<?, ?>) value));
+      } else if (value instanceof List) {
+        parsedMap.put(key, checkListEntryTypes((List<?>) value));
+      } else if (value instanceof String) {
+        parsedMap.put(key, value);
+      } else if (value instanceof Double) {
+        parsedMap.put(key, value);
+      } else if (value instanceof Boolean) {
+        parsedMap.put(key, value);
+      } else {
+        throw new IllegalArgumentException(
+            "The value of the map entry '" + entry + "' is of type '" + value.getClass()
+                + "', which is not supported");
+      }
+    }
+    return Collections.unmodifiableMap(parsedMap);
+  }
+
+  private static List<?> checkListEntryTypes(List<?> list) {
+    List<Object> parsedList = new ArrayList<>(list.size());
+    for (Object value : list) {
+      if (value == null) {
+        parsedList.add(null);
+      } else if (value instanceof Map) {
+        parsedList.add(checkMapEntryTypes((Map<?, ?>) value));
+      } else if (value instanceof List) {
+        parsedList.add(checkListEntryTypes((List<?>) value));
+      } else if (value instanceof String) {
+        parsedList.add(value);
+      } else if (value instanceof Double) {
+        parsedList.add(value);
+      } else if (value instanceof Boolean) {
+        parsedList.add(value);
+      } else {
+        throw new IllegalArgumentException(
+            "The entry '" + value + "' is of type '" + value.getClass()
+                + "', which is not supported");
+      }
+    }
+    return Collections.unmodifiableList(parsedList);
+  }
+
+  @Override
+  public T lookUpServiceConfig(boolean enable) {
+    this.lookUpServiceConfig = enable;
+    return thisT();
+  }
+
   /**
    * Disable or enable stats features. Enabled by default.
    *
@@ -490,7 +568,7 @@ public abstract class AbstractManagedChannelImplBuilder
   /**
    * Subclasses can override this method to provide a default port to {@link NameResolver} for use
    * in cases where the target string doesn't include a port.  The default implementation returns
-   * {@link GrpcUtil.DEFAULT_PORT_SSL}.
+   * {@link GrpcUtil#DEFAULT_PORT_SSL}.
    */
   protected int getDefaultPort() {
     return GrpcUtil.DEFAULT_PORT_SSL;

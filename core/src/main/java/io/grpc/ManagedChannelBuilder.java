@@ -18,8 +18,10 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 
 /**
  * A builder for {@link ManagedChannel} instances.
@@ -534,6 +536,60 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5113")
   public T proxyDetector(ProxyDetector proxyDetector) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Provides a service config to the channel. The channel will use the default service config when
+   * the name resolver provides no service config or if the channel disables lookup service config
+   * from name resolver (see {@link #lookUpServiceConfig(boolean)}). The argument
+   * {@code serviceConfig} is a nested map representing a Json object in the most natural way:
+   *
+   *        <table border="1">
+   *          <tr>
+   *            <td>Json entry</td><td>Java Type</td>
+   *          </tr>
+   *          <tr>
+   *            <td>object</td><td>{@link Map}</td>
+   *          </tr>
+   *          <tr>
+   *            <td>array</td><td>{@link List}</td>
+   *          </tr>
+   *          <tr>
+   *            <td>string</td><td>{@link String}</td>
+   *          </tr>
+   *          <tr>
+   *            <td>number</td><td>{@link Double}</td>
+   *          </tr>
+   *          <tr>
+   *            <td>boolean</td><td>{@link Boolean}</td>
+   *          </tr>
+   *          <tr>
+   *            <td>null</td><td>{@code null}</td>
+   *          </tr>
+   *        </table>
+   *
+   * <p>If null is passed, then there will be no default service config.
+   *
+   * @throws IllegalArgumentException When the given serviceConfig is invalid or the current version
+   *         of grpc library can not parse it gracefully. The state of the builder is unchanged if
+   *         an exception is thrown.
+   * @return this
+   * @since 1.20.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5189")
+  public T defaultServiceConfig(@Nullable Map<String, ?> serviceConfig) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Enables or disables service config look-up from the naming system. Enabled by default.
+   *
+   * @return this
+   * @since 1.20.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5189")
+  public T lookUpServiceConfig(boolean enable) {
     throw new UnsupportedOperationException();
   }
 

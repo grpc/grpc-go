@@ -18,8 +18,10 @@ package io.grpc;
 
 import com.google.common.base.MoreObjects;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 
 /**
  * A {@link ManagedChannelBuilder} that delegates all its builder method to another builder by
@@ -239,6 +241,18 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
   @Override
   public T proxyDetector(ProxyDetector proxyDetector) {
     delegate().proxyDetector(proxyDetector);
+    return thisT();
+  }
+
+  @Override
+  public T defaultServiceConfig(@Nullable Map<String, ?> serviceConfig) {
+    delegate().defaultServiceConfig(serviceConfig);
+    return thisT();
+  }
+
+  @Override
+  public T lookUpServiceConfig(boolean enable) {
+    delegate().lookUpServiceConfig(enable);
     return thisT();
   }
 

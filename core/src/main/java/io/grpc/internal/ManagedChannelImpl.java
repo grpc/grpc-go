@@ -237,9 +237,17 @@ final class ManagedChannelImpl extends ManagedChannel implements
   // Must be mutated and read from syncContext
   @CheckForNull
   private Boolean haveBackends; // a flag for doing channel tracing when flipped
-  // Must be mutated and read from syncContext
+  // Must be mutated and read from constructor or syncContext
+  // TODO(notcarl): check this value when error in service config resolution
   @Nullable
   private Map<String, ?> lastServiceConfig; // used for channel tracing when value changed
+  @Nullable
+  private final Map<String, ?> defaultServiceConfig;
+  // Must be mutated and read from constructor or syncContext
+  // See service config error handling spec for reference.
+  // TODO(notcarl): check this value when error in service config resolution
+  private boolean waitingForServiceConfig = true;
+  private final boolean lookUpServiceConfig;
 
   // One instance per channel.
   private final ChannelBufferMeter channelBufferUsed = new ChannelBufferMeter();
@@ -581,6 +589,9 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     serviceConfigInterceptor = new ServiceConfigInterceptor(
         retryEnabled, builder.maxRetryAttempts, builder.maxHedgedAttempts);
+    this.defaultServiceConfig = builder.defaultServiceConfig;
+    this.lastServiceConfig = defaultServiceConfig;
+    this.lookUpServiceConfig = builder.lookUpServiceConfig;
     Channel channel = new RealChannel(nameResolver.getServiceAuthority());
     channel = ClientInterceptors.intercept(channel, serviceConfigInterceptor);
     if (builder.binlog != null) {
@@ -621,6 +632,23 @@ final class ManagedChannelImpl extends ManagedChannel implements
     channelCallTracer = callTracerFactory.create();
     this.channelz = checkNotNull(builder.channelz);
     channelz.addRootChannel(this);
+
+    if (!lookUpServiceConfig) {
+      if (defaultServiceConfig != null) {
+        channelLogger.log(
+            ChannelLogLevel.INFO, "Service config look-up disabled, using default service config");
+      }
+      handleServiceConfigUpdate();
+    }
+  }
+
+  // May only be called in constructor or syncContext
+  private void handleServiceConfigUpdate() {
+    waitingForServiceConfig = false;
+    serviceConfigInterceptor.handleUpdate(lastServiceConfig);
+    if (retryEnabled) {
+      throttle = ServiceConfigUtil.getThrottlePolicy(lastServiceConfig);
+    }
   }
 
   @VisibleForTesting
@@ -1278,32 +1306,57 @@ final class ManagedChannelImpl extends ManagedChannel implements
     }
 
     @Override
-    public void onAddresses(final List<EquivalentAddressGroup> servers, final Attributes config) {
+    public void onAddresses(final List<EquivalentAddressGroup> servers, final Attributes attrs) {
       final class NamesResolved implements Runnable {
+
+        @SuppressWarnings("ReferenceEquality")
         @Override
         public void run() {
           channelLogger.log(
-              ChannelLogLevel.DEBUG, "Resolved address: {0}, config={1}", servers, config);
+              ChannelLogLevel.DEBUG, "Resolved address: {0}, config={1}", servers, attrs);
 
           if (haveBackends == null || !haveBackends) {
             channelLogger.log(ChannelLogLevel.INFO, "Address resolved: {0}", servers);
             haveBackends = true;
           }
-          final Map<String, ?> serviceConfig =
-              config.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
-          if (serviceConfig != null && !serviceConfig.equals(lastServiceConfig)) {
-            channelLogger.log(ChannelLogLevel.INFO, "Service config changed");
-            lastServiceConfig = serviceConfig;
-          }
 
           nameResolverBackoffPolicy = null;
 
-          if (serviceConfig != null) {
-            try {
-              serviceConfigInterceptor.handleUpdate(serviceConfig);
-              if (retryEnabled) {
-                throttle = ServiceConfigUtil.getThrottlePolicy(serviceConfig);
+          // Assuming no error in config resolution for now.
+          final Map<String, ?> serviceConfig =
+              attrs.get(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG);
+          Map<String, ?> effectiveServiceConfig;
+          if (!lookUpServiceConfig) {
+            if (serviceConfig != null) {
+              channelLogger.log(
+                  ChannelLogLevel.INFO,
+                  "Service config from name resolver discarded by channel settings");
+            }
+            effectiveServiceConfig = defaultServiceConfig;
+          } else {
+            // Try to use config if returned from name resolver
+            // Otherwise, try to use the default config if available
+            if (serviceConfig != null) {
+              effectiveServiceConfig = serviceConfig;
+            } else {
+              effectiveServiceConfig = defaultServiceConfig;
+              if (defaultServiceConfig != null) {
+                channelLogger.log(
+                    ChannelLogLevel.INFO,
+                    "Received no service config, using default service config");
               }
+            }
+
+            // FIXME(notcarl): reference equality is not right (although not harmful) right now.
+            //                 Name resolver should return the same config if txt record is the same
+            if (effectiveServiceConfig != lastServiceConfig) {
+              channelLogger.log(ChannelLogLevel.INFO,
+                  "Service config changed{0}", effectiveServiceConfig == null ? " to null" : "");
+              lastServiceConfig = effectiveServiceConfig;
+            }
+
+            try {
+              handleServiceConfigUpdate();
             } catch (RuntimeException re) {
               logger.log(
                   Level.WARNING,
@@ -1318,7 +1371,13 @@ final class ManagedChannelImpl extends ManagedChannel implements
               handleErrorInSyncContext(Status.UNAVAILABLE.withDescription(
                   "Name resolver " + resolver + " returned an empty list"));
             } else {
-              helper.lb.handleResolvedAddressGroups(servers, config);
+              Attributes effectiveAttrs = attrs;
+              if (effectiveServiceConfig != serviceConfig) {
+                effectiveAttrs = attrs.toBuilder()
+                    .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, effectiveServiceConfig)
+                    .build();
+              }
+              helper.lb.handleResolvedAddressGroups(servers, effectiveAttrs);
             }
           }
         }

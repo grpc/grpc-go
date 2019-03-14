@@ -102,6 +102,21 @@ public class ServiceConfigInterceptorTest {
   }
 
   @Test
+  public void handleNullConfig() {
+    JsonObj name = new JsonObj("service", "service");
+    JsonObj methodConfig = new JsonObj("name", new JsonList(name), "waitForReady", true);
+    JsonObj serviceConfig = new JsonObj("methodConfig", new JsonList(methodConfig));
+
+    interceptor.handleUpdate(serviceConfig);
+    interceptor.handleUpdate(null);
+
+    interceptor.interceptCall(methodDescriptor, CallOptions.DEFAULT.withoutWaitForReady(), channel);
+
+    verify(channel).newCall(eq(methodDescriptor), callOptionsCap.capture());
+    assertThat(callOptionsCap.getValue().isWaitForReady()).isFalse();
+  }
+
+  @Test
   public void handleUpdateNotCalledBeforeInterceptCall() {
     interceptor.interceptCall(methodDescriptor, CallOptions.DEFAULT.withoutWaitForReady(), channel);
 

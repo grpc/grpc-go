@@ -26,11 +26,12 @@ import io.grpc.ClientInterceptor;
 import io.grpc.Deadline;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.ManagedChannelServiceConfig.MethodInfo;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.CheckForNull;
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 /**
  * Modifies RPCs in conformance with a Service Config.
@@ -47,7 +48,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   private final int maxHedgedAttemptsLimit;
 
   // Setting this to true and observing this equal to true are run in different threads.
-  private volatile boolean nameResolveComplete;
+  private volatile boolean initComplete;
 
   ServiceConfigInterceptor(
       boolean retryEnabled, int maxRetryAttemptsLimit, int maxHedgedAttemptsLimit) {
@@ -56,11 +57,17 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
     this.maxHedgedAttemptsLimit = maxHedgedAttemptsLimit;
   }
 
-  void handleUpdate(@Nonnull Map<String, ?> serviceConfig) {
-    ManagedChannelServiceConfig conf = ManagedChannelServiceConfig.fromServiceConfig(
-        serviceConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit);
+  void handleUpdate(@Nullable Map<String, ?> serviceConfig) {
+    ManagedChannelServiceConfig conf;
+    if (serviceConfig == null) {
+      conf = new ManagedChannelServiceConfig(
+          new HashMap<String, MethodInfo>(), new HashMap<String, MethodInfo>());
+    } else {
+      conf = ManagedChannelServiceConfig.fromServiceConfig(
+          serviceConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit);
+    }
     managedChannelServiceConfig.set(conf);
-    nameResolveComplete = true;
+    initComplete = true;
   }
 
   static final CallOptions.Key<RetryPolicy.Provider> RETRY_POLICY_KEY =
@@ -72,7 +79,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
     if (retryEnabled) {
-      if (nameResolveComplete) {
+      if (initComplete) {
         final RetryPolicy retryPolicy = getRetryPolicyFromConfig(method);
         final class ImmediateRetryPolicyProvider implements RetryPolicy.Provider {
           @Override
@@ -106,7 +113,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
            */
           @Override
           public RetryPolicy get() {
-            if (!nameResolveComplete) {
+            if (!initComplete) {
               return RetryPolicy.DEFAULT;
             }
             return getRetryPolicyFromConfig(method);
@@ -122,7 +129,7 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
            */
           @Override
           public HedgingPolicy get() {
-            if (!nameResolveComplete) {
+            if (!initComplete) {
               return HedgingPolicy.DEFAULT;
             }
             HedgingPolicy hedgingPolicy = getHedgingPolicyFromConfig(method);
