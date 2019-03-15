@@ -21,6 +21,7 @@ package grpc
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
@@ -34,8 +35,9 @@ type ccResolverWrapper struct {
 	resolver           resolver.Resolver
 	addrCh             chan []resolver.Address
 	scCh               chan string
-	done               chan struct{}
+	done               uint32 // accessed atomically; set to 1 when closed.
 	lastAddressesCount int
+	curAddresses       []resolver.Address
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -82,7 +84,6 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 		cc:     cc,
 		addrCh: make(chan []resolver.Address, 1),
 		scCh:   make(chan string, 1),
-		done:   make(chan struct{}),
 	}
 
 	var err error
@@ -99,33 +100,44 @@ func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOption) {
 
 func (ccr *ccResolverWrapper) close() {
 	ccr.resolver.Close()
-	close(ccr.done)
+	atomic.StoreUint32(&ccr.done, 1)
+}
+
+func (ccr *ccResolverWrapper) isDone() bool {
+	return atomic.LoadUint32(&ccr.done) == 1
+}
+
+func (ccr *ccResolverWrapper) UpdateState(s resolver.State) {
+	if ccr.isDone() {
+		return
+	}
+	grpclog.Infof("ccResolverWrapper: sending update to cc: %v", s)
+	// TODO: add Channelz Trace Event
+	ccr.cc.updateResolverState(s)
+	ccr.curAddresses = s.Addresses
 }
 
 // NewAddress is called by the resolver implemenetion to send addresses to gRPC.
 func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
-	select {
-	case <-ccr.done:
+	if ccr.isDone() {
 		return
-	default:
 	}
 	grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
 	if channelz.IsOn() {
 		ccr.addChannelzTraceEvent(addrs)
 	}
-	ccr.cc.handleResolvedAddrs(addrs, nil)
+	ccr.cc.updateResolverState(resolver.State{Addresses: addrs, ServiceConfig: ccr.cc.scRaw})
+	ccr.curAddresses = addrs
 }
 
 // NewServiceConfig is called by the resolver implemenetion to send service
 // configs to gRPC.
 func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
-	select {
-	case <-ccr.done:
+	if ccr.isDone() {
 		return
-	default:
 	}
 	grpclog.Infof("ccResolverWrapper: got new service config: %v", sc)
-	ccr.cc.handleServiceConfig(sc)
+	ccr.cc.updateResolverState(resolver.State{Addresses: ccr.curAddresses, ServiceConfig: sc})
 }
 
 func (ccr *ccResolverWrapper) addChannelzTraceEvent(addrs []resolver.Address) {

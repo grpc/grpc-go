@@ -141,18 +141,19 @@ func (s) TestSwitchBalancer(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
+	addrs := []resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}}
+	r.NewAddress(addrs)
 	// The default balancer is pickfirst.
 	if err := checkPickFirst(cc, servers); err != nil {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
 	}
 	// Switch to roundrobin.
-	cc.handleServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	cc.updateResolverState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`, Addresses: addrs})
 	if err := checkRoundRobin(cc, servers); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
 	}
 	// Switch to pickfirst.
-	cc.handleServiceConfig(`{"loadBalancingPolicy": "pick_first"}`)
+	cc.updateResolverState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "pick_first"}`, Addresses: addrs})
 	if err := checkPickFirst(cc, servers); err != nil {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
 	}
@@ -172,13 +173,14 @@ func (s) TestBalancerDialOption(t *testing.T) {
 		t.Fatalf("failed to dial: %v", err)
 	}
 	defer cc.Close()
-	r.NewAddress([]resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}})
+	addrs := []resolver.Address{{Addr: servers[0].addr}, {Addr: servers[1].addr}}
+	r.NewAddress(addrs)
 	// The init balancer is roundrobin.
 	if err := checkRoundRobin(cc, servers); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
 	}
 	// Switch to pickfirst.
-	cc.handleServiceConfig(`{"loadBalancingPolicy": "pick_first"}`)
+	cc.updateResolverState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "pick_first"}`, Addresses: addrs})
 	// Balancer is still roundrobin.
 	if err := checkRoundRobin(cc, servers); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
@@ -496,15 +498,16 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	//
 	// If the filtering failed, servers[0] will be used for RPCs and the RPCs
 	// will succeed. The following checks will catch this and fail.
-	r.NewAddress([]resolver.Address{
+	addrs := []resolver.Address{
 		{Addr: servers[0].addr, Type: resolver.GRPCLB},
-		{Addr: servers[1].addr}, {Addr: servers[2].addr}})
+		{Addr: servers[1].addr}, {Addr: servers[2].addr}}
+	r.NewAddress(addrs)
 	// Still check for pickfirst, but only with server[1] and server[2].
 	if err := checkPickFirst(cc, servers[1:]); err != nil {
 		t.Fatalf("check pickfirst returned non-nil error: %v", err)
 	}
-	// Switch to roundrobin, anc check against server[1] and server[2].
-	cc.handleServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	// Switch to roundrobin, and check against server[1] and server[2].
+	cc.updateResolverState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`, Addresses: addrs})
 	if err := checkRoundRobin(cc, servers[1:]); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
 	}

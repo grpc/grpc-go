@@ -1555,7 +1555,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
                 {
                     "service": "grpc.testing.TestService",
                     "method": "EmptyCall"
-                },
+                }
             ],
             "waitForReady": false,
             "timeout": ".001s"

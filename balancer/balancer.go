@@ -248,13 +248,35 @@ type Balancer interface {
 	// that back to gRPC.
 	// Balancer should also generate and update Pickers when its internal state has
 	// been changed by the new state.
+	//
+	// Deprecated: if V2 is implemented by the Balancer, UpdateSubConnState
+	// will be called instead.
 	HandleSubConnStateChange(sc SubConn, state connectivity.State)
 	// HandleResolvedAddrs is called by gRPC to send updated resolved addresses to
 	// balancers.
 	// Balancer can create new SubConn or remove SubConn with the addresses.
 	// An empty address slice and a non-nil error will be passed if the resolver returns
 	// non-nil error to gRPC.
+	//
+	// Deprecated: if V2 is implemented by the Balancer, UpdateResolverState
+	// will be called instead.
 	HandleResolvedAddrs([]resolver.Address, error)
+	// Close closes the balancer. The balancer is not required to call
+	// ClientConn.RemoveSubConn for its existing SubConns.
+	Close()
+}
+
+// V2 is defined for documentation purposes.  If a Balancer also implements V2,
+// its UpdateResolverState method will be called instead of HandleResolvedAddrs
+// and its UpdateSubConnState will be called instead of
+// HandleSubConnStateChange.
+type V2 interface {
+	// UpdateResolverState is called by gRPC when the state of the resolver
+	// changes.
+	UpdateResolverState(resolver.State)
+	// UpdateSubConnState is called by gRPC when the state of a SubConn
+	// changes.
+	UpdateSubConnState(sc SubConn, state connectivity.State)
 	// Close closes the balancer. The balancer is not required to call
 	// ClientConn.RemoveSubConn for its existing SubConns.
 	Close()
