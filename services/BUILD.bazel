@@ -1,0 +1,84 @@
+load("//:java_grpc_library.bzl", "java_grpc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "binarylog",
+    srcs = [
+        "src/main/java/io/grpc/services/BinaryLogProvider.java",
+        "src/main/java/io/grpc/services/BinaryLogProviderImpl.java",
+        "src/main/java/io/grpc/services/BinaryLogSink.java",
+        "src/main/java/io/grpc/services/BinlogHelper.java",
+        "src/main/java/io/grpc/services/InetAddressUtil.java",
+        "src/main/java/io/grpc/services/TempFileSink.java",
+    ],
+    deps = [
+        "//context",
+        "//core",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@com_google_re2j//jar",
+        "@io_grpc_grpc_proto//:binarylog_java_proto",
+    ],
+)
+
+java_library(
+    name = "channelz",
+    srcs = [
+        "src/main/java/io/grpc/services/ChannelzProtoUtil.java",
+        "src/main/java/io/grpc/services/ChannelzService.java",
+    ],
+    deps = [
+        ":_channelz_java_grpc",
+        "//context",
+        "//core",
+        "//stub",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@io_grpc_grpc_proto//:channelz_java_proto",
+    ],
+)
+
+java_library(
+    name = "reflection",
+    srcs = [
+        "src/main/java/io/grpc/protobuf/services/ProtoReflectionService.java",
+    ],
+    deps = [
+        ":_reflection_java_grpc",
+        "//context",
+        "//core",
+        "//core:internal",
+        "//core:util",
+        "//protobuf",
+        "//stub",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava_guava//jar",
+        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@com_google_re2j//jar",
+        "@io_grpc_grpc_proto//:reflection_java_proto_deprecated",
+        "@javax_annotation_javax_annotation_api//jar",
+    ],
+)
+
+# These shouldn't be here, but this is better than having
+# a circular dependency on grpc-proto and grpc-java.
+
+java_grpc_library(
+    name = "_reflection_java_grpc",
+    srcs = ["@io_grpc_grpc_proto//:reflection_proto_deprecated"],
+    visibility = ["//visibility:private"],
+    deps = ["@io_grpc_grpc_proto//:reflection_java_proto_deprecated"],
+)
+
+java_grpc_library(
+    name = "_channelz_java_grpc",
+    srcs = ["@io_grpc_grpc_proto//:channelz_proto"],
+    visibility = ["//visibility:private"],
+    deps = ["@io_grpc_grpc_proto//:channelz_java_proto"],
+)
