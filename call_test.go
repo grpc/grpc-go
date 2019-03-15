@@ -226,22 +226,121 @@ func setUpWithOptions(t *testing.T, port int, maxStreams uint32, dopts ...DialOp
 	return server, cc
 }
 
-func (s) TestChainUnaryClientInterceptor(t *testing.T) {
-	firstInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
-		// requireContextValue(t, ctx, "parent", "first must know the parent context value")
-		// require.Equal(t, someServiceName, method, "first must know someService")
-		// require.Len(t, opts, 1, "first should see parent CallOptions")
-		// wrappedCtx := context.WithValue(ctx, "firstInt", 1)
+type ctxKey string
+
+func (s) TestUnaryClientInterceptor(t *testing.T) {
+	parentKey := ctxKey("parentKey")
+
+	interceptor := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("interceptor should have %v in context", parentKey)
+		}
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 
-	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithUnaryInterceptor(firstInt))
+	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithUnaryInterceptor(interceptor))
+	defer func() {
+		cc.Close()
+		server.stop()
+	}()
+
 	var reply string
-	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+	ctx := context.Background()
+	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
+	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
-	cc.Close()
-	server.stop()
+}
+
+func (s) TestChainUnaryClientInterceptor(t *testing.T) {
+	var (
+		parentKey    = ctxKey("parentKey")
+		firstIntKey  = ctxKey("firstIntKey")
+		secondIntKey = ctxKey("secondIntKey")
+	)
+
+	firstInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("first interceptor should have %v in context", parentKey)
+		}
+		firstCtx := context.WithValue(ctx, firstIntKey, 1)
+		return invoker(firstCtx, method, req, reply, cc, opts...)
+	}
+
+	secondInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("second interceptor should have %v in context", parentKey)
+		}
+		if ctx.Value(firstIntKey) == nil {
+			t.Fatalf("second interceptor should have %v in context", firstIntKey)
+		}
+		secondCtx := context.WithValue(ctx, secondIntKey, 2)
+		return invoker(secondCtx, method, req, reply, cc, opts...)
+	}
+
+	lastInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", parentKey)
+		}
+		if ctx.Value(firstIntKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", secondIntKey)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithChainUnaryInterceptor(firstInt, secondInt, lastInt))
+	defer func() {
+		cc.Close()
+		server.stop()
+	}()
+
+	var reply string
+	ctx := context.Background()
+	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
+	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+	}
+}
+
+func (s) TestChainOnBaseUnaryClientInterceptor(t *testing.T) {
+	var (
+		parentKey  = ctxKey("parentKey")
+		baseIntKey = ctxKey("baseIntKey")
+	)
+
+	baseInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("base interceptor should have %v in context", parentKey)
+		}
+		baseCtx := context.WithValue(ctx, baseIntKey, 1)
+		return invoker(baseCtx, method, req, reply, cc, opts...)
+	}
+
+	chainInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("chain interceptor should have %v in context", parentKey)
+		}
+		if ctx.Value(baseIntKey) == nil {
+			t.Fatalf("chain interceptor should have %v in context", baseIntKey)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithUnaryInterceptor(baseInt), WithChainUnaryInterceptor(chainInt))
+	defer func() {
+		cc.Close()
+		server.stop()
+	}()
+
+	var reply string
+	ctx := context.Background()
+	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
+	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+	}
 }
 
 func (s) TestInvoke(t *testing.T) {

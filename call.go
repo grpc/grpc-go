@@ -40,7 +40,7 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	}
 
 	if len(interceptors) > 0 {
-		return interceptors[0](ctx, method, args, reply, cc, getInvoker(interceptors, 0, invoke))
+		return interceptors[0](ctx, method, args, reply, cc, getInvoker(interceptors, 0, invoke), opts...)
 	}
 	return invoke(ctx, method, args, reply, cc, opts...)
 }
