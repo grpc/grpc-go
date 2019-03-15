@@ -988,7 +988,7 @@ func (ac *addrConn) resetTransport() {
 		connectDeadline := time.Now().Add(dialDuration)
 		ac.mu.Unlock()
 
-		newTr, addr, reconnect, err := ac.tryAll(addrs, connectDeadline)
+		newTr, addr, reconnect, err := ac.tryAllAddrs(addrs, connectDeadline)
 		if err != nil {
 			// After exhausting all addresses, the addrConn enters
 			// TRANSIENT_FAILURE.
@@ -1072,10 +1072,10 @@ func (ac *addrConn) resetTransport() {
 	}
 }
 
-// tryAll tries to creates a connection to the addresses, and stop when at the
+// tryAllAddrs tries to creates a connection to the addresses, and stop when at the
 // first successful one. It returns the transport, the address and a Event in
 // the successful case. The Event fires when the returned transport disconnects.
-func (ac *addrConn) tryAll(addrs []resolver.Address, connectDeadline time.Time) (transport.ClientTransport, resolver.Address, *grpcsync.Event, error) {
+func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.Time) (transport.ClientTransport, resolver.Address, *grpcsync.Event, error) {
 	for _, addr := range addrs {
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
