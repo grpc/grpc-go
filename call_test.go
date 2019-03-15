@@ -213,6 +213,37 @@ func setUp(t *testing.T, port int, maxStreams uint32) (*server, *ClientConn) {
 	return server, cc
 }
 
+func setUpWithOptions(t *testing.T, port int, maxStreams uint32, dopts ...DialOption) (*server, *ClientConn) {
+	server := newTestServer()
+	go server.start(t, port, maxStreams)
+	server.wait(t, 2*time.Second)
+	addr := "localhost:" + server.port
+	dopts = append(dopts, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial(addr, dopts...)
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	return server, cc
+}
+
+func (s) TestChainUnaryClientInterceptor(t *testing.T) {
+	firstInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		// requireContextValue(t, ctx, "parent", "first must know the parent context value")
+		// require.Equal(t, someServiceName, method, "first must know someService")
+		// require.Len(t, opts, 1, "first should see parent CallOptions")
+		// wrappedCtx := context.WithValue(ctx, "firstInt", 1)
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithUnaryInterceptor(firstInt))
+	var reply string
+	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+	}
+	cc.Close()
+	server.stop()
+}
+
 func (s) TestInvoke(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string

@@ -39,8 +39,11 @@ import (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt    UnaryClientInterceptor
-	streamInt   StreamClientInterceptor
+	unaryInt  UnaryClientInterceptor
+	streamInt StreamClientInterceptor
+
+	chainUnaryInts []UnaryClientInterceptor
+
 	cp          Compressor
 	dc          Decompressor
 	bs          backoff.Strategy
@@ -408,6 +411,14 @@ func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
 func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.unaryInt = f
+	})
+}
+
+// WithChainUnaryInterceptor returns a DialOption that specifies the chained
+// interceptor for unary RPCs. The execution will be done in left-to-right order.
+func WithChainUnaryInterceptor(its ...UnaryClientInterceptor) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.chainUnaryInts = its
 	})
 }
 
