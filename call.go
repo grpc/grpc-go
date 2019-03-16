@@ -40,17 +40,18 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	}
 
 	if len(interceptors) > 0 {
-		return interceptors[0](ctx, method, args, reply, cc, getInvoker(interceptors, 0, invoke), opts...)
+		return interceptors[0](ctx, method, args, reply, cc, getChainInvoker(interceptors, 0, invoke), opts...)
 	}
 	return invoke(ctx, method, args, reply, cc, opts...)
 }
 
-func getInvoker(interceptors []UnaryClientInterceptor, curr int, originalInvoker UnaryInvoker) UnaryInvoker {
+// getChainInvoker recursively generate the chained unary invoker.
+func getChainInvoker(interceptors []UnaryClientInterceptor, curr int, finalInvoker UnaryInvoker) UnaryInvoker {
 	if curr == len(interceptors)-1 {
-		return originalInvoker
+		return finalInvoker
 	}
 	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
-		return interceptors[curr+1](ctx, method, req, reply, cc, getInvoker(interceptors, curr+1, originalInvoker), opts...)
+		return interceptors[curr+1](ctx, method, req, reply, cc, getChainInvoker(interceptors, curr+1, finalInvoker), opts...)
 	}
 }
 

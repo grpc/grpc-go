@@ -123,6 +123,8 @@ type server struct {
 	conns      map[transport.ServerTransport]bool
 }
 
+type ctxKey string
+
 func newTestServer() *server {
 	return &server{startedErr: make(chan error, 1)}
 }
@@ -225,8 +227,6 @@ func setUpWithOptions(t *testing.T, port int, maxStreams uint32, dopts ...DialOp
 	}
 	return server, cc
 }
-
-type ctxKey string
 
 func (s) TestUnaryClientInterceptor(t *testing.T) {
 	parentKey := ctxKey("parentKey")
@@ -340,6 +340,59 @@ func (s) TestChainOnBaseUnaryClientInterceptor(t *testing.T) {
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
 	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+	}
+}
+
+func (s) TestChainStreamClientInterceptor(t *testing.T) {
+	var (
+		parentKey    = ctxKey("parentKey")
+		firstIntKey  = ctxKey("firstIntKey")
+		secondIntKey = ctxKey("secondIntKey")
+	)
+
+	firstInt := func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("first interceptor should have %v in context", parentKey)
+		}
+		firstCtx := context.WithValue(ctx, firstIntKey, 1)
+		return streamer(firstCtx, desc, cc, method, opts...)
+	}
+
+	secondInt := func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("second interceptor should have %v in context", parentKey)
+		}
+		if ctx.Value(firstIntKey) == nil {
+			t.Fatalf("second interceptor should have %v in context", firstIntKey)
+		}
+		secondCtx := context.WithValue(ctx, secondIntKey, 2)
+		return streamer(secondCtx, desc, cc, method, opts...)
+	}
+
+	lastInt := func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+		if ctx.Value(parentKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", parentKey)
+		}
+		if ctx.Value(firstIntKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) == nil {
+			t.Fatalf("last interceptor should have %v in context", secondIntKey)
+		}
+		return streamer(ctx, desc, cc, method, opts...)
+	}
+
+	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithChainStreamInterceptor(firstInt, secondInt, lastInt))
+	defer func() {
+		cc.Close()
+		server.stop()
+	}()
+
+	ctx := context.Background()
+	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
+	_, err := cc.NewStream(parentCtx, &StreamDesc{}, "/foo/bar")
+	if err != nil {
+		t.Fatalf("grpc.NewStream(_, _, _) = %v, want <nil>", err)
 	}
 }
 

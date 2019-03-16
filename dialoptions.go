@@ -42,7 +42,8 @@ type dialOptions struct {
 	unaryInt  UnaryClientInterceptor
 	streamInt StreamClientInterceptor
 
-	chainUnaryInts []UnaryClientInterceptor
+	chainUnaryInts  []UnaryClientInterceptor
+	chainStreamInts []StreamClientInterceptor
 
 	cp          Compressor
 	dc          Decompressor
@@ -416,9 +417,9 @@ func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 
 // WithChainUnaryInterceptor returns a DialOption that specifies the chained
 // interceptor for unary RPCs. The execution will be done in left-to-right order.
-func WithChainUnaryInterceptor(its ...UnaryClientInterceptor) DialOption {
+func WithChainUnaryInterceptor(interceptors ...UnaryClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.chainUnaryInts = its
+		o.chainUnaryInts = append(o.chainUnaryInts, interceptors...)
 	})
 }
 
@@ -427,6 +428,14 @@ func WithChainUnaryInterceptor(its ...UnaryClientInterceptor) DialOption {
 func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.streamInt = f
+	})
+}
+
+// WithChainStreamInterceptor returns a DialOption that specifies the chained
+// interceptor for unary RPCs. The execution will be done in left-to-right order.
+func WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.chainStreamInts = append(o.chainStreamInts, interceptors...)
 	})
 }
 
