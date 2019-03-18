@@ -19,6 +19,7 @@ package io.grpc.netty;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_IDLE_NANOS_DISABLED;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
@@ -910,18 +911,26 @@ class NettyServerHandler extends AbstractNettyHandler {
 
       // gracefully shutdown with specified grace time
       long savedGracefulShutdownTimeMillis = gracefulShutdownTimeoutMillis();
-      long gracefulShutdownTimeoutMillis = savedGracefulShutdownTimeMillis;
-      if (graceTimeInNanos != null) {
-        gracefulShutdownTimeoutMillis = TimeUnit.NANOSECONDS.toMillis(graceTimeInNanos);
-      }
+      long overriddenGraceTime = graceTimeOverrideMillis(savedGracefulShutdownTimeMillis);
       try {
-        gracefulShutdownTimeoutMillis(gracefulShutdownTimeoutMillis);
+        gracefulShutdownTimeoutMillis(overriddenGraceTime);
         NettyServerHandler.super.close(ctx, ctx.newPromise());
       } catch (Exception e) {
         onError(ctx, /* outbound= */ true, e);
       } finally {
         gracefulShutdownTimeoutMillis(savedGracefulShutdownTimeMillis);
       }
+    }
+
+    private long graceTimeOverrideMillis(long originalMillis) {
+      if (graceTimeInNanos == null) {
+        return originalMillis;
+      }
+      if (graceTimeInNanos == MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE) {
+        // netty treats -1 as "no timeout"
+        return -1L;
+      }
+      return TimeUnit.NANOSECONDS.toMillis(graceTimeInNanos);
     }
   }
 
