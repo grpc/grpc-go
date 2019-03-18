@@ -171,9 +171,6 @@ type PickOptions struct {
 	// FullMethodName is the method name that NewClientStream() is called
 	// with. The canonical format is /service/Method.
 	FullMethodName string
-	// Header contains the metadata from the RPC's client header.  The metadata
-	// should not be modified; make a copy first if needed.
-	Header metadata.MD
 }
 
 // DoneInfo contains additional information for done.
