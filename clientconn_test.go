@@ -253,7 +253,7 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 			WithWaitForHandshake(),
 			WithBlock(),
 			withBackoff(noBackoff{}),
-			withGetMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
+			withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
 		lis.Close()
 		if err == nil {
 			client.Close()
@@ -301,7 +301,7 @@ func (s) TestDialWaitsForServerSettingsViaEnvAndFails(t *testing.T) {
 		WithInsecure(),
 		WithBlock(),
 		withBackoff(noBackoff{}),
-		withGetMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
+		withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
 	lis.Close()
 	if err == nil {
 		client.Close()
@@ -418,7 +418,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithInsecure(), withGetMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
+	client, err := Dial(lis.Addr().String(), WithInsecure(), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
@@ -665,7 +665,7 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 		WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName),
 		withResolverBuilder(rb),
-		withGetMinConnectDeadline(getMinConnectTimeout))
+		withMinConnectDeadline(getMinConnectTimeout))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1185,7 +1185,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		withResolverBuilder(rb),
 		withBackoff(noBackoff{}),
 		WithBalancerName(stateRecordingBalancerName),
-		withGetMinConnectDeadline(func() time.Duration { return time.Hour }))
+		withMinConnectDeadline(func() time.Duration { return time.Hour }))
 	if err != nil {
 		t.Fatal(err)
 	}

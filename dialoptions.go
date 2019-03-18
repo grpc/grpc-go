@@ -55,14 +55,14 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder          resolver.Builder
-	reqHandshake             envconfig.RequireHandshakeSetting
-	channelzParentID         int64
-	disableServiceConfig     bool
-	disableRetry             bool
-	disableHealthCheck       bool
-	healthCheckFunc          internal.HealthChecker
-	getMinConnectTimeoutFunc func() time.Duration
+	resolverBuilder      resolver.Builder
+	reqHandshake         envconfig.RequireHandshakeSetting
+	channelzParentID     int64
+	disableServiceConfig bool
+	disableRetry         bool
+	disableHealthCheck   bool
+	healthCheckFunc      internal.HealthChecker
+	minConnectTimeout    func() time.Duration
 }
 
 // DialOption configures how we set up the connection.
@@ -508,8 +508,8 @@ func defaultDialOptions() dialOptions {
 // faster/slower.
 //
 // For testing purpose only.
-func withGetMinConnectDeadline(f func() time.Duration) DialOption {
+func withMinConnectDeadline(f func() time.Duration) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.getMinConnectTimeoutFunc = f
+		o.minConnectTimeout = f
 	})
 }

@@ -163,7 +163,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		WithBalancerName(stateRecordingBalancerName),
 		WithDialer(pl.Dialer()),
 		withBackoff(noBackoff{}),
-		withGetMinConnectDeadline(func() time.Duration { return time.Millisecond * 100 }))
+		withMinConnectDeadline(func() time.Duration { return time.Millisecond * 100 }))
 	if err != nil {
 		t.Fatal(err)
 	}

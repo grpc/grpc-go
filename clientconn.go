@@ -969,8 +969,8 @@ func (ac *addrConn) resetTransport() {
 
 		// This will be the duration that dial gets to finish.
 		dialDuration := minConnectTimeout
-		if ac.dopts.getMinConnectTimeoutFunc != nil {
-			dialDuration = ac.dopts.getMinConnectTimeoutFunc()
+		if ac.dopts.minConnectTimeout != nil {
+			dialDuration = ac.dopts.minConnectTimeout()
 		}
 
 		if dialDuration < backoffFor {
