@@ -45,6 +45,7 @@ type testBalancer struct {
 	sc balancer.SubConn
 
 	newSubConnOptions balancer.NewSubConnOptions
+	pickOptions       []balancer.PickOptions
 	doneInfo          []balancer.DoneInfo
 }
 
