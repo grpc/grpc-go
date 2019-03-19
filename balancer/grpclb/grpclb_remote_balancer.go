@@ -96,14 +96,36 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 // indicating whether the backendAddrs are different from the cached
 // backendAddrs (whether any SubConn was newed/removed).
 // Caller must hold lb.mu.
-func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) bool {
+func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
 	opts := balancer.NewSubConnOptions{}
 	if fromGRPCLBServer {
 		opts.CredsBundle = lb.grpclbBackendCreds
 	}
 
 	lb.backendAddrs = nil
-	var backendsUpdated bool
+
+	if lb.usePickFirst {
+		var sc balancer.SubConn
+		for _, sc = range lb.subConns {
+			break
+		}
+		if sc != nil {
+			sc.UpdateAddresses(backendAddrs)
+			sc.Connect()
+			return
+		}
+		// This bypasses the cc wrapper with SubConn cache.
+		sc, err := lb.cc.cc.NewSubConn(backendAddrs, opts)
+		if err != nil {
+			grpclog.Warningf("grpclb: failed to create new SubConn: %v", err)
+			return
+		}
+		sc.Connect()
+		lb.subConns[backendAddrs[0]] = sc
+		lb.scStates[sc] = connectivity.Idle
+		return
+	}
+
 	// addrsSet is the set converted from backendAddrs, it's used to quick
 	// lookup for an address.
 	addrsSet := make(map[resolver.Address]struct{})
@@ -115,12 +137,10 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCL
 		lb.backendAddrs = append(lb.backendAddrs, addrWithoutMD)
 
 		if _, ok := lb.subConns[addrWithoutMD]; !ok {
-			backendsUpdated = true
-
 			// Use addrWithMD to create the SubConn.
 			sc, err := lb.cc.NewSubConn([]resolver.Address{addr}, opts)
 			if err != nil {
-				grpclog.Warningf("roundrobinBalancer: failed to create new SubConn: %v", err)
+				grpclog.Warningf("grpclb: failed to create new SubConn: %v", err)
 				continue
 			}
 			lb.subConns[addrWithoutMD] = sc // Use the addr without MD as key for the map.
@@ -136,16 +156,12 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCL
 	for a, sc := range lb.subConns {
 		// a was removed by resolver.
 		if _, ok := addrsSet[a]; !ok {
-			backendsUpdated = true
-
 			lb.cc.RemoveSubConn(sc)
 			delete(lb.subConns, a)
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in HandleSubConnStateChange.
 		}
 	}
-
-	return backendsUpdated
 }
 
 func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) error {

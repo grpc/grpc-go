@@ -129,8 +129,19 @@ func newLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Bui
 	}
 }
 
+// newLBBuilderWithPickFirst creates a grpclb builder with pick-first.
+func newLBBuilderWithPickFirst() balancer.Builder {
+	return &lbBuilder{
+		usePickFirst: true,
+	}
+}
+
 type lbBuilder struct {
 	fallbackTimeout time.Duration
+
+	// TODO: delete this when balancer can handle service config. This should be
+	//  updated by service config.
+	usePickFirst bool // Use roundrobin or pickfirst for backends.
 }
 
 func (b *lbBuilder) Name() string {
@@ -156,6 +167,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		cc:              newLBCacheClientConn(cc),
 		target:          target,
 		opt:             opt,
+		usePickFirst:    b.usePickFirst,
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
@@ -187,6 +199,8 @@ type lbBalancer struct {
 	cc     *lbCacheClientConn
 	target string
 	opt    balancer.BuildOptions
+
+	usePickFirst bool
 
 	// grpclbClientConnCreds is the creds bundle to be used to connect to grpclb
 	// servers. If it's nil, use the TransportCredentials from BuildOptions
@@ -249,11 +263,21 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 		lb.picker = &errPicker{err: balancer.ErrTransientFailure}
 		return
 	}
+
 	var readySCs []balancer.SubConn
-	for _, a := range lb.backendAddrs {
-		if sc, ok := lb.subConns[a]; ok {
-			if st, ok := lb.scStates[sc]; ok && st == connectivity.Ready {
+	if lb.usePickFirst {
+		if lb.state == connectivity.Ready || lb.state == connectivity.Idle {
+			for _, sc := range lb.subConns {
 				readySCs = append(readySCs, sc)
+				break
+			}
+		}
+	} else {
+		for _, a := range lb.backendAddrs {
+			if sc, ok := lb.subConns[a]; ok {
+				if st, ok := lb.scStates[sc]; ok && st == connectivity.Ready {
+					readySCs = append(readySCs, sc)
+				}
 			}
 		}
 	}
