@@ -32,7 +32,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.mockito.ArgumentCaptor
-import org.mockito.Matchers
+import org.mockito.ArgumentMatchers
 
 /**
  * Unit tests for [HelloWorldClient].
@@ -86,7 +86,7 @@ class HelloWorldClientTest {
         client!!.greet("test name")
 
         verify<GreeterGrpc.GreeterImplBase>(serviceImpl)
-                .sayHello(requestCaptor.capture(), Matchers.any<StreamObserver<HelloReply>>())
+                .sayHello(requestCaptor.capture(), ArgumentMatchers.any<StreamObserver<HelloReply>>())
         assertEquals("test name", requestCaptor.value.name)
     }
 }

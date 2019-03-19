@@ -25,9 +25,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -75,8 +75,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -163,7 +163,7 @@ public class ClientCallImplTest {
     streamListener.closed(status , new Metadata());
     executor.release();
 
-    verify(callListener).onClose(same(status), Matchers.isA(Metadata.class));
+    verify(callListener).onClose(same(status), ArgumentMatchers.isA(Metadata.class));
   }
 
   @Test
@@ -183,7 +183,7 @@ public class ClientCallImplTest {
     streamListener.headersRead(new Metadata());
 
     RuntimeException failure = new RuntimeException("bad");
-    doThrow(failure).when(callListener).onMessage(Matchers.<Void>any());
+    doThrow(failure).when(callListener).onMessage(ArgumentMatchers.<Void>any());
 
     /*
      * In unary calls, the server closes the call right after responding, so the onClose call is
@@ -196,7 +196,8 @@ public class ClientCallImplTest {
     streamListener.closed(Status.OK, new Metadata());
     executor.release();
 
-    verify(callListener).onClose(statusArgumentCaptor.capture(), Matchers.isA(Metadata.class));
+    verify(callListener).onClose(statusArgumentCaptor.capture(),
+        ArgumentMatchers.isA(Metadata.class));
     Status callListenerStatus = statusArgumentCaptor.getValue();
     assertThat(callListenerStatus.getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(callListenerStatus.getCause()).isSameAs(failure);
@@ -231,7 +232,8 @@ public class ClientCallImplTest {
     streamListener.closed(Status.OK, new Metadata());
     executor.release();
 
-    verify(callListener).onClose(statusArgumentCaptor.capture(), Matchers.isA(Metadata.class));
+    verify(callListener).onClose(statusArgumentCaptor.capture(),
+        ArgumentMatchers.isA(Metadata.class));
     Status callListenerStatus = statusArgumentCaptor.getValue();
     assertThat(callListenerStatus.getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(callListenerStatus.getCause()).isSameAs(failure);
@@ -266,7 +268,8 @@ public class ClientCallImplTest {
     streamListener.closed(Status.OK, new Metadata());
     executor.release();
 
-    verify(callListener).onClose(statusArgumentCaptor.capture(), Matchers.isA(Metadata.class));
+    verify(callListener).onClose(statusArgumentCaptor.capture(),
+        ArgumentMatchers.isA(Metadata.class));
     Status callListenerStatus = statusArgumentCaptor.getValue();
     assertThat(callListenerStatus.getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(callListenerStatus.getCause()).isSameAs(failure);

@@ -28,11 +28,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -82,8 +82,8 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
-import org.mockito.Matchers;
 
 /** Standard unit tests for {@link ClientTransport}s and {@link ServerTransport}s. */
 @RunWith(JUnit4.class)
@@ -548,7 +548,7 @@ public abstract class AbstractTransportTest {
       // Transport doesn't support ping, so this neither passes nor fails.
       assumeTrue(false);
     }
-    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyLong());
+    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(ArgumentMatchers.anyLong());
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
@@ -570,7 +570,7 @@ public abstract class AbstractTransportTest {
       // Transport doesn't support ping, so this neither passes nor fails.
       assumeTrue(false);
     }
-    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyLong());
+    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(ArgumentMatchers.anyLong());
     stream.cancel(Status.CANCELLED);
   }
 

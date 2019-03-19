@@ -27,11 +27,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isNull;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -88,7 +88,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.AdditionalMatchers;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 /** Tests for {@link BinlogHelper}. */
 @RunWith(JUnit4.class)
@@ -960,12 +962,12 @@ public final class BinlogHelperTest {
     verify(mockSinkWriter).logClientHeader(
         /*seq=*/ eq(1L),
         eq("service/method"),
-        isNull(String.class),
+        ArgumentMatchers.<String>isNull(),
         timeoutCaptor.capture(),
         any(Metadata.class),
         eq(Logger.LOGGER_SERVER),
         eq(CALL_ID),
-        isNull(SocketAddress.class));
+        ArgumentMatchers.<SocketAddress>isNull());
     verifyNoMoreInteractions(mockSinkWriter);
     Duration timeout = timeoutCaptor.getValue();
     assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
@@ -1008,13 +1010,14 @@ public final class BinlogHelperTest {
     verify(mockSinkWriter)
         .logClientHeader(
             anyLong(),
-            any(String.class),
-            any(String.class),
+            AdditionalMatchers.or(ArgumentMatchers.<String>isNull(), anyString()),
+            AdditionalMatchers.or(ArgumentMatchers.<String>isNull(), anyString()),
             callOptTimeoutCaptor.capture(),
             any(Metadata.class),
             any(GrpcLogEntry.Logger.class),
             anyLong(),
-            any(SocketAddress.class));
+            AdditionalMatchers.or(ArgumentMatchers.<SocketAddress>isNull(),
+                ArgumentMatchers.<SocketAddress>any()));
     Duration timeout = callOptTimeoutCaptor.getValue();
     assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
         .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
@@ -1065,13 +1068,14 @@ public final class BinlogHelperTest {
     verify(mockSinkWriter)
         .logClientHeader(
             anyLong(),
-            any(String.class),
-            any(String.class),
+            anyString(),
+            ArgumentMatchers.<String>any(),
             callOptTimeoutCaptor.capture(),
             any(Metadata.class),
             any(GrpcLogEntry.Logger.class),
             anyLong(),
-            any(SocketAddress.class));
+            AdditionalMatchers.or(ArgumentMatchers.<SocketAddress>isNull(),
+                ArgumentMatchers.<SocketAddress>any()));
     Duration timeout = callOptTimeoutCaptor.getValue();
     assertThat(TimeUnit.SECONDS.toNanos(1) - Durations.toNanos(timeout))
         .isAtMost(TimeUnit.MILLISECONDS.toNanos(250));
@@ -1152,11 +1156,11 @@ public final class BinlogHelperTest {
           /*seq=*/ eq(1L),
           eq("service/method"),
           eq("the-authority"),
-          isNull(Duration.class),
+          ArgumentMatchers.<Duration>isNull(),
           same(clientInitial),
           eq(Logger.LOGGER_CLIENT),
           eq(CALL_ID),
-          isNull(SocketAddress.class));
+          ArgumentMatchers.<SocketAddress>isNull());
       verifyNoMoreInteractions(mockSinkWriter);
       assertSame(clientInitial, actualClientInitial.get());
     }
@@ -1228,7 +1232,7 @@ public final class BinlogHelperTest {
           same(trailers),
           eq(Logger.LOGGER_CLIENT),
           eq(CALL_ID),
-          isNull(SocketAddress.class));
+          ArgumentMatchers.<SocketAddress>isNull());
       verifyNoMoreInteractions(mockSinkWriter);
       verify(mockListener).onClose(same(status), same(trailers));
     }
@@ -1302,13 +1306,13 @@ public final class BinlogHelperTest {
     interceptedCall.start(mockListener, clientInitial);
     verify(mockSinkWriter).logClientHeader(
         /*seq=*/ eq(1L),
-        any(String.class),
-        any(String.class),
+        anyString(),
+        anyString(),
         any(Duration.class),
         any(Metadata.class),
         eq(Logger.LOGGER_CLIENT),
         eq(CALL_ID),
-        isNull(SocketAddress.class));
+        ArgumentMatchers.<SocketAddress>isNull());
     verifyNoMoreInteractions(mockSinkWriter);
 
     // trailer only response
@@ -1405,7 +1409,7 @@ public final class BinlogHelperTest {
           /*seq=*/ eq(1L),
           eq("service/method"),
           eq("the-authority"),
-          isNull(Duration.class),
+          ArgumentMatchers.<Duration>isNull(),
           same(clientInitial),
           eq(Logger.LOGGER_SERVER),
           eq(CALL_ID),
@@ -1422,7 +1426,7 @@ public final class BinlogHelperTest {
           same(serverInital),
           eq(Logger.LOGGER_SERVER),
           eq(CALL_ID),
-          isNull(SocketAddress.class));
+          ArgumentMatchers.<SocketAddress>isNull());
       verifyNoMoreInteractions(mockSinkWriter);
       assertSame(serverInital, actualServerInitial.get());
     }
@@ -1479,7 +1483,7 @@ public final class BinlogHelperTest {
           same(trailers),
           eq(Logger.LOGGER_SERVER),
           eq(CALL_ID),
-          isNull(SocketAddress.class));
+          ArgumentMatchers.<SocketAddress>isNull());
       verifyNoMoreInteractions(mockSinkWriter);
       assertSame(status, actualStatus.get());
       assertSame(trailers, actualTrailers.get());

@@ -9,8 +9,7 @@ plugins {
 
 repositories {
     maven { // The google mirror is less flaky than mavenCentral()
-        url "https://maven-central.storage-download.googleapis.com/repos/central/data/"
-    }
+        url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     mavenLocal()
 }
 
@@ -38,7 +37,7 @@ dependencies {
 
     testImplementation "io.grpc:grpc-testing:${grpcVersion}"
     testImplementation "junit:junit:4.12"
-    testImplementation "org.mockito:mockito-core:1.10.19"
+    testImplementation "org.mockito:mockito-core:2.25.1"
 }
 
 protobuf {

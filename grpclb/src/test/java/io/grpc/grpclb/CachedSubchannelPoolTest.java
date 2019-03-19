@@ -19,7 +19,7 @@ package io.grpc.grpclb;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.grpclb.CachedSubchannelPool.SHUTDOWN_TIMEOUT_MS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;

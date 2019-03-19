@@ -35,10 +35,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -96,7 +95,7 @@ import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -157,7 +156,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
             }
           })
       .when(streamListener)
-      .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+      .messagesAvailable(ArgumentMatchers.<StreamListener.MessageProducer>any());
 
     lifecycleManager = new ClientTransportLifecycleManager(listener);
     // This mocks the keepalive manager only for there's in which we verify it. For other tests
@@ -380,7 +379,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Read a GOAWAY that indicates our stream was never processed by the server.
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture(), same(REFUSED), notNull(Metadata.class));
+    verify(streamListener).closed(captor.capture(), same(REFUSED),
+        ArgumentMatchers.<Metadata>notNull());
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
     assertEquals("HTTP/2 error code: CANCEL\nReceived Goaway\nthis is a test",
         captor.getValue().getDescription());
@@ -487,7 +487,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
     handler().channelInactive(ctx());
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture(), same(PROCESSED), notNull(Metadata.class));
+    verify(streamListener).closed(captor.capture(), same(PROCESSED),
+        ArgumentMatchers.<Metadata>notNull());
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 

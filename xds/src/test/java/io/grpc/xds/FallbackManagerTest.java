@@ -17,8 +17,8 @@
 package io.grpc.xds;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,7 +44,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -123,7 +123,7 @@ public class FallbackManagerTest {
         eags, Attributes.EMPTY, fallbackPolicy);
 
     verify(fakeLb, never()).handleResolvedAddressGroups(
-        Matchers.<List<EquivalentAddressGroup>>any(), Matchers.<Attributes>any());
+        ArgumentMatchers.<List<EquivalentAddressGroup>>any(), ArgumentMatchers.<Attributes>any());
 
     fakeClock.forwardTime(FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
@@ -146,6 +146,6 @@ public class FallbackManagerTest {
     fakeClock.forwardTime(FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
     verify(fakeLb, never()).handleResolvedAddressGroups(
-        Matchers.<List<EquivalentAddressGroup>>any(), Matchers.<Attributes>any());
+        ArgumentMatchers.<List<EquivalentAddressGroup>>any(), ArgumentMatchers.<Attributes>any());
   }
 }

@@ -25,10 +25,10 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -58,7 +58,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnit;
@@ -89,7 +89,7 @@ public class AbstractClientStreamTest {
         while (producer.next() != null) {}
         return null;
       }
-    }).when(mockListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+    }).when(mockListener).messagesAvailable(ArgumentMatchers.<StreamListener.MessageProducer>any());
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
@@ -454,7 +454,7 @@ public class AbstractClientStreamTest {
     stream.start(mockListener);
 
     ArgumentCaptor<Metadata> headersCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(sink).writeHeaders(headersCaptor.capture(), any(byte[].class));
+    verify(sink).writeHeaders(headersCaptor.capture(), ArgumentMatchers.<byte[]>any());
 
     Metadata headers = headersCaptor.getValue();
     assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));

@@ -31,10 +31,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
@@ -1687,7 +1687,7 @@ public class GrpclbLoadBalancerTest {
     // Fail the retry after spending 4ns
     fakeClock.forwardNanos(4);
     lbResponseObserver.onError(Status.UNAVAILABLE.asException());
-    
+
     // Will be on the first retry (10ns) of backoff sequence 2.
     inOrder.verify(backoffPolicy2).nextBackoffNanos();
     assertEquals(1, fakeClock.numPendingTasks(LB_RPC_RETRY_TASK_FILTER));
@@ -1996,7 +1996,7 @@ public class GrpclbLoadBalancerTest {
                 new EquivalentAddressGroup(backends1.get(0).addr, eagAttrsWithToken("token0001")),
                 new EquivalentAddressGroup(backends1.get(1).addr, eagAttrsWithToken("token0002")))),
         any(Attributes.class));
-    
+
     inOrder.verify(helper).updateBalancingState(eq(IDLE), any(SubchannelPicker.class));
   }
 

@@ -28,13 +28,11 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
-import static org.mockito.Matchers.isNotNull;
-import static org.mockito.Matchers.notNull;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -107,8 +105,8 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -796,7 +794,7 @@ public class ServerImplTest {
 
     assertEquals(1, executor.runDueTasks());
     verify(fallbackRegistry).lookupMethod("Waiter/serve", AUTHORITY);
-    verify(stream).close(same(status), notNull(Metadata.class));
+    verify(stream).close(same(status), ArgumentMatchers.<Metadata>notNull());
     verify(stream, atLeast(1)).statsTraceContext();
   }
 
@@ -972,7 +970,7 @@ public class ServerImplTest {
     assertTrue(onCancelCalled.get());
 
     // Close should never be called if asserts in listener pass.
-    verify(stream, times(0)).close(isA(Status.class), isNotNull(Metadata.class));
+    verify(stream, times(0)).close(isA(Status.class), ArgumentMatchers.<Metadata>isNotNull());
   }
 
   private ServerStreamListener testClientClose_setup(
@@ -1123,8 +1121,8 @@ public class ServerImplTest {
     // This call will be handled by callHandler from the internal registry
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     assertEquals(1, executor.runDueTasks());
-    verify(callHandler).startCall(Matchers.<ServerCall<String, Integer>>anyObject(),
-        Matchers.<Metadata>anyObject());
+    verify(callHandler).startCall(ArgumentMatchers.<ServerCall<String, Integer>>any(),
+        ArgumentMatchers.<Metadata>any());
     // This call will be handled by the fallbackRegistry because it's not registred in the internal
     // registry.
     transportListener.streamCreated(stream, "Service1/Method2", requestHeaders);

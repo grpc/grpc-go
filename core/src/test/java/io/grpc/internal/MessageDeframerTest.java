@@ -22,7 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
-import static org.mockito.Matchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -62,7 +62,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -321,7 +321,7 @@ public class MessageDeframerTest {
             }
           })
           .when(listener)
-          .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+          .messagesAvailable(ArgumentMatchers.<StreamListener.MessageProducer>any());
       deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 1, 3}));
       deframer.closeWhenComplete();
       verifyNoMoreInteractions(listener);

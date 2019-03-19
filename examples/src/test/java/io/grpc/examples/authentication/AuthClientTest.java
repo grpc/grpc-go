@@ -41,7 +41,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Unit tests for {@link AuthClient} testing the default and non-default tokens
@@ -104,9 +104,9 @@ public class AuthClientTest {
     String retVal = client.greet("default token test");
 
     verify(mockServerInterceptor).interceptCall(
-        Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
         metadataCaptor.capture(),
-        Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
     assertEquals(
         "my-default-token",
         metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));
@@ -124,9 +124,9 @@ public class AuthClientTest {
     String retVal = client.greet("non default token test");
 
     verify(mockServerInterceptor).interceptCall(
-        Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
         metadataCaptor.capture(),
-        Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
     assertEquals(
         "non-default-token",
         metadataCaptor.getValue().get(Constant.JWT_METADATA_KEY));

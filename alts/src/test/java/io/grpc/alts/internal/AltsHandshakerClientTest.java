@@ -36,7 +36,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 
 /** Unit tests for {@link AltsHandshakerClient}. */
 @RunWith(JUnit4.class)
@@ -64,7 +64,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startClientHandshakeFailure() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getErrorResponse());
 
     try {
@@ -77,7 +77,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startClientHandshakeSuccess() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(0));
 
     ByteBuffer outFrame = handshaker.startClientHandshake();
@@ -90,7 +90,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startClientHandshakeWithOptions() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(0));
 
     ByteBuffer outFrame = handshaker.startClientHandshake();
@@ -113,7 +113,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startServerHandshakeFailure() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getErrorResponse());
 
     try {
@@ -127,7 +127,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startServerHandshakeSuccess() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -142,7 +142,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startServerHandshakeEmptyOutFrame() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getEmptyOutFrameResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -157,7 +157,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void startServerHandshakeWithPrefixBuffer() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -174,7 +174,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void nextFailure() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getErrorResponse());
 
     try {
@@ -188,7 +188,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void nextSuccess() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -203,7 +203,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void nextEmptyOutFrame() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getEmptyOutFrameResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -218,7 +218,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void nextFinished() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getFinishedResponse(BYTES_CONSUMED));
 
     ByteBuffer inBytes = ByteBuffer.allocate(IN_BYTES_SIZE);
@@ -232,7 +232,7 @@ public class AltsHandshakerClientTest {
 
   @Test
   public void setRpcVersions() throws Exception {
-    when(mockStub.send(Matchers.<HandshakerReq>any()))
+    when(mockStub.send(ArgumentMatchers.<HandshakerReq>any()))
         .thenReturn(MockAltsHandshakerResp.getOkResponse(0));
 
     RpcProtocolVersions rpcVersions =

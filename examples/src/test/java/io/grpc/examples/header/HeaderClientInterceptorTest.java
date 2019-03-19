@@ -44,7 +44,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Unit tests for {@link HeaderClientInterceptor}.
@@ -95,9 +95,9 @@ public class HeaderClientInterceptorTest {
     }
 
     verify(mockServerInterceptor).interceptCall(
-        Matchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
         metadataCaptor.capture(),
-        Matchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
     assertEquals(
         "customRequestValue",
         metadataCaptor.getValue().get(HeaderClientInterceptor.CUSTOM_HEADER_KEY));

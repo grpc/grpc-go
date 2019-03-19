@@ -23,7 +23,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
@@ -104,6 +104,7 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 @RunWith(JUnit4.class)
@@ -470,7 +471,7 @@ public class ProtocolNegotiatorsTest {
     channel.eventLoop().submit(NOOP_RUNNABLE).sync();
     ArgumentCaptor<Object> objectCaptor = ArgumentCaptor.forClass(Object.class);
     Mockito.verify(mockHandler)
-        .channelRead(any(ChannelHandlerContext.class), objectCaptor.capture());
+        .channelRead(ArgumentMatchers.<ChannelHandlerContext>any(), objectCaptor.capture());
     ByteBuf b = (ByteBuf) objectCaptor.getValue();
     String request = b.toString(UTF_8);
     b.release();
@@ -483,9 +484,9 @@ public class ProtocolNegotiatorsTest {
     negotiationFuture.sync();
 
     channel.eventLoop().submit(NOOP_RUNNABLE).sync();
-    objectCaptor.getAllValues().clear();
+    objectCaptor = ArgumentCaptor.forClass(Object.class);
     Mockito.verify(mockHandler, times(2))
-        .channelRead(any(ChannelHandlerContext.class), objectCaptor.capture());
+        .channelRead(ArgumentMatchers.<ChannelHandlerContext>any(), objectCaptor.capture());
     b = (ByteBuf) objectCaptor.getAllValues().get(1);
     // If we were using the real grpcHandler, this would have been the HTTP/2 preface
     String preface = b.toString(UTF_8);

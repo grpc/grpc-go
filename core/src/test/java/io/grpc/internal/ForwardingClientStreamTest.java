@@ -18,7 +18,7 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,7 +64,7 @@ public class ForwardingClientStreamTest {
 
   @Test
   public void writeMessageTest() {
-    InputStream is = mock(InputStream.class); 
+    InputStream is = mock(InputStream.class);
     forward.writeMessage(is);
     verify(mock).writeMessage(same(is));
   }

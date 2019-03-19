@@ -20,7 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.ServiceConfigInterceptor.HEDGING_POLICY_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 

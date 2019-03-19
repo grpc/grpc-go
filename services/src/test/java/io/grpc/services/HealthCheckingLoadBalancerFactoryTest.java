@@ -26,10 +26,9 @@ import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalAnswers.delegatesTo;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.argThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -93,6 +92,7 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.hamcrest.MockitoHamcrest;
 
 /** Tests for {@link HealthCheckingLoadBalancerFactory}. */
 @RunWith(JUnit4.class)
@@ -173,7 +173,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
       eagLists[i] = eagList;
     }
     resolvedAddressList = Arrays.asList(eags);
-    
+
     when(backoffPolicyProvider.get()).thenReturn(backoffPolicy1, backoffPolicy2);
     when(backoffPolicy1.nextBackoffNanos()).thenReturn(11L, 21L, 31L);
     when(backoffPolicy2.nextBackoffNanos()).thenReturn(12L, 22L, 32L);
@@ -477,7 +477,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
     verifyRetryAfterNanos(inOrder, subchannel, healthImpl, 11);
     assertThat(clock.getPendingTasks()).isEmpty();
-    
+
     subchannel.logs.clear();
     // Server closes the health checking RPC without any response
     healthImpl.calls.poll().responseObserver.onError(Status.CANCELLED.asException());
@@ -496,7 +496,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
     inOrder.verify(backoffPolicy1).nextBackoffNanos();
 
     verifyRetryAfterNanos(inOrder, subchannel, healthImpl, 21);
-    
+
     // Server responds this time
     healthImpl.calls.poll().responseObserver.onNext(makeResponse(ServingStatus.SERVING));
 
@@ -1038,31 +1038,32 @@ public class HealthCheckingLoadBalancerFactoryTest {
   }
 
   private ConnectivityStateInfo unavailableStateWithMsg(final String expectedMsg) {
-    return argThat(new org.hamcrest.BaseMatcher<ConnectivityStateInfo>() {
-        @Override
-        public boolean matches(Object item) {
-          if (!(item instanceof ConnectivityStateInfo)) {
-            return false;
+    return MockitoHamcrest.argThat(
+        new org.hamcrest.BaseMatcher<ConnectivityStateInfo>() {
+          @Override
+          public boolean matches(Object item) {
+            if (!(item instanceof ConnectivityStateInfo)) {
+              return false;
+            }
+            ConnectivityStateInfo info = (ConnectivityStateInfo) item;
+            if (!info.getState().equals(TRANSIENT_FAILURE)) {
+              return false;
+            }
+            Status error = info.getStatus();
+            if (!error.getCode().equals(Code.UNAVAILABLE)) {
+              return false;
+            }
+            if (!error.getDescription().equals(expectedMsg)) {
+              return false;
+            }
+            return true;
           }
-          ConnectivityStateInfo info = (ConnectivityStateInfo) item;
-          if (!info.getState().equals(TRANSIENT_FAILURE)) {
-            return false;
-          }
-          Status error = info.getStatus();
-          if (!error.getCode().equals(Code.UNAVAILABLE)) {
-            return false;
-          }
-          if (!error.getDescription().equals(expectedMsg)) {
-            return false;
-          }
-          return true;
-        }
 
-        @Override
-        public void describeTo(org.hamcrest.Description desc) {
-          desc.appendText("Matches unavailable state with msg='" + expectedMsg + "'");
-        }
-      });
+          @Override
+          public void describeTo(org.hamcrest.Description desc) {
+            desc.appendText("Matches unavailable state with msg='" + expectedMsg + "'");
+          }
+        });
   }
 
   private static class HealthImpl extends HealthGrpc.HealthImplBase {

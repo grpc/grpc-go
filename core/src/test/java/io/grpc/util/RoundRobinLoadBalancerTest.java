@@ -30,9 +30,9 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -235,7 +235,7 @@ public class RoundRobinLoadBalancerTest {
 
     verify(newSubchannel, times(1)).requestConnection();
     verify(removedSubchannel, times(1)).shutdown();
-    
+
     loadBalancer.handleSubchannelState(removedSubchannel,
             ConnectivityStateInfo.forNonError(SHUTDOWN));
 
@@ -734,7 +734,7 @@ public class RoundRobinLoadBalancerTest {
 
     assertSame(stickinessMap1, stickinessMap2);
   }
-  
+
   @Test(expected = IllegalArgumentException.class)
   public void readyPicker_emptyList() {
     // ready picker list must be non-empty
