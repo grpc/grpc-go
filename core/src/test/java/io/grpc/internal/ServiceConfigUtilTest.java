@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 
 import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -41,7 +42,7 @@ public class ServiceConfigUtilTest {
     assertEquals(
         "dns:///balancer.example.com:8080",
         ServiceConfigUtil.getBalancerNameFromXdsConfig(
-            ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig))));
+            ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig)))));
   }
 
   @Test
@@ -52,12 +53,12 @@ public class ServiceConfigUtilTest {
         + "\"fallbackPolicy\" : [{\"lbPolicy3\" : {\"key\" : \"val\"}}, {\"lbPolicy4\" : {}}]"
         + "}}";
     LbConfig expectedChildPolicy1 = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"round_robin\" : {}}"));
+        checkObject(JsonParser.parse("{\"round_robin\" : {}}")));
     LbConfig expectedChildPolicy2 = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"lbPolicy2\" : {\"key\" : \"val\"}}"));
+        checkObject(JsonParser.parse("{\"lbPolicy2\" : {\"key\" : \"val\"}}")));
 
     List<LbConfig> childPolicies = ServiceConfigUtil.getChildPolicyFromXdsConfig(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig)));
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig))));
 
     assertThat(childPolicies).containsExactly(expectedChildPolicy1, expectedChildPolicy2);
   }
@@ -70,7 +71,7 @@ public class ServiceConfigUtilTest {
         + "}}";
 
     List<LbConfig> childPolicies = ServiceConfigUtil.getChildPolicyFromXdsConfig(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig)));
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig))));
 
     assertThat(childPolicies).isNull();
   }
@@ -83,12 +84,12 @@ public class ServiceConfigUtilTest {
         + "\"fallbackPolicy\" : [{\"lbPolicy3\" : {\"key\" : \"val\"}}, {\"lbPolicy4\" : {}}]"
         + "}}";
     LbConfig expectedFallbackPolicy1 = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"lbPolicy3\" : {\"key\" : \"val\"}}"));
+        checkObject(JsonParser.parse("{\"lbPolicy3\" : {\"key\" : \"val\"}}")));
     LbConfig expectedFallbackPolicy2 = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"lbPolicy4\" : {}}"));
+        checkObject(JsonParser.parse("{\"lbPolicy4\" : {}}")));
 
     List<LbConfig> childPolicies = ServiceConfigUtil.getFallbackPolicyFromXdsConfig(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig)));
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig))));
 
     assertThat(childPolicies).containsExactly(expectedFallbackPolicy1, expectedFallbackPolicy2);
   }
@@ -101,7 +102,7 @@ public class ServiceConfigUtilTest {
         + "}}";
 
     List<LbConfig> fallbackPolicies = ServiceConfigUtil.getFallbackPolicyFromXdsConfig(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig)));
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig))));
 
     assertThat(fallbackPolicies).isNull();
   }
@@ -113,7 +114,8 @@ public class ServiceConfigUtilTest {
         + "\"childPolicy\" : [{\"round_robin\" : {}}, {\"lbPolicy2\" : {\"key\" : \"val\"}}]"
         + "}}";
 
-    LbConfig config = ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
+    LbConfig config =
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig)));
     assertThat(config.getPolicyName()).isEqualTo("xds_experimental");
     assertThat(config.getRawConfigValue()).isEqualTo(JsonParser.parse(
             "{\"balancerName\" : \"dns:///balancer.example.com:8080\","
@@ -130,7 +132,7 @@ public class ServiceConfigUtilTest {
         + "},"
         + "\"grpclb\" : {} }";
     try {
-      ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
+      ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig)));
       fail("Should throw");
     } catch (Exception e) {
       assertThat(e).hasMessageThat().contains("There are 2 fields");
@@ -142,34 +144,10 @@ public class ServiceConfigUtilTest {
     // A LoadBalancingConfig should not exactly one field.
     String lbConfig = "{}";
     try {
-      ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
+      ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig)));
       fail("Should throw");
     } catch (Exception e) {
       assertThat(e).hasMessageThat().contains("There are 0 fields");
-    }
-  }
-
-  @Test
-  public void unwrapLoadBalancingConfig_failOnList() throws Exception {
-    // A LoadBalancingConfig must be a JSON dictionary (map)
-    String lbConfig = "[ { \"xds\" : {} } ]";
-    try {
-      ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
-      fail("Should throw");
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().contains("Invalid type");
-    }
-  }
-
-  @Test
-  public void unwrapLoadBalancingConfig_failOnString() throws Exception {
-    // A LoadBalancingConfig must be a JSON dictionary (map)
-    String lbConfig = "\"xds\"";
-    try {
-      ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
-      fail("Should throw");
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().contains("Invalid type");
     }
   }
 
@@ -178,10 +156,10 @@ public class ServiceConfigUtilTest {
     // The value of the config should be a JSON dictionary (map)
     String lbConfig = "{ \"xds\" : \"I thought I was a config.\" }";
     try {
-      ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfig));
+      ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(lbConfig)));
       fail("Should throw");
     } catch (Exception e) {
-      assertThat(e).hasMessageThat().contains("Invalid value type");
+      assertThat(e).hasMessageThat().contains("is not object");
     }
   }
 
@@ -191,24 +169,14 @@ public class ServiceConfigUtilTest {
         + "{\"xds_experimental\" : {\"balancerName\" : \"dns:///balancer.example.com:8080\"} },"
         + "{\"grpclb\" : {} } ]";
     List<LbConfig> configs =
-        ServiceConfigUtil.unwrapLoadBalancingConfigList(JsonParser.parse(lbConfig));
+        ServiceConfigUtil.unwrapLoadBalancingConfigList(
+            checkObjectList(JsonParser.parse(lbConfig)));
     assertThat(configs).containsExactly(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(
                 "{\"xds_experimental\" : "
-                + "{\"balancerName\" : \"dns:///balancer.example.com:8080\"} }")),
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(
-                "{\"grpclb\" : {} }"))).inOrder();
-  }
-
-  @Test
-  public void unwrapLoadBalancingConfigList_failOnObject() throws Exception {
-    String notAList = "{}";
-    try {
-      ServiceConfigUtil.unwrapLoadBalancingConfigList(JsonParser.parse(notAList));
-      fail("Should throw");
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().contains("List expected");
-    }
+                + "{\"balancerName\" : \"dns:///balancer.example.com:8080\"} }"))),
+        ServiceConfigUtil.unwrapLoadBalancingConfig(checkObject(JsonParser.parse(
+                "{\"grpclb\" : {} }")))).inOrder();
   }
 
   @Test
@@ -217,10 +185,20 @@ public class ServiceConfigUtilTest {
         + "{\"xds_experimental\" : \"I thought I was a config\" },"
         + "{\"grpclb\" : {} } ]";
     try {
-      ServiceConfigUtil.unwrapLoadBalancingConfigList(JsonParser.parse(lbConfig));
+      ServiceConfigUtil.unwrapLoadBalancingConfigList(checkObjectList(JsonParser.parse(lbConfig)));
       fail("Should throw");
     } catch (Exception e) {
-      assertThat(e).hasMessageThat().contains("Invalid value type");
+      assertThat(e).hasMessageThat().contains("is not object");
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, ?>> checkObjectList(Object o) {
+    return (List<Map<String, ?>>) o;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, ?> checkObject(Object o) {
+    return (Map<String, ?>) o;
   }
 }

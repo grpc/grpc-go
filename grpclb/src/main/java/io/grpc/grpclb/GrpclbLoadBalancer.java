@@ -117,12 +117,12 @@ class GrpclbLoadBalancer extends LoadBalancer {
       if (rawLbConfigValue == null) {
         return DEFAULT_MODE;
       }
-      Object rawChildPolicies = rawLbConfigValue.get("childPolicy");
+      List<?> rawChildPolicies = getList(rawLbConfigValue, "childPolicy");
       if (rawChildPolicies == null) {
         return DEFAULT_MODE;
       }
       List<LbConfig> childPolicies =
-          ServiceConfigUtil.unwrapLoadBalancingConfigList(rawChildPolicies);
+          ServiceConfigUtil.unwrapLoadBalancingConfigList(checkObjectList(rawChildPolicies));
       for (LbConfig childPolicy : childPolicies) {
         String childPolicyName = childPolicy.getPolicyName();
         switch (childPolicyName) {
@@ -173,5 +173,39 @@ class GrpclbLoadBalancer extends LoadBalancer {
   @Nullable
   GrpclbState getGrpclbState() {
     return grpclbState;
+  }
+
+  // TODO(carl-mastrangelo): delete getList and checkObjectList once apply is complete for SVCCFG.
+  /**
+   * Gets a list from an object for the given key.  Copy of
+   * {@link io.grpc.internal.ServiceConfigUtil#getList}.
+   */
+  @SuppressWarnings("unchecked")
+  @Nullable
+  private static List<?> getList(Map<String, ?> obj, String key) {
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
+    }
+    Object value = obj.get(key);
+    if (!(value instanceof List)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in %s is not List", value, key, obj));
+    }
+    return (List<?>) value;
+  }
+
+  /**
+   * Copy of {@link io.grpc.internal.ServiceConfigUtil#checkObjectList}.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, ?>> checkObjectList(List<?> rawList) {
+    for (int i = 0; i < rawList.size(); i++) {
+      if (!(rawList.get(i) instanceof Map)) {
+        throw new ClassCastException(
+            String.format("value %s for idx %d in %s is not object", rawList.get(i), i, rawList));
+      }
+    }
+    return (List<Map<String, ?>>) rawList;
   }
 }

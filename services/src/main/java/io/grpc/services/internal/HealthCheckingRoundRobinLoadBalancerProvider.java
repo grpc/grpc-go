@@ -22,7 +22,9 @@ import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancerProvider;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import io.grpc.services.HealthCheckingLoadBalancerUtil;
+import java.util.Map;
 
 /**
  * The health-check-capable provider for the "round_robin" balancing policy.  This overrides
@@ -56,13 +58,18 @@ public final class HealthCheckingRoundRobinLoadBalancerProvider extends LoadBala
     return HealthCheckingLoadBalancerUtil.newHealthCheckingLoadBalancer(rrProvider, helper);
   }
 
-  @SuppressWarnings("unchecked")
+  @Override
+  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+      Map<String, ?> rawLoadBalancingPolicyConfig) {
+    return rrProvider.parseLoadBalancingPolicyConfig(rawLoadBalancingPolicyConfig);
+  }
+
   @VisibleForTesting
   static LoadBalancerProvider newRoundRobinProvider() {
     try {
-      Class<LoadBalancerProvider> rrProviderClass =
-          (Class<LoadBalancerProvider>) Class.forName(
-              "io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider");
+      Class<? extends LoadBalancerProvider> rrProviderClass =
+          Class.forName("io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider")
+              .asSubclass(LoadBalancerProvider.class);
       return rrProviderClass.getDeclaredConstructor().newInstance();
     } catch (Exception e) {
       Throwables.throwIfUnchecked(e);

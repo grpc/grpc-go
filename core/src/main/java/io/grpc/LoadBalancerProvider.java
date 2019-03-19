@@ -17,6 +17,8 @@
 package io.grpc;
 
 import com.google.common.base.MoreObjects;
+import io.grpc.NameResolver.Helper.ConfigOrError;
+import java.util.Map;
 
 /**
  * Provider of {@link LoadBalancer}s.  Each provider is bounded to a load-balancing policy name.
@@ -48,6 +50,23 @@ public abstract class LoadBalancerProvider extends LoadBalancer.Factory {
    * and can only start with letters.
    */
   public abstract String getPolicyName();
+
+  /**
+   * Parses the config for the Load Balancing policy unpacked from the service config.  This will
+   * return a {@link ConfigOrError} which contains either the successfully parsed config, or the
+   * {@link Status} representing the failure to parse.  Implementations are expected to not throw
+   * exceptions but return a Status representing the failure.
+   *
+   * @param rawLoadBalancingPolicyConfig The {@link Map} representation of the load balancing
+   *     policy choice.
+   * @return a tuple of the fully parsed and validated balancer configuration, else the Status.
+   * @since 1.20.0
+   * @see https://github.com/grpc/proposal/blob/master/A24-lb-policy-config.md
+   */
+  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+      Map<String, ?> rawLoadBalancingPolicyConfig) {
+    return ConfigOrError.UNKNOWN_CONFIG;
+  }
 
   @Override
   public final String toString() {

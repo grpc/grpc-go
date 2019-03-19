@@ -3389,6 +3389,7 @@ public class ManagedChannelImplTest {
     boolean retryEnabled = false;
     int maxRetryAttemptsLimit = 2;
     int maxHedgedAttemptsLimit = 3;
+    AutoConfiguredLoadBalancerFactory autoConfiguredLoadBalancerFactory = null;
 
     NrHelper nrh = new NrHelper(
         defaultPort,
@@ -3396,12 +3397,13 @@ public class ManagedChannelImplTest {
         syncCtx,
         retryEnabled,
         maxRetryAttemptsLimit,
-        maxHedgedAttemptsLimit);
+        maxHedgedAttemptsLimit,
+        autoConfiguredLoadBalancerFactory);
 
     ConfigOrError<ManagedChannelServiceConfig> coe =
         nrh.parseServiceConfig(ImmutableMap.<String, Object>of());
 
-    assertThat(coe.getConfig()).isNotNull();
+    assertThat(coe.getError()).isNull();
     assertThat(coe.getConfig().getServiceMap()).isEmpty();
     assertThat(coe.getConfig().getServiceMethodMap()).isEmpty();
   }
@@ -3415,6 +3417,7 @@ public class ManagedChannelImplTest {
     boolean retryEnabled = false;
     int maxRetryAttemptsLimit = 2;
     int maxHedgedAttemptsLimit = 3;
+    AutoConfiguredLoadBalancerFactory autoConfiguredLoadBalancerFactory = null;
 
     NrHelper nrh = new NrHelper(
         defaultPort,
@@ -3422,7 +3425,8 @@ public class ManagedChannelImplTest {
         syncCtx,
         retryEnabled,
         maxRetryAttemptsLimit,
-        maxHedgedAttemptsLimit);
+        maxHedgedAttemptsLimit,
+        autoConfiguredLoadBalancerFactory);
 
     ConfigOrError<ManagedChannelServiceConfig> coe =
         nrh.parseServiceConfig(ImmutableMap.<String, Object>of("methodConfig", "bogus"));
@@ -3431,6 +3435,34 @@ public class ManagedChannelImplTest {
     assertThat(coe.getError().getCode()).isEqualTo(Code.UNKNOWN);
     assertThat(coe.getError().getDescription()).contains("failed to parse service config");
     assertThat(coe.getError().getCause()).isInstanceOf(ClassCastException.class);
+  }
+
+  @Test
+  public void nameResolverHelper_noConfigChosen() {
+    int defaultPort = 1;
+    ProxyDetector proxyDetector = GrpcUtil.getDefaultProxyDetector();
+    SynchronizationContext syncCtx =
+        new SynchronizationContext(Thread.currentThread().getUncaughtExceptionHandler());
+    boolean retryEnabled = false;
+    int maxRetryAttemptsLimit = 2;
+    int maxHedgedAttemptsLimit = 3;
+    AutoConfiguredLoadBalancerFactory autoConfiguredLoadBalancerFactory =
+        new AutoConfiguredLoadBalancerFactory("pick_first");
+
+    NrHelper nrh = new NrHelper(
+        defaultPort,
+        proxyDetector,
+        syncCtx,
+        retryEnabled,
+        maxRetryAttemptsLimit,
+        maxHedgedAttemptsLimit,
+        autoConfiguredLoadBalancerFactory);
+
+    ConfigOrError<ManagedChannelServiceConfig> coe =
+        nrh.parseServiceConfig(ImmutableMap.of("loadBalancingConfig", ImmutableList.of()));
+
+    assertThat(coe.getError()).isNull();
+    assertThat(coe.getConfig().getLoadBalancingConfig()).isEqualTo(null);
   }
 
   @Test

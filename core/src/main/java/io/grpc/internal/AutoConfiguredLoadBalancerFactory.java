@@ -31,10 +31,12 @@ import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import io.grpc.Status;
 import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,23 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
   @Override
   public LoadBalancer newLoadBalancer(Helper helper) {
     return new AutoConfiguredLoadBalancer(helper);
+  }
+
+  private static final class AutoConfiguredLoadBalancerServiceConfig {
+    @Nullable
+    private final Map<String, ?> loadBalancingConfigs;
+
+    AutoConfiguredLoadBalancerServiceConfig(@Nullable Map<String, ?> loadBalancingConfigs) {
+      if (loadBalancingConfigs != null) {
+        Map<String, Object> lbMapping = new LinkedHashMap<>();
+        for (Map.Entry<String, ?> entry : loadBalancingConfigs.entrySet()) {
+          lbMapping.put(entry.getKey(), entry.getValue());
+        }
+        this.loadBalancingConfigs = Collections.unmodifiableMap(lbMapping);
+      } else {
+        this.loadBalancingConfigs = null;
+      }
+    }
   }
 
   private static final class NoopLoadBalancer extends LoadBalancer {
@@ -190,9 +209,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
      * Picks a load balancer based on given criteria.  In order of preference:
      *
      * <ol>
-     *   <li>User provided lb on the channel.  This is a degenerate case and not handled here.</li>
+     *   <li>User provided lb on the channel.  This is a degenerate case and not handled here.
+     *       This options is deprecated.</li>
+     *   <li>Policy from "loadBalancingConfig" if present.  This is not covered here.</li>
      *   <li>"grpclb" if any gRPC LB balancer addresses are present</li>
-     *   <li>The policy picked by the service config</li>
+     *   <li>The policy from "loadBalancingPolicy" if present</li>
      *   <li>"pick_first" if the service config choice does not specify</li>
      * </ol>
      *
@@ -291,8 +312,48 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
     return provider;
   }
 
+  /**
+   * Unlike a normal {@link LoadBalancer.Factory}, this accepts a full service config rather than
+   * the LoadBalancingConfig.
+   *
+   * @return null if no selection could be made.
+   */
+  @Nullable
+  ConfigOrError<PolicySelection> selectLoadBalancerPolicy(Map<String, ?> serviceConfig) {
+    try {
+      List<LbConfig> loadBalancerConfigs = null;
+      if (serviceConfig != null) {
+        List<Map<String, ?>> rawLbConfigs =
+            ServiceConfigUtil.getLoadBalancingConfigsFromServiceConfig(serviceConfig);
+        loadBalancerConfigs = ServiceConfigUtil.unwrapLoadBalancingConfigList(rawLbConfigs);
+      }
+      if (loadBalancerConfigs != null && !loadBalancerConfigs.isEmpty()) {
+        List<String> policiesTried = new ArrayList<>();
+        for (LbConfig lbConfig : loadBalancerConfigs) {
+          String policy = lbConfig.getPolicyName();
+          LoadBalancerProvider provider = registry.getProvider(policy);
+          if (provider == null) {
+            policiesTried.add(policy);
+          } else {
+            return ConfigOrError.fromConfig(new PolicySelection(
+                provider,
+                /* serverList= */ null,
+                lbConfig.getRawConfigValue()));
+          }
+        }
+        return ConfigOrError.fromError(
+            Status.UNKNOWN.withDescription(
+                "None of " + policiesTried + " specified by Service Config are available."));
+      }
+      return null;
+    } catch (RuntimeException e) {
+      return ConfigOrError.fromError(
+          Status.UNKNOWN.withDescription("can't parse load balancer configuration").withCause(e));
+    }
+  }
+
   @VisibleForTesting
-  static class PolicyException extends Exception {
+  static final class PolicyException extends Exception {
     private static final long serialVersionUID = 1L;
 
     private PolicyException(String msg) {
@@ -303,7 +364,8 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
   @VisibleForTesting
   static final class PolicySelection {
     final LoadBalancerProvider provider;
-    final List<EquivalentAddressGroup> serverList;
+    @Nullable final List<EquivalentAddressGroup> serverList;
+    // TODO(carl-mastrangelo): make this the non-raw service config object.
     @Nullable final Map<String, ?> config;
 
     PolicySelection(
@@ -311,6 +373,14 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
         @Nullable Map<String, ?> config) {
       this.provider = checkNotNull(provider, "provider");
       this.serverList = Collections.unmodifiableList(checkNotNull(serverList, "serverList"));
+      this.config = config;
+    }
+
+    PolicySelection(
+        LoadBalancerProvider provider,
+        @Nullable Map<String, ?> config) {
+      this.provider = checkNotNull(provider, "provider");
+      this.serverList = null;
       this.config = config;
     }
   }

@@ -18,6 +18,8 @@ package io.grpc.util;
 
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancerProvider;
+import io.grpc.NameResolver.Helper.ConfigOrError;
+import java.util.Map;
 
 /**
  * Provider for the "round_robin" balancing policy.
@@ -29,6 +31,10 @@ final class SecretRoundRobinLoadBalancerProvider {
   }
 
   public static final class Provider extends LoadBalancerProvider {
+
+    private static final String NO_CONFIG = "no service config";
+
+
     @Override
     public boolean isAvailable() {
       return true;
@@ -47,6 +53,12 @@ final class SecretRoundRobinLoadBalancerProvider {
     @Override
     public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
       return new RoundRobinLoadBalancer(helper);
+    }
+
+    @Override
+    public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+        Map<String, ?> rawLoadBalancingPolicyConfig) {
+      return ConfigOrError.fromConfig(NO_CONFIG);
     }
   }
 }

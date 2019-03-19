@@ -58,13 +58,14 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   }
 
   void handleUpdate(@Nullable Map<String, ?> serviceConfig) {
+    // TODO(carl-mastrangelo): delete this.
     ManagedChannelServiceConfig conf;
     if (serviceConfig == null) {
       conf = new ManagedChannelServiceConfig(
-          new HashMap<String, MethodInfo>(), new HashMap<String, MethodInfo>());
+          new HashMap<String, MethodInfo>(), new HashMap<String, MethodInfo>(), null, null);
     } else {
       conf = ManagedChannelServiceConfig.fromServiceConfig(
-          serviceConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit);
+          serviceConfig, retryEnabled, maxRetryAttemptsLimit, maxHedgedAttemptsLimit, null);
     }
     managedChannelServiceConfig.set(conf);
     initComplete = true;

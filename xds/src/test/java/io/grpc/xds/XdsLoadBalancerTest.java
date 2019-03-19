@@ -19,7 +19,6 @@ package io.grpc.xds;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.LoadBalancer.ATTR_LOAD_BALANCING_CONFIG;
 import static io.grpc.xds.XdsLoadBalancer.STATE_INFO;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.anyString;
@@ -52,8 +51,6 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.JsonParser;
-import io.grpc.internal.ServiceConfigUtil;
-import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import io.grpc.internal.testing.StreamRecorder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
@@ -245,57 +242,6 @@ public class XdsLoadBalancerTest {
   @After
   public void tearDown() {
     lb.shutdown();
-  }
-
-  @Test
-  public void selectChildPolicy() throws Exception {
-    String lbConfigRaw = "{\"xds_experimental\" : { "
-        + "\"balancerName\" : \"dns:///balancer.example.com:8080\","
-        + "\"childPolicy\" : [{\"unsupported_1\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}},"
-        + "{\"supported_2\" : {\"key\" : \"val\"}}],"
-        + "\"fallbackPolicy\" : [{\"lbPolicy3\" : {\"key\" : \"val\"}}, {\"lbPolicy4\" : {}}]"
-        + "}}";
-    LbConfig expectedChildPolicy =
-        ServiceConfigUtil.unwrapLoadBalancingConfig(
-            JsonParser.parse("{\"supported_1\" : {\"key\" : \"val\"}}"));
-
-    LbConfig childPolicy = XdsLoadBalancer
-        .selectChildPolicy(
-            ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfigRaw)), lbRegistry);
-
-    assertEquals(expectedChildPolicy, childPolicy);
-  }
-
-  @Test
-  public void selectFallBackPolicy() throws Exception {
-    String lbConfigRaw = "{\"xds_experimental\" : { "
-        + "\"balancerName\" : \"dns:///balancer.example.com:8080\","
-        + "\"childPolicy\" : [{\"lbPolicy3\" : {\"key\" : \"val\"}}, {\"lbPolicy4\" : {}}],"
-        + "\"fallbackPolicy\" : [{\"unsupported\" : {}}, {\"supported_1\" : {\"key\" : \"val\"}},"
-        + "{\"supported_2\" : {\"key\" : \"val\"}}]"
-        + "}}";
-    LbConfig expectedFallbackPolicy = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"supported_1\" : {\"key\" : \"val\"}}"));
-
-    LbConfig fallbackPolicy = XdsLoadBalancer.selectFallbackPolicy(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfigRaw)), lbRegistry);
-
-    assertEquals(expectedFallbackPolicy, fallbackPolicy);
-  }
-
-  @Test
-  public void selectFallBackPolicy_roundRobinIsDefault() throws Exception {
-    String lbConfigRaw = "{\"xds_experimental\" : { "
-        + "\"balancerName\" : \"dns:///balancer.example.com:8080\","
-        + "\"childPolicy\" : [{\"lbPolicy3\" : {\"key\" : \"val\"}}, {\"lbPolicy4\" : {}}]"
-        + "}}";
-    LbConfig expectedFallbackPolicy = ServiceConfigUtil.unwrapLoadBalancingConfig(
-        JsonParser.parse("{\"round_robin\" : {}}"));
-
-    LbConfig fallbackPolicy = XdsLoadBalancer.selectFallbackPolicy(
-        ServiceConfigUtil.unwrapLoadBalancingConfig(JsonParser.parse(lbConfigRaw)), lbRegistry);
-
-    assertEquals(expectedFallbackPolicy, fallbackPolicy);
   }
 
   @Test
@@ -607,5 +553,15 @@ public class XdsLoadBalancerTest {
     assertThat(fakeClock.getPendingTasks()).isNotEmpty();
     lb.shutdown();
     assertThat(fakeClock.getPendingTasks()).isEmpty();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, ?>> checkObjectList(Object o) {
+    return (List<Map<String, ?>>) o;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, ?> checkObject(Object o) {
+    return (Map<String, ?>) o;
   }
 }

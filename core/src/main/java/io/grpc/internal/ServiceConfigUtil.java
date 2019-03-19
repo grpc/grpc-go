@@ -35,6 +35,8 @@ import javax.annotation.Nullable;
 
 /**
  * Helper utility to work with service configs.
+ *
+ * <p>This class contains helper methods to parse service config JSON values into Java types.
  */
 public final class ServiceConfigUtil {
 
@@ -124,6 +126,7 @@ public final class ServiceConfigUtil {
 
     Map<String, ?> throttling = getObject(serviceConfig, retryThrottlingKey);
 
+    // TODO(dapengzhang0): check if this is null.
     float maxTokens = getDouble(throttling, "maxTokens").floatValue();
     float tokenRatio = getDouble(throttling, "tokenRatio").floatValue();
     checkState(maxTokens > 0f, "maxToken should be greater than zero");
@@ -311,36 +314,34 @@ public final class ServiceConfigUtil {
       Map<String, ?> serviceConfig) {
     /* schema as follows
     {
-      "loadBalancingConfig": {
-        [
-          {"xds" :
-            {
-              "balancerName": "balancer1",
-              "childPolicy": [...],
-              "fallbackPolicy": [...],
-            }
-          },
-          {"round_robin": {}}
-        ]
-      },
+      "loadBalancingConfig": [
+        {"xds" :
+          {
+            "balancerName": "balancer1",
+            "childPolicy": [...],
+            "fallbackPolicy": [...],
+          }
+        },
+        {"round_robin": {}}
+      ],
       "loadBalancingPolicy": "ROUND_ROBIN"  // The deprecated policy key
     }
     */
     List<Map<String, ?>> lbConfigs = new ArrayList<>();
     if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY)) {
       List<?> configs = getList(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_CONFIG_KEY);
-      for (Object config : configs) {
-        lbConfigs.add((Map<String, ?>) config);
+      for (Map<String, ?> config : checkObjectList(configs)) {
+        lbConfigs.add(config);
       }
     }
     if (lbConfigs.isEmpty()) {
       // No LoadBalancingConfig found.  Fall back to the deprecated LoadBalancingPolicy
       if (serviceConfig.containsKey(SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY)) {
+        // TODO(zhangkun83): check if this is null.
         String policy = getString(serviceConfig, SERVICE_CONFIG_LOAD_BALANCING_POLICY_KEY);
         // Convert the policy to a config, so that the caller can handle them in the same way.
         policy = policy.toLowerCase(Locale.ROOT);
-        Map<String, ?> fakeConfig =
-            Collections.singletonMap(policy, (Object) Collections.emptyMap());
+        Map<String, ?> fakeConfig = Collections.singletonMap(policy, Collections.emptyMap());
         lbConfigs.add(fakeConfig);
       }
     }
@@ -353,48 +354,23 @@ public final class ServiceConfigUtil {
    * for that policy.
    */
   @SuppressWarnings("unchecked")
-  public static LbConfig unwrapLoadBalancingConfig(Object lbConfig) {
-    Map<String, ?> map;
-    try {
-      map = (Map<String, ?>) lbConfig;
-    } catch (ClassCastException e) {
-      ClassCastException ex = new ClassCastException("Invalid type. Config=" + lbConfig);
-      ex.initCause(e);
-      throw ex;
-    }
-    if (map.size() != 1) {
+  public static LbConfig unwrapLoadBalancingConfig(Map<String, ?> lbConfig) {
+    if (lbConfig.size() != 1) {
       throw new RuntimeException(
-          "There are " + map.size() + " fields in a LoadBalancingConfig object. Exactly one"
+          "There are " + lbConfig.size() + " fields in a LoadBalancingConfig object. Exactly one"
           + " is expected. Config=" + lbConfig);
     }
-    Map.Entry<String, ?> entry = map.entrySet().iterator().next();
-    Map<String, ?> configValue;
-    try {
-      configValue = (Map<String, ?>) entry.getValue();
-    } catch (ClassCastException e) {
-      ClassCastException ex =
-          new ClassCastException("Invalid value type.  value=" + entry.getValue());
-      ex.initCause(e);
-      throw ex;
-    }
-    return new LbConfig(entry.getKey(), configValue);
+    String key = lbConfig.entrySet().iterator().next().getKey();
+    return new LbConfig(key, getObject(lbConfig, key));
   }
 
   /**
    * Given a JSON list of LoadBalancingConfigs, and convert it into a list of LbConfig.
    */
   @SuppressWarnings("unchecked")
-  public static List<LbConfig> unwrapLoadBalancingConfigList(Object listObject) {
-    List<?> list;
-    try {
-      list = (List<?>) listObject;
-    } catch (ClassCastException e) {
-      ClassCastException ex = new ClassCastException("List expected, but is " + listObject);
-      ex.initCause(e);
-      throw ex;
-    }
+  public static List<LbConfig> unwrapLoadBalancingConfigList(List<Map<String, ?>> list) {
     ArrayList<LbConfig> result = new ArrayList<>();
-    for (Object rawChildPolicy : list) {
+    for (Map<String, ?> rawChildPolicy : list) {
       result.add(unwrapLoadBalancingConfig(rawChildPolicy));
     }
     return Collections.unmodifiableList(result);
@@ -414,9 +390,9 @@ public final class ServiceConfigUtil {
   @Nullable
   public static List<LbConfig> getChildPolicyFromXdsConfig(LbConfig xdsConfig) {
     Map<String, ?> map = xdsConfig.getRawConfigValue();
-    Object rawChildPolicies = map.get(XDS_CONFIG_CHILD_POLICY_KEY);
+    List<?> rawChildPolicies = getList(map, XDS_CONFIG_CHILD_POLICY_KEY);
     if (rawChildPolicies != null) {
-      return unwrapLoadBalancingConfigList(rawChildPolicies);
+      return unwrapLoadBalancingConfigList(checkObjectList(rawChildPolicies));
     }
     return null;
   }
@@ -427,9 +403,9 @@ public final class ServiceConfigUtil {
   @Nullable
   public static List<LbConfig> getFallbackPolicyFromXdsConfig(LbConfig xdsConfig) {
     Map<String, ?> map = xdsConfig.getRawConfigValue();
-    Object rawFallbackPolicies = map.get(XDS_CONFIG_FALLBACK_POLICY_KEY);
+    List<?> rawFallbackPolicies = getList(map, XDS_CONFIG_FALLBACK_POLICY_KEY);
     if (rawFallbackPolicies != null) {
-      return unwrapLoadBalancingConfigList(rawFallbackPolicies);
+      return unwrapLoadBalancingConfigList(checkObjectList(rawFallbackPolicies));
     }
     return null;
   }
@@ -447,86 +423,95 @@ public final class ServiceConfigUtil {
   }
 
   /**
-   * Gets a list from an object for the given key.
+   * Gets a list from an object for the given key.  If the key is not present, this returns null.
+   * If the value is not a List, throws an exception.
    */
   @SuppressWarnings("unchecked")
+  @Nullable
   static List<?> getList(Map<String, ?> obj, String key) {
-    assert obj.containsKey(key);
-    Object value = checkNotNull(obj.get(key), "no such key %s", key);
-    if (value instanceof List) {
-      return (List<?>) value;
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
     }
-    throw new ClassCastException(
-        String.format("value %s for key %s in %s is not List", value, key, obj));
+    Object value = obj.get(key);
+    if (!(value instanceof List)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in '%s' is not List", value, key, obj));
+    }
+    return (List<?>) value;
   }
 
   /**
-   * Gets an object from an object for the given key.
+   * Gets an object from an object for the given key.  If the key is not present, this returns null.
+   * If the value is not a List, throws an exception.
    */
   @SuppressWarnings("unchecked")
+  @Nullable
   static Map<String, ?> getObject(Map<String, ?> obj, String key) {
-    assert obj.containsKey(key);
-    Object value = checkNotNull(obj.get(key), "no such key %s", key);
-    if (value instanceof Map) {
-      return (Map<String, ?>) value;
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
     }
-    throw new ClassCastException(
-        String.format("value %s for key %s in %s is not object", value, key, obj));
+    Object value = obj.get(key);
+    if (!(value instanceof Map)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in '%s' is not object", value, key, obj));
+    }
+    return (Map<String, ?>) value;
   }
 
   /**
-   * Gets a double from an object for the given key.
+   * Gets a double from an object for the given key.  If the key is not present, this returns null.
+   * If the value is not a Double, throws an exception.
    */
-  @SuppressWarnings("unchecked")
+  @Nullable
   static Double getDouble(Map<String, ?> obj, String key) {
-    assert obj.containsKey(key);
-    Object value = checkNotNull(obj.get(key), "no such key %s", key);
-    if (value instanceof Double) {
-      return (Double) value;
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
     }
-    throw new ClassCastException(
-        String.format("value %s for key %s in %s is not Double", value, key, obj));
+    Object value = obj.get(key);
+    if (!(value instanceof Double)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in '%s' is not Double", value, key, obj));
+    }
+    return (Double) value;
   }
 
   /**
-   * Gets a string from an object for the given key.
+   * Gets a string from an object for the given key.  If the key is not present, this returns null.
+   * If the value is not a String, throws an exception.
    */
-  @SuppressWarnings("unchecked")
+  @Nullable
   static String getString(Map<String, ?> obj, String key) {
-    assert obj.containsKey(key);
-    Object value = checkNotNull(obj.get(key), "no such key %s", key);
-    if (value instanceof String) {
-      return (String) value;
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
     }
-    throw new ClassCastException(
-        String.format("value %s for key %s in %s is not String", value, key, obj));
+    Object value = obj.get(key);
+    if (!(value instanceof String)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in '%s' is not String", value, key, obj));
+    }
+    return (String) value;
   }
 
   /**
-   * Gets a string from an object for the given index.
+   * Gets a boolean from an object for the given key.  If the key is not present, this returns null.
+   * If the value is not a Boolean, throws an exception.
    */
-  @SuppressWarnings("unchecked")
-  static String getString(List<?> list, int i) {
-    assert i >= 0 && i < list.size();
-    Object value = checkNotNull(list.get(i), "idx %s in %s is null", i, list);
-    if (value instanceof String) {
-      return (String) value;
-    }
-    throw new ClassCastException(
-        String.format("value %s for idx %d in %s is not String", value, i, list));
-  }
-
-  /**
-   * Gets a boolean from an object for the given key.
-   */
+  @Nullable
   static Boolean getBoolean(Map<String, ?> obj, String key) {
-    assert obj.containsKey(key);
-    Object value = checkNotNull(obj.get(key), "no such key %s", key);
-    if (value instanceof Boolean) {
-      return (Boolean) value;
+    assert key != null;
+    if (!obj.containsKey(key)) {
+      return null;
     }
-    throw new ClassCastException(
-        String.format("value %s for key %s in %s is not Boolean", value, key, obj));
+    Object value = obj.get(key);
+    if (!(value instanceof Boolean)) {
+      throw new ClassCastException(
+          String.format("value '%s' for key '%s' in '%s' is not Boolean", value, key, obj));
+    }
+    return (Boolean) value;
   }
 
   @SuppressWarnings("unchecked")
@@ -545,7 +530,8 @@ public final class ServiceConfigUtil {
     for (int i = 0; i < rawList.size(); i++) {
       if (!(rawList.get(i) instanceof String)) {
         throw new ClassCastException(
-            String.format("value %s for idx %d in %s is not string", rawList.get(i), i, rawList));
+            String.format(
+                "value '%s' for idx %d in '%s' is not string", rawList.get(i), i, rawList));
       }
     }
     return (List<String>) rawList;

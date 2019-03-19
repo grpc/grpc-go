@@ -21,23 +21,23 @@ import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.grpc.Attributes;
 import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancerRegistry;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import io.grpc.Status;
 import io.grpc.SynchronizationContext.ScheduledHandle;
-import io.grpc.internal.ServiceConfigUtil;
 import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import io.grpc.xds.XdsComms.AdsStreamCallback;
 import io.grpc.xds.XdsLbState.SubchannelStore;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
@@ -50,9 +50,6 @@ final class XdsLoadBalancer extends LoadBalancer {
   @VisibleForTesting
   static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.create("io.grpc.xds.XdsLoadBalancer.stateInfo");
-
-  private static final LbConfig DEFAULT_FALLBACK_POLICY =
-      new LbConfig("round_robin", ImmutableMap.<String, Void>of());
 
   private final SubchannelStore subchannelStore;
   private final Helper helper;
@@ -91,17 +88,23 @@ final class XdsLoadBalancer extends LoadBalancer {
       List<EquivalentAddressGroup> servers, Attributes attributes) {
     Map<String, ?> newRawLbConfig = checkNotNull(
         attributes.get(ATTR_LOAD_BALANCING_CONFIG), "ATTR_LOAD_BALANCING_CONFIG not available");
-    LbConfig newLbConfig = ServiceConfigUtil.unwrapLoadBalancingConfig(newRawLbConfig);
-    fallbackPolicy = selectFallbackPolicy(newLbConfig, lbRegistry);
+
+    ConfigOrError<XdsConfig> cfg =
+        XdsLoadBalancerProvider.parseLoadBalancingConfigPolicy(newRawLbConfig, lbRegistry);
+    if (cfg.getError() != null) {
+      throw cfg.getError().asRuntimeException();
+    }
+    XdsConfig xdsConfig = cfg.getConfig();
+    fallbackPolicy = xdsConfig.fallbackPolicy;
     fallbackManager.updateFallbackServers(servers, attributes, fallbackPolicy);
     fallbackManager.maybeStartFallbackTimer();
-    handleNewConfig(newLbConfig);
+    handleNewConfig(xdsConfig);
     xdsLbState.handleResolvedAddressGroups(servers, attributes);
   }
 
-  private void handleNewConfig(LbConfig newLbConfig) {
-    String newBalancerName = ServiceConfigUtil.getBalancerNameFromXdsConfig(newLbConfig);
-    LbConfig childPolicy = selectChildPolicy(newLbConfig, lbRegistry);
+  private void handleNewConfig(XdsConfig xdsConfig) {
+    String newBalancerName = xdsConfig.newBalancerName;
+    LbConfig childPolicy = xdsConfig.childPolicy;
     XdsComms xdsComms = null;
     if (xdsLbState != null) { // may release and re-use/shutdown xdsComms from current xdsLbState
       if (!newBalancerName.equals(xdsLbState.balancerName)) {
@@ -111,7 +114,7 @@ final class XdsLoadBalancer extends LoadBalancer {
           fallbackManager.balancerWorking = false;
           xdsComms = null;
         }
-      } else if (!Objects.equals(
+      } else if (!Objects.equal(
           getPolicyNameOrNull(childPolicy),
           getPolicyNameOrNull(xdsLbState.childPolicy))) {
         String cancelMessage = "Changing loadbalancing mode";
@@ -136,35 +139,6 @@ final class XdsLoadBalancer extends LoadBalancer {
       return null;
     }
     return config.getPolicyName();
-  }
-
-  @Nullable
-  @VisibleForTesting
-  static LbConfig selectChildPolicy(LbConfig lbConfig, LoadBalancerRegistry lbRegistry) {
-    List<LbConfig> childConfigs = ServiceConfigUtil.getChildPolicyFromXdsConfig(lbConfig);
-    return selectSupportedLbPolicy(childConfigs, lbRegistry);
-  }
-
-  @VisibleForTesting
-  static LbConfig selectFallbackPolicy(LbConfig lbConfig, LoadBalancerRegistry lbRegistry) {
-    List<LbConfig> fallbackConfigs = ServiceConfigUtil.getFallbackPolicyFromXdsConfig(lbConfig);
-    LbConfig fallbackPolicy = selectSupportedLbPolicy(fallbackConfigs, lbRegistry);
-    return fallbackPolicy == null ? DEFAULT_FALLBACK_POLICY : fallbackPolicy;
-  }
-
-  @Nullable
-  private static LbConfig selectSupportedLbPolicy(
-      @Nullable List<LbConfig> lbConfigs, LoadBalancerRegistry lbRegistry) {
-    if (lbConfigs == null) {
-      return null;
-    }
-    for (LbConfig lbConfig : lbConfigs) {
-      String lbPolicy = lbConfig.getPolicyName();
-      if (lbRegistry.getProvider(lbPolicy) != null) {
-        return lbConfig;
-      }
-    }
-    return null;
   }
 
   @Override
@@ -316,6 +290,50 @@ final class XdsLoadBalancer extends LoadBalancer {
             new FallbackTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS,
             helper.getScheduledExecutorService());
       }
+    }
+  }
+
+  /**
+   * Represents a successfully parsed and validated LoadBalancingConfig for XDS.
+   */
+  static final class XdsConfig {
+    private final String newBalancerName;
+    // TODO(carl-mastrangelo): make these Object's containing the fully parsed child configs.
+    @Nullable
+    private final LbConfig childPolicy;
+    @Nullable
+    private final LbConfig fallbackPolicy;
+
+    XdsConfig(
+        String newBalancerName, @Nullable LbConfig childPolicy, @Nullable LbConfig fallbackPolicy) {
+      this.newBalancerName = checkNotNull(newBalancerName, "newBalancerName");
+      this.childPolicy = childPolicy;
+      this.fallbackPolicy = fallbackPolicy;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("newBalancerName", newBalancerName)
+          .add("childPolicy", childPolicy)
+          .add("fallbackPolicy", fallbackPolicy)
+          .toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (!(obj instanceof XdsConfig)) {
+        return false;
+      }
+      XdsConfig that = (XdsConfig) obj;
+      return Objects.equal(this.newBalancerName, that.newBalancerName)
+          && Objects.equal(this.childPolicy, that.childPolicy)
+          && Objects.equal(this.fallbackPolicy, that.fallbackPolicy);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(newBalancerName, childPolicy, fallbackPolicy);
     }
   }
 }

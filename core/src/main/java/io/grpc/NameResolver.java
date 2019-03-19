@@ -259,8 +259,7 @@ public abstract class NameResolver {
      * @since 1.20.0
      */
     public ConfigOrError<?> parseServiceConfig(Map<String, ?> rawServiceConfig) {
-      return ConfigOrError.fromError(
-          Status.INTERNAL.withDescription("service config parsing not supported"));
+      throw new UnsupportedOperationException("should have been implemented");
     }
 
     /**
@@ -271,6 +270,24 @@ public abstract class NameResolver {
      * @since 1.20.0
      */
     public static final class ConfigOrError<T> {
+
+      private static final class UnknownConfig {
+
+        UnknownConfig() {}
+
+        @Override
+        public String toString() {
+          return "service config is unused";
+        }
+      }
+
+      /**
+       * A sentinel value indicating that service config is not supported.   This can be used to
+       * indicate that parsing of the service config is neither right nor wrong, but doesn't have
+       * any meaning.
+       */
+      public static final ConfigOrError<?> UNKNOWN_CONFIG =
+          ConfigOrError.fromConfig(new UnknownConfig());
 
       /**
        * Returns a {@link ConfigOrError} for the successfully parsed config.
