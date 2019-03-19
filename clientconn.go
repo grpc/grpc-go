@@ -963,6 +963,11 @@ func (ac *addrConn) resetTransport() {
 		}
 
 		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			return
+		}
+
 		addrs := ac.addrs
 		backoffFor := ac.dopts.bs.Backoff(ac.backoffIdx)
 		// This will be the duration that dial gets to finish.
@@ -980,125 +985,138 @@ func (ac *addrConn) resetTransport() {
 		connectDeadline := time.Now().Add(dialDuration)
 		ac.mu.Unlock()
 
-		for _, addr := range addrs {
+		newTr, addr, reconnect, err := ac.tryAllAddrs(addrs, connectDeadline)
+		if err != nil {
+			// After exhausting all addresses, the addrConn enters
+			// TRANSIENT_FAILURE.
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				ac.mu.Unlock()
 				return
 			}
-			ac.updateConnectivityState(connectivity.Connecting)
-			ac.transport = nil
+			ac.updateConnectivityState(connectivity.TransientFailure)
 
-			ac.cc.mu.RLock()
-			ac.dopts.copts.KeepaliveParams = ac.cc.mkp
-			ac.cc.mu.RUnlock()
-
-			copts := ac.dopts.copts
-			if ac.scopts.CredsBundle != nil {
-				copts.CredsBundle = ac.scopts.CredsBundle
-			}
+			// Backoff.
+			b := ac.resetBackoff
 			ac.mu.Unlock()
 
-			if channelz.IsOn() {
-				channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
-					Desc:     fmt.Sprintf("Subchannel picks a new address %q to connect", addr.Addr),
-					Severity: channelz.CtINFO,
-				})
-			}
-
-			reconnect := grpcsync.NewEvent()
-			newTr, err := ac.createTransport(addr, copts, connectDeadline, reconnect)
-			if err != nil {
-				ac.cc.blockingpicker.updateConnectionError(err)
-				continue
-			}
-
-			backoffFor = 0
-			ac.mu.Lock()
-			if ac.state == connectivity.Shutdown {
-				newTr.Close()
-				ac.mu.Unlock()
-				return
-			}
-			ac.curAddr = addr
-			ac.transport = newTr
-			ac.backoffIdx = 0
-			ac.mu.Unlock()
-
-			healthCheckConfig := ac.cc.healthCheckConfig()
-			// LB channel health checking is only enabled when all the four requirements below are met:
-			// 1. it is not disabled by the user with the WithDisableHealthCheck DialOption,
-			// 2. the internal.HealthCheckFunc is set by importing the grpc/healthcheck package,
-			// 3. a service config with non-empty healthCheckConfig field is provided,
-			// 4. the current load balancer allows it.
-			hctx, hcancel := context.WithCancel(ac.ctx)
-			healthcheckManagingState := false
-			if !ac.cc.dopts.disableHealthCheck && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
-				if ac.cc.dopts.healthCheckFunc == nil {
-					// TODO: add a link to the health check doc in the error message.
-					grpclog.Error("the client side LB channel health check function has not been set.")
-				} else {
-					// TODO(deklerk) refactor to just return transport
-					go ac.startHealthCheck(hctx, newTr, addr, healthCheckConfig.ServiceName)
-					healthcheckManagingState = true
-				}
-			}
-			if !healthcheckManagingState {
+			timer := time.NewTimer(backoffFor)
+			select {
+			case <-timer.C:
 				ac.mu.Lock()
-				ac.updateConnectivityState(connectivity.Ready)
+				ac.backoffIdx++
 				ac.mu.Unlock()
+			case <-b:
+				timer.Stop()
+			case <-ac.ctx.Done():
+				timer.Stop()
+				return
 			}
-
-			// Block until the created transport is down. And when this happens,
-			// we restart from the top of the addr list.
-			<-reconnect.Done()
-			hcancel()
-
-			// In RequireHandshakeOn mode, we would have already waited for
-			// the server preface, so we consider this a success and restart
-			// from the top of the addr list. In RequireHandshakeOff mode,
-			// we don't care to wait for the server preface before
-			// considering this a success, so we also restart from the top
-			// of the addr list.
-			break
+			continue
 		}
 
-		// After exhausting all addresses, or after need to reconnect after a
-		// READY, the addrConn enters TRANSIENT_FAILURE.
+		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			newTr.Close()
+			ac.mu.Unlock()
+			return
+		}
+		ac.curAddr = addr
+		ac.transport = newTr
+		ac.backoffIdx = 0
+
+		healthCheckConfig := ac.cc.healthCheckConfig()
+		// LB channel health checking is only enabled when all the four requirements below are met:
+		// 1. it is not disabled by the user with the WithDisableHealthCheck DialOption,
+		// 2. the internal.HealthCheckFunc is set by importing the grpc/healthcheck package,
+		// 3. a service config with non-empty healthCheckConfig field is provided,
+		// 4. the current load balancer allows it.
+		hctx, hcancel := context.WithCancel(ac.ctx)
+		healthcheckManagingState := false
+		if !ac.cc.dopts.disableHealthCheck && healthCheckConfig != nil && ac.scopts.HealthCheckEnabled {
+			if ac.cc.dopts.healthCheckFunc == nil {
+				// TODO: add a link to the health check doc in the error message.
+				grpclog.Error("the client side LB channel health check function has not been set.")
+			} else {
+				// TODO(deklerk) refactor to just return transport
+				go ac.startHealthCheck(hctx, newTr, addr, healthCheckConfig.ServiceName)
+				healthcheckManagingState = true
+			}
+		}
+		if !healthcheckManagingState {
+			ac.updateConnectivityState(connectivity.Ready)
+		}
+		ac.mu.Unlock()
+
+		// Block until the created transport is down. And when this happens,
+		// we restart from the top of the addr list.
+		<-reconnect.Done()
+		hcancel()
+
+		// Need to reconnect after a READY, the addrConn enters
+		// TRANSIENT_FAILURE.
+		//
+		// This will set addrConn to TRANSIENT_FAILURE for a very short period
+		// of time, and turns CONNECTING. It seems reasonable to skip this, but
+		// READY-CONNECTING is not a valid transition.
 		ac.mu.Lock()
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
 			return
 		}
 		ac.updateConnectivityState(connectivity.TransientFailure)
-
-		// Backoff.
-		b := ac.resetBackoff
-		timer := time.NewTimer(backoffFor)
 		ac.mu.Unlock()
-
-		select {
-		case <-timer.C:
-			ac.mu.Lock()
-			ac.backoffIdx++
-			ac.mu.Unlock()
-		case <-b:
-			timer.Stop()
-		case <-ac.ctx.Done():
-			timer.Stop()
-			return
-		}
 	}
 }
 
-// createTransport creates a connection to one of the backends in addrs. It
-// sets ac.transport in the success case, or it returns an error if it was
-// unable to successfully create a transport.
-//
-// If waitForHandshake is enabled, it blocks until server preface arrives.
-func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time, reconnect *grpcsync.Event) (transport.ClientTransport, error) {
+// tryAllAddrs tries to creates a connection to the addresses, and stop when at the
+// first successful one. It returns the transport, the address and a Event in
+// the successful case. The Event fires when the returned transport disconnects.
+func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.Time) (transport.ClientTransport, resolver.Address, *grpcsync.Event, error) {
+	for _, addr := range addrs {
+		ac.mu.Lock()
+		if ac.state == connectivity.Shutdown {
+			ac.mu.Unlock()
+			return nil, resolver.Address{}, nil, errConnClosing
+		}
+		ac.updateConnectivityState(connectivity.Connecting)
+		ac.transport = nil
+
+		ac.cc.mu.RLock()
+		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
+		ac.cc.mu.RUnlock()
+
+		copts := ac.dopts.copts
+		if ac.scopts.CredsBundle != nil {
+			copts.CredsBundle = ac.scopts.CredsBundle
+		}
+		ac.mu.Unlock()
+
+		if channelz.IsOn() {
+			channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel picks a new address %q to connect", addr.Addr),
+				Severity: channelz.CtINFO,
+			})
+		}
+
+		newTr, reconnect, err := ac.createTransport(addr, copts, connectDeadline)
+		if err == nil {
+			return newTr, addr, reconnect, nil
+		}
+		ac.cc.blockingpicker.updateConnectionError(err)
+	}
+
+	// Couldn't connect to any address.
+	return nil, resolver.Address{}, nil, fmt.Errorf("couldn't connect to any address")
+}
+
+// createTransport creates a connection to addr. It returns the transport and a
+// Event in the successful case. The Event fires when the returned transport
+// disconnects.
+func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) (transport.ClientTransport, *grpcsync.Event, error) {
 	prefaceReceived := make(chan struct{})
 	onCloseCalled := make(chan struct{})
+	reconnect := grpcsync.NewEvent()
 
 	target := transport.TargetInfo{
 		Addr:      addr.Addr,
@@ -1132,7 +1150,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	if err != nil {
 		// newTr is either nil, or closed.
 		grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v. Err :%v. Reconnecting...", addr, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	if ac.dopts.reqHandshake == envconfig.RequireHandshakeOn {
@@ -1141,16 +1159,16 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// We didn't get the preface in time.
 			newTr.Close()
 			grpclog.Warningf("grpc: addrConn.createTransport failed to connect to %v: didn't receive server preface in time. Reconnecting...", addr)
-			return nil, errors.New("timed out waiting for server handshake")
+			return nil, nil, errors.New("timed out waiting for server handshake")
 		case <-prefaceReceived:
 			// We got the preface - huzzah! things are good.
 		case <-onCloseCalled:
 			// The transport has already closed - noop.
-			return nil, errors.New("connection closed")
+			return nil, nil, errors.New("connection closed")
 			// TODO(deklerk) this should bail on ac.ctx.Done(). Add a test and fix.
 		}
 	}
-	return newTr, nil
+	return newTr, reconnect, nil
 }
 
 func (ac *addrConn) startHealthCheck(ctx context.Context, newTr transport.ClientTransport, addr resolver.Address, serviceName string) {
