@@ -27,6 +27,7 @@ import com.google.common.base.Verify;
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import io.grpc.ProxiedSocketAddress;
 import io.grpc.ProxyDetector;
 import io.grpc.Status;
@@ -285,30 +286,50 @@ final class DnsNameResolver extends NameResolver {
 
       Attributes.Builder attrs = Attributes.newBuilder();
       if (!resolutionResults.txtRecords.isEmpty()) {
-        Map<String, ?> serviceConfig = null;
-        try {
-          for (Map<String, ?> possibleConfig : parseTxtResults(resolutionResults.txtRecords)) {
-            try {
-              serviceConfig =
-                  maybeChooseServiceConfig(possibleConfig, random, getLocalHostname());
-            } catch (RuntimeException e) {
-              logger.log(Level.WARNING, "Bad service config choice " + possibleConfig, e);
-            }
-            if (serviceConfig != null) {
-              break;
-            }
-          }
-        } catch (RuntimeException e) {
-          logger.log(Level.WARNING, "Can't parse service Configs", e);
-        }
+        ConfigOrError<Map<String, ?>> serviceConfig =
+            parseServiceConfig(resolutionResults.txtRecords, random, getLocalHostname());
         if (serviceConfig != null) {
-          attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig);
+          if (serviceConfig.getError() != null) {
+            savedListener.onError(serviceConfig.getError());
+            return;
+          } else {
+            attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig.getConfig());
+          }
         }
       } else {
         logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
       }
       savedListener.onAddresses(servers, attrs.build());
     }
+  }
+
+  @Nullable
+  static ConfigOrError<Map<String, ?>> parseServiceConfig(
+      List<String> rawTxtRecords, Random random, String localHostname) {
+    List<Map<String, ?>> possibleServiceConfigChoices;
+    try {
+      possibleServiceConfigChoices = parseTxtResults(rawTxtRecords);
+    } catch (IOException | RuntimeException e) {
+      return ConfigOrError.fromError(
+          Status.UNKNOWN.withDescription("failed to parse TXT records").withCause(e));
+    }
+    Map<String, ?> possibleServiceConfig = null;
+    for (Map<String, ?> possibleServiceConfigChoice : possibleServiceConfigChoices) {
+      try {
+        possibleServiceConfig =
+            maybeChooseServiceConfig(possibleServiceConfigChoice, random, localHostname);
+      } catch (RuntimeException e) {
+        return ConfigOrError.fromError(
+            Status.UNKNOWN.withDescription("failed to pick service config choice").withCause(e));
+      }
+      if (possibleServiceConfig != null) {
+        break;
+      }
+    }
+    if (possibleServiceConfig == null) {
+      return null;
+    }
+    return ConfigOrError.<Map<String, ?>>fromConfig(possibleServiceConfig);
   }
 
   private void resolve() {
@@ -403,35 +424,27 @@ final class DnsNameResolver extends NameResolver {
     return new ResolutionResults(addresses, txtRecords, balancerAddresses);
   }
 
+  /**
+   *
+   * @throws IOException if one of the txt records contains improperly formatted JSON.
+   */
   @SuppressWarnings("unchecked")
   @VisibleForTesting
-  static List<Map<String, ?>> parseTxtResults(List<String> txtRecords) {
-    List<Map<String, ?>> serviceConfigs = new ArrayList<>();
+  static List<Map<String, ?>> parseTxtResults(List<String> txtRecords) throws IOException {
+    List<Map<String, ?>> possibleServiceConfigChoices = new ArrayList<>();
     for (String txtRecord : txtRecords) {
-      if (txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
-        List<Map<String, ?>> choices;
-        try {
-          Object rawChoices = JsonParser.parse(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()));
-          if (!(rawChoices instanceof List)) {
-            throw new IOException("wrong type " + rawChoices);
-          }
-          List<?> listChoices = (List<?>) rawChoices;
-          for (Object obj : listChoices) {
-            if (!(obj instanceof Map)) {
-              throw new IOException("wrong element type " + rawChoices);
-            }
-          }
-          choices = (List<Map<String, ?>>) listChoices;
-        } catch (IOException e) {
-          logger.log(Level.WARNING, "Bad service config: " + txtRecord, e);
-          continue;
-        }
-        serviceConfigs.addAll(choices);
-      } else {
+      if (!txtRecord.startsWith(SERVICE_CONFIG_PREFIX)) {
         logger.log(Level.FINE, "Ignoring non service config {0}", new Object[]{txtRecord});
+        continue;
       }
+      Object rawChoices = JsonParser.parse(txtRecord.substring(SERVICE_CONFIG_PREFIX.length()));
+      if (!(rawChoices instanceof List)) {
+        throw new ClassCastException("wrong type " + rawChoices);
+      }
+      List<?> listChoices = (List<?>) rawChoices;
+      possibleServiceConfigChoices.addAll(ServiceConfigUtil.checkObjectList(listChoices));
     }
-    return serviceConfigs;
+    return possibleServiceConfigChoices;
   }
 
   @Nullable

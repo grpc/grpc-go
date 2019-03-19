@@ -40,7 +40,7 @@ public final class JsonParser {
   private JsonParser() {}
 
   /**
-   * Parses a json string, returning either a {@code Map<String, ?>}, {@code List<Object>},
+   * Parses a json string, returning either a {@code Map<String, ?>}, {@code List<?>},
    * {@code String}, {@code Double}, {@code Boolean}, or {@code null}.
    */
   @SuppressWarnings("unchecked")

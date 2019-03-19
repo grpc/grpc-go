@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.net.InetAddresses;
 import com.google.common.testing.FakeTicker;
@@ -39,6 +40,7 @@ import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.HttpConnectProxiedSocketAddress;
 import io.grpc.NameResolver;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import io.grpc.ProxyDetector;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -58,6 +60,7 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -878,7 +881,7 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void parseTxtResults_misspelledName() {
+  public void parseTxtResults_misspelledName() throws Exception {
     List<String> txtRecords = new ArrayList<>();
     txtRecords.add("some_record");
     txtRecords.add("_grpc_config=[]");
@@ -889,50 +892,36 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void parseTxtResults_badTypeIgnored() {
-    Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
-    Level level = logger.getLevel();
-    logger.setLevel(Level.SEVERE);
-    try {
-      List<String> txtRecords = new ArrayList<>();
-      txtRecords.add("some_record");
-      txtRecords.add("grpc_config={}");
+  public void parseTxtResults_badTypeFails() throws Exception {
+    thrown.expect(ClassCastException.class);
+    thrown.expectMessage("wrong type");
+    List<String> txtRecords = new ArrayList<>();
+    txtRecords.add("some_record");
+    txtRecords.add("grpc_config={}");
 
-      List<? extends Map<String, ?>> results = DnsNameResolver.parseTxtResults(txtRecords);
-
-      assertThat(results).isEmpty();
-    } finally {
-      logger.setLevel(level);
-    }
+    DnsNameResolver.parseTxtResults(txtRecords);
   }
 
   @Test
-  public void parseTxtResults_badInnerTypeIgnored() {
-    Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
-    Level level = logger.getLevel();
-    logger.setLevel(Level.SEVERE);
-    try {
-      List<String> txtRecords = new ArrayList<>();
-      txtRecords.add("some_record");
-      txtRecords.add("grpc_config=[\"bogus\"]");
+  public void parseTxtResults_badInnerTypeFails() throws Exception {
+    thrown.expect(ClassCastException.class);
+    thrown.expectMessage("not object");
 
-      List<? extends Map<String, ?>> results = DnsNameResolver.parseTxtResults(txtRecords);
+    List<String> txtRecords = new ArrayList<>();
+    txtRecords.add("some_record");
+    txtRecords.add("grpc_config=[\"bogus\"]");
 
-      assertThat(results).isEmpty();
-    } finally {
-      logger.setLevel(level);
-    }
+    DnsNameResolver.parseTxtResults(txtRecords);
   }
 
   @Test
-  public void parseTxtResults_combineAll() {
+  public void parseTxtResults_combineAll() throws Exception {
     Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
     Level level = logger.getLevel();
     logger.setLevel(Level.SEVERE);
     try {
       List<String> txtRecords = new ArrayList<>();
       txtRecords.add("some_record");
-      txtRecords.add("grpc_config=[\"bogus\", {}]");
       txtRecords.add("grpc_config=[{}, {}]"); // 2 records
       txtRecords.add("grpc_config=[{\"\":{}}]"); // 1 record
 
@@ -1015,6 +1004,44 @@ public class DnsNameResolverTest {
         enableJndi, enableJndiLocalhost, "8.8.8.8.in-addr.arpa."));
     assertTrue(DnsNameResolver.shouldUseJndi(
         enableJndi, enableJndiLocalhost, "2001-db8-1234--as3.ipv6-literal.net"));
+  }
+
+  @Test
+  public void parseServiceConfig_capturesParseError() {
+    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+        Arrays.asList("grpc_config=bogus"), new Random(), "localhost");
+
+    assertThat(result).isNotNull();
+    assertThat(result.getError().getCode()).isEqualTo(Status.Code.UNKNOWN);
+    assertThat(result.getError().getDescription()).contains("failed to parse TXT records");
+  }
+
+  @Test
+  public void parseServiceConfig_capturesChoiceError() {
+    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+        Arrays.asList("grpc_config=[{\"hi\":{}}]"), new Random(), "localhost");
+
+    assertThat(result).isNotNull();
+    assertThat(result.getError().getCode()).isEqualTo(Status.Code.UNKNOWN);
+    assertThat(result.getError().getDescription()).contains("failed to pick");
+  }
+
+  @Test
+  public void parseServiceConfig_noChoiceIsNull() {
+    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+        Arrays.asList("grpc_config=[]"), new Random(), "localhost");
+
+    assertThat(result).isNull();
+  }
+
+  @Test
+  public void parseServiceConfig_matches() {
+    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+        Arrays.asList("grpc_config=[{\"serviceConfig\":{}}]"), new Random(), "localhost");
+
+    assertThat(result).isNotNull();
+    assertThat(result.getError()).isNull();
+    assertThat(result.getConfig()).isEqualTo(ImmutableMap.of());
   }
 
   private void testInvalidUri(URI uri) {

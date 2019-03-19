@@ -530,7 +530,7 @@ public final class ServiceConfigUtil {
   }
 
   @SuppressWarnings("unchecked")
-  private static List<Map<String, ?>> checkObjectList(List<?> rawList) {
+  static List<Map<String, ?>> checkObjectList(List<?> rawList) {
     for (int i = 0; i < rawList.size(); i++) {
       if (!(rawList.get(i) instanceof Map)) {
         throw new ClassCastException(
