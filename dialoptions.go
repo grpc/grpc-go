@@ -416,7 +416,8 @@ func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 }
 
 // WithChainUnaryInterceptor returns a DialOption that specifies the chained
-// interceptor for unary RPCs. The execution will be done in left-to-right order.
+// interceptor for unary RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
 func WithChainUnaryInterceptor(interceptors ...UnaryClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.chainUnaryInts = append(o.chainUnaryInts, interceptors...)
@@ -432,7 +433,8 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 }
 
 // WithChainStreamInterceptor returns a DialOption that specifies the chained
-// interceptor for unary RPCs. The execution will be done in left-to-right order.
+// interceptor for unary RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
 func WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.chainStreamInts = append(o.chainStreamInts, interceptors...)

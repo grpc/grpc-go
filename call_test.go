@@ -263,6 +263,12 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 		if ctx.Value(parentKey) == nil {
 			t.Fatalf("first interceptor should have %v in context", parentKey)
 		}
+		if ctx.Value(firstIntKey) != nil {
+			t.Fatalf("first interceptor should not have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) != nil {
+			t.Fatalf("first interceptor should not have %v in context", secondIntKey)
+		}
 		firstCtx := context.WithValue(ctx, firstIntKey, 1)
 		return invoker(firstCtx, method, req, reply, cc, opts...)
 	}
@@ -273,6 +279,9 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 		}
 		if ctx.Value(firstIntKey) == nil {
 			t.Fatalf("second interceptor should have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) != nil {
+			t.Fatalf("second interceptor should not have %v in context", secondIntKey)
 		}
 		secondCtx := context.WithValue(ctx, secondIntKey, 2)
 		return invoker(secondCtx, method, req, reply, cc, opts...)
@@ -315,6 +324,9 @@ func (s) TestChainOnBaseUnaryClientInterceptor(t *testing.T) {
 		if ctx.Value(parentKey) == nil {
 			t.Fatalf("base interceptor should have %v in context", parentKey)
 		}
+		if ctx.Value(baseIntKey) != nil {
+			t.Fatalf("base interceptor should not have %v in context", baseIntKey)
+		}
 		baseCtx := context.WithValue(ctx, baseIntKey, 1)
 		return invoker(baseCtx, method, req, reply, cc, opts...)
 	}
@@ -354,6 +366,12 @@ func (s) TestChainStreamClientInterceptor(t *testing.T) {
 		if ctx.Value(parentKey) == nil {
 			t.Fatalf("first interceptor should have %v in context", parentKey)
 		}
+		if ctx.Value(firstIntKey) != nil {
+			t.Fatalf("first interceptor should not have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) != nil {
+			t.Fatalf("first interceptor should not have %v in context", secondIntKey)
+		}
 		firstCtx := context.WithValue(ctx, firstIntKey, 1)
 		return streamer(firstCtx, desc, cc, method, opts...)
 	}
@@ -364,6 +382,9 @@ func (s) TestChainStreamClientInterceptor(t *testing.T) {
 		}
 		if ctx.Value(firstIntKey) == nil {
 			t.Fatalf("second interceptor should have %v in context", firstIntKey)
+		}
+		if ctx.Value(secondIntKey) != nil {
+			t.Fatalf("second interceptor should not have %v in context", secondIntKey)
 		}
 		secondCtx := context.WithValue(ctx, secondIntKey, 2)
 		return streamer(secondCtx, desc, cc, method, opts...)

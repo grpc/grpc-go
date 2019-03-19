@@ -152,21 +152,19 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 		interceptors = append([]StreamClientInterceptor{cc.dopts.streamInt}, interceptors...)
 	}
 
-	if len(interceptors) > 0 {
-		return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, newClientStream), opts...)
-	}
-
-	return newClientStream(ctx, desc, cc, method, opts...)
+	return getChainStreamer(interceptors, newClientStream)(ctx, desc, cc, method, opts...)
 }
 
-// getChainStreamer recursively generate the chained client stream constructor.
-func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStreamer Streamer) Streamer {
-	if curr == len(interceptors)-1 {
-		return finalStreamer
+// getChainStreamer generates the chained client stream constructor.
+func getChainStreamer(its []StreamClientInterceptor, finalStreamer Streamer) Streamer {
+	outerStreamer := finalStreamer
+	for i := len(its) - 1; i >= 0; i-- {
+		innerIt, innerStreamer := its[i], outerStreamer
+		outerStreamer = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+			return innerIt(ctx, desc, cc, method, innerStreamer, opts...)
+		}
 	}
-	return func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
-		return interceptors[curr+1](ctx, desc, cc, method, getChainStreamer(interceptors, curr+1, finalStreamer), opts...)
-	}
+	return outerStreamer
 }
 
 // NewClientStream is a wrapper for ClientConn.NewStream.
