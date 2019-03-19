@@ -176,17 +176,11 @@ func (a strAddr) String() string { return string(a) }
 
 // do runs fn in the ServeHTTP goroutine.
 func (ht *serverHandlerTransport) do(fn func()) error {
-	// Avoid a panic writing to closed channel. Imperfect but maybe good enough.
 	select {
 	case <-ht.closedCh:
 		return ErrConnClosing
-	default:
-		select {
-		case ht.writes <- fn:
-			return nil
-		case <-ht.closedCh:
-			return ErrConnClosing
-		}
+	case ht.writes <- fn:
+		return nil
 	}
 }
 
@@ -237,7 +231,6 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 		if ht.stats != nil {
 			ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 		}
-		close(ht.writes)
 	}
 	ht.Close()
 	return err
@@ -407,10 +400,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 func (ht *serverHandlerTransport) runStream() {
 	for {
 		select {
-		case fn, ok := <-ht.writes:
-			if !ok {
-				return
-			}
+		case fn := <-ht.writes:
 			fn()
 		case <-ht.closedCh:
 			return
