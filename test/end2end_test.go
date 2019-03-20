@@ -1478,8 +1478,10 @@ func (s) TestGetMethodConfig(t *testing.T) {
 
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1500,7 +1502,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
             "waitForReady": false
         }
     ]
-}`)
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1518,7 +1520,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.NewServiceConfig(`{
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1539,7 +1541,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
             "waitForReady": false
         }
     ]
-}`)
+}`})
 
 	// Make sure service config has been processed by grpc.
 	for {
@@ -1563,8 +1565,10 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1581,7 +1585,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
             "timeout": ".001s"
         }
     ]
-}`)
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1604,7 +1608,9 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
-	r.NewServiceConfig(`{
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1621,7 +1627,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
             "timeout": ".001s"
         }
     ]
-}`)
+}`})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1648,8 +1654,10 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1666,7 +1674,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
             "timeout": "3600s"
         }
     ]
-}`)
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1694,7 +1702,9 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	r.NewServiceConfig(`{
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -1711,7 +1721,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
             "timeout": ".000000001s"
         }
     ]
-}`)
+}`})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1785,8 +1795,8 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te1.startServer(&testServer{security: e.security})
 	cc1 := te1.clientConn()
 
-	r.NewAddress([]resolver.Address{{Addr: te1.srvAddr}})
-	r.NewServiceConfig(scjs)
+	addrs := []resolver.Address{{Addr: te1.srvAddr}}
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: scjs})
 	tc := testpb.NewTestServiceClient(cc1)
 
 	req := &testpb.SimpleRequest{
@@ -1857,8 +1867,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	cc2 := te2.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te2.srvAddr}})
-	r.NewServiceConfig(scjs)
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: scjs})
 	tc = testpb.NewTestServiceClient(cc2)
 
 	for {
@@ -1919,8 +1928,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer te3.tearDown()
 
 	cc3 := te3.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te3.srvAddr}})
-	r.NewServiceConfig(scjs)
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: scjs})
 	tc = testpb.NewTestServiceClient(cc3)
 
 	for {
@@ -2010,8 +2018,9 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
+	r.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: te.srvAddr}},
+		ServiceConfig: `{
 	    "methodConfig": [
 	        {
 	            "name": [
@@ -2024,7 +2033,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	            "timeout": "10s"
 	        }
 	    ]
-	}`)
+	}`})
 	// Make sure service config has been processed by grpc.
 	for {
 		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
@@ -4850,7 +4859,7 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
-	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -5155,6 +5164,8 @@ type stubServer struct {
 	client testpb.TestServiceClient
 	cc     *grpc.ClientConn
 
+	addr string // address of listener
+
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
 
 	r *manual.Resolver
@@ -5182,6 +5193,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	if err != nil {
 		return fmt.Errorf(`net.Listen("tcp", "localhost:0") = %v`, err)
 	}
+	ss.addr = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
@@ -5189,7 +5201,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 
-	target := ss.r.Scheme() + ":///" + lis.Addr().String()
+	target := ss.r.Scheme() + ":///" + ss.addr
 
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	cc, err := grpc.Dial(target, opts...)
@@ -5197,7 +5209,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
 	}
 	ss.cc = cc
-	ss.r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
 	if err := ss.waitForReady(cc); err != nil {
 		return err
 	}
@@ -5206,6 +5218,10 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 
 	ss.client = testpb.NewTestServiceClient(cc)
 	return nil
+}
+
+func (ss *stubServer) newServiceConfig(sc string) {
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: sc})
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
@@ -7017,10 +7033,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	r.InitialAddrs([]resolver.Address{
+	r.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	})
+	}})
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
@@ -7100,7 +7116,9 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	defer cancel()
 	go func() {
 		time.Sleep(time.Second)
-		r.NewServiceConfig(`{
+		r.UpdateState(resolver.State{
+			Addresses: []resolver.Address{{Addr: te.srvAddr}},
+			ServiceConfig: `{
 		    "methodConfig": [
 		        {
 		            "name": [
@@ -7112,8 +7130,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
                     "maxRequestMessageBytes": 0
 		        }
 		    ]
-		}`)
-		r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+		}`})
 	}()
 	// We wait a second before providing a service config and resolving
 	// addresses.  So this will wait for that and then honor the

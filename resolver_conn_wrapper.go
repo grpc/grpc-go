@@ -112,7 +112,9 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) {
 		return
 	}
 	grpclog.Infof("ccResolverWrapper: sending update to cc: %v", s)
-	// TODO: add Channelz Trace Event
+	if channelz.IsOn() {
+		ccr.addChannelzTraceEvent(s.Addresses)
+	}
 	ccr.cc.updateResolverState(s)
 	ccr.curAddresses = s.Addresses
 }

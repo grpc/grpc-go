@@ -82,13 +82,6 @@ func (b *scStateUpdateBuffer) get() <-chan *scStateUpdate {
 	return b.c
 }
 
-// resolverUpdate contains the new resolved addresses or error if there's
-// any.
-type resolverUpdate struct {
-	addrs []resolver.Address
-	err   error
-}
-
 // ccBalancerWrapper is a wrapper on top of cc for balancers.
 // It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
@@ -128,7 +121,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 				return
 			default:
 			}
-			if ub, ok := ccb.balancer.(balancer.V2); ok {
+			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
 				ub.UpdateSubConnState(t.sc, t.state)
 			} else {
 				ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
@@ -140,7 +133,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 				return
 			default:
 			}
-			if ub, ok := ccb.balancer.(balancer.V2); ok {
+			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
 				ub.UpdateResolverState(*s)
 			} else {
 				ccb.balancer.HandleResolvedAddrs(s.Addresses, nil)
