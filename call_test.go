@@ -204,15 +204,7 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32) (*server, *ClientConn) {
-	server := newTestServer()
-	go server.start(t, port, maxStreams)
-	server.wait(t, 2*time.Second)
-	addr := "localhost:" + server.port
-	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	if err != nil {
-		t.Fatalf("Failed to create ClientConn: %v", err)
-	}
-	return server, cc
+	return setUpWithOptions(t, port, maxStreams)
 }
 
 func setUpWithOptions(t *testing.T, port int, maxStreams uint32, dopts ...DialOption) (*server, *ClientConn) {
@@ -270,7 +262,9 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 			t.Fatalf("first interceptor should not have %v in context", secondIntKey)
 		}
 		firstCtx := context.WithValue(ctx, firstIntKey, 1)
-		return invoker(firstCtx, method, req, reply, cc, opts...)
+		err := invoker(firstCtx, method, req, reply, cc, opts...)
+		*(reply.(*string)) += "1"
+		return err
 	}
 
 	secondInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
@@ -284,7 +278,9 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 			t.Fatalf("second interceptor should not have %v in context", secondIntKey)
 		}
 		secondCtx := context.WithValue(ctx, secondIntKey, 2)
-		return invoker(secondCtx, method, req, reply, cc, opts...)
+		err := invoker(secondCtx, method, req, reply, cc, opts...)
+		*(reply.(*string)) += "2"
+		return err
 	}
 
 	lastInt := func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
@@ -297,7 +293,9 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 		if ctx.Value(secondIntKey) == nil {
 			t.Fatalf("last interceptor should have %v in context", secondIntKey)
 		}
-		return invoker(ctx, method, req, reply, cc, opts...)
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		*(reply.(*string)) += "3"
+		return err
 	}
 
 	server, cc := setUpWithOptions(t, 0, math.MaxUint32, WithChainUnaryInterceptor(firstInt, secondInt, lastInt))
@@ -309,7 +307,7 @@ func (s) TestChainUnaryClientInterceptor(t *testing.T) {
 	var reply string
 	ctx := context.Background()
 	parentCtx := context.WithValue(ctx, ctxKey("parentKey"), 0)
-	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
+	if err := cc.Invoke(parentCtx, "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse+"321" {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
 }
