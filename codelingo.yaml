@@ -1,0 +1,5 @@
+tenets:
+  - import: codelingo/effective-go/package-comment
+  - import: codelingo/code-review-comments/go-error-fmt
+  - import: codelingo/php/sql-concats
+  - import: codelingo/effective-go/underscores-in-name
