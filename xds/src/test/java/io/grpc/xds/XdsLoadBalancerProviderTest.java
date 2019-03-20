@@ -25,7 +25,6 @@ import io.grpc.LoadBalancerRegistry;
 import io.grpc.internal.JsonParser;
 import io.grpc.internal.ServiceConfigUtil;
 import io.grpc.internal.ServiceConfigUtil.LbConfig;
-import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Rule;
@@ -155,11 +154,6 @@ public class XdsLoadBalancerProviderTest {
         lbRegistry);
 
     assertEquals(expectedFallbackPolicy, fallbackPolicy);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, ?>> checkObjectList(Object o) {
-    return (List<Map<String, ?>>) o;
   }
 
   @SuppressWarnings("unchecked")

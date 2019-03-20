@@ -312,7 +312,7 @@ public class DnsNameResolverTest {
   }
 
   @Test
-  public void resolveAll_failsOnEmptyResult() throws Exception {
+  public void resolveAll_failsOnEmptyResult() {
     DnsNameResolver nr = newResolver("dns:///addr.fake:1234", 443);
     nr.setAddressResolver(new AddressResolver() {
       @Override
@@ -895,24 +895,23 @@ public class DnsNameResolverTest {
 
   @Test
   public void parseTxtResults_badTypeFails() throws Exception {
-    thrown.expect(ClassCastException.class);
-    thrown.expectMessage("wrong type");
     List<String> txtRecords = new ArrayList<>();
     txtRecords.add("some_record");
     txtRecords.add("grpc_config={}");
 
+    thrown.expect(ClassCastException.class);
+    thrown.expectMessage("wrong type");
     DnsNameResolver.parseTxtResults(txtRecords);
   }
 
   @Test
   public void parseTxtResults_badInnerTypeFails() throws Exception {
-    thrown.expect(ClassCastException.class);
-    thrown.expectMessage("not object");
-
     List<String> txtRecords = new ArrayList<>();
     txtRecords.add("some_record");
     txtRecords.add("grpc_config=[\"bogus\"]");
 
+    thrown.expect(ClassCastException.class);
+    thrown.expectMessage("not object");
     DnsNameResolver.parseTxtResults(txtRecords);
   }
 

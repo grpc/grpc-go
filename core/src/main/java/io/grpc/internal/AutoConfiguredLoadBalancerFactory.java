@@ -36,7 +36,6 @@ import io.grpc.Status;
 import io.grpc.internal.ServiceConfigUtil.LbConfig;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,23 +63,6 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
   @Override
   public LoadBalancer newLoadBalancer(Helper helper) {
     return new AutoConfiguredLoadBalancer(helper);
-  }
-
-  private static final class AutoConfiguredLoadBalancerServiceConfig {
-    @Nullable
-    private final Map<String, ?> loadBalancingConfigs;
-
-    AutoConfiguredLoadBalancerServiceConfig(@Nullable Map<String, ?> loadBalancingConfigs) {
-      if (loadBalancingConfigs != null) {
-        Map<String, Object> lbMapping = new LinkedHashMap<>();
-        for (Map.Entry<String, ?> entry : loadBalancingConfigs.entrySet()) {
-          lbMapping.put(entry.getKey(), entry.getValue());
-        }
-        this.loadBalancingConfigs = Collections.unmodifiableMap(lbMapping);
-      } else {
-        this.loadBalancingConfigs = null;
-      }
-    }
   }
 
   private static final class NoopLoadBalancer extends LoadBalancer {

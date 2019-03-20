@@ -430,8 +430,6 @@ public class ClientInterceptorsTest {
     private List<Integer> requests = new ArrayList<>();
     private List<String> messages = new ArrayList<>();
     private boolean halfClosed;
-    private Throwable cancelCause;
-    private String cancelMessage;
 
     @Override
     public void start(ClientCall.Listener<Integer> listener, Metadata headers) {
@@ -451,8 +449,6 @@ public class ClientInterceptorsTest {
     @Override
     public void cancel(String message, Throwable cause) {
       checkNotDone();
-      this.cancelMessage = message;
-      this.cancelCause = cause;
     }
 
     @Override

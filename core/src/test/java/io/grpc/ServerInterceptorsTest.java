@@ -41,6 +41,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -53,6 +54,9 @@ import org.mockito.junit.MockitoRule;
 public class ServerInterceptorsTest {
   @Rule
   public final MockitoRule mocks = MockitoJUnit.rule();
+
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
 
   @Mock
   private Marshaller<String> requestMarshaller;
@@ -100,20 +104,25 @@ public class ServerInterceptorsTest {
     verifyZeroInteractions(listener);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void npeForNullServiceDefinition() {
     ServerServiceDefinition serviceDef = null;
-    ServerInterceptors.intercept(serviceDef, Arrays.<ServerInterceptor>asList());
+    List<ServerInterceptor> interceptors = Arrays.asList();
+    thrown.expect(NullPointerException.class);
+    ServerInterceptors.intercept(serviceDef, interceptors);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void npeForNullInterceptorList() {
+    thrown.expect(NullPointerException.class);
     ServerInterceptors.intercept(serviceDefinition, (List<ServerInterceptor>) null);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void npeForNullInterceptor() {
-    ServerInterceptors.intercept(serviceDefinition, Arrays.asList((ServerInterceptor) null));
+    List<ServerInterceptor> interceptors = Arrays.asList((ServerInterceptor) null);
+    thrown.expect(NullPointerException.class);
+    ServerInterceptors.intercept(serviceDefinition, interceptors);
   }
 
   @Test
