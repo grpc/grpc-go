@@ -68,11 +68,6 @@ var (
 	errConnClosing = errors.New("grpc: the connection is closing")
 	// errBalancerClosed indicates that the balancer is closed.
 	errBalancerClosed = errors.New("grpc: balancer is closed")
-	// We use an accessor so that minConnectTimeout can be
-	// atomically read and updated while testing.
-	getMinConnectTimeout = func() time.Duration {
-		return minConnectTimeout
-	}
 )
 
 // The following errors are returned from Dial and DialContext
@@ -971,7 +966,11 @@ func (ac *addrConn) resetTransport() {
 		addrs := ac.addrs
 		backoffFor := ac.dopts.bs.Backoff(ac.backoffIdx)
 		// This will be the duration that dial gets to finish.
-		dialDuration := getMinConnectTimeout()
+		dialDuration := minConnectTimeout
+		if ac.dopts.minConnectTimeout != nil {
+			dialDuration = ac.dopts.minConnectTimeout()
+		}
+
 		if dialDuration < backoffFor {
 			// Give dial more time as we keep failing to connect.
 			dialDuration = backoffFor

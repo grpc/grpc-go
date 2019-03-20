@@ -22,7 +22,6 @@ import (
 	"context"
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,12 +45,6 @@ func init() {
 // except that it is unbuffered, so each read and write will wait for the other
 // side's corresponding write or read.
 func (s) TestStateTransitions_SingleAddress(t *testing.T) {
-	mctBkp := getMinConnectTimeout()
-	defer func() {
-		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
-	}()
-	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(time.Millisecond)*100)
-
 	for _, test := range []struct {
 		desc   string
 		want   []connectivity.State
@@ -163,8 +156,14 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := DialContext(ctx, "", WithWaitForHandshake(), WithInsecure(),
-		WithBalancerName(stateRecordingBalancerName), WithDialer(pl.Dialer()), withBackoff(noBackoff{}))
+	client, err := DialContext(ctx,
+		"",
+		WithWaitForHandshake(),
+		WithInsecure(),
+		WithBalancerName(stateRecordingBalancerName),
+		WithDialer(pl.Dialer()),
+		withBackoff(noBackoff{}),
+		withMinConnectDeadline(func() time.Duration { return time.Millisecond * 100 }))
 	if err != nil {
 		t.Fatal(err)
 	}

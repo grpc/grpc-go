@@ -42,16 +42,6 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-var (
-	mutableMinConnectTimeout = time.Second * 20
-)
-
-func init() {
-	getMinConnectTimeout = func() time.Duration {
-		return time.Duration(atomic.LoadInt64((*int64)(&mutableMinConnectTimeout)))
-	}
-}
-
 func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.State, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -255,11 +245,15 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 				defer conn.Close()
 			}
 		}()
-		cleanup := setMinConnectTimeout(time.Second / 4)
-		defer cleanup()
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithWaitForHandshake(), WithBlock(), withBackoff(noBackoff{}))
+		client, err := DialContext(ctx,
+			lis.Addr().String(),
+			WithInsecure(),
+			WithWaitForHandshake(),
+			WithBlock(),
+			withBackoff(noBackoff{}),
+			withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
 		lis.Close()
 		if err == nil {
 			client.Close()
@@ -300,11 +294,14 @@ func (s) TestDialWaitsForServerSettingsViaEnvAndFails(t *testing.T) {
 			defer conn.Close()
 		}
 	}()
-	cleanup := setMinConnectTimeout(time.Second / 4)
-	defer cleanup()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock(), withBackoff(noBackoff{}))
+	client, err := DialContext(ctx,
+		lis.Addr().String(),
+		WithInsecure(),
+		WithBlock(),
+		withBackoff(noBackoff{}),
+		withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
 	lis.Close()
 	if err == nil {
 		client.Close()
@@ -358,18 +355,15 @@ func (s) TestDialDoesNotWaitForServerSettings(t *testing.T) {
 	close(dialDone)
 }
 
+// 1. Client connects to a server that doesn't send preface.
+// 2. After minConnectTimeout(500 ms here), client disconnects and retries.
+// 3. The new server sends its preface.
+// 4. Client doesn't kill the connection this time.
 func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	// Restore current setting after test.
 	old := envconfig.RequireHandshake
 	defer func() { envconfig.RequireHandshake = old }()
 	envconfig.RequireHandshake = envconfig.RequireHandshakeOn
-
-	// 1. Client connects to a server that doesn't send preface.
-	// 2. After minConnectTimeout(500 ms here), client disconnects and retries.
-	// 3. The new server sends its preface.
-	// 4. Client doesn't kill the connection this time.
-	cleanup := setMinConnectTimeout(time.Millisecond * 500)
-	defer cleanup()
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -424,7 +418,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithInsecure())
+	client, err := Dial(lis.Addr().String(), WithInsecure(), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
@@ -610,12 +604,8 @@ func (s) TestWithAuthorityAndTLS(t *testing.T) {
 // backoff once per "round" of attempts instead of once per address (n times
 // per "round" of attempts).
 func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
-	getMinConnectTimeoutBackup := getMinConnectTimeout
-	defer func() {
-		getMinConnectTimeout = getMinConnectTimeoutBackup
-	}()
 	var attempts uint32
-	getMinConnectTimeout = func() time.Duration {
+	getMinConnectTimeout := func() time.Duration {
 		if atomic.AddUint32(&attempts, 1) == 1 {
 			// Once all addresses are exhausted, hang around and wait for the
 			// client.Close to happen rather than re-starting a new round of
@@ -671,7 +661,11 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	})
-	client, err := DialContext(ctx, "this-gets-overwritten", WithInsecure(), WithBalancerName(stateRecordingBalancerName), withResolverBuilder(rb))
+	client, err := DialContext(ctx, "this-gets-overwritten",
+		WithInsecure(),
+		WithBalancerName(stateRecordingBalancerName),
+		withResolverBuilder(rb),
+		withMinConnectDeadline(getMinConnectTimeout))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1079,9 +1073,6 @@ func (s) TestBackoffCancel(t *testing.T) {
 // UpdateAddresses should cause the next reconnect to begin from the top of the
 // list if the connection is not READY.
 func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
-	cleanup := setMinConnectTimeout(time.Hour)
-	defer cleanup()
-
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -1188,7 +1179,13 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	rb := manual.NewBuilderWithScheme("whatever")
 	rb.InitialAddrs(addrsList)
 
-	client, err := Dial("this-gets-overwritten", WithInsecure(), WithWaitForHandshake(), withResolverBuilder(rb), withBackoff(noBackoff{}), WithBalancerName(stateRecordingBalancerName))
+	client, err := Dial("this-gets-overwritten",
+		WithInsecure(),
+		WithWaitForHandshake(),
+		withResolverBuilder(rb),
+		withBackoff(noBackoff{}),
+		WithBalancerName(stateRecordingBalancerName),
+		withMinConnectDeadline(func() time.Duration { return time.Hour }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1233,14 +1230,5 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		t.Fatal("server3 was contacted, but after tryUpdateAddrs it should have re-started the list and tried server1")
 	case <-timeout:
 		t.Fatal("timed out waiting for any server to be contacted after tryUpdateAddrs")
-	}
-}
-
-// Set the minConnectTimeout. Be sure to defer cleanup!
-func setMinConnectTimeout(newMin time.Duration) (cleanup func()) {
-	mctBkp := getMinConnectTimeout()
-	atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(newMin))
-	return func() {
-		atomic.StoreInt64((*int64)(&mutableMinConnectTimeout), int64(mctBkp))
 	}
 }
