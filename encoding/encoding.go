@@ -103,7 +103,7 @@ func RegisterCodec(codec Codec) {
 		panic("cannot register a nil Codec")
 	}
 	if codec.Name() == "" {
-		panic("cannot register Codec with empty string result for String()")
+		panic("cannot register Codec with empty string result for Name()")
 	}
 	contentSubtype := strings.ToLower(codec.Name())
 	registeredCodecs[contentSubtype] = codec
