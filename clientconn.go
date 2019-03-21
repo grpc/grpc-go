@@ -468,7 +468,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	}
 
 	if !cc.dopts.disableServiceConfig && cc.scRaw != s.ServiceConfig {
-		/* New service config; apply it. */
+		// New service config; apply it.
 		sc, err := parseServiceConfig(s.ServiceConfig)
 		if err != nil {
 			fmt.Println("error parsing config: ", err)
