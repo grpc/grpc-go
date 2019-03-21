@@ -476,14 +476,6 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		}
 		cc.scRaw = s.ServiceConfig
 		cc.sc = sc
-		if channelz.IsOn() {
-			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
-				// The special formatting of \"%s\" instead of %q is to provide nice printing of service config
-				// for human consumption.
-				Desc:     fmt.Sprintf("Channel has a new service config \"%s\"", cc.scRaw),
-				Severity: channelz.CtINFO,
-			})
-		}
 
 		if cc.sc.retryThrottling != nil {
 			newThrottler := &retryThrottler{

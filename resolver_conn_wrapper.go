@@ -31,13 +31,12 @@ import (
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConnection interface.
 type ccResolverWrapper struct {
-	cc                 *ClientConn
-	resolver           resolver.Resolver
-	addrCh             chan []resolver.Address
-	scCh               chan string
-	done               uint32 // accessed atomically; set to 1 when closed.
-	lastAddressesCount int
-	curAddresses       []resolver.Address
+	cc       *ClientConn
+	resolver resolver.Resolver
+	addrCh   chan []resolver.Address
+	scCh     chan string
+	done     uint32 // accessed atomically; set to 1 when closed.
+	curState resolver.State
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -113,10 +112,10 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) {
 	}
 	grpclog.Infof("ccResolverWrapper: sending update to cc: %v", s)
 	if channelz.IsOn() {
-		ccr.addChannelzTraceEvent(s.Addresses)
+		ccr.addChannelzTraceEvent(s)
 	}
 	ccr.cc.updateResolverState(s)
-	ccr.curAddresses = s.Addresses
+	ccr.curState = s
 }
 
 // NewAddress is called by the resolver implemenetion to send addresses to gRPC.
@@ -126,10 +125,10 @@ func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 	}
 	grpclog.Infof("ccResolverWrapper: sending new addresses to cc: %v", addrs)
 	if channelz.IsOn() {
-		ccr.addChannelzTraceEvent(addrs)
+		ccr.addChannelzTraceEvent(resolver.State{Addresses: addrs, ServiceConfig: ccr.curState.ServiceConfig})
 	}
-	ccr.cc.updateResolverState(resolver.State{Addresses: addrs, ServiceConfig: ccr.cc.scRaw})
-	ccr.curAddresses = addrs
+	ccr.curState.Addresses = addrs
+	ccr.cc.updateResolverState(ccr.curState)
 }
 
 // NewServiceConfig is called by the resolver implemenetion to send service
@@ -139,31 +138,28 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 		return
 	}
 	grpclog.Infof("ccResolverWrapper: got new service config: %v", sc)
-	ccr.cc.updateResolverState(resolver.State{Addresses: ccr.curAddresses, ServiceConfig: sc})
+	if channelz.IsOn() {
+		ccr.addChannelzTraceEvent(resolver.State{Addresses: ccr.curState.Addresses, ServiceConfig: sc})
+	}
+	ccr.curState.ServiceConfig = sc
+	ccr.cc.updateResolverState(ccr.curState)
 }
 
-func (ccr *ccResolverWrapper) addChannelzTraceEvent(addrs []resolver.Address) {
-	if len(addrs) == 0 && ccr.lastAddressesCount != 0 {
-		channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
-			Desc:     "Resolver returns an empty address list",
-			Severity: channelz.CtWarning,
-		})
-	} else if len(addrs) != 0 && ccr.lastAddressesCount == 0 {
-		var s string
-		for i, a := range addrs {
-			if a.ServerName != "" {
-				s += a.Addr + "(" + a.ServerName + ")"
-			} else {
-				s += a.Addr
-			}
-			if i != len(addrs)-1 {
-				s += " "
-			}
-		}
-		channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", s),
-			Severity: channelz.CtINFO,
-		})
+func (ccr *ccResolverWrapper) addChannelzTraceEvent(s resolver.State) {
+	if s.ServiceConfig == ccr.curState.ServiceConfig && (len(ccr.curState.Addresses) == 0) == (len(s.Addresses) == 0) {
+		return
 	}
-	ccr.lastAddressesCount = len(addrs)
+	var updates []string
+	if s.ServiceConfig != ccr.curState.ServiceConfig {
+		updates = append(updates, "service config updated")
+	}
+	if len(ccr.curState.Addresses) > 0 && len(s.Addresses) == 0 {
+		updates = append(updates, "resolver returned an empty address list")
+	} else if len(ccr.curState.Addresses) == 0 && len(s.Addresses) > 0 {
+		updates = append(updates, "resolver returned new addresses")
+	}
+	channelz.AddTraceEvent(ccr.cc.channelzID, &channelz.TraceEventDesc{
+		Desc:     fmt.Sprintf("Resolver state updated: %+v (%v)", s, strings.Join(updates, "; ")),
+		Severity: channelz.CtINFO,
+	})
 }

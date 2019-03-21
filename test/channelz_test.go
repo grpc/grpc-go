@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1518,11 +1519,11 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		}
 		cid = tcs[0].ID
 		for i := len(tcs[0].Trace.Events) - 1; i >= 0; i-- {
-			if tcs[0].Trace.Events[i].Desc == fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", te.srvAddr) {
+			if strings.Contains(tcs[0].Trace.Events[i].Desc, "resolver returned new addresses") {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("events do not contain expected address resolution from empty address state")
+				return false, fmt.Errorf("events do not contain expected address resolution from empty address state.  Got: %+v", tcs[0].Trace.Events)
 			}
 		}
 		return true, nil
@@ -1567,7 +1568,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		cm := channelz.GetChannel(cid)
 
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == fmt.Sprintf("Channel has a new service config \"%s\"", newSC) {
+			if strings.Contains(cm.Trace.Events[i].Desc, "service config updated") {
 				break
 			}
 			if i == 0 {
@@ -1584,7 +1585,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == "Resolver returns an empty address list" {
+			if strings.Contains(cm.Trace.Events[i].Desc, "resolver returned an empty address list") {
 				break
 			}
 			if i == 0 {
