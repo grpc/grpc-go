@@ -173,7 +173,7 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateSubConnState(sc, state)
+		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
 	} else {
 		b.HandleSubConnStateChange(sc, state)
 	}

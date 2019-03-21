@@ -125,7 +125,8 @@ func (b *baseBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectiv
 	panic("not implemented")
 }
 
-func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, s connectivity.State) {
+func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	s := state.ConnectivityState
 	grpclog.Infof("base.baseBalancer: handle SubConn state change: %p, %v", sc, s)
 	oldS, ok := b.scStates[sc]
 	if !ok {

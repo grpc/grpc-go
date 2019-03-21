@@ -122,7 +122,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			default:
 			}
 			if ub, ok := ccb.balancer.(balancer.V2Balancer); ok {
-				ub.UpdateSubConnState(t.sc, t.state)
+				ub.UpdateSubConnState(t.sc, balancer.SubConnState{ConnectivityState: t.state})
 			} else {
 				ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
 			}
