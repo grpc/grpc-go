@@ -1660,6 +1660,26 @@ public abstract class AbstractInteropTest {
     assertResponse(goldenResponse, response);
   }
 
+  /** Sends an unary rpc with ComputeEngineChannelBuilder. */
+  public void computeEngineChannelCredentials(
+      String defaultServiceAccount,
+      TestServiceGrpc.TestServiceBlockingStub computeEngineStub) throws Exception {
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setFillUsername(true)
+        .setResponseSize(314159)
+        .setPayload(Payload.newBuilder()
+        .setBody(ByteString.copyFrom(new byte[271828])))
+        .build();
+    final SimpleResponse response = computeEngineStub.unaryCall(request);
+    assertEquals(defaultServiceAccount, response.getUsername());
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setUsername(defaultServiceAccount)
+        .setPayload(Payload.newBuilder()
+        .setBody(ByteString.copyFrom(new byte[314159])))
+        .build();
+    assertResponse(goldenResponse, response);
+  }
+
   /** Test JWT-based auth. */
   public void jwtTokenCreds(InputStream serviceAccountJson) throws Exception {
     final SimpleRequest request = SimpleRequest.newBuilder()

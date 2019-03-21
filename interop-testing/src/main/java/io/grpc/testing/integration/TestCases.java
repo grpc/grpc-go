@@ -38,6 +38,7 @@ public enum TestCases {
   PING_PONG("full-duplex ping-pong streaming"),
   EMPTY_STREAM("A stream that has zero-messages in both directions"),
   COMPUTE_ENGINE_CREDS("large_unary with service_account auth"),
+  COMPUTE_ENGINE_CHANNEL_CREDENTIALS("large unary with compute engine channel builder"),
   SERVICE_ACCOUNT_CREDS("large_unary with compute engine auth"),
   JWT_TOKEN_CREDS("JWT-based auth"),
   OAUTH2_AUTH_TOKEN("raw oauth2 access token auth"),

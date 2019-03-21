@@ -34,6 +34,7 @@ import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.Charset;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -277,6 +278,20 @@ public class TestServiceClient {
       case COMPUTE_ENGINE_CREDS:
         tester.computeEngineCreds(defaultServiceAccount, oauthScope);
         break;
+
+      case COMPUTE_ENGINE_CHANNEL_CREDENTIALS: {
+        ManagedChannel channel = ComputeEngineChannelBuilder
+            .forAddress(serverHost, serverPort).build();
+        try {
+          TestServiceGrpc.TestServiceBlockingStub computeEngineStub =
+              TestServiceGrpc.newBlockingStub(channel);
+          tester.computeEngineChannelCredentials(defaultServiceAccount, computeEngineStub);
+        } finally {
+          channel.shutdownNow();
+          channel.awaitTermination(5, TimeUnit.SECONDS);
+        }
+        break;
+      }
 
       case SERVICE_ACCOUNT_CREDS: {
         String jsonKey = Files.asCharSource(new File(serviceAccountKeyFile), UTF_8).read();

@@ -47,6 +47,7 @@ public class TestCasesTest {
       "server_compressed_unary",
       "client_streaming",
       "client_compressed_streaming",
+      "compute_engine_channel_credentials",
       "server_streaming",
       "server_compressed_streaming",
       "ping_pong",
