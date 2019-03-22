@@ -39,14 +39,14 @@ const tokenRequestTimeout = 30 * time.Second
 // This API is experimental.
 func NewDefaultCredentials() credentials.Bundle {
 	c := &creds{
-		newPerRpcCreds: func() credentials.PerRPCCredentials {
+		newPerRPCCreds: func() credentials.PerRPCCredentials {
 			ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
 			defer cancel()
-			perRpcCreds, err := oauth.NewApplicationDefault(ctx)
+			perRPCCreds, err := oauth.NewApplicationDefault(ctx)
 			if err != nil {
 				grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
 			}
-			return perRpcCreds
+			return perRPCCreds
 		},
 	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
@@ -63,7 +63,7 @@ func NewDefaultCredentials() credentials.Bundle {
 // This API is experimental.
 func NewComputeEngineChannelCredentials() credentials.Bundle {
 	c := &creds{
-		newPerRpcCreds: func() credentials.PerRPCCredentials {
+		newPerRPCCreds: func() credentials.PerRPCCredentials {
 			return oauth.NewComputeEngine()
 		},
 	}
@@ -83,7 +83,7 @@ type creds struct {
 	// The per RPC credentials associated with this bundle.
 	perRPCCreds credentials.PerRPCCredentials
 	// Creates new per RPC credentials
-	newPerRpcCreds func() credentials.PerRPCCredentials
+	newPerRPCCreds func() credentials.PerRPCCredentials
 }
 
 func (c *creds) TransportCredentials() credentials.TransportCredentials {
@@ -102,7 +102,7 @@ func (c *creds) PerRPCCredentials() credentials.PerRPCCredentials {
 func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	newCreds := &creds{
 		mode:           mode,
-		newPerRpcCreds: c.newPerRpcCreds,
+		newPerRPCCreds: c.newPerRPCCreds,
 	}
 
 	// Create transport credentials.
@@ -118,7 +118,7 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	}
 
 	if mode == internal.CredsBundleModeFallback || mode == internal.CredsBundleModeBackendFromBalancer {
-		newCreds.perRPCCreds = newCreds.newPerRpcCreds()
+		newCreds.perRPCCreds = newCreds.newPerRPCCreds()
 	}
 
 	return newCreds, nil
