@@ -881,8 +881,9 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 			RecvTime: time.Now(),
 			Payload:  m,
 			// TODO truncate large payload.
-			Data:   payInfo.uncompressedBytes,
-			Length: len(payInfo.uncompressedBytes),
+			Data:       payInfo.uncompressedBytes,
+			WireLength: payInfo.wireLength,
+			Length:     len(payInfo.uncompressedBytes),
 		})
 	}
 	if channelz.IsOn() {
@@ -1467,8 +1468,9 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			RecvTime: time.Now(),
 			Payload:  m,
 			// TODO truncate large payload.
-			Data:   payInfo.uncompressedBytes,
-			Length: len(payInfo.uncompressedBytes),
+			Data:       payInfo.uncompressedBytes,
+			WireLength: payInfo.wireLength,
+			Length:     len(payInfo.uncompressedBytes),
 		})
 	}
 	if ss.binlog != nil {
