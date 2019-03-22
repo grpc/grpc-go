@@ -89,7 +89,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{lis1Addr, lis2Addr})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
 	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -657,10 +657,10 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	}()
 
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialAddrs([]resolver.Address{
+	rb.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	})
+	}})
 	client, err := DialContext(ctx, "this-gets-overwritten",
 		WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName),
@@ -873,7 +873,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 	// SwitchBalancer before NewAddress. There was no balancer created, this
 	// makes sure we don't call close on nil balancerWrapper.
-	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`) // This should not panic.
+	r.UpdateState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -889,7 +889,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		}
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`) // This should not panic.
+		go r.UpdateState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`}) // This should not panic.
 	}
 }
 
@@ -904,7 +904,7 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	defer cc.Close()
 
 	// This make sure we don't create addrConn with empty address list.
-	r.NewAddress([]resolver.Address{}) // This should not panic.
+	r.UpdateState(resolver.State{}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -982,7 +982,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	r.NewServiceConfig(`{
+	r.UpdateState(resolver.State{ServiceConfig: `{
     "methodConfig": [
         {
             "name": [
@@ -994,7 +994,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
             "waitForReady": true
         }
     ]
-}`)
+}`})
 	time.Sleep(1 * time.Second)
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady != nil {
@@ -1177,7 +1177,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		{Addr: lis3.Addr().String()},
 	}
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialAddrs(addrsList)
+	rb.InitialState(resolver.State{Addresses: addrsList})
 
 	client, err := Dial("this-gets-overwritten",
 		WithInsecure(),

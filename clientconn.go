@@ -388,8 +388,6 @@ type ClientConn struct {
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
 	curBalancerName string
-	preBalancerName string // previous balancer name.
-	curAddresses    []resolver.Address
 	balancerWrapper *ccBalancerWrapper
 	retryThrottler  atomic.Value
 
@@ -459,50 +457,57 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
-func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
+func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
+	// Check if the ClientConn is already closed. Some fields (e.g.
+	// balancerWrapper) are set to nil when closing the ClientConn, and could
+	// cause nil pointer panic if we don't have this check.
 	if cc.conns == nil {
-		// cc was closed.
-		return
+		return nil
 	}
 
-	if reflect.DeepEqual(cc.curAddresses, addrs) {
-		return
-	}
+	if !cc.dopts.disableServiceConfig && cc.scRaw != s.ServiceConfig {
+		// New service config; apply it.
+		sc, err := parseServiceConfig(s.ServiceConfig)
+		if err != nil {
+			fmt.Println("error parsing config: ", err)
+			return err
+		}
+		cc.scRaw = s.ServiceConfig
+		cc.sc = sc
 
-	cc.curAddresses = addrs
-	cc.firstResolveEvent.Fire()
+		if cc.sc.retryThrottling != nil {
+			newThrottler := &retryThrottler{
+				tokens: cc.sc.retryThrottling.MaxTokens,
+				max:    cc.sc.retryThrottling.MaxTokens,
+				thresh: cc.sc.retryThrottling.MaxTokens / 2,
+				ratio:  cc.sc.retryThrottling.TokenRatio,
+			}
+			cc.retryThrottler.Store(newThrottler)
+		} else {
+			cc.retryThrottler.Store((*retryThrottler)(nil))
+		}
+	}
 
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial
 		// option is not set.
 		var isGRPCLB bool
-		for _, a := range addrs {
+		for _, a := range s.Addresses {
 			if a.Type == resolver.GRPCLB {
 				isGRPCLB = true
 				break
 			}
 		}
 		var newBalancerName string
+		// TODO: use new loadBalancerConfig field with appropriate priority.
 		if isGRPCLB {
 			newBalancerName = grpclbName
+		} else if cc.sc.LB != nil {
+			newBalancerName = *cc.sc.LB
 		} else {
-			// Address list doesn't contain grpclb address. Try to pick a
-			// non-grpclb balancer.
-			newBalancerName = cc.curBalancerName
-			// If current balancer is grpclb, switch to the previous one.
-			if newBalancerName == grpclbName {
-				newBalancerName = cc.preBalancerName
-			}
-			// The following could be true in two cases:
-			// - the first time handling resolved addresses
-			//   (curBalancerName="")
-			// - the first time handling non-grpclb addresses
-			//   (curBalancerName="grpclb", preBalancerName="")
-			if newBalancerName == "" {
-				newBalancerName = PickFirstBalancerName
-			}
+			newBalancerName = PickFirstBalancerName
 		}
 		cc.switchBalancer(newBalancerName)
 	} else if cc.balancerWrapper == nil {
@@ -511,7 +516,9 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
 	}
 
-	cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
+	cc.balancerWrapper.updateResolverState(s)
+	cc.firstResolveEvent.Fire()
+	return nil
 }
 
 // switchBalancer starts the switching from current balancer to the balancer
@@ -523,10 +530,6 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 //
 // Caller must hold cc.mu.
 func (cc *ClientConn) switchBalancer(name string) {
-	if cc.conns == nil {
-		return
-	}
-
 	if strings.ToLower(cc.curBalancerName) == strings.ToLower(name) {
 		return
 	}
@@ -536,15 +539,11 @@ func (cc *ClientConn) switchBalancer(name string) {
 		grpclog.Infoln("ignoring balancer switching: Balancer DialOption used instead")
 		return
 	}
-	// TODO(bar switching) change this to two steps: drain and close.
-	// Keep track of sc in wrapper.
 	if cc.balancerWrapper != nil {
 		cc.balancerWrapper.close()
 	}
 
 	builder := balancer.Get(name)
-	// TODO(yuxuanli): If user send a service config that does not contain a valid balancer name, should
-	// we reuse previous one?
 	if channelz.IsOn() {
 		if builder == nil {
 			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
@@ -563,7 +562,6 @@ func (cc *ClientConn) switchBalancer(name string) {
 		builder = newPickfirstBuilder()
 	}
 
-	cc.preBalancerName = cc.curBalancerName
 	cc.curBalancerName = builder.Name()
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
 }
@@ -748,68 +746,6 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 		return nil, nil, toRPCErr(err)
 	}
 	return t, done, nil
-}
-
-// handleServiceConfig parses the service config string in JSON format to Go native
-// struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
-func (cc *ClientConn) handleServiceConfig(js string) error {
-	if cc.dopts.disableServiceConfig {
-		return nil
-	}
-	if cc.scRaw == js {
-		return nil
-	}
-	if channelz.IsOn() {
-		channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
-			// The special formatting of \"%s\" instead of %q is to provide nice printing of service config
-			// for human consumption.
-			Desc:     fmt.Sprintf("Channel has a new service config \"%s\"", js),
-			Severity: channelz.CtINFO,
-		})
-	}
-	sc, err := parseServiceConfig(js)
-	if err != nil {
-		return err
-	}
-	cc.mu.Lock()
-	// Check if the ClientConn is already closed. Some fields (e.g.
-	// balancerWrapper) are set to nil when closing the ClientConn, and could
-	// cause nil pointer panic if we don't have this check.
-	if cc.conns == nil {
-		cc.mu.Unlock()
-		return nil
-	}
-	cc.scRaw = js
-	cc.sc = sc
-
-	if sc.retryThrottling != nil {
-		newThrottler := &retryThrottler{
-			tokens: sc.retryThrottling.MaxTokens,
-			max:    sc.retryThrottling.MaxTokens,
-			thresh: sc.retryThrottling.MaxTokens / 2,
-			ratio:  sc.retryThrottling.TokenRatio,
-		}
-		cc.retryThrottler.Store(newThrottler)
-	} else {
-		cc.retryThrottler.Store((*retryThrottler)(nil))
-	}
-
-	if sc.LB != nil && *sc.LB != grpclbName { // "grpclb" is not a valid balancer option in service config.
-		if cc.curBalancerName == grpclbName {
-			// If current balancer is grpclb, there's at least one grpclb
-			// balancer address in the resolved list. Don't switch the balancer,
-			// but change the previous balancer name, so if a new resolved
-			// address list doesn't contain grpclb address, balancer will be
-			// switched to *sc.LB.
-			cc.preBalancerName = *sc.LB
-		} else {
-			cc.switchBalancer(*sc.LB)
-			cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
-		}
-	}
-
-	cc.mu.Unlock()
-	return nil
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {

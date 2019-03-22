@@ -401,7 +401,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	// cc to remote balancers uses lb.manualResolver. Send the updated remote
 	// balancer addresses to it through manualResolver.
-	lb.manualResolver.NewAddress(remoteBalancerAddrs)
+	lb.manualResolver.UpdateState(resolver.State{Addresses: remoteBalancerAddrs})
 
 	lb.mu.Lock()
 	lb.resolvedBackendAddrs = backendAddrs

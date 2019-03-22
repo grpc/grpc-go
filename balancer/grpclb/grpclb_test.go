@@ -391,11 +391,11 @@ func TestGRPCLB(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
@@ -442,11 +442,11 @@ func TestGRPCLBWeighted(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	sequences := []string{"00101", "00011"}
 	for _, seq := range sequences {
@@ -512,11 +512,11 @@ func TestDropRequest(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	// Wait for the 1st, non-fail-fast RPC to succeed. This ensures both server
 	// connections are made, because the first one has Drop set to true.
@@ -630,7 +630,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tests[0].lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -638,7 +638,7 @@ func TestBalancerDisconnects(t *testing.T) {
 		Addr:       tests[1].lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	var p peer.Peer
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
@@ -711,7 +711,7 @@ func TestFallback(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       "",
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -719,7 +719,7 @@ func TestFallback(t *testing.T) {
 		Addr:       beLis.Addr().String(),
 		Type:       resolver.Backend,
 		ServerName: beServerName,
-	}})
+	}}})
 
 	var p peer.Peer
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
@@ -729,7 +729,7 @@ func TestFallback(t *testing.T) {
 		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
 	}
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
@@ -737,7 +737,7 @@ func TestFallback(t *testing.T) {
 		Addr:       beLis.Addr().String(),
 		Type:       resolver.Backend,
 		ServerName: beServerName,
-	}})
+	}}})
 
 	for i := 0; i < 1000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
@@ -798,11 +798,11 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	var p peer.Peer
 
@@ -909,11 +909,11 @@ func runAndGetStats(t *testing.T, drop bool, runRPCs func(*grpc.ClientConn)) *rp
 	}
 	defer cc.Close()
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	runRPCs(cc)
 	time.Sleep(1 * time.Second)
