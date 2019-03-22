@@ -153,7 +153,7 @@ func main() {
 	case credsGoogleDefaultCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))
 	case credsComputeEngineChannelCreds:
-		opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineChannelCredentials()))
+		opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
 	case credsNone:
 		opts = append(opts, grpc.WithInsecure())
 	default:

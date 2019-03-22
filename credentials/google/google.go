@@ -56,12 +56,12 @@ func NewDefaultCredentials() credentials.Bundle {
 	return bundle
 }
 
-// NewComputeEngineChannelCredentials returns a credentials bundle that is configured to work
+// NewComputeEngineCredentials returns a credentials bundle that is configured to work
 // with google services. This API must only be used when running on GCE. Authentication configured
 // by this API represents the GCE VM's default service account.
 //
 // This API is experimental.
-func NewComputeEngineChannelCredentials() credentials.Bundle {
+func NewComputeEngineCredentials() credentials.Bundle {
 	c := &creds{
 		newPerRPCCreds: func() credentials.PerRPCCredentials {
 			return oauth.NewComputeEngine()
