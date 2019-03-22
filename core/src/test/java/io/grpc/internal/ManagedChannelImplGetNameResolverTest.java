@@ -176,7 +176,7 @@ public class ManagedChannelImplGetNameResolverTest {
       return uri.getAuthority();
     }
 
-    @Override public void start(final Listener listener) {}
+    @Override public void start(final Observer observer) {}
 
     @Override public void shutdown() {}
   }

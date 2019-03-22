@@ -91,6 +91,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.NameResolver.Helper.ConfigOrError;
+import io.grpc.NameResolver.ResolutionResult;
 import io.grpc.ProxiedSocketAddress;
 import io.grpc.ProxyDetector;
 import io.grpc.SecurityLevel;
@@ -674,7 +675,7 @@ public class ManagedChannelImplTest {
         .handleSubchannelState(same(subchannel2), stateInfoCaptor.capture());
     assertSame(CONNECTING, stateInfoCaptor.getValue().getState());
 
-    resolver.listener.onError(resolutionError);
+    resolver.observer.onError(resolutionError);
     verify(mockLoadBalancer).handleNameResolutionError(resolutionError);
 
     verifyNoMoreInteractions(mockLoadBalancer);
@@ -684,7 +685,7 @@ public class ManagedChannelImplTest {
 
     // No more callback should be delivered to LoadBalancer after it's shut down
     transportInfo2.listener.transportReady();
-    resolver.listener.onError(resolutionError);
+    resolver.observer.onError(resolutionError);
     resolver.resolved();
     verifyNoMoreInteractions(mockLoadBalancer);
   }
@@ -801,7 +802,7 @@ public class ManagedChannelImplTest {
     assertEquals(0, timer.numPendingTasks());
 
     // Verify that the successful resolution reset the backoff policy
-    resolver.listener.onError(error);
+    resolver.observer.onError(error);
     timer.forwardNanos(RECONNECT_BACKOFF_INTERVAL_NANOS - 1);
     assertEquals(3, resolver.refreshCalled);
     timer.forwardNanos(1);
@@ -2585,25 +2586,31 @@ public class ManagedChannelImplTest {
     createChannel();
 
     int prevSize = getStats(channel).channelTrace.events.size();
-    nameResolverFactory.resolvers.get(0).listener.onAddresses(
-        Collections.singletonList(new EquivalentAddressGroup(
-            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
-        Attributes.EMPTY);
+    ResolutionResult resolutionResult1 = ResolutionResult.newBuilder()
+        .setServers(Collections.singletonList(
+            new EquivalentAddressGroup(
+                Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))))
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    nameResolverFactory.resolvers.get(0).observer.onResult(resolutionResult1);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
 
     prevSize = getStats(channel).channelTrace.events.size();
-    nameResolverFactory.resolvers.get(0).listener.onError(Status.INTERNAL);
+    nameResolverFactory.resolvers.get(0).observer.onError(Status.INTERNAL);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
 
     prevSize = getStats(channel).channelTrace.events.size();
-    nameResolverFactory.resolvers.get(0).listener.onError(Status.INTERNAL);
+    nameResolverFactory.resolvers.get(0).observer.onError(Status.INTERNAL);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
 
     prevSize = getStats(channel).channelTrace.events.size();
-    nameResolverFactory.resolvers.get(0).listener.onAddresses(
-        Collections.singletonList(new EquivalentAddressGroup(
-            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
-        Attributes.EMPTY);
+    ResolutionResult resolutionResult2 = ResolutionResult.newBuilder()
+        .setServers(Collections.singletonList(
+            new EquivalentAddressGroup(
+              Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))))
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    nameResolverFactory.resolvers.get(0).observer.onResult(resolutionResult2);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
   }
 
@@ -2623,10 +2630,13 @@ public class ManagedChannelImplTest {
         Attributes.newBuilder()
             .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, new HashMap<String, Object>())
             .build();
-    nameResolverFactory.resolvers.get(0).listener.onAddresses(
-        Collections.singletonList(new EquivalentAddressGroup(
-            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
-        attributes);
+    ResolutionResult resolutionResult1 = ResolutionResult.newBuilder()
+        .setServers(Collections.singletonList(
+            new EquivalentAddressGroup(
+                Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))))
+        .setAttributes(attributes)
+        .build();
+    nameResolverFactory.resolvers.get(0).observer.onResult(resolutionResult1);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
     assertThat(getStats(channel).channelTrace.events.get(prevSize))
         .isEqualTo(new ChannelTrace.Event.Builder()
@@ -2636,10 +2646,13 @@ public class ManagedChannelImplTest {
             .build());
 
     prevSize = getStats(channel).channelTrace.events.size();
-    nameResolverFactory.resolvers.get(0).listener.onAddresses(
-        Collections.singletonList(new EquivalentAddressGroup(
-            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
-        attributes);
+    ResolutionResult resolutionResult2 = ResolutionResult.newBuilder().setServers(
+        Collections.singletonList(
+            new EquivalentAddressGroup(
+                Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))))
+        .setAttributes(attributes)
+        .build();
+    nameResolverFactory.resolvers.get(0).observer.onResult(resolutionResult2);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize);
 
     prevSize = getStats(channel).channelTrace.events.size();
@@ -2650,10 +2663,13 @@ public class ManagedChannelImplTest {
             .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig)
             .build();
     timer.forwardNanos(1234);
-    nameResolverFactory.resolvers.get(0).listener.onAddresses(
-        Collections.singletonList(new EquivalentAddressGroup(
-            Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))),
-        attributes);
+    ResolutionResult resolutionResult3 = ResolutionResult.newBuilder()
+        .setServers(Collections.singletonList(
+            new EquivalentAddressGroup(
+                Arrays.asList(new SocketAddress() {}, new SocketAddress() {}))))
+        .setAttributes(attributes)
+        .build();
+    nameResolverFactory.resolvers.get(0).observer.onResult(resolutionResult3);
     assertThat(getStats(channel).channelTrace.events).hasSize(prevSize + 1);
     assertThat(getStats(channel).channelTrace.events.get(prevSize))
         .isEqualTo(new ChannelTrace.Event.Builder()
@@ -3192,7 +3208,7 @@ public class ManagedChannelImplTest {
     final List<EquivalentAddressGroup> addresses =
         ImmutableList.of(new EquivalentAddressGroup(new SocketAddress() {}));
     final class FakeNameResolver extends NameResolver {
-      Listener listener;
+      Observer observer;
 
       @Override
       public String getServiceAuthority() {
@@ -3200,13 +3216,17 @@ public class ManagedChannelImplTest {
       }
 
       @Override
-      public void start(Listener listener) {
-        this.listener = listener;
-        listener.onAddresses(addresses,
-            Attributes.newBuilder()
-                .set(
-                    GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
-                    ImmutableMap.<String, Object>of("loadBalancingPolicy", "kaboom"))
+      public void start(Observer observer) {
+        this.observer = observer;
+        observer.onResult(
+            ResolutionResult.newBuilder()
+                .setServers(addresses)
+                .setAttributes(
+                    Attributes.newBuilder()
+                        .set(
+                            GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
+                            ImmutableMap.<String, Object>of("loadBalancingPolicy", "kaboom"))
+                        .build())
                 .build());
       }
 
@@ -3259,12 +3279,16 @@ public class ManagedChannelImplTest {
 
     // ok the service config is bad, let's fix it.
 
-    factory.resolver.listener.onAddresses(addresses,
-        Attributes.newBuilder()
-        .set(
-            GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
-            ImmutableMap.<String, Object>of("loadBalancingPolicy", "round_robin"))
-        .build());
+    factory.resolver.observer.onResult(
+        ResolutionResult.newBuilder()
+            .setServers(addresses)
+            .setAttributes(
+                Attributes.newBuilder()
+                    .set(
+                        GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG,
+                        ImmutableMap.<String, Object>of("loadBalancingPolicy", "round_robin"))
+                    .build())
+            .build());
 
     ClientCall<Void, Void> call2 = mychannel.newCall(
         TestMethodDescriptors.voidMethod(),
@@ -3294,7 +3318,7 @@ public class ManagedChannelImplTest {
         }
 
         @Override
-        public void start(Listener listener) {
+        public void start(Observer observer) {
         }
 
         @Override
@@ -3803,7 +3827,7 @@ public class ManagedChannelImplTest {
     }
 
     final class FakeNameResolver extends NameResolver {
-      Listener listener;
+      Observer observer;
       boolean shutdown;
       int refreshCalled;
       Status error;
@@ -3816,8 +3840,8 @@ public class ManagedChannelImplTest {
         return expectedUri.getAuthority();
       }
 
-      @Override public void start(final Listener listener) {
-        this.listener = listener;
+      @Override public void start(Observer observer) {
+        this.observer = observer;
         if (resolvedAtStart) {
           resolved();
         }
@@ -3830,10 +3854,14 @@ public class ManagedChannelImplTest {
 
       void resolved() {
         if (error != null) {
-          listener.onError(error);
+          observer.onError(error);
           return;
         }
-        listener.onAddresses(servers, nextResolvedAttributes.get());
+        observer.onResult(
+            ResolutionResult.newBuilder()
+                .setServers(servers)
+                .setAttributes(nextResolvedAttributes.get())
+                .build());
       }
 
       @Override public void shutdown() {

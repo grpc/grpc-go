@@ -53,6 +53,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
+import io.grpc.NameResolver.ResolutionResult;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.FakeClock.ScheduledTask;
@@ -138,10 +139,11 @@ public class ManagedChannelImplIdlenessTest {
   @Mock private NameResolver.Factory mockNameResolverFactory;
   @Mock private ClientCall.Listener<Integer> mockCallListener;
   @Mock private ClientCall.Listener<Integer> mockCallListener2;
-  @Captor private ArgumentCaptor<NameResolver.Listener> nameResolverListenerCaptor;
+  @Captor private ArgumentCaptor<NameResolver.Observer> nameResolverObserverCaptor;
   private BlockingQueue<MockClientTransportInfo> newTransports;
 
   @Before
+  @SuppressWarnings("deprecation") // For NameResolver.Listener
   public void setUp() {
     LoadBalancerRegistry.getDefaultRegistry().register(mockLoadBalancerProvider);
     when(mockNameResolver.getServiceAuthority()).thenReturn(AUTHORITY);
@@ -193,6 +195,7 @@ public class ManagedChannelImplIdlenessTest {
         any(ClientTransportFactory.ClientTransportOptions.class),
         any(ChannelLogger.class));
     verify(mockNameResolver, never()).start(any(NameResolver.Listener.class));
+    verify(mockNameResolver, never()).start(any(NameResolver.Observer.class));
   }
 
   @After
@@ -216,10 +219,15 @@ public class ManagedChannelImplIdlenessTest {
 
     verify(mockLoadBalancerProvider).newLoadBalancer(any(Helper.class));
 
-    verify(mockNameResolver).start(nameResolverListenerCaptor.capture());
+    verify(mockNameResolver).start(nameResolverObserverCaptor.capture());
     // Simulate new address resolved to make sure the LoadBalancer is correctly linked to
     // the NameResolver.
-    nameResolverListenerCaptor.getValue().onAddresses(servers, Attributes.EMPTY);
+    ResolutionResult resolutionResult =
+        ResolutionResult.newBuilder()
+            .setServers(servers)
+            .setAttributes(Attributes.EMPTY)
+            .build();
+    nameResolverObserverCaptor.getValue().onResult(resolutionResult);
     verify(mockLoadBalancer).handleResolvedAddressGroups(servers, Attributes.EMPTY);
   }
 

@@ -60,7 +60,7 @@ import javax.annotation.Nullable;
  * A DNS-based {@link NameResolver}.
  *
  * <p>Each {@code A} or {@code AAAA} record emits an {@link EquivalentAddressGroup} in the list
- * passed to {@link NameResolver.Listener#onAddresses(List, Attributes)}
+ * passed to {@link NameResolver.Observer#onResult(ResolutionResult)}.
  *
  * @see DnsNameResolverProvider
  */
@@ -150,9 +150,9 @@ final class DnsNameResolver extends NameResolver {
   private Executor executor;
   private boolean resolving;
 
-  // The field must be accessed from syncContext, although the methods on a Listener can be called
+  // The field must be accessed from syncContext, although the methods on an Observer can be called
   // from any thread.
-  private Listener listener;
+  private NameResolver.Observer observer;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Helper helper,
       Resource<Executor> executorResource, Stopwatch stopwatch, boolean isAndroid) {
@@ -185,24 +185,24 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Override
-  public void start(Listener listener) {
-    Preconditions.checkState(this.listener == null, "already started");
+  public void start(Observer observer) {
+    Preconditions.checkState(this.observer == null, "already started");
     executor = SharedResourceHolder.get(executorResource);
-    this.listener = Preconditions.checkNotNull(listener, "listener");
+    this.observer = Preconditions.checkNotNull(observer, "observer");
     resolve();
   }
 
   @Override
   public void refresh() {
-    Preconditions.checkState(listener != null, "not started");
+    Preconditions.checkState(observer != null, "not started");
     resolve();
   }
 
   private final class Resolve implements Runnable {
-    private final Listener savedListener;
+    private final Observer savedObserver;
 
-    Resolve(Listener savedListener) {
-      this.savedListener = Preconditions.checkNotNull(savedListener, "savedListener");
+    Resolve(Observer savedObserver) {
+      this.savedObserver = Preconditions.checkNotNull(savedObserver, "savedObserver");
     }
 
     @Override
@@ -230,7 +230,7 @@ final class DnsNameResolver extends NameResolver {
       try {
         proxiedAddr = proxyDetector.proxyFor(destination);
       } catch (IOException e) {
-        savedListener.onError(
+        savedObserver.onError(
             Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
         return;
       }
@@ -239,7 +239,12 @@ final class DnsNameResolver extends NameResolver {
           logger.finer("Using proxy address " + proxiedAddr);
         }
         EquivalentAddressGroup server = new EquivalentAddressGroup(proxiedAddr);
-        savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
+        ResolutionResult resolutionResult =
+            ResolutionResult.newBuilder()
+                .setServers(Collections.singletonList(server))
+                .setAttributes(Attributes.EMPTY)
+                .build();
+        savedObserver.onResult(resolutionResult);
         return;
       }
 
@@ -269,7 +274,7 @@ final class DnsNameResolver extends NameResolver {
           logger.finer("Found DNS results " + resolutionResults + " for " + host);
         }
       } catch (Exception e) {
-        savedListener.onError(
+        savedObserver.onError(
             Status.UNAVAILABLE.withDescription("Unable to resolve host " + host).withCause(e));
         return;
       }
@@ -280,7 +285,7 @@ final class DnsNameResolver extends NameResolver {
       }
       servers.addAll(resolutionResults.balancerAddresses);
       if (servers.isEmpty()) {
-        savedListener.onError(Status.UNAVAILABLE.withDescription(
+        savedObserver.onError(Status.UNAVAILABLE.withDescription(
             "No DNS backend or balancer addresses found for " + host));
         return;
       }
@@ -291,7 +296,7 @@ final class DnsNameResolver extends NameResolver {
             parseServiceConfig(resolutionResults.txtRecords, random, getLocalHostname());
         if (serviceConfig != null) {
           if (serviceConfig.getError() != null) {
-            savedListener.onError(serviceConfig.getError());
+            savedObserver.onError(serviceConfig.getError());
             return;
           } else {
             attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig.getConfig());
@@ -300,7 +305,9 @@ final class DnsNameResolver extends NameResolver {
       } else {
         logger.log(Level.FINE, "No TXT records found for {0}", new Object[]{host});
       }
-      savedListener.onAddresses(servers, attrs.build());
+      ResolutionResult resolutionResult =
+          ResolutionResult.newBuilder().setServers(servers).setAttributes(attrs.build()).build();
+      savedObserver.onResult(resolutionResult);
     }
   }
 
@@ -338,7 +345,7 @@ final class DnsNameResolver extends NameResolver {
       return;
     }
     resolving = true;
-    executor.execute(new Resolve(listener));
+    executor.execute(new Resolve(observer));
   }
 
   private boolean cacheRefreshRequired() {

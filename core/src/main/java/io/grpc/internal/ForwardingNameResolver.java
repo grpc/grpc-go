@@ -38,8 +38,14 @@ abstract class ForwardingNameResolver extends NameResolver {
   }
 
   @Override
+  @Deprecated
   public void start(Listener listener) {
     delegate.start(listener);
+  }
+
+  @Override
+  public void start(Observer observer) {
+    delegate.start(observer);
   }
 
   @Override
