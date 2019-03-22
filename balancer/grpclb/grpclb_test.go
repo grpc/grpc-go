@@ -798,11 +798,11 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
-	}})
+	}}})
 
 	var p peer.Peer
 

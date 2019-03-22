@@ -660,7 +660,7 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	rb.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	})
+	}})
 	client, err := DialContext(ctx, "this-gets-overwritten",
 		WithInsecure(),
 		WithBalancerName(stateRecordingBalancerName),
