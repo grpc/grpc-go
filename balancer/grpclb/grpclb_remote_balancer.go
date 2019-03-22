@@ -41,7 +41,9 @@ import (
 // processServerList updates balaner's internal state, create/remove SubConns
 // and regenerates picker using the received serverList.
 func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
-	grpclog.Infof("lbBalancer: processing server list: %+v", l)
+	if grpclog.V(2) {
+		grpclog.Infof("lbBalancer: processing server list: %+v", l)
+	}
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
@@ -51,7 +53,9 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 
 	// If the new server list == old server list, do nothing.
 	if reflect.DeepEqual(lb.fullServerList, l.Servers) {
-		grpclog.Infof("lbBalancer: new serverlist same as the previous one, ignoring")
+		if grpclog.V(2) {
+			grpclog.Infof("lbBalancer: new serverlist same as the previous one, ignoring")
+		}
 		return
 	}
 	lb.fullServerList = l.Servers
@@ -74,8 +78,10 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 			Addr:     fmt.Sprintf("%s:%d", ipStr, s.Port),
 			Metadata: &md,
 		}
-		grpclog.Infof("lbBalancer: server list entry[%d]: ipStr:|%s|, port:|%d|, load balancer token:|%v|",
-			i, ipStr, s.Port, s.LoadBalanceToken)
+		if grpclog.V(2) {
+			grpclog.Infof("lbBalancer: server list entry[%d]: ipStr:|%s|, port:|%d|, load balancer token:|%v|",
+				i, ipStr, s.Port, s.LoadBalanceToken)
+		}
 		backendAddrs = append(backendAddrs, addr)
 	}
 
