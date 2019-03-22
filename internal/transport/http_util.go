@@ -139,14 +139,6 @@ type parsedHeaderData struct {
 type decodeState struct {
 	// whether decoding on server side or not
 	serverSide bool
-	// ignoreContentType indicates whether when processing the HEADERS frame, ignoring checking the
-	// content-type is grpc or not.
-	//
-	// Trailers (after headers) should not have a content-type. And thus we will ignore checking the
-	// content-type.
-	//
-	// For server, this field is always false.
-	ignoreContentType bool
 
 	// Records the states during HPACK decoding. It will be filled with info parsed from HTTP HEADERS
 	// frame once decodeHeader function has been invoked and returned.
