@@ -39,19 +39,20 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 		interceptors = append([]UnaryClientInterceptor{cc.dopts.unaryInt}, interceptors...)
 	}
 
-	return getChainInvoker(interceptors, invoke)(ctx, method, args, reply, cc, opts...)
+	if len(interceptors) > 0 {
+		return interceptors[0](ctx, method, args, reply, cc, getChainInvoker(interceptors, 0, invoke), opts...)
+	}
+	return invoke(ctx, method, args, reply, cc, opts...)
 }
 
-// getChainInvoker generates the chained unary invoker.
-func getChainInvoker(its []UnaryClientInterceptor, finalInvoker UnaryInvoker) UnaryInvoker {
-	outerInv := finalInvoker
-	for i := len(its) - 1; i >= 0; i-- {
-		innerIt, innerInv := its[i], outerInv
-		outerInv = func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
-			return innerIt(ctx, method, req, reply, cc, innerInv, opts...)
-		}
+// getChainInvoker recursively generate the chained unary invoker.
+func getChainInvoker(interceptors []UnaryClientInterceptor, curr int, finalInvoker UnaryInvoker) UnaryInvoker {
+	if curr == len(interceptors)-1 {
+		return finalInvoker
 	}
-	return outerInv
+	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+		return interceptors[curr+1](ctx, method, req, reply, cc, getChainInvoker(interceptors, curr+1, finalInvoker), opts...)
+	}
 }
 
 func combine(o1 []CallOption, o2 []CallOption) []CallOption {
