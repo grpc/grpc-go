@@ -1,3 +1,10 @@
+---
+name: Bug Report
+about: Create a report to help us improve
+labels: 'Type: Bug'
+
+---
+
 Please answer these questions before submitting your issue.
 
 ### What version of gRPC are you using?
