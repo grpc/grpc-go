@@ -30,9 +30,24 @@ import "os"
 
 var logger = newLoggerV2()
 
+// Verbose is a typed boolean that implements Infof.
+type Verbose bool
+
+// Infof is equivalent to the global Infof, guarded by the verbose value.
+func (v Verbose) Infof(format string, args ...interface{}) {
+	if v {
+		Infof(format, args...)
+	}
+}
+
 // V reports whether verbosity level l is at least the requested verbose level.
-func V(l int) bool {
-	return logger.V(l)
+// The returned value is a typed boolean that implements Infof. Thus, it's
+// equivalent to write
+//    if grpclog.V(2) { grpclog.Infof("something") }
+// or
+//    grpclog.V(2).Infof("something")
+func V(l int) Verbose {
+	return Verbose(logger.V(l))
 }
 
 // Info logs to the INFO log.
