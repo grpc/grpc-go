@@ -1369,6 +1369,8 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 	return &s
 }
 
+func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
+
 func (t *http2Client) IncrMsgSent() {
 	atomic.AddInt64(&t.czData.msgSent, 1)
 	atomic.StoreInt64(&t.czData.lastMsgSentTime, time.Now().UnixNano())

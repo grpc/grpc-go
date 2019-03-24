@@ -749,10 +749,11 @@ func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Strea
 
 	trInfo = &traceInfo{
 		tr: tr,
+		firstLine: firstLine{
+			client:     false,
+			remoteAddr: st.RemoteAddr(),
+		},
 	}
-	trInfo.firstLine.client = false
-	trInfo.firstLine.remoteAddr = st.RemoteAddr()
-
 	if dl, ok := stream.Context().Deadline(); ok {
 		trInfo.firstLine.deadline = time.Until(dl)
 	}
@@ -860,7 +861,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	if trInfo != nil {
 		defer trInfo.tr.Finish()
-		trInfo.firstLine.client = false
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		defer func() {
 			if err != nil && err != io.EOF {
