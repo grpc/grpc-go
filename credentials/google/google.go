@@ -69,7 +69,7 @@ func NewComputeEngineCredentials() credentials.Bundle {
 	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
-		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
+		grpclog.Warningf("compute engine creds: failed to create new creds: %v", err)
 	}
 	return bundle
 }
@@ -114,7 +114,7 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 		// to create new ALTS client creds here.
 		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())
 	default:
-		return nil, fmt.Errorf("google default creds: unsupported mode: %v", mode)
+		return nil, fmt.Errorf("unsupported mode: %v", mode)
 	}
 
 	if mode == internal.CredsBundleModeFallback || mode == internal.CredsBundleModeBackendFromBalancer {
