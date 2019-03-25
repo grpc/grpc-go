@@ -41,7 +41,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
 import io.grpc.Channel;
 import io.grpc.ChannelLogger;
-import io.grpc.ChannelLogger.ChannelLogLevel;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
@@ -179,7 +178,8 @@ public class HealthCheckingLoadBalancerFactoryTest {
     when(backoffPolicy2.nextBackoffNanos()).thenReturn(12L, 22L, 32L);
 
     hcLbFactory = new HealthCheckingLoadBalancerFactory(
-        origLbFactory, backoffPolicyProvider, clock.getTimeProvider());
+        origLbFactory, backoffPolicyProvider,
+        clock.getStopwatchSupplier());
     hcLb = hcLbFactory.newLoadBalancer(origHelper);
     // Make sure all calls into the hcLb is from the syncContext
     hcLbEventDelivery = new LoadBalancer() {

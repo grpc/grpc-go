@@ -21,7 +21,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Factory;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.internal.ExponentialBackoffPolicy;
-import io.grpc.internal.TimeProvider;
+import io.grpc.internal.GrpcUtil;
 
 /**
  * Utility for enabling
@@ -63,7 +63,8 @@ public final class HealthCheckingLoadBalancerUtil {
   public static LoadBalancer newHealthCheckingLoadBalancer(Factory factory, Helper helper) {
     HealthCheckingLoadBalancerFactory hcFactory =
         new HealthCheckingLoadBalancerFactory(
-            factory, new ExponentialBackoffPolicy.Provider(), TimeProvider.SYSTEM_TIME_PROVIDER);
+            factory, new ExponentialBackoffPolicy.Provider(),
+            GrpcUtil.STOPWATCH_SUPPLIER);
     return hcFactory.newLoadBalancer(helper);
   }
 }

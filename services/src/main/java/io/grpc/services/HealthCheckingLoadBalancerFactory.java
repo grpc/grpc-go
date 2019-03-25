@@ -25,6 +25,8 @@ import static io.grpc.ConnectivityState.SHUTDOWN;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ChannelLogger;
@@ -48,7 +50,6 @@ import io.grpc.health.v1.HealthGrpc;
 import io.grpc.internal.BackoffPolicy;
 import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.ServiceConfigUtil;
-import io.grpc.internal.TimeProvider;
 import io.grpc.util.ForwardingLoadBalancer;
 import io.grpc.util.ForwardingLoadBalancerHelper;
 import java.util.HashSet;
@@ -76,13 +77,14 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
 
   private final Factory delegateFactory;
   private final BackoffPolicy.Provider backoffPolicyProvider;
-  private final TimeProvider time;
+  private final Supplier<Stopwatch> stopwatchSupplier;
 
   public HealthCheckingLoadBalancerFactory(
-      Factory delegateFactory, BackoffPolicy.Provider backoffPolicyProvider, TimeProvider time) {
+      Factory delegateFactory, BackoffPolicy.Provider backoffPolicyProvider,
+      Supplier<Stopwatch> stopwatchSupplier) {
     this.delegateFactory = checkNotNull(delegateFactory, "delegateFactory");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
-    this.time = checkNotNull(time, "time");
+    this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
   }
 
   @Override
@@ -357,11 +359,11 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
     private class HcStream extends ClientCall.Listener<HealthCheckResponse> {
       private final ClientCall<HealthCheckRequest, HealthCheckResponse> call;
       private final String callServiceName;
-      private final long callCreationNanos;
+      private final Stopwatch stopwatch;
       private boolean callHasResponded;
 
       HcStream() {
-        callCreationNanos = time.currentTimeNanos();
+        stopwatch = stopwatchSupplier.get().start();
         callServiceName = serviceName;
         call = subchannel.asChannel().newCall(HealthGrpc.getWatchMethod(), CallOptions.DEFAULT);
       }
@@ -446,8 +448,7 @@ final class HealthCheckingLoadBalancerFactory extends Factory {
           if (backoffPolicy == null) {
             backoffPolicy = backoffPolicyProvider.get();
           }
-          delayNanos =
-              callCreationNanos + backoffPolicy.nextBackoffNanos() - time.currentTimeNanos();
+          delayNanos = backoffPolicy.nextBackoffNanos() - stopwatch.elapsed(TimeUnit.NANOSECONDS);
         }
         if (delayNanos <= 0) {
           startRpc();

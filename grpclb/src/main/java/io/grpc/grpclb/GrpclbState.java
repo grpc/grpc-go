@@ -27,6 +27,7 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
+import com.google.common.base.Stopwatch;
 import com.google.protobuf.util.Durations;
 import io.grpc.Attributes;
 import io.grpc.ChannelLogger;
@@ -112,6 +113,7 @@ final class GrpclbState {
   private final SynchronizationContext syncContext;
   private final SubchannelPool subchannelPool;
   private final TimeProvider time;
+  private final Stopwatch stopwatch;
   private final ScheduledExecutorService timerService;
 
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
@@ -131,7 +133,6 @@ final class GrpclbState {
   private BackoffPolicy lbRpcRetryPolicy;
   @Nullable
   private ScheduledHandle lbRpcRetryTimer;
-  private long prevLbRpcStartNanos;
 
   @Nullable
   private ManagedChannel lbCommChannel;
@@ -155,6 +156,7 @@ final class GrpclbState {
       Helper helper,
       SubchannelPool subchannelPool,
       TimeProvider time,
+      Stopwatch stopwatch,
       BackoffPolicy.Provider backoffPolicyProvider) {
     this.mode = checkNotNull(mode, "mode");
     this.helper = checkNotNull(helper, "helper");
@@ -162,6 +164,7 @@ final class GrpclbState {
     this.subchannelPool =
         mode == Mode.ROUND_ROBIN ? checkNotNull(subchannelPool, "subchannelPool") : null;
     this.time = checkNotNull(time, "time provider");
+    this.stopwatch = checkNotNull(stopwatch, "stopwatch");
     this.timerService = checkNotNull(helper.getScheduledExecutorService(), "timerService");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
@@ -288,7 +291,7 @@ final class GrpclbState {
     LoadBalancerGrpc.LoadBalancerStub stub = LoadBalancerGrpc.newStub(lbCommChannel);
     lbStream = new LbStream(stub);
     lbStream.start();
-    prevLbRpcStartNanos = time.currentTimeNanos();
+    stopwatch.reset().start();
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
@@ -630,7 +633,7 @@ final class GrpclbState {
         // actual delay may be smaller than the value from the back-off policy, or even negative,
         // depending how much time was spent in the previous RPC.
         delayNanos =
-            prevLbRpcStartNanos + lbRpcRetryPolicy.nextBackoffNanos() - time.currentTimeNanos();
+            lbRpcRetryPolicy.nextBackoffNanos() - stopwatch.elapsed(TimeUnit.NANOSECONDS);
       }
       if (delayNanos <= 0) {
         startLbRpc();

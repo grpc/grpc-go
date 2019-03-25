@@ -16,6 +16,7 @@
 
 package io.grpc.grpclb;
 
+import com.google.common.base.Stopwatch;
 import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancerProvider;
@@ -58,6 +59,7 @@ public final class GrpclbLoadBalancerProvider extends LoadBalancerProvider {
   public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new GrpclbLoadBalancer(
         helper, new CachedSubchannelPool(), TimeProvider.SYSTEM_TIME_PROVIDER,
+        Stopwatch.createUnstarted(),
         new ExponentialBackoffPolicy.Provider());
   }
 
