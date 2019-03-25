@@ -55,15 +55,16 @@ type dialOptions struct {
 	// balancer, and also by WithBalancerName dial option.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder      resolver.Builder
-	reqHandshake         envconfig.RequireHandshakeSetting
-	channelzParentID     int64
-	disableServiceConfig bool
-	disableRetry         bool
-	disableHealthCheck   bool
-	healthCheckFunc      internal.HealthChecker
-	minConnectTimeout    func() time.Duration
-	defaultServiceConfig *ServiceConfig
+	resolverBuilder             resolver.Builder
+	reqHandshake                envconfig.RequireHandshakeSetting
+	channelzParentID            int64
+	disableServiceConfig        bool
+	disableRetry                bool
+	disableHealthCheck          bool
+	healthCheckFunc             internal.HealthChecker
+	minConnectTimeout           func() time.Duration
+	defaultServiceConfig        *ServiceConfig
+	defaultServiceConfigRawJSON *string
 }
 
 // DialOption configures how we set up the connection.
@@ -452,16 +453,11 @@ func WithDisableServiceConfig() DialOption {
 // will be used in cases where:
 // 1. WithDisableServiceConfig is called.
 // 2. Resolver does not return service config or if the resolver gets and invalid config.
-// It is strongly recommended that caller of this function verifies the validity of the input string
-// by using the grpc.ValidateServiceConfig function.
+//
+// This API is EXPERIMENTAL.
 func WithDefaultServiceConfig(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		sc, err := parseServiceConfig(s)
-		if err != nil {
-			grpclog.Warningf("the provided service config is invalid, err: %v", err)
-			return
-		}
-		o.defaultServiceConfig = sc
+		o.defaultServiceConfigRawJSON = &s
 	})
 }
 

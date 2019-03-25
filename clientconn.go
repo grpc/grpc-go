@@ -86,6 +86,9 @@ var (
 	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
 	// and grpc.WithInsecure() are both called for a connection.
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
+	// errInvalidDefaultServiceConfig indicates that grpc.WithDefaultServiceConfig(string) provides
+	// an invalid service config string.
+	errInvalidDefaultServiceConfig = errors.New("grpc: the provided default service config is invalid")
 )
 
 const (
@@ -173,6 +176,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 
+	if cc.dopts.defaultServiceConfigRawJSON != nil {
+		sc, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
+		if err != nil {
+			return nil, errInvalidDefaultServiceConfig
+		}
+		cc.dopts.defaultServiceConfig = sc
+	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
 	if cc.dopts.copts.Dialer == nil {
@@ -457,27 +467,22 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
-// Apply default service config when default service config is configured and:
+// gRPC should resort to default service config when:
 // * resolver service config is disabled
 // * or, resolver does not return a service config or returns an invalid one.
-func (cc *ClientConn) shouldApplyDefaultServiceConfig(sc string) bool {
-	if cc.dopts.defaultServiceConfig != nil {
-		if cc.dopts.disableServiceConfig {
-			return true
-		}
-		// The logic below is temporary, will be removed once we change the resolver.State ServiceConfig field type.
-		// Right now, we assume that empty service config string means resolver does not return a config.
-		if sc == "" {
-			return false
-		}
-		// TODO: the logic below is temporary. Once we finish the logic to validate service config
-		// in resolver, we will replace the logic below.
-		_, err := parseServiceConfig(sc)
-		if err != nil {
-			return true
-		}
+func (cc *ClientConn) fallbackToDefaultServiceConfig(sc string) bool {
+	if cc.dopts.disableServiceConfig {
+		return true
 	}
-	return false
+	// The logic below is temporary, will be removed once we change the resolver.State ServiceConfig field type.
+	// Right now, we assume that empty service config string means resolver does not return a config.
+	if sc == "" {
+		return true
+	}
+	// TODO: the logic below is temporary. Once we finish the logic to validate service config
+	// in resolver, we will replace the logic below.
+	_, err := parseServiceConfig(sc)
+	return err != nil
 }
 
 func (cc *ClientConn) updateResolverState(s resolver.State) error {
@@ -490,14 +495,14 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
-	if cc.shouldApplyDefaultServiceConfig(s.ServiceConfig) {
-		if cc.sc.rawJSONString == nil {
+	if cc.fallbackToDefaultServiceConfig(s.ServiceConfig) {
+		if cc.dopts.defaultServiceConfig != nil && cc.sc.rawJSONString == nil {
 			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
 		}
 	} else {
 		// TODO: the parsing logic below will be moved inside resolver.
 		sc, err := parseServiceConfig(s.ServiceConfig)
-		if err != nil && s.ServiceConfig != "" { // s.ServiceConfig != "" is a temporary special case.
+		if err != nil {
 			return err
 		}
 		if cc.sc.rawJSONString == nil || *cc.sc.rawJSONString != s.ServiceConfig {
@@ -763,11 +768,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-// Parse and apply the service config. If sc is passed as a non-nil pointer, which indicates we have
-// a parsed service config, we will skip the parsing. It will also skip the whole processing if
-// the new service config is the same as the old one.
 func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
 	if sc == nil {
+		// should never reach here.
 		return fmt.Errorf("got nil pointer for service config")
 	}
 	cc.sc = *sc

@@ -1250,8 +1250,10 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
         }
     ]
 }`
+	testInvalidDefaultServiceConfig(t)
 	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
+	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
@@ -1264,6 +1266,13 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return i != 10
+}
+
+func testInvalidDefaultServiceConfig(t *testing.T) {
+	_, err := Dial("fake.com", WithInsecure(), WithDefaultServiceConfig(""))
+	if err != errInvalidDefaultServiceConfig {
+		t.Fatalf("Dial got err: %v, want: %v", err, errInvalidDefaultServiceConfig)
+	}
 }
 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r resolver.Resolver, addr string, js string) {
@@ -1290,6 +1299,21 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 	defer cc.Close()
 	r.(*manual.Resolver).UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
+	})
+	if !verifyWaitForReadyEqualsTrue(cc) {
+		t.Fatal("default service config failed to be applied after 1s")
+	}
+}
+
+func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r resolver.Resolver, addr string, js string) {
+	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(js))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	r.(*manual.Resolver).UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: addr}},
+		ServiceConfig: "{something wrong,}",
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")

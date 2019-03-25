@@ -247,7 +247,7 @@ func parseServiceConfig(js string) (*ServiceConfig, error) {
 	err := json.Unmarshal([]byte(js), &rsc)
 	if err != nil {
 		grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to %v", js, err)
-		return &ServiceConfig{}, err
+		return nil, err
 	}
 	sc := ServiceConfig{
 		LB:                rsc.LoadBalancingPolicy,
@@ -267,7 +267,7 @@ func parseServiceConfig(js string) (*ServiceConfig, error) {
 		d, err := parseDuration(m.Timeout)
 		if err != nil {
 			grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to %v", js, err)
-			return &ServiceConfig{}, err
+			return nil, err
 		}
 
 		mc := MethodConfig{
@@ -276,7 +276,7 @@ func parseServiceConfig(js string) (*ServiceConfig, error) {
 		}
 		if mc.retryPolicy, err = convertRetryPolicy(m.RetryPolicy); err != nil {
 			grpclog.Warningf("grpc: parseServiceConfig error unmarshaling %s due to %v", js, err)
-			return &ServiceConfig{}, err
+			return nil, err
 		}
 		if m.MaxRequestMessageBytes != nil {
 			if *m.MaxRequestMessageBytes > int64(maxInt) {
@@ -371,10 +371,4 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 
 func newInt(b int) *int {
 	return &b
-}
-
-// ValidateServiceConfig validates the input service config json string and returns the error.
-func ValidateServiceConfig(js string) error {
-	_, err := parseServiceConfig(js)
-	return err
 }
