@@ -35,6 +35,7 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.netty.channel.Channel;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.local.LocalAddress;
@@ -95,9 +96,13 @@ public class TransportBenchmark {
       {
         String name = "bench" + Math.random();
         LocalAddress address = new LocalAddress(name);
+        EventLoopGroup group = new DefaultEventLoopGroup();
         serverBuilder = NettyServerBuilder.forAddress(address)
+            .bossEventLoopGroup(group)
+            .workerEventLoopGroup(group)
             .channelType(LocalServerChannel.class);
         channelBuilder = NettyChannelBuilder.forAddress(address)
+            .eventLoopGroup(group)
             .channelType(LocalChannel.class)
             .negotiationType(NegotiationType.PLAINTEXT);
         break;
