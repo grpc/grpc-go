@@ -38,10 +38,38 @@ const tokenRequestTimeout = 30 * time.Second
 //
 // This API is experimental.
 func NewDefaultCredentials() credentials.Bundle {
-	c := &creds{}
+	c := &creds{
+		newPerRPCCreds: func() credentials.PerRPCCredentials {
+			ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
+			defer cancel()
+			perRPCCreds, err := oauth.NewApplicationDefault(ctx)
+			if err != nil {
+				grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
+			}
+			return perRPCCreds
+		},
+	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
 		grpclog.Warningf("google default creds: failed to create new creds: %v", err)
+	}
+	return bundle
+}
+
+// NewComputeEngineCredentials returns a credentials bundle that is configured to work
+// with google services. This API must only be used when running on GCE. Authentication configured
+// by this API represents the GCE VM's default service account.
+//
+// This API is experimental.
+func NewComputeEngineCredentials() credentials.Bundle {
+	c := &creds{
+		newPerRPCCreds: func() credentials.PerRPCCredentials {
+			return oauth.NewComputeEngine()
+		},
+	}
+	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
+	if err != nil {
+		grpclog.Warningf("compute engine creds: failed to create new creds: %v", err)
 	}
 	return bundle
 }
@@ -54,6 +82,8 @@ type creds struct {
 	transportCreds credentials.TransportCredentials
 	// The per RPC credentials associated with this bundle.
 	perRPCCreds credentials.PerRPCCredentials
+	// Creates new per RPC credentials
+	newPerRPCCreds func() credentials.PerRPCCredentials
 }
 
 func (c *creds) TransportCredentials() credentials.TransportCredentials {
@@ -70,7 +100,10 @@ func (c *creds) PerRPCCredentials() credentials.PerRPCCredentials {
 // NewWithMode should make a copy of Bundle, and switch mode. Modifying the
 // existing Bundle may cause races.
 func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
-	newCreds := &creds{mode: mode}
+	newCreds := &creds{
+		mode:           mode,
+		newPerRPCCreds: c.newPerRPCCreds,
+	}
 
 	// Create transport credentials.
 	switch mode {
@@ -81,20 +114,11 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 		// to create new ALTS client creds here.
 		newCreds.transportCreds = alts.NewClientCreds(alts.DefaultClientOptions())
 	default:
-		return nil, fmt.Errorf("google default creds: unsupported mode: %v", mode)
+		return nil, fmt.Errorf("unsupported mode: %v", mode)
 	}
 
 	if mode == internal.CredsBundleModeFallback || mode == internal.CredsBundleModeBackendFromBalancer {
-		// Create per RPC credentials.
-		// For the time being, we required per RPC credentials for both TLS and
-		// ALTS. In the future, this will only be required for TLS.
-		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
-		defer cancel()
-		var err error
-		newCreds.perRPCCreds, err = oauth.NewApplicationDefault(ctx)
-		if err != nil {
-			grpclog.Warningf("google default creds: failed to create application oauth: %v", err)
-		}
+		newCreds.perRPCCreds = newCreds.newPerRPCCreds()
 	}
 
 	return newCreds, nil
