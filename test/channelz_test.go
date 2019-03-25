@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
@@ -240,7 +241,7 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1425,7 +1426,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1569,7 +1570,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
@@ -1586,7 +1587,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newSC := `{
+	newSC := parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1599,7 +1600,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
             "timeout": ".001s"
         }
     ]
-}`
+}`)
 
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: newSC})
 
@@ -1608,6 +1609,7 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
 			if strings.Contains(cm.Trace.Events[i].Desc, "service config updated") {
+				fmt.Printf("%+v\n", cm.Trace.Events[i])
 				break
 			}
 			if i == 0 {
@@ -1883,7 +1885,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -2011,4 +2013,12 @@ func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func parseCfg(s string) serviceconfig.Config {
+	c, err := serviceconfig.Parse(s)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, err))
+	}
+	return c
 }
