@@ -91,20 +91,20 @@ const (
 
 func main() {
 	flag.Parse()
-	var useGDC bool                       // use google default creds
-	var useComputeEngineChannelCreds bool // use compute engine channel creds
+	var useGDC bool // use google default creds
+	var useCEC bool // use compute engine creds
 	if *customCredentialsType != "" {
 		switch *customCredentialsType {
 		case googleDefaultCredsName:
 			useGDC = true
 		case computeEngineChannelCredsName:
-			useComputeEngineChannelCreds = true
+			useCEC = true
 		default:
 			grpclog.Fatalf("If set, custom_credentials_type can only be set to one of %v or %v",
 				googleDefaultCredsName, computeEngineChannelCredsName)
 		}
 	}
-	if (*useTLS && *useALTS) || (*useTLS && useGDC) || (*useALTS && useGDC) || (*useTLS && useComputeEngineChannelCreds) || (*useALTS && useComputeEngineChannelCreds) {
+	if (*useTLS && *useALTS) || (*useTLS && useGDC) || (*useALTS && useGDC) || (*useTLS && useCEC) || (*useALTS && useCEC) {
 		grpclog.Fatalf("only one of TLS, ALTS, google default creds, or compute engine channel creds can be used")
 	}
 
@@ -116,7 +116,7 @@ func main() {
 		credsChosen = credsALTS
 	case useGDC:
 		credsChosen = credsGoogleDefaultCreds
-	case useComputeEngineChannelCreds:
+	case useCEC:
 		credsChosen = credsComputeEngineChannelCreds
 	}
 
