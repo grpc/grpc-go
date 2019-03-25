@@ -693,6 +693,7 @@ final class DnsNameResolver extends NameResolver {
           Level.FINE,
           "JndiResourceResolverFactory not available, skipping.",
           rrf.unavailabilityCause());
+      return null;
     }
     return rrf;
   }
