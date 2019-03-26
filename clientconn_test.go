@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1270,8 +1271,8 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 
 func testInvalidDefaultServiceConfig(t *testing.T) {
 	_, err := Dial("fake.com", WithInsecure(), WithDefaultServiceConfig(""))
-	if err != errInvalidDefaultServiceConfig {
-		t.Fatalf("Dial got err: %v, want: %v", err, errInvalidDefaultServiceConfig)
+	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
+		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
 }
 

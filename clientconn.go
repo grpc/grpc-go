@@ -68,6 +68,9 @@ var (
 	errConnClosing = errors.New("grpc: the connection is closing")
 	// errBalancerClosed indicates that the balancer is closed.
 	errBalancerClosed = errors.New("grpc: balancer is closed")
+	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
+	// service config.
+	invalidDefaultServiceConfigErrPrefix = "grpc: the provided default service config is invalid"
 )
 
 // The following errors are returned from Dial and DialContext
@@ -86,9 +89,6 @@ var (
 	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
 	// and grpc.WithInsecure() are both called for a connection.
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
-	// errInvalidDefaultServiceConfig indicates that grpc.WithDefaultServiceConfig(string) provides
-	// an invalid service config string.
-	errInvalidDefaultServiceConfig = errors.New("grpc: the provided default service config is invalid")
 )
 
 const (
@@ -179,7 +179,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.defaultServiceConfigRawJSON != nil {
 		sc, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
 		if err != nil {
-			return nil, errInvalidDefaultServiceConfig
+			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, err)
 		}
 		cc.dopts.defaultServiceConfig = sc
 	}
