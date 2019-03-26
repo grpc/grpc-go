@@ -139,6 +139,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		opt.apply(&cc.dopts)
 	}
 
+	chainUnaryClientInterceptors(cc)
+	chainStreamClientInterceptors(cc)
+
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
@@ -317,9 +320,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 		}
 	}
-
-	chainUnaryClientInterceptors(cc)
-	chainStreamClientInterceptors(cc)
 
 	return cc, nil
 }
