@@ -144,28 +144,10 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	interceptors := cc.dopts.chainStreamInts
-
-	// Prepend dopts.streamInt to the chaining interceptors if it exists, since streamInt will
-	// be executed before any other chained interceptors.
 	if cc.dopts.streamInt != nil {
-		interceptors = append([]StreamClientInterceptor{cc.dopts.streamInt}, interceptors...)
-	}
-
-	if len(interceptors) > 0 {
-		return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, newClientStream), opts...)
+		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
 	return newClientStream(ctx, desc, cc, method, opts...)
-}
-
-// getChainStreamer recursively generate the chained client stream constructor.
-func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStreamer Streamer) Streamer {
-	if curr == len(interceptors)-1 {
-		return finalStreamer
-	}
-	return func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
-		return interceptors[curr+1](ctx, desc, cc, method, getChainStreamer(interceptors, curr+1, finalStreamer), opts...)
-	}
 }
 
 // NewClientStream is a wrapper for ClientConn.NewStream.

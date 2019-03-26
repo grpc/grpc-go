@@ -31,28 +31,10 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	interceptors := cc.dopts.chainUnaryInts
-
-	// Prepend dopts.unaryInt to the chaining interceptors if it exists, since unaryInt will
-	// be executed before any other chained interceptors.
 	if cc.dopts.unaryInt != nil {
-		interceptors = append([]UnaryClientInterceptor{cc.dopts.unaryInt}, interceptors...)
-	}
-
-	if len(interceptors) > 0 {
-		return interceptors[0](ctx, method, args, reply, cc, getChainInvoker(interceptors, 0, invoke), opts...)
+		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
 	}
 	return invoke(ctx, method, args, reply, cc, opts...)
-}
-
-// getChainInvoker recursively generate the chained unary invoker.
-func getChainInvoker(interceptors []UnaryClientInterceptor, curr int, finalInvoker UnaryInvoker) UnaryInvoker {
-	if curr == len(interceptors)-1 {
-		return finalInvoker
-	}
-	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
-		return interceptors[curr+1](ctx, method, req, reply, cc, getChainInvoker(interceptors, curr+1, finalInvoker), opts...)
-	}
 }
 
 func combine(o1 []CallOption, o2 []CallOption) []CallOption {
