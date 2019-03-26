@@ -73,7 +73,7 @@ internal constructor(private val channel: ManagedChannel) {
             val client = HelloWorldClient("localhost", 50051)
             try {
                 /* Access a service running on the local machine on port 50051 */
-                val user = if (args.size > 0) "world" else "world"
+                val user = if (args.size > 0) "${args[0]}" else "world"
                 client.greet(user)
             } finally {
                 client.shutdown()
