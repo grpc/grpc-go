@@ -105,6 +105,7 @@ public class TransportBenchmark {
             .eventLoopGroup(group)
             .channelType(LocalChannel.class)
             .negotiationType(NegotiationType.PLAINTEXT);
+        groupToShutdown = group;
         break;
       }
       case NETTY_EPOLL:
