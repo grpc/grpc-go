@@ -33,10 +33,24 @@ var logger = newLoggerV2()
 // Verbose is a typed boolean that implements Infof.
 type Verbose bool
 
+// Info is equivalent to the global Info, guarded by the verbose value.
+func (v Verbose) Info(args ...interface{}) {
+	if v {
+		Info(args...)
+	}
+}
+
 // Infof is equivalent to the global Infof, guarded by the verbose value.
 func (v Verbose) Infof(format string, args ...interface{}) {
 	if v {
 		Infof(format, args...)
+	}
+}
+
+// Infoln is equivalent to the global Infoln, guarded by the verbose value.
+func (v Verbose) Infoln(args ...interface{}) {
+	if v {
+		Infoln(args...)
 	}
 }
 
