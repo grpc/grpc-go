@@ -98,9 +98,8 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	lb.cc.UpdateBalancerState(lb.state, lb.picker)
 }
 
-// refreshSubConns creates/removes SubConns with backendAddrs. It returns a bool
-// indicating whether the backendAddrs are different from the cached
-// backendAddrs (whether any SubConn was newed/removed).
+// refreshSubConns creates/removes SubConns with backendAddrs.
+//
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
 	lb.inFallback = !fromGRPCLBServer

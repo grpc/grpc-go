@@ -21,7 +21,6 @@ package grpclb
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 )
 
 type tempError struct{}
@@ -35,13 +34,11 @@ func (*tempError) Temporary() bool {
 
 type restartableListener struct {
 	net.Listener
-
-	closed uint32
-
 	addr string
 
-	mu    sync.Mutex
-	conns []net.Conn
+	mu     sync.Mutex
+	closed bool
+	conns  []net.Conn
 }
 
 func newRestartableListener(l net.Listener) *restartableListener {
@@ -52,13 +49,20 @@ func newRestartableListener(l net.Listener) *restartableListener {
 }
 
 func (l *restartableListener) Accept() (conn net.Conn, err error) {
-	if atomic.LoadUint32(&l.closed) == 1 {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
 		return nil, &tempError{}
 	}
+	l.mu.Unlock()
 
 	conn, err = l.Listener.Accept()
 	if err == nil {
 		l.mu.Lock()
+		if l.closed {
+			l.mu.Unlock()
+			return
+		}
 		l.conns = append(l.conns, conn)
 		l.mu.Unlock()
 	}
@@ -66,22 +70,22 @@ func (l *restartableListener) Accept() (conn net.Conn, err error) {
 }
 
 func (l *restartableListener) Close() error {
-	l.Listener.Close()
-	l.stop()
-	return nil
+	return l.Listener.Close()
 }
 
-func (l *restartableListener) stop() {
+func (l *restartableListener) stopPreviousConns() {
 	l.mu.Lock()
+	l.closed = true
 	tmp := l.conns
 	l.conns = nil
 	l.mu.Unlock()
 	for _, conn := range tmp {
 		conn.Close()
 	}
-	atomic.StoreUint32(&l.closed, 1)
 }
 
 func (l *restartableListener) restart() {
-	atomic.StoreUint32(&l.closed, 0)
+	l.mu.Lock()
+	l.closed = false
+	l.mu.Unlock()
 }

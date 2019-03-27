@@ -765,8 +765,8 @@ func TestFallback(t *testing.T) {
 	}
 
 	// Close backend and remote balancer connections, should use fallback.
-	tss.beListeners[0].(*restartableListener).stop()
-	tss.lbListener.(*restartableListener).stop()
+	tss.beListeners[0].(*restartableListener).stopPreviousConns()
+	tss.lbListener.(*restartableListener).stopPreviousConns()
 	time.Sleep(time.Second)
 
 	var fallbackUsed bool
