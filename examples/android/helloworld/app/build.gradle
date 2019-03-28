@@ -30,7 +30,7 @@ protobuf {
     protoc { artifact = 'com.google.protobuf:protoc:3.7.0' }
     plugins {
         javalite { artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0" }
-        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+        grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
@@ -48,8 +48,8 @@ dependencies {
     implementation 'com.android.support:appcompat-v7:27.0.2'
 
     // You need to build grpc-java to obtain these libraries below.
-    implementation 'io.grpc:grpc-okhttp:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-protobuf-lite:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    implementation 'io.grpc:grpc-stub:1.20.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-okhttp:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-protobuf-lite:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-stub:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'javax.annotation:javax.annotation-api:1.2'
 }
