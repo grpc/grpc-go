@@ -1772,12 +1772,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     @Override
     @SuppressWarnings("unchecked")
-    public ConfigOrError<ManagedChannelServiceConfig> parseServiceConfig(
-        Map<String, ?> rawServiceConfig) {
+    public ConfigOrError parseServiceConfig(Map<String, ?> rawServiceConfig) {
       try {
         Object loadBalancingPolicySelection;
         if (autoLoadBalancerFactory != null) {
-          ConfigOrError<?> choiceFromLoadBalancer =
+          ConfigOrError choiceFromLoadBalancer =
               autoLoadBalancerFactory.selectLoadBalancerPolicy(rawServiceConfig);
           if (choiceFromLoadBalancer == null) {
             loadBalancingPolicySelection = null;

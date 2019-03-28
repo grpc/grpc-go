@@ -63,8 +63,7 @@ public abstract class LoadBalancerProvider extends LoadBalancer.Factory {
    * @since 1.20.0
    * @see https://github.com/grpc/proposal/blob/master/A24-lb-policy-config.md
    */
-  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
-      Map<String, ?> rawLoadBalancingPolicyConfig) {
+  public ConfigOrError parseLoadBalancingPolicyConfig(Map<String, ?> rawLoadBalancingPolicyConfig) {
     return ConfigOrError.UNKNOWN_CONFIG;
   }
 

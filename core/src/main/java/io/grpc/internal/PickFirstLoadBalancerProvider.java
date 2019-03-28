@@ -51,7 +51,7 @@ public final class PickFirstLoadBalancerProvider extends LoadBalancerProvider {
   }
 
   @Override
-  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+  public ConfigOrError parseLoadBalancingPolicyConfig(
       Map<String, ?> rawLoadBalancingPolicyConfig) {
     return ConfigOrError.fromConfig(NO_CONFIG);
   }

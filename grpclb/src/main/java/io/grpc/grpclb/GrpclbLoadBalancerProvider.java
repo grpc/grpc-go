@@ -64,7 +64,7 @@ public final class GrpclbLoadBalancerProvider extends LoadBalancerProvider {
   }
 
   @Override
-  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+  public ConfigOrError parseLoadBalancingPolicyConfig(
       Map<String, ?> rawLoadBalancingConfigPolicy) {
     try {
       return parseLoadBalancingConfigPolicyInternal(rawLoadBalancingConfigPolicy);
@@ -74,7 +74,7 @@ public final class GrpclbLoadBalancerProvider extends LoadBalancerProvider {
     }
   }
 
-  ConfigOrError<Mode> parseLoadBalancingConfigPolicyInternal(
+  ConfigOrError parseLoadBalancingConfigPolicyInternal(
       Map<String, ?> rawLoadBalancingPolicyConfig) {
     if (rawLoadBalancingPolicyConfig == null) {
       return ConfigOrError.fromConfig(DEFAULT_MODE);

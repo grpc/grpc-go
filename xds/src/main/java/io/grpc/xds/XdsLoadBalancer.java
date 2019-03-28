@@ -89,12 +89,12 @@ final class XdsLoadBalancer extends LoadBalancer {
     Map<String, ?> newRawLbConfig = checkNotNull(
         attributes.get(ATTR_LOAD_BALANCING_CONFIG), "ATTR_LOAD_BALANCING_CONFIG not available");
 
-    ConfigOrError<XdsConfig> cfg =
+    ConfigOrError cfg =
         XdsLoadBalancerProvider.parseLoadBalancingConfigPolicy(newRawLbConfig, lbRegistry);
     if (cfg.getError() != null) {
       throw cfg.getError().asRuntimeException();
     }
-    XdsConfig xdsConfig = cfg.getConfig();
+    XdsConfig xdsConfig = (XdsConfig) cfg.getConfig();
     fallbackPolicy = xdsConfig.fallbackPolicy;
     fallbackManager.updateFallbackServers(servers, attributes, fallbackPolicy);
     fallbackManager.maybeStartFallbackTimer();

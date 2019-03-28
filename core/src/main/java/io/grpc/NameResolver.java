@@ -316,7 +316,7 @@ public abstract class NameResolver {
      * @return a tuple of the fully parsed and validated channel configuration, else the Status.
      * @since 1.20.0
      */
-    public ConfigOrError<?> parseServiceConfig(Map<String, ?> rawServiceConfig) {
+    public ConfigOrError parseServiceConfig(Map<String, ?> rawServiceConfig) {
       throw new UnsupportedOperationException("should have been implemented");
     }
 
@@ -324,10 +324,9 @@ public abstract class NameResolver {
      * Represents either a successfully parsed service config, containing all necessary parts to be
      * later applied by the channel, or a Status containing the error encountered while parsing.
      *
-     * @param <T> The message type of the config.
      * @since 1.20.0
      */
-    public static final class ConfigOrError<T> {
+    public static final class ConfigOrError {
 
       private static final class UnknownConfig {
 
@@ -344,14 +343,14 @@ public abstract class NameResolver {
        * indicate that parsing of the service config is neither right nor wrong, but doesn't have
        * any meaning.
        */
-      public static final ConfigOrError<?> UNKNOWN_CONFIG =
+      public static final ConfigOrError UNKNOWN_CONFIG =
           ConfigOrError.fromConfig(new UnknownConfig());
 
       /**
        * Returns a {@link ConfigOrError} for the successfully parsed config.
        */
-      public static <T> ConfigOrError<T> fromConfig(T config) {
-        return new ConfigOrError<>(config);
+      public static ConfigOrError fromConfig(Object config) {
+        return new ConfigOrError(config);
       }
 
       /**
@@ -359,14 +358,14 @@ public abstract class NameResolver {
        *
        * @param status a non-OK status
        */
-      public static <T> ConfigOrError<T> fromError(Status status) {
-        return new ConfigOrError<>(status);
+      public static ConfigOrError fromError(Status status) {
+        return new ConfigOrError(status);
       }
 
       private final Status status;
-      private final T config;
+      private final Object config;
 
-      private ConfigOrError(T config) {
+      private ConfigOrError(Object config) {
         this.config = checkNotNull(config, "config");
         this.status = null;
       }
@@ -381,7 +380,7 @@ public abstract class NameResolver {
        * Returns config if exists, otherwise null.
        */
       @Nullable
-      public T getConfig() {
+      public Object getConfig() {
         return config;
       }
 

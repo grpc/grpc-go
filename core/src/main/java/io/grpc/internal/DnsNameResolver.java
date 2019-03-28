@@ -292,14 +292,16 @@ final class DnsNameResolver extends NameResolver {
 
       Attributes.Builder attrs = Attributes.newBuilder();
       if (!resolutionResults.txtRecords.isEmpty()) {
-        ConfigOrError<Map<String, ?>> serviceConfig =
+        ConfigOrError serviceConfig =
             parseServiceConfig(resolutionResults.txtRecords, random, getLocalHostname());
         if (serviceConfig != null) {
           if (serviceConfig.getError() != null) {
             savedObserver.onError(serviceConfig.getError());
             return;
           } else {
-            attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, serviceConfig.getConfig());
+            @SuppressWarnings("unchecked")
+            Map<String, ?> config = (Map<String, ?>) serviceConfig.getConfig();
+            attrs.set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, config);
           }
         }
       } else {
@@ -312,7 +314,7 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Nullable
-  static ConfigOrError<Map<String, ?>> parseServiceConfig(
+  static ConfigOrError parseServiceConfig(
       List<String> rawTxtRecords, Random random, String localHostname) {
     List<Map<String, ?>> possibleServiceConfigChoices;
     try {
@@ -337,7 +339,7 @@ final class DnsNameResolver extends NameResolver {
     if (possibleServiceConfig == null) {
       return null;
     }
-    return ConfigOrError.<Map<String, ?>>fromConfig(possibleServiceConfig);
+    return ConfigOrError.fromConfig(possibleServiceConfig);
   }
 
   private void resolve() {

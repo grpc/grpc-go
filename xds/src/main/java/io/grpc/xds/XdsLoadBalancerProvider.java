@@ -66,12 +66,12 @@ public final class XdsLoadBalancerProvider extends LoadBalancerProvider {
   }
 
   @Override
-  public ConfigOrError<?> parseLoadBalancingPolicyConfig(
+  public ConfigOrError parseLoadBalancingPolicyConfig(
       Map<String, ?> rawLoadBalancingPolicyConfig) {
     return parseLoadBalancingConfigPolicy(rawLoadBalancingPolicyConfig, registry);
   }
 
-  static ConfigOrError<XdsConfig> parseLoadBalancingConfigPolicy(
+  static ConfigOrError parseLoadBalancingConfigPolicy(
       Map<String, ?> rawLoadBalancingPolicyConfig, LoadBalancerRegistry registry) {
     try {
       LbConfig newLbConfig =

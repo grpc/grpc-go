@@ -1008,7 +1008,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void parseServiceConfig_capturesParseError() {
-    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+    ConfigOrError result = DnsNameResolver.parseServiceConfig(
         Arrays.asList("grpc_config=bogus"), new Random(), "localhost");
 
     assertThat(result).isNotNull();
@@ -1018,7 +1018,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void parseServiceConfig_capturesChoiceError() {
-    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+    ConfigOrError result = DnsNameResolver.parseServiceConfig(
         Arrays.asList("grpc_config=[{\"hi\":{}}]"), new Random(), "localhost");
 
     assertThat(result).isNotNull();
@@ -1028,7 +1028,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void parseServiceConfig_noChoiceIsNull() {
-    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+    ConfigOrError result = DnsNameResolver.parseServiceConfig(
         Arrays.asList("grpc_config=[]"), new Random(), "localhost");
 
     assertThat(result).isNull();
@@ -1036,7 +1036,7 @@ public class DnsNameResolverTest {
 
   @Test
   public void parseServiceConfig_matches() {
-    ConfigOrError<Map<String, ?>> result = DnsNameResolver.parseServiceConfig(
+    ConfigOrError result = DnsNameResolver.parseServiceConfig(
         Arrays.asList("grpc_config=[{\"serviceConfig\":{}}]"), new Random(), "localhost");
 
     assertThat(result).isNotNull();

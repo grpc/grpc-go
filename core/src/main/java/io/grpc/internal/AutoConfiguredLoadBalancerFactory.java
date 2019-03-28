@@ -301,7 +301,7 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
    * @return null if no selection could be made.
    */
   @Nullable
-  ConfigOrError<PolicySelection> selectLoadBalancerPolicy(Map<String, ?> serviceConfig) {
+  ConfigOrError selectLoadBalancerPolicy(Map<String, ?> serviceConfig) {
     try {
       List<LbConfig> loadBalancerConfigs = null;
       if (serviceConfig != null) {

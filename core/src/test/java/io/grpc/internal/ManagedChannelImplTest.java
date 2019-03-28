@@ -3423,12 +3423,12 @@ public class ManagedChannelImplTest {
         maxHedgedAttemptsLimit,
         autoConfiguredLoadBalancerFactory);
 
-    ConfigOrError<ManagedChannelServiceConfig> coe =
-        nrh.parseServiceConfig(ImmutableMap.<String, Object>of());
+    ConfigOrError coe = nrh.parseServiceConfig(ImmutableMap.<String, Object>of());
 
     assertThat(coe.getError()).isNull();
-    assertThat(coe.getConfig().getServiceMap()).isEmpty();
-    assertThat(coe.getConfig().getServiceMethodMap()).isEmpty();
+    ManagedChannelServiceConfig cfg = (ManagedChannelServiceConfig) coe.getConfig();
+    assertThat(cfg.getServiceMap()).isEmpty();
+    assertThat(cfg.getServiceMethodMap()).isEmpty();
   }
 
   @Test
@@ -3451,7 +3451,7 @@ public class ManagedChannelImplTest {
         maxHedgedAttemptsLimit,
         autoConfiguredLoadBalancerFactory);
 
-    ConfigOrError<ManagedChannelServiceConfig> coe =
+    ConfigOrError coe =
         nrh.parseServiceConfig(ImmutableMap.<String, Object>of("methodConfig", "bogus"));
 
     assertThat(coe.getError()).isNotNull();
@@ -3481,11 +3481,12 @@ public class ManagedChannelImplTest {
         maxHedgedAttemptsLimit,
         autoConfiguredLoadBalancerFactory);
 
-    ConfigOrError<ManagedChannelServiceConfig> coe =
+    ConfigOrError coe =
         nrh.parseServiceConfig(ImmutableMap.of("loadBalancingConfig", ImmutableList.of()));
 
     assertThat(coe.getError()).isNull();
-    assertThat(coe.getConfig().getLoadBalancingConfig()).isEqualTo(null);
+    ManagedChannelServiceConfig cfg = (ManagedChannelServiceConfig) coe.getConfig();
+    assertThat(cfg.getLoadBalancingConfig()).isEqualTo(null);
   }
 
   @Test
