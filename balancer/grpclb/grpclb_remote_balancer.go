@@ -215,7 +215,7 @@ func (lb *lbBalancer) callRemoteBalancer() (backoff bool, _ error) {
 	lbClient := &loadBalancerClient{cc: lb.ccRemoteLB}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stream, err := lbClient.BalanceLoad(ctx)
+	stream, err := lbClient.BalanceLoad(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 	}
