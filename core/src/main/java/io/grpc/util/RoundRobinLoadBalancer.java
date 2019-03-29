@@ -87,8 +87,9 @@ final class RoundRobinLoadBalancer extends LoadBalancer {
   }
 
   @Override
-  public void handleResolvedAddressGroups(
-      List<EquivalentAddressGroup> servers, Attributes attributes) {
+  public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+    List<EquivalentAddressGroup> servers = resolvedAddresses.getServers();
+    Attributes attributes = resolvedAddresses.getAttributes();
     Set<EquivalentAddressGroup> currentAddrs = subchannels.keySet();
     Set<EquivalentAddressGroup> latestAddrs = stripAttrs(servers);
     Set<EquivalentAddressGroup> addedAddrs = setsDifference(latestAddrs, currentAddrs);

@@ -49,6 +49,7 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Factory;
 import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
@@ -187,13 +188,12 @@ public class HealthCheckingLoadBalancerFactoryTest {
         boolean shutdown;
 
         @Override
-        public void handleResolvedAddressGroups(
-            final List<EquivalentAddressGroup> servers, final Attributes attributes) {
+        public void handleResolvedAddresses(final ResolvedAddresses resolvedAddresses) {
           syncContext.execute(new Runnable() {
               @Override
               public void run() {
                 if (!shutdown) {
-                  hcLb.handleResolvedAddressGroups(servers, attributes);
+                  hcLb.handleResolvedAddresses(resolvedAddresses);
                 }
               }
             });
@@ -265,9 +265,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void typicalWorkflow() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("FooService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verify(origHelper, atLeast(0)).getSynchronizationContext();
     verify(origHelper, atLeast(0)).getScheduledExecutorService();
     verifyNoMoreInteractions(origHelper);
@@ -372,9 +376,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void healthCheckDisabledWhenServiceNotImplemented() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("BarService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verifyNoMoreInteractions(origLb);
 
     // We create 2 Subchannels. One of them connects to a server that doesn't implement health check
@@ -441,9 +449,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void backoffRetriesWhenServerErroneouslyClosesRpcBeforeAnyResponse() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verifyNoMoreInteractions(origLb);
 
     FakeSubchannel subchannel = (FakeSubchannel) createSubchannel(0, Attributes.EMPTY);
@@ -509,9 +521,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serverRespondResetsBackoff() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -599,9 +615,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigHasNoHealthCheckingInitiallyButDoesLater() {
     // No service config, thus no health check.
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, Attributes.EMPTY);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(Attributes.EMPTY));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     // First, create Subchannels 0
@@ -618,9 +638,12 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
     // Service config enables health check
     Attributes resolutionAttrs = attrsWithHealthCheckService("FooService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
-    verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
+    verify(origLb).handleResolvedAddresses(result2);
 
     // Health check started on existing Subchannel
     assertThat(healthImpls[0].calls).hasSize(1);
@@ -639,9 +662,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigDisablesHealthCheckWhenRpcActive() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -658,7 +685,11 @@ public class HealthCheckingLoadBalancerFactoryTest {
     assertThat(serverCall.cancelled).isFalse();
 
     // NameResolver gives an update without service config, thus health check will be disabled
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, Attributes.EMPTY);
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
 
     // Health check RPC cancelled.
     assertThat(serverCall.cancelled).isTrue();
@@ -666,8 +697,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
     inOrder.verify(origLb).handleSubchannelState(
         same(subchannel), eq(ConnectivityStateInfo.forNonError(READY)));
 
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(Attributes.EMPTY));
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     verifyNoMoreInteractions(origLb);
     assertThat(healthImpl.calls).isEmpty();
@@ -676,9 +706,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigDisablesHealthCheckWhenRetryPending() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -702,7 +736,11 @@ public class HealthCheckingLoadBalancerFactoryTest {
             "Health-check stream unexpectedly closed with " + Status.OK + " for 'TeeService'"));
 
     // NameResolver gives an update without service config, thus health check will be disabled
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, Attributes.EMPTY);
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
 
     // Retry timer is cancelled
     assertThat(clock.getPendingTasks()).isEmpty();
@@ -714,8 +752,7 @@ public class HealthCheckingLoadBalancerFactoryTest {
     inOrder.verify(origLb).handleSubchannelState(
         same(subchannel), eq(ConnectivityStateInfo.forNonError(READY)));
 
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(Attributes.EMPTY));
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     verifyNoMoreInteractions(origLb);
   }
@@ -723,9 +760,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigDisablesHealthCheckWhenRpcInactive() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -741,10 +782,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
     inOrder.verifyNoMoreInteractions();
 
     // NameResolver gives an update without service config, thus health check will be disabled
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, Attributes.EMPTY);
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(Attributes.EMPTY)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
 
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(Attributes.EMPTY));
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     // Underlying subchannel is now ready
     hcLbEventDelivery.handleSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
@@ -762,9 +806,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigChangesServiceNameWhenRpcActive() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -787,18 +835,19 @@ public class HealthCheckingLoadBalancerFactoryTest {
         same(subchannel), eq(ConnectivityStateInfo.forNonError(READY)));
 
     // Service config returns with the same health check name.
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    hcLbEventDelivery.handleResolvedAddresses(result1);
     // It's delivered to origLb, but nothing else happens
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    inOrder.verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     // Service config returns a different health check name.
     resolutionAttrs = attrsWithHealthCheckService("FooService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
-
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     // Current health check RPC cancelled.
     assertThat(serverCall.cancelled).isTrue();
@@ -816,9 +865,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigChangesServiceNameWhenRetryPending() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -846,24 +899,27 @@ public class HealthCheckingLoadBalancerFactoryTest {
             "Health-check stream unexpectedly closed with " + Status.OK + " for 'TeeService'"));
 
     // Service config returns with the same health check name.
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+
+    hcLbEventDelivery.handleResolvedAddresses(result1);
     // It's delivered to origLb, but nothing else happens
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    inOrder.verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
     assertThat(clock.getPendingTasks()).hasSize(1);
     assertThat(healthImpl.calls).isEmpty();
 
     // Service config returns a different health check name.
     resolutionAttrs = attrsWithHealthCheckService("FooService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
 
     // Concluded CONNECTING state
     inOrder.verify(origLb).handleSubchannelState(
         same(subchannel), eq(ConnectivityStateInfo.forNonError(CONNECTING)));
 
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     // Current retry timer cancelled
     assertThat(clock.getPendingTasks()).isEmpty();
@@ -880,9 +936,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void serviceConfigChangesServiceNameWhenRpcInactive() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result1 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result1);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result1);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -899,19 +959,21 @@ public class HealthCheckingLoadBalancerFactoryTest {
     inOrder.verifyNoMoreInteractions();
 
     // Service config returns with the same health check name.
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    hcLbEventDelivery.handleResolvedAddresses(result1);
     // It's delivered to origLb, but nothing else happens
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    inOrder.verify(origLb).handleResolvedAddresses(result1);
     assertThat(healthImpl.calls).isEmpty();
     verifyNoMoreInteractions(origLb);
 
     // Service config returns a different health check name.
     resolutionAttrs = attrsWithHealthCheckService("FooService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result2 = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result2);
 
-    inOrder.verify(origLb).handleResolvedAddressGroups(
-        same(resolvedAddressList), same(resolutionAttrs));
+    inOrder.verify(origLb).handleResolvedAddresses(result2);
 
     // Underlying subchannel is now ready
     hcLbEventDelivery.handleSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
@@ -959,9 +1021,13 @@ public class HealthCheckingLoadBalancerFactoryTest {
   @Test
   public void balancerShutdown() {
     Attributes resolutionAttrs = attrsWithHealthCheckService("TeeService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
 
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    verify(origLb).handleResolvedAddresses(result);
     verifyNoMoreInteractions(origLb);
 
     Subchannel subchannel = createSubchannel(0, Attributes.EMPTY);
@@ -1011,8 +1077,12 @@ public class HealthCheckingLoadBalancerFactoryTest {
 
     // Verify that HC works
     Attributes resolutionAttrs = attrsWithHealthCheckService("BarService");
-    hcLbEventDelivery.handleResolvedAddressGroups(resolvedAddressList, resolutionAttrs);
-    verify(origLb).handleResolvedAddressGroups(same(resolvedAddressList), same(resolutionAttrs));
+    ResolvedAddresses result = ResolvedAddresses.newBuilder()
+        .setServers(resolvedAddressList)
+        .setAttributes(resolutionAttrs)
+        .build();
+    hcLbEventDelivery.handleResolvedAddresses(result);
+    verify(origLb).handleResolvedAddresses(result);
     createSubchannel(0, Attributes.EMPTY);
     assertThat(healthImpls[0].calls).isEmpty();
     hcLbEventDelivery.handleSubchannelState(

@@ -88,8 +88,9 @@ class GrpclbLoadBalancer extends LoadBalancer {
   }
 
   @Override
-  public void handleResolvedAddressGroups(
-      List<EquivalentAddressGroup> updatedServers, Attributes attributes) {
+  public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+    List<EquivalentAddressGroup> updatedServers = resolvedAddresses.getServers();
+    Attributes attributes = resolvedAddresses.getAttributes();
     // LB addresses and backend addresses are treated separately
     List<LbAddressGroup> newLbAddressGroups = new ArrayList<>();
     List<EquivalentAddressGroup> newBackendServers = new ArrayList<>();

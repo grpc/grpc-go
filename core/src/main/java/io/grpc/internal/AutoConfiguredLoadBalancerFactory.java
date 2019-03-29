@@ -68,7 +68,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
   private static final class NoopLoadBalancer extends LoadBalancer {
 
     @Override
+    @Deprecated
     public void handleResolvedAddressGroups(List<EquivalentAddressGroup> s, Attributes a) {}
+
+    @Override
+    public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {}
 
     @Override
     public void handleNameResolutionError(Status error) {}
@@ -100,8 +104,9 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
 
     //  Must be run inside ChannelExecutor.
     @Override
-    public void handleResolvedAddressGroups(
-        List<EquivalentAddressGroup> servers, Attributes attributes) {
+    public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+      List<EquivalentAddressGroup> servers = resolvedAddresses.getServers();
+      Attributes attributes = resolvedAddresses.getAttributes();
       if (attributes.get(ATTR_LOAD_BALANCING_CONFIG) != null) {
         throw new IllegalArgumentException(
             "Unexpected ATTR_LOAD_BALANCING_CONFIG from upstream: "
@@ -147,7 +152,11 @@ public final class AutoConfiguredLoadBalancerFactory extends LoadBalancer.Factor
                 "Name resolver returned no usable address. addrs="
                 + servers + ", attrs=" + attributes));
       } else {
-        delegate.handleResolvedAddressGroups(selection.serverList, attributes);
+        delegate.handleResolvedAddresses(
+            ResolvedAddresses.newBuilder()
+                .setServers(selection.serverList)
+                .setAttributes(attributes)
+                .build());
       }
     }
 

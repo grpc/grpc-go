@@ -84,8 +84,9 @@ final class XdsLoadBalancer extends LoadBalancer {
   }
 
   @Override
-  public void handleResolvedAddressGroups(
-      List<EquivalentAddressGroup> servers, Attributes attributes) {
+  public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+    List<EquivalentAddressGroup> servers = resolvedAddresses.getServers();
+    Attributes attributes = resolvedAddresses.getAttributes();
     Map<String, ?> newRawLbConfig = checkNotNull(
         attributes.get(ATTR_LOAD_BALANCING_CONFIG), "ATTR_LOAD_BALANCING_CONFIG not available");
 
@@ -252,7 +253,13 @@ final class XdsLoadBalancer extends LoadBalancer {
           ChannelLogLevel.INFO, "Using fallback policy");
       fallbackBalancer = lbRegistry.getProvider(fallbackPolicy.getPolicyName())
           .newLoadBalancer(helper);
-      fallbackBalancer.handleResolvedAddressGroups(fallbackServers, fallbackAttributes);
+      // TODO(carl-mastrangelo): propagate the load balancing config policy
+      fallbackBalancer.handleResolvedAddresses(
+          ResolvedAddresses.newBuilder()
+              .setServers(fallbackServers)
+              .setAttributes(fallbackAttributes)
+              .build());
+
       // TODO: maybe update picker
     }
 
@@ -268,7 +275,12 @@ final class XdsLoadBalancer extends LoadBalancer {
       this.fallbackPolicy = fallbackPolicy;
       if (fallbackBalancer != null) {
         if (fallbackPolicy.getPolicyName().equals(currentFallbackPolicy.getPolicyName())) {
-          fallbackBalancer.handleResolvedAddressGroups(fallbackServers, fallbackAttributes);
+          // TODO(carl-mastrangelo): propagate the load balancing config policy
+          fallbackBalancer.handleResolvedAddresses(
+              ResolvedAddresses.newBuilder()
+                  .setServers(fallbackServers)
+                  .setAttributes(fallbackAttributes)
+                  .build());
         } else {
           fallbackBalancer.shutdown();
           fallbackBalancer = null;

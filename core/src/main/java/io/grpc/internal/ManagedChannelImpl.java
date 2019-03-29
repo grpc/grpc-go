@@ -55,6 +55,7 @@ import io.grpc.InternalWithLogId;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
@@ -1385,7 +1386,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
                     .set(GrpcAttributes.NAME_RESOLVER_SERVICE_CONFIG, effectiveServiceConfig)
                     .build();
               }
-              helper.lb.handleResolvedAddressGroups(servers, effectiveAttrs);
+              helper.lb.handleResolvedAddresses(
+                  ResolvedAddresses.newBuilder()
+                      .setServers(servers)
+                      .setAttributes(effectiveAttrs)
+                      .build());
             }
           }
         }

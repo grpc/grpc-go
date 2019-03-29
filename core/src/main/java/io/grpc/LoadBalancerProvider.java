@@ -55,7 +55,9 @@ public abstract class LoadBalancerProvider extends LoadBalancer.Factory {
    * Parses the config for the Load Balancing policy unpacked from the service config.  This will
    * return a {@link ConfigOrError} which contains either the successfully parsed config, or the
    * {@link Status} representing the failure to parse.  Implementations are expected to not throw
-   * exceptions but return a Status representing the failure.
+   * exceptions but return a Status representing the failure.  If successful, the load balancing
+   * policy config should be immutable, and implement {@link Object#equals(Object)} and
+   * {@link Object#hashCode()}.
    *
    * @param rawLoadBalancingPolicyConfig The {@link Map} representation of the load balancing
    *     policy choice.

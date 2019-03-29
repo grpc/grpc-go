@@ -17,8 +17,6 @@
 package io.grpc.xds;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,6 +26,7 @@ import io.grpc.ChannelLogger;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
 import io.grpc.SynchronizationContext;
@@ -122,16 +121,20 @@ public class FallbackManagerTest {
     fallbackManager.updateFallbackServers(
         eags, Attributes.EMPTY, fallbackPolicy);
 
-    verify(fakeLb, never()).handleResolvedAddressGroups(
-        ArgumentMatchers.<List<EquivalentAddressGroup>>any(), ArgumentMatchers.<Attributes>any());
+    verify(fakeLb, never()).handleResolvedAddresses(ArgumentMatchers.any(ResolvedAddresses.class));
 
     fakeClock.forwardTime(FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-    verify(fakeLb).handleResolvedAddressGroups(
-        same(eags),
-        eq(Attributes.newBuilder()
-            .set(LoadBalancer.ATTR_LOAD_BALANCING_CONFIG, fallbackPolicy.getRawConfigValue())
-            .build()));
+    verify(fakeLb).handleResolvedAddresses(
+        ResolvedAddresses.newBuilder()
+            .setServers(eags)
+            .setAttributes(
+                Attributes.newBuilder()
+                    .set(
+                        LoadBalancer.ATTR_LOAD_BALANCING_CONFIG,
+                        fallbackPolicy.getRawConfigValue())
+                    .build())
+            .build());
   }
 
   @Test
@@ -145,7 +148,6 @@ public class FallbackManagerTest {
 
     fakeClock.forwardTime(FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-    verify(fakeLb, never()).handleResolvedAddressGroups(
-        ArgumentMatchers.<List<EquivalentAddressGroup>>any(), ArgumentMatchers.<Attributes>any());
+    verify(fakeLb, never()).handleResolvedAddresses(ArgumentMatchers.any(ResolvedAddresses.class));
   }
 }

@@ -16,9 +16,12 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -121,11 +124,184 @@ public abstract class LoadBalancer {
    *
    * @param servers the resolved server addresses, never empty.
    * @param attributes extra information from naming system.
+   * @deprecated override {@link #handleResolvedAddresses(ResolvedAddresses) instead}
    * @since 1.2.0
    */
-  public abstract void handleResolvedAddressGroups(
+  @Deprecated
+  public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> servers,
-      @NameResolver.ResolutionResultAttr Attributes attributes);
+      @NameResolver.ResolutionResultAttr Attributes attributes) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  /**
+   * Handles newly resolved server groups and metadata attributes from name resolution system.
+   * {@code servers} contained in {@link EquivalentAddressGroup} should be considered equivalent
+   * but may be flattened into a single list if needed.
+   *
+   * <p>Implementations should not modify the given {@code servers}.
+   *
+   * @param resolvedAddresses the resolved server addresses, attributes, and config.
+   * @since 1.21.0
+   */
+  @SuppressWarnings("deprecation")
+  public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+    handleResolvedAddressGroups(resolvedAddresses.getServers(), resolvedAddresses.getAttributes());
+  }
+
+  /**
+   * Represents a combination of the resolved server address, associated attributes and a load
+   * balancing policy config.  The config is from the {@link
+   * LoadBalancerProvider#parseLoadBalancingPolicyConfig(Map)}.
+   *
+   * @since 1.21.0
+   */
+  public static final class ResolvedAddresses {
+    private final List<EquivalentAddressGroup> servers;
+    @NameResolver.ResolutionResultAttr
+    private final Attributes attributes;
+    @Nullable
+    private final Object loadBalancingPolicyConfig;
+    // Make sure to update toBuilder() below!
+
+    private ResolvedAddresses(
+        List<EquivalentAddressGroup> servers,
+        @NameResolver.ResolutionResultAttr Attributes attributes,
+        Object loadBalancingPolicyConfig) {
+      this.servers =
+          Collections.unmodifiableList(new ArrayList<>(checkNotNull(servers, "servers")));
+      this.attributes = checkNotNull(attributes, "attributes");
+      this.loadBalancingPolicyConfig = loadBalancingPolicyConfig;
+    }
+
+    /**
+     * Factory for constructing a new Builder.
+     *
+     * @since 1.21.0
+     */
+    public static Builder newBuilder() {
+      return new Builder();
+    }
+
+    /**
+     * Converts this back to a builder.
+     *
+     * @since 1.21.0
+     */
+    public Builder toBuilder() {
+      return newBuilder()
+          .setServers(servers)
+          .setAttributes(attributes)
+          .setLoadBalancingPolicyConfig(loadBalancingPolicyConfig);
+    }
+
+    /**
+     * Gets the server addresses.
+     *
+     * @since 1.21.0
+     */
+    public List<EquivalentAddressGroup> getServers() {
+      return servers;
+    }
+
+    /**
+     * Gets the attributes associated with these addresses.  If this was not previously set,
+     * {@link Attributes#EMPTY} will be returned.
+     *
+     * @since 1.21.0
+     */
+    @NameResolver.ResolutionResultAttr
+    public Attributes getAttributes() {
+      return attributes;
+    }
+
+    /**
+     * Gets the domain specific load balancing policy.  This is the config produced by
+     * {@link LoadBalancerProvider#parseLoadBalancingPolicyConfig(Map)}.
+     *
+     * @since 1.21.0
+     */
+    @Nullable
+    public Object getLoadBalancingPolicyConfig() {
+      return loadBalancingPolicyConfig;
+    }
+
+    /**
+     * Builder for {@link ResolvedAddresses}.
+     */
+    public static final class Builder {
+      private List<EquivalentAddressGroup> servers;
+      @NameResolver.ResolutionResultAttr
+      private Attributes attributes = Attributes.EMPTY;
+      @Nullable
+      private Object loadBalancingPolicyConfig;
+
+      Builder() {}
+
+      /**
+       * Sets the servers.  This field is required.
+       *
+       * @return this.
+       */
+      public Builder setServers(List<EquivalentAddressGroup> servers) {
+        this.servers = servers;
+        return this;
+      }
+
+      /**
+       * Sets the attributes.  This field is optional; if not called, {@link Attributes#EMPTY}
+       * will be used.
+       *
+       * @return this.
+       */
+      public Builder setAttributes(@NameResolver.ResolutionResultAttr Attributes attributes) {
+        this.attributes = attributes;
+        return this;
+      }
+
+      /**
+       * Sets the load balancing policy config. This field is optional.
+       *
+       * @return this.
+       */
+      public Builder setLoadBalancingPolicyConfig(@Nullable Object loadBalancingPolicyConfig) {
+        this.loadBalancingPolicyConfig = loadBalancingPolicyConfig;
+        return this;
+      }
+
+      /**
+       * Constructs the {@link ResolvedAddresses}.
+       */
+      public ResolvedAddresses build() {
+        return new ResolvedAddresses(servers, attributes, loadBalancingPolicyConfig);
+      }
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("servers", servers)
+          .add("attributes", attributes)
+          .add("loadBalancingPolicyConfig", loadBalancingPolicyConfig)
+          .toString();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(servers, attributes, loadBalancingPolicyConfig);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (!(obj instanceof ResolvedAddresses)) {
+        return false;
+      }
+      ResolvedAddresses that = (ResolvedAddresses) obj;
+      return Objects.equal(this.servers, that.servers)
+          && Objects.equal(this.attributes, that.attributes)
+          && Objects.equal(this.loadBalancingPolicyConfig, that.loadBalancingPolicyConfig);
+    }
+  }
 
   /**
    * Handles an error from the name resolution system.
@@ -170,10 +346,10 @@ public abstract class LoadBalancer {
 
   /**
    * Whether this LoadBalancer can handle empty address group list to be passed to {@link
-   * #handleResolvedAddressGroups}.  The default implementation returns {@code false}, meaning that
-   * if the NameResolver returns an empty list, the Channel will turn that into an error and call
-   * {@link #handleNameResolutionError}.  LoadBalancers that want to accept empty lists should
-   * override this method and return {@code true}.
+   * #handleResolvedAddresses(ResolvedAddresses)}.  The default implementation returns
+   * {@code false}, meaning that if the NameResolver returns an empty list, the Channel will turn
+   * that into an error and call {@link #handleNameResolutionError}.  LoadBalancers that want to
+   * accept empty lists should override this method and return {@code true}.
    *
    * <p>This method should always return a constant value.  It's not specified when this will be
    * called.
@@ -279,7 +455,7 @@ public abstract class LoadBalancer {
         Status status, boolean drop) {
       this.subchannel = subchannel;
       this.streamTracerFactory = streamTracerFactory;
-      this.status = Preconditions.checkNotNull(status, "status");
+      this.status = checkNotNull(status, "status");
       this.drop = drop;
     }
 
@@ -353,7 +529,7 @@ public abstract class LoadBalancer {
     public static PickResult withSubchannel(
         Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory) {
       return new PickResult(
-          Preconditions.checkNotNull(subchannel, "subchannel"), streamTracerFactory, Status.OK,
+          checkNotNull(subchannel, "subchannel"), streamTracerFactory, Status.OK,
           false);
     }
 
@@ -486,7 +662,7 @@ public abstract class LoadBalancer {
      * @since 1.2.0
      */
     public final Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs) {
-      Preconditions.checkNotNull(addrs, "addrs");
+      checkNotNull(addrs, "addrs");
       return createSubchannel(Collections.singletonList(addrs), attrs);
     }
 
@@ -518,7 +694,7 @@ public abstract class LoadBalancer {
      */
     public final void updateSubchannelAddresses(
         Subchannel subchannel, EquivalentAddressGroup addrs) {
-      Preconditions.checkNotNull(addrs, "addrs");
+      checkNotNull(addrs, "addrs");
       updateSubchannelAddresses(subchannel, Collections.singletonList(addrs));
     }
 

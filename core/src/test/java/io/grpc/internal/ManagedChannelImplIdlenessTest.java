@@ -44,6 +44,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.LoadBalancerProvider;
@@ -228,7 +229,8 @@ public class ManagedChannelImplIdlenessTest {
             .setAttributes(Attributes.EMPTY)
             .build();
     nameResolverObserverCaptor.getValue().onResult(resolutionResult);
-    verify(mockLoadBalancer).handleResolvedAddressGroups(servers, Attributes.EMPTY);
+    verify(mockLoadBalancer).handleResolvedAddresses(
+        ResolvedAddresses.newBuilder().setServers(servers).setAttributes(Attributes.EMPTY).build());
   }
 
   @Test

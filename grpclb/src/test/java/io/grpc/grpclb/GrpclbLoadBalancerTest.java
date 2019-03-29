@@ -60,6 +60,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
@@ -2099,7 +2100,8 @@ public class GrpclbLoadBalancerTest {
     syncContext.execute(new Runnable() {
         @Override
         public void run() {
-          balancer.handleResolvedAddressGroups(addrs, attrs);
+          balancer.handleResolvedAddresses(
+              ResolvedAddresses.newBuilder().setServers(addrs).setAttributes(attrs).build());
         }
       });
   }
