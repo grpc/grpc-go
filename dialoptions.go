@@ -63,7 +63,7 @@ type dialOptions struct {
 	disableHealthCheck          bool
 	healthCheckFunc             internal.HealthChecker
 	minConnectTimeout           func() time.Duration
-	defaultServiceConfig        *ServiceConfig
+	defaultServiceConfig        *ServiceConfig // defaultServiceConfig is parsed from defaultServiceConfigRawJSON.
 	defaultServiceConfigRawJSON *string
 }
 

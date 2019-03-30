@@ -224,7 +224,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.sc = &sc
+				s := "" // for service config API v1, we don't care the raw json string.
+				cc.sc.rawJSONString = &s
 				scSet = true
 			}
 		default:
@@ -270,7 +272,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.sc = &sc
+				s := "" // for service config API v1, we don't care the raw json string.
+				cc.sc.rawJSONString = &s
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -392,7 +396,7 @@ type ClientConn struct {
 
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
-	sc              ServiceConfig
+	sc              *ServiceConfig
 	conns           map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
@@ -438,8 +442,8 @@ func (cc *ClientConn) scWatcher() {
 			cc.mu.Lock()
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
-			cc.sc = sc
-			s := ""
+			cc.sc = &sc
+			s := "" // for service config API v1, we don't care the raw json string.
 			cc.sc.rawJSONString = &s
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
@@ -496,7 +500,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	}
 
 	if cc.fallbackToDefaultServiceConfig(s.ServiceConfig) {
-		if cc.dopts.defaultServiceConfig != nil && cc.sc.rawJSONString == nil {
+		if cc.dopts.defaultServiceConfig != nil && cc.sc == nil {
 			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
 		}
 	} else {
@@ -505,9 +509,15 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		if err != nil {
 			return err
 		}
-		if cc.sc.rawJSONString == nil || *cc.sc.rawJSONString != s.ServiceConfig {
+		if cc.sc == nil || *cc.sc.rawJSONString != s.ServiceConfig {
 			cc.applyServiceConfig(sc)
 		}
+	}
+
+	// update the service config that will be sent to balancer.
+	if cc.sc != nil {
+		fmt.Println(cc.sc)
+		s.ServiceConfig = *cc.sc.rawJSONString
 	}
 
 	if cc.dopts.balancerBuilder == nil {
@@ -524,7 +534,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		// TODO: use new loadBalancerConfig field with appropriate priority.
 		if isGRPCLB {
 			newBalancerName = grpclbName
-		} else if cc.sc.LB != nil {
+		} else if cc.sc != nil && cc.sc.LB != nil {
 			newBalancerName = *cc.sc.LB
 		} else {
 			newBalancerName = PickFirstBalancerName
@@ -744,6 +754,9 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
+	if cc.sc == nil {
+		return MethodConfig{}
+	}
 	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
@@ -755,6 +768,9 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
+	if cc.sc == nil {
+		return nil
+	}
 	return cc.sc.healthCheckConfig
 }
 
@@ -773,7 +789,7 @@ func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
 		// should never reach here.
 		return fmt.Errorf("got nil pointer for service config")
 	}
-	cc.sc = *sc
+	cc.sc = sc
 
 	if cc.sc.retryThrottling != nil {
 		newThrottler := &retryThrottler{
