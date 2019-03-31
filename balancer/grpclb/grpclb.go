@@ -363,7 +363,9 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	// to remote balancer is lost.
 	if lb.state != connectivity.Ready {
 		if !lb.inFallback && !lb.remoteBalancerConnected {
+			// Enter fallback
 			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+			lb.regeneratePicker(true)
 		}
 	}
 
@@ -396,7 +398,9 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 		lb.mu.Unlock()
 		return
 	}
+	// Enter fallback.
 	lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+	lb.regeneratePicker(true)
 	lb.mu.Unlock()
 }
 

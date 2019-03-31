@@ -85,7 +85,8 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 		backendAddrs = append(backendAddrs, addr)
 	}
 
-	// Call refreshSubConns to create/remove SubConns.
+	// Call refreshSubConns to create/remove SubConns.  If we are in fallback,
+	// this is also exiting fallback.
 	lb.refreshSubConns(backendAddrs, true)
 	// Regenerate and update picker no matter if there's update on backends (if
 	// any SubConn will be newed/removed). Because since the full serverList was
@@ -280,7 +281,9 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		// Enter fallback when connection to remote balancer is lost, and the
 		// aggregated state is not Ready.
 		if !lb.inFallback && lb.state != connectivity.Ready {
+			// Entering fallback.
 			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+			lb.regeneratePicker(true)
 		}
 		lb.mu.Unlock()
 
