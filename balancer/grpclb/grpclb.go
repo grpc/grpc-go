@@ -263,13 +263,16 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 		return
 	}
 
+	if lb.state == connectivity.Connecting {
+		lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
+		return
+	}
+
 	var readySCs []balancer.SubConn
 	if lb.usePickFirst {
-		if lb.state == connectivity.Ready || lb.state == connectivity.Idle {
-			for _, sc := range lb.subConns {
-				readySCs = append(readySCs, sc)
-				break
-			}
+		for _, sc := range lb.subConns {
+			readySCs = append(readySCs, sc)
+			break
 		}
 	} else {
 		for _, a := range lb.backendAddrs {
@@ -285,10 +288,13 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 		// If there's no ready SubConns, always re-pick. This is to avoid drops
 		// unless at least one SubConn is ready. Otherwise we may drop more
 		// often than want because of drops + re-picks(which become re-drops).
+		//
+		// This doesn't seem to be necessary after the connecting check above.
+		// Kept for safety.
 		lb.picker = &errPicker{err: balancer.ErrNoSubConnAvailable}
 		return
 	}
-	if len(lb.fullServerList) <= 0 {
+	if lb.inFallback {
 		lb.picker = newRRPicker(readySCs)
 		return
 	}
@@ -355,28 +361,33 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 		// kept the sc's state in scStates. Remove state for this sc here.
 		delete(lb.scStates, sc)
 	}
-
-	oldAggrState := lb.state
-	lb.state = lb.aggregateSubConnStates()
+	// Force regenerate picker if
+	//  - this sc became ready from not-ready
+	//  - this sc became not-ready from ready
+	lb.updateStateAndPicker((oldS == connectivity.Ready) != (s == connectivity.Ready), false)
 
 	// Enter fallback when the aggregated state is not Ready and the connection
 	// to remote balancer is lost.
 	if lb.state != connectivity.Ready {
 		if !lb.inFallback && !lb.remoteBalancerConnected {
-			// Enter fallback
+			// Enter fallback.
 			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
-			lb.regeneratePicker(true)
 		}
 	}
+}
 
+// updateStateAndPicker re-calculate the aggregated state, and regenerate picker
+// if overall state is changed.
+//
+// If forceRegeneratePicker is true, picker will be regenerated.
+func (lb *lbBalancer) updateStateAndPicker(forceRegeneratePicker bool, resetDrop bool) {
+	oldAggrState := lb.state
+	lb.state = lb.aggregateSubConnStates()
 	// Regenerate picker when one of the following happens:
-	//  - this sc became ready from not-ready
-	//  - this sc became not-ready from ready
-	//  - the aggregated state of balancer became TransientFailure from non-TransientFailure
-	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
-	if (oldS == connectivity.Ready) != (s == connectivity.Ready) ||
-		(lb.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
-		lb.regeneratePicker(false)
+	//  - caller wants to regenerate
+	//  - the aggregated state changed
+	if forceRegeneratePicker || (lb.state != oldAggrState) {
+		lb.regeneratePicker(resetDrop)
 	}
 
 	lb.cc.UpdateBalancerState(lb.state, lb.picker)
@@ -400,7 +411,6 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 	}
 	// Enter fallback.
 	lb.refreshSubConns(lb.resolvedBackendAddrs, false)
-	lb.regeneratePicker(true)
 	lb.mu.Unlock()
 }
 

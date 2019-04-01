@@ -88,21 +88,21 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	// Call refreshSubConns to create/remove SubConns.  If we are in fallback,
 	// this is also exiting fallback.
 	lb.refreshSubConns(backendAddrs, true)
-	// Regenerate and update picker no matter if there's update on backends (if
-	// any SubConn will be newed/removed). Because since the full serverList was
-	// different, there might be updates in drops or pick weights(different
-	// number of duplicates). We need to update picker with the fulllist.
-	//
-	// Now with cache, even if SubConn was newed/removed, there might be no
-	// state changes.
-	lb.regeneratePicker(true)
-	lb.cc.UpdateBalancerState(lb.state, lb.picker)
 }
 
-// refreshSubConns creates/removes SubConns with backendAddrs.
+// refreshSubConns creates/removes SubConns with backendAddrs, and refreshes
+// balancer state and picker.
 //
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
+	defer func() {
+		// Regenerate and update picker after refreshing subconns because with
+		// cache, even if SubConn was newed/removed, there might be no state
+		// changes (the subconn will be kept in cache, not actually
+		// newed/removed).
+		lb.updateStateAndPicker(true, true)
+	}()
+
 	lb.inFallback = !fromGRPCLBServer
 
 	opts := balancer.NewSubConnOptions{}
@@ -283,7 +283,6 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		if !lb.inFallback && lb.state != connectivity.Ready {
 			// Entering fallback.
 			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
-			lb.regeneratePicker(true)
 		}
 		lb.mu.Unlock()
 
