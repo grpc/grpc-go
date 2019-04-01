@@ -153,6 +153,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			})
 		}
 		cc.csMgr.channelzID = cc.channelzID
+		defer func() {
+			if err != nil {
+				ted := &channelz.TraceEventDesc{
+					Desc:     "Channel Deleted",
+					Severity: channelz.CtINFO,
+				}
+				channelz.AddTraceEvent(cc.channelzID, ted)
+				// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
+				// the entity being deleted, and thus prevent it from being deleted right away.
+				channelz.RemoveEntry(cc.channelzID)
+			}
+		}()
 	}
 
 	if !cc.dopts.insecure {
@@ -820,7 +832,7 @@ func (cc *ClientConn) Close() error {
 		}
 		channelz.AddTraceEvent(cc.channelzID, ted)
 		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
-		// the entity beng deleted, and thus prevent it from being deleted right away.
+		// the entity being deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(cc.channelzID)
 	}
 	return nil
