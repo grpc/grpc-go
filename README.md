@@ -131,7 +131,7 @@ buildscript {
     mavenCentral()
   }
   dependencies {
-    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5'
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.8'
   }
 }
 
