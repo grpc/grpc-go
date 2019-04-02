@@ -247,8 +247,23 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	})
 }
 
+// WithConnectRetryParams configures the dialer to use the provided backoff
+// parameters for the algorithm defined in
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+// This will override all the default values with the ones provided here. So,
+// use with caution.
+//
+// This API is EXPERIMENTAL.
+func WithConnectRetryParams(p ConnectRetryParams) DialOption {
+	b := backoff.NewExponentialBuilder()
+	b.BaseDelay(p.BaseDelay).Multiplier(p.Multiplier).Jitter(p.Jitter).MaxDelay(p.MaxDelay).MinConnectTimeout(p.MinConnectTimeout)
+	return withBackoff(b.Build())
+}
+
 // WithBackoffMaxDelay configures the dialer to use the provided maximum delay
 // when backing off after failed connection attempts.
+//
+// Deprecated: use WithConnectRetryParams instead.
 func WithBackoffMaxDelay(md time.Duration) DialOption {
 	return WithBackoffConfig(BackoffConfig{MaxDelay: md})
 }
@@ -256,12 +271,9 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // WithBackoffConfig configures the dialer to use the provided backoff
 // parameters after connection failures.
 //
-// Use WithBackoffMaxDelay until more parameters on BackoffConfig are opened up
-// for use.
+// Deprecated: use WithConnectRetryParams instead.
 func WithBackoffConfig(b BackoffConfig) DialOption {
-	return withBackoff(backoff.Exponential{
-		MaxDelay: b.MaxDelay,
-	})
+	return withBackoff(backoff.NewExponentialBuilder().MaxDelay(b.MaxDelay).Build())
 }
 
 // withBackoff sets the backoff strategy used for connectRetryNum after a failed

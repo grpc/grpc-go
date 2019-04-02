@@ -27,12 +27,34 @@ import (
 
 // DefaultBackoffConfig uses values specified for backoff in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+// Deprecated: use ConnectRetryParams instead.
 var DefaultBackoffConfig = BackoffConfig{
 	MaxDelay: 120 * time.Second,
 }
 
 // BackoffConfig defines the parameters for the default gRPC backoff strategy.
+// Deprecated: use ConnectRetryParams instead.
 type BackoffConfig struct {
 	// MaxDelay is the upper bound of backoff delay.
 	MaxDelay time.Duration
+}
+
+// ConnectRetryParams defines the parameters for the backoff during connection
+// retries. Users are encouraged to use this instead of BackoffConfig.
+//
+// This API is EXPERIMENTAL.
+type ConnectRetryParams struct {
+	// BaseDelay is the amount of time to backoff after the first connection
+	// failure.
+	BaseDelay time.Duration
+	// Multiplier is the factor with which to multiply backoffs after a failed
+	// retry.
+	Multiplier float64
+	// Jitter is the factor with which backoffs are randomized.
+	Jitter float64
+	// MaxDelay is the upper bound of backoff delay.
+	MaxDelay time.Duration
+	// MinConnectTimeout is the minimum amount of time we are willing to give a
+	// connection to complete.
+	MinConnectTimeout time.Duration
 }

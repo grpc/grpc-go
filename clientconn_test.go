@@ -777,22 +777,31 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 }
 
 func (s) TestWithBackoffConfigDefault(t *testing.T) {
-	testBackoffConfigSet(t, &DefaultBackoffConfig)
+	testBackoffStrategySet(t, backoff.NewExponentialBuilder().Build())
 }
 
 func (s) TestWithBackoffConfig(t *testing.T) {
-	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
-	expected := b
-	testBackoffConfigSet(t, &expected, WithBackoffConfig(b))
+	md := DefaultBackoffConfig.MaxDelay / 2
+	expected := backoff.NewExponentialBuilder().MaxDelay(md).Build()
+	testBackoffStrategySet(t, expected, WithBackoffConfig(BackoffConfig{MaxDelay: md}))
 }
 
 func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
-	expected := BackoffConfig{MaxDelay: md}
-	testBackoffConfigSet(t, &expected, WithBackoffMaxDelay(md))
+	expected := backoff.NewExponentialBuilder().MaxDelay(md).Build()
+	testBackoffStrategySet(t, expected, WithBackoffMaxDelay(md))
 }
 
-func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOption) {
+func (s) TestWithConnectRetryParams(t *testing.T) {
+	bd := 2 * time.Second
+	mltpr := 2.0
+	jitter := 0.0
+	crt := ConnectRetryParams{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
+	expected := backoff.NewExponentialBuilder().BaseDelay(bd).Multiplier(mltpr).Jitter(jitter).MaxDelay(time.Duration(0)).MinConnectTimeout(time.Duration(0)).Build()
+	testBackoffStrategySet(t, expected, WithConnectRetryParams(crt))
+}
+
+func testBackoffStrategySet(t *testing.T, expected backoff.Strategy, opts ...DialOption) {
 	opts = append(opts, WithInsecure())
 	conn, err := Dial("passthrough:///foo:80", opts...)
 	if err != nil {
@@ -801,19 +810,16 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 	defer conn.Close()
 
 	if conn.dopts.bs == nil {
-		t.Fatalf("backoff config not set")
+		t.Fatalf("backoff strategy not set")
 	}
 
 	actual, ok := conn.dopts.bs.(backoff.Exponential)
 	if !ok {
-		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
+		t.Fatalf("unexpected type of backoff strategy: %#v", conn.dopts.bs)
 	}
 
-	expectedValue := backoff.Exponential{
-		MaxDelay: expected.MaxDelay,
-	}
-	if actual != expectedValue {
-		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
+	if actual != expected.(backoff.Exponential) {
+		t.Errorf("unexpected backoff strategy on connection: %v, want %v", actual, expected)
 	}
 }
 
@@ -1016,7 +1022,8 @@ func (s) TestGetClientConnTarget(t *testing.T) {
 
 type backoffForever struct{}
 
-func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
+func (b backoffForever) Backoff(int) time.Duration           { return time.Duration(math.MaxInt64) }
+func (b backoffForever) MinConnectionTimeout() time.Duration { return time.Duration(0) }
 
 func (s) TestResetConnectBackoff(t *testing.T) {
 	dials := make(chan struct{})

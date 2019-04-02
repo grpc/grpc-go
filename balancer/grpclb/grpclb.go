@@ -51,16 +51,14 @@ const (
 )
 
 var (
-	// defaultBackoffConfig configures the backoff strategy that's used when the
+	// defaultBackoffStrategy configures the backoff strategy that's used when the
 	// init handshake in the RPC is unsuccessful. It's not for the clientconn
 	// reconnect backoff.
 	//
 	// It has the same value as the default grpc.DefaultBackoffConfig.
 	//
 	// TODO: make backoff configurable.
-	defaultBackoffConfig = backoff.Exponential{
-		MaxDelay: 120 * time.Second,
-	}
+	defaultBackoffStrategy        = backoff.NewExponentialBuilder().Build()
 	errServerTerminatedConnection = errors.New("grpclb: failed to recv server list: server terminated connection")
 )
 
@@ -177,7 +175,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 		scStates:       make(map[balancer.SubConn]connectivity.State),
 		picker:         &errPicker{err: balancer.ErrNoSubConnAvailable},
 		clientStats:    newRPCStats(),
-		backoff:        defaultBackoffConfig, // TODO: make backoff configurable.
+		backoff:        defaultBackoffStrategy, // TODO: make backoff configurable.
 	}
 
 	var err error
