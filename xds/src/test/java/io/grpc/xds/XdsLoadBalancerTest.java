@@ -58,7 +58,6 @@ import io.grpc.testing.GrpcCleanupRule;
 import io.grpc.xds.XdsLbState.SubchannelStore;
 import io.grpc.xds.XdsLbState.SubchannelStoreImpl;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -616,15 +615,5 @@ public class XdsLoadBalancerTest {
     assertThat(fakeClock.getPendingTasks()).isNotEmpty();
     lb.shutdown();
     assertThat(fakeClock.getPendingTasks()).isEmpty();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, ?>> checkObjectList(Object o) {
-    return (List<Map<String, ?>>) o;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, ?> checkObject(Object o) {
-    return (Map<String, ?>) o;
   }
 }
