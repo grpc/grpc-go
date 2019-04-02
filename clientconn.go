@@ -134,6 +134,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		opt.apply(&cc.dopts)
 	}
 
+	defer func() {
+		select {
+		case <-ctx.Done():
+			conn, err = nil, ctx.Err()
+		default:
+		}
+
+		if err != nil {
+			cc.Close()
+		}
+	}()
+
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
@@ -153,18 +165,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			})
 		}
 		cc.csMgr.channelzID = cc.channelzID
-		defer func() {
-			if err != nil {
-				ted := &channelz.TraceEventDesc{
-					Desc:     "Channel Deleted",
-					Severity: channelz.CtINFO,
-				}
-				channelz.AddTraceEvent(cc.channelzID, ted)
-				// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
-				// the entity being deleted, and thus prevent it from being deleted right away.
-				channelz.RemoveEntry(cc.channelzID)
-			}
-		}()
 	}
 
 	if !cc.dopts.insecure {
@@ -207,18 +207,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
 		defer cancel()
 	}
-
-	defer func() {
-		select {
-		case <-ctx.Done():
-			conn, err = nil, ctx.Err()
-		default:
-		}
-
-		if err != nil {
-			cc.Close()
-		}
-	}()
 
 	scSet := false
 	if cc.dopts.scChan != nil {
