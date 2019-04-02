@@ -367,7 +367,7 @@ func (lb *lbBalancer) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubCo
 	if lb.state != connectivity.Ready {
 		if !lb.inFallback && !lb.remoteBalancerConnected {
 			// Enter fallback.
-			lb.refreshSubConns(lb.resolvedBackendAddrs, false, lb.usePickFirst)
+			lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 		}
 	}
 }
@@ -429,7 +429,6 @@ func (lb *lbBalancer) handleServiceConfig(sc string) {
 		grpclog.Infof("lbBalancer: switching mode, new usePickFirst: %+v", newUsePickFirst)
 	}
 	lb.refreshSubConns(lb.backendAddrs, lb.inFallback, newUsePickFirst)
-	lb.regeneratePicker(true)
 }
 
 func (lb *lbBalancer) UpdateResolverState(rs resolver.State) {
