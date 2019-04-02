@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
@@ -940,6 +941,7 @@ func (a *csAttempt) finish(err error) {
 			Trailer:       tr,
 			BytesSent:     a.s != nil,
 			BytesReceived: br,
+			ServerLoad:    balancerload.Parse(tr),
 		})
 	}
 	if a.statsHandler != nil {

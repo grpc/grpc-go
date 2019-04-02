@@ -183,6 +183,11 @@ type DoneInfo struct {
 	BytesSent bool
 	// BytesReceived indicates if any byte has been received from the server.
 	BytesReceived bool
+	// ServerLoad is the load received from server. It's usually sent as part of
+	// trailing metadata.
+	//
+	// The only supported type now is *orca_v1.LoadReport.
+	ServerLoad interface{}
 }
 
 var (
