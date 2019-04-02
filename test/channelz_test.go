@@ -190,6 +190,18 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
+func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
+	channelz.NewChannelzStorage()
+	// Make dial fails (due to no transport security specified)
+	_, err := grpc.Dial("fake.addr")
+	if err == nil {
+		t.Fatal("expecting dial to fail")
+	}
+	if tcs, end := channelz.GetTopChannels(0, 0); tcs != nil || !end {
+		t.Fatalf("GetTopChannels(0, 0) = %v, %v, want <nil>, true", tcs, end)
+	}
+}
+
 func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
