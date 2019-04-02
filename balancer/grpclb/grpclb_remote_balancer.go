@@ -85,24 +85,26 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 		backendAddrs = append(backendAddrs, addr)
 	}
 
-	// Call refreshSubConns to create/remove SubConns.
+	// Call refreshSubConns to create/remove SubConns.  If we are in fallback,
+	// this is also exiting fallback.
 	lb.refreshSubConns(backendAddrs, true)
-	// Regenerate and update picker no matter if there's update on backends (if
-	// any SubConn will be newed/removed). Because since the full serverList was
-	// different, there might be updates in drops or pick weights(different
-	// number of duplicates). We need to update picker with the fulllist.
-	//
-	// Now with cache, even if SubConn was newed/removed, there might be no
-	// state changes.
-	lb.regeneratePicker(true)
-	lb.cc.UpdateBalancerState(lb.state, lb.picker)
 }
 
-// refreshSubConns creates/removes SubConns with backendAddrs. It returns a bool
-// indicating whether the backendAddrs are different from the cached
-// backendAddrs (whether any SubConn was newed/removed).
+// refreshSubConns creates/removes SubConns with backendAddrs, and refreshes
+// balancer state and picker.
+//
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
+	defer func() {
+		// Regenerate and update picker after refreshing subconns because with
+		// cache, even if SubConn was newed/removed, there might be no state
+		// changes (the subconn will be kept in cache, not actually
+		// newed/removed).
+		lb.updateStateAndPicker(true, true)
+	}()
+
+	lb.inFallback = !fromGRPCLBServer
+
 	opts := balancer.NewSubConnOptions{}
 	if fromGRPCLBServer {
 		opts.CredsBundle = lb.grpclbBackendCreds
@@ -218,6 +220,9 @@ func (lb *lbBalancer) callRemoteBalancer() (backoff bool, _ error) {
 	if err != nil {
 		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 	}
+	lb.mu.Lock()
+	lb.remoteBalancerConnected = true
+	lb.mu.Unlock()
 
 	// grpclb handshake on the stream.
 	initReq := &lbpb.LoadBalanceRequest{
@@ -269,6 +274,17 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		}
 		// Trigger a re-resolve when the stream errors.
 		lb.cc.cc.ResolveNow(resolver.ResolveNowOption{})
+
+		lb.mu.Lock()
+		lb.remoteBalancerConnected = false
+		lb.fullServerList = nil
+		// Enter fallback when connection to remote balancer is lost, and the
+		// aggregated state is not Ready.
+		if !lb.inFallback && lb.state != connectivity.Ready {
+			// Entering fallback.
+			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+		}
+		lb.mu.Unlock()
 
 		if !doBackoff {
 			retryCount = 0
