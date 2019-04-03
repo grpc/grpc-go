@@ -225,8 +225,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
-				s := "" // for service config API v1, we don't care the raw json string.
-				cc.sc.rawJSONString = &s
 				scSet = true
 			}
 		default:
@@ -273,8 +271,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = &sc
-				s := "" // for service config API v1, we don't care the raw json string.
-				cc.sc.rawJSONString = &s
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -443,8 +439,6 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
 			cc.sc = &sc
-			s := "" // for service config API v1, we don't care the raw json string.
-			cc.sc.rawJSONString = &s
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -509,15 +503,14 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		if err != nil {
 			return err
 		}
-		if cc.sc == nil || *cc.sc.rawJSONString != s.ServiceConfig {
+		if cc.sc == nil || cc.sc.rawJSONString != s.ServiceConfig {
 			cc.applyServiceConfig(sc)
 		}
 	}
 
 	// update the service config that will be sent to balancer.
 	if cc.sc != nil {
-		fmt.Println(cc.sc)
-		s.ServiceConfig = *cc.sc.rawJSONString
+		s.ServiceConfig = cc.sc.rawJSONString
 	}
 
 	if cc.dopts.balancerBuilder == nil {

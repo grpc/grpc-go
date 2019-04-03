@@ -392,7 +392,7 @@ func scCompareWithRawJSONSkipped(s1, s2 *ServiceConfig) bool {
 	if (s1 == nil) != (s2 == nil) {
 		return false
 	}
-	s1.rawJSONString = nil
-	s2.rawJSONString = nil
+	s1.rawJSONString = ""
+	s2.rawJSONString = ""
 	return reflect.DeepEqual(s1, s2)
 }

@@ -99,10 +99,9 @@ type ServiceConfig struct {
 	// healthCheckConfig must be set as one of the requirement to enable LB channel
 	// health check.
 	healthCheckConfig *healthCheckConfig
-	// rawJSONString stores the pointer to the original service config json string that get parsed into
-	// this service config struct. Null pointer means this is a service config struct just defined,
-	// but no json string has been parsed and initialize the struct.
-	rawJSONString *string
+	// rawJSONString stores service config json string that get parsed into
+	// this service config struct.
+	rawJSONString string
 }
 
 // healthCheckConfig defines the go-native version of the LB channel health check config.
@@ -254,7 +253,7 @@ func parseServiceConfig(js string) (*ServiceConfig, error) {
 		Methods:           make(map[string]MethodConfig),
 		retryThrottling:   rsc.RetryThrottling,
 		healthCheckConfig: rsc.HealthCheckConfig,
-		rawJSONString:     &js,
+		rawJSONString:     js,
 	}
 	if rsc.MethodConfig == nil {
 		return &sc, nil
