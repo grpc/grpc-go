@@ -28,8 +28,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.timeout;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
@@ -131,9 +129,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
-import org.mockito.verification.VerificationMode;
 
 /**
  * Abstract base class for all GRPC transport tests.
@@ -1491,19 +1486,18 @@ public abstract class AbstractInteropTest {
     assertStatsTrace("grpc.testing.TestService/UnaryCall", Status.Code.UNKNOWN);
 
     // Test FullDuplexCall
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver =
-        mock(StreamObserver.class);
+    StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(streamingRequest);
     requestObserver.onCompleted();
 
-    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(operationTimeoutMillis())).onError(captor.capture());
-    assertEquals(Status.UNKNOWN.getCode(), Status.fromThrowable(captor.getValue()).getCode());
-    assertEquals(errorMessage, Status.fromThrowable(captor.getValue()).getDescription());
-    verifyNoMoreInteractions(responseObserver);
+    assertThat(responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS))
+        .isTrue();
+    assertThat(responseObserver.getError()).isNotNull();
+    Status status = Status.fromThrowable(responseObserver.getError());
+    assertEquals(Status.UNKNOWN.getCode(), status.getCode());
+    assertEquals(errorMessage, status.getDescription());
     assertStatsTrace("grpc.testing.TestService/FullDuplexCall", Status.Code.UNKNOWN);
   }
 
@@ -1818,48 +1812,6 @@ public abstract class AbstractInteropTest {
     Assume.assumeTrue(
         actuallyFreeMemory + " is not sufficient to run this test",
         actuallyFreeMemory >= 64 * 1024 * 1024);
-  }
-
-  /**
-   * Wrapper around {@link Mockito#verify}, to keep log spam down on failure.
-   */
-  private static <T> T verify(T mock, VerificationMode mode) {
-    try {
-      return Mockito.verify(mock, mode);
-    } catch (final AssertionError e) {
-      String msg = e.getMessage();
-      if (msg.length() >= 256) {
-        // AssertionError(String, Throwable) only present in Android API 19+
-        throw new AssertionError(msg.substring(0, 256)) {
-          @Override
-          public synchronized Throwable getCause() {
-            return e;
-          }
-        };
-      }
-      throw e;
-    }
-  }
-
-  /**
-   * Wrapper around {@link Mockito#verify}, to keep log spam down on failure.
-   */
-  private static void verifyNoMoreInteractions(Object... mocks) {
-    try {
-      Mockito.verifyNoMoreInteractions(mocks);
-    } catch (final AssertionError e) {
-      String msg = e.getMessage();
-      if (msg.length() >= 256) {
-        // AssertionError(String, Throwable) only present in Android API 19+
-        throw new AssertionError(msg.substring(0, 256)) {
-          @Override
-          public synchronized Throwable getCause() {
-            return e;
-          }
-        };
-      }
-      throw e;
-    }
   }
 
   /**

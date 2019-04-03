@@ -23,12 +23,12 @@ dependencies {
             project(':grpc-testing'),
             libraries.google_auth_oauth2_http,
             libraries.junit,
-            libraries.mockito,
             libraries.truth
     compileOnly libraries.javax_annotation
     runtime libraries.opencensus_impl,
             libraries.netty_tcnative
-    testCompile project(':grpc-context').sourceSets.test.output
+    testCompile project(':grpc-context').sourceSets.test.output,
+            libraries.mockito
 }
 
 configureProtoCompilation()

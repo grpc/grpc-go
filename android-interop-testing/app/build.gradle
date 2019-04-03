@@ -76,8 +76,6 @@ dependencies {
     implementation 'io.grpc:grpc-protobuf-lite:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'io.grpc:grpc-stub:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'io.grpc:grpc-testing:1.21.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    
-    implementation 'org.mockito:mockito-core:2.25.1'
 
     // workaround for https://github.com/google/protobuf/issues/1889
     protobuf 'com.google.protobuf:protobuf-java:3.0.2'
