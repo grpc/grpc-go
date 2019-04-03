@@ -126,6 +126,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		blockingpicker:    newPickerWrapper(),
 		czData:            new(channelzData),
 		firstResolveEvent: grpcsync.NewEvent(),
+		transportWg:       sync.WaitGroup{},
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
@@ -395,6 +396,14 @@ type ClientConn struct {
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
+
+	gracefullyClosing uint32 // 0 = open, 1 = closing
+	// transportWg tracks open transports and transport creation attempts. When
+	// this wg is Done, there are guaranteed not to be any existing transports
+	// or imminent transports.
+	transportWg sync.WaitGroup
+	// rpcWg tracks active RPCs.
+	rpcWg sync.WaitGroup
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -826,6 +835,23 @@ func (cc *ClientConn) Close() error {
 	return nil
 }
 
+// GracefulClose is a method that deklerk@ should document.
+// TODO(deklerk)
+func (cc *ClientConn) GracefulClose() error {
+	if old := atomic.SwapUint32(&cc.gracefullyClosing, 1); old == 1 {
+		return nil
+	}
+
+	cc.rpcWg.Wait()
+
+	if err := cc.Close(); err != nil {
+		return err
+	}
+
+	cc.transportWg.Wait()
+	return nil
+}
+
 // addrConn is a network connection to a given address.
 type addrConn struct {
 	ctx    context.Context
@@ -1068,6 +1094,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 
 	onClose := func() {
 		close(onCloseCalled)
+		ac.cc.transportWg.Done()
 		reconnect.Fire()
 	}
 
@@ -1081,6 +1108,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		copts.ChannelzParentID = ac.channelzID
 	}
 
+	ac.cc.transportWg.Add(1)
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, target, copts, onPrefaceReceipt, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.

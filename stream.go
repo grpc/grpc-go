@@ -25,6 +25,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -156,6 +157,12 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
+	// TODO(deklerk) By putting this here, we're allowing unary interceptors to
+	// fire even when in a GracefulStop state. Is that correct behavior?
+	if atomic.LoadUint32(&cc.gracefullyClosing) == 1 {
+		return nil, errors.New("gracefully shutting down")
+	}
+
 	if channelz.IsOn() {
 		cc.incrCallsStarted()
 		defer func() {
@@ -258,6 +265,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		sh.HandleRPC(ctx, begin)
 	}
 
+	cc.rpcWg.Add(1)
 	cs := &clientStream{
 		callHdr:      callHdr,
 		ctx:          ctx,
@@ -815,6 +823,7 @@ func (cs *clientStream) finish(err error) {
 		}
 	}
 	cs.cancel()
+	cs.cc.rpcWg.Done()
 }
 
 func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {

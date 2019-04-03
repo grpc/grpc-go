@@ -7146,6 +7146,49 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 }
 
+func (s) TestClientGracefulClose(t *testing.T) {
+	ctx := context.Background()
+	e := noBalancerEnv
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	sCtx, sCancel := context.WithCancel(ctx)
+	if _, err := tc.StreamingInputCall(sCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	shouldWaitTilAfterCancel := make(chan struct{})
+	go func() {
+		if err := cc.GracefulClose(); err != nil {
+			t.Error(err)
+		}
+		close(shouldWaitTilAfterCancel)
+	}()
+
+	// TODO(deklerk) is there a way to get rid of this and use signals instead?
+	time.Sleep(100 * time.Millisecond)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err == nil || err.Error() != "gracefully shutting down" {
+		t.Fatalf("Expected %s, got %v", "gracefully shutting down", err)
+	}
+
+	select {
+	case <-shouldWaitTilAfterCancel:
+		t.Fatal("expected to block until all RPCs were done, but did not")
+	default:
+	}
+
+	sCancel()
+
+	select {
+	case <-shouldWaitTilAfterCancel:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected to finish blocking once streaming RPC was done, but did not")
+	}
+}
+
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	// Non-gRPC content-type fallback path.
 	for httpCode := range transport.HTTPStatusConvTab {
