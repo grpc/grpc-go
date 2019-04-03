@@ -68,6 +68,9 @@ var (
 	errConnClosing = errors.New("grpc: the connection is closing")
 	// errBalancerClosed indicates that the balancer is closed.
 	errBalancerClosed = errors.New("grpc: balancer is closed")
+	// invalidDefaultServiceConfigErrPrefix is used to prefix the json parsing error for the default
+	// service config.
+	invalidDefaultServiceConfigErrPrefix = "grpc: the provided default service config is invalid"
 )
 
 // The following errors are returned from Dial and DialContext
@@ -185,6 +188,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 
+	if cc.dopts.defaultServiceConfigRawJSON != nil {
+		sc, err := parseServiceConfig(*cc.dopts.defaultServiceConfigRawJSON)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", invalidDefaultServiceConfigErrPrefix, err)
+		}
+		cc.dopts.defaultServiceConfig = sc
+	}
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
 	if cc.dopts.copts.Dialer == nil {
@@ -214,7 +224,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.sc = &sc
 				scSet = true
 			}
 		default:
@@ -260,7 +270,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
-				cc.sc = sc
+				cc.sc = &sc
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -382,8 +392,7 @@ type ClientConn struct {
 
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
-	sc              ServiceConfig
-	scRaw           string
+	sc              *ServiceConfig
 	conns           map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
@@ -429,8 +438,7 @@ func (cc *ClientConn) scWatcher() {
 			cc.mu.Lock()
 			// TODO: load balance policy runtime change is ignored.
 			// We may revisit this decision in the future.
-			cc.sc = sc
-			cc.scRaw = ""
+			cc.sc = &sc
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -457,6 +465,24 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
+// gRPC should resort to default service config when:
+// * resolver service config is disabled
+// * or, resolver does not return a service config or returns an invalid one.
+func (cc *ClientConn) fallbackToDefaultServiceConfig(sc string) bool {
+	if cc.dopts.disableServiceConfig {
+		return true
+	}
+	// The logic below is temporary, will be removed once we change the resolver.State ServiceConfig field type.
+	// Right now, we assume that empty service config string means resolver does not return a config.
+	if sc == "" {
+		return true
+	}
+	// TODO: the logic below is temporary. Once we finish the logic to validate service config
+	// in resolver, we will replace the logic below.
+	_, err := parseServiceConfig(sc)
+	return err != nil
+}
+
 func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -467,27 +493,24 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
-	if !cc.dopts.disableServiceConfig && cc.scRaw != s.ServiceConfig {
-		// New service config; apply it.
+	if cc.fallbackToDefaultServiceConfig(s.ServiceConfig) {
+		if cc.dopts.defaultServiceConfig != nil && cc.sc == nil {
+			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
+		}
+	} else {
+		// TODO: the parsing logic below will be moved inside resolver.
 		sc, err := parseServiceConfig(s.ServiceConfig)
 		if err != nil {
-			fmt.Println("error parsing config: ", err)
 			return err
 		}
-		cc.scRaw = s.ServiceConfig
-		cc.sc = sc
-
-		if cc.sc.retryThrottling != nil {
-			newThrottler := &retryThrottler{
-				tokens: cc.sc.retryThrottling.MaxTokens,
-				max:    cc.sc.retryThrottling.MaxTokens,
-				thresh: cc.sc.retryThrottling.MaxTokens / 2,
-				ratio:  cc.sc.retryThrottling.TokenRatio,
-			}
-			cc.retryThrottler.Store(newThrottler)
-		} else {
-			cc.retryThrottler.Store((*retryThrottler)(nil))
+		if cc.sc == nil || cc.sc.rawJSONString != s.ServiceConfig {
+			cc.applyServiceConfig(sc)
 		}
+	}
+
+	// update the service config that will be sent to balancer.
+	if cc.sc != nil {
+		s.ServiceConfig = cc.sc.rawJSONString
 	}
 
 	if cc.dopts.balancerBuilder == nil {
@@ -504,7 +527,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		// TODO: use new loadBalancerConfig field with appropriate priority.
 		if isGRPCLB {
 			newBalancerName = grpclbName
-		} else if cc.sc.LB != nil {
+		} else if cc.sc != nil && cc.sc.LB != nil {
 			newBalancerName = *cc.sc.LB
 		} else {
 			newBalancerName = PickFirstBalancerName
@@ -724,6 +747,9 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	// TODO: Avoid the locking here.
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
+	if cc.sc == nil {
+		return MethodConfig{}
+	}
 	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
@@ -735,6 +761,9 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
+	if cc.sc == nil {
+		return nil
+	}
 	return cc.sc.healthCheckConfig
 }
 
@@ -746,6 +775,28 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 		return nil, nil, toRPCErr(err)
 	}
 	return t, done, nil
+}
+
+func (cc *ClientConn) applyServiceConfig(sc *ServiceConfig) error {
+	if sc == nil {
+		// should never reach here.
+		return fmt.Errorf("got nil pointer for service config")
+	}
+	cc.sc = sc
+
+	if cc.sc.retryThrottling != nil {
+		newThrottler := &retryThrottler{
+			tokens: cc.sc.retryThrottling.MaxTokens,
+			max:    cc.sc.retryThrottling.MaxTokens,
+			thresh: cc.sc.retryThrottling.MaxTokens / 2,
+			ratio:  cc.sc.retryThrottling.TokenRatio,
+		}
+		cc.retryThrottler.Store(newThrottler)
+	} else {
+		cc.retryThrottler.Store((*retryThrottler)(nil))
+	}
+
+	return nil
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
