@@ -176,8 +176,9 @@ final class ProtocolNegotiators {
             // Replace this handler with the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
           } else {
-            fail(ctx, new Exception(
-                "Failed protocol negotiation: Unable to find compatible protocol."));
+            fail(ctx,
+                unavailableException(
+                  "Failed protocol negotiation: Unable to find compatible protocol"));
           }
         } else {
           fail(ctx, handshakeEvent.cause());
@@ -333,8 +334,8 @@ final class ProtocolNegotiators {
             ctx.pipeline().replace(ctx.name(), null, next);
             fireProtocolNegotiationEvent(ctx, handler.engine().getSession());
           } else {
-            Exception ex = new Exception(
-                "Failed ALPN negotiation: Unable to find compatible protocol.");
+            Exception ex =
+                unavailableException("Failed ALPN negotiation: Unable to find compatible protocol");
             logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed.", ex);
             ctx.fireExceptionCaught(ex);
           }
