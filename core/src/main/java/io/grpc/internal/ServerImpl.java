@@ -596,6 +596,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         ServerStream stream,
         Metadata headers,
         Context.CancellableContext context) {
+
       ServerCallImpl<WReqT, WRespT> call = new ServerCallImpl<>(
           stream,
           methodDef.getMethodDescriptor(),

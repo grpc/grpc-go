@@ -46,6 +46,8 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
+import io.grpc.perfmark.PerfMark;
+import io.grpc.perfmark.PerfTag;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.concurrent.CancellationException;
@@ -67,6 +69,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       = "gzip".getBytes(Charset.forName("US-ASCII"));
 
   private final MethodDescriptor<ReqT, RespT> method;
+  private final PerfTag tag;
   private final Executor callExecutor;
   private final CallTracer channelCallsTracer;
   private final Context context;
@@ -92,6 +95,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       CallTracer channelCallsTracer,
       boolean retryEnabled) {
     this.method = method;
+    // TODO(carl-mastrangelo): consider moving this construction to ManagedChannelImpl.
+    this.tag = PerfTag.create(PerfTag.allocateNumericId(), method.getFullMethodName());
     // If we know that the executor is a direct executor, we don't need to wrap it with a
     // SerializingExecutor. This is purely for performance reasons.
     // See https://github.com/grpc/grpc-java/issues/368
@@ -177,7 +182,17 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   }
 
   @Override
-  public void start(final Listener<RespT> observer, Metadata headers) {
+  public void start(Listener<RespT> observer, Metadata headers) {
+    PerfMark.taskStart(
+        tag.getNumericTag(), Thread.currentThread().getName(), tag, "ClientCall.start");
+    try {
+      startInternal(observer, headers);
+    } finally {
+      PerfMark.taskEnd(tag.getNumericTag(), Thread.currentThread().getName());
+    }
+  }
+
+  private void startInternal(final Listener<RespT> observer, Metadata headers) {
     checkState(stream == null, "Already started");
     checkState(!cancelCalled, "call was cancelled");
     checkNotNull(observer, "observer");
@@ -371,6 +386,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void cancel(@Nullable String message, @Nullable Throwable cause) {
+    PerfMark.taskStart(
+        tag.getNumericTag(), Thread.currentThread().getName(), tag, "ClientCall.cancel");
+    try {
+      cancelInternal(message, cause);
+    } finally {
+      PerfMark.taskEnd(tag.getNumericTag(), Thread.currentThread().getName());
+    }
+  }
+
+  private void cancelInternal(@Nullable String message, @Nullable Throwable cause) {
     if (message == null && cause == null) {
       cause = new CancellationException("Cancelled without a message or cause");
       log.log(Level.WARNING, "Cancelling without a message or cause is suboptimal", cause);
@@ -401,6 +426,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void halfClose() {
+    PerfMark.taskStart(
+        tag.getNumericTag(), Thread.currentThread().getName(), tag, "ClientCall.halfClose");
+    try {
+      halfCloseInternal();
+    } finally {
+      PerfMark.taskEnd(tag.getNumericTag(), Thread.currentThread().getName());
+    }
+  }
+
+  private void halfCloseInternal() {
     checkState(stream != null, "Not started");
     checkState(!cancelCalled, "call was cancelled");
     checkState(!halfCloseCalled, "call already half-closed");
@@ -410,6 +445,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void sendMessage(ReqT message) {
+    PerfMark.taskStart(
+        tag.getNumericTag(), Thread.currentThread().getName(), tag, "ClientCall.sendMessage");
+    try {
+      sendMessageInternal(message);
+    } finally {
+      PerfMark.taskEnd(tag.getNumericTag(), Thread.currentThread().getName());
+    }
+  }
+
+  private void sendMessageInternal(ReqT message) {
     checkState(stream != null, "Not started");
     checkState(!cancelCalled, "call was cancelled");
     checkState(!halfCloseCalled, "call was half-closed");
@@ -467,6 +512,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private class ClientStreamListenerImpl implements ClientStreamListener {
     private final Listener<RespT> observer;
     private boolean closed;
+    private final long listenerScopeId = PerfTag.allocateNumericId();
 
     public ClientStreamListenerImpl(Listener<RespT> observer) {
       this.observer = checkNotNull(observer, "observer");
@@ -474,23 +520,27 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void headersRead(final Metadata headers) {
-      class HeadersRead extends ContextRunnable {
+      final class HeadersRead extends ContextRunnable {
         HeadersRead() {
           super(context);
         }
 
         @Override
         public final void runInContext() {
+          if (closed) {
+            return;
+          }
+          PerfMark.taskStart(
+              listenerScopeId, Thread.currentThread().getName(), tag, "ClientCall.headersRead");
           try {
-            if (closed) {
-              return;
-            }
             observer.onHeaders(headers);
           } catch (Throwable t) {
             Status status =
                 Status.CANCELLED.withCause(t).withDescription("Failed to read headers");
             stream.cancel(status);
             close(status, new Metadata());
+          } finally {
+            PerfMark.taskEnd(listenerScopeId, Thread.currentThread().getName());
           }
         }
       }
@@ -500,7 +550,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void messagesAvailable(final MessageProducer producer) {
-      class MessagesAvailable extends ContextRunnable {
+      final class MessagesAvailable extends ContextRunnable {
         MessagesAvailable() {
           super(context);
         }
@@ -511,9 +561,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
             GrpcUtil.closeQuietly(producer);
             return;
           }
-
-          InputStream message;
+          PerfMark.taskStart(
+              listenerScopeId,
+              Thread.currentThread().getName(),
+              tag,
+              "ClientCall.messagesAvailable");
           try {
+            InputStream message;
             while ((message = producer.next()) != null) {
               try {
                 observer.onMessage(method.parseResponse(message));
@@ -529,6 +583,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
                 Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
             stream.cancel(status);
             close(status, new Metadata());
+          } finally {
+            PerfMark.taskEnd(listenerScopeId, Thread.currentThread().getName());
           }
         }
       }
@@ -570,7 +626,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       }
       final Status savedStatus = status;
       final Metadata savedTrailers = trailers;
-      class StreamClosed extends ContextRunnable {
+      final class StreamClosed extends ContextRunnable {
         StreamClosed() {
           super(context);
         }
@@ -581,7 +637,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
             // We intentionally don't keep the status or metadata from the server.
             return;
           }
-          close(savedStatus, savedTrailers);
+          PerfMark.taskStart(
+              listenerScopeId, Thread.currentThread().getName(), tag, "ClientCall.closed");
+          try {
+            close(savedStatus, savedTrailers);
+          } finally {
+            PerfMark.taskEnd(listenerScopeId, Thread.currentThread().getName());
+          }
         }
       }
 
@@ -590,13 +652,15 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void onReady() {
-      class StreamOnReady extends ContextRunnable {
+      final class StreamOnReady extends ContextRunnable {
         StreamOnReady() {
           super(context);
         }
 
         @Override
         public final void runInContext() {
+          PerfMark.taskStart(
+              listenerScopeId, Thread.currentThread().getName(), tag, "ClientCall.onReady");
           try {
             observer.onReady();
           } catch (Throwable t) {
@@ -604,6 +668,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
                 Status.CANCELLED.withCause(t).withDescription("Failed to call onReady.");
             stream.cancel(status);
             close(status, new Metadata());
+          } finally {
+            PerfMark.taskEnd(listenerScopeId, Thread.currentThread().getName());
           }
         }
       }
