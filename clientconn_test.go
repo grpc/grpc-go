@@ -52,6 +52,48 @@ func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.Sta
 	return state, state == wantState
 }
 
+func (s) TestDialWithTimeout(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer lis.Close()
+	lisAddr := resolver.Address{Addr: lis.Addr().String()}
+	lisDone := make(chan struct{})
+	dialDone := make(chan struct{})
+	// 1st listener accepts the connection and then does nothing
+	go func() {
+		defer close(lisDone)
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+		framer := http2.NewFramer(conn, conn)
+		if err := framer.WriteSettings(http2.Setting{}); err != nil {
+			t.Errorf("Error while writing settings. Err: %v", err)
+			return
+		}
+		<-dialDone // Close conn only after dial returns.
+	}()
+
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
+	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithTimeout(5*time.Second))
+	close(dialDone)
+	if err != nil {
+		t.Fatalf("Dial failed. Err: %v", err)
+	}
+	defer client.Close()
+	timeout := time.After(1 * time.Second)
+	select {
+	case <-timeout:
+		t.Fatal("timed out waiting for server to finish")
+	case <-lisDone:
+	}
+}
+
 func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

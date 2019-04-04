@@ -138,12 +138,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	defer func() {
-		select {
-		case <-ctx.Done():
-			conn, err = nil, ctx.Err()
-		default:
-		}
-
 		if err != nil {
 			cc.Close()
 		}
@@ -217,6 +211,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
 		defer cancel()
 	}
+	defer func() {
+		select {
+		case <-ctx.Done():
+			conn, err = nil, ctx.Err()
+		default:
+		}
+	}()
 
 	scSet := false
 	if cc.dopts.scChan != nil {
