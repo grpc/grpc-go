@@ -38,6 +38,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -46,6 +48,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -74,6 +77,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
+import io.grpc.okhttp.OkHttpFrameLogger.Direction;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -104,6 +108,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.net.SocketFactory;
 import javax.net.ssl.HostnameVerifier;
@@ -149,6 +155,8 @@ public class OkHttpClientTransportTest {
 
   @Mock
   private ManagedClientTransport.Listener transportListener;
+  @Mock
+  private Logger log;
 
   private final SocketFactory socketFactory = null;
   private final SSLSocketFactory sslSocketFactory = null;
@@ -224,6 +232,7 @@ public class OkHttpClientTransportTest {
         executor,
         frameReader,
         frameWriter,
+        new OkHttpFrameLogger(Level.FINE, log),
         startId,
         socket,
         stopwatchSupplier,
@@ -261,6 +270,50 @@ public class OkHttpClientTransportTest {
     String s = clientTransport.toString();
     assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
     assertTrue("Unexpected: " + s, s.contains(address.toString()));
+  }
+
+  /**
+   * Test logging is functioning correctly for client received Http/2 frames. Not intended to test
+   * actual frame content being logged.
+   */
+  @Test
+  public void testClientHandlerFrameLogger() throws Exception {
+    initTransport();
+
+    when(log.isLoggable(any(Level.class))).thenReturn(true);
+    frameHandler().headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " HEADERS: streamId=" + 3));
+
+    final String message = "Hello Client";
+    Buffer buffer = createMessageFrame(message);
+    frameHandler().data(false, 3, buffer, (int) buffer.size());
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " DATA: streamId=" + 3));
+
+    // At most 64 bytes of data frame will be logged.
+    frameHandler().data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
+    ArgumentCaptor<String> logCaptor = ArgumentCaptor.forClass(String.class);
+    verify(log, atLeastOnce()).log(any(Level.class), logCaptor.capture());
+    String data = logCaptor.getValue();
+    assertThat(data).endsWith("...");
+    assertThat(data.substring(data.indexOf("bytes="), data.indexOf("..."))).hasLength(64 * 2 + 6);
+
+    frameHandler().settings(false, new Settings());
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " SETTINGS: ack=false"));
+
+    frameHandler().ping(false, 0, 0);
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " PING: ack=false"));
+
+    frameHandler().pushPromise(3, 3, grpcResponseHeaders());
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " PUSH_PROMISE"));
+
+    frameHandler().rstStream(3, ErrorCode.CANCEL);
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " RST_STREAM"));
+
+    frameHandler().goAway(3, ErrorCode.CANCEL, ByteString.EMPTY);
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " GO_AWAY"));
+
+    frameHandler().windowUpdate(3, 32);
+    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " WINDOW_UPDATE"));
   }
 
   @Test
