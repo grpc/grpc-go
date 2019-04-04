@@ -21,10 +21,8 @@ dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
     compile (libraries.protobuf_util) {
-        // prefer 2.3.2 from libraries instead of 2.1.3 from guava
-        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
-        // prefer 1.17 from libraries instead of 1.14 from guava
-        exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
+        // prefer 26.0-android from libraries instead of 20.0
+        exclude group: 'com.google.guava', module: 'guava'
     }
     compile libraries.re2j
 

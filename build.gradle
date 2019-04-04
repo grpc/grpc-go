@@ -110,7 +110,7 @@ subprojects {
         nettyVersion = '4.1.34.Final'
         googleauthVersion = '0.13.0'
         guavaVersion = '26.0-android'
-        protobufVersion = '3.7.0'
+        protobufVersion = '3.7.1'
         protocVersion = protobufVersion
         protobufNanoVersion = '3.0.0-alpha-5'
         opencensusVersion = '0.19.2'
