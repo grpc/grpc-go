@@ -3515,7 +3515,7 @@ public class ManagedChannelImplTest {
           new FakeNameResolverFactory.Builder(expectedUri)
               .setServers(ImmutableList.of(addressGroup)).build();
       channelBuilder.nameResolverFactory(nameResolverFactory);
-      channelBuilder.lookUpServiceConfig(false);
+      channelBuilder.disableServiceConfigLookUp();
 
       Map<String, Object> serviceConfig =
           parseConfig("{\"methodConfig\":[{"
@@ -3549,7 +3549,7 @@ public class ManagedChannelImplTest {
           new FakeNameResolverFactory.Builder(expectedUri)
               .setServers(ImmutableList.of(addressGroup)).build();
       channelBuilder.nameResolverFactory(nameResolverFactory);
-      channelBuilder.lookUpServiceConfig(false);
+      channelBuilder.disableServiceConfigLookUp();
       Map<String, Object> defaultServiceConfig =
           parseConfig("{\"methodConfig\":[{"
               + "\"name\":[{\"service\":\"SimpleService1\"}],"
@@ -3734,7 +3734,7 @@ public class ManagedChannelImplTest {
         new FakeNameResolverFactory.Builder(expectedUri)
             .setServers(ImmutableList.of(addressGroup)).build();
     channelBuilder.nameResolverFactory(nameResolverFactory);
-    channelBuilder.lookUpServiceConfig(false);
+    channelBuilder.disableServiceConfigLookUp();
     Map<String, Object> defaultServiceConfig =
         parseConfig("{\"methodConfig\":[{"
             + "\"name\":[{\"service\":\"SimpleService1\"}],"
@@ -3760,7 +3760,6 @@ public class ManagedChannelImplTest {
         new FakeNameResolverFactory.Builder(expectedUri)
             .setServers(ImmutableList.of(addressGroup)).build();
     channelBuilder.nameResolverFactory(nameResolverFactory);
-    channelBuilder.lookUpServiceConfig(true);
     Map<String, Object> defaultServiceConfig =
         parseConfig("{\"methodConfig\":[{"
             + "\"name\":[{\"service\":\"SimpleService1\"}],"

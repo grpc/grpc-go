@@ -542,7 +542,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Provides a service config to the channel. The channel will use the default service config when
    * the name resolver provides no service config or if the channel disables lookup service config
-   * from name resolver (see {@link #lookUpServiceConfig(boolean)}). The argument
+   * from name resolver (see {@link #disableServiceConfigLookUp()}). The argument
    * {@code serviceConfig} is a nested map representing a Json object in the most natural way:
    *
    *        <table border="1">
@@ -583,13 +583,13 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
-   * Enables or disables service config look-up from the naming system. Enabled by default.
+   * Disables service config look-up from the naming system, which is enabled by default.
    *
    * @return this
    * @since 1.20.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5189")
-  public T lookUpServiceConfig(boolean enable) {
+  public T disableServiceConfigLookUp() {
     throw new UnsupportedOperationException();
   }
 
