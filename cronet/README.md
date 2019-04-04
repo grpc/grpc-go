@@ -11,6 +11,7 @@ as the transport layer for gRPC on Android. This lets your Android app make
 RPCs using the same networking stack as used in the Chrome browser.
 
 Some advantages of using Cronet with gRPC:
+
 * Bundles an OpenSSL implementation, enabling TLS connections even on older
   versions of Android without additional configuration
 * Robust to Android network connectivity changes
