@@ -20,7 +20,48 @@ package edsbalancer
 
 import (
 	"testing"
+
+	"google.golang.org/grpc/balancer/internal/wrr"
 )
+
+// testWRR is a deterministic WRR implementation.
+//
+// With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
+type testWRR struct {
+	itemsWithWeight []struct {
+		item   interface{}
+		weight int64
+	}
+	length int
+	idx    int   // The index of the item that will be picked
+	count  int64 // The number of times the current item has been picked.
+}
+
+func newTestWRR() wrr.WRR {
+	return &testWRR{}
+}
+
+func (twrr *testWRR) Add(item interface{}, weight int64) {
+	twrr.itemsWithWeight = append(twrr.itemsWithWeight, struct {
+		item   interface{}
+		weight int64
+	}{item: item, weight: weight})
+	twrr.length++
+}
+
+func (twrr *testWRR) Next() interface{} {
+	iww := twrr.itemsWithWeight[twrr.idx]
+	twrr.count++
+	if twrr.count >= iww.weight {
+		twrr.idx = (twrr.idx + 1) % twrr.length
+		twrr.count = 0
+	}
+	return iww.item
+}
+
+func init() {
+	newRandomWRR = newTestWRR
+}
 
 func TestDropper(t *testing.T) {
 	const repeat = 2
