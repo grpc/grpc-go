@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Status;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,18 +32,16 @@ import javax.annotation.concurrent.GuardedBy;
  * Manages keepalive pings.
  */
 public class KeepAliveManager {
-  private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
   private static final long MIN_KEEPALIVE_TIME_NANOS = TimeUnit.SECONDS.toNanos(10);
   private static final long MIN_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MILLISECONDS.toNanos(10L);
 
   private final ScheduledExecutorService scheduler;
-  private final Ticker ticker;
+  @GuardedBy("this")
+  private final Stopwatch stopwatch;
   private final KeepAlivePinger keepAlivePinger;
   private final boolean keepAliveDuringTransportIdle;
   @GuardedBy("this")
   private State state = State.IDLE;
-  @GuardedBy("this")
-  private long nextKeepaliveTime;
   @GuardedBy("this")
   private ScheduledFuture<?> shutdownFuture;
   @GuardedBy("this")
@@ -80,7 +79,7 @@ public class KeepAliveManager {
           // We have received some data. Reschedule the ping with the new time.
           pingFuture = scheduler.schedule(
               sendPing,
-              nextKeepaliveTime - ticker.read(),
+              keepAliveTimeInNanos - stopwatch.elapsed(TimeUnit.NANOSECONDS),
               TimeUnit.NANOSECONDS);
           state = State.PING_SCHEDULED;
         }
@@ -130,21 +129,22 @@ public class KeepAliveManager {
   public KeepAliveManager(KeepAlivePinger keepAlivePinger, ScheduledExecutorService scheduler,
                           long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
                           boolean keepAliveDuringTransportIdle) {
-    this(keepAlivePinger, scheduler, SYSTEM_TICKER, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+    this(keepAlivePinger, scheduler, Stopwatch.createUnstarted(), keepAliveTimeInNanos,
+        keepAliveTimeoutInNanos,
         keepAliveDuringTransportIdle);
   }
 
   @VisibleForTesting
   KeepAliveManager(KeepAlivePinger keepAlivePinger, ScheduledExecutorService scheduler,
-                   Ticker ticker, long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+      Stopwatch stopwatch, long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
                    boolean keepAliveDuringTransportIdle) {
     this.keepAlivePinger = checkNotNull(keepAlivePinger, "keepAlivePinger");
     this.scheduler = checkNotNull(scheduler, "scheduler");
-    this.ticker = checkNotNull(ticker, "ticker");
+    this.stopwatch = checkNotNull(stopwatch, "stopwatch");
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
     this.keepAliveDuringTransportIdle = keepAliveDuringTransportIdle;
-    nextKeepaliveTime = ticker.read() + keepAliveTimeInNanos;
+    stopwatch.reset().start();
   }
 
   /** Start keepalive monitoring. */
@@ -158,7 +158,7 @@ public class KeepAliveManager {
    * Transport has received some data so that we can delay sending keepalives.
    */
   public synchronized void onDataReceived() {
-    nextKeepaliveTime = ticker.read() + keepAliveTimeInNanos;
+    stopwatch.reset().start();
     // We do not cancel the ping future here. This avoids constantly scheduling and cancellation in
     // a busy transport. Instead, we update the status here and reschedule later. So we actually
     // keep one sendPing task always in flight when there're active rpcs.
@@ -193,7 +193,7 @@ public class KeepAliveManager {
       if (pingFuture == null) {
         pingFuture = scheduler.schedule(
             sendPing,
-            nextKeepaliveTime - ticker.read(),
+            keepAliveTimeInNanos - stopwatch.elapsed(TimeUnit.NANOSECONDS),
             TimeUnit.NANOSECONDS);
       }
     } else if (state == State.IDLE_AND_PING_SENT) {
@@ -286,22 +286,6 @@ public class KeepAliveManager {
     public void onPingTimeout() {
       transport.shutdownNow(Status.UNAVAILABLE.withDescription(
           "Keepalive failed. The connection is likely gone"));
-    }
-  }
-
-  // TODO(zsurocking): Classes below are copied from Deadline.java. We should consider share the
-  // code.
-
-  /** Time source representing nanoseconds since fixed but arbitrary point in time. */
-  abstract static class Ticker {
-    /** Returns the number of nanoseconds since this source's epoch. */
-    public abstract long read();
-  }
-
-  private static class SystemTicker extends Ticker {
-    @Override
-    public long read() {
-      return System.nanoTime();
     }
   }
 }
