@@ -18,6 +18,7 @@ package io.grpc.netty;
 
 import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
 import static io.netty.util.CharsetUtil.UTF_8;
+import static io.netty.util.internal.ObjectUtil.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -445,12 +446,17 @@ class NettyClientHandler extends AbstractNettyHandler {
     this.attributes = this.attributes.toBuilder().setAll(attributes).build();
     this.securityInfo = securityInfo;
     super.handleProtocolNegotiationCompleted(attributes, securityInfo);
-    // Once protocol negotiator is complete, release all writes and remove the buffer.
+    writeBufferingAndRemove(ctx().channel());
+  }
+
+  static void writeBufferingAndRemove(Channel channel) {
+    checkNotNull(channel, "channel");
     ChannelHandlerContext handlerCtx =
-        ctx().pipeline().context(WriteBufferingAndExceptionHandler.class);
-    if (handlerCtx != null) {
-      ((WriteBufferingAndExceptionHandler) handlerCtx.handler()).writeBufferedAndRemove(handlerCtx);
+        channel.pipeline().context(WriteBufferingAndExceptionHandler.class);
+    if (handlerCtx == null) {
+      return;
     }
+    ((WriteBufferingAndExceptionHandler) handlerCtx.handler()).writeBufferedAndRemove(handlerCtx);
   }
 
   @Override

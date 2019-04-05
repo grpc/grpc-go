@@ -18,6 +18,7 @@ package io.grpc.alts.internal;
 
 import static com.google.common.base.Preconditions.checkState;
 
+import io.grpc.Internal;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultChannelPromise;
@@ -34,14 +35,15 @@ import java.util.List;
  *
  * <p>NOTE: this code is based on code in Netty's {@code Http2CodecUtil}.
  */
-final class ProtectedPromise extends DefaultChannelPromise {
+@Internal
+public final class ProtectedPromise extends DefaultChannelPromise {
   private final List<ChannelPromise> unprotectedPromises;
   private int expectedCount;
   private int successfulCount;
   private int failureCount;
   private boolean doneAllocating;
 
-  ProtectedPromise(Channel channel, EventExecutor executor, int numUnprotectedPromises) {
+  public ProtectedPromise(Channel channel, EventExecutor executor, int numUnprotectedPromises) {
     super(channel, executor);
     unprotectedPromises = new ArrayList<>(numUnprotectedPromises);
   }
@@ -50,7 +52,7 @@ final class ProtectedPromise extends DefaultChannelPromise {
    * Adds a promise for a pending unprotected write. This will be notified after all of the writes
    * complete.
    */
-  void addUnprotectedPromise(ChannelPromise promise) {
+  public void addUnprotectedPromise(ChannelPromise promise) {
     unprotectedPromises.add(promise);
   }
 
@@ -60,7 +62,7 @@ final class ProtectedPromise extends DefaultChannelPromise {
    *
    * @return {@code this} promise.
    */
-  ChannelPromise newPromise() {
+  public ChannelPromise newPromise() {
     checkState(!doneAllocating, "Done allocating. No more promises can be allocated.");
     expectedCount++;
     return this;
@@ -72,7 +74,7 @@ final class ProtectedPromise extends DefaultChannelPromise {
    *
    * @return {@code this} promise.
    */
-  ChannelPromise doneAllocatingPromises() {
+  public ChannelPromise doneAllocatingPromises() {
     if (!doneAllocating) {
       doneAllocating = true;
       if (successfulCount == expectedCount) {
