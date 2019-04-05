@@ -178,6 +178,11 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 		cfg.ServerName = authority[:colonPos]
 	}
 	conn := tls.Client(rawConn, cfg)
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
 	errChannel := make(chan error, 1)
 	go func() {
 		errChannel <- conn.Handshake()
