@@ -151,6 +151,8 @@ func (t TLSInfo) GetSecurityValue() ChannelzSecurityValue {
 	return v
 }
 
+const alpnProtoStrH2 = "h2"
+
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
 	// TLS configuration
@@ -188,7 +190,15 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState()}, nil
+
+	negotiatedProtocol := conn.ConnectionState().NegotiatedProtocol
+	for _, p := range c.config.NextProtos {
+		if p == negotiatedProtocol {
+			return internal.WrapSyscallConn(rawConn, conn), TLSInfo{conn.ConnectionState()}, nil
+		}
+	}
+	// negotiated protocol is not in NextProtos.
+	return nil, nil, fmt.Errorf("tls: failed ALPN negotiation, negotiated protocol: %q", negotiatedProtocol)
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
