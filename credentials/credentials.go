@@ -151,8 +151,6 @@ func (t TLSInfo) GetSecurityValue() ChannelzSecurityValue {
 	return v
 }
 
-const alpnProtoStrH2 = "h2"
-
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
 	// TLS configuration
