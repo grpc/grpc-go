@@ -25,12 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/balancer"
+	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
-
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -338,7 +338,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
-					if !reflect.DeepEqual(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
+					if !proto.Equal(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
 						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignmentWithoutEndpoints)
 					}
 				case <-time.After(time.Second):

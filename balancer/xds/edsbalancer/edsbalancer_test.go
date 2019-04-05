@@ -24,13 +24,13 @@ import (
 	"strconv"
 	"testing"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	xdstypepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	typespb "github.com/gogo/protobuf/types"
+	typespb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	corepb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/core"
+	endpointpb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/endpoint"
+	xdstypepb "google.golang.org/grpc/balancer/xds/proto/envoy/type"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
@@ -68,7 +68,7 @@ func newClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 }
 
 func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uint32, addrsWithPort []string) {
-	var lbEndPoints []endpointpb.LbEndpoint
+	var lbEndPoints []*endpointpb.LbEndpoint
 	for _, a := range addrsWithPort {
 		host, portStr, err := net.SplitHostPort(a)
 		if err != nil {
@@ -79,20 +79,20 @@ func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uin
 			panic("failed to atoi " + portStr)
 		}
 
-		lbEndPoints = append(lbEndPoints, endpointpb.LbEndpoint{
+		lbEndPoints = append(lbEndPoints, &endpointpb.LbEndpoint{
 			HostIdentifier: &endpointpb.LbEndpoint_Endpoint{
 				Endpoint: &endpointpb.Endpoint{
 					Address: &corepb.Address{
 						Address: &corepb.Address_SocketAddress{
 							SocketAddress: &corepb.SocketAddress{
-								Protocol: corepb.TCP,
+								Protocol: corepb.SocketAddress_TCP,
 								Address:  host,
 								PortSpecifier: &corepb.SocketAddress_PortValue{
 									PortValue: uint32(port)}}}}}}},
 		)
 	}
 
-	clab.v.Endpoints = append(clab.v.Endpoints, endpointpb.LocalityLbEndpoints{
+	clab.v.Endpoints = append(clab.v.Endpoints, &endpointpb.LocalityLbEndpoints{
 		Locality: &corepb.Locality{
 			Region:  "",
 			Zone:    "",

@@ -23,13 +23,14 @@ import (
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	xdsdiscoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	xdscorepb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/core"
+	xdsdiscoverypb "google.golang.org/grpc/balancer/xds/proto/envoy/service/discovery/v2"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
@@ -124,10 +125,10 @@ func (c *client) dial() {
 func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
 	cdsReq := &xdspb.DiscoveryRequest{
 		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					grpcHostname: {
-						Kind: &types.Value_StringValue{StringValue: c.serviceName},
+						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
 					},
 				},
 			},
@@ -140,10 +141,10 @@ func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
 func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
 	edsReq := &xdspb.DiscoveryRequest{
 		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: c.enableCDS},
+						Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
 					},
 				},
 			},
@@ -226,8 +227,8 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			// start a new call as we receive CDS response when in EDS-only mode.
 			return
 		}
-		var adsResp types.DynamicAny
-		if err := types.UnmarshalAny(&resources[0], &adsResp); err != nil {
+		var adsResp ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(resources[0], &adsResp); err != nil {
 			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
 			return
 		}

@@ -26,10 +26,10 @@ import (
 	"strconv"
 	"sync"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdstypepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	xdstypepb "google.golang.org/grpc/balancer/xds/proto/envoy/type"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"

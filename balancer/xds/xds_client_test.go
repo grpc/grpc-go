@@ -26,14 +26,16 @@ import (
 	"testing"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	xdsendpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	xdsdiscoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	structpb "github.com/golang/protobuf/ptypes/struct"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	xdscorepb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/core"
+	xdsendpointpb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/endpoint"
+	xdsdiscoverypb "google.golang.org/grpc/balancer/xds/proto/envoy/service/discovery/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -42,10 +44,10 @@ var (
 	testServiceName = "test/foo"
 	testCDSReq      = &xdspb.DiscoveryRequest{
 		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					grpcHostname: {
-						Kind: &types.Value_StringValue{StringValue: testServiceName},
+						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
 					},
 				},
 			},
@@ -54,10 +56,10 @@ var (
 	}
 	testEDSReq = &xdspb.DiscoveryRequest{
 		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: true},
+						Kind: &structpb.Value_BoolValue{BoolValue: true},
 					},
 				},
 			},
@@ -67,10 +69,10 @@ var (
 	}
 	testEDSReqWithoutEndpoints = &xdspb.DiscoveryRequest{
 		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: false},
+						Kind: &structpb.Value_BoolValue{BoolValue: false},
 					},
 				},
 			},
@@ -85,7 +87,7 @@ var (
 	}
 	marshaledCluster, _ = proto.Marshal(testCluster)
 	testCDSResp         = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: cdsType,
 				Value:   marshaledCluster,
@@ -95,14 +97,14 @@ var (
 	}
 	testClusterLoadAssignment = &xdspb.ClusterLoadAssignment{
 		ClusterName: testServiceName,
-		Endpoints: []xdsendpointpb.LocalityLbEndpoints{
+		Endpoints: []*xdsendpointpb.LocalityLbEndpoints{
 			{
 				Locality: &xdscorepb.Locality{
 					Region:  "asia-east1",
 					Zone:    "1",
 					SubZone: "sa",
 				},
-				LbEndpoints: []xdsendpointpb.LbEndpoint{
+				LbEndpoints: []*xdsendpointpb.LbEndpoint{
 					{
 						HostIdentifier: &xdsendpointpb.LbEndpoint_Endpoint{
 							Endpoint: &xdsendpointpb.Endpoint{
@@ -121,11 +123,11 @@ var (
 							},
 						},
 						Metadata: &xdscorepb.Metadata{
-							FilterMetadata: map[string]*types.Struct{
+							FilterMetadata: map[string]*structpb.Struct{
 								"xx.lb": {
-									Fields: map[string]*types.Value{
+									Fields: map[string]*structpb.Value{
 										"endpoint_name": {
-											Kind: &types.Value_StringValue{
+											Kind: &structpb.Value_StringValue{
 												StringValue: "some.endpoint.name",
 											},
 										},
@@ -135,7 +137,7 @@ var (
 						},
 					},
 				},
-				LoadBalancingWeight: &types.UInt32Value{
+				LoadBalancingWeight: &wrappers.UInt32Value{
 					Value: 1,
 				},
 				Priority: 0,
@@ -144,7 +146,7 @@ var (
 	}
 	marshaledClusterLoadAssignment, _ = proto.Marshal(testClusterLoadAssignment)
 	testEDSResp                       = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: edsType,
 				Value:   marshaledClusterLoadAssignment,
@@ -154,12 +156,12 @@ var (
 	}
 	testClusterLoadAssignmentWithoutEndpoints = &xdspb.ClusterLoadAssignment{
 		ClusterName: testServiceName,
-		Endpoints: []xdsendpointpb.LocalityLbEndpoints{
+		Endpoints: []*xdsendpointpb.LocalityLbEndpoints{
 			{
 				Locality: &xdscorepb.Locality{
 					SubZone: "sa",
 				},
-				LoadBalancingWeight: &types.UInt32Value{
+				LoadBalancingWeight: &wrappers.UInt32Value{
 					Value: 128,
 				},
 				Priority: 0,
@@ -169,7 +171,7 @@ var (
 	}
 	marshaledClusterLoadAssignmentWithoutEndpoints, _ = proto.Marshal(testClusterLoadAssignmentWithoutEndpoints)
 	testEDSRespWithoutEndpoints                       = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: edsType,
 				Value:   marshaledClusterLoadAssignmentWithoutEndpoints,
