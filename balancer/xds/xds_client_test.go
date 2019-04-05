@@ -29,13 +29,13 @@ import (
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	structpb "github.com/golang/protobuf/ptypes/struct"
-	"github.com/golang/protobuf/ptypes/wrappers"
+	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
-	xdscorepb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/core"
-	xdsendpointpb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2/endpoint"
-	xdsdiscoverypb "google.golang.org/grpc/balancer/xds/proto/envoy/service/discovery/v2"
+	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
+	xdscorepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core"
+	xdsendpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint"
+	xdsdiscoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -137,7 +137,7 @@ var (
 						},
 					},
 				},
-				LoadBalancingWeight: &wrappers.UInt32Value{
+				LoadBalancingWeight: &wrpb.UInt32Value{
 					Value: 1,
 				},
 				Priority: 0,
@@ -161,7 +161,7 @@ var (
 				Locality: &xdscorepb.Locality{
 					SubZone: "sa",
 				},
-				LoadBalancingWeight: &wrappers.UInt32Value{
+				LoadBalancingWeight: &wrpb.UInt32Value{
 					Value: 128,
 				},
 				Priority: 0,

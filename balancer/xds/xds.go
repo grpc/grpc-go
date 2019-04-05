@@ -32,7 +32,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/xds/edsbalancer"
-	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"

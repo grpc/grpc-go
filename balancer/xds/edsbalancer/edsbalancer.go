@@ -28,8 +28,8 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
-	xdstypepb "google.golang.org/grpc/balancer/xds/proto/envoy/type"
+	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
+	xdstypepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"

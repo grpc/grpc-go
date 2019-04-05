@@ -27,7 +27,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
-	xdspb "google.golang.org/grpc/balancer/xds/proto/envoy/api/v2"
+	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
