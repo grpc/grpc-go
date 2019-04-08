@@ -230,18 +230,21 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 			b.stats.merge(req.GetClientStats())
 		}
 	}()
-	for v := range b.sls {
-		resp = &lbpb.LoadBalanceResponse{
-			LoadBalanceResponseType: &lbpb.LoadBalanceResponse_ServerList{
-				ServerList: v,
-			},
+	for {
+		select {
+		case v := <-b.sls:
+			resp = &lbpb.LoadBalanceResponse{
+				LoadBalanceResponseType: &lbpb.LoadBalanceResponse_ServerList{
+					ServerList: v,
+				},
+			}
+		case <-stream.Context().Done():
+			return stream.Context().Err()
 		}
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 	}
-	<-b.done
-	return nil
 }
 
 type testServer struct {
@@ -297,6 +300,9 @@ type testServers struct {
 	backends []*grpc.Server
 	beIPs    []net.IP
 	bePorts  []int
+
+	lbListener  net.Listener
+	beListeners []net.Listener
 }
 
 func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), err error) {
@@ -317,7 +323,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
 		bePorts = append(bePorts, beLis.Addr().(*net.TCPAddr).Port)
 
-		beListeners = append(beListeners, beLis)
+		beListeners = append(beListeners, newRestartableListener(beLis))
 	}
 	backends := startBackends(beServerName, false, beListeners...)
 
@@ -327,6 +333,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		err = fmt.Errorf("failed to create the listener for the load balancer %v", err)
 		return
 	}
+	lbLis = newRestartableListener(lbLis)
 	lbCreds := &serverNameCheckCreds{
 		sn: lbServerName,
 	}
@@ -344,6 +351,9 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		backends: backends,
 		beIPs:    beIPs,
 		bePorts:  bePorts,
+
+		lbListener:  lbLis,
+		beListeners: beListeners,
 	}
 	cleanup = func() {
 		defer stopBackends(backends)
@@ -712,7 +722,7 @@ func TestFallback(t *testing.T) {
 	testC := testpb.NewTestServiceClient(cc)
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
-		Addr:       "",
+		Addr:       "invalid.address",
 		Type:       resolver.GRPCLB,
 		ServerName: lbServerName,
 	}, {
@@ -723,7 +733,7 @@ func TestFallback(t *testing.T) {
 
 	var p peer.Peer
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	if p.Addr.String() != beLis.Addr().String() {
 		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
@@ -739,16 +749,62 @@ func TestFallback(t *testing.T) {
 		ServerName: beServerName,
 	}}})
 
+	var backendUsed bool
 	for i := 0; i < 1000; i++ {
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			return
+			backendUsed = true
+			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+	if !backendUsed {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+	}
+
+	// Close backend and remote balancer connections, should use fallback.
+	tss.beListeners[0].(*restartableListener).stopPreviousConns()
+	tss.lbListener.(*restartableListener).stopPreviousConns()
+	time.Sleep(time.Second)
+
+	var fallbackUsed bool
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.String() == beLis.Addr().String() {
+			fallbackUsed = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !fallbackUsed {
+		t.Fatalf("No RPC sent to fallback after 1 second")
+	}
+
+	// Restart backend and remote balancer, should not use backends.
+	tss.beListeners[0].(*restartableListener).restart()
+	tss.lbListener.(*restartableListener).restart()
+	tss.ls.sls <- sl
+
+	time.Sleep(time.Second)
+
+	var backendUsed2 bool
+	for i := 0; i < 1000; i++ {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
+			backendUsed2 = true
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !backendUsed2 {
+		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+	}
 }
 
 // The remote balancer sends response with duplicates to grpclb client.

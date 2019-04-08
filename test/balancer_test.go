@@ -24,14 +24,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/balancerload/orca"
+	orcapb "google.golang.org/grpc/internal/balancerload/orca/orca_v1"
 	"google.golang.org/grpc/resolver"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	_ "google.golang.org/grpc/internal/balancerload/orca"
 )
 
 const testBalancerName = "testbalancer"
@@ -192,5 +197,58 @@ func testDoneInfo(t *testing.T, e env) {
 	<-finished
 	if len(b.pickOptions) != len(b.doneInfo) {
 		t.Fatalf("Got %d picks, %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
+	}
+}
+
+func (s) TestDoneLoads(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testDoneLoads(t, e)
+	}
+}
+
+func testDoneLoads(t *testing.T, e env) {
+	b := &testBalancer{}
+	balancer.Register(b)
+
+	testLoad := &orcapb.LoadReport{
+		CpuUtilization:           0.31,
+		MemUtilization:           0.41,
+		NicInUtilization:         0.59,
+		NicOutUtilization:        0.26,
+		RequestCostOrUtilization: nil,
+	}
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			grpc.SetTrailer(ctx, orca.ToMetadata(testLoad))
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil, grpc.WithBalancerName(testBalancerName)); err != nil {
+		t.Fatalf("error starting testing server: %v", err)
+	}
+	defer ss.Stop()
+
+	tc := testpb.NewTestServiceClient(ss.cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
+
+	poWant := []balancer.PickOptions{
+		{FullMethodName: "/grpc.testing.TestService/EmptyCall"},
+	}
+	if !reflect.DeepEqual(b.pickOptions, poWant) {
+		t.Fatalf("b.pickOptions = %v; want %v", b.pickOptions, poWant)
+	}
+
+	if len(b.doneInfo) < 1 {
+		t.Fatalf("b.doneInfo = %v, want length 1", b.doneInfo)
+	}
+	gotLoad, _ := b.doneInfo[0].ServerLoad.(*orcapb.LoadReport)
+	if !proto.Equal(gotLoad, testLoad) {
+		t.Fatalf("b.doneInfo[0].ServerLoad = %v; want = %v", b.doneInfo[0].ServerLoad, testLoad)
 	}
 }

@@ -29,7 +29,7 @@ import (
 func (s) TestParseLoadBalancer(t *testing.T) {
 	testcases := []struct {
 		scjs    string
-		wantSC  ServiceConfig
+		wantSC  *ServiceConfig
 		wantErr bool
 	}{
 		{
@@ -47,7 +47,7 @@ func (s) TestParseLoadBalancer(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				LB: newString("round_robin"),
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
@@ -72,14 +72,14 @@ func (s) TestParseLoadBalancer(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{},
+			nil,
 			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -88,7 +88,7 @@ func (s) TestParseLoadBalancer(t *testing.T) {
 func (s) TestParseWaitForReady(t *testing.T) {
 	testcases := []struct {
 		scjs    string
-		wantSC  ServiceConfig
+		wantSC  *ServiceConfig
 		wantErr bool
 	}{
 		{
@@ -105,7 +105,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(true),
@@ -128,7 +128,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(false),
@@ -160,14 +160,14 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{},
+			nil,
 			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -176,7 +176,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 func (s) TestPraseTimeOut(t *testing.T) {
 	testcases := []struct {
 		scjs    string
-		wantSC  ServiceConfig
+		wantSC  *ServiceConfig
 		wantErr bool
 	}{
 		{
@@ -193,7 +193,7 @@ func (s) TestPraseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						Timeout: newDuration(time.Second),
@@ -216,7 +216,7 @@ func (s) TestPraseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{},
+			nil,
 			true,
 		},
 		{
@@ -242,14 +242,14 @@ func (s) TestPraseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{},
+			nil,
 			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -258,7 +258,7 @@ func (s) TestPraseTimeOut(t *testing.T) {
 func (s) TestPraseMsgSize(t *testing.T) {
 	testcases := []struct {
 		scjs    string
-		wantSC  ServiceConfig
+		wantSC  *ServiceConfig
 		wantErr bool
 	}{
 		{
@@ -276,7 +276,7 @@ func (s) TestPraseMsgSize(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						MaxReqSize:  newInt(1024),
@@ -311,14 +311,14 @@ func (s) TestPraseMsgSize(t *testing.T) {
         }
     ]
 }`,
-			ServiceConfig{},
+			nil,
 			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !scCompareWithRawJSONSkipped(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -383,4 +383,16 @@ func newDuration(b time.Duration) *time.Duration {
 
 func newString(b string) *string {
 	return &b
+}
+
+func scCompareWithRawJSONSkipped(s1, s2 *ServiceConfig) bool {
+	if s1 == nil && s2 == nil {
+		return true
+	}
+	if (s1 == nil) != (s2 == nil) {
+		return false
+	}
+	s1.rawJSONString = ""
+	s2.rawJSONString = ""
+	return reflect.DeepEqual(s1, s2)
 }

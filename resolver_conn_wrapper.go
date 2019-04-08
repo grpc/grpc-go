@@ -118,7 +118,7 @@ func (ccr *ccResolverWrapper) UpdateState(s resolver.State) {
 	ccr.curState = s
 }
 
-// NewAddress is called by the resolver implemenetion to send addresses to gRPC.
+// NewAddress is called by the resolver implementation to send addresses to gRPC.
 func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 	if ccr.isDone() {
 		return
@@ -131,7 +131,7 @@ func (ccr *ccResolverWrapper) NewAddress(addrs []resolver.Address) {
 	ccr.cc.updateResolverState(ccr.curState)
 }
 
-// NewServiceConfig is called by the resolver implemenetion to send service
+// NewServiceConfig is called by the resolver implementation to send service
 // configs to gRPC.
 func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 	if ccr.isDone() {
