@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import io.grpc.NameResolver.Helper.ConfigOrError;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -419,12 +420,12 @@ public abstract class NameResolver {
     @ResolutionResultAttr
     private final Attributes attributes;
     @Nullable
-    private final Object serviceConfig;
+    private final ConfigOrError serviceConfig;
 
     ResolutionResult(
         List<EquivalentAddressGroup> servers,
         @ResolutionResultAttr Attributes attributes,
-        Object serviceConfig) {
+        ConfigOrError serviceConfig) {
       this.servers = Collections.unmodifiableList(new ArrayList<>(servers));
       this.attributes = checkNotNull(attributes, "attributes");
       this.serviceConfig = serviceConfig;
@@ -477,7 +478,7 @@ public abstract class NameResolver {
      * @since 1.21.0
      */
     @Nullable
-    public Object getServiceConfig() {
+    public ConfigOrError getServiceConfig() {
       return serviceConfig;
     }
 
@@ -515,7 +516,7 @@ public abstract class NameResolver {
       private List<EquivalentAddressGroup> servers = Collections.emptyList();
       private Attributes attributes = Attributes.EMPTY;
       @Nullable
-      private Object serviceConfig;
+      private ConfigOrError serviceConfig;
       //  Make sure to update #toBuilder above!
 
       Builder() {}
@@ -547,7 +548,7 @@ public abstract class NameResolver {
        *
        * @since 1.21.0
        */
-      public Builder setServiceConfig(@Nullable Object serviceConfig) {
+      public Builder setServiceConfig(@Nullable ConfigOrError serviceConfig) {
         this.serviceConfig = serviceConfig;
         return this;
       }
