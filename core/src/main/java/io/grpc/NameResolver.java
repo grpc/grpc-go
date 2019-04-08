@@ -142,6 +142,10 @@ public abstract class NameResolver {
     public static final Attributes.Key<ProxyDetector> PARAMS_PROXY_DETECTOR =
         Attributes.Key.create("params-proxy-detector");
 
+    @Deprecated
+    private static final Attributes.Key<SynchronizationContext> PARAMS_SYNC_CONTEXT =
+        Attributes.Key.create("params-sync-context");
+
     /**
      * Creates a {@link NameResolver} for the given target URI, or {@code null} if the given URI
      * cannot be resolved by this factory. The decision should be solely based on the scheme of the
@@ -158,8 +162,24 @@ public abstract class NameResolver {
      */
     @Nullable
     @Deprecated
-    public NameResolver newNameResolver(URI targetUri, Attributes params) {
-      throw new UnsupportedOperationException("This method is going to be deleted");
+    public NameResolver newNameResolver(URI targetUri, final Attributes params) {
+      Helper helper = new Helper() {
+          @Override
+          public int getDefaultPort() {
+            return checkNotNull(params.get(PARAMS_DEFAULT_PORT), "default port not available");
+          }
+
+          @Override
+          public ProxyDetector getProxyDetector() {
+            return checkNotNull(params.get(PARAMS_PROXY_DETECTOR), "proxy detector not available");
+          }
+
+          @Override
+          public SynchronizationContext getSynchronizationContext() {
+            return checkNotNull(params.get(PARAMS_SYNC_CONTEXT), "sync context not available");
+          }
+        };
+      return newNameResolver(targetUri, helper);
     }
 
     /**
@@ -180,6 +200,7 @@ public abstract class NameResolver {
           Attributes.newBuilder()
               .set(PARAMS_DEFAULT_PORT, helper.getDefaultPort())
               .set(PARAMS_PROXY_DETECTOR, helper.getProxyDetector())
+              .set(PARAMS_SYNC_CONTEXT, helper.getSynchronizationContext())
               .build());
     }
 

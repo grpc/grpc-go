@@ -3414,6 +3414,65 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  @Deprecated
+  public void nameResolverParams_forwardingResolverWithOldApi() {
+    final AtomicReference<NameResolver.Helper> capturedHelper = new AtomicReference<>();
+    final NameResolver noopResolver = new NameResolver() {
+        @Override
+        public String getServiceAuthority() {
+          return "fake-authority";
+        }
+
+        @Override
+        public void start(Listener listener) {
+        }
+
+        @Override
+        public void shutdown() {}
+      };
+    ProxyDetector neverProxy = new ProxyDetector() {
+        @Override
+        public ProxiedSocketAddress proxyFor(SocketAddress targetAddress) {
+          return null;
+        }
+      };
+    final NameResolver.Factory factory = new NameResolver.Factory() {
+        @Override
+        public NameResolver newNameResolver(URI targetUri, NameResolver.Helper helper) {
+          capturedHelper.set(helper);
+          return noopResolver;
+        }
+
+        @Override
+        public String getDefaultScheme() {
+          return "fakescheme";
+        }
+      };
+
+    // A forwarding factory still with the old API can forward to a delegate factory that has
+    // migrated to the new API.
+    NameResolver.Factory oldApiForwardingFactory = new NameResolver.Factory() {
+        @Override
+        public NameResolver newNameResolver(URI targetUri, Attributes params) {
+          return factory.newNameResolver(targetUri, params);
+        }
+
+        @Override
+        public String getDefaultScheme() {
+          return factory.getDefaultScheme();
+        }
+      };
+    channelBuilder.nameResolverFactory(oldApiForwardingFactory).proxyDetector(neverProxy);
+    createChannel();
+
+    NameResolver.Helper helper = capturedHelper.get();
+    assertThat(helper).isNotNull();
+    assertThat(helper.getDefaultPort()).isEqualTo(DEFAULT_PORT);
+    assertThat(helper.getProxyDetector()).isSameAs(neverProxy);
+    assertThat(helper.getSynchronizationContext()).isSameAs(channel.syncContext);
+  }
+
+  @Test
   public void getAuthorityAfterShutdown() throws Exception {
     createChannel();
     assertEquals(SERVICE_NAME, channel.authority());
