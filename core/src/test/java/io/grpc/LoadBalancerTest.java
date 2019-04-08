@@ -20,10 +20,12 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.mock;
 
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.ResolvedAddresses;
 import io.grpc.LoadBalancer.Subchannel;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -195,6 +197,74 @@ public class LoadBalancerTest {
         return Arrays.asList(eag, eag);
       }
     }.getAddresses();
+  }
+
+  @Deprecated
+  @Test
+  public void handleResolvedAddressGroups_delegatesToHandleResolvedAddresses() {
+    final AtomicReference<ResolvedAddresses> resultCapture = new AtomicReference<>();
+
+    LoadBalancer balancer = new LoadBalancer() {
+        @Override
+        public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+          resultCapture.set(resolvedAddresses);
+        }
+
+        @Override
+        public void handleNameResolutionError(Status error) {
+        }
+
+        @Override
+        public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo state) {
+        }
+
+        @Override
+        public void shutdown() {
+        }
+      };
+
+    List<EquivalentAddressGroup> servers = Arrays.asList(
+        new EquivalentAddressGroup(new SocketAddress(){}),
+        new EquivalentAddressGroup(new SocketAddress(){}));
+    balancer.handleResolvedAddressGroups(servers, attrs);
+    assertThat(resultCapture.get()).isEqualTo(
+        ResolvedAddresses.newBuilder().setServers(servers).setAttributes(attrs).build());
+  }
+
+  @Deprecated
+  @Test
+  public void handleResolvedAddresses_delegatesToHandleResolvedAddressGroups() {
+    final AtomicReference<List<EquivalentAddressGroup>> serversCapture = new AtomicReference<>();
+    final AtomicReference<Attributes> attrsCapture = new AtomicReference<>();
+
+    LoadBalancer balancer = new LoadBalancer() {
+        @Override
+        public void handleResolvedAddressGroups(
+            List<EquivalentAddressGroup> servers, Attributes attrs) {
+          serversCapture.set(servers);
+          attrsCapture.set(attrs);
+        }
+
+        @Override
+        public void handleNameResolutionError(Status error) {
+        }
+
+        @Override
+        public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo state) {
+        }
+
+        @Override
+        public void shutdown() {
+        }
+      };
+
+    List<EquivalentAddressGroup> servers = Arrays.asList(
+        new EquivalentAddressGroup(new SocketAddress(){}),
+        new EquivalentAddressGroup(new SocketAddress(){}));
+    balancer.handleResolvedAddresses(
+        ResolvedAddresses.newBuilder().setServers(servers).setAttributes(attrs).build());
+    assertThat(serversCapture.get()).isEqualTo(servers);
+    assertThat(attrsCapture.get()).isEqualTo(attrs);
   }
 
   private static class NoopHelper extends LoadBalancer.Helper {

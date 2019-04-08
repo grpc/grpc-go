@@ -131,7 +131,8 @@ public abstract class LoadBalancer {
   public void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> servers,
       @NameResolver.ResolutionResultAttr Attributes attributes) {
-    throw new UnsupportedOperationException("Not implemented");
+    handleResolvedAddresses(
+        ResolvedAddresses.newBuilder().setServers(servers).setAttributes(attributes).build());
   }
 
   /**
