@@ -76,8 +76,22 @@ public abstract class NameResolver {
    * @since 1.0.0
    */
   @Deprecated
-  public void start(Listener listener) {
-    throw new UnsupportedOperationException("Not implemented");
+  public void start(final Listener listener) {
+    if (listener instanceof Observer) {
+      start((Observer) listener);
+    } else {
+      start(new Observer() {
+          @Override
+          public void onError(Status error) {
+            listener.onError(error);
+          }
+
+          @Override
+          public void onResult(ResolutionResult resolutionResult) {
+            listener.onAddresses(resolutionResult.getServers(), resolutionResult.getAttributes());
+          }
+      });
+    }
   }
 
   /**
