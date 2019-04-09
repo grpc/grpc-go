@@ -34,6 +34,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Set a very small duration for the resolver rate limit to avoid tests
+	// running for long time.
+	dc := replaceDNSResRate(1 * time.Second)
+	defer dc()
+
 	cleanup := replaceNetFunc()
 	code := m.Run()
 	cleanup()
@@ -85,9 +90,11 @@ func (t *testClientConn) getSc() (string, int) {
 }
 
 type testResolver struct {
+	cnt map[string]int
 }
 
-func (*testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	tr.cnt[host]++
 	return hostLookup(host)
 }
 
@@ -101,10 +108,19 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 
 func replaceNetFunc() func() {
 	oldResolver := defaultResolver
-	defaultResolver = &testResolver{}
+	defaultResolver = &testResolver{cnt: make(map[string]int)}
 
 	return func() {
 		defaultResolver = oldResolver
+	}
+}
+
+func replaceDNSResRate(d time.Duration) func() {
+	oldMinDNSResRate := minDNSResRate
+	minDNSResRate = d
+
+	return func() {
+		minDNSResRate = oldMinDNSResRate
 	}
 }
 
@@ -1125,4 +1141,60 @@ func TestCustomAuthority(t *testing.T) {
 			t.Errorf("unexpected error using custom authority %s: %s", a.authority, err)
 		}
 	}
+}
+
+func TestRateLimitedResolve(t *testing.T) {
+	defer leakcheck.Check(t)
+
+	// Create a new testResolver{} for this test because we want the exact count
+	// of the number of times the resolver was invoked.
+	nc := replaceNetFunc()
+	defer nc()
+
+	target := "foo.bar.com"
+	b := NewBuilder()
+	cc := &testClientConn{target: target}
+	r, err := b.Build(resolver.Target{Endpoint: target}, cc, resolver.BuildOption{})
+	if err != nil {
+		t.Fatalf("resolver.Build() returned error: %v\n", err)
+	}
+	dnsR, ok := r.(*dnsResolver)
+	if !ok {
+		t.Fatalf("resolver.Build() returned unexpected type: %T\n", dnsR)
+	}
+	tr, ok := dnsR.resolver.(*testResolver)
+	if !ok {
+		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.ResolveNow(resolver.ResolveNowOption{})
+		}()
+	}
+	wg.Wait()
+
+	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
+	var gotAddrs []resolver.Address
+	var cnt int
+	for {
+		gotAddrs, cnt = cc.getAddress()
+		if cnt > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !reflect.DeepEqual(gotAddrs, wantAddrs) {
+		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, gotAddrs, wantAddrs)
+	}
+
+	gotResolveCnt := tr.cnt[target]
+	wantResolveCnt := 1
+	if gotResolveCnt != wantResolveCnt {
+		t.Errorf("Resolve count mismatch for target: %q = %+v, want %+v\n", target, gotResolveCnt, wantResolveCnt)
+	}
+	r.Close()
 }
