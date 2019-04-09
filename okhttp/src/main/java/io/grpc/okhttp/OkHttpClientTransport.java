@@ -80,6 +80,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
@@ -502,11 +503,21 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
       frameWriter = new ExceptionHandlingFrameWriter(this, rawFrameWriter);
       outboundFlow = new OutboundFlowController(this, frameWriter, initialWindowSize);
     }
+    final CountDownLatch latch = new CountDownLatch(1);
     // Connecting in the serializingExecutor, so that some stream operations like synStream
     // will be executed after connected.
     serializingExecutor.execute(new Runnable() {
       @Override
       public void run() {
+        // This is a hack to make sure the connection preface and initial settings to be sent out
+        // without blocking the start. By doing this essentially prevents potential deadlock when
+        // network is not available during startup while another thread holding lock to send the
+        // initial preface.
+        try {
+          latch.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
         // Use closed source on failure so that the reader immediately shuts down.
         BufferedSource source = Okio.buffer(new Source() {
           @Override
@@ -578,11 +589,17 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
         }
       }
     });
-    synchronized (lock) {
-      frameWriter.connectionPreface();
-      Settings settings = new Settings();
-      frameWriter.settings(settings);
+    // Schedule to send connection preface & settings before any other write.
+    try {
+      synchronized (lock) {
+        frameWriter.connectionPreface();
+        Settings settings = new Settings();
+        frameWriter.settings(settings);
+      }
+    } finally {
+      latch.countDown();
     }
+
     serializingExecutor.execute(new Runnable() {
       @Override
       public void run() {
