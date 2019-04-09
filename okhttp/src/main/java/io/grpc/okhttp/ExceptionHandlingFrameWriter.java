@@ -177,8 +177,13 @@ final class ExceptionHandlingFrameWriter implements FrameWriter {
 
   @Override
   public void ping(boolean ack, int payload1, int payload2) {
-    frameLogger.logPing(OkHttpFrameLogger.Direction.OUTBOUND,
-        ((long)payload1 << 32) | (payload2 & 0xFFFFFFFFL));
+    if (ack) {
+      frameLogger.logPingAck(OkHttpFrameLogger.Direction.OUTBOUND,
+          ((long) payload1 << 32) | (payload2 & 0xFFFFFFFFL));
+    } else {
+      frameLogger.logPing(OkHttpFrameLogger.Direction.OUTBOUND,
+          ((long) payload1 << 32) | (payload2 & 0xFFFFFFFFL));
+    }
     try {
       frameWriter.ping(ack, payload1, payload2);
     } catch (IOException e) {

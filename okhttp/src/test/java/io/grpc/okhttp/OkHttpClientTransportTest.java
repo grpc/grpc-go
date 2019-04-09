@@ -38,8 +38,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.ArgumentMatchers.same;
-import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,7 +46,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -108,7 +105,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.net.SocketFactory;
@@ -146,6 +145,7 @@ public class OkHttpClientTransportTest {
   private static final int DEFAULT_START_STREAM_ID = 3;
   private static final int DEFAULT_MAX_INBOUND_METADATA_SIZE = Integer.MAX_VALUE;
   private static final Attributes EAG_ATTRS = Attributes.EMPTY;
+  private static final Logger logger = Logger.getLogger(OkHttpClientTransport.class.getName());
 
   @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
@@ -155,8 +155,6 @@ public class OkHttpClientTransportTest {
 
   @Mock
   private ManagedClientTransport.Listener transportListener;
-  @Mock
-  private Logger log;
 
   private final SocketFactory socketFactory = null;
   private final SSLSocketFactory sslSocketFactory = null;
@@ -232,7 +230,7 @@ public class OkHttpClientTransportTest {
         executor,
         frameReader,
         frameWriter,
-        new OkHttpFrameLogger(Level.FINE, log),
+        new OkHttpFrameLogger(Level.FINE, logger),
         startId,
         socket,
         stopwatchSupplier,
@@ -278,42 +276,107 @@ public class OkHttpClientTransportTest {
    */
   @Test
   public void testClientHandlerFrameLogger() throws Exception {
+    final List<LogRecord> logs = new ArrayList<>();
+    Handler handler = new Handler() {
+      @Override
+      public void publish(LogRecord record) {
+        logs.add(record);
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() throws SecurityException {
+      }
+    };
+    logger.addHandler(handler);
+    logger.setLevel(Level.ALL);
+
     initTransport();
 
-    when(log.isLoggable(any(Level.class))).thenReturn(true);
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream =
+        clientTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
+    stream.start(listener);
+    stream.request(1);
+
     frameHandler().headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " HEADERS: streamId=" + 3));
+    assertThat(logs).hasSize(1);
+    LogRecord log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " HEADERS: streamId=" + 3);
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
     final String message = "Hello Client";
     Buffer buffer = createMessageFrame(message);
     frameHandler().data(false, 3, buffer, (int) buffer.size());
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " DATA: streamId=" + 3));
+    assertThat(logs).hasSize(1);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " DATA: streamId=" + 3);
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
     // At most 64 bytes of data frame will be logged.
     frameHandler().data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
-    ArgumentCaptor<String> logCaptor = ArgumentCaptor.forClass(String.class);
-    verify(log, atLeastOnce()).log(any(Level.class), logCaptor.capture());
-    String data = logCaptor.getValue();
+    assertThat(logs).hasSize(1);
+    log = logs.remove(0);
+    String data = log.getMessage();
     assertThat(data).endsWith("...");
     assertThat(data.substring(data.indexOf("bytes="), data.indexOf("..."))).hasLength(64 * 2 + 6);
 
+    // A SETTINGS ACK frame is sent out after receiving SETTINGS frame.
     frameHandler().settings(false, new Settings());
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " SETTINGS: ack=false"));
+    assertThat(logs).hasSize(2);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " SETTINGS: ack=false");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.OUTBOUND + " SETTINGS: ack=true");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
+    // A PING ACK frame is sent out after receiving PING frame.
     frameHandler().ping(false, 0, 0);
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " PING: ack=false"));
+    assertThat(logs).hasSize(2);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " PING: ack=false");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.OUTBOUND + " PING: ack=true");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
+    // As server push is not supported, a RST_STREAM is sent out after receiving PUSH_PROMISE frame.
     frameHandler().pushPromise(3, 3, grpcResponseHeaders());
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " PUSH_PROMISE"));
+    assertThat(logs).hasSize(2);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " PUSH_PROMISE");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.OUTBOUND + " RST_STREAM");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
     frameHandler().rstStream(3, ErrorCode.CANCEL);
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " RST_STREAM"));
+    assertThat(logs).hasSize(1);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " RST_STREAM");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
+    // Outbound GO_AWAY is responded after receiving inbound GO_AWAY frame.
     frameHandler().goAway(3, ErrorCode.CANCEL, ByteString.EMPTY);
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " GO_AWAY"));
+    assertThat(logs).hasSize(2);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " GO_AWAY");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.OUTBOUND + " GO_AWAY");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
 
     frameHandler().windowUpdate(3, 32);
-    verify(log).log(any(Level.class), startsWith(Direction.INBOUND + " WINDOW_UPDATE"));
+    assertThat(logs).hasSize(1);
+    log = logs.remove(0);
+    assertThat(log.getMessage()).startsWith(Direction.INBOUND + " WINDOW_UPDATE");
+    assertThat(log.getLevel()).isEqualTo(Level.FINE);
+
+    logger.removeHandler(handler);
   }
 
   @Test
