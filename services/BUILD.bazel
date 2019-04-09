@@ -19,7 +19,6 @@ java_library(
         "@com_google_guava_guava//jar",
         "@com_google_protobuf//:protobuf_java",
         "@com_google_protobuf//:protobuf_java_util",
-        "@com_google_re2j//jar",
         "@io_grpc_grpc_proto//:binarylog_java_proto",
     ],
 )
@@ -60,7 +59,6 @@ java_library(
         "@com_google_guava_guava//jar",
         "@com_google_protobuf//:protobuf_java",
         "@com_google_protobuf//:protobuf_java_util",
-        "@com_google_re2j//jar",
         "@io_grpc_grpc_proto//:reflection_java_proto_deprecated",
         "@javax_annotation_javax_annotation_api//jar",
     ],

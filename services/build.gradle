@@ -24,7 +24,6 @@ dependencies {
         // prefer 26.0-android from libraries instead of 20.0
         exclude group: 'com.google.guava', module: 'guava'
     }
-    compile libraries.re2j
 
     compileOnly libraries.javax_annotation
     testCompile project(':grpc-testing'),

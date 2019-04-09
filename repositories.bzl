@@ -19,7 +19,6 @@ def grpc_java_repositories(
         omit_com_google_protobuf_java = False,
         omit_com_google_protobuf_javalite = False,
         omit_com_google_protobuf_nano_protobuf_javanano = False,
-        omit_com_google_re2j = False,
         omit_com_google_truth_truth = False,
         omit_com_squareup_okhttp = False,
         omit_com_squareup_okio = False,
@@ -73,8 +72,6 @@ def grpc_java_repositories(
         com_google_protobuf_javalite()
     if not omit_com_google_protobuf_nano_protobuf_javanano:
         com_google_protobuf_nano_protobuf_javanano()
-    if not omit_com_google_re2j:
-        com_google_re2j()
     if not omit_com_google_truth_truth:
         com_google_truth_truth()
     if not omit_com_squareup_okhttp:
@@ -263,15 +260,6 @@ def com_google_protobuf_nano_protobuf_javanano():
         server_urls = ["http://central.maven.org/maven2"],
         artifact_sha256 = "6d30f1e667a8952e1c90a0a125f0ce0edf84d6b1d51c91d8555c4fb549e3d7a1",
         licenses = ["notice"],  # BSD 2-clause
-    )
-
-def com_google_re2j():
-    jvm_maven_import_external(
-        name = "com_google_re2j",
-        artifact = "com.google.re2j:re2j:1.2",
-        server_urls = ["http://central.maven.org/maven2"],
-        artifact_sha256 = "e9dc705fd4c570344b54a7146b2e3a819cdc271a29793f4acc1a93b56a388e59",
-        licenses = ["notice"],  # Go License
     )
 
 def com_google_truth_truth():

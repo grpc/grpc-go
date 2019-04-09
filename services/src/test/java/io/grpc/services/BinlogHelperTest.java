@@ -226,18 +226,18 @@ public final class BinlogHelperTest {
 
   @Test
   public void createLogFromOptionString() throws Exception {
-    assertSameLimits(BOTH_FULL, makeLog(null));
-    assertSameLimits(HEADER_FULL, makeLog("{h}"));
-    assertSameLimits(MSG_FULL, makeLog("{m}"));
-    assertSameLimits(HEADER_256, makeLog("{h:256}"));
-    assertSameLimits(MSG_256, makeLog("{m:256}"));
-    assertSameLimits(BOTH_256, makeLog("{h:256;m:256}"));
+    assertSameLimits(BOTH_FULL, makeOptions(null));
+    assertSameLimits(HEADER_FULL, makeOptions("h"));
+    assertSameLimits(MSG_FULL, makeOptions("m"));
+    assertSameLimits(HEADER_256, makeOptions("h:256"));
+    assertSameLimits(MSG_256, makeOptions("m:256"));
+    assertSameLimits(BOTH_256, makeOptions("h:256;m:256"));
     assertSameLimits(
         new Builder().header(Integer.MAX_VALUE).msg(256).build(),
-        makeLog("{h;m:256}"));
+        makeOptions("h;m:256"));
     assertSameLimits(
         new Builder().header(256).msg(Integer.MAX_VALUE).build(),
-        makeLog("{h:256;m}"));
+        makeOptions("h:256;m"));
   }
 
   private void assertIllegalPatternDetected(String perSvcOrMethodConfig) {
@@ -260,17 +260,29 @@ public final class BinlogHelperTest {
   }
 
   @Test
+  public void badFactoryConfigStrDetected_empty() throws Exception {
+    try {
+      new FactoryImpl(sink, "*,");
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected).hasMessageThat().startsWith("Illegal log config pattern");
+    }
+  }
+
+  @Test
   public void createLogFromOptionString_malformed() throws Exception {
+    assertIllegalPatternDetected("");
     assertIllegalPatternDetected("bad");
-    assertIllegalPatternDetected("{bad}");
-    assertIllegalPatternDetected("{x;y}");
-    assertIllegalPatternDetected("{h:abc}");
-    assertIllegalPatternDetected("{2}");
-    assertIllegalPatternDetected("{2;2}");
+    assertIllegalPatternDetected("mad");
+    assertIllegalPatternDetected("x;y");
+    assertIllegalPatternDetected("h:abc");
+    assertIllegalPatternDetected("h:1e8");
+    assertIllegalPatternDetected("2");
+    assertIllegalPatternDetected("2;2");
     // The grammar specifies that if both h and m are present, h comes before m
-    assertIllegalPatternDetected("{m:123;h:123}");
+    assertIllegalPatternDetected("m:123;h:123");
     // NumberFormatException
-    assertIllegalPatternDetected("{h:99999999999999}");
+    assertIllegalPatternDetected("h:99999999999999");
   }
 
   @Test
@@ -1530,7 +1542,7 @@ public final class BinlogHelperTest {
     return new BinlogHelper.FactoryImpl(sink, factoryConfigStr).getLog(lookup);
   }
 
-  private BinlogHelper makeLog(String logConfigStr) {
+  private BinlogHelper makeOptions(String logConfigStr) {
     return FactoryImpl.createBinaryLog(sink, logConfigStr);
   }
 

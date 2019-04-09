@@ -29,8 +29,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
-import com.google.re2j.Matcher;
-import com.google.re2j.Pattern;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -601,20 +599,6 @@ final class BinlogHelper {
   }
 
   static final class FactoryImpl implements Factory {
-    // '*' for global, 'service/*' for service glob, or 'service/method' for fully qualified.
-    private static final Pattern logPatternRe = Pattern.compile("[^{]+");
-    // A curly brace wrapped expression. Will be further matched with the more specified REs below.
-    private static final Pattern logOptionsRe = Pattern.compile("\\{[^}]+}");
-    private static final Pattern configRe = Pattern.compile(
-        String.format("^(%s)(%s)?$", logPatternRe.pattern(), logOptionsRe.pattern()));
-    // Regexes to extract per-binlog options
-    // The form: {m:256}
-    private static final Pattern msgRe = Pattern.compile("\\{m(?::(\\d+))?}");
-    // The form: {h:256}
-    private static final Pattern headerRe = Pattern.compile("\\{h(?::(\\d+))?}");
-    // The form: {h:256,m:256}
-    private static final Pattern bothRe = Pattern.compile("\\{h(?::(\\d+))?;m(?::(\\d+))?}");
-
     private final BinlogHelper globalLog;
     private final Map<String, BinlogHelper> perServiceLogs;
     private final Map<String, BinlogHelper> perMethodLogs;
@@ -632,12 +616,26 @@ final class BinlogHelper {
       Set<String> blacklistedMethods = new HashSet<>();
       if (configurationString != null && configurationString.length() > 0) {
         for (String configuration : Splitter.on(',').split(configurationString)) {
-          Matcher configMatcher = configRe.matcher(configuration);
-          if (!configMatcher.matches()) {
+          int leftCurly = configuration.indexOf('{');
+          // '*' for global, 'service/*' for service glob, or 'service/method' for fully qualified
+          String methodOrSvc;
+          // An expression originally wrapped in curly braces; like {m:256,h:256}, {m:256}, {h:256}
+          String binlogOptionStr;
+          if (leftCurly == -1) {
+            methodOrSvc = configuration;
+            binlogOptionStr = null;
+          } else {
+            int rightCurly = configuration.indexOf('}', leftCurly);
+            if (rightCurly != configuration.length() - 1) {
+              throw new IllegalArgumentException("Illegal log config pattern: " + configuration);
+            }
+            methodOrSvc = configuration.substring(0, leftCurly);
+            // option without the curly braces
+            binlogOptionStr = configuration.substring(leftCurly + 1, configuration.length() - 1);
+          }
+          if (methodOrSvc.isEmpty()) {
             throw new IllegalArgumentException("Illegal log config pattern: " + configuration);
           }
-          String methodOrSvc = configMatcher.group(1);
-          String binlogOptionStr = configMatcher.group(2);
           if (methodOrSvc.equals("*")) {
             // parse config for "*"
             checkState(
@@ -729,26 +727,21 @@ final class BinlogHelper {
                 sink, TimeProvider.SYSTEM_TIME_PROVIDER, Integer.MAX_VALUE, Integer.MAX_VALUE));
       }
       try {
-        Matcher headerMatcher;
-        Matcher msgMatcher;
-        Matcher bothMatcher;
         final int maxHeaderBytes;
         final int maxMsgBytes;
-        if ((headerMatcher = headerRe.matcher(logConfig)).matches()) {
-          String maxHeaderStr = headerMatcher.group(1);
-          maxHeaderBytes =
-              maxHeaderStr != null ? Integer.parseInt(maxHeaderStr) : Integer.MAX_VALUE;
+        String[] parts = logConfig.split(";", 2);
+        if (parts.length == 2) {
+          if (!(parts[0].startsWith("h") && parts[1].startsWith("m"))) {
+            throw new IllegalArgumentException("Illegal log config pattern");
+          }
+          maxHeaderBytes = optionalInt(parts[0].substring(1));
+          maxMsgBytes = optionalInt(parts[1].substring(1));
+        } else if (parts[0].startsWith("h")) {
+          maxHeaderBytes = optionalInt(parts[0].substring(1));
           maxMsgBytes = 0;
-        } else if ((msgMatcher = msgRe.matcher(logConfig)).matches()) {
+        } else if (parts[0].startsWith("m")) {
           maxHeaderBytes = 0;
-          String maxMsgStr = msgMatcher.group(1);
-          maxMsgBytes = maxMsgStr != null ? Integer.parseInt(maxMsgStr) : Integer.MAX_VALUE;
-        } else if ((bothMatcher = bothRe.matcher(logConfig)).matches()) {
-          String maxHeaderStr = bothMatcher.group(1);
-          String maxMsgStr = bothMatcher.group(2);
-          maxHeaderBytes =
-              maxHeaderStr != null ? Integer.parseInt(maxHeaderStr) : Integer.MAX_VALUE;
-          maxMsgBytes = maxMsgStr != null ? Integer.parseInt(maxMsgStr) : Integer.MAX_VALUE;
+          maxMsgBytes = optionalInt(parts[0].substring(1));
         } else {
           throw new IllegalArgumentException("Illegal log config pattern");
         }
@@ -758,6 +751,29 @@ final class BinlogHelper {
       } catch (NumberFormatException e) {
         throw new IllegalArgumentException("Illegal log config pattern");
       }
+    }
+
+    /** Returns {@code s}, after verifying it contains only digits. */
+    static String checkDigits(String s) {
+      for (int i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        if (c < '0' || '9' < c) {
+          throw new IllegalArgumentException("Illegal log config pattern");
+        }
+      }
+      return s;
+    }
+
+    /** Parses the optional int of the form "" (max int) or ":123" (123). */
+    static int optionalInt(String s) {
+      if (s.isEmpty()) {
+        return Integer.MAX_VALUE;
+      }
+      if (!s.startsWith(":")) {
+        throw new IllegalArgumentException("Illegal log config pattern");
+      }
+      s = checkDigits(s.substring(1));
+      return Integer.parseInt(s);
     }
 
     /**
