@@ -21,7 +21,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-import io.grpc.NameResolver.Helper.ConfigOrError;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -355,93 +354,6 @@ public abstract class NameResolver {
     public ConfigOrError parseServiceConfig(Map<String, ?> rawServiceConfig) {
       throw new UnsupportedOperationException("should have been implemented");
     }
-
-    /**
-     * Represents either a successfully parsed service config, containing all necessary parts to be
-     * later applied by the channel, or a Status containing the error encountered while parsing.
-     *
-     * @since 1.20.0
-     */
-    public static final class ConfigOrError {
-
-      private static final class UnknownConfig {
-
-        UnknownConfig() {}
-
-        @Override
-        public String toString() {
-          return "service config is unused";
-        }
-      }
-
-      /**
-       * A sentinel value indicating that service config is not supported.   This can be used to
-       * indicate that parsing of the service config is neither right nor wrong, but doesn't have
-       * any meaning.
-       */
-      public static final ConfigOrError UNKNOWN_CONFIG =
-          ConfigOrError.fromConfig(new UnknownConfig());
-
-      /**
-       * Returns a {@link ConfigOrError} for the successfully parsed config.
-       */
-      public static ConfigOrError fromConfig(Object config) {
-        return new ConfigOrError(config);
-      }
-
-      /**
-       * Returns a {@link ConfigOrError} for the failure to parse the config.
-       *
-       * @param status a non-OK status
-       */
-      public static ConfigOrError fromError(Status status) {
-        return new ConfigOrError(status);
-      }
-
-      private final Status status;
-      private final Object config;
-
-      private ConfigOrError(Object config) {
-        this.config = checkNotNull(config, "config");
-        this.status = null;
-      }
-
-      private ConfigOrError(Status status) {
-        this.config = null;
-        this.status = checkNotNull(status, "status");
-        checkArgument(!status.isOk(), "cannot use OK status: %s", status);
-      }
-
-      /**
-       * Returns config if exists, otherwise null.
-       */
-      @Nullable
-      public Object getConfig() {
-        return config;
-      }
-
-      /**
-       * Returns error status if exists, otherwise null.
-       */
-      @Nullable
-      public Status getError() {
-        return status;
-      }
-
-      @Override
-      public String toString() {
-        if (config != null) {
-          return MoreObjects.toStringHelper(this)
-              .add("config", config)
-              .toString();
-        } else {
-          assert status != null;
-          return MoreObjects.toStringHelper(this)
-              .add("error", status)
-              .toString();
-        }
-      }
-    }
   }
 
   /**
@@ -595,6 +507,92 @@ public abstract class NameResolver {
        */
       public ResolutionResult build() {
         return new ResolutionResult(servers, attributes, serviceConfig);
+      }
+    }
+  }
+  
+  /**
+   * Gets the attributes associated with the servers resolved by name resolution.  If there are
+   * no attributes, {@link Attributes#EMPTY} will be returned.
+   *
+   * @since 1.21.0
+   */
+  public static final class ConfigOrError {
+    private static final class UnknownConfig {
+
+      UnknownConfig() {}
+
+      @Override
+      public String toString() {
+        return "service config is unused";
+      }
+    }
+
+    /**
+     * A sentinel value indicating that service config is not supported.   This can be used to
+     * indicate that parsing of the service config is neither right nor wrong, but doesn't have
+     * any meaning.
+     */
+    public static final ConfigOrError UNKNOWN_CONFIG =
+        ConfigOrError.fromConfig(new UnknownConfig());
+
+    /**
+     * Returns a {@link ConfigOrError} for the successfully parsed config.
+     */
+    public static ConfigOrError fromConfig(Object config) {
+      return new ConfigOrError(config);
+    }
+
+    /**
+     * Returns a {@link ConfigOrError} for the failure to parse the config.
+     *
+     * @param status a non-OK status
+     */
+    public static ConfigOrError fromError(Status status) {
+      return new ConfigOrError(status);
+    }
+
+    private final Status status;
+    private final Object config;
+
+    private ConfigOrError(Object config) {
+      this.config = checkNotNull(config, "config");
+      this.status = null;
+    }
+
+    private ConfigOrError(Status status) {
+      this.config = null;
+      this.status = checkNotNull(status, "status");
+      checkArgument(!status.isOk(), "cannot use OK status: %s", status);
+    }
+
+    /**
+     * Returns config if exists, otherwise null.
+     */
+    @Nullable
+    public Object getConfig() {
+      return config;
+    }
+
+    /**
+     * Returns error status if exists, otherwise null.
+     */
+    @Nullable
+    public Status getError() {
+      return status;
+    }
+
+    @Override
+    public String toString() {
+      if (config != null) {
+        return MoreObjects.toStringHelper(this)
+            .add("config", config)
+            .toString();
+      } else {
+        assert status != null;
+        return MoreObjects.toStringHelper(this)
+            .add("error", status)
+            .toString();
       }
     }
   }

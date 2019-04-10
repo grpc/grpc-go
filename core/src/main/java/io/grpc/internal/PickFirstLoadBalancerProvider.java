@@ -18,7 +18,7 @@ package io.grpc.internal;
 
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancerProvider;
-import io.grpc.NameResolver.Helper.ConfigOrError;
+import io.grpc.NameResolver.ConfigOrError;
 import java.util.Map;
 
 /**

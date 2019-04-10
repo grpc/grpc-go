@@ -17,7 +17,7 @@
 package io.grpc;
 
 import com.google.common.base.MoreObjects;
-import io.grpc.NameResolver.Helper.ConfigOrError;
+import io.grpc.NameResolver.ConfigOrError;
 import java.util.Map;
 
 /**
