@@ -840,16 +840,19 @@ public class ContextTest {
 
   @Test
   public void storageReturnsNullTest() throws Exception {
-    Field storage = Context.class.getDeclaredField("storage");
+    Class<?> lazyStorageClass = Class.forName("io.grpc.Context$LazyStorage");
+    Field storage = lazyStorageClass.getDeclaredField("storage");
     assertTrue(Modifier.isFinal(storage.getModifiers()));
     // use reflection to forcibly change the storage object to a test object
     storage.setAccessible(true);
+    Field modifiersField = Field.class.getDeclaredField("modifiers");
+    modifiersField.setAccessible(true);
+    int storageModifiers = modifiersField.getInt(storage);
+    modifiersField.set(storage, storageModifiers & ~Modifier.FINAL);
     Object o = storage.get(null);
-    @SuppressWarnings("unchecked")
-    AtomicReference<Context.Storage> storageRef = (AtomicReference<Context.Storage>) o;
-    Context.Storage originalStorage = storageRef.get();
+    Context.Storage originalStorage = (Context.Storage) o;
     try {
-      storageRef.set(new Context.Storage() {
+      storage.set(null, new Context.Storage() {
         @Override
         public Context doAttach(Context toAttach) {
           return null;
@@ -878,8 +881,10 @@ public class ContextTest {
       assertEquals(Context.ROOT, Context.current());
     } finally {
       // undo the changes
-      storageRef.set(originalStorage);
+      storage.set(null, originalStorage);
       storage.setAccessible(false);
+      modifiersField.set(storage, storageModifiers | Modifier.FINAL);
+      modifiersField.setAccessible(false);
     }
   }
 
