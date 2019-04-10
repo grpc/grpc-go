@@ -137,7 +137,6 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		cc:                   cc,
 		t:                    time.NewTimer(0),
 		rn:                   make(chan struct{}, 1),
-		rateCh:               make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
 	}
 
@@ -151,7 +150,6 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	}
 
 	d.wg.Add(1)
-	go d.rateLimiter()
 	go d.watcher()
 	return d, nil
 }
@@ -213,10 +211,7 @@ type dnsResolver struct {
 	cc         resolver.ClientConn
 	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
 	rn chan struct{}
-	// rateCh is the channel used to rate limit and coalesce dns resolution
-	// requests.
-	rateCh chan struct{}
-	t      *time.Timer
+	t  *time.Timer
 	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
 	// Otherwise, data race will be possible. [Race Example] in dns_resolver_test we
 	// replace the real lookup functions with mocked ones to facilitate testing.
@@ -251,9 +246,6 @@ func (d *dnsResolver) watcher() {
 		case <-d.t.C:
 		case <-d.rn:
 		}
-		// Block on the rate channel to ensure that only allowed number of
-		// resolution requests happen.
-		<-d.rateCh
 
 		result, sc := d.lookup()
 		// Next lookup should happen within an interval defined by d.freq. It may be
@@ -267,26 +259,13 @@ func (d *dnsResolver) watcher() {
 		}
 		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
-	}
-}
 
-func (d *dnsResolver) rateLimiter() {
-	// Write to the rate channel here to unblock the first iteration of the loop
-	// in watcher().
-	d.rateCh <- struct{}{}
-	t := time.NewTicker(minDNSResRate)
-	for {
+		t := time.NewTimer(minDNSResRate)
 		select {
+		case <-t.C:
 		case <-d.ctx.Done():
 			t.Stop()
-			// Close the rate limiting channel to unblock the watcher().
-			close(d.rateCh)
 			return
-		case <-t.C:
-		}
-		select {
-		case d.rateCh <- struct{}{}:
-		default:
 		}
 	}
 }
