@@ -252,7 +252,7 @@ func (d *dnsResolver) watcher() {
 		case <-d.rn:
 		}
 		// Block on the rate channel to ensure that only allowed number of
-		// resulution requests happen.
+		// resolution requests happen.
 		<-d.rateCh
 
 		result, sc := d.lookup()
