@@ -1,41 +1,86 @@
 # gRPC-Go
 
-[![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go) [![GoDoc](https://godoc.org/google.golang.org/grpc?status.svg)](https://godoc.org/google.golang.org/grpc) [![GoReportCard](https://goreportcard.com/badge/grpc/grpc-go)](https://goreportcard.com/report/github.com/grpc/grpc-go)
+[![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go)
+[![GoDoc](https://godoc.org/google.golang.org/grpc?status.svg)](https://godoc.org/google.golang.org/grpc)
+[![GoReportCard](https://goreportcard.com/badge/grpc/grpc-go)](https://goreportcard.com/report/github.com/grpc/grpc-go)
 
-The Go implementation of [gRPC](https://grpc.io/): A high performance, open source, general RPC framework that puts mobile and HTTP/2 first. For more information see the [gRPC Quick Start: Go](https://grpc.io/docs/quickstart/go.html) guide.
+The Go implementation of [gRPC](https://grpc.io/): A high performance, open
+source, general RPC framework that puts mobile and HTTP/2 first. For more
+information see the [gRPC Quick Start:
+Go](https://grpc.io/docs/quickstart/go.html) guide.
 
 Installation
 ------------
 
-To install this package, you need to install Go and setup your Go workspace on your computer. The simplest way to install the library is to run:
+To install this package, you need to install Go and setup your Go workspace on
+your computer. The simplest way to install the library is to run:
 
 ```
 $ go get -u google.golang.org/grpc
 ```
 
+With Go module support (Go 1.11+), simply `import "google.golang.org/grpc"` in
+your source code and `go [build|run|test]` will automatically download the
+necessary dependencies ([Go modules
+ref](https://github.com/golang/go/wiki/Modules)).
+
+If you are trying to access grpc-go from within China, please see the
+[FAQ](#FAQ) below.
+
 Prerequisites
 -------------
-
 gRPC-Go requires Go 1.9 or later.
-
-Constraints
------------
-The grpc package should only depend on standard Go packages and a small number of exceptions. If your contribution introduces new dependencies which are NOT in the [list](https://godoc.org/google.golang.org/grpc?imports), you need a discussion with gRPC-Go authors and consultants.
 
 Documentation
 -------------
-See [API documentation](https://godoc.org/google.golang.org/grpc) for package and API descriptions and find examples in the [examples directory](examples/).
+- See [godoc](https://godoc.org/google.golang.org/grpc) for package and API
+  descriptions.
+- Documentation on specific topics can be found in the [Documentation
+  directory](Documentation/).
+- Examples can be found in the [examples directory](examples/).
 
 Performance
 -----------
-See the current benchmarks for some of the languages supported in [this dashboard](https://performance-dot-grpc-testing.appspot.com/explore?dashboard=5652536396611584&widget=490377658&container=1286539696).
+Performance benchmark data for grpc-go and other languages is maintained in
+[this
+dashboard](https://performance-dot-grpc-testing.appspot.com/explore?dashboard=5652536396611584&widget=490377658&container=1286539696).
 
 Status
 ------
-General Availability [Google Cloud Platform Launch Stages](https://cloud.google.com/terms/launch-stages).
+General Availability [Google Cloud Platform Launch
+Stages](https://cloud.google.com/terms/launch-stages).
 
 FAQ
 ---
+
+#### Accessing from China
+
+The `golang.org` domain is blocked from inside China.  To build Go code, you
+will need to set up a VPN or:
+
+- Without Go module support: `git clone` the repo manually:
+
+  ```
+  git clone https://github.com/grpc/grpc-go.git $GOPATH/src/google.golang.org/grpc
+  ```
+
+  You will need to do the same for all of grpc's dependencies in `golang.org`,
+  e.g. `golang.org/x/net`.
+
+- With Go module support: it is possible to use the `replace` feature of `go
+  mod` to create aliases for golang.org packages.  In your project's directory:
+
+  ```
+  go mod edit -replace=google.golang.org/grpc=github.com/grpc/grpc-go@latest
+  go mod tidy
+  go mod vendor
+  go build -mod=vendor
+  ```
+
+  Again, this will need to be done for all transitive dependencies hosted on
+  golang.org as well.  Please refer to [this
+  issue](https://github.com/golang/go/issues/28652) in the golang repo regarding
+  this concern.
 
 #### Compiling error, undefined: grpc.SupportPackageIsVersion
 
