@@ -641,7 +641,9 @@ func DoUnimplementedMethod(cc *grpc.ClientConn) {
 
 // DoPickFirstUnary runs multiple RPCs (rpcCount) and checks that all requests
 // are sent to the same backend.
-func DoPickFirstUnary(tc testpb.TestServiceClient, rpcCount int) {
+func DoPickFirstUnary(tc testpb.TestServiceClient) {
+	const rpcCount = 100
+
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
@@ -655,18 +657,18 @@ func DoPickFirstUnary(tc testpb.TestServiceClient, rpcCount int) {
 	for i := 0; i < rpcCount; i++ {
 		resp, err := tc.UnaryCall(ctx, req)
 		if err != nil {
-			grpclog.Fatalf("failed to do UnaryCall: %v", err)
+			grpclog.Fatalf("iteration %d, failed to do UnaryCall: %v", i, err)
 		}
 		id := resp.ServerId
 		if id == "" {
-			grpclog.Fatalf("got empty server ID")
+			grpclog.Fatalf("iteration %d, got empty server ID", i)
 		}
 		if i == 0 {
 			serverID = id
 			continue
 		}
 		if serverID != id {
-			grpclog.Fatalf("got different server ids: %q vs %q", serverID, id)
+			grpclog.Fatalf("iteration %d, got different server ids: %q vs %q", i, serverID, id)
 		}
 	}
 }

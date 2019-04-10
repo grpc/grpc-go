@@ -272,7 +272,7 @@ func main() {
 		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
 		grpclog.Infoln("UnimplementedService done")
 	case "pick_first_unary":
-		interop.DoPickFirstUnary(tc, 100)
+		interop.DoPickFirstUnary(tc)
 		grpclog.Infoln("PickFirstUnary done")
 	default:
 		grpclog.Fatal("Unsupported test case: ", *testCase)
