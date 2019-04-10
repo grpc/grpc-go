@@ -30,8 +30,8 @@ For a guided tour, take a look at the [quick start
 guide](https://grpc.io/docs/quickstart/java.html) or the more explanatory [gRPC
 basics](https://grpc.io/docs/tutorials/basic/java.html).
 
-The [examples](https://github.com/grpc/grpc-java/tree/v1.19.0/examples) and the
-[Android example](https://github.com/grpc/grpc-java/tree/v1.19.0/examples/android)
+The [examples](https://github.com/grpc/grpc-java/tree/v1.20.0/examples) and the
+[Android example](https://github.com/grpc/grpc-java/tree/v1.20.0/examples/android)
 are standalone projects that showcase the usage of gRPC.
 
 Download
@@ -42,37 +42,37 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-netty-shaded</artifactId>
-  <version>1.19.0</version>
+  <version>1.20.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-protobuf</artifactId>
-  <version>1.19.0</version>
+  <version>1.20.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-stub</artifactId>
-  <version>1.19.0</version>
+  <version>1.20.0</version>
 </dependency>
 ```
 
 Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-netty-shaded:1.19.0'
-compile 'io.grpc:grpc-protobuf:1.19.0'
-compile 'io.grpc:grpc-stub:1.19.0'
+compile 'io.grpc:grpc-netty-shaded:1.20.0'
+compile 'io.grpc:grpc-protobuf:1.20.0'
+compile 'io.grpc:grpc-stub:1.20.0'
 ```
 
 For Android client, use `grpc-okhttp` instead of `grpc-netty-shaded` and
 `grpc-protobuf-lite` instead of `grpc-protobuf`:
 ```gradle
-compile 'io.grpc:grpc-okhttp:1.19.0'
-compile 'io.grpc:grpc-protobuf-lite:1.19.0'
-compile 'io.grpc:grpc-stub:1.19.0'
+compile 'io.grpc:grpc-okhttp:1.20.0'
+compile 'io.grpc:grpc-protobuf-lite:1.20.0'
+compile 'io.grpc:grpc-stub:1.20.0'
 ```
 
 [the JARs]:
-https://search.maven.org/search?q=g:io.grpc%20AND%20v:1.19.0
+https://search.maven.org/search?q=g:io.grpc%20AND%20v:1.20.0
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
@@ -102,9 +102,9 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <artifactId>protobuf-maven-plugin</artifactId>
       <version>0.5.1</version>
       <configuration>
-        <protocArtifact>com.google.protobuf:protoc:3.6.1:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.7.1:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.19.0:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.20.0:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -137,11 +137,11 @@ buildscript {
 
 protobuf {
   protoc {
-    artifact = "com.google.protobuf:protoc:3.6.1"
+    artifact = "com.google.protobuf:protoc:3.7.1"
   }
   plugins {
     grpc {
-      artifact = 'io.grpc:protoc-gen-grpc-java:1.19.0'
+      artifact = 'io.grpc:protoc-gen-grpc-java:1.20.0'
     }
   }
   generateProtoTasks {
