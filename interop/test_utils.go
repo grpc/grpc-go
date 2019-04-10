@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
@@ -674,14 +673,11 @@ func DoPickFirstUnary(tc testpb.TestServiceClient) {
 }
 
 type testServer struct {
-	id string
 }
 
 // NewTestServer creates a test server for test service.
 func NewTestServer() testpb.TestServiceServer {
-	return &testServer{
-		id: uuid.New().String(),
-	}
+	return &testServer{}
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -725,13 +721,9 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	resp := &testpb.SimpleResponse{
+	return &testpb.SimpleResponse{
 		Payload: pl,
-	}
-	if in.FillServerId {
-		resp.ServerId = s.id
-	}
-	return resp, nil
+	}, nil
 }
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
