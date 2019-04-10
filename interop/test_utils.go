@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
@@ -638,12 +639,47 @@ func DoUnimplementedMethod(cc *grpc.ClientConn) {
 	}
 }
 
+// DoPickFirstUnary runs multiple RPCs (rpcCount) and checks that all requests
+// are sent to the same backend.
+func DoPickFirstUnary(tc testpb.TestServiceClient, rpcCount int) {
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(1),
+		Payload:      pl,
+		FillServerId: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var serverID string
+	for i := 0; i < rpcCount; i++ {
+		resp, err := tc.UnaryCall(ctx, req)
+		if err != nil {
+			grpclog.Fatalf("failed to do UnaryCall: %v", err)
+		}
+		id := resp.ServerId
+		if id == "" {
+			grpclog.Fatalf("got empty server ID")
+		}
+		if i == 0 {
+			serverID = id
+			continue
+		}
+		if serverID != id {
+			grpclog.Fatalf("got different server ids: %q vs %q", serverID, id)
+		}
+	}
+}
+
 type testServer struct {
+	id string
 }
 
 // NewTestServer creates a test server for test service.
 func NewTestServer() testpb.TestServiceServer {
-	return &testServer{}
+	return &testServer{
+		id: uuid.New().String(),
+	}
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -687,9 +723,13 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	return &testpb.SimpleResponse{
+	resp := &testpb.SimpleResponse{
 		Payload: pl,
-	}, nil
+	}
+	if in.FillServerId {
+		resp.ServerId = s.id
+	}
+	return resp, nil
 }
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
