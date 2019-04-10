@@ -53,7 +53,8 @@ public enum TestCases {
   CANCEL_AFTER_BEGIN("cancel stream after starting it"),
   CANCEL_AFTER_FIRST_RESPONSE("cancel on first response"),
   TIMEOUT_ON_SLEEPING_SERVER("timeout before receiving a response"),
-  VERY_LARGE_REQUEST("very large request");
+  VERY_LARGE_REQUEST("very large request"),
+  PICK_FIRST_UNARY("all requests are sent to one server despite multiple servers are resolved");
 
   private final String description;
 

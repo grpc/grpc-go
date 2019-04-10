@@ -377,6 +377,11 @@ public class TestServiceClient {
         break;
       }
 
+      case PICK_FIRST_UNARY: {
+        tester.pickFirstUnary();
+        break;
+      }
+
       default:
         throw new IllegalArgumentException("Unknown test case: " + testCase);
     }

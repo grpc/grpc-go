@@ -491,6 +491,26 @@ public abstract class AbstractInteropTest {
         Collections.singleton(goldenResponse));
   }
 
+  /**
+   * Assuming "pick_first" policy is used, tests that all requests are sent to the same server.
+   */
+  public void pickFirstUnary() throws Exception {
+    SimpleRequest request = SimpleRequest.newBuilder()
+        .setResponseSize(1)
+        .setFillServerId(true)
+        .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[1])))
+        .build();
+
+    SimpleResponse firstResponse = blockingStub.unaryCall(request);
+    // Increase the chance of all servers are connected, in case the channel should be doing
+    // round_robin instead.
+    Thread.sleep(5000);
+    for (int i = 0; i < 100; i++) {
+      SimpleResponse response = blockingStub.unaryCall(request);
+      assertThat(response.getServerId()).isEqualTo(firstResponse.getServerId());
+    }
+  }
+
   @Test
   public void serverStreaming() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
