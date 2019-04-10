@@ -22,12 +22,17 @@ package main
 import (
 	"flag"
 	"net"
+	"strings"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+)
+
+const (
+	udsAddrPrefix = "unix:"
 )
 
 var (
@@ -38,7 +43,12 @@ var (
 func main() {
 	flag.Parse()
 
-	lis, err := net.Listen("tcp", *serverAddr)
+	// If the server address starts with `unix:`, then we have a UDS address.
+	network := "tcp"
+	if strings.HasPrefix(*serverAddr, udsAddrPrefix) {
+		network = "unix"
+	}
+	lis, err := net.Listen(network, *serverAddr)
 	if err != nil {
 		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", *serverAddr, err)
 	}
