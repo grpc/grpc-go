@@ -53,10 +53,19 @@ Stages](https://cloud.google.com/terms/launch-stages).
 FAQ
 ---
 
-#### Accessing from China
+#### I/O Timeout Errors
 
-The `golang.org` domain is blocked from inside China.  To build Go code, you
-will need to set up a VPN or:
+The `golang.org` domain may be blocked from some countries.  `go get` usually
+produces an error like the following when this happens:
+
+```
+$ go get -u google.golang.org/grpc
+package google.golang.org/grpc: unrecognized import path "google.golang.org/grpc" (https fetch: Get https://google.golang.org/grpc?go-get=1: dial tcp 216.239.37.1:443: i/o timeout)
+```
+
+To build Go code, there are several options:
+
+- Set up a VPN and access google.golang.org through that.
 
 - Without Go module support: `git clone` the repo manually:
 
