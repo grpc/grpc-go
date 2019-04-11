@@ -1176,14 +1176,19 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	// We set the re-resolution rate to 500ms at the start of this test. After
-	// this loop, we expect to see two and only two resolution requests making it
-	// past the rate limiter.
+	// We set the re-resolution rate to 500ms at the start of this test. We
+	// expect the first call to ResolveNow() to make a resolution request
+	// immediately (T0), and one amongst the other queued up calls to make
+	// another resolution request at (T0+500ms). We wait till a little over
+	// (T0+1s) to make sure all the earlier calls were squashed and another
+	// resolution request does not happen.
 	start := time.Now()
-	end := start.Add(750 * time.Millisecond)
+	end := start.Add(400 * time.Millisecond)
 	for time.Now().Before(end) {
 		r.ResolveNow(resolver.ResolveNowOption{})
+		time.Sleep(1 * time.Millisecond)
 	}
+	time.Sleep(1 * time.Second)
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	var gotAddrs []resolver.Address
