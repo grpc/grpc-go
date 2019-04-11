@@ -1150,13 +1150,13 @@ func TestCustomAuthority(t *testing.T) {
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 
+	dc := replaceDNSResRate(500 * time.Millisecond)
+	defer dc()
+
 	// Create a new testResolver{} for this test because we want the exact count
 	// of the number of times the resolver was invoked.
 	nc := replaceNetFunc()
 	defer nc()
-
-	dc := replaceDNSResRate(500 * time.Millisecond)
-	defer dc()
 
 	target := "foo.bar.com"
 	b := NewBuilder()
@@ -1165,6 +1165,8 @@ func TestRateLimitedResolve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolver.Build() returned error: %v\n", err)
 	}
+	defer r.Close()
+
 	dnsR, ok := r.(*dnsResolver)
 	if !ok {
 		t.Fatalf("resolver.Build() returned unexpected type: %T\n", dnsR)
@@ -1201,5 +1203,4 @@ func TestRateLimitedResolve(t *testing.T) {
 	if tr.cnt != wantResolveCnt {
 		t.Errorf("Resolve count mismatch for target: %q = %+v, want %+v\n", target, tr.cnt, wantResolveCnt)
 	}
-	r.Close()
 }
