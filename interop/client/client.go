@@ -76,7 +76,8 @@ var (
         special_status_message: Unicode and whitespace is correctly processed in status message;
         custom_metadata: server will echo custom metadata;
         unimplemented_method: client attempts to call unimplemented method;
-        unimplemented_service: client attempts to call unimplemented service.`)
+        unimplemented_service: client attempts to call unimplemented service;
+        pick_first_unary: all requests are sent to one server despite multiple servers are resolved.`)
 )
 
 type credsMode uint8
@@ -270,6 +271,9 @@ func main() {
 	case "unimplemented_service":
 		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
 		grpclog.Infoln("UnimplementedService done")
+	case "pick_first_unary":
+		interop.DoPickFirstUnary(tc)
+		grpclog.Infoln("PickFirstUnary done")
 	default:
 		grpclog.Fatal("Unsupported test case: ", *testCase)
 	}

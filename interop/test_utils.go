@@ -638,6 +638,40 @@ func DoUnimplementedMethod(cc *grpc.ClientConn) {
 	}
 }
 
+// DoPickFirstUnary runs multiple RPCs (rpcCount) and checks that all requests
+// are sent to the same backend.
+func DoPickFirstUnary(tc testpb.TestServiceClient) {
+	const rpcCount = 100
+
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(1),
+		Payload:      pl,
+		FillServerId: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var serverID string
+	for i := 0; i < rpcCount; i++ {
+		resp, err := tc.UnaryCall(ctx, req)
+		if err != nil {
+			grpclog.Fatalf("iteration %d, failed to do UnaryCall: %v", i, err)
+		}
+		id := resp.ServerId
+		if id == "" {
+			grpclog.Fatalf("iteration %d, got empty server ID", i)
+		}
+		if i == 0 {
+			serverID = id
+			continue
+		}
+		if serverID != id {
+			grpclog.Fatalf("iteration %d, got different server ids: %q vs %q", i, serverID, id)
+		}
+	}
+}
+
 type testServer struct {
 }
 
