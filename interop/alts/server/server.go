@@ -45,12 +45,14 @@ func main() {
 
 	// If the server address starts with `unix:`, then we have a UDS address.
 	network := "tcp"
-	if strings.HasPrefix(*serverAddr, udsAddrPrefix) {
+	address := *serverAddr
+	if strings.HasPrefix(address, udsAddrPrefix) {
 		network = "unix"
+		address = strings.TrimPrefix(address, udsAddrPrefix)
 	}
-	lis, err := net.Listen(network, *serverAddr)
+	lis, err := net.Listen(network, address)
 	if err != nil {
-		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", *serverAddr, err)
+		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", address, err)
 	}
 	opts := alts.DefaultServerOptions()
 	if *hsAddr != "" {
