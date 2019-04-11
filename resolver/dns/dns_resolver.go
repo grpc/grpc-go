@@ -52,9 +52,6 @@ const (
 	// In DNS, service config is encoded in a TXT record via the mechanism
 	// described in RFC-1464 using the attribute name grpc_config.
 	txtAttribute = "grpc_config="
-	// To prevent excessive re-resolution, we enforce a rate limit on DNS
-	// resolution requests.
-	defaultDNSResRate = 30 * time.Second
 )
 
 var (
@@ -69,7 +66,9 @@ var (
 
 var (
 	defaultResolver netResolver = net.DefaultResolver
-	minDNSResRate               = defaultDNSResRate
+	// To prevent excessive re-resolution, we enforce a rate limit on DNS
+	// resolution requests.
+	minDNSResRate = 30 * time.Second
 )
 
 var customAuthorityDialler = func(authority string) func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -138,6 +137,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 		t:                    time.NewTimer(0),
 		rn:                   make(chan struct{}, 1),
 		disableServiceConfig: opts.DisableServiceConfig,
+		reResRate:            minDNSResRate,
 	}
 
 	if target.Authority == "" {
@@ -220,6 +220,9 @@ type dnsResolver struct {
 	// has data race with replaceNetFunc (WRITE the lookup function pointers).
 	wg                   sync.WaitGroup
 	disableServiceConfig bool
+	// To prevent excessive re-resolutions via calls to ResolveNow(), we enforce
+	// a minimum re-resolution rate.
+	reResRate time.Duration
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
@@ -260,7 +263,9 @@ func (d *dnsResolver) watcher() {
 		d.cc.NewServiceConfig(sc)
 		d.cc.NewAddress(result)
 
-		t := time.NewTimer(minDNSResRate)
+		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
+		// will be queued in d.rn.
+		t := time.NewTimer(d.reResRate)
 		select {
 		case <-t.C:
 		case <-d.ctx.Done():

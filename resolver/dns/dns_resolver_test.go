@@ -34,9 +34,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Set a very small duration for the resolver rate limit to avoid tests
-	// running for long time.
-	dc := replaceDNSResRate(1 * time.Second)
+	// Set a valid duration for the re-resolution rate only for tests which are
+	// actually testing that feature.
+	dc := replaceDNSResRate(time.Duration(0))
 	defer dc()
 
 	cleanup := replaceNetFunc()
@@ -90,11 +90,11 @@ func (t *testClientConn) getSc() (string, int) {
 }
 
 type testResolver struct {
-	cnt map[string]int
+	cnt int
 }
 
 func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	tr.cnt[host]++
+	tr.cnt++
 	return hostLookup(host)
 }
 
@@ -108,7 +108,7 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 
 func replaceNetFunc() func() {
 	oldResolver := defaultResolver
-	defaultResolver = &testResolver{cnt: make(map[string]int)}
+	defaultResolver = &testResolver{}
 
 	return func() {
 		defaultResolver = oldResolver
@@ -1143,6 +1143,10 @@ func TestCustomAuthority(t *testing.T) {
 	}
 }
 
+// TestRateLimitedResolve exercises the rate limit enforced on re-resolution
+// requests. It sets the re-resolution rate to a small value and repeatedly
+// calls ResolveNow() and ensures only the expected number of resolution
+// requests are made.
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 
@@ -1150,6 +1154,9 @@ func TestRateLimitedResolve(t *testing.T) {
 	// of the number of times the resolver was invoked.
 	nc := replaceNetFunc()
 	defer nc()
+
+	dc := replaceDNSResRate(500 * time.Millisecond)
+	defer dc()
 
 	target := "foo.bar.com"
 	b := NewBuilder()
@@ -1167,15 +1174,14 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r.ResolveNow(resolver.ResolveNowOption{})
-		}()
+	// We set the re-resolution rate to 500ms at the start of this test. After
+	// this loop, we expect to see two and only two resolution requests making it
+	// past the rate limiter.
+	start := time.Now()
+	end := start.Add(750 * time.Millisecond)
+	for time.Now().Before(end) {
+		r.ResolveNow(resolver.ResolveNowOption{})
 	}
-	wg.Wait()
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	var gotAddrs []resolver.Address
@@ -1191,10 +1197,9 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, gotAddrs, wantAddrs)
 	}
 
-	gotResolveCnt := tr.cnt[target]
-	wantResolveCnt := 1
-	if gotResolveCnt != wantResolveCnt {
-		t.Errorf("Resolve count mismatch for target: %q = %+v, want %+v\n", target, gotResolveCnt, wantResolveCnt)
+	wantResolveCnt := 2
+	if tr.cnt != wantResolveCnt {
+		t.Errorf("Resolve count mismatch for target: %q = %+v, want %+v\n", target, tr.cnt, wantResolveCnt)
 	}
 	r.Close()
 }
