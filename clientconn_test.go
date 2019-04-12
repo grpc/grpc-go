@@ -835,13 +835,13 @@ func (s) TestWithBackoffMaxDelay(t *testing.T) {
 	testBackoffStrategySet(t, expected, WithBackoffMaxDelay(md))
 }
 
-func (s) TestWithConnectRetryParams(t *testing.T) {
+func (s) TestWithConnectParams(t *testing.T) {
 	bd := 2 * time.Second
 	mltpr := 2.0
 	jitter := 0.0
-	crt := ConnectRetryParams{BaseDelay: bd, Multiplier: mltpr, Jitter: jitter}
-	expected := backoff.NewExponentialBuilder().BaseDelay(bd).Multiplier(mltpr).Jitter(jitter).MaxDelay(time.Duration(0)).MinConnectTimeout(time.Duration(0)).Build()
-	testBackoffStrategySet(t, expected, WithConnectRetryParams(crt))
+	crt := ConnectParams{BackoffBaseDelay: bd, BackoffMultiplier: mltpr, BackoffJitter: jitter}
+	expected := backoff.NewExponentialBuilder().BaseDelay(bd).Multiplier(mltpr).Jitter(jitter).MaxDelay(time.Duration(0)).Build()
+	testBackoffStrategySet(t, expected, WithConnectParams(crt))
 }
 
 func testBackoffStrategySet(t *testing.T, expected backoff.Strategy, opts ...DialOption) {
@@ -1065,8 +1065,7 @@ func (s) TestGetClientConnTarget(t *testing.T) {
 
 type backoffForever struct{}
 
-func (b backoffForever) Backoff(int) time.Duration           { return time.Duration(math.MaxInt64) }
-func (b backoffForever) MinConnectionTimeout() time.Duration { return time.Duration(0) }
+func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
 
 func (s) TestResetConnectBackoff(t *testing.T) {
 	dials := make(chan struct{})

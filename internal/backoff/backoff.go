@@ -34,9 +34,6 @@ type Strategy interface {
 	// Backoff returns the amount of time to wait before the next retry given
 	// the number of consecutive failures.
 	Backoff(retries int) time.Duration
-	// MinConnectionTimeout returns the minimum amount of time we are willing to
-	// give a connection to complete.
-	MinConnectionTimeout() time.Duration
 }
 
 // StrategyBuilder helps build an implementation of the Strategy interface,
@@ -52,9 +49,6 @@ type StrategyBuilder interface {
 	Jitter(float64) StrategyBuilder
 	// MaxDelay sets the upper bound of backoff delay.
 	MaxDelay(time.Duration) StrategyBuilder
-	// MinConnectTimeout sets the minimum amount of time we are willing to give a
-	// connection to complete.
-	MinConnectTimeout(time.Duration) StrategyBuilder
 	// Build builds an implementation of the Strategy interface configured using
 	// the above setter methods.
 	Build() Strategy
@@ -63,11 +57,10 @@ type StrategyBuilder interface {
 // Default values for the different backoff parameters as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 const (
-	baseDelay         = 1.0 * time.Second
-	multiplier        = 1.6
-	jitter            = 0.2
-	maxDelay          = 120 * time.Second
-	minConnectTimeout = 20 * time.Second
+	baseDelay  = 1.0 * time.Second
+	multiplier = 1.6
+	jitter     = 0.2
+	maxDelay   = 120 * time.Second
 )
 
 // NewExponentialBuilder returns an implementation of the StrategyBuilder
@@ -80,7 +73,6 @@ func NewExponentialBuilder() StrategyBuilder {
 		mltpr:  multiplier,
 		jitter: jitter,
 		md:     maxDelay,
-		mct:    minConnectTimeout,
 	}
 }
 
@@ -119,19 +111,12 @@ func (eb *exponentialBuilder) MaxDelay(md time.Duration) StrategyBuilder {
 }
 
 // BaseDelay helps implement StrategyBuilder.
-func (eb *exponentialBuilder) MinConnectTimeout(mct time.Duration) StrategyBuilder {
-	eb.mct = mct
-	return eb
-}
-
-// BaseDelay helps implement StrategyBuilder.
 func (eb *exponentialBuilder) Build() Strategy {
 	return Exponential{
-		baseDelay:         eb.bd,
-		multiplier:        eb.mltpr,
-		jitter:            eb.jitter,
-		maxDelay:          eb.md,
-		minConnectTimeout: eb.mct,
+		baseDelay:  eb.bd,
+		multiplier: eb.mltpr,
+		jitter:     eb.jitter,
+		maxDelay:   eb.md,
 	}
 }
 
@@ -148,9 +133,6 @@ type Exponential struct {
 	jitter float64
 	// maxDelay is the upper bound of backoff delay.
 	maxDelay time.Duration
-	// minConnectTimeout is the minimum amount of time we are willing to give a
-	// connection to complete.
-	minConnectTimeout time.Duration
 }
 
 // Backoff returns the amount of time to wait before the next retry given the
@@ -175,11 +157,4 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 		return 0
 	}
 	return time.Duration(backoff)
-}
-
-// MinConnectionTimeout returns the minimum amount of time we are willing to
-// give a connection to complete.
-// Helps implement Strategy.
-func (bc Exponential) MinConnectionTimeout() time.Duration {
-	return bc.minConnectTimeout
 }

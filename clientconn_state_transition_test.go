@@ -500,8 +500,7 @@ func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.
 
 type noBackoff struct{}
 
-func (b noBackoff) Backoff(int) time.Duration           { return time.Duration(0) }
-func (b noBackoff) MinConnectionTimeout() time.Duration { return time.Duration(0) }
+func (b noBackoff) Backoff(int) time.Duration { return time.Duration(0) }
 
 // Keep reading until something causes the connection to die (EOF, server
 // closed, etc). Useful as a tool for mindlessly keeping the connection

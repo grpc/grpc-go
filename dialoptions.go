@@ -36,6 +36,11 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+const (
+	// Minimum time to give a connection to complete.
+	minConnectTimeout = 20 * time.Second
+)
+
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
@@ -65,6 +70,7 @@ type dialOptions struct {
 	minConnectTimeout           func() time.Duration
 	defaultServiceConfig        *ServiceConfig // defaultServiceConfig is parsed from defaultServiceConfigRawJSON.
 	defaultServiceConfigRawJSON *string
+	mct                         time.Duration
 }
 
 // DialOption configures how we set up the connection.
@@ -249,23 +255,26 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	})
 }
 
-// WithConnectRetryParams configures the dialer to use the provided backoff
+// WithConnectParams configures the dialer to use the provided backoff
 // parameters for the algorithm defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 // This will override all the default values with the ones provided here. So,
 // use with caution.
 //
 // This API is EXPERIMENTAL.
-func WithConnectRetryParams(p ConnectRetryParams) DialOption {
+func WithConnectParams(p ConnectParams) DialOption {
 	b := backoff.NewExponentialBuilder()
-	b.BaseDelay(p.BaseDelay).Multiplier(p.Multiplier).Jitter(p.Jitter).MaxDelay(p.MaxDelay).MinConnectTimeout(p.MinConnectTimeout)
-	return withBackoff(b.Build())
+	b.BaseDelay(p.BackoffBaseDelay).Multiplier(p.BackoffMultiplier).Jitter(p.BackoffJitter).MaxDelay(p.BackoffMaxDelay)
+	return newFuncDialOption(func(o *dialOptions) {
+		o.bs = b.Build()
+		o.mct = p.MinConnectTimeout
+	})
 }
 
 // WithBackoffMaxDelay configures the dialer to use the provided maximum delay
 // when backing off after failed connection attempts.
 //
-// Deprecated: use WithConnectRetryParams instead.
+// Deprecated: use WithConnectParams instead.
 func WithBackoffMaxDelay(md time.Duration) DialOption {
 	return WithBackoffConfig(BackoffConfig{MaxDelay: md})
 }
@@ -273,7 +282,7 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 // WithBackoffConfig configures the dialer to use the provided backoff
 // parameters after connection failures.
 //
-// Deprecated: use WithConnectRetryParams instead.
+// Deprecated: use WithConnectParams instead.
 func WithBackoffConfig(b BackoffConfig) DialOption {
 	return withBackoff(backoff.NewExponentialBuilder().MaxDelay(b.MaxDelay).Build())
 }
@@ -529,6 +538,7 @@ func defaultDialOptions() dialOptions {
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
 		},
+		mct: minConnectTimeout,
 	}
 }
 
