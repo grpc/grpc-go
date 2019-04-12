@@ -88,7 +88,7 @@ go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 gofmt -s -d -l . 2>&1 | fail_on_output
 goimports -l . 2>&1 | fail_on_output
 golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
-go tool vet -all .
+go vet -all .
 
 # - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then
