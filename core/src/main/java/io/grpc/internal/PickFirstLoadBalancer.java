@@ -21,7 +21,6 @@ import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
-import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
@@ -31,6 +30,7 @@ import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
+import io.grpc.LoadBalancer.SubchannelStateListener;
 import io.grpc.Status;
 import java.util.List;
 
@@ -39,7 +39,7 @@ import java.util.List;
  * NameResolver}.  The channel's default behavior is used, which is walking down the address list
  * and sticking to the first that works.
  */
-final class PickFirstLoadBalancer extends LoadBalancer {
+final class PickFirstLoadBalancer extends LoadBalancer implements SubchannelStateListener {
   private final Helper helper;
   private Subchannel subchannel;
 
@@ -51,7 +51,11 @@ final class PickFirstLoadBalancer extends LoadBalancer {
   public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
     List<EquivalentAddressGroup> servers = resolvedAddresses.getServers();
     if (subchannel == null) {
-      subchannel = helper.createSubchannel(servers, Attributes.EMPTY);
+      subchannel = helper.createSubchannel(
+          CreateSubchannelArgs.newBuilder()
+              .setAddresses(servers)
+              .setStateListener(this)
+              .build());
 
       // The channel state does not get updated when doing name resolving today, so for the moment
       // let LB report CONNECTION and call subchannel.requestConnection() immediately.
@@ -74,9 +78,9 @@ final class PickFirstLoadBalancer extends LoadBalancer {
   }
 
   @Override
-  public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
+  public void onSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
     ConnectivityState currentState = stateInfo.getState();
-    if (subchannel != this.subchannel || currentState == SHUTDOWN) {
+    if (subchannel != PickFirstLoadBalancer.this.subchannel || currentState == SHUTDOWN) {
       return;
     }
 
@@ -99,7 +103,6 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       default:
         throw new IllegalArgumentException("Unsupported state:" + currentState);
     }
-
     helper.updateBalancingState(currentState, picker);
   }
 

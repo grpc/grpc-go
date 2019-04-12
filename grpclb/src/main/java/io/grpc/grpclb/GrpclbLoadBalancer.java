@@ -24,7 +24,6 @@ import com.google.common.base.Stopwatch;
 import io.grpc.Attributes;
 import io.grpc.ChannelLogger;
 import io.grpc.ChannelLogger.ChannelLogLevel;
-import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
@@ -75,16 +74,9 @@ class GrpclbLoadBalancer extends LoadBalancer {
     this.stopwatch = checkNotNull(stopwatch, "stopwatch");
     this.backoffPolicyProvider = checkNotNull(backoffPolicyProvider, "backoffPolicyProvider");
     this.subchannelPool = checkNotNull(subchannelPool, "subchannelPool");
-    this.subchannelPool.init(helper, this);
+    this.subchannelPool.init(helper);
     recreateStates();
     checkNotNull(grpclbState, "grpclbState");
-  }
-
-  @Override
-  public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo newState) {
-    // grpclbState should never be null here since handleSubchannelState cannot be called while the
-    // lb is shutdown.
-    grpclbState.handleSubchannelState(subchannel, newState);
   }
 
   @Override
