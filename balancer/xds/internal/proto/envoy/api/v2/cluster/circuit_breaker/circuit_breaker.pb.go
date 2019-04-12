@@ -3,11 +3,13 @@
 
 package cluster
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import wrappers "github.com/golang/protobuf/ptypes/wrappers"
-import core "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,16 +20,9 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// :ref:`Circuit breaking<arch_overview_circuit_break>` settings can be
-// specified individually for each defined priority.
 type CircuitBreakers struct {
-	// If multiple :ref:`Thresholds<envoy_api_msg_cluster.CircuitBreakers.Thresholds>`
-	// are defined with the same :ref:`RoutingPriority<envoy_api_enum_core.RoutingPriority>`,
-	// the first one in the list is used. If no Thresholds is defined for a given
-	// :ref:`RoutingPriority<envoy_api_enum_core.RoutingPriority>`, the default values
-	// are used.
 	Thresholds           []*CircuitBreakers_Thresholds `protobuf:"bytes,1,rep,name=thresholds,proto3" json:"thresholds,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                      `json:"-"`
 	XXX_unrecognized     []byte                        `json:"-"`
@@ -38,16 +33,17 @@ func (m *CircuitBreakers) Reset()         { *m = CircuitBreakers{} }
 func (m *CircuitBreakers) String() string { return proto.CompactTextString(m) }
 func (*CircuitBreakers) ProtoMessage()    {}
 func (*CircuitBreakers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_circuit_breaker_75e897beb699589d, []int{0}
+	return fileDescriptor_89bc8d4e21efdd79, []int{0}
 }
+
 func (m *CircuitBreakers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CircuitBreakers.Unmarshal(m, b)
 }
 func (m *CircuitBreakers) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CircuitBreakers.Marshal(b, m, deterministic)
 }
-func (dst *CircuitBreakers) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CircuitBreakers.Merge(dst, src)
+func (m *CircuitBreakers) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CircuitBreakers.Merge(m, src)
 }
 func (m *CircuitBreakers) XXX_Size() int {
 	return xxx_messageInfo_CircuitBreakers.Size(m)
@@ -65,35 +61,13 @@ func (m *CircuitBreakers) GetThresholds() []*CircuitBreakers_Thresholds {
 	return nil
 }
 
-// A Thresholds defines CircuitBreaker settings for a
-// :ref:`RoutingPriority<envoy_api_enum_core.RoutingPriority>`.
 type CircuitBreakers_Thresholds struct {
-	// The :ref:`RoutingPriority<envoy_api_enum_core.RoutingPriority>`
-	// the specified CircuitBreaker settings apply to.
-	// [#comment:TODO(htuch): add (validate.rules).enum.defined_only = true once
-	// https://github.com/lyft/protoc-gen-validate/issues/42 is resolved.]
-	Priority core.RoutingPriority `protobuf:"varint,1,opt,name=priority,proto3,enum=envoy.api.v2.core.RoutingPriority" json:"priority,omitempty"`
-	// The maximum number of connections that Envoy will make to the upstream
-	// cluster. If not specified, the default is 1024.
-	MaxConnections *wrappers.UInt32Value `protobuf:"bytes,2,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
-	// The maximum number of pending requests that Envoy will allow to the
-	// upstream cluster. If not specified, the default is 1024.
-	MaxPendingRequests *wrappers.UInt32Value `protobuf:"bytes,3,opt,name=max_pending_requests,json=maxPendingRequests,proto3" json:"max_pending_requests,omitempty"`
-	// The maximum number of parallel requests that Envoy will make to the
-	// upstream cluster. If not specified, the default is 1024.
-	MaxRequests *wrappers.UInt32Value `protobuf:"bytes,4,opt,name=max_requests,json=maxRequests,proto3" json:"max_requests,omitempty"`
-	// The maximum number of parallel retries that Envoy will allow to the
-	// upstream cluster. If not specified, the default is 3.
-	MaxRetries *wrappers.UInt32Value `protobuf:"bytes,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
-	// If track_remaining is true, then stats will be published that expose
-	// the number of resources remaining until the circuit breakers open. If
-	// not specified, the default is false.
-	TrackRemaining bool `protobuf:"varint,6,opt,name=track_remaining,json=trackRemaining,proto3" json:"track_remaining,omitempty"`
-	// The maximum number of connection pools per cluster that Envoy will concurrently support at
-	// once. If not specified, the default is unlimited. Set this for clusters which create a
-	// large number of connection pools. See
-	// :ref:`Circuit Breaking <arch_overview_circuit_break_cluster_maximum_connection_pools>` for
-	// more details.
+	Priority             base.RoutingPriority  `protobuf:"varint,1,opt,name=priority,proto3,enum=envoy.api.v2.core.RoutingPriority" json:"priority,omitempty"`
+	MaxConnections       *wrappers.UInt32Value `protobuf:"bytes,2,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
+	MaxPendingRequests   *wrappers.UInt32Value `protobuf:"bytes,3,opt,name=max_pending_requests,json=maxPendingRequests,proto3" json:"max_pending_requests,omitempty"`
+	MaxRequests          *wrappers.UInt32Value `protobuf:"bytes,4,opt,name=max_requests,json=maxRequests,proto3" json:"max_requests,omitempty"`
+	MaxRetries           *wrappers.UInt32Value `protobuf:"bytes,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	TrackRemaining       bool                  `protobuf:"varint,6,opt,name=track_remaining,json=trackRemaining,proto3" json:"track_remaining,omitempty"`
 	MaxConnectionPools   *wrappers.UInt32Value `protobuf:"bytes,7,opt,name=max_connection_pools,json=maxConnectionPools,proto3" json:"max_connection_pools,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
@@ -104,16 +78,17 @@ func (m *CircuitBreakers_Thresholds) Reset()         { *m = CircuitBreakers_Thre
 func (m *CircuitBreakers_Thresholds) String() string { return proto.CompactTextString(m) }
 func (*CircuitBreakers_Thresholds) ProtoMessage()    {}
 func (*CircuitBreakers_Thresholds) Descriptor() ([]byte, []int) {
-	return fileDescriptor_circuit_breaker_75e897beb699589d, []int{0, 0}
+	return fileDescriptor_89bc8d4e21efdd79, []int{0, 0}
 }
+
 func (m *CircuitBreakers_Thresholds) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Unmarshal(m, b)
 }
 func (m *CircuitBreakers_Thresholds) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Marshal(b, m, deterministic)
 }
-func (dst *CircuitBreakers_Thresholds) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CircuitBreakers_Thresholds.Merge(dst, src)
+func (m *CircuitBreakers_Thresholds) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CircuitBreakers_Thresholds.Merge(m, src)
 }
 func (m *CircuitBreakers_Thresholds) XXX_Size() int {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Size(m)
@@ -124,11 +99,11 @@ func (m *CircuitBreakers_Thresholds) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CircuitBreakers_Thresholds proto.InternalMessageInfo
 
-func (m *CircuitBreakers_Thresholds) GetPriority() core.RoutingPriority {
+func (m *CircuitBreakers_Thresholds) GetPriority() base.RoutingPriority {
 	if m != nil {
 		return m.Priority
 	}
-	return core.RoutingPriority_DEFAULT
+	return base.RoutingPriority_DEFAULT
 }
 
 func (m *CircuitBreakers_Thresholds) GetMaxConnections() *wrappers.UInt32Value {
@@ -179,10 +154,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/cluster/circuit_breaker.proto", fileDescriptor_circuit_breaker_75e897beb699589d)
+	proto.RegisterFile("envoy/api/v2/cluster/circuit_breaker.proto", fileDescriptor_89bc8d4e21efdd79)
 }
 
-var fileDescriptor_circuit_breaker_75e897beb699589d = []byte{
+var fileDescriptor_89bc8d4e21efdd79 = []byte{
 	// 417 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xc1, 0x6e, 0xd3, 0x40,
 	0x10, 0x86, 0xe5, 0xa6, 0xb4, 0xd5, 0x06, 0x25, 0xd2, 0x52, 0x21, 0x2b, 0xaa, 0x50, 0x94, 0x0b,

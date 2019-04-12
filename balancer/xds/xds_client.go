@@ -28,9 +28,11 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
-	xdscorepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core"
-	xdsdiscoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2"
+	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
+	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
@@ -55,7 +57,7 @@ var (
 type client struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
-	cli          xdsdiscoverypb.AggregatedDiscoveryServiceClient
+	cli          adspb.AggregatedDiscoveryServiceClient
 	opts         balancer.BuildOptions
 	balancerName string // the traffic director name
 	serviceName  string // the user dial target name
@@ -122,9 +124,9 @@ func (c *client) dial() {
 	c.mu.Unlock()
 }
 
-func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
-	cdsReq := &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
+func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
+	cdsReq := &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
 					grpcHostname: {
@@ -138,9 +140,9 @@ func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
 	return cdsReq
 }
 
-func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
-	edsReq := &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
+func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
+	edsReq := &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
 					endpointRequired: {
@@ -156,7 +158,7 @@ func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
 }
 
 func (c *client) makeADSCall() {
-	c.cli = xdsdiscoverypb.NewAggregatedDiscoveryServiceClient(c.cc)
+	c.cli = adspb.NewAggregatedDiscoveryServiceClient(c.cc)
 	retryCount := 0
 	var doRetry bool
 
@@ -233,9 +235,9 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			return
 		}
 		switch adsResp.Message.(type) {
-		case *xdspb.Cluster:
+		case *cdspb.Cluster:
 			expectCDS = false
-		case *xdspb.ClusterLoadAssignment:
+		case *edspb.ClusterLoadAssignment:
 			if expectCDS {
 				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
 				return

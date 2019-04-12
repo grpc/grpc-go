@@ -3,10 +3,12 @@
 
 package envoy_type
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -17,24 +19,14 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// Fraction percentages support several fixed denominator values.
 type FractionalPercent_DenominatorType int32
 
 const (
-	// 100.
-	//
-	// **Example**: 1/100 = 1%.
-	FractionalPercent_HUNDRED FractionalPercent_DenominatorType = 0
-	// 10,000.
-	//
-	// **Example**: 1/10000 = 0.01%.
+	FractionalPercent_HUNDRED      FractionalPercent_DenominatorType = 0
 	FractionalPercent_TEN_THOUSAND FractionalPercent_DenominatorType = 1
-	// 1,000,000.
-	//
-	// **Example**: 1/1000000 = 0.0001%.
-	FractionalPercent_MILLION FractionalPercent_DenominatorType = 2
+	FractionalPercent_MILLION      FractionalPercent_DenominatorType = 2
 )
 
 var FractionalPercent_DenominatorType_name = map[int32]string{
@@ -42,6 +34,7 @@ var FractionalPercent_DenominatorType_name = map[int32]string{
 	1: "TEN_THOUSAND",
 	2: "MILLION",
 }
+
 var FractionalPercent_DenominatorType_value = map[string]int32{
 	"HUNDRED":      0,
 	"TEN_THOUSAND": 1,
@@ -51,11 +44,11 @@ var FractionalPercent_DenominatorType_value = map[string]int32{
 func (x FractionalPercent_DenominatorType) String() string {
 	return proto.EnumName(FractionalPercent_DenominatorType_name, int32(x))
 }
+
 func (FractionalPercent_DenominatorType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_percent_6bfa47df3b88e8ca, []int{1, 0}
+	return fileDescriptor_89401f90eb07307e, []int{1, 0}
 }
 
-// Identifies a percentage, in the range [0.0, 100.0].
 type Percent struct {
 	Value                float64  `protobuf:"fixed64,1,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -67,16 +60,17 @@ func (m *Percent) Reset()         { *m = Percent{} }
 func (m *Percent) String() string { return proto.CompactTextString(m) }
 func (*Percent) ProtoMessage()    {}
 func (*Percent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_percent_6bfa47df3b88e8ca, []int{0}
+	return fileDescriptor_89401f90eb07307e, []int{0}
 }
+
 func (m *Percent) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Percent.Unmarshal(m, b)
 }
 func (m *Percent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Percent.Marshal(b, m, deterministic)
 }
-func (dst *Percent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Percent.Merge(dst, src)
+func (m *Percent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Percent.Merge(m, src)
 }
 func (m *Percent) XXX_Size() int {
 	return xxx_messageInfo_Percent.Size(m)
@@ -94,17 +88,8 @@ func (m *Percent) GetValue() float64 {
 	return 0
 }
 
-// A fractional percentage is used in cases in which for performance reasons performing floating
-// point to integer conversions during randomness calculations is undesirable. The message includes
-// both a numerator and denominator that together determine the final fractional value.
-//
-// * **Example**: 1/100 = 1%.
-// * **Example**: 3/10000 = 0.03%.
 type FractionalPercent struct {
-	// Specifies the numerator. Defaults to 0.
-	Numerator uint32 `protobuf:"varint,1,opt,name=numerator,proto3" json:"numerator,omitempty"`
-	// Specifies the denominator. If the denominator specified is less than the numerator, the final
-	// fractional percentage is capped at 1 (100%).
+	Numerator            uint32                            `protobuf:"varint,1,opt,name=numerator,proto3" json:"numerator,omitempty"`
 	Denominator          FractionalPercent_DenominatorType `protobuf:"varint,2,opt,name=denominator,proto3,enum=envoy.type.FractionalPercent_DenominatorType" json:"denominator,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                          `json:"-"`
 	XXX_unrecognized     []byte                            `json:"-"`
@@ -115,16 +100,17 @@ func (m *FractionalPercent) Reset()         { *m = FractionalPercent{} }
 func (m *FractionalPercent) String() string { return proto.CompactTextString(m) }
 func (*FractionalPercent) ProtoMessage()    {}
 func (*FractionalPercent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_percent_6bfa47df3b88e8ca, []int{1}
+	return fileDescriptor_89401f90eb07307e, []int{1}
 }
+
 func (m *FractionalPercent) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FractionalPercent.Unmarshal(m, b)
 }
 func (m *FractionalPercent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FractionalPercent.Marshal(b, m, deterministic)
 }
-func (dst *FractionalPercent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FractionalPercent.Merge(dst, src)
+func (m *FractionalPercent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FractionalPercent.Merge(m, src)
 }
 func (m *FractionalPercent) XXX_Size() int {
 	return xxx_messageInfo_FractionalPercent.Size(m)
@@ -150,14 +136,14 @@ func (m *FractionalPercent) GetDenominator() FractionalPercent_DenominatorType {
 }
 
 func init() {
+	proto.RegisterEnum("envoy.type.FractionalPercent_DenominatorType", FractionalPercent_DenominatorType_name, FractionalPercent_DenominatorType_value)
 	proto.RegisterType((*Percent)(nil), "envoy.type.Percent")
 	proto.RegisterType((*FractionalPercent)(nil), "envoy.type.FractionalPercent")
-	proto.RegisterEnum("envoy.type.FractionalPercent_DenominatorType", FractionalPercent_DenominatorType_name, FractionalPercent_DenominatorType_value)
 }
 
-func init() { proto.RegisterFile("envoy/type/percent.proto", fileDescriptor_percent_6bfa47df3b88e8ca) }
+func init() { proto.RegisterFile("envoy/type/percent.proto", fileDescriptor_89401f90eb07307e) }
 
-var fileDescriptor_percent_6bfa47df3b88e8ca = []byte{
+var fileDescriptor_89401f90eb07307e = []byte{
 	// 277 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x48, 0xcd, 0x2b, 0xcb,
 	0xaf, 0xd4, 0x2f, 0xa9, 0x2c, 0x48, 0xd5, 0x2f, 0x48, 0x2d, 0x4a, 0x4e, 0xcd, 0x2b, 0xd1, 0x2b,

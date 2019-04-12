@@ -3,12 +3,15 @@
 
 package auth
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import wrappers "github.com/golang/protobuf/ptypes/wrappers"
-import core "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core"
-import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	config_source "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/config_source"
+	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -19,21 +22,16 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type TlsParameters_TlsProtocol int32
 
 const (
-	// Envoy will choose the optimal TLS version.
 	TlsParameters_TLS_AUTO TlsParameters_TlsProtocol = 0
-	// TLS 1.0
-	TlsParameters_TLSv1_0 TlsParameters_TlsProtocol = 1
-	// TLS 1.1
-	TlsParameters_TLSv1_1 TlsParameters_TlsProtocol = 2
-	// TLS 1.2
-	TlsParameters_TLSv1_2 TlsParameters_TlsProtocol = 3
-	// TLS 1.3
-	TlsParameters_TLSv1_3 TlsParameters_TlsProtocol = 4
+	TlsParameters_TLSv1_0  TlsParameters_TlsProtocol = 1
+	TlsParameters_TLSv1_1  TlsParameters_TlsProtocol = 2
+	TlsParameters_TLSv1_2  TlsParameters_TlsProtocol = 3
+	TlsParameters_TLSv1_3  TlsParameters_TlsProtocol = 4
 )
 
 var TlsParameters_TlsProtocol_name = map[int32]string{
@@ -43,6 +41,7 @@ var TlsParameters_TlsProtocol_name = map[int32]string{
 	3: "TLSv1_2",
 	4: "TLSv1_3",
 }
+
 var TlsParameters_TlsProtocol_value = map[string]int32{
 	"TLS_AUTO": 0,
 	"TLSv1_0":  1,
@@ -54,90 +53,36 @@ var TlsParameters_TlsProtocol_value = map[string]int32{
 func (x TlsParameters_TlsProtocol) String() string {
 	return proto.EnumName(TlsParameters_TlsProtocol_name, int32(x))
 }
+
 func (TlsParameters_TlsProtocol) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{0, 0}
+	return fileDescriptor_0c3851c0865b2745, []int{0, 0}
 }
 
 type TlsParameters struct {
-	// Minimum TLS protocol version. By default, it's ``TLSv1_0``.
 	TlsMinimumProtocolVersion TlsParameters_TlsProtocol `protobuf:"varint,1,opt,name=tls_minimum_protocol_version,json=tlsMinimumProtocolVersion,proto3,enum=envoy.api.v2.auth.TlsParameters_TlsProtocol" json:"tls_minimum_protocol_version,omitempty"`
-	// Maximum TLS protocol version. By default, it's ``TLSv1_3`` for servers in non-FIPS builds, and
-	// ``TLSv1_2`` for clients and for servers using :ref:`BoringSSL FIPS <arch_overview_ssl_fips>`.
 	TlsMaximumProtocolVersion TlsParameters_TlsProtocol `protobuf:"varint,2,opt,name=tls_maximum_protocol_version,json=tlsMaximumProtocolVersion,proto3,enum=envoy.api.v2.auth.TlsParameters_TlsProtocol" json:"tls_maximum_protocol_version,omitempty"`
-	// If specified, the TLS listener will only support the specified `cipher list
-	// <https://commondatastorage.googleapis.com/chromium-boringssl-docs/ssl.h.html#Cipher-suite-configuration>`_
-	// when negotiating TLS 1.0-1.2 (this setting has no effect when negotiating TLS 1.3). If not
-	// specified, the default list will be used.
-	//
-	// In non-FIPS builds, the default cipher list is:
-	//
-	// .. code-block:: none
-	//
-	//   [ECDHE-ECDSA-AES128-GCM-SHA256|ECDHE-ECDSA-CHACHA20-POLY1305]
-	//   [ECDHE-RSA-AES128-GCM-SHA256|ECDHE-RSA-CHACHA20-POLY1305]
-	//   ECDHE-ECDSA-AES128-SHA
-	//   ECDHE-RSA-AES128-SHA
-	//   AES128-GCM-SHA256
-	//   AES128-SHA
-	//   ECDHE-ECDSA-AES256-GCM-SHA384
-	//   ECDHE-RSA-AES256-GCM-SHA384
-	//   ECDHE-ECDSA-AES256-SHA
-	//   ECDHE-RSA-AES256-SHA
-	//   AES256-GCM-SHA384
-	//   AES256-SHA
-	//
-	// In builds using :ref:`BoringSSL FIPS <arch_overview_ssl_fips>`, the default cipher list is:
-	//
-	// .. code-block:: none
-	//
-	//   ECDHE-ECDSA-AES128-GCM-SHA256
-	//   ECDHE-RSA-AES128-GCM-SHA256
-	//   ECDHE-ECDSA-AES128-SHA
-	//   ECDHE-RSA-AES128-SHA
-	//   AES128-GCM-SHA256
-	//   AES128-SHA
-	//   ECDHE-ECDSA-AES256-GCM-SHA384
-	//   ECDHE-RSA-AES256-GCM-SHA384
-	//   ECDHE-ECDSA-AES256-SHA
-	//   ECDHE-RSA-AES256-SHA
-	//   AES256-GCM-SHA384
-	//   AES256-SHA
-	CipherSuites []string `protobuf:"bytes,3,rep,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
-	// If specified, the TLS connection will only support the specified ECDH
-	// curves. If not specified, the default curves will be used.
-	//
-	// In non-FIPS builds, the default curves are:
-	//
-	// .. code-block:: none
-	//
-	//   X25519
-	//   P-256
-	//
-	// In builds using :ref:`BoringSSL FIPS <arch_overview_ssl_fips>`, the default curve is:
-	//
-	// .. code-block:: none
-	//
-	//   P-256
-	EcdhCurves           []string `protobuf:"bytes,4,rep,name=ecdh_curves,json=ecdhCurves,proto3" json:"ecdh_curves,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	CipherSuites              []string                  `protobuf:"bytes,3,rep,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
+	EcdhCurves                []string                  `protobuf:"bytes,4,rep,name=ecdh_curves,json=ecdhCurves,proto3" json:"ecdh_curves,omitempty"`
+	XXX_NoUnkeyedLiteral      struct{}                  `json:"-"`
+	XXX_unrecognized          []byte                    `json:"-"`
+	XXX_sizecache             int32                     `json:"-"`
 }
 
 func (m *TlsParameters) Reset()         { *m = TlsParameters{} }
 func (m *TlsParameters) String() string { return proto.CompactTextString(m) }
 func (*TlsParameters) ProtoMessage()    {}
 func (*TlsParameters) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{0}
+	return fileDescriptor_0c3851c0865b2745, []int{0}
 }
+
 func (m *TlsParameters) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsParameters.Unmarshal(m, b)
 }
 func (m *TlsParameters) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsParameters.Marshal(b, m, deterministic)
 }
-func (dst *TlsParameters) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsParameters.Merge(dst, src)
+func (m *TlsParameters) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsParameters.Merge(m, src)
 }
 func (m *TlsParameters) XXX_Size() int {
 	return xxx_messageInfo_TlsParameters.Size(m)
@@ -177,17 +122,11 @@ func (m *TlsParameters) GetEcdhCurves() []string {
 }
 
 type TlsCertificate struct {
-	// The TLS certificate chain.
-	CertificateChain *core.DataSource `protobuf:"bytes,1,opt,name=certificate_chain,json=certificateChain,proto3" json:"certificate_chain,omitempty"`
-	// The TLS private key.
-	PrivateKey *core.DataSource `protobuf:"bytes,2,opt,name=private_key,json=privateKey,proto3" json:"private_key,omitempty"`
-	// The password to decrypt the TLS private key. If this field is not set, it is assumed that the
-	// TLS private key is not password encrypted.
-	Password *core.DataSource `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
-	// [#not-implemented-hide:]
-	OcspStaple *core.DataSource `protobuf:"bytes,4,opt,name=ocsp_staple,json=ocspStaple,proto3" json:"ocsp_staple,omitempty"`
-	// [#not-implemented-hide:]
-	SignedCertificateTimestamp []*core.DataSource `protobuf:"bytes,5,rep,name=signed_certificate_timestamp,json=signedCertificateTimestamp,proto3" json:"signed_certificate_timestamp,omitempty"`
+	CertificateChain           *base.DataSource   `protobuf:"bytes,1,opt,name=certificate_chain,json=certificateChain,proto3" json:"certificate_chain,omitempty"`
+	PrivateKey                 *base.DataSource   `protobuf:"bytes,2,opt,name=private_key,json=privateKey,proto3" json:"private_key,omitempty"`
+	Password                   *base.DataSource   `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	OcspStaple                 *base.DataSource   `protobuf:"bytes,4,opt,name=ocsp_staple,json=ocspStaple,proto3" json:"ocsp_staple,omitempty"`
+	SignedCertificateTimestamp []*base.DataSource `protobuf:"bytes,5,rep,name=signed_certificate_timestamp,json=signedCertificateTimestamp,proto3" json:"signed_certificate_timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral       struct{}           `json:"-"`
 	XXX_unrecognized           []byte             `json:"-"`
 	XXX_sizecache              int32              `json:"-"`
@@ -197,16 +136,17 @@ func (m *TlsCertificate) Reset()         { *m = TlsCertificate{} }
 func (m *TlsCertificate) String() string { return proto.CompactTextString(m) }
 func (*TlsCertificate) ProtoMessage()    {}
 func (*TlsCertificate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{1}
+	return fileDescriptor_0c3851c0865b2745, []int{1}
 }
+
 func (m *TlsCertificate) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsCertificate.Unmarshal(m, b)
 }
 func (m *TlsCertificate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsCertificate.Marshal(b, m, deterministic)
 }
-func (dst *TlsCertificate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsCertificate.Merge(dst, src)
+func (m *TlsCertificate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsCertificate.Merge(m, src)
 }
 func (m *TlsCertificate) XXX_Size() int {
 	return xxx_messageInfo_TlsCertificate.Size(m)
@@ -217,35 +157,35 @@ func (m *TlsCertificate) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_TlsCertificate proto.InternalMessageInfo
 
-func (m *TlsCertificate) GetCertificateChain() *core.DataSource {
+func (m *TlsCertificate) GetCertificateChain() *base.DataSource {
 	if m != nil {
 		return m.CertificateChain
 	}
 	return nil
 }
 
-func (m *TlsCertificate) GetPrivateKey() *core.DataSource {
+func (m *TlsCertificate) GetPrivateKey() *base.DataSource {
 	if m != nil {
 		return m.PrivateKey
 	}
 	return nil
 }
 
-func (m *TlsCertificate) GetPassword() *core.DataSource {
+func (m *TlsCertificate) GetPassword() *base.DataSource {
 	if m != nil {
 		return m.Password
 	}
 	return nil
 }
 
-func (m *TlsCertificate) GetOcspStaple() *core.DataSource {
+func (m *TlsCertificate) GetOcspStaple() *base.DataSource {
 	if m != nil {
 		return m.OcspStaple
 	}
 	return nil
 }
 
-func (m *TlsCertificate) GetSignedCertificateTimestamp() []*core.DataSource {
+func (m *TlsCertificate) GetSignedCertificateTimestamp() []*base.DataSource {
 	if m != nil {
 		return m.SignedCertificateTimestamp
 	}
@@ -253,30 +193,7 @@ func (m *TlsCertificate) GetSignedCertificateTimestamp() []*core.DataSource {
 }
 
 type TlsSessionTicketKeys struct {
-	// Keys for encrypting and decrypting TLS session tickets. The
-	// first key in the array contains the key to encrypt all new sessions created by this context.
-	// All keys are candidates for decrypting received tickets. This allows for easy rotation of keys
-	// by, for example, putting the new key first, and the previous key second.
-	//
-	// If :ref:`session_ticket_keys <envoy_api_field_auth.DownstreamTlsContext.session_ticket_keys>`
-	// is not specified, the TLS library will still support resuming sessions via tickets, but it will
-	// use an internally-generated and managed key, so sessions cannot be resumed across hot restarts
-	// or on different hosts.
-	//
-	// Each key must contain exactly 80 bytes of cryptographically-secure random data. For
-	// example, the output of ``openssl rand 80``.
-	//
-	// .. attention::
-	//
-	//   Using this feature has serious security considerations and risks. Improper handling of keys
-	//   may result in loss of secrecy in connections, even if ciphers supporting perfect forward
-	//   secrecy are used. See https://www.imperialviolet.org/2013/06/27/botchingpfs.html for some
-	//   discussion. To minimize the risk, you must:
-	//
-	//   * Keep the session ticket keys at least as secure as your TLS certificate private keys
-	//   * Rotate session ticket keys at least daily, and preferably hourly
-	//   * Always generate keys using a cryptographically-secure random data source
-	Keys                 []*core.DataSource `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	Keys                 []*base.DataSource `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -286,16 +203,17 @@ func (m *TlsSessionTicketKeys) Reset()         { *m = TlsSessionTicketKeys{} }
 func (m *TlsSessionTicketKeys) String() string { return proto.CompactTextString(m) }
 func (*TlsSessionTicketKeys) ProtoMessage()    {}
 func (*TlsSessionTicketKeys) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{2}
+	return fileDescriptor_0c3851c0865b2745, []int{2}
 }
+
 func (m *TlsSessionTicketKeys) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsSessionTicketKeys.Unmarshal(m, b)
 }
 func (m *TlsSessionTicketKeys) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsSessionTicketKeys.Marshal(b, m, deterministic)
 }
-func (dst *TlsSessionTicketKeys) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsSessionTicketKeys.Merge(dst, src)
+func (m *TlsSessionTicketKeys) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsSessionTicketKeys.Merge(m, src)
 }
 func (m *TlsSessionTicketKeys) XXX_Size() int {
 	return xxx_messageInfo_TlsSessionTicketKeys.Size(m)
@@ -306,7 +224,7 @@ func (m *TlsSessionTicketKeys) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_TlsSessionTicketKeys proto.InternalMessageInfo
 
-func (m *TlsSessionTicketKeys) GetKeys() []*core.DataSource {
+func (m *TlsSessionTicketKeys) GetKeys() []*base.DataSource {
 	if m != nil {
 		return m.Keys
 	}
@@ -314,124 +232,34 @@ func (m *TlsSessionTicketKeys) GetKeys() []*core.DataSource {
 }
 
 type CertificateValidationContext struct {
-	// TLS certificate data containing certificate authority certificates to use in verifying
-	// a presented peer certificate (e.g. server certificate for clusters or client certificate
-	// for listeners). If not specified and a peer certificate is presented it will not be
-	// verified. By default, a client certificate is optional, unless one of the additional
-	// options (:ref:`require_client_certificate
-	// <envoy_api_field_auth.DownstreamTlsContext.require_client_certificate>`,
-	// :ref:`verify_certificate_spki
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_spki>`,
-	// :ref:`verify_certificate_hash
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_hash>`, or
-	// :ref:`verify_subject_alt_name
-	// <envoy_api_field_auth.CertificateValidationContext.verify_subject_alt_name>`) is also
-	// specified.
-	//
-	// It can optionally contain certificate revocation lists, in which case Envoy will verify
-	// that the presented peer certificate has not been revoked by one of the included CRLs.
-	//
-	// See :ref:`the TLS overview <arch_overview_ssl_enabling_verification>` for a list of common
-	// system CA locations.
-	TrustedCa *core.DataSource `protobuf:"bytes,1,opt,name=trusted_ca,json=trustedCa,proto3" json:"trusted_ca,omitempty"`
-	// An optional list of base64-encoded SHA-256 hashes. If specified, Envoy will verify that the
-	// SHA-256 of the DER-encoded Subject Public Key Information (SPKI) of the presented certificate
-	// matches one of the specified values.
-	//
-	// A base64-encoded SHA-256 of the Subject Public Key Information (SPKI) of the certificate
-	// can be generated with the following command:
-	//
-	// .. code-block:: bash
-	//
-	//   $ openssl x509 -in path/to/client.crt -noout -pubkey \
-	//     | openssl pkey -pubin -outform DER \
-	//     | openssl dgst -sha256 -binary \
-	//     | openssl enc -base64
-	//   NvqYIYSbgK2vCJpQhObf77vv+bQWtc5ek5RIOwPiC9A=
-	//
-	// This is the format used in HTTP Public Key Pinning.
-	//
-	// When both:
-	// :ref:`verify_certificate_hash
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_hash>` and
-	// :ref:`verify_certificate_spki
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_spki>` are specified,
-	// a hash matching value from either of the lists will result in the certificate being accepted.
-	//
-	// .. attention::
-	//
-	//   This option is preferred over :ref:`verify_certificate_hash
-	//   <envoy_api_field_auth.CertificateValidationContext.verify_certificate_hash>`,
-	//   because SPKI is tied to a private key, so it doesn't change when the certificate
-	//   is renewed using the same private key.
-	VerifyCertificateSpki []string `protobuf:"bytes,3,rep,name=verify_certificate_spki,json=verifyCertificateSpki,proto3" json:"verify_certificate_spki,omitempty"`
-	// An optional list of hex-encoded SHA-256 hashes. If specified, Envoy will verify that
-	// the SHA-256 of the DER-encoded presented certificate matches one of the specified values.
-	//
-	// A hex-encoded SHA-256 of the certificate can be generated with the following command:
-	//
-	// .. code-block:: bash
-	//
-	//   $ openssl x509 -in path/to/client.crt -outform DER | openssl dgst -sha256 | cut -d" " -f2
-	//   df6ff72fe9116521268f6f2dd4966f51df479883fe7037b39f75916ac3049d1a
-	//
-	// A long hex-encoded and colon-separated SHA-256 (a.k.a. "fingerprint") of the certificate
-	// can be generated with the following command:
-	//
-	// .. code-block:: bash
-	//
-	//   $ openssl x509 -in path/to/client.crt -noout -fingerprint -sha256 | cut -d"=" -f2
-	//   DF:6F:F7:2F:E9:11:65:21:26:8F:6F:2D:D4:96:6F:51:DF:47:98:83:FE:70:37:B3:9F:75:91:6A:C3:04:9D:1A
-	//
-	// Both of those formats are acceptable.
-	//
-	// When both:
-	// :ref:`verify_certificate_hash
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_hash>` and
-	// :ref:`verify_certificate_spki
-	// <envoy_api_field_auth.CertificateValidationContext.verify_certificate_spki>` are specified,
-	// a hash matching value from either of the lists will result in the certificate being accepted.
-	VerifyCertificateHash []string `protobuf:"bytes,2,rep,name=verify_certificate_hash,json=verifyCertificateHash,proto3" json:"verify_certificate_hash,omitempty"`
-	// An optional list of Subject Alternative Names. If specified, Envoy will verify that the
-	// Subject Alternative Name of the presented certificate matches one of the specified values.
-	//
-	// .. attention::
-	//
-	//   Subject Alternative Names are easily spoofable and verifying only them is insecure,
-	//   therefore this option must be used together with :ref:`trusted_ca
-	//   <envoy_api_field_auth.CertificateValidationContext.trusted_ca>`.
-	VerifySubjectAltName []string `protobuf:"bytes,4,rep,name=verify_subject_alt_name,json=verifySubjectAltName,proto3" json:"verify_subject_alt_name,omitempty"`
-	// [#not-implemented-hide:] Must present a signed time-stamped OCSP response.
-	RequireOcspStaple *wrappers.BoolValue `protobuf:"bytes,5,opt,name=require_ocsp_staple,json=requireOcspStaple,proto3" json:"require_ocsp_staple,omitempty"`
-	// [#not-implemented-hide:] Must present signed certificate time-stamp.
+	TrustedCa                         *base.DataSource    `protobuf:"bytes,1,opt,name=trusted_ca,json=trustedCa,proto3" json:"trusted_ca,omitempty"`
+	VerifyCertificateSpki             []string            `protobuf:"bytes,3,rep,name=verify_certificate_spki,json=verifyCertificateSpki,proto3" json:"verify_certificate_spki,omitempty"`
+	VerifyCertificateHash             []string            `protobuf:"bytes,2,rep,name=verify_certificate_hash,json=verifyCertificateHash,proto3" json:"verify_certificate_hash,omitempty"`
+	VerifySubjectAltName              []string            `protobuf:"bytes,4,rep,name=verify_subject_alt_name,json=verifySubjectAltName,proto3" json:"verify_subject_alt_name,omitempty"`
+	RequireOcspStaple                 *wrappers.BoolValue `protobuf:"bytes,5,opt,name=require_ocsp_staple,json=requireOcspStaple,proto3" json:"require_ocsp_staple,omitempty"`
 	RequireSignedCertificateTimestamp *wrappers.BoolValue `protobuf:"bytes,6,opt,name=require_signed_certificate_timestamp,json=requireSignedCertificateTimestamp,proto3" json:"require_signed_certificate_timestamp,omitempty"`
-	// An optional `certificate revocation list
-	// <https://en.wikipedia.org/wiki/Certificate_revocation_list>`_
-	// (in PEM format). If specified, Envoy will verify that the presented peer
-	// certificate has not been revoked by this CRL. If this DataSource contains
-	// multiple CRLs, all of them will be used.
-	Crl *core.DataSource `protobuf:"bytes,7,opt,name=crl,proto3" json:"crl,omitempty"`
-	// If specified, Envoy will not reject expired certificates.
-	AllowExpiredCertificate bool     `protobuf:"varint,8,opt,name=allow_expired_certificate,json=allowExpiredCertificate,proto3" json:"allow_expired_certificate,omitempty"`
-	XXX_NoUnkeyedLiteral    struct{} `json:"-"`
-	XXX_unrecognized        []byte   `json:"-"`
-	XXX_sizecache           int32    `json:"-"`
+	Crl                               *base.DataSource    `protobuf:"bytes,7,opt,name=crl,proto3" json:"crl,omitempty"`
+	AllowExpiredCertificate           bool                `protobuf:"varint,8,opt,name=allow_expired_certificate,json=allowExpiredCertificate,proto3" json:"allow_expired_certificate,omitempty"`
+	XXX_NoUnkeyedLiteral              struct{}            `json:"-"`
+	XXX_unrecognized                  []byte              `json:"-"`
+	XXX_sizecache                     int32               `json:"-"`
 }
 
 func (m *CertificateValidationContext) Reset()         { *m = CertificateValidationContext{} }
 func (m *CertificateValidationContext) String() string { return proto.CompactTextString(m) }
 func (*CertificateValidationContext) ProtoMessage()    {}
 func (*CertificateValidationContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{3}
+	return fileDescriptor_0c3851c0865b2745, []int{3}
 }
+
 func (m *CertificateValidationContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CertificateValidationContext.Unmarshal(m, b)
 }
 func (m *CertificateValidationContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CertificateValidationContext.Marshal(b, m, deterministic)
 }
-func (dst *CertificateValidationContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CertificateValidationContext.Merge(dst, src)
+func (m *CertificateValidationContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CertificateValidationContext.Merge(m, src)
 }
 func (m *CertificateValidationContext) XXX_Size() int {
 	return xxx_messageInfo_CertificateValidationContext.Size(m)
@@ -442,7 +270,7 @@ func (m *CertificateValidationContext) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CertificateValidationContext proto.InternalMessageInfo
 
-func (m *CertificateValidationContext) GetTrustedCa() *core.DataSource {
+func (m *CertificateValidationContext) GetTrustedCa() *base.DataSource {
 	if m != nil {
 		return m.TrustedCa
 	}
@@ -484,7 +312,7 @@ func (m *CertificateValidationContext) GetRequireSignedCertificateTimestamp() *w
 	return nil
 }
 
-func (m *CertificateValidationContext) GetCrl() *core.DataSource {
+func (m *CertificateValidationContext) GetCrl() *base.DataSource {
 	if m != nil {
 		return m.Crl
 	}
@@ -498,54 +326,36 @@ func (m *CertificateValidationContext) GetAllowExpiredCertificate() bool {
 	return false
 }
 
-// TLS context shared by both client and server TLS contexts.
 type CommonTlsContext struct {
-	// TLS protocol versions, cipher suites etc.
-	TlsParams *TlsParameters `protobuf:"bytes,1,opt,name=tls_params,json=tlsParams,proto3" json:"tls_params,omitempty"`
-	// :ref:`Multiple TLS certificates <arch_overview_ssl_cert_select>` can be associated with the
-	// same context to allow both RSA and ECDSA certificates.
-	//
-	// Only a single TLS certificate is supported in client contexts. In server contexts, the first
-	// RSA certificate is used for clients that only support RSA and the first ECDSA certificate is
-	// used for clients that support ECDSA.
-	TlsCertificates []*TlsCertificate `protobuf:"bytes,2,rep,name=tls_certificates,json=tlsCertificates,proto3" json:"tls_certificates,omitempty"`
-	// Configs for fetching TLS certificates via SDS API.
+	TlsParams                      *TlsParameters     `protobuf:"bytes,1,opt,name=tls_params,json=tlsParams,proto3" json:"tls_params,omitempty"`
+	TlsCertificates                []*TlsCertificate  `protobuf:"bytes,2,rep,name=tls_certificates,json=tlsCertificates,proto3" json:"tls_certificates,omitempty"`
 	TlsCertificateSdsSecretConfigs []*SdsSecretConfig `protobuf:"bytes,6,rep,name=tls_certificate_sds_secret_configs,json=tlsCertificateSdsSecretConfigs,proto3" json:"tls_certificate_sds_secret_configs,omitempty"`
 	// Types that are valid to be assigned to ValidationContextType:
 	//	*CommonTlsContext_ValidationContext
 	//	*CommonTlsContext_ValidationContextSdsSecretConfig
 	//	*CommonTlsContext_CombinedValidationContext
 	ValidationContextType isCommonTlsContext_ValidationContextType `protobuf_oneof:"validation_context_type"`
-	// Supplies the list of ALPN protocols that the listener should expose. In
-	// practice this is likely to be set to one of two values (see the
-	// :ref:`codec_type
-	// <envoy_api_field_config.filter.network.http_connection_manager.v2.HttpConnectionManager.codec_type>`
-	// parameter in the HTTP connection manager for more information):
-	//
-	// * "h2,http/1.1" If the listener is going to support both HTTP/2 and HTTP/1.1.
-	// * "http/1.1" If the listener is only going to support HTTP/1.1.
-	//
-	// There is no default for this parameter. If empty, Envoy will not expose ALPN.
-	AlpnProtocols        []string `protobuf:"bytes,4,rep,name=alpn_protocols,json=alpnProtocols,proto3" json:"alpn_protocols,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	AlpnProtocols         []string                                 `protobuf:"bytes,4,rep,name=alpn_protocols,json=alpnProtocols,proto3" json:"alpn_protocols,omitempty"`
+	XXX_NoUnkeyedLiteral  struct{}                                 `json:"-"`
+	XXX_unrecognized      []byte                                   `json:"-"`
+	XXX_sizecache         int32                                    `json:"-"`
 }
 
 func (m *CommonTlsContext) Reset()         { *m = CommonTlsContext{} }
 func (m *CommonTlsContext) String() string { return proto.CompactTextString(m) }
 func (*CommonTlsContext) ProtoMessage()    {}
 func (*CommonTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{4}
+	return fileDescriptor_0c3851c0865b2745, []int{4}
 }
+
 func (m *CommonTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommonTlsContext.Unmarshal(m, b)
 }
 func (m *CommonTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommonTlsContext.Marshal(b, m, deterministic)
 }
-func (dst *CommonTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommonTlsContext.Merge(dst, src)
+func (m *CommonTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonTlsContext.Merge(m, src)
 }
 func (m *CommonTlsContext) XXX_Size() int {
 	return xxx_messageInfo_CommonTlsContext.Size(m)
@@ -634,107 +444,21 @@ func (m *CommonTlsContext) GetAlpnProtocols() []string {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*CommonTlsContext) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _CommonTlsContext_OneofMarshaler, _CommonTlsContext_OneofUnmarshaler, _CommonTlsContext_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*CommonTlsContext) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*CommonTlsContext_ValidationContext)(nil),
 		(*CommonTlsContext_ValidationContextSdsSecretConfig)(nil),
 		(*CommonTlsContext_CombinedValidationContext)(nil),
 	}
 }
 
-func _CommonTlsContext_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*CommonTlsContext)
-	// validation_context_type
-	switch x := m.ValidationContextType.(type) {
-	case *CommonTlsContext_ValidationContext:
-		b.EncodeVarint(3<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.ValidationContext); err != nil {
-			return err
-		}
-	case *CommonTlsContext_ValidationContextSdsSecretConfig:
-		b.EncodeVarint(7<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.ValidationContextSdsSecretConfig); err != nil {
-			return err
-		}
-	case *CommonTlsContext_CombinedValidationContext:
-		b.EncodeVarint(8<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.CombinedValidationContext); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("CommonTlsContext.ValidationContextType has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _CommonTlsContext_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*CommonTlsContext)
-	switch tag {
-	case 3: // validation_context_type.validation_context
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CertificateValidationContext)
-		err := b.DecodeMessage(msg)
-		m.ValidationContextType = &CommonTlsContext_ValidationContext{msg}
-		return true, err
-	case 7: // validation_context_type.validation_context_sds_secret_config
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(SdsSecretConfig)
-		err := b.DecodeMessage(msg)
-		m.ValidationContextType = &CommonTlsContext_ValidationContextSdsSecretConfig{msg}
-		return true, err
-	case 8: // validation_context_type.combined_validation_context
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CommonTlsContext_CombinedCertificateValidationContext)
-		err := b.DecodeMessage(msg)
-		m.ValidationContextType = &CommonTlsContext_CombinedValidationContext{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _CommonTlsContext_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*CommonTlsContext)
-	// validation_context_type
-	switch x := m.ValidationContextType.(type) {
-	case *CommonTlsContext_ValidationContext:
-		s := proto.Size(x.ValidationContext)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *CommonTlsContext_ValidationContextSdsSecretConfig:
-		s := proto.Size(x.ValidationContextSdsSecretConfig)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *CommonTlsContext_CombinedValidationContext:
-		s := proto.Size(x.CombinedValidationContext)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
 type CommonTlsContext_CombinedCertificateValidationContext struct {
-	// How to validate peer certificates.
-	DefaultValidationContext *CertificateValidationContext `protobuf:"bytes,1,opt,name=default_validation_context,json=defaultValidationContext,proto3" json:"default_validation_context,omitempty"`
-	// Config for fetching validation context via SDS API.
-	ValidationContextSdsSecretConfig *SdsSecretConfig `protobuf:"bytes,2,opt,name=validation_context_sds_secret_config,json=validationContextSdsSecretConfig,proto3" json:"validation_context_sds_secret_config,omitempty"`
-	XXX_NoUnkeyedLiteral             struct{}         `json:"-"`
-	XXX_unrecognized                 []byte           `json:"-"`
-	XXX_sizecache                    int32            `json:"-"`
+	DefaultValidationContext         *CertificateValidationContext `protobuf:"bytes,1,opt,name=default_validation_context,json=defaultValidationContext,proto3" json:"default_validation_context,omitempty"`
+	ValidationContextSdsSecretConfig *SdsSecretConfig              `protobuf:"bytes,2,opt,name=validation_context_sds_secret_config,json=validationContextSdsSecretConfig,proto3" json:"validation_context_sds_secret_config,omitempty"`
+	XXX_NoUnkeyedLiteral             struct{}                      `json:"-"`
+	XXX_unrecognized                 []byte                        `json:"-"`
+	XXX_sizecache                    int32                         `json:"-"`
 }
 
 func (m *CommonTlsContext_CombinedCertificateValidationContext) Reset() {
@@ -745,16 +469,17 @@ func (m *CommonTlsContext_CombinedCertificateValidationContext) String() string 
 }
 func (*CommonTlsContext_CombinedCertificateValidationContext) ProtoMessage() {}
 func (*CommonTlsContext_CombinedCertificateValidationContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{4, 0}
+	return fileDescriptor_0c3851c0865b2745, []int{4, 0}
 }
+
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Unmarshal(m, b)
 }
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Marshal(b, m, deterministic)
 }
-func (dst *CommonTlsContext_CombinedCertificateValidationContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Merge(dst, src)
+func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Merge(m, src)
 }
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Size() int {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Size(m)
@@ -780,20 +505,9 @@ func (m *CommonTlsContext_CombinedCertificateValidationContext) GetValidationCon
 }
 
 type UpstreamTlsContext struct {
-	// Common TLS context settings.
-	CommonTlsContext *CommonTlsContext `protobuf:"bytes,1,opt,name=common_tls_context,json=commonTlsContext,proto3" json:"common_tls_context,omitempty"`
-	// SNI string to use when creating TLS backend connections.
-	Sni string `protobuf:"bytes,2,opt,name=sni,proto3" json:"sni,omitempty"`
-	// If true, server-initiated TLS renegotiation will be allowed.
-	//
-	// .. attention::
-	//
-	//   TLS renegotiation is considered insecure and shouldn't be used unless absolutely necessary.
-	AllowRenegotiation bool `protobuf:"varint,3,opt,name=allow_renegotiation,json=allowRenegotiation,proto3" json:"allow_renegotiation,omitempty"`
-	// Maximum number of session keys (Pre-Shared Keys for TLSv1.3+, Session IDs and Session Tickets
-	// for TLSv1.2 and older) to store for the purpose of session resumption.
-	//
-	// Defaults to 1, setting this to 0 disables session resumption.
+	CommonTlsContext     *CommonTlsContext     `protobuf:"bytes,1,opt,name=common_tls_context,json=commonTlsContext,proto3" json:"common_tls_context,omitempty"`
+	Sni                  string                `protobuf:"bytes,2,opt,name=sni,proto3" json:"sni,omitempty"`
+	AllowRenegotiation   bool                  `protobuf:"varint,3,opt,name=allow_renegotiation,json=allowRenegotiation,proto3" json:"allow_renegotiation,omitempty"`
 	MaxSessionKeys       *wrappers.UInt32Value `protobuf:"bytes,4,opt,name=max_session_keys,json=maxSessionKeys,proto3" json:"max_session_keys,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
@@ -804,16 +518,17 @@ func (m *UpstreamTlsContext) Reset()         { *m = UpstreamTlsContext{} }
 func (m *UpstreamTlsContext) String() string { return proto.CompactTextString(m) }
 func (*UpstreamTlsContext) ProtoMessage()    {}
 func (*UpstreamTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{5}
+	return fileDescriptor_0c3851c0865b2745, []int{5}
 }
+
 func (m *UpstreamTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpstreamTlsContext.Unmarshal(m, b)
 }
 func (m *UpstreamTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_UpstreamTlsContext.Marshal(b, m, deterministic)
 }
-func (dst *UpstreamTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpstreamTlsContext.Merge(dst, src)
+func (m *UpstreamTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpstreamTlsContext.Merge(m, src)
 }
 func (m *UpstreamTlsContext) XXX_Size() int {
 	return xxx_messageInfo_UpstreamTlsContext.Size(m)
@@ -853,14 +568,9 @@ func (m *UpstreamTlsContext) GetMaxSessionKeys() *wrappers.UInt32Value {
 }
 
 type DownstreamTlsContext struct {
-	// Common TLS context settings.
-	CommonTlsContext *CommonTlsContext `protobuf:"bytes,1,opt,name=common_tls_context,json=commonTlsContext,proto3" json:"common_tls_context,omitempty"`
-	// If specified, Envoy will reject connections without a valid client
-	// certificate.
+	CommonTlsContext         *CommonTlsContext   `protobuf:"bytes,1,opt,name=common_tls_context,json=commonTlsContext,proto3" json:"common_tls_context,omitempty"`
 	RequireClientCertificate *wrappers.BoolValue `protobuf:"bytes,2,opt,name=require_client_certificate,json=requireClientCertificate,proto3" json:"require_client_certificate,omitempty"`
-	// If specified, Envoy will reject connections without a valid and matching SNI.
-	// [#not-implemented-hide:]
-	RequireSni *wrappers.BoolValue `protobuf:"bytes,3,opt,name=require_sni,json=requireSni,proto3" json:"require_sni,omitempty"`
+	RequireSni               *wrappers.BoolValue `protobuf:"bytes,3,opt,name=require_sni,json=requireSni,proto3" json:"require_sni,omitempty"`
 	// Types that are valid to be assigned to SessionTicketKeysType:
 	//	*DownstreamTlsContext_SessionTicketKeys
 	//	*DownstreamTlsContext_SessionTicketKeysSdsSecretConfig
@@ -874,16 +584,17 @@ func (m *DownstreamTlsContext) Reset()         { *m = DownstreamTlsContext{} }
 func (m *DownstreamTlsContext) String() string { return proto.CompactTextString(m) }
 func (*DownstreamTlsContext) ProtoMessage()    {}
 func (*DownstreamTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{6}
+	return fileDescriptor_0c3851c0865b2745, []int{6}
 }
+
 func (m *DownstreamTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DownstreamTlsContext.Unmarshal(m, b)
 }
 func (m *DownstreamTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DownstreamTlsContext.Marshal(b, m, deterministic)
 }
-func (dst *DownstreamTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DownstreamTlsContext.Merge(dst, src)
+func (m *DownstreamTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DownstreamTlsContext.Merge(m, src)
 }
 func (m *DownstreamTlsContext) XXX_Size() int {
 	return xxx_messageInfo_DownstreamTlsContext.Size(m)
@@ -953,106 +664,37 @@ func (m *DownstreamTlsContext) GetSessionTicketKeysSdsSecretConfig() *SdsSecretC
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*DownstreamTlsContext) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _DownstreamTlsContext_OneofMarshaler, _DownstreamTlsContext_OneofUnmarshaler, _DownstreamTlsContext_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*DownstreamTlsContext) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*DownstreamTlsContext_SessionTicketKeys)(nil),
 		(*DownstreamTlsContext_SessionTicketKeysSdsSecretConfig)(nil),
 	}
 }
 
-func _DownstreamTlsContext_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*DownstreamTlsContext)
-	// session_ticket_keys_type
-	switch x := m.SessionTicketKeysType.(type) {
-	case *DownstreamTlsContext_SessionTicketKeys:
-		b.EncodeVarint(4<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.SessionTicketKeys); err != nil {
-			return err
-		}
-	case *DownstreamTlsContext_SessionTicketKeysSdsSecretConfig:
-		b.EncodeVarint(5<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.SessionTicketKeysSdsSecretConfig); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("DownstreamTlsContext.SessionTicketKeysType has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _DownstreamTlsContext_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*DownstreamTlsContext)
-	switch tag {
-	case 4: // session_ticket_keys_type.session_ticket_keys
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(TlsSessionTicketKeys)
-		err := b.DecodeMessage(msg)
-		m.SessionTicketKeysType = &DownstreamTlsContext_SessionTicketKeys{msg}
-		return true, err
-	case 5: // session_ticket_keys_type.session_ticket_keys_sds_secret_config
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(SdsSecretConfig)
-		err := b.DecodeMessage(msg)
-		m.SessionTicketKeysType = &DownstreamTlsContext_SessionTicketKeysSdsSecretConfig{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _DownstreamTlsContext_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*DownstreamTlsContext)
-	// session_ticket_keys_type
-	switch x := m.SessionTicketKeysType.(type) {
-	case *DownstreamTlsContext_SessionTicketKeys:
-		s := proto.Size(x.SessionTicketKeys)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *DownstreamTlsContext_SessionTicketKeysSdsSecretConfig:
-		s := proto.Size(x.SessionTicketKeysSdsSecretConfig)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
-// [#proto-status: experimental]
 type SdsSecretConfig struct {
-	// Name (FQDN, UUID, SPKI, SHA256, etc.) by which the secret can be uniquely referred to.
-	// When both name and config are specified, then secret can be fetched and/or reloaded via SDS.
-	// When only name is specified, then secret will be loaded from static resources [V2-API-DIFF].
-	Name                 string             `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	SdsConfig            *core.ConfigSource `protobuf:"bytes,2,opt,name=sds_config,json=sdsConfig,proto3" json:"sds_config,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Name                 string                      `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SdsConfig            *config_source.ConfigSource `protobuf:"bytes,2,opt,name=sds_config,json=sdsConfig,proto3" json:"sds_config,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+	XXX_unrecognized     []byte                      `json:"-"`
+	XXX_sizecache        int32                       `json:"-"`
 }
 
 func (m *SdsSecretConfig) Reset()         { *m = SdsSecretConfig{} }
 func (m *SdsSecretConfig) String() string { return proto.CompactTextString(m) }
 func (*SdsSecretConfig) ProtoMessage()    {}
 func (*SdsSecretConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{7}
+	return fileDescriptor_0c3851c0865b2745, []int{7}
 }
+
 func (m *SdsSecretConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdsSecretConfig.Unmarshal(m, b)
 }
 func (m *SdsSecretConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SdsSecretConfig.Marshal(b, m, deterministic)
 }
-func (dst *SdsSecretConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdsSecretConfig.Merge(dst, src)
+func (m *SdsSecretConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdsSecretConfig.Merge(m, src)
 }
 func (m *SdsSecretConfig) XXX_Size() int {
 	return xxx_messageInfo_SdsSecretConfig.Size(m)
@@ -1070,16 +712,14 @@ func (m *SdsSecretConfig) GetName() string {
 	return ""
 }
 
-func (m *SdsSecretConfig) GetSdsConfig() *core.ConfigSource {
+func (m *SdsSecretConfig) GetSdsConfig() *config_source.ConfigSource {
 	if m != nil {
 		return m.SdsConfig
 	}
 	return nil
 }
 
-// [#proto-status: experimental]
 type Secret struct {
-	// Name (FQDN, UUID, SPKI, SHA256, etc.) by which the secret can be uniquely referred to.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Types that are valid to be assigned to Type:
 	//	*Secret_TlsCertificate
@@ -1095,16 +735,17 @@ func (m *Secret) Reset()         { *m = Secret{} }
 func (m *Secret) String() string { return proto.CompactTextString(m) }
 func (*Secret) ProtoMessage()    {}
 func (*Secret) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cert_6c0eba2541b48bed, []int{8}
+	return fileDescriptor_0c3851c0865b2745, []int{8}
 }
+
 func (m *Secret) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Secret.Unmarshal(m, b)
 }
 func (m *Secret) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Secret.Marshal(b, m, deterministic)
 }
-func (dst *Secret) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Secret.Merge(dst, src)
+func (m *Secret) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Secret.Merge(m, src)
 }
 func (m *Secret) XXX_Size() int {
 	return xxx_messageInfo_Secret.Size(m)
@@ -1172,100 +813,17 @@ func (m *Secret) GetValidationContext() *CertificateValidationContext {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*Secret) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _Secret_OneofMarshaler, _Secret_OneofUnmarshaler, _Secret_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*Secret) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*Secret_TlsCertificate)(nil),
 		(*Secret_SessionTicketKeys)(nil),
 		(*Secret_ValidationContext)(nil),
 	}
 }
 
-func _Secret_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*Secret)
-	// type
-	switch x := m.Type.(type) {
-	case *Secret_TlsCertificate:
-		b.EncodeVarint(2<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.TlsCertificate); err != nil {
-			return err
-		}
-	case *Secret_SessionTicketKeys:
-		b.EncodeVarint(3<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.SessionTicketKeys); err != nil {
-			return err
-		}
-	case *Secret_ValidationContext:
-		b.EncodeVarint(4<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.ValidationContext); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("Secret.Type has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _Secret_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*Secret)
-	switch tag {
-	case 2: // type.tls_certificate
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(TlsCertificate)
-		err := b.DecodeMessage(msg)
-		m.Type = &Secret_TlsCertificate{msg}
-		return true, err
-	case 3: // type.session_ticket_keys
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(TlsSessionTicketKeys)
-		err := b.DecodeMessage(msg)
-		m.Type = &Secret_SessionTicketKeys{msg}
-		return true, err
-	case 4: // type.validation_context
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CertificateValidationContext)
-		err := b.DecodeMessage(msg)
-		m.Type = &Secret_ValidationContext{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _Secret_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*Secret)
-	// type
-	switch x := m.Type.(type) {
-	case *Secret_TlsCertificate:
-		s := proto.Size(x.TlsCertificate)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *Secret_SessionTicketKeys:
-		s := proto.Size(x.SessionTicketKeys)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *Secret_ValidationContext:
-		s := proto.Size(x.ValidationContext)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
 func init() {
+	proto.RegisterEnum("envoy.api.v2.auth.TlsParameters_TlsProtocol", TlsParameters_TlsProtocol_name, TlsParameters_TlsProtocol_value)
 	proto.RegisterType((*TlsParameters)(nil), "envoy.api.v2.auth.TlsParameters")
 	proto.RegisterType((*TlsCertificate)(nil), "envoy.api.v2.auth.TlsCertificate")
 	proto.RegisterType((*TlsSessionTicketKeys)(nil), "envoy.api.v2.auth.TlsSessionTicketKeys")
@@ -1276,12 +834,11 @@ func init() {
 	proto.RegisterType((*DownstreamTlsContext)(nil), "envoy.api.v2.auth.DownstreamTlsContext")
 	proto.RegisterType((*SdsSecretConfig)(nil), "envoy.api.v2.auth.SdsSecretConfig")
 	proto.RegisterType((*Secret)(nil), "envoy.api.v2.auth.Secret")
-	proto.RegisterEnum("envoy.api.v2.auth.TlsParameters_TlsProtocol", TlsParameters_TlsProtocol_name, TlsParameters_TlsProtocol_value)
 }
 
-func init() { proto.RegisterFile("envoy/api/v2/auth/cert.proto", fileDescriptor_cert_6c0eba2541b48bed) }
+func init() { proto.RegisterFile("envoy/api/v2/auth/cert.proto", fileDescriptor_0c3851c0865b2745) }
 
-var fileDescriptor_cert_6c0eba2541b48bed = []byte{
+var fileDescriptor_0c3851c0865b2745 = []byte{
 	// 1295 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x56, 0x4d, 0x77, 0xdb, 0x44,
 	0x17, 0x8e, 0x6c, 0xc7, 0x75, 0xae, 0xdb, 0x54, 0x99, 0xf6, 0x3d, 0x51, 0xfc, 0x86, 0xd6, 0x55,

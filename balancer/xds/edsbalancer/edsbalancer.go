@@ -28,8 +28,8 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	xdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2"
-	xdstypepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -117,7 +117,7 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment_Policy_DropOverload) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment_Policy_DropOverload) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
@@ -129,11 +129,11 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 			denominator uint32
 		)
 		switch percentage.GetDenominator() {
-		case xdstypepb.FractionalPercent_HUNDRED:
+		case percentpb.FractionalPercent_HUNDRED:
 			denominator = 100
-		case xdstypepb.FractionalPercent_TEN_THOUSAND:
+		case percentpb.FractionalPercent_TEN_THOUSAND:
 			denominator = 10000
-		case xdstypepb.FractionalPercent_MILLION:
+		case percentpb.FractionalPercent_MILLION:
 			denominator = 1000000
 		}
 		newDrops = append(newDrops, newDropper(numerator, denominator))
@@ -166,7 +166,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 // SubConns. It also handles drops.
 //
 // HandleCDSResponse and HandleEDSResponse must be called by the same goroutine.
-func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
+func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
 	// Create balancer group if it's never created (this is the first EDS
 	// response).
 	if xdsB.bg == nil {

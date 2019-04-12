@@ -3,9 +3,11 @@
 
 package envoy_type
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,14 +18,10 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// Specifies the int64 start and end of the range using half-open interval semantics [start,
-// end).
 type Int64Range struct {
-	// start of the range (inclusive)
-	Start int64 `protobuf:"varint,1,opt,name=start,proto3" json:"start,omitempty"`
-	// end of the range (exclusive)
+	Start                int64    `protobuf:"varint,1,opt,name=start,proto3" json:"start,omitempty"`
 	End                  int64    `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -34,16 +32,17 @@ func (m *Int64Range) Reset()         { *m = Int64Range{} }
 func (m *Int64Range) String() string { return proto.CompactTextString(m) }
 func (*Int64Range) ProtoMessage()    {}
 func (*Int64Range) Descriptor() ([]byte, []int) {
-	return fileDescriptor_range_eb12e26adca8dde3, []int{0}
+	return fileDescriptor_6d5354588716e6e7, []int{0}
 }
+
 func (m *Int64Range) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Int64Range.Unmarshal(m, b)
 }
 func (m *Int64Range) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Int64Range.Marshal(b, m, deterministic)
 }
-func (dst *Int64Range) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Int64Range.Merge(dst, src)
+func (m *Int64Range) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Int64Range.Merge(m, src)
 }
 func (m *Int64Range) XXX_Size() int {
 	return xxx_messageInfo_Int64Range.Size(m)
@@ -68,12 +67,8 @@ func (m *Int64Range) GetEnd() int64 {
 	return 0
 }
 
-// Specifies the double start and end of the range using half-open interval semantics [start,
-// end).
 type DoubleRange struct {
-	// start of the range (inclusive)
-	Start float64 `protobuf:"fixed64,1,opt,name=start,proto3" json:"start,omitempty"`
-	// end of the range (exclusive)
+	Start                float64  `protobuf:"fixed64,1,opt,name=start,proto3" json:"start,omitempty"`
 	End                  float64  `protobuf:"fixed64,2,opt,name=end,proto3" json:"end,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -84,16 +79,17 @@ func (m *DoubleRange) Reset()         { *m = DoubleRange{} }
 func (m *DoubleRange) String() string { return proto.CompactTextString(m) }
 func (*DoubleRange) ProtoMessage()    {}
 func (*DoubleRange) Descriptor() ([]byte, []int) {
-	return fileDescriptor_range_eb12e26adca8dde3, []int{1}
+	return fileDescriptor_6d5354588716e6e7, []int{1}
 }
+
 func (m *DoubleRange) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DoubleRange.Unmarshal(m, b)
 }
 func (m *DoubleRange) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DoubleRange.Marshal(b, m, deterministic)
 }
-func (dst *DoubleRange) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DoubleRange.Merge(dst, src)
+func (m *DoubleRange) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DoubleRange.Merge(m, src)
 }
 func (m *DoubleRange) XXX_Size() int {
 	return xxx_messageInfo_DoubleRange.Size(m)
@@ -123,9 +119,9 @@ func init() {
 	proto.RegisterType((*DoubleRange)(nil), "envoy.type.DoubleRange")
 }
 
-func init() { proto.RegisterFile("envoy/type/range.proto", fileDescriptor_range_eb12e26adca8dde3) }
+func init() { proto.RegisterFile("envoy/type/range.proto", fileDescriptor_6d5354588716e6e7) }
 
-var fileDescriptor_range_eb12e26adca8dde3 = []byte{
+var fileDescriptor_6d5354588716e6e7 = []byte{
 	// 154 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x4b, 0xcd, 0x2b, 0xcb,
 	0xaf, 0xd4, 0x2f, 0xa9, 0x2c, 0x48, 0xd5, 0x2f, 0x4a, 0xcc, 0x4b, 0x4f, 0xd5, 0x2b, 0x28, 0xca,

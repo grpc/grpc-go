@@ -3,12 +3,16 @@
 
 package endpoint
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import wrappers "github.com/golang/protobuf/ptypes/wrappers"
-import core "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core"
-import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	address "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
+	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	health_check "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/health_check"
+	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -19,27 +23,10 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// Upstream host identifier.
 type Endpoint struct {
-	// The upstream host address.
-	//
-	// .. attention::
-	//
-	//   The form of host address depends on the given cluster type. For STATIC or EDS,
-	//   it is expected to be a direct IP address (or something resolvable by the
-	//   specified :ref:`resolver <envoy_api_field_core.SocketAddress.resolver_name>`
-	//   in the Address). For LOGICAL or STRICT DNS, it is expected to be hostname,
-	//   and will be resolved via DNS.
-	Address *core.Address `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	// The optional health check configuration is used as configuration for the
-	// health checker to contact the health checked host.
-	//
-	// .. attention::
-	//
-	//   This takes into effect only for upstream clusters with
-	//   :ref:`active health checking <arch_overview_health_checking>` enabled.
+	Address              *address.Address            `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	HealthCheckConfig    *Endpoint_HealthCheckConfig `protobuf:"bytes,2,opt,name=health_check_config,json=healthCheckConfig,proto3" json:"health_check_config,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
 	XXX_unrecognized     []byte                      `json:"-"`
@@ -50,16 +37,17 @@ func (m *Endpoint) Reset()         { *m = Endpoint{} }
 func (m *Endpoint) String() string { return proto.CompactTextString(m) }
 func (*Endpoint) ProtoMessage()    {}
 func (*Endpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_endpoint_49ebe276a19d0ba5, []int{0}
+	return fileDescriptor_a9d2a3e4ee06324f, []int{0}
 }
+
 func (m *Endpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Endpoint.Unmarshal(m, b)
 }
 func (m *Endpoint) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Endpoint.Marshal(b, m, deterministic)
 }
-func (dst *Endpoint) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Endpoint.Merge(dst, src)
+func (m *Endpoint) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Endpoint.Merge(m, src)
 }
 func (m *Endpoint) XXX_Size() int {
 	return xxx_messageInfo_Endpoint.Size(m)
@@ -70,7 +58,7 @@ func (m *Endpoint) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Endpoint proto.InternalMessageInfo
 
-func (m *Endpoint) GetAddress() *core.Address {
+func (m *Endpoint) GetAddress() *address.Address {
 	if m != nil {
 		return m.Address
 	}
@@ -84,14 +72,7 @@ func (m *Endpoint) GetHealthCheckConfig() *Endpoint_HealthCheckConfig {
 	return nil
 }
 
-// The optional health check configuration.
 type Endpoint_HealthCheckConfig struct {
-	// Optional alternative health check port value.
-	//
-	// By default the health check address port of an upstream host is the same
-	// as the host's serving address port. This provides an alternative health
-	// check port. Setting this with a non-zero value allows an upstream host
-	// to have different health check address port.
 	PortValue            uint32   `protobuf:"varint,1,opt,name=port_value,json=portValue,proto3" json:"port_value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -102,16 +83,17 @@ func (m *Endpoint_HealthCheckConfig) Reset()         { *m = Endpoint_HealthCheck
 func (m *Endpoint_HealthCheckConfig) String() string { return proto.CompactTextString(m) }
 func (*Endpoint_HealthCheckConfig) ProtoMessage()    {}
 func (*Endpoint_HealthCheckConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_endpoint_49ebe276a19d0ba5, []int{0, 0}
+	return fileDescriptor_a9d2a3e4ee06324f, []int{0, 0}
 }
+
 func (m *Endpoint_HealthCheckConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Unmarshal(m, b)
 }
 func (m *Endpoint_HealthCheckConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Marshal(b, m, deterministic)
 }
-func (dst *Endpoint_HealthCheckConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Endpoint_HealthCheckConfig.Merge(dst, src)
+func (m *Endpoint_HealthCheckConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Endpoint_HealthCheckConfig.Merge(m, src)
 }
 func (m *Endpoint_HealthCheckConfig) XXX_Size() int {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Size(m)
@@ -129,58 +111,34 @@ func (m *Endpoint_HealthCheckConfig) GetPortValue() uint32 {
 	return 0
 }
 
-// An Endpoint that Envoy can route traffic to.
 type LbEndpoint struct {
-	// Upstream host identifier or a named reference.
-	//
 	// Types that are valid to be assigned to HostIdentifier:
 	//	*LbEndpoint_Endpoint
 	//	*LbEndpoint_EndpointName
-	HostIdentifier isLbEndpoint_HostIdentifier `protobuf_oneof:"host_identifier"`
-	// Optional health status when known and supplied by EDS server.
-	HealthStatus core.HealthStatus `protobuf:"varint,2,opt,name=health_status,json=healthStatus,proto3,enum=envoy.api.v2.core.HealthStatus" json:"health_status,omitempty"`
-	// The endpoint metadata specifies values that may be used by the load
-	// balancer to select endpoints in a cluster for a given request. The filter
-	// name should be specified as *envoy.lb*. An example boolean key-value pair
-	// is *canary*, providing the optional canary status of the upstream host.
-	// This may be matched against in a route's
-	// :ref:`RouteAction <envoy_api_msg_route.RouteAction>` metadata_match field
-	// to subset the endpoints considered in cluster load balancing.
-	Metadata *core.Metadata `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	// The optional load balancing weight of the upstream host, in the range 1 -
-	// 128. Envoy uses the load balancing weight in some of the built in load
-	// balancers. The load balancing weight for an endpoint is divided by the sum
-	// of the weights of all endpoints in the endpoint's locality to produce a
-	// percentage of traffic for the endpoint. This percentage is then further
-	// weighted by the endpoint's locality's load balancing weight from
-	// LocalityLbEndpoints. If unspecified, each host is presumed to have equal
-	// weight in a locality.
-	//
-	// .. attention::
-	//
-	//   The limit of 128 is somewhat arbitrary, but is applied due to performance
-	//   concerns with the current implementation and can be removed when
-	//   `this issue <https://github.com/envoyproxy/envoy/issues/1285>`_ is fixed.
-	LoadBalancingWeight  *wrappers.UInt32Value `protobuf:"bytes,4,opt,name=load_balancing_weight,json=loadBalancingWeight,proto3" json:"load_balancing_weight,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	HostIdentifier       isLbEndpoint_HostIdentifier `protobuf_oneof:"host_identifier"`
+	HealthStatus         health_check.HealthStatus   `protobuf:"varint,2,opt,name=health_status,json=healthStatus,proto3,enum=envoy.api.v2.core.HealthStatus" json:"health_status,omitempty"`
+	Metadata             *base.Metadata              `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	LoadBalancingWeight  *wrappers.UInt32Value       `protobuf:"bytes,4,opt,name=load_balancing_weight,json=loadBalancingWeight,proto3" json:"load_balancing_weight,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+	XXX_unrecognized     []byte                      `json:"-"`
+	XXX_sizecache        int32                       `json:"-"`
 }
 
 func (m *LbEndpoint) Reset()         { *m = LbEndpoint{} }
 func (m *LbEndpoint) String() string { return proto.CompactTextString(m) }
 func (*LbEndpoint) ProtoMessage()    {}
 func (*LbEndpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_endpoint_49ebe276a19d0ba5, []int{1}
+	return fileDescriptor_a9d2a3e4ee06324f, []int{1}
 }
+
 func (m *LbEndpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LbEndpoint.Unmarshal(m, b)
 }
 func (m *LbEndpoint) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_LbEndpoint.Marshal(b, m, deterministic)
 }
-func (dst *LbEndpoint) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LbEndpoint.Merge(dst, src)
+func (m *LbEndpoint) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LbEndpoint.Merge(m, src)
 }
 func (m *LbEndpoint) XXX_Size() int {
 	return xxx_messageInfo_LbEndpoint.Size(m)
@@ -228,14 +186,14 @@ func (m *LbEndpoint) GetEndpointName() string {
 	return ""
 }
 
-func (m *LbEndpoint) GetHealthStatus() core.HealthStatus {
+func (m *LbEndpoint) GetHealthStatus() health_check.HealthStatus {
 	if m != nil {
 		return m.HealthStatus
 	}
-	return core.HealthStatus_UNKNOWN
+	return health_check.HealthStatus_UNKNOWN
 }
 
-func (m *LbEndpoint) GetMetadata() *core.Metadata {
+func (m *LbEndpoint) GetMetadata() *base.Metadata {
 	if m != nil {
 		return m.Metadata
 	}
@@ -249,131 +207,39 @@ func (m *LbEndpoint) GetLoadBalancingWeight() *wrappers.UInt32Value {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*LbEndpoint) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _LbEndpoint_OneofMarshaler, _LbEndpoint_OneofUnmarshaler, _LbEndpoint_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*LbEndpoint) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*LbEndpoint_Endpoint)(nil),
 		(*LbEndpoint_EndpointName)(nil),
 	}
 }
 
-func _LbEndpoint_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*LbEndpoint)
-	// host_identifier
-	switch x := m.HostIdentifier.(type) {
-	case *LbEndpoint_Endpoint:
-		b.EncodeVarint(1<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Endpoint); err != nil {
-			return err
-		}
-	case *LbEndpoint_EndpointName:
-		b.EncodeVarint(5<<3 | proto.WireBytes)
-		b.EncodeStringBytes(x.EndpointName)
-	case nil:
-	default:
-		return fmt.Errorf("LbEndpoint.HostIdentifier has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _LbEndpoint_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*LbEndpoint)
-	switch tag {
-	case 1: // host_identifier.endpoint
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(Endpoint)
-		err := b.DecodeMessage(msg)
-		m.HostIdentifier = &LbEndpoint_Endpoint{msg}
-		return true, err
-	case 5: // host_identifier.endpoint_name
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeStringBytes()
-		m.HostIdentifier = &LbEndpoint_EndpointName{x}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _LbEndpoint_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*LbEndpoint)
-	// host_identifier
-	switch x := m.HostIdentifier.(type) {
-	case *LbEndpoint_Endpoint:
-		s := proto.Size(x.Endpoint)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *LbEndpoint_EndpointName:
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(len(x.EndpointName)))
-		n += len(x.EndpointName)
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
-// A group of endpoints belonging to a Locality.
-// One can have multiple LocalityLbEndpoints for a locality, but this is
-// generally only done if the different groups need to have different load
-// balancing weights or different priorities.
 type LocalityLbEndpoints struct {
-	// Identifies location of where the upstream hosts run.
-	Locality *core.Locality `protobuf:"bytes,1,opt,name=locality,proto3" json:"locality,omitempty"`
-	// The group of endpoints belonging to the locality specified.
-	LbEndpoints []*LbEndpoint `protobuf:"bytes,2,rep,name=lb_endpoints,json=lbEndpoints,proto3" json:"lb_endpoints,omitempty"`
-	// Optional: Per priority/region/zone/sub_zone weight - range 1-128. The load
-	// balancing weight for a locality is divided by the sum of the weights of all
-	// localities  at the same priority level to produce the effective percentage
-	// of traffic for the locality.
-	//
-	// Locality weights are only considered when :ref:`locality weighted load
-	// balancing <arch_overview_load_balancing_locality_weighted_lb>` is
-	// configured. These weights are ignored otherwise. If no weights are
-	// specified when locality weighted load balancing is enabled, the locality is
-	// assigned no load.
-	//
-	// .. attention::
-	//
-	//   The limit of 128 is somewhat arbitrary, but is applied due to performance
-	//   concerns with the current implementation and can be removed when
-	//   `this issue <https://github.com/envoyproxy/envoy/issues/1285>`_ is fixed.
-	LoadBalancingWeight *wrappers.UInt32Value `protobuf:"bytes,3,opt,name=load_balancing_weight,json=loadBalancingWeight,proto3" json:"load_balancing_weight,omitempty"`
-	// Optional: the priority for this LocalityLbEndpoints. If unspecified this will
-	// default to the highest priority (0).
-	//
-	// Under usual circumstances, Envoy will only select endpoints for the highest
-	// priority (0). In the event all endpoints for a particular priority are
-	// unavailable/unhealthy, Envoy will fail over to selecting endpoints for the
-	// next highest priority group.
-	//
-	// Priorities should range from 0 (highest) to N (lowest) without skipping.
-	Priority             uint32   `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Locality             *base.Locality        `protobuf:"bytes,1,opt,name=locality,proto3" json:"locality,omitempty"`
+	LbEndpoints          []*LbEndpoint         `protobuf:"bytes,2,rep,name=lb_endpoints,json=lbEndpoints,proto3" json:"lb_endpoints,omitempty"`
+	LoadBalancingWeight  *wrappers.UInt32Value `protobuf:"bytes,3,opt,name=load_balancing_weight,json=loadBalancingWeight,proto3" json:"load_balancing_weight,omitempty"`
+	Priority             uint32                `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
 }
 
 func (m *LocalityLbEndpoints) Reset()         { *m = LocalityLbEndpoints{} }
 func (m *LocalityLbEndpoints) String() string { return proto.CompactTextString(m) }
 func (*LocalityLbEndpoints) ProtoMessage()    {}
 func (*LocalityLbEndpoints) Descriptor() ([]byte, []int) {
-	return fileDescriptor_endpoint_49ebe276a19d0ba5, []int{2}
+	return fileDescriptor_a9d2a3e4ee06324f, []int{2}
 }
+
 func (m *LocalityLbEndpoints) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LocalityLbEndpoints.Unmarshal(m, b)
 }
 func (m *LocalityLbEndpoints) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_LocalityLbEndpoints.Marshal(b, m, deterministic)
 }
-func (dst *LocalityLbEndpoints) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LocalityLbEndpoints.Merge(dst, src)
+func (m *LocalityLbEndpoints) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LocalityLbEndpoints.Merge(m, src)
 }
 func (m *LocalityLbEndpoints) XXX_Size() int {
 	return xxx_messageInfo_LocalityLbEndpoints.Size(m)
@@ -384,7 +250,7 @@ func (m *LocalityLbEndpoints) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_LocalityLbEndpoints proto.InternalMessageInfo
 
-func (m *LocalityLbEndpoints) GetLocality() *core.Locality {
+func (m *LocalityLbEndpoints) GetLocality() *base.Locality {
 	if m != nil {
 		return m.Locality
 	}
@@ -420,10 +286,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/endpoint/endpoint.proto", fileDescriptor_endpoint_49ebe276a19d0ba5)
+	proto.RegisterFile("envoy/api/v2/endpoint/endpoint.proto", fileDescriptor_a9d2a3e4ee06324f)
 }
 
-var fileDescriptor_endpoint_49ebe276a19d0ba5 = []byte{
+var fileDescriptor_a9d2a3e4ee06324f = []byte{
 	// 556 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x52, 0xc1, 0x6e, 0xd3, 0x4c,
 	0x18, 0xac, 0xe3, 0xa6, 0x4d, 0x37, 0xc9, 0xff, 0x2b, 0x8e, 0x2a, 0xac, 0x50, 0xd1, 0x12, 0x0a,
