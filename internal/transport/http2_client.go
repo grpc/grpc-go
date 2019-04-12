@@ -1152,10 +1152,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	state := &decodeState{
-		serverSide:        false,
-		ignoreContentType: !initialHeader,
-	}
+	state := &decodeState{}
 	// Initialize isGRPC value to be !initialHeader, since if a gRPC ResponseHeader has been received
 	// which indicates peer speaking gRPC, we are in gRPC mode.
 	state.data.isGRPC = !initialHeader
@@ -1371,6 +1368,8 @@ func (t *http2Client) ChannelzMetric() *channelz.SocketInternalMetric {
 	s.RemoteFlowControlWindow = t.getOutFlowWindow()
 	return &s
 }
+
+func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
 
 func (t *http2Client) IncrMsgSent() {
 	atomic.AddInt64(&t.czData.msgSent, 1)

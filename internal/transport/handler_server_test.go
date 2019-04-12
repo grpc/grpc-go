@@ -99,26 +99,6 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			wantErr: "gRPC requires a ResponseWriter supporting http.Flusher",
 		},
 		{
-			name: "not closenotifier",
-			req: &http.Request{
-				ProtoMajor: 2,
-				Method:     "POST",
-				Header: http.Header{
-					"Content-Type": {"application/grpc"},
-				},
-				RequestURI: "/service/foo.bar",
-			},
-			modrw: func(w http.ResponseWriter) http.ResponseWriter {
-				// Return w without its CloseNotify method
-				type onlyFlusher interface {
-					http.ResponseWriter
-					http.Flusher
-				}
-				return struct{ onlyFlusher }{w.(onlyFlusher)}
-			},
-			wantErr: "gRPC requires a ResponseWriter supporting http.CloseNotifier",
-		},
-		{
 			name: "valid",
 			req: &http.Request{
 				ProtoMajor: 2,

@@ -610,6 +610,9 @@ type ClientTransport interface {
 	// GetGoAwayReason returns the reason why GoAway frame was received.
 	GetGoAwayReason() GoAwayReason
 
+	// RemoteAddr returns the remote network address.
+	RemoteAddr() net.Addr
+
 	// IncrMsgSent increments the number of message sent through this transport.
 	IncrMsgSent()
 

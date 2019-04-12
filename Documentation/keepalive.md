@@ -35,7 +35,7 @@ for details.
 ### Enforcement policy
 
 [Enforcement
-policy](https://godoc.org/google.golang.org/grpc/keepalive#ServerParameters) is
+policy](https://godoc.org/google.golang.org/grpc/keepalive#EnforcementPolicy) is
 a special setting on server side to protect server from malicious or misbehaving
 clients.
 

@@ -24,14 +24,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/balancerload/orca"
+	orcapb "google.golang.org/grpc/internal/balancerload/orca/orca_v1"
 	"google.golang.org/grpc/resolver"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	_ "google.golang.org/grpc/internal/balancerload/orca"
 )
 
 const testBalancerName = "testbalancer"
@@ -45,6 +50,7 @@ type testBalancer struct {
 	sc balancer.SubConn
 
 	newSubConnOptions balancer.NewSubConnOptions
+	pickOptions       []balancer.PickOptions
 	doneInfo          []balancer.DoneInfo
 }
 
@@ -104,6 +110,7 @@ func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.
 	if p.err != nil {
 		return nil, nil, p.err
 	}
+	p.bal.pickOptions = append(p.bal.pickOptions, opts)
 	return p.sc, func(d balancer.DoneInfo) { p.bal.doneInfo = append(p.bal.doneInfo, d) }, nil
 }
 
@@ -170,5 +177,78 @@ func testDoneInfo(t *testing.T, e env) {
 	}
 	if len(b.doneInfo) < 2 || !reflect.DeepEqual(b.doneInfo[1].Trailer, testTrailerMetadata) {
 		t.Fatalf("b.doneInfo = %v; want b.doneInfo[1].Trailer = %v", b.doneInfo, testTrailerMetadata)
+	}
+	if len(b.pickOptions) != len(b.doneInfo) {
+		t.Fatalf("Got %d picks, but %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
+	}
+	// To test done() is always called, even if it's returned with a non-Ready
+	// SubConn.
+	//
+	// Stop server and at the same time send RPCs. There are chances that picker
+	// is not updated in time, causing a non-Ready SubConn to be returned.
+	finished := make(chan struct{})
+	go func() {
+		for i := 0; i < 20; i++ {
+			tc.UnaryCall(ctx, &testpb.SimpleRequest{})
+		}
+		close(finished)
+	}()
+	te.srv.Stop()
+	<-finished
+	if len(b.pickOptions) != len(b.doneInfo) {
+		t.Fatalf("Got %d picks, %d doneInfo, want equal amount", len(b.pickOptions), len(b.doneInfo))
+	}
+}
+
+func (s) TestDoneLoads(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testDoneLoads(t, e)
+	}
+}
+
+func testDoneLoads(t *testing.T, e env) {
+	b := &testBalancer{}
+	balancer.Register(b)
+
+	testLoad := &orcapb.LoadReport{
+		CpuUtilization:           0.31,
+		MemUtilization:           0.41,
+		NicInUtilization:         0.59,
+		NicOutUtilization:        0.26,
+		RequestCostOrUtilization: nil,
+	}
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			grpc.SetTrailer(ctx, orca.ToMetadata(testLoad))
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil, grpc.WithBalancerName(testBalancerName)); err != nil {
+		t.Fatalf("error starting testing server: %v", err)
+	}
+	defer ss.Stop()
+
+	tc := testpb.NewTestServiceClient(ss.cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
+
+	poWant := []balancer.PickOptions{
+		{FullMethodName: "/grpc.testing.TestService/EmptyCall"},
+	}
+	if !reflect.DeepEqual(b.pickOptions, poWant) {
+		t.Fatalf("b.pickOptions = %v; want %v", b.pickOptions, poWant)
+	}
+
+	if len(b.doneInfo) < 1 {
+		t.Fatalf("b.doneInfo = %v, want length 1", b.doneInfo)
+	}
+	gotLoad, _ := b.doneInfo[0].ServerLoad.(*orcapb.LoadReport)
+	if !proto.Equal(gotLoad, testLoad) {
+		t.Fatalf("b.doneInfo[0].ServerLoad = %v; want = %v", b.doneInfo[0].ServerLoad, testLoad)
 	}
 }

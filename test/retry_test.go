@@ -63,7 +63,7 @@ func (s) TestRetryUnary(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -131,7 +131,7 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -191,7 +191,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -502,7 +502,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,

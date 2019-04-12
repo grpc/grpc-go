@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  * Copyright 2019 gRPC authors.
  *
@@ -172,7 +174,11 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 		grpclog.Infof("balancer group: balancer not found for sc state change")
 		return
 	}
-	b.HandleSubConnStateChange(sc, state)
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: state})
+	} else {
+		b.HandleSubConnStateChange(sc, state)
+	}
 }
 
 // Address change: forward to balancer.
@@ -184,7 +190,11 @@ func (bg *balancerGroup) handleResolvedAddrs(id string, addrs []resolver.Address
 		grpclog.Infof("balancer group: balancer with id %q not found", id)
 		return
 	}
-	b.HandleResolvedAddrs(addrs, nil)
+	if ub, ok := b.(balancer.V2Balancer); ok {
+		ub.UpdateResolverState(resolver.State{Addresses: addrs})
+	} else {
+		b.HandleResolvedAddrs(addrs, nil)
+	}
 }
 
 // TODO: handleServiceConfig()
