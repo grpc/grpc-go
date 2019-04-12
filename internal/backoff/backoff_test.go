@@ -26,11 +26,10 @@ import (
 func TestNewExponentialBuilderDefault(t *testing.T) {
 	gotExp := NewExponentialBuilder().Build().(Strategy)
 	wantExp := Exponential{
-		baseDelay:         baseDelay,
-		multiplier:        multiplier,
-		jitter:            jitter,
-		maxDelay:          maxDelay,
-		minConnectTimeout: minConnectTimeout,
+		baseDelay:  baseDelay,
+		multiplier: multiplier,
+		jitter:     jitter,
+		maxDelay:   maxDelay,
 	}
 	if gotExp != wantExp {
 		t.Errorf("DefaultExponentialBuilder got: %v, want %v", gotExp, wantExp)
@@ -42,11 +41,10 @@ func TestNewExponentialBuilderOverride(t *testing.T) {
 	mltpr := 2.0
 	gotExp := NewExponentialBuilder().BaseDelay(bd).Multiplier(mltpr).Build().(Strategy)
 	wantExp := Exponential{
-		baseDelay:         bd,
-		multiplier:        mltpr,
-		jitter:            jitter,
-		maxDelay:          maxDelay,
-		minConnectTimeout: minConnectTimeout,
+		baseDelay:  bd,
+		multiplier: mltpr,
+		jitter:     jitter,
+		maxDelay:   maxDelay,
 	}
 	if gotExp != wantExp {
 		t.Errorf("OverrideExponentialBuilder got: %v, want %v", gotExp, wantExp)
