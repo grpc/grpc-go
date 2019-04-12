@@ -83,7 +83,6 @@ type exponentialBuilder struct {
 	mltpr  float64
 	jitter float64
 	md     time.Duration
-	mct    time.Duration
 }
 
 // BaseDelay helps implement StrategyBuilder.
