@@ -807,8 +807,7 @@ func (t *http2Client) GracefulClose() error {
 	if active == 0 {
 		return t.Close()
 	}
-	t.controlBuf.put(&incomingGoAway{})
-	return nil
+	return t.controlBuf.put(&incomingGoAway{})
 }
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
