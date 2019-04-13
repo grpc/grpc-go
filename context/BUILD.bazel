@@ -4,10 +4,4 @@ java_library(
         "src/main/java/**/*.java",
     ]),
     visibility = ["//visibility:public"],
-    deps = [
-        "@com_google_code_findbugs_jsr305//jar",
-        "@com_google_errorprone_error_prone_annotations//jar",
-        "@com_google_guava_guava//jar",
-        "@com_google_j2objc_j2objc_annotations//jar",
-    ],
 )
