@@ -3,13 +3,11 @@
 
 package cluster
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -20,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type CircuitBreakers struct {
 	Thresholds           []*CircuitBreakers_Thresholds `protobuf:"bytes,1,rep,name=thresholds,proto3" json:"thresholds,omitempty"`
@@ -33,17 +31,16 @@ func (m *CircuitBreakers) Reset()         { *m = CircuitBreakers{} }
 func (m *CircuitBreakers) String() string { return proto.CompactTextString(m) }
 func (*CircuitBreakers) ProtoMessage()    {}
 func (*CircuitBreakers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_89bc8d4e21efdd79, []int{0}
+	return fileDescriptor_circuit_breaker_dc7392708e718eb5, []int{0}
 }
-
 func (m *CircuitBreakers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CircuitBreakers.Unmarshal(m, b)
 }
 func (m *CircuitBreakers) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CircuitBreakers.Marshal(b, m, deterministic)
 }
-func (m *CircuitBreakers) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CircuitBreakers.Merge(m, src)
+func (dst *CircuitBreakers) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CircuitBreakers.Merge(dst, src)
 }
 func (m *CircuitBreakers) XXX_Size() int {
 	return xxx_messageInfo_CircuitBreakers.Size(m)
@@ -78,17 +75,16 @@ func (m *CircuitBreakers_Thresholds) Reset()         { *m = CircuitBreakers_Thre
 func (m *CircuitBreakers_Thresholds) String() string { return proto.CompactTextString(m) }
 func (*CircuitBreakers_Thresholds) ProtoMessage()    {}
 func (*CircuitBreakers_Thresholds) Descriptor() ([]byte, []int) {
-	return fileDescriptor_89bc8d4e21efdd79, []int{0, 0}
+	return fileDescriptor_circuit_breaker_dc7392708e718eb5, []int{0, 0}
 }
-
 func (m *CircuitBreakers_Thresholds) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Unmarshal(m, b)
 }
 func (m *CircuitBreakers_Thresholds) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Marshal(b, m, deterministic)
 }
-func (m *CircuitBreakers_Thresholds) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CircuitBreakers_Thresholds.Merge(m, src)
+func (dst *CircuitBreakers_Thresholds) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CircuitBreakers_Thresholds.Merge(dst, src)
 }
 func (m *CircuitBreakers_Thresholds) XXX_Size() int {
 	return xxx_messageInfo_CircuitBreakers_Thresholds.Size(m)
@@ -154,10 +150,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/cluster/circuit_breaker.proto", fileDescriptor_89bc8d4e21efdd79)
+	proto.RegisterFile("envoy/api/v2/cluster/circuit_breaker.proto", fileDescriptor_circuit_breaker_dc7392708e718eb5)
 }
 
-var fileDescriptor_89bc8d4e21efdd79 = []byte{
+var fileDescriptor_circuit_breaker_dc7392708e718eb5 = []byte{
 	// 417 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xc1, 0x6e, 0xd3, 0x40,
 	0x10, 0x86, 0xe5, 0xa6, 0xb4, 0xd5, 0x06, 0x25, 0xd2, 0x52, 0x21, 0x2b, 0xaa, 0x50, 0x94, 0x0b,

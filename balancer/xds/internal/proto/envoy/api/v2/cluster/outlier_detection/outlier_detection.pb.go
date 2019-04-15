@@ -3,14 +3,12 @@
 
 package envoy_api_v2_cluster
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	duration "github.com/golang/protobuf/ptypes/duration"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import duration "github.com/golang/protobuf/ptypes/duration"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type OutlierDetection struct {
 	Consecutive_5Xx                    *wrappers.UInt32Value `protobuf:"bytes,1,opt,name=consecutive_5xx,json=consecutive5xx,proto3" json:"consecutive_5xx,omitempty"`
@@ -44,17 +42,16 @@ func (m *OutlierDetection) Reset()         { *m = OutlierDetection{} }
 func (m *OutlierDetection) String() string { return proto.CompactTextString(m) }
 func (*OutlierDetection) ProtoMessage()    {}
 func (*OutlierDetection) Descriptor() ([]byte, []int) {
-	return fileDescriptor_56cd87362a3f00c9, []int{0}
+	return fileDescriptor_outlier_detection_c374e0b25113dd85, []int{0}
 }
-
 func (m *OutlierDetection) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OutlierDetection.Unmarshal(m, b)
 }
 func (m *OutlierDetection) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_OutlierDetection.Marshal(b, m, deterministic)
 }
-func (m *OutlierDetection) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OutlierDetection.Merge(m, src)
+func (dst *OutlierDetection) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OutlierDetection.Merge(dst, src)
 }
 func (m *OutlierDetection) XXX_Size() int {
 	return xxx_messageInfo_OutlierDetection.Size(m)
@@ -147,10 +144,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/cluster/outlier_detection.proto", fileDescriptor_56cd87362a3f00c9)
+	proto.RegisterFile("envoy/api/v2/cluster/outlier_detection.proto", fileDescriptor_outlier_detection_c374e0b25113dd85)
 }
 
-var fileDescriptor_56cd87362a3f00c9 = []byte{
+var fileDescriptor_outlier_detection_c374e0b25113dd85 = []byte{
 	// 526 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x94, 0xed, 0x6a, 0x13, 0x4d,
 	0x14, 0xc7, 0x9f, 0xa4, 0xef, 0x53, 0x78, 0x2c, 0x43, 0x4d, 0x26, 0xad, 0x88, 0x04, 0x04, 0x29,

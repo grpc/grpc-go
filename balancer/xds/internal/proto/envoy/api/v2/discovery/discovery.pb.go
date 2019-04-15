@@ -3,14 +3,12 @@
 
 package v2
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	any "github.com/golang/protobuf/ptypes/any"
-	status "google.golang.org/genproto/googleapis/rpc/status"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import any "github.com/golang/protobuf/ptypes/any"
+import status "google.golang.org/genproto/googleapis/rpc/status"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type DiscoveryRequest struct {
 	VersionInfo          string         `protobuf:"bytes,1,opt,name=version_info,json=versionInfo,proto3" json:"version_info,omitempty"`
@@ -39,17 +37,16 @@ func (m *DiscoveryRequest) Reset()         { *m = DiscoveryRequest{} }
 func (m *DiscoveryRequest) String() string { return proto.CompactTextString(m) }
 func (*DiscoveryRequest) ProtoMessage()    {}
 func (*DiscoveryRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2c7365e287e5c035, []int{0}
+	return fileDescriptor_discovery_a1ffda4a09a0e500, []int{0}
 }
-
 func (m *DiscoveryRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DiscoveryRequest.Unmarshal(m, b)
 }
 func (m *DiscoveryRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DiscoveryRequest.Marshal(b, m, deterministic)
 }
-func (m *DiscoveryRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DiscoveryRequest.Merge(m, src)
+func (dst *DiscoveryRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DiscoveryRequest.Merge(dst, src)
 }
 func (m *DiscoveryRequest) XXX_Size() int {
 	return xxx_messageInfo_DiscoveryRequest.Size(m)
@@ -118,17 +115,16 @@ func (m *DiscoveryResponse) Reset()         { *m = DiscoveryResponse{} }
 func (m *DiscoveryResponse) String() string { return proto.CompactTextString(m) }
 func (*DiscoveryResponse) ProtoMessage()    {}
 func (*DiscoveryResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2c7365e287e5c035, []int{1}
+	return fileDescriptor_discovery_a1ffda4a09a0e500, []int{1}
 }
-
 func (m *DiscoveryResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DiscoveryResponse.Unmarshal(m, b)
 }
 func (m *DiscoveryResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DiscoveryResponse.Marshal(b, m, deterministic)
 }
-func (m *DiscoveryResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DiscoveryResponse.Merge(m, src)
+func (dst *DiscoveryResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DiscoveryResponse.Merge(dst, src)
 }
 func (m *DiscoveryResponse) XXX_Size() int {
 	return xxx_messageInfo_DiscoveryResponse.Size(m)
@@ -198,17 +194,16 @@ func (m *DeltaDiscoveryRequest) Reset()         { *m = DeltaDiscoveryRequest{} }
 func (m *DeltaDiscoveryRequest) String() string { return proto.CompactTextString(m) }
 func (*DeltaDiscoveryRequest) ProtoMessage()    {}
 func (*DeltaDiscoveryRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2c7365e287e5c035, []int{2}
+	return fileDescriptor_discovery_a1ffda4a09a0e500, []int{2}
 }
-
 func (m *DeltaDiscoveryRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeltaDiscoveryRequest.Unmarshal(m, b)
 }
 func (m *DeltaDiscoveryRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DeltaDiscoveryRequest.Marshal(b, m, deterministic)
 }
-func (m *DeltaDiscoveryRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DeltaDiscoveryRequest.Merge(m, src)
+func (dst *DeltaDiscoveryRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeltaDiscoveryRequest.Merge(dst, src)
 }
 func (m *DeltaDiscoveryRequest) XXX_Size() int {
 	return xxx_messageInfo_DeltaDiscoveryRequest.Size(m)
@@ -282,17 +277,16 @@ func (m *DeltaDiscoveryResponse) Reset()         { *m = DeltaDiscoveryResponse{}
 func (m *DeltaDiscoveryResponse) String() string { return proto.CompactTextString(m) }
 func (*DeltaDiscoveryResponse) ProtoMessage()    {}
 func (*DeltaDiscoveryResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2c7365e287e5c035, []int{3}
+	return fileDescriptor_discovery_a1ffda4a09a0e500, []int{3}
 }
-
 func (m *DeltaDiscoveryResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeltaDiscoveryResponse.Unmarshal(m, b)
 }
 func (m *DeltaDiscoveryResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DeltaDiscoveryResponse.Marshal(b, m, deterministic)
 }
-func (m *DeltaDiscoveryResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DeltaDiscoveryResponse.Merge(m, src)
+func (dst *DeltaDiscoveryResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeltaDiscoveryResponse.Merge(dst, src)
 }
 func (m *DeltaDiscoveryResponse) XXX_Size() int {
 	return xxx_messageInfo_DeltaDiscoveryResponse.Size(m)
@@ -345,17 +339,16 @@ func (m *Resource) Reset()         { *m = Resource{} }
 func (m *Resource) String() string { return proto.CompactTextString(m) }
 func (*Resource) ProtoMessage()    {}
 func (*Resource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2c7365e287e5c035, []int{4}
+	return fileDescriptor_discovery_a1ffda4a09a0e500, []int{4}
 }
-
 func (m *Resource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Resource.Unmarshal(m, b)
 }
 func (m *Resource) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Resource.Marshal(b, m, deterministic)
 }
-func (m *Resource) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Resource.Merge(m, src)
+func (dst *Resource) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Resource.Merge(dst, src)
 }
 func (m *Resource) XXX_Size() int {
 	return xxx_messageInfo_Resource.Size(m)
@@ -403,9 +396,11 @@ func init() {
 	proto.RegisterType((*Resource)(nil), "envoy.api.v2.Resource")
 }
 
-func init() { proto.RegisterFile("envoy/api/v2/discovery.proto", fileDescriptor_2c7365e287e5c035) }
+func init() {
+	proto.RegisterFile("envoy/api/v2/discovery.proto", fileDescriptor_discovery_a1ffda4a09a0e500)
+}
 
-var fileDescriptor_2c7365e287e5c035 = []byte{
+var fileDescriptor_discovery_a1ffda4a09a0e500 = []byte{
 	// 656 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x54, 0x41, 0x6b, 0xdb, 0x4c,
 	0x10, 0x45, 0xb6, 0xe3, 0xd8, 0x63, 0x27, 0x24, 0xfb, 0xe5, 0x73, 0x14, 0x13, 0xa8, 0x6b, 0x28,

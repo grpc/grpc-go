@@ -3,14 +3,12 @@
 
 package envoy_api_v2_core
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type SocketAddress_Protocol int32
 
@@ -34,7 +32,6 @@ var SocketAddress_Protocol_name = map[int32]string{
 	0: "TCP",
 	1: "UDP",
 }
-
 var SocketAddress_Protocol_value = map[string]int32{
 	"TCP": 0,
 	"UDP": 1,
@@ -43,9 +40,8 @@ var SocketAddress_Protocol_value = map[string]int32{
 func (x SocketAddress_Protocol) String() string {
 	return proto.EnumName(SocketAddress_Protocol_name, int32(x))
 }
-
 func (SocketAddress_Protocol) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{1, 0}
+	return fileDescriptor_address_b91d58d2da3489da, []int{1, 0}
 }
 
 type Pipe struct {
@@ -59,17 +55,16 @@ func (m *Pipe) Reset()         { *m = Pipe{} }
 func (m *Pipe) String() string { return proto.CompactTextString(m) }
 func (*Pipe) ProtoMessage()    {}
 func (*Pipe) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{0}
+	return fileDescriptor_address_b91d58d2da3489da, []int{0}
 }
-
 func (m *Pipe) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Pipe.Unmarshal(m, b)
 }
 func (m *Pipe) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Pipe.Marshal(b, m, deterministic)
 }
-func (m *Pipe) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Pipe.Merge(m, src)
+func (dst *Pipe) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Pipe.Merge(dst, src)
 }
 func (m *Pipe) XXX_Size() int {
 	return xxx_messageInfo_Pipe.Size(m)
@@ -105,17 +100,16 @@ func (m *SocketAddress) Reset()         { *m = SocketAddress{} }
 func (m *SocketAddress) String() string { return proto.CompactTextString(m) }
 func (*SocketAddress) ProtoMessage()    {}
 func (*SocketAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{1}
+	return fileDescriptor_address_b91d58d2da3489da, []int{1}
 }
-
 func (m *SocketAddress) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SocketAddress.Unmarshal(m, b)
 }
 func (m *SocketAddress) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SocketAddress.Marshal(b, m, deterministic)
 }
-func (m *SocketAddress) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SocketAddress.Merge(m, src)
+func (dst *SocketAddress) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SocketAddress.Merge(dst, src)
 }
 func (m *SocketAddress) XXX_Size() int {
 	return xxx_messageInfo_SocketAddress.Size(m)
@@ -191,12 +185,69 @@ func (m *SocketAddress) GetIpv4Compat() bool {
 	return false
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*SocketAddress) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*SocketAddress) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _SocketAddress_OneofMarshaler, _SocketAddress_OneofUnmarshaler, _SocketAddress_OneofSizer, []interface{}{
 		(*SocketAddress_PortValue)(nil),
 		(*SocketAddress_NamedPort)(nil),
 	}
+}
+
+func _SocketAddress_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*SocketAddress)
+	// port_specifier
+	switch x := m.PortSpecifier.(type) {
+	case *SocketAddress_PortValue:
+		b.EncodeVarint(3<<3 | proto.WireVarint)
+		b.EncodeVarint(uint64(x.PortValue))
+	case *SocketAddress_NamedPort:
+		b.EncodeVarint(4<<3 | proto.WireBytes)
+		b.EncodeStringBytes(x.NamedPort)
+	case nil:
+	default:
+		return fmt.Errorf("SocketAddress.PortSpecifier has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _SocketAddress_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*SocketAddress)
+	switch tag {
+	case 3: // port_specifier.port_value
+		if wire != proto.WireVarint {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeVarint()
+		m.PortSpecifier = &SocketAddress_PortValue{uint32(x)}
+		return true, err
+	case 4: // port_specifier.named_port
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeStringBytes()
+		m.PortSpecifier = &SocketAddress_NamedPort{x}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _SocketAddress_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*SocketAddress)
+	// port_specifier
+	switch x := m.PortSpecifier.(type) {
+	case *SocketAddress_PortValue:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(x.PortValue))
+	case *SocketAddress_NamedPort:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(len(x.NamedPort)))
+		n += len(x.NamedPort)
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type TcpKeepalive struct {
@@ -212,17 +263,16 @@ func (m *TcpKeepalive) Reset()         { *m = TcpKeepalive{} }
 func (m *TcpKeepalive) String() string { return proto.CompactTextString(m) }
 func (*TcpKeepalive) ProtoMessage()    {}
 func (*TcpKeepalive) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{2}
+	return fileDescriptor_address_b91d58d2da3489da, []int{2}
 }
-
 func (m *TcpKeepalive) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TcpKeepalive.Unmarshal(m, b)
 }
 func (m *TcpKeepalive) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TcpKeepalive.Marshal(b, m, deterministic)
 }
-func (m *TcpKeepalive) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TcpKeepalive.Merge(m, src)
+func (dst *TcpKeepalive) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TcpKeepalive.Merge(dst, src)
 }
 func (m *TcpKeepalive) XXX_Size() int {
 	return xxx_messageInfo_TcpKeepalive.Size(m)
@@ -267,17 +317,16 @@ func (m *BindConfig) Reset()         { *m = BindConfig{} }
 func (m *BindConfig) String() string { return proto.CompactTextString(m) }
 func (*BindConfig) ProtoMessage()    {}
 func (*BindConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{3}
+	return fileDescriptor_address_b91d58d2da3489da, []int{3}
 }
-
 func (m *BindConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BindConfig.Unmarshal(m, b)
 }
 func (m *BindConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_BindConfig.Marshal(b, m, deterministic)
 }
-func (m *BindConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BindConfig.Merge(m, src)
+func (dst *BindConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BindConfig.Merge(dst, src)
 }
 func (m *BindConfig) XXX_Size() int {
 	return xxx_messageInfo_BindConfig.Size(m)
@@ -323,17 +372,16 @@ func (m *Address) Reset()         { *m = Address{} }
 func (m *Address) String() string { return proto.CompactTextString(m) }
 func (*Address) ProtoMessage()    {}
 func (*Address) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{4}
+	return fileDescriptor_address_b91d58d2da3489da, []int{4}
 }
-
 func (m *Address) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Address.Unmarshal(m, b)
 }
 func (m *Address) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Address.Marshal(b, m, deterministic)
 }
-func (m *Address) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Address.Merge(m, src)
+func (dst *Address) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Address.Merge(dst, src)
 }
 func (m *Address) XXX_Size() int {
 	return xxx_messageInfo_Address.Size(m)
@@ -381,12 +429,78 @@ func (m *Address) GetPipe() *Pipe {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*Address) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*Address) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _Address_OneofMarshaler, _Address_OneofUnmarshaler, _Address_OneofSizer, []interface{}{
 		(*Address_SocketAddress)(nil),
 		(*Address_Pipe)(nil),
 	}
+}
+
+func _Address_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*Address)
+	// address
+	switch x := m.Address.(type) {
+	case *Address_SocketAddress:
+		b.EncodeVarint(1<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.SocketAddress); err != nil {
+			return err
+		}
+	case *Address_Pipe:
+		b.EncodeVarint(2<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Pipe); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("Address.Address has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _Address_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*Address)
+	switch tag {
+	case 1: // address.socket_address
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(SocketAddress)
+		err := b.DecodeMessage(msg)
+		m.Address = &Address_SocketAddress{msg}
+		return true, err
+	case 2: // address.pipe
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(Pipe)
+		err := b.DecodeMessage(msg)
+		m.Address = &Address_Pipe{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _Address_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*Address)
+	// address
+	switch x := m.Address.(type) {
+	case *Address_SocketAddress:
+		s := proto.Size(x.SocketAddress)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *Address_Pipe:
+		s := proto.Size(x.Pipe)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type CidrRange struct {
@@ -401,17 +515,16 @@ func (m *CidrRange) Reset()         { *m = CidrRange{} }
 func (m *CidrRange) String() string { return proto.CompactTextString(m) }
 func (*CidrRange) ProtoMessage()    {}
 func (*CidrRange) Descriptor() ([]byte, []int) {
-	return fileDescriptor_6906417f87bcce55, []int{5}
+	return fileDescriptor_address_b91d58d2da3489da, []int{5}
 }
-
 func (m *CidrRange) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CidrRange.Unmarshal(m, b)
 }
 func (m *CidrRange) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CidrRange.Marshal(b, m, deterministic)
 }
-func (m *CidrRange) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CidrRange.Merge(m, src)
+func (dst *CidrRange) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CidrRange.Merge(dst, src)
 }
 func (m *CidrRange) XXX_Size() int {
 	return xxx_messageInfo_CidrRange.Size(m)
@@ -437,18 +550,20 @@ func (m *CidrRange) GetPrefixLen() *wrappers.UInt32Value {
 }
 
 func init() {
-	proto.RegisterEnum("envoy.api.v2.core.SocketAddress_Protocol", SocketAddress_Protocol_name, SocketAddress_Protocol_value)
 	proto.RegisterType((*Pipe)(nil), "envoy.api.v2.core.Pipe")
 	proto.RegisterType((*SocketAddress)(nil), "envoy.api.v2.core.SocketAddress")
 	proto.RegisterType((*TcpKeepalive)(nil), "envoy.api.v2.core.TcpKeepalive")
 	proto.RegisterType((*BindConfig)(nil), "envoy.api.v2.core.BindConfig")
 	proto.RegisterType((*Address)(nil), "envoy.api.v2.core.Address")
 	proto.RegisterType((*CidrRange)(nil), "envoy.api.v2.core.CidrRange")
+	proto.RegisterEnum("envoy.api.v2.core.SocketAddress_Protocol", SocketAddress_Protocol_name, SocketAddress_Protocol_value)
 }
 
-func init() { proto.RegisterFile("envoy/api/v2/core/address.proto", fileDescriptor_6906417f87bcce55) }
+func init() {
+	proto.RegisterFile("envoy/api/v2/core/address.proto", fileDescriptor_address_b91d58d2da3489da)
+}
 
-var fileDescriptor_6906417f87bcce55 = []byte{
+var fileDescriptor_address_b91d58d2da3489da = []byte{
 	// 667 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0x4f, 0x4f, 0xdb, 0x48,
 	0x14, 0xcf, 0xc4, 0x01, 0x92, 0x17, 0x92, 0x0d, 0x73, 0xc1, 0x8a, 0xd8, 0x4d, 0x14, 0xb4, 0x52,

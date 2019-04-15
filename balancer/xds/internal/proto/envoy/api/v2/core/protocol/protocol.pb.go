@@ -3,14 +3,12 @@
 
 package envoy_api_v2_core
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	duration "github.com/golang/protobuf/ptypes/duration"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import duration "github.com/golang/protobuf/ptypes/duration"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -21,7 +19,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type TcpProtocolOptions struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -33,17 +31,16 @@ func (m *TcpProtocolOptions) Reset()         { *m = TcpProtocolOptions{} }
 func (m *TcpProtocolOptions) String() string { return proto.CompactTextString(m) }
 func (*TcpProtocolOptions) ProtoMessage()    {}
 func (*TcpProtocolOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_d86476e078060b60, []int{0}
+	return fileDescriptor_protocol_2e969372c85b867d, []int{0}
 }
-
 func (m *TcpProtocolOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TcpProtocolOptions.Unmarshal(m, b)
 }
 func (m *TcpProtocolOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TcpProtocolOptions.Marshal(b, m, deterministic)
 }
-func (m *TcpProtocolOptions) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TcpProtocolOptions.Merge(m, src)
+func (dst *TcpProtocolOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TcpProtocolOptions.Merge(dst, src)
 }
 func (m *TcpProtocolOptions) XXX_Size() int {
 	return xxx_messageInfo_TcpProtocolOptions.Size(m)
@@ -65,17 +62,16 @@ func (m *HttpProtocolOptions) Reset()         { *m = HttpProtocolOptions{} }
 func (m *HttpProtocolOptions) String() string { return proto.CompactTextString(m) }
 func (*HttpProtocolOptions) ProtoMessage()    {}
 func (*HttpProtocolOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_d86476e078060b60, []int{1}
+	return fileDescriptor_protocol_2e969372c85b867d, []int{1}
 }
-
 func (m *HttpProtocolOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpProtocolOptions.Unmarshal(m, b)
 }
 func (m *HttpProtocolOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HttpProtocolOptions.Marshal(b, m, deterministic)
 }
-func (m *HttpProtocolOptions) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HttpProtocolOptions.Merge(m, src)
+func (dst *HttpProtocolOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HttpProtocolOptions.Merge(dst, src)
 }
 func (m *HttpProtocolOptions) XXX_Size() int {
 	return xxx_messageInfo_HttpProtocolOptions.Size(m)
@@ -106,17 +102,16 @@ func (m *Http1ProtocolOptions) Reset()         { *m = Http1ProtocolOptions{} }
 func (m *Http1ProtocolOptions) String() string { return proto.CompactTextString(m) }
 func (*Http1ProtocolOptions) ProtoMessage()    {}
 func (*Http1ProtocolOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_d86476e078060b60, []int{2}
+	return fileDescriptor_protocol_2e969372c85b867d, []int{2}
 }
-
 func (m *Http1ProtocolOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Http1ProtocolOptions.Unmarshal(m, b)
 }
 func (m *Http1ProtocolOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Http1ProtocolOptions.Marshal(b, m, deterministic)
 }
-func (m *Http1ProtocolOptions) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Http1ProtocolOptions.Merge(m, src)
+func (dst *Http1ProtocolOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Http1ProtocolOptions.Merge(dst, src)
 }
 func (m *Http1ProtocolOptions) XXX_Size() int {
 	return xxx_messageInfo_Http1ProtocolOptions.Size(m)
@@ -164,17 +159,16 @@ func (m *Http2ProtocolOptions) Reset()         { *m = Http2ProtocolOptions{} }
 func (m *Http2ProtocolOptions) String() string { return proto.CompactTextString(m) }
 func (*Http2ProtocolOptions) ProtoMessage()    {}
 func (*Http2ProtocolOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_d86476e078060b60, []int{3}
+	return fileDescriptor_protocol_2e969372c85b867d, []int{3}
 }
-
 func (m *Http2ProtocolOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Http2ProtocolOptions.Unmarshal(m, b)
 }
 func (m *Http2ProtocolOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Http2ProtocolOptions.Marshal(b, m, deterministic)
 }
-func (m *Http2ProtocolOptions) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Http2ProtocolOptions.Merge(m, src)
+func (dst *Http2ProtocolOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Http2ProtocolOptions.Merge(dst, src)
 }
 func (m *Http2ProtocolOptions) XXX_Size() int {
 	return xxx_messageInfo_Http2ProtocolOptions.Size(m)
@@ -238,17 +232,16 @@ func (m *GrpcProtocolOptions) Reset()         { *m = GrpcProtocolOptions{} }
 func (m *GrpcProtocolOptions) String() string { return proto.CompactTextString(m) }
 func (*GrpcProtocolOptions) ProtoMessage()    {}
 func (*GrpcProtocolOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_d86476e078060b60, []int{4}
+	return fileDescriptor_protocol_2e969372c85b867d, []int{4}
 }
-
 func (m *GrpcProtocolOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GrpcProtocolOptions.Unmarshal(m, b)
 }
 func (m *GrpcProtocolOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GrpcProtocolOptions.Marshal(b, m, deterministic)
 }
-func (m *GrpcProtocolOptions) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GrpcProtocolOptions.Merge(m, src)
+func (dst *GrpcProtocolOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GrpcProtocolOptions.Merge(dst, src)
 }
 func (m *GrpcProtocolOptions) XXX_Size() int {
 	return xxx_messageInfo_GrpcProtocolOptions.Size(m)
@@ -274,9 +267,11 @@ func init() {
 	proto.RegisterType((*GrpcProtocolOptions)(nil), "envoy.api.v2.core.GrpcProtocolOptions")
 }
 
-func init() { proto.RegisterFile("envoy/api/v2/core/protocol.proto", fileDescriptor_d86476e078060b60) }
+func init() {
+	proto.RegisterFile("envoy/api/v2/core/protocol.proto", fileDescriptor_protocol_2e969372c85b867d)
+}
 
-var fileDescriptor_d86476e078060b60 = []byte{
+var fileDescriptor_protocol_2e969372c85b867d = []byte{
 	// 556 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0x4f, 0x6f, 0xd3, 0x4c,
 	0x10, 0xc6, 0xe5, 0x37, 0x2f, 0xa5, 0x6c, 0xff, 0xd0, 0xba, 0x51, 0x6b, 0x0a, 0x2a, 0x51, 0x00,

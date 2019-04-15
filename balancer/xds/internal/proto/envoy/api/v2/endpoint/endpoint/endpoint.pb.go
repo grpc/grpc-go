@@ -3,16 +3,14 @@
 
 package endpoint
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	address "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	health_check "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/health_check"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import address "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+import health_check "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/health_check"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -23,7 +21,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type Endpoint struct {
 	Address              *address.Address            `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
@@ -37,17 +35,16 @@ func (m *Endpoint) Reset()         { *m = Endpoint{} }
 func (m *Endpoint) String() string { return proto.CompactTextString(m) }
 func (*Endpoint) ProtoMessage()    {}
 func (*Endpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a9d2a3e4ee06324f, []int{0}
+	return fileDescriptor_endpoint_2d1a533d75f3064c, []int{0}
 }
-
 func (m *Endpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Endpoint.Unmarshal(m, b)
 }
 func (m *Endpoint) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Endpoint.Marshal(b, m, deterministic)
 }
-func (m *Endpoint) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Endpoint.Merge(m, src)
+func (dst *Endpoint) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Endpoint.Merge(dst, src)
 }
 func (m *Endpoint) XXX_Size() int {
 	return xxx_messageInfo_Endpoint.Size(m)
@@ -83,17 +80,16 @@ func (m *Endpoint_HealthCheckConfig) Reset()         { *m = Endpoint_HealthCheck
 func (m *Endpoint_HealthCheckConfig) String() string { return proto.CompactTextString(m) }
 func (*Endpoint_HealthCheckConfig) ProtoMessage()    {}
 func (*Endpoint_HealthCheckConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a9d2a3e4ee06324f, []int{0, 0}
+	return fileDescriptor_endpoint_2d1a533d75f3064c, []int{0, 0}
 }
-
 func (m *Endpoint_HealthCheckConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Unmarshal(m, b)
 }
 func (m *Endpoint_HealthCheckConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Marshal(b, m, deterministic)
 }
-func (m *Endpoint_HealthCheckConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Endpoint_HealthCheckConfig.Merge(m, src)
+func (dst *Endpoint_HealthCheckConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Endpoint_HealthCheckConfig.Merge(dst, src)
 }
 func (m *Endpoint_HealthCheckConfig) XXX_Size() int {
 	return xxx_messageInfo_Endpoint_HealthCheckConfig.Size(m)
@@ -128,17 +124,16 @@ func (m *LbEndpoint) Reset()         { *m = LbEndpoint{} }
 func (m *LbEndpoint) String() string { return proto.CompactTextString(m) }
 func (*LbEndpoint) ProtoMessage()    {}
 func (*LbEndpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a9d2a3e4ee06324f, []int{1}
+	return fileDescriptor_endpoint_2d1a533d75f3064c, []int{1}
 }
-
 func (m *LbEndpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LbEndpoint.Unmarshal(m, b)
 }
 func (m *LbEndpoint) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_LbEndpoint.Marshal(b, m, deterministic)
 }
-func (m *LbEndpoint) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LbEndpoint.Merge(m, src)
+func (dst *LbEndpoint) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LbEndpoint.Merge(dst, src)
 }
 func (m *LbEndpoint) XXX_Size() int {
 	return xxx_messageInfo_LbEndpoint.Size(m)
@@ -207,12 +202,74 @@ func (m *LbEndpoint) GetLoadBalancingWeight() *wrappers.UInt32Value {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*LbEndpoint) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*LbEndpoint) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _LbEndpoint_OneofMarshaler, _LbEndpoint_OneofUnmarshaler, _LbEndpoint_OneofSizer, []interface{}{
 		(*LbEndpoint_Endpoint)(nil),
 		(*LbEndpoint_EndpointName)(nil),
 	}
+}
+
+func _LbEndpoint_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*LbEndpoint)
+	// host_identifier
+	switch x := m.HostIdentifier.(type) {
+	case *LbEndpoint_Endpoint:
+		b.EncodeVarint(1<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Endpoint); err != nil {
+			return err
+		}
+	case *LbEndpoint_EndpointName:
+		b.EncodeVarint(5<<3 | proto.WireBytes)
+		b.EncodeStringBytes(x.EndpointName)
+	case nil:
+	default:
+		return fmt.Errorf("LbEndpoint.HostIdentifier has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _LbEndpoint_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*LbEndpoint)
+	switch tag {
+	case 1: // host_identifier.endpoint
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(Endpoint)
+		err := b.DecodeMessage(msg)
+		m.HostIdentifier = &LbEndpoint_Endpoint{msg}
+		return true, err
+	case 5: // host_identifier.endpoint_name
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeStringBytes()
+		m.HostIdentifier = &LbEndpoint_EndpointName{x}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _LbEndpoint_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*LbEndpoint)
+	// host_identifier
+	switch x := m.HostIdentifier.(type) {
+	case *LbEndpoint_Endpoint:
+		s := proto.Size(x.Endpoint)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *LbEndpoint_EndpointName:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(len(x.EndpointName)))
+		n += len(x.EndpointName)
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type LocalityLbEndpoints struct {
@@ -229,17 +286,16 @@ func (m *LocalityLbEndpoints) Reset()         { *m = LocalityLbEndpoints{} }
 func (m *LocalityLbEndpoints) String() string { return proto.CompactTextString(m) }
 func (*LocalityLbEndpoints) ProtoMessage()    {}
 func (*LocalityLbEndpoints) Descriptor() ([]byte, []int) {
-	return fileDescriptor_a9d2a3e4ee06324f, []int{2}
+	return fileDescriptor_endpoint_2d1a533d75f3064c, []int{2}
 }
-
 func (m *LocalityLbEndpoints) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LocalityLbEndpoints.Unmarshal(m, b)
 }
 func (m *LocalityLbEndpoints) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_LocalityLbEndpoints.Marshal(b, m, deterministic)
 }
-func (m *LocalityLbEndpoints) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LocalityLbEndpoints.Merge(m, src)
+func (dst *LocalityLbEndpoints) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LocalityLbEndpoints.Merge(dst, src)
 }
 func (m *LocalityLbEndpoints) XXX_Size() int {
 	return xxx_messageInfo_LocalityLbEndpoints.Size(m)
@@ -286,10 +342,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/endpoint/endpoint.proto", fileDescriptor_a9d2a3e4ee06324f)
+	proto.RegisterFile("envoy/api/v2/endpoint/endpoint.proto", fileDescriptor_endpoint_2d1a533d75f3064c)
 }
 
-var fileDescriptor_a9d2a3e4ee06324f = []byte{
+var fileDescriptor_endpoint_2d1a533d75f3064c = []byte{
 	// 556 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x52, 0xc1, 0x6e, 0xd3, 0x4c,
 	0x18, 0xac, 0xe3, 0xa6, 0x4d, 0x37, 0xc9, 0xff, 0x2b, 0x8e, 0x2a, 0xac, 0x50, 0xd1, 0x12, 0x0a,

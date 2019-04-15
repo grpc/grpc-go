@@ -3,18 +3,16 @@
 
 package envoy_api_v2_core
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	any "github.com/golang/protobuf/ptypes/any"
-	duration "github.com/golang/protobuf/ptypes/duration"
-	_struct "github.com/golang/protobuf/ptypes/struct"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	_range "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/range"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import any "github.com/golang/protobuf/ptypes/any"
+import duration "github.com/golang/protobuf/ptypes/duration"
+import _struct "github.com/golang/protobuf/ptypes/struct"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+import _range "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/range"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -25,7 +23,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type HealthStatus int32
 
@@ -46,7 +44,6 @@ var HealthStatus_name = map[int32]string{
 	4: "TIMEOUT",
 	5: "DEGRADED",
 }
-
 var HealthStatus_value = map[string]int32{
 	"UNKNOWN":   0,
 	"HEALTHY":   1,
@@ -59,9 +56,8 @@ var HealthStatus_value = map[string]int32{
 func (x HealthStatus) String() string {
 	return proto.EnumName(HealthStatus_name, int32(x))
 }
-
 func (HealthStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0}
 }
 
 type HealthCheck struct {
@@ -94,17 +90,16 @@ func (m *HealthCheck) Reset()         { *m = HealthCheck{} }
 func (m *HealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck) ProtoMessage()    {}
 func (*HealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0}
 }
-
 func (m *HealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck.Merge(m, src)
+func (dst *HealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck.Size(m)
@@ -276,14 +271,116 @@ func (m *HealthCheck) GetAlwaysLogHealthCheckFailures() bool {
 	return false
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*HealthCheck) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*HealthCheck) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _HealthCheck_OneofMarshaler, _HealthCheck_OneofUnmarshaler, _HealthCheck_OneofSizer, []interface{}{
 		(*HealthCheck_HttpHealthCheck_)(nil),
 		(*HealthCheck_TcpHealthCheck_)(nil),
 		(*HealthCheck_GrpcHealthCheck_)(nil),
 		(*HealthCheck_CustomHealthCheck_)(nil),
 	}
+}
+
+func _HealthCheck_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*HealthCheck)
+	// health_checker
+	switch x := m.HealthChecker.(type) {
+	case *HealthCheck_HttpHealthCheck_:
+		b.EncodeVarint(8<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.HttpHealthCheck); err != nil {
+			return err
+		}
+	case *HealthCheck_TcpHealthCheck_:
+		b.EncodeVarint(9<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.TcpHealthCheck); err != nil {
+			return err
+		}
+	case *HealthCheck_GrpcHealthCheck_:
+		b.EncodeVarint(11<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.GrpcHealthCheck); err != nil {
+			return err
+		}
+	case *HealthCheck_CustomHealthCheck_:
+		b.EncodeVarint(13<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.CustomHealthCheck); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("HealthCheck.HealthChecker has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _HealthCheck_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*HealthCheck)
+	switch tag {
+	case 8: // health_checker.http_health_check
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(HealthCheck_HttpHealthCheck)
+		err := b.DecodeMessage(msg)
+		m.HealthChecker = &HealthCheck_HttpHealthCheck_{msg}
+		return true, err
+	case 9: // health_checker.tcp_health_check
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(HealthCheck_TcpHealthCheck)
+		err := b.DecodeMessage(msg)
+		m.HealthChecker = &HealthCheck_TcpHealthCheck_{msg}
+		return true, err
+	case 11: // health_checker.grpc_health_check
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(HealthCheck_GrpcHealthCheck)
+		err := b.DecodeMessage(msg)
+		m.HealthChecker = &HealthCheck_GrpcHealthCheck_{msg}
+		return true, err
+	case 13: // health_checker.custom_health_check
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(HealthCheck_CustomHealthCheck)
+		err := b.DecodeMessage(msg)
+		m.HealthChecker = &HealthCheck_CustomHealthCheck_{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _HealthCheck_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*HealthCheck)
+	// health_checker
+	switch x := m.HealthChecker.(type) {
+	case *HealthCheck_HttpHealthCheck_:
+		s := proto.Size(x.HttpHealthCheck)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *HealthCheck_TcpHealthCheck_:
+		s := proto.Size(x.TcpHealthCheck)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *HealthCheck_GrpcHealthCheck_:
+		s := proto.Size(x.GrpcHealthCheck)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *HealthCheck_CustomHealthCheck_:
+		s := proto.Size(x.CustomHealthCheck)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type HealthCheck_Payload struct {
@@ -300,17 +397,16 @@ func (m *HealthCheck_Payload) Reset()         { *m = HealthCheck_Payload{} }
 func (m *HealthCheck_Payload) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_Payload) ProtoMessage()    {}
 func (*HealthCheck_Payload) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 0}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 0}
 }
-
 func (m *HealthCheck_Payload) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_Payload.Unmarshal(m, b)
 }
 func (m *HealthCheck_Payload) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_Payload.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_Payload) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_Payload.Merge(m, src)
+func (dst *HealthCheck_Payload) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_Payload.Merge(dst, src)
 }
 func (m *HealthCheck_Payload) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_Payload.Size(m)
@@ -358,12 +454,70 @@ func (m *HealthCheck_Payload) GetBinary() []byte {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*HealthCheck_Payload) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*HealthCheck_Payload) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _HealthCheck_Payload_OneofMarshaler, _HealthCheck_Payload_OneofUnmarshaler, _HealthCheck_Payload_OneofSizer, []interface{}{
 		(*HealthCheck_Payload_Text)(nil),
 		(*HealthCheck_Payload_Binary)(nil),
 	}
+}
+
+func _HealthCheck_Payload_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*HealthCheck_Payload)
+	// payload
+	switch x := m.Payload.(type) {
+	case *HealthCheck_Payload_Text:
+		b.EncodeVarint(1<<3 | proto.WireBytes)
+		b.EncodeStringBytes(x.Text)
+	case *HealthCheck_Payload_Binary:
+		b.EncodeVarint(2<<3 | proto.WireBytes)
+		b.EncodeRawBytes(x.Binary)
+	case nil:
+	default:
+		return fmt.Errorf("HealthCheck_Payload.Payload has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _HealthCheck_Payload_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*HealthCheck_Payload)
+	switch tag {
+	case 1: // payload.text
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeStringBytes()
+		m.Payload = &HealthCheck_Payload_Text{x}
+		return true, err
+	case 2: // payload.binary
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeRawBytes(true)
+		m.Payload = &HealthCheck_Payload_Binary{x}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _HealthCheck_Payload_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*HealthCheck_Payload)
+	// payload
+	switch x := m.Payload.(type) {
+	case *HealthCheck_Payload_Text:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(len(x.Text)))
+		n += len(x.Text)
+	case *HealthCheck_Payload_Binary:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(len(x.Binary)))
+		n += len(x.Binary)
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type HealthCheck_HttpHealthCheck struct {
@@ -385,17 +539,16 @@ func (m *HealthCheck_HttpHealthCheck) Reset()         { *m = HealthCheck_HttpHea
 func (m *HealthCheck_HttpHealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_HttpHealthCheck) ProtoMessage()    {}
 func (*HealthCheck_HttpHealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 1}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 1}
 }
-
 func (m *HealthCheck_HttpHealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_HttpHealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck_HttpHealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_HttpHealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_HttpHealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_HttpHealthCheck.Merge(m, src)
+func (dst *HealthCheck_HttpHealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_HttpHealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck_HttpHealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_HttpHealthCheck.Size(m)
@@ -481,17 +634,16 @@ func (m *HealthCheck_TcpHealthCheck) Reset()         { *m = HealthCheck_TcpHealt
 func (m *HealthCheck_TcpHealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_TcpHealthCheck) ProtoMessage()    {}
 func (*HealthCheck_TcpHealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 2}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 2}
 }
-
 func (m *HealthCheck_TcpHealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_TcpHealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck_TcpHealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_TcpHealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_TcpHealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_TcpHealthCheck.Merge(m, src)
+func (dst *HealthCheck_TcpHealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_TcpHealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck_TcpHealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_TcpHealthCheck.Size(m)
@@ -527,17 +679,16 @@ func (m *HealthCheck_RedisHealthCheck) Reset()         { *m = HealthCheck_RedisH
 func (m *HealthCheck_RedisHealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_RedisHealthCheck) ProtoMessage()    {}
 func (*HealthCheck_RedisHealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 3}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 3}
 }
-
 func (m *HealthCheck_RedisHealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_RedisHealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck_RedisHealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_RedisHealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_RedisHealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_RedisHealthCheck.Merge(m, src)
+func (dst *HealthCheck_RedisHealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_RedisHealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck_RedisHealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_RedisHealthCheck.Size(m)
@@ -567,17 +718,16 @@ func (m *HealthCheck_GrpcHealthCheck) Reset()         { *m = HealthCheck_GrpcHea
 func (m *HealthCheck_GrpcHealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_GrpcHealthCheck) ProtoMessage()    {}
 func (*HealthCheck_GrpcHealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 4}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 4}
 }
-
 func (m *HealthCheck_GrpcHealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_GrpcHealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck_GrpcHealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_GrpcHealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_GrpcHealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_GrpcHealthCheck.Merge(m, src)
+func (dst *HealthCheck_GrpcHealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_GrpcHealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck_GrpcHealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_GrpcHealthCheck.Size(m)
@@ -617,17 +767,16 @@ func (m *HealthCheck_CustomHealthCheck) Reset()         { *m = HealthCheck_Custo
 func (m *HealthCheck_CustomHealthCheck) String() string { return proto.CompactTextString(m) }
 func (*HealthCheck_CustomHealthCheck) ProtoMessage()    {}
 func (*HealthCheck_CustomHealthCheck) Descriptor() ([]byte, []int) {
-	return fileDescriptor_b6ca44dd529b90bd, []int{0, 5}
+	return fileDescriptor_health_check_96ed99a3bbe98749, []int{0, 5}
 }
-
 func (m *HealthCheck_CustomHealthCheck) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HealthCheck_CustomHealthCheck.Unmarshal(m, b)
 }
 func (m *HealthCheck_CustomHealthCheck) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HealthCheck_CustomHealthCheck.Marshal(b, m, deterministic)
 }
-func (m *HealthCheck_CustomHealthCheck) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HealthCheck_CustomHealthCheck.Merge(m, src)
+func (dst *HealthCheck_CustomHealthCheck) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HealthCheck_CustomHealthCheck.Merge(dst, src)
 }
 func (m *HealthCheck_CustomHealthCheck) XXX_Size() int {
 	return xxx_messageInfo_HealthCheck_CustomHealthCheck.Size(m)
@@ -682,16 +831,81 @@ func (m *HealthCheck_CustomHealthCheck) GetTypedConfig() *any.Any {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*HealthCheck_CustomHealthCheck) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*HealthCheck_CustomHealthCheck) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _HealthCheck_CustomHealthCheck_OneofMarshaler, _HealthCheck_CustomHealthCheck_OneofUnmarshaler, _HealthCheck_CustomHealthCheck_OneofSizer, []interface{}{
 		(*HealthCheck_CustomHealthCheck_Config)(nil),
 		(*HealthCheck_CustomHealthCheck_TypedConfig)(nil),
 	}
 }
 
+func _HealthCheck_CustomHealthCheck_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*HealthCheck_CustomHealthCheck)
+	// config_type
+	switch x := m.ConfigType.(type) {
+	case *HealthCheck_CustomHealthCheck_Config:
+		b.EncodeVarint(2<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Config); err != nil {
+			return err
+		}
+	case *HealthCheck_CustomHealthCheck_TypedConfig:
+		b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.TypedConfig); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("HealthCheck_CustomHealthCheck.ConfigType has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _HealthCheck_CustomHealthCheck_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*HealthCheck_CustomHealthCheck)
+	switch tag {
+	case 2: // config_type.config
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(_struct.Struct)
+		err := b.DecodeMessage(msg)
+		m.ConfigType = &HealthCheck_CustomHealthCheck_Config{msg}
+		return true, err
+	case 3: // config_type.typed_config
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(any.Any)
+		err := b.DecodeMessage(msg)
+		m.ConfigType = &HealthCheck_CustomHealthCheck_TypedConfig{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _HealthCheck_CustomHealthCheck_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*HealthCheck_CustomHealthCheck)
+	// config_type
+	switch x := m.ConfigType.(type) {
+	case *HealthCheck_CustomHealthCheck_Config:
+		s := proto.Size(x.Config)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *HealthCheck_CustomHealthCheck_TypedConfig:
+		s := proto.Size(x.TypedConfig)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
+
 func init() {
-	proto.RegisterEnum("envoy.api.v2.core.HealthStatus", HealthStatus_name, HealthStatus_value)
 	proto.RegisterType((*HealthCheck)(nil), "envoy.api.v2.core.HealthCheck")
 	proto.RegisterType((*HealthCheck_Payload)(nil), "envoy.api.v2.core.HealthCheck.Payload")
 	proto.RegisterType((*HealthCheck_HttpHealthCheck)(nil), "envoy.api.v2.core.HealthCheck.HttpHealthCheck")
@@ -699,13 +913,14 @@ func init() {
 	proto.RegisterType((*HealthCheck_RedisHealthCheck)(nil), "envoy.api.v2.core.HealthCheck.RedisHealthCheck")
 	proto.RegisterType((*HealthCheck_GrpcHealthCheck)(nil), "envoy.api.v2.core.HealthCheck.GrpcHealthCheck")
 	proto.RegisterType((*HealthCheck_CustomHealthCheck)(nil), "envoy.api.v2.core.HealthCheck.CustomHealthCheck")
+	proto.RegisterEnum("envoy.api.v2.core.HealthStatus", HealthStatus_name, HealthStatus_value)
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/core/health_check.proto", fileDescriptor_b6ca44dd529b90bd)
+	proto.RegisterFile("envoy/api/v2/core/health_check.proto", fileDescriptor_health_check_96ed99a3bbe98749)
 }
 
-var fileDescriptor_b6ca44dd529b90bd = []byte{
+var fileDescriptor_health_check_96ed99a3bbe98749 = []byte{
 	// 1166 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x96, 0xdf, 0x72, 0xdb, 0xc4,
 	0x17, 0xc7, 0xad, 0xd8, 0x89, 0xed, 0x63, 0x27, 0x91, 0xd7, 0xbf, 0x26, 0xaa, 0x7f, 0x81, 0x1a,

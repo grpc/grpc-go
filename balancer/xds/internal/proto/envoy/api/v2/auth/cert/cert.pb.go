@@ -3,15 +3,13 @@
 
 package auth
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
-	config_source "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/config_source"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import base "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+import config_source "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/config_source"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -22,7 +20,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type TlsParameters_TlsProtocol int32
 
@@ -41,7 +39,6 @@ var TlsParameters_TlsProtocol_name = map[int32]string{
 	3: "TLSv1_2",
 	4: "TLSv1_3",
 }
-
 var TlsParameters_TlsProtocol_value = map[string]int32{
 	"TLS_AUTO": 0,
 	"TLSv1_0":  1,
@@ -53,9 +50,8 @@ var TlsParameters_TlsProtocol_value = map[string]int32{
 func (x TlsParameters_TlsProtocol) String() string {
 	return proto.EnumName(TlsParameters_TlsProtocol_name, int32(x))
 }
-
 func (TlsParameters_TlsProtocol) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{0, 0}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{0, 0}
 }
 
 type TlsParameters struct {
@@ -72,17 +68,16 @@ func (m *TlsParameters) Reset()         { *m = TlsParameters{} }
 func (m *TlsParameters) String() string { return proto.CompactTextString(m) }
 func (*TlsParameters) ProtoMessage()    {}
 func (*TlsParameters) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{0}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{0}
 }
-
 func (m *TlsParameters) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsParameters.Unmarshal(m, b)
 }
 func (m *TlsParameters) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsParameters.Marshal(b, m, deterministic)
 }
-func (m *TlsParameters) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsParameters.Merge(m, src)
+func (dst *TlsParameters) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsParameters.Merge(dst, src)
 }
 func (m *TlsParameters) XXX_Size() int {
 	return xxx_messageInfo_TlsParameters.Size(m)
@@ -136,17 +131,16 @@ func (m *TlsCertificate) Reset()         { *m = TlsCertificate{} }
 func (m *TlsCertificate) String() string { return proto.CompactTextString(m) }
 func (*TlsCertificate) ProtoMessage()    {}
 func (*TlsCertificate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{1}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{1}
 }
-
 func (m *TlsCertificate) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsCertificate.Unmarshal(m, b)
 }
 func (m *TlsCertificate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsCertificate.Marshal(b, m, deterministic)
 }
-func (m *TlsCertificate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsCertificate.Merge(m, src)
+func (dst *TlsCertificate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsCertificate.Merge(dst, src)
 }
 func (m *TlsCertificate) XXX_Size() int {
 	return xxx_messageInfo_TlsCertificate.Size(m)
@@ -203,17 +197,16 @@ func (m *TlsSessionTicketKeys) Reset()         { *m = TlsSessionTicketKeys{} }
 func (m *TlsSessionTicketKeys) String() string { return proto.CompactTextString(m) }
 func (*TlsSessionTicketKeys) ProtoMessage()    {}
 func (*TlsSessionTicketKeys) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{2}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{2}
 }
-
 func (m *TlsSessionTicketKeys) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TlsSessionTicketKeys.Unmarshal(m, b)
 }
 func (m *TlsSessionTicketKeys) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TlsSessionTicketKeys.Marshal(b, m, deterministic)
 }
-func (m *TlsSessionTicketKeys) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TlsSessionTicketKeys.Merge(m, src)
+func (dst *TlsSessionTicketKeys) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TlsSessionTicketKeys.Merge(dst, src)
 }
 func (m *TlsSessionTicketKeys) XXX_Size() int {
 	return xxx_messageInfo_TlsSessionTicketKeys.Size(m)
@@ -249,17 +242,16 @@ func (m *CertificateValidationContext) Reset()         { *m = CertificateValidat
 func (m *CertificateValidationContext) String() string { return proto.CompactTextString(m) }
 func (*CertificateValidationContext) ProtoMessage()    {}
 func (*CertificateValidationContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{3}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{3}
 }
-
 func (m *CertificateValidationContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CertificateValidationContext.Unmarshal(m, b)
 }
 func (m *CertificateValidationContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CertificateValidationContext.Marshal(b, m, deterministic)
 }
-func (m *CertificateValidationContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CertificateValidationContext.Merge(m, src)
+func (dst *CertificateValidationContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CertificateValidationContext.Merge(dst, src)
 }
 func (m *CertificateValidationContext) XXX_Size() int {
 	return xxx_messageInfo_CertificateValidationContext.Size(m)
@@ -345,17 +337,16 @@ func (m *CommonTlsContext) Reset()         { *m = CommonTlsContext{} }
 func (m *CommonTlsContext) String() string { return proto.CompactTextString(m) }
 func (*CommonTlsContext) ProtoMessage()    {}
 func (*CommonTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{4}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{4}
 }
-
 func (m *CommonTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommonTlsContext.Unmarshal(m, b)
 }
 func (m *CommonTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommonTlsContext.Marshal(b, m, deterministic)
 }
-func (m *CommonTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommonTlsContext.Merge(m, src)
+func (dst *CommonTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonTlsContext.Merge(dst, src)
 }
 func (m *CommonTlsContext) XXX_Size() int {
 	return xxx_messageInfo_CommonTlsContext.Size(m)
@@ -444,13 +435,97 @@ func (m *CommonTlsContext) GetAlpnProtocols() []string {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*CommonTlsContext) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*CommonTlsContext) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _CommonTlsContext_OneofMarshaler, _CommonTlsContext_OneofUnmarshaler, _CommonTlsContext_OneofSizer, []interface{}{
 		(*CommonTlsContext_ValidationContext)(nil),
 		(*CommonTlsContext_ValidationContextSdsSecretConfig)(nil),
 		(*CommonTlsContext_CombinedValidationContext)(nil),
 	}
+}
+
+func _CommonTlsContext_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*CommonTlsContext)
+	// validation_context_type
+	switch x := m.ValidationContextType.(type) {
+	case *CommonTlsContext_ValidationContext:
+		b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.ValidationContext); err != nil {
+			return err
+		}
+	case *CommonTlsContext_ValidationContextSdsSecretConfig:
+		b.EncodeVarint(7<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.ValidationContextSdsSecretConfig); err != nil {
+			return err
+		}
+	case *CommonTlsContext_CombinedValidationContext:
+		b.EncodeVarint(8<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.CombinedValidationContext); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("CommonTlsContext.ValidationContextType has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _CommonTlsContext_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*CommonTlsContext)
+	switch tag {
+	case 3: // validation_context_type.validation_context
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(CertificateValidationContext)
+		err := b.DecodeMessage(msg)
+		m.ValidationContextType = &CommonTlsContext_ValidationContext{msg}
+		return true, err
+	case 7: // validation_context_type.validation_context_sds_secret_config
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(SdsSecretConfig)
+		err := b.DecodeMessage(msg)
+		m.ValidationContextType = &CommonTlsContext_ValidationContextSdsSecretConfig{msg}
+		return true, err
+	case 8: // validation_context_type.combined_validation_context
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(CommonTlsContext_CombinedCertificateValidationContext)
+		err := b.DecodeMessage(msg)
+		m.ValidationContextType = &CommonTlsContext_CombinedValidationContext{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _CommonTlsContext_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*CommonTlsContext)
+	// validation_context_type
+	switch x := m.ValidationContextType.(type) {
+	case *CommonTlsContext_ValidationContext:
+		s := proto.Size(x.ValidationContext)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *CommonTlsContext_ValidationContextSdsSecretConfig:
+		s := proto.Size(x.ValidationContextSdsSecretConfig)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *CommonTlsContext_CombinedValidationContext:
+		s := proto.Size(x.CombinedValidationContext)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type CommonTlsContext_CombinedCertificateValidationContext struct {
@@ -469,17 +544,16 @@ func (m *CommonTlsContext_CombinedCertificateValidationContext) String() string 
 }
 func (*CommonTlsContext_CombinedCertificateValidationContext) ProtoMessage() {}
 func (*CommonTlsContext_CombinedCertificateValidationContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{4, 0}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{4, 0}
 }
-
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Unmarshal(m, b)
 }
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Marshal(b, m, deterministic)
 }
-func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Merge(m, src)
+func (dst *CommonTlsContext_CombinedCertificateValidationContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Merge(dst, src)
 }
 func (m *CommonTlsContext_CombinedCertificateValidationContext) XXX_Size() int {
 	return xxx_messageInfo_CommonTlsContext_CombinedCertificateValidationContext.Size(m)
@@ -518,17 +592,16 @@ func (m *UpstreamTlsContext) Reset()         { *m = UpstreamTlsContext{} }
 func (m *UpstreamTlsContext) String() string { return proto.CompactTextString(m) }
 func (*UpstreamTlsContext) ProtoMessage()    {}
 func (*UpstreamTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{5}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{5}
 }
-
 func (m *UpstreamTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpstreamTlsContext.Unmarshal(m, b)
 }
 func (m *UpstreamTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_UpstreamTlsContext.Marshal(b, m, deterministic)
 }
-func (m *UpstreamTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpstreamTlsContext.Merge(m, src)
+func (dst *UpstreamTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpstreamTlsContext.Merge(dst, src)
 }
 func (m *UpstreamTlsContext) XXX_Size() int {
 	return xxx_messageInfo_UpstreamTlsContext.Size(m)
@@ -584,17 +657,16 @@ func (m *DownstreamTlsContext) Reset()         { *m = DownstreamTlsContext{} }
 func (m *DownstreamTlsContext) String() string { return proto.CompactTextString(m) }
 func (*DownstreamTlsContext) ProtoMessage()    {}
 func (*DownstreamTlsContext) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{6}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{6}
 }
-
 func (m *DownstreamTlsContext) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DownstreamTlsContext.Unmarshal(m, b)
 }
 func (m *DownstreamTlsContext) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DownstreamTlsContext.Marshal(b, m, deterministic)
 }
-func (m *DownstreamTlsContext) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DownstreamTlsContext.Merge(m, src)
+func (dst *DownstreamTlsContext) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DownstreamTlsContext.Merge(dst, src)
 }
 func (m *DownstreamTlsContext) XXX_Size() int {
 	return xxx_messageInfo_DownstreamTlsContext.Size(m)
@@ -664,12 +736,78 @@ func (m *DownstreamTlsContext) GetSessionTicketKeysSdsSecretConfig() *SdsSecretC
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*DownstreamTlsContext) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*DownstreamTlsContext) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _DownstreamTlsContext_OneofMarshaler, _DownstreamTlsContext_OneofUnmarshaler, _DownstreamTlsContext_OneofSizer, []interface{}{
 		(*DownstreamTlsContext_SessionTicketKeys)(nil),
 		(*DownstreamTlsContext_SessionTicketKeysSdsSecretConfig)(nil),
 	}
+}
+
+func _DownstreamTlsContext_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*DownstreamTlsContext)
+	// session_ticket_keys_type
+	switch x := m.SessionTicketKeysType.(type) {
+	case *DownstreamTlsContext_SessionTicketKeys:
+		b.EncodeVarint(4<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.SessionTicketKeys); err != nil {
+			return err
+		}
+	case *DownstreamTlsContext_SessionTicketKeysSdsSecretConfig:
+		b.EncodeVarint(5<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.SessionTicketKeysSdsSecretConfig); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("DownstreamTlsContext.SessionTicketKeysType has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _DownstreamTlsContext_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*DownstreamTlsContext)
+	switch tag {
+	case 4: // session_ticket_keys_type.session_ticket_keys
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(TlsSessionTicketKeys)
+		err := b.DecodeMessage(msg)
+		m.SessionTicketKeysType = &DownstreamTlsContext_SessionTicketKeys{msg}
+		return true, err
+	case 5: // session_ticket_keys_type.session_ticket_keys_sds_secret_config
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(SdsSecretConfig)
+		err := b.DecodeMessage(msg)
+		m.SessionTicketKeysType = &DownstreamTlsContext_SessionTicketKeysSdsSecretConfig{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _DownstreamTlsContext_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*DownstreamTlsContext)
+	// session_ticket_keys_type
+	switch x := m.SessionTicketKeysType.(type) {
+	case *DownstreamTlsContext_SessionTicketKeys:
+		s := proto.Size(x.SessionTicketKeys)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *DownstreamTlsContext_SessionTicketKeysSdsSecretConfig:
+		s := proto.Size(x.SessionTicketKeysSdsSecretConfig)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 type SdsSecretConfig struct {
@@ -684,17 +822,16 @@ func (m *SdsSecretConfig) Reset()         { *m = SdsSecretConfig{} }
 func (m *SdsSecretConfig) String() string { return proto.CompactTextString(m) }
 func (*SdsSecretConfig) ProtoMessage()    {}
 func (*SdsSecretConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{7}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{7}
 }
-
 func (m *SdsSecretConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdsSecretConfig.Unmarshal(m, b)
 }
 func (m *SdsSecretConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SdsSecretConfig.Marshal(b, m, deterministic)
 }
-func (m *SdsSecretConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdsSecretConfig.Merge(m, src)
+func (dst *SdsSecretConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdsSecretConfig.Merge(dst, src)
 }
 func (m *SdsSecretConfig) XXX_Size() int {
 	return xxx_messageInfo_SdsSecretConfig.Size(m)
@@ -735,17 +872,16 @@ func (m *Secret) Reset()         { *m = Secret{} }
 func (m *Secret) String() string { return proto.CompactTextString(m) }
 func (*Secret) ProtoMessage()    {}
 func (*Secret) Descriptor() ([]byte, []int) {
-	return fileDescriptor_0c3851c0865b2745, []int{8}
+	return fileDescriptor_cert_f82beca1d890b9d7, []int{8}
 }
-
 func (m *Secret) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Secret.Unmarshal(m, b)
 }
 func (m *Secret) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Secret.Marshal(b, m, deterministic)
 }
-func (m *Secret) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Secret.Merge(m, src)
+func (dst *Secret) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Secret.Merge(dst, src)
 }
 func (m *Secret) XXX_Size() int {
 	return xxx_messageInfo_Secret.Size(m)
@@ -813,17 +949,100 @@ func (m *Secret) GetValidationContext() *CertificateValidationContext {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*Secret) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*Secret) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _Secret_OneofMarshaler, _Secret_OneofUnmarshaler, _Secret_OneofSizer, []interface{}{
 		(*Secret_TlsCertificate)(nil),
 		(*Secret_SessionTicketKeys)(nil),
 		(*Secret_ValidationContext)(nil),
 	}
 }
 
+func _Secret_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*Secret)
+	// type
+	switch x := m.Type.(type) {
+	case *Secret_TlsCertificate:
+		b.EncodeVarint(2<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.TlsCertificate); err != nil {
+			return err
+		}
+	case *Secret_SessionTicketKeys:
+		b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.SessionTicketKeys); err != nil {
+			return err
+		}
+	case *Secret_ValidationContext:
+		b.EncodeVarint(4<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.ValidationContext); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("Secret.Type has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _Secret_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*Secret)
+	switch tag {
+	case 2: // type.tls_certificate
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(TlsCertificate)
+		err := b.DecodeMessage(msg)
+		m.Type = &Secret_TlsCertificate{msg}
+		return true, err
+	case 3: // type.session_ticket_keys
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(TlsSessionTicketKeys)
+		err := b.DecodeMessage(msg)
+		m.Type = &Secret_SessionTicketKeys{msg}
+		return true, err
+	case 4: // type.validation_context
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(CertificateValidationContext)
+		err := b.DecodeMessage(msg)
+		m.Type = &Secret_ValidationContext{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _Secret_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*Secret)
+	// type
+	switch x := m.Type.(type) {
+	case *Secret_TlsCertificate:
+		s := proto.Size(x.TlsCertificate)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *Secret_SessionTicketKeys:
+		s := proto.Size(x.SessionTicketKeys)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *Secret_ValidationContext:
+		s := proto.Size(x.ValidationContext)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
+
 func init() {
-	proto.RegisterEnum("envoy.api.v2.auth.TlsParameters_TlsProtocol", TlsParameters_TlsProtocol_name, TlsParameters_TlsProtocol_value)
 	proto.RegisterType((*TlsParameters)(nil), "envoy.api.v2.auth.TlsParameters")
 	proto.RegisterType((*TlsCertificate)(nil), "envoy.api.v2.auth.TlsCertificate")
 	proto.RegisterType((*TlsSessionTicketKeys)(nil), "envoy.api.v2.auth.TlsSessionTicketKeys")
@@ -834,11 +1053,12 @@ func init() {
 	proto.RegisterType((*DownstreamTlsContext)(nil), "envoy.api.v2.auth.DownstreamTlsContext")
 	proto.RegisterType((*SdsSecretConfig)(nil), "envoy.api.v2.auth.SdsSecretConfig")
 	proto.RegisterType((*Secret)(nil), "envoy.api.v2.auth.Secret")
+	proto.RegisterEnum("envoy.api.v2.auth.TlsParameters_TlsProtocol", TlsParameters_TlsProtocol_name, TlsParameters_TlsProtocol_value)
 }
 
-func init() { proto.RegisterFile("envoy/api/v2/auth/cert.proto", fileDescriptor_0c3851c0865b2745) }
+func init() { proto.RegisterFile("envoy/api/v2/auth/cert.proto", fileDescriptor_cert_f82beca1d890b9d7) }
 
-var fileDescriptor_0c3851c0865b2745 = []byte{
+var fileDescriptor_cert_f82beca1d890b9d7 = []byte{
 	// 1295 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x56, 0x4d, 0x77, 0xdb, 0x44,
 	0x17, 0x8e, 0x6c, 0xc7, 0x75, 0xae, 0xdb, 0x54, 0x99, 0xf6, 0x3d, 0x51, 0xfc, 0x86, 0xd6, 0x55,

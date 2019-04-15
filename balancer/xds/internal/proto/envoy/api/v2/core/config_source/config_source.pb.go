@@ -3,15 +3,13 @@
 
 package envoy_api_v2_core
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	duration "github.com/golang/protobuf/ptypes/duration"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
-	grpc_service "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/grpc_service"
-	_ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import duration "github.com/golang/protobuf/ptypes/duration"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
+import grpc_service "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/grpc_service"
+import _ "google.golang.org/grpc/balancer/xds/internal/proto/validate"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -22,7 +20,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type ApiConfigSource_ApiType int32
 
@@ -39,7 +37,6 @@ var ApiConfigSource_ApiType_name = map[int32]string{
 	2: "GRPC",
 	3: "DELTA_GRPC",
 }
-
 var ApiConfigSource_ApiType_value = map[string]int32{
 	"UNSUPPORTED_REST_LEGACY": 0,
 	"REST":                    1,
@@ -50,9 +47,8 @@ var ApiConfigSource_ApiType_value = map[string]int32{
 func (x ApiConfigSource_ApiType) String() string {
 	return proto.EnumName(ApiConfigSource_ApiType_name, int32(x))
 }
-
 func (ApiConfigSource_ApiType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_1ffcc55cf4c30535, []int{0, 0}
+	return fileDescriptor_config_source_d368846786cd1f7d, []int{0, 0}
 }
 
 type ApiConfigSource struct {
@@ -71,17 +67,16 @@ func (m *ApiConfigSource) Reset()         { *m = ApiConfigSource{} }
 func (m *ApiConfigSource) String() string { return proto.CompactTextString(m) }
 func (*ApiConfigSource) ProtoMessage()    {}
 func (*ApiConfigSource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1ffcc55cf4c30535, []int{0}
+	return fileDescriptor_config_source_d368846786cd1f7d, []int{0}
 }
-
 func (m *ApiConfigSource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ApiConfigSource.Unmarshal(m, b)
 }
 func (m *ApiConfigSource) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ApiConfigSource.Marshal(b, m, deterministic)
 }
-func (m *ApiConfigSource) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ApiConfigSource.Merge(m, src)
+func (dst *ApiConfigSource) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ApiConfigSource.Merge(dst, src)
 }
 func (m *ApiConfigSource) XXX_Size() int {
 	return xxx_messageInfo_ApiConfigSource.Size(m)
@@ -144,17 +139,16 @@ func (m *AggregatedConfigSource) Reset()         { *m = AggregatedConfigSource{}
 func (m *AggregatedConfigSource) String() string { return proto.CompactTextString(m) }
 func (*AggregatedConfigSource) ProtoMessage()    {}
 func (*AggregatedConfigSource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1ffcc55cf4c30535, []int{1}
+	return fileDescriptor_config_source_d368846786cd1f7d, []int{1}
 }
-
 func (m *AggregatedConfigSource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_AggregatedConfigSource.Unmarshal(m, b)
 }
 func (m *AggregatedConfigSource) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_AggregatedConfigSource.Marshal(b, m, deterministic)
 }
-func (m *AggregatedConfigSource) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_AggregatedConfigSource.Merge(m, src)
+func (dst *AggregatedConfigSource) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AggregatedConfigSource.Merge(dst, src)
 }
 func (m *AggregatedConfigSource) XXX_Size() int {
 	return xxx_messageInfo_AggregatedConfigSource.Size(m)
@@ -177,17 +171,16 @@ func (m *RateLimitSettings) Reset()         { *m = RateLimitSettings{} }
 func (m *RateLimitSettings) String() string { return proto.CompactTextString(m) }
 func (*RateLimitSettings) ProtoMessage()    {}
 func (*RateLimitSettings) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1ffcc55cf4c30535, []int{2}
+	return fileDescriptor_config_source_d368846786cd1f7d, []int{2}
 }
-
 func (m *RateLimitSettings) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RateLimitSettings.Unmarshal(m, b)
 }
 func (m *RateLimitSettings) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RateLimitSettings.Marshal(b, m, deterministic)
 }
-func (m *RateLimitSettings) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RateLimitSettings.Merge(m, src)
+func (dst *RateLimitSettings) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RateLimitSettings.Merge(dst, src)
 }
 func (m *RateLimitSettings) XXX_Size() int {
 	return xxx_messageInfo_RateLimitSettings.Size(m)
@@ -228,17 +221,16 @@ func (m *ConfigSource) Reset()         { *m = ConfigSource{} }
 func (m *ConfigSource) String() string { return proto.CompactTextString(m) }
 func (*ConfigSource) ProtoMessage()    {}
 func (*ConfigSource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_1ffcc55cf4c30535, []int{3}
+	return fileDescriptor_config_source_d368846786cd1f7d, []int{3}
 }
-
 func (m *ConfigSource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ConfigSource.Unmarshal(m, b)
 }
 func (m *ConfigSource) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ConfigSource.Marshal(b, m, deterministic)
 }
-func (m *ConfigSource) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ConfigSource.Merge(m, src)
+func (dst *ConfigSource) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ConfigSource.Merge(dst, src)
 }
 func (m *ConfigSource) XXX_Size() int {
 	return xxx_messageInfo_ConfigSource.Size(m)
@@ -306,28 +298,108 @@ func (m *ConfigSource) GetInitialFetchTimeout() *duration.Duration {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*ConfigSource) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*ConfigSource) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _ConfigSource_OneofMarshaler, _ConfigSource_OneofUnmarshaler, _ConfigSource_OneofSizer, []interface{}{
 		(*ConfigSource_Path)(nil),
 		(*ConfigSource_ApiConfigSource)(nil),
 		(*ConfigSource_Ads)(nil),
 	}
 }
 
+func _ConfigSource_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*ConfigSource)
+	// config_source_specifier
+	switch x := m.ConfigSourceSpecifier.(type) {
+	case *ConfigSource_Path:
+		b.EncodeVarint(1<<3 | proto.WireBytes)
+		b.EncodeStringBytes(x.Path)
+	case *ConfigSource_ApiConfigSource:
+		b.EncodeVarint(2<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.ApiConfigSource); err != nil {
+			return err
+		}
+	case *ConfigSource_Ads:
+		b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Ads); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("ConfigSource.ConfigSourceSpecifier has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _ConfigSource_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*ConfigSource)
+	switch tag {
+	case 1: // config_source_specifier.path
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeStringBytes()
+		m.ConfigSourceSpecifier = &ConfigSource_Path{x}
+		return true, err
+	case 2: // config_source_specifier.api_config_source
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(ApiConfigSource)
+		err := b.DecodeMessage(msg)
+		m.ConfigSourceSpecifier = &ConfigSource_ApiConfigSource{msg}
+		return true, err
+	case 3: // config_source_specifier.ads
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(AggregatedConfigSource)
+		err := b.DecodeMessage(msg)
+		m.ConfigSourceSpecifier = &ConfigSource_Ads{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _ConfigSource_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*ConfigSource)
+	// config_source_specifier
+	switch x := m.ConfigSourceSpecifier.(type) {
+	case *ConfigSource_Path:
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(len(x.Path)))
+		n += len(x.Path)
+	case *ConfigSource_ApiConfigSource:
+		s := proto.Size(x.ApiConfigSource)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *ConfigSource_Ads:
+		s := proto.Size(x.Ads)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
+
 func init() {
-	proto.RegisterEnum("envoy.api.v2.core.ApiConfigSource_ApiType", ApiConfigSource_ApiType_name, ApiConfigSource_ApiType_value)
 	proto.RegisterType((*ApiConfigSource)(nil), "envoy.api.v2.core.ApiConfigSource")
 	proto.RegisterType((*AggregatedConfigSource)(nil), "envoy.api.v2.core.AggregatedConfigSource")
 	proto.RegisterType((*RateLimitSettings)(nil), "envoy.api.v2.core.RateLimitSettings")
 	proto.RegisterType((*ConfigSource)(nil), "envoy.api.v2.core.ConfigSource")
+	proto.RegisterEnum("envoy.api.v2.core.ApiConfigSource_ApiType", ApiConfigSource_ApiType_name, ApiConfigSource_ApiType_value)
 }
 
 func init() {
-	proto.RegisterFile("envoy/api/v2/core/config_source.proto", fileDescriptor_1ffcc55cf4c30535)
+	proto.RegisterFile("envoy/api/v2/core/config_source.proto", fileDescriptor_config_source_d368846786cd1f7d)
 }
 
-var fileDescriptor_1ffcc55cf4c30535 = []byte{
+var fileDescriptor_config_source_d368846786cd1f7d = []byte{
 	// 667 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x53, 0xcd, 0x6e, 0x13, 0x3d,
 	0x14, 0xcd, 0x24, 0x69, 0x9b, 0x38, 0x69, 0x9b, 0xb8, 0xdf, 0xf7, 0x75, 0xbe, 0x0a, 0xb5, 0x21,
