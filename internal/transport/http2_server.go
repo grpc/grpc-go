@@ -1059,6 +1059,7 @@ func getCleanupStream(streamID uint32, rst bool, rstCode http2.ErrCode) *cleanup
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
 	oldState := t.deleteStream(s, eosReceived)
+	// If the stream is already closed, then don't put trailing header to controlbuf.
 	if oldState == streamDone {
 		return
 	}
@@ -1070,8 +1071,6 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 // closeStream clears the footprint of a stream when the stream is not needed any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
 	t.deleteStream(s, eosReceived)
-
-	// No trailer. Puts cleanupFrame into transport's control buffer.
 	t.controlBuf.put(getCleanupStream(s.id, rst, rstCode))
 }
 
