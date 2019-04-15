@@ -182,7 +182,8 @@ public final class Status {
     /**
      * The service is currently unavailable.  This is a most likely a
      * transient condition and may be corrected by retrying with
-     * a backoff.
+     * a backoff. Note that it is not always safe to retry
+     * non-idempotent operations.
      *
      * <p>See litmus test above for deciding between FAILED_PRECONDITION,
      * ABORTED, and UNAVAILABLE.
