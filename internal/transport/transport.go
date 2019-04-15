@@ -578,8 +578,8 @@ type ClientTransport interface {
 	// is called only once.
 	Close() error
 
-	// GracefulClose starts to tear down the transport. It stops accepting
-	// new RPCs by causing NewStream to return error. Once all streams are
+	// GracefulClose starts to tear down the transport: the transport will stop
+	// accepting new RPCs and NewStream will return error. Once all streams are
 	// finished, the transport will close.
 	//
 	// It does not block.
