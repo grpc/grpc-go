@@ -1,0 +1,1 @@
+Run ./envoy-proto-gen.sh to generate xds proto generated fiels for grpc usage.
