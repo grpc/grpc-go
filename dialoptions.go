@@ -39,8 +39,12 @@ import (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt    UnaryClientInterceptor
-	streamInt   StreamClientInterceptor
+	unaryInt  UnaryClientInterceptor
+	streamInt StreamClientInterceptor
+
+	chainUnaryInts  []UnaryClientInterceptor
+	chainStreamInts []StreamClientInterceptor
+
 	cp          Compressor
 	dc          Decompressor
 	bs          backoff.Strategy
@@ -414,11 +418,33 @@ func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 	})
 }
 
+// WithChainUnaryInterceptor returns a DialOption that specifies the chained
+// interceptor for unary RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
+// All interceptors added by this method will be chained, and the interceptor
+// defined by WithUnaryInterceptor will always be prepended to the chain.
+func WithChainUnaryInterceptor(interceptors ...UnaryClientInterceptor) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.chainUnaryInts = append(o.chainUnaryInts, interceptors...)
+	})
+}
+
 // WithStreamInterceptor returns a DialOption that specifies the interceptor for
 // streaming RPCs.
 func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.streamInt = f
+	})
+}
+
+// WithChainStreamInterceptor returns a DialOption that specifies the chained
+// interceptor for unary RPCs. The first interceptor will be the outer most,
+// while the last interceptor will be the inner most wrapper around the real call.
+// All interceptors added by this method will be chained, and the interceptor
+// defined by WithStreamInterceptor will always be prepended to the chain.
+func WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.chainStreamInts = append(o.chainStreamInts, interceptors...)
 	})
 }
 
