@@ -610,7 +610,12 @@ func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
 		return
 	}
 	// If the stream is already deleted from the active streams map, then put a cleanupStream item into controlbuf to delete the stream from loopy writer's established streams map.
-	t.controlBuf.put(getCleanupStream(f.Header().StreamID, false, 0))
+	t.controlBuf.put(&cleanupStream{
+		streamID: f.Header().StreamID,
+		rst:      false,
+		rstCode:  0,
+		onWrite:  func() {},
+	})
 }
 
 func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
@@ -1046,16 +1051,6 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) (oldState stream
 	return oldState
 }
 
-// getCleanupStream returns a cleanupStream item that can be put into controlbuf.
-func getCleanupStream(streamID uint32, rst bool, rstCode http2.ErrCode) *cleanupStream {
-	return &cleanupStream{
-		streamID: streamID,
-		rst:      rst,
-		rstCode:  rstCode,
-		onWrite:  func() {},
-	}
-}
-
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
 	oldState := t.deleteStream(s, eosReceived)
@@ -1064,14 +1059,24 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 		return
 	}
 
-	hdr.cleanup = getCleanupStream(s.id, rst, rstCode)
+	hdr.cleanup = &cleanupStream{
+		streamID: s.id,
+		rst:      rst,
+		rstCode:  rstCode,
+		onWrite:  func() {},
+	}
 	t.controlBuf.put(hdr)
 }
 
 // closeStream clears the footprint of a stream when the stream is not needed any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
 	t.deleteStream(s, eosReceived)
-	t.controlBuf.put(getCleanupStream(s.id, rst, rstCode))
+	t.controlBuf.put(&cleanupStream{
+		streamID: s.id,
+		rst:      rst,
+		rstCode:  rstCode,
+		onWrite:  func() {},
+	})
 }
 
 func (t *http2Server) RemoteAddr() net.Addr {
