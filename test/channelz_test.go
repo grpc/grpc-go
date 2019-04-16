@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -188,6 +190,18 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
+func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
+	channelz.NewChannelzStorage()
+	// Make dial fails (due to no transport security specified)
+	_, err := grpc.Dial("fake.addr")
+	if err == nil {
+		t.Fatal("expecting dial to fail")
+	}
+	if tcs, end := channelz.GetTopChannels(0, 0); tcs != nil || !end {
+		t.Fatalf("GetTopChannels(0, 0) = %v, %v, want <nil>, true", tcs, end)
+	}
+}
+
 func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
@@ -197,7 +211,7 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
-	r.InitialAddrs(resolvedAddrs)
+	r.InitialState(resolver.State{Addresses: resolvedAddrs})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -215,8 +229,7 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
-	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -245,7 +258,7 @@ func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 	for _, a := range te.srvAddrs {
 		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
 	}
-	r.InitialAddrs(svrAddrs)
+	r.InitialState(resolver.State{Addresses: svrAddrs})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -276,7 +289,7 @@ func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewAddress(svrAddrs[:len(svrAddrs)-1])
+	r.UpdateState(resolver.State{Addresses: svrAddrs[:len(svrAddrs)-1]})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -493,7 +506,7 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 	for _, a := range te.srvAddrs {
 		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
 	}
-	r.InitialAddrs(svrAddrs)
+	r.InitialState(resolver.State{Addresses: svrAddrs})
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
 	defer te.tearDown()
@@ -834,7 +847,7 @@ func doServerSideInitiatedFailedStreamWithClientBreakFlowControl(tc testpb.TestS
 	}
 	// sleep here to make sure header frame being sent before the data frame we write directly below.
 	time.Sleep(10 * time.Millisecond)
-	payload := make([]byte, 65537, 65537)
+	payload := make([]byte, 65537)
 	dw.getRawConnWrapper().writeRawFrame(http2.FrameData, 0, tc.(*testServiceClientWrapper).getCurrentStreamID(), payload)
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = %v, want error code: %v", stream, err, codes.ResourceExhausted)
@@ -847,8 +860,8 @@ func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 	if err != nil {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
-	// 2500ms allow for 2 keepalives (1000ms per round trip)
-	time.Sleep(2500 * time.Millisecond)
+	// Allow for at least 2 keepalives (1s per ping interval)
+	time.Sleep(4 * time.Second)
 	cancel()
 }
 
@@ -1125,15 +1138,24 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 
 func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
+	defer func(t time.Duration) { internal.KeepaliveMinPingTime = t }(internal.KeepaliveMinPingTime)
+	internal.KeepaliveMinPingTime = time.Second
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.cliKeepAlive = &keepalive.ClientParameters{Time: 500 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	te.customDialOptions = append(te.customDialOptions, grpc.WithKeepaliveParams(
+		keepalive.ClientParameters{
+			Time:                time.Second,
+			Timeout:             500 * time.Millisecond,
+			PermitWithoutStream: true,
+		}))
+	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveEnforcementPolicy(
+		keepalive.EnforcementPolicy{
+			MinTime:             500 * time.Millisecond,
+			PermitWithoutStream: true,
+		}))
 	te.startServer(&testServer{security: e.security})
+	te.clientConn() // Dial the server
 	defer te.tearDown()
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	doIdleCallToInvokeKeepAlive(tc, t)
-
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tchan, _ := channelz.GetTopChannels(0, 0)
 		if len(tchan) != 1 {
@@ -1157,7 +1179,7 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 			break
 		}
 		skt := channelz.GetSocket(id)
-		if skt.SocketData.KeepAlivesSent != 2 { // doIdleCallToInvokeKeepAlive func is set up to send 2 KeepAlives.
+		if skt.SocketData.KeepAlivesSent != 2 {
 			return false, fmt.Errorf("there should be 2 KeepAlives sent, not %d", skt.SocketData.KeepAlivesSent)
 		}
 		return true, nil
@@ -1230,7 +1252,7 @@ func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
 	channelz.NewChannelzStorage()
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	te.svrKeepAlive = &keepalive.ServerParameters{Time: 500 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Second, Timeout: 500 * time.Millisecond}))
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	cc := te.clientConn()
@@ -1279,6 +1301,9 @@ var cipherSuites = []string{
 	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
 	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
 	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+	"TLS_AES_128_GCM_SHA256",
+	"TLS_AES_256_GCM_SHA384",
+	"TLS_CHACHA20_POLY1305_SHA256",
 }
 
 func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
@@ -1324,7 +1349,7 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 				return true, nil
 			}
 		}
-		return false, fmt.Errorf("SocketData.Security.StandardName got: %v, want it to be one of %v ", securityVal.StandardName, cipherSuites)
+		return false, fmt.Errorf("SocketData.Security.StandardName got: %v, want it to be one of %v", securityVal.StandardName, cipherSuites)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1339,7 +1364,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
-	r.InitialAddrs(resolvedAddrs)
+	r.InitialState(resolver.State{Addresses: resolvedAddrs})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -1375,8 +1400,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
-	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1413,7 +1437,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -1454,7 +1478,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewAddress([]resolver.Address{})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -1492,7 +1516,8 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.InitialState(resolver.State{Addresses: addrs})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -1506,19 +1531,18 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		}
 		cid = tcs[0].ID
 		for i := len(tcs[0].Trace.Events) - 1; i >= 0; i-- {
-			if tcs[0].Trace.Events[i].Desc == fmt.Sprintf("Resolver returns a non-empty address list (previous one was empty) %q", te.srvAddr) {
+			if strings.Contains(tcs[0].Trace.Events[i].Desc, "resolver returned new addresses") {
 				break
 			}
 			if i == 0 {
-				return false, fmt.Errorf("events do not contain expected address resolution from empty address state")
+				return false, fmt.Errorf("events do not contain expected address resolution from empty address state.  Got: %+v", tcs[0].Trace.Events)
 			}
 		}
 		return true, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-
-	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
@@ -1535,14 +1559,14 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newSc := `{
+	newSC := `{
     "methodConfig": [
         {
             "name": [
                 {
                     "service": "grpc.testing.TestService",
                     "method": "EmptyCall"
-                },
+                }
             ],
             "waitForReady": false,
             "timeout": ".001s"
@@ -1550,13 +1574,13 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
     ]
 }`
 
-	r.NewServiceConfig(newSc)
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: newSC})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == fmt.Sprintf("Channel has a new service config \"%s\"", newSc) {
+			if strings.Contains(cm.Trace.Events[i].Desc, "service config updated") {
 				break
 			}
 			if i == 0 {
@@ -1568,12 +1592,12 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewAddress([]resolver.Address{})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}, ServiceConfig: newSC})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
-			if cm.Trace.Events[i].Desc == "Resolver returns an empty address list" {
+			if strings.Contains(cm.Trace.Events[i].Desc, "resolver returned an empty address list") {
 				break
 			}
 			if i == 0 {
@@ -1598,7 +1622,7 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	for _, a := range te.srvAddrs {
 		svrAddrs = append(svrAddrs, resolver.Address{Addr: a})
 	}
-	r.InitialAddrs(svrAddrs)
+	r.InitialState(resolver.State{Addresses: svrAddrs})
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
 	defer te.tearDown()
@@ -1653,9 +1677,8 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
-	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	cc := te.clientConn()
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
@@ -1670,7 +1693,7 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		// we need to obtain the SubChannel id before it gets deleted from Channel's children list (due
-		// to effect of r.NewAddress([]resolver.Address{}))
+		// to effect of r.UpdateState(resolver.State{Addresses:[]resolver.Address{}}))
 		if subConn == 0 {
 			tcs, _ := channelz.GetTopChannels(0, 0)
 			if len(tcs) != 1 {
@@ -1701,12 +1724,12 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 			}
 		}
 		// Make sure the SubChannel has already seen transient failure before shutting it down through
-		// r.NewAddress([]resolver.Address{}).
+		// r.UpdateState(resolver.State{Addresses:[]resolver.Address{}}).
 		if transient == 0 {
 			return false, fmt.Errorf("transient failure has not happened on SubChannel yet")
 		}
 		transient = 0
-		r.NewAddress([]resolver.Address{})
+		r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 		for _, e := range scm.Trace.Events {
 			if e.Desc == fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready) {
 				ready++
@@ -1748,9 +1771,8 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
-	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	cc := te.clientConn()
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(cc)
@@ -1809,7 +1831,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
 	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", Type: resolver.GRPCLB, ServerName: "grpclb.server"}}
-	r.InitialAddrs(resolvedAddrs)
+	r.InitialState(resolver.State{Addresses: resolvedAddrs})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -1830,8 +1852,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewServiceConfig(`{"loadBalancingPolicy": "round_robin"}`)
-	r.NewAddress([]resolver.Address{{Addr: "127.0.0.1:0"}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "127.0.0.1:0"}}, ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`})
 
 	// wait for the shutdown of grpclb balancer
 	if err := verifyResultWithDelay(func() (bool, error) {
@@ -1868,7 +1889,7 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	defer te.tearDown()
@@ -1891,7 +1912,7 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.NewAddress([]resolver.Address{})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
@@ -1925,7 +1946,7 @@ func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	r, cleanup := manual.GenerateAndRegisterManualResolver()
 	defer cleanup()
-	r.InitialAddrs([]resolver.Address{{Addr: te.srvAddr}})
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: te.srvAddr}}})
 	te.resolverScheme = r.Scheme()
 	te.clientConn()
 	var subConn int64

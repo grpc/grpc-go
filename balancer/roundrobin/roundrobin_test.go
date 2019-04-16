@@ -72,7 +72,7 @@ func startTestServers(count int) (_ *test, err error) {
 	for i := 0; i < count; i++ {
 		lis, err := net.Listen("tcp", "localhost:0")
 		if err != nil {
-			return nil, fmt.Errorf("Failed to listen %v", err)
+			return nil, fmt.Errorf("failed to listen %v", err)
 		}
 
 		s := grpc.NewServer()
@@ -112,7 +112,7 @@ func TestOneBackend(t *testing.T) {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
-	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: test.addresses[0]}}})
 	// The second RPC should succeed.
 	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
@@ -149,7 +149,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 		resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test.addresses[i]})
 	}
 
-	r.NewAddress(resolvedAddrs)
+	r.UpdateState(resolver.State{Addresses: resolvedAddrs})
 	var p peer.Peer
 	// Make sure connections to all servers are up.
 	for si := 0; si < backendCount; si++ {
@@ -203,13 +203,13 @@ func TestAddressesRemoved(t *testing.T) {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
-	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: test.addresses[0]}}})
 	// The second RPC should succeed.
 	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 
-	r.NewAddress([]resolver.Address{})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 	for i := 0; i < 1000; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
@@ -279,7 +279,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
-	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: test.addresses[0]}}})
 	// The second RPC should succeed.
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -287,7 +287,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 		t.Fatalf("EmptyCall() = _, %v, want _, nil", err)
 	}
 
-	r.NewAddress([]resolver.Address{})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 3; i++ {
@@ -299,7 +299,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
-	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: test.addresses[0]}}})
 	wg.Wait()
 }
 
@@ -333,7 +333,7 @@ func TestOneServerDown(t *testing.T) {
 		resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test.addresses[i]})
 	}
 
-	r.NewAddress(resolvedAddrs)
+	r.UpdateState(resolver.State{Addresses: resolvedAddrs})
 	var p peer.Peer
 	// Make sure connections to all servers are up.
 	for si := 0; si < backendCount; si++ {
@@ -431,7 +431,7 @@ func TestAllServersDown(t *testing.T) {
 		resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test.addresses[i]})
 	}
 
-	r.NewAddress(resolvedAddrs)
+	r.UpdateState(resolver.State{Addresses: resolvedAddrs})
 	var p peer.Peer
 	// Make sure connections to all servers are up.
 	for si := 0; si < backendCount; si++ {

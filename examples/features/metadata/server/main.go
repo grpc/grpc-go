@@ -40,7 +40,6 @@ var port = flag.Int("port", 50051, "the port to serve on")
 
 const (
 	timestampFormat = time.StampNano
-	smallDuration   = time.Second
 	streamingCount  = 10
 )
 

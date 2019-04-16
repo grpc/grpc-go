@@ -5,7 +5,7 @@ This examples shows how `ClientConn` can pick different name resolvers.
 ## What is a name resolver
 
 A name resolver can be seen as a `map[service-name][]backend-ip`. It takes a
-service name, and returns a list of IPs of the backends. A commen used name
+service name, and returns a list of IPs of the backends. A common used name
 resolver is DNS.
 
 In this example, a resolver is created to resolve `resolver.example.grpc.io` to
@@ -25,7 +25,7 @@ go run client/main.go
 
 The echo server is serving on ":50051". Two clients are created, one is dialing
 to `passthrough:///localhost:50051`, while the other is dialing to
-`example:///resolver.example.grpc.io`. Both of them can connect the the server.
+`example:///resolver.example.grpc.io`. Both of them can connect the server.
 
 Name resolver is picked based on the `scheme` in the target string. See
 https://github.com/grpc/grpc/blob/master/doc/naming.md for the target syntax.

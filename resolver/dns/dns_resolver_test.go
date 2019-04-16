@@ -54,6 +54,10 @@ type testClientConn struct {
 	s      int
 }
 
+func (t *testClientConn) UpdateState(s resolver.State) {
+	panic("unused")
+}
+
 func (t *testClientConn) NewAddress(addresses []resolver.Address) {
 	t.m1.Lock()
 	defer t.m1.Unlock()
@@ -574,10 +578,10 @@ var scs = []string{
 // scLookupTbl is a set, which contains targets that have service config. Target
 // not in this set should not have service config.
 var scLookupTbl = map[string]bool{
-	"foo.bar.com":          true,
-	"srv.ipv4.single.fake": true,
-	"srv.ipv4.multi.fake":  true,
-	"no.attribute":         true,
+	txtPrefix + "foo.bar.com":          true,
+	txtPrefix + "srv.ipv4.single.fake": true,
+	txtPrefix + "srv.ipv4.multi.fake":  true,
+	txtPrefix + "no.attribute":         true,
 }
 
 // generateSCF generates a slice of strings (aggregately representing a single

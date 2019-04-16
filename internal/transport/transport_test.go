@@ -19,7 +19,6 @@
 package transport
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -28,7 +27,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -63,6 +61,13 @@ var (
 	expectedResponseLarge      = make([]byte, initialWindowSize*2)
 	expectedInvalidHeaderField = "invalid/content-type"
 )
+
+func init() {
+	expectedRequestLarge[0] = 'g'
+	expectedRequestLarge[len(expectedRequestLarge)-1] = 'r'
+	expectedResponseLarge[0] = 'p'
+	expectedResponseLarge[len(expectedResponseLarge)-1] = 'c'
+}
 
 type testStreamHandler struct {
 	t           *http2Server
@@ -109,7 +114,9 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		return
 	}
 	if !bytes.Equal(p, req) {
-		t.Fatalf("handleStream got %v, want %v", p, req)
+		t.Errorf("handleStream got %v, want %v", p, req)
+		h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+		return
 	}
 	// send a response back to the client.
 	h.t.Write(s, nil, resp, &Options{})
@@ -125,12 +132,16 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 				h.t.WriteStatus(s, status.New(codes.OK, ""))
 				return
 			}
-			t.Fatalf("Error on server while reading data header: %v", err)
+			t.Errorf("Error on server while reading data header: %v", err)
+			h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+			return
 		}
 		sz := binary.BigEndian.Uint32(header[1:])
 		msg := make([]byte, int(sz))
 		if _, err := s.Read(msg); err != nil {
-			t.Fatalf("Error on server while reading message: %v", err)
+			t.Errorf("Error on server while reading message: %v", err)
+			h.t.WriteStatus(s, status.New(codes.Internal, "panic"))
+			return
 		}
 		buf := make([]byte, sz+5)
 		buf[0] = byte(0)
@@ -143,7 +154,9 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	conn, ok := s.st.(*http2Server)
 	if !ok {
-		t.Fatalf("Failed to convert %v to *http2Server", s.st)
+		t.Errorf("Failed to convert %v to *http2Server", s.st)
+		h.t.WriteStatus(s, status.New(codes.Internal, ""))
+		return
 	}
 	var sent int
 	p := make([]byte, http2MaxFrameLen)
@@ -1926,167 +1939,6 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 		}
 		break
 	}
-}
-
-// A function of type writeHeaders writes out
-// http status with the given stream ID using the given framer.
-type writeHeaders func(*http2.Framer, uint32, int) error
-
-func writeOneHeader(framer *http2.Framer, sid uint32, httpStatus int) error {
-	var buf bytes.Buffer
-	henc := hpack.NewEncoder(&buf)
-	henc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
-	return framer.WriteHeaders(http2.HeadersFrameParam{
-		StreamID:      sid,
-		BlockFragment: buf.Bytes(),
-		EndStream:     true,
-		EndHeaders:    true,
-	})
-}
-
-func writeTwoHeaders(framer *http2.Framer, sid uint32, httpStatus int) error {
-	var buf bytes.Buffer
-	henc := hpack.NewEncoder(&buf)
-	henc.WriteField(hpack.HeaderField{
-		Name:  ":status",
-		Value: fmt.Sprint(http.StatusOK),
-	})
-	if err := framer.WriteHeaders(http2.HeadersFrameParam{
-		StreamID:      sid,
-		BlockFragment: buf.Bytes(),
-		EndHeaders:    true,
-	}); err != nil {
-		return err
-	}
-	buf.Reset()
-	henc.WriteField(hpack.HeaderField{
-		Name:  ":status",
-		Value: fmt.Sprint(httpStatus),
-	})
-	return framer.WriteHeaders(http2.HeadersFrameParam{
-		StreamID:      sid,
-		BlockFragment: buf.Bytes(),
-		EndStream:     true,
-		EndHeaders:    true,
-	})
-}
-
-type httpServer struct {
-	httpStatus int
-	wh         writeHeaders
-}
-
-func (s *httpServer) start(t *testing.T, lis net.Listener) {
-	// Launch an HTTP server to send back header with httpStatus.
-	go func() {
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error accepting connection: %v", err)
-			return
-		}
-		defer conn.Close()
-		// Read preface sent by client.
-		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
-			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
-			return
-		}
-		reader := bufio.NewReaderSize(conn, defaultWriteBufSize)
-		writer := bufio.NewWriterSize(conn, defaultReadBufSize)
-		framer := http2.NewFramer(writer, reader)
-		if err = framer.WriteSettingsAck(); err != nil {
-			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
-			return
-		}
-		var sid uint32
-		// Read frames until a header is received.
-		for {
-			frame, err := framer.ReadFrame()
-			if err != nil {
-				t.Errorf("Error at server-side while reading frame. Err: %v", err)
-				return
-			}
-			if hframe, ok := frame.(*http2.HeadersFrame); ok {
-				sid = hframe.Header().StreamID
-				break
-			}
-		}
-		if err = s.wh(framer, sid, s.httpStatus); err != nil {
-			t.Errorf("Error at server-side while writing headers. Err: %v", err)
-			return
-		}
-		writer.Flush()
-	}()
-}
-
-func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (*Stream, func()) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen. Err: %v", err)
-	}
-	server := &httpServer{
-		httpStatus: httpStatus,
-		wh:         wh,
-	}
-	server.start(t, lis)
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
-	client, err := newHTTP2Client(connectCtx, context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
-	if err != nil {
-		lis.Close()
-		t.Fatalf("Error creating client. Err: %v", err)
-	}
-	stream, err := client.NewStream(context.Background(), &CallHdr{Method: "bogus/method"})
-	if err != nil {
-		client.Close()
-		lis.Close()
-		t.Fatalf("Error creating stream at client-side. Err: %v", err)
-	}
-	return stream, func() {
-		client.Close()
-		lis.Close()
-	}
-}
-
-func TestHTTPToGRPCStatusMapping(t *testing.T) {
-	for k := range httpStatusConvTab {
-		testHTTPToGRPCStatusMapping(t, k, writeOneHeader)
-	}
-}
-
-func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) {
-	stream, cleanUp := setUpHTTPStatusTest(t, httpStatus, wh)
-	defer cleanUp()
-	want := httpStatusConvTab[httpStatus]
-	buf := make([]byte, 8)
-	_, err := stream.Read(buf)
-	if err == nil {
-		t.Fatalf("Stream.Read(_) unexpectedly returned no error. Expected stream error with code %v", want)
-	}
-	serr, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("err.(Type) = %T, want status error", err)
-	}
-	if want != serr.Code() {
-		t.Fatalf("Want error code: %v, got: %v", want, serr.Code())
-	}
-}
-
-func TestHTTPStatusOKAndMissingGRPCStatus(t *testing.T) {
-	stream, cleanUp := setUpHTTPStatusTest(t, http.StatusOK, writeOneHeader)
-	defer cleanUp()
-	buf := make([]byte, 8)
-	_, err := stream.Read(buf)
-	if err != io.EOF {
-		t.Fatalf("stream.Read(_) = _, %v, want _, io.EOF", err)
-	}
-	want := codes.Unknown
-	if stream.status.Code() != want {
-		t.Fatalf("Status code of stream: %v, want: %v", stream.status.Code(), want)
-	}
-}
-
-func TestHTTPStatusNottOKAndMissingGRPCStatusInSecondHeader(t *testing.T) {
-	testHTTPToGRPCStatusMapping(t, http.StatusUnauthorized, writeTwoHeaders)
 }
 
 // If any error occurs on a call to Stream.Read, future calls

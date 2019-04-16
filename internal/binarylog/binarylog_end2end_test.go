@@ -822,18 +822,12 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 		e.CallId = 0 // CallID is global to the binary, hard to compare.
 		if h := e.GetClientHeader(); h != nil {
 			h.Timeout = nil
-			tmp := h.Metadata.Entry[:0]
-			for _, e := range h.Metadata.Entry {
-				tmp = append(tmp, e)
-			}
+			tmp := append(h.Metadata.Entry[:0], h.Metadata.Entry...)
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
 		}
 		if h := e.GetServerHeader(); h != nil {
-			tmp := h.Metadata.Entry[:0]
-			for _, e := range h.Metadata.Entry {
-				tmp = append(tmp, e)
-			}
+			tmp := append(h.Metadata.Entry[:0], h.Metadata.Entry...)
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
 		}

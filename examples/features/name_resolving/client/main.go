@@ -119,11 +119,11 @@ type exampleResolver struct {
 
 func (r *exampleResolver) start() {
 	addrStrs := r.addrsStore[r.target.Endpoint]
-	addrs := make([]resolver.Address, len(addrStrs), len(addrStrs))
+	addrs := make([]resolver.Address, len(addrStrs))
 	for i, s := range addrStrs {
 		addrs[i] = resolver.Address{Addr: s}
 	}
-	r.cc.NewAddress(addrs)
+	r.cc.UpdateState(resolver.State{Addresses: addrs})
 }
 func (*exampleResolver) ResolveNow(o resolver.ResolveNowOption) {}
 func (*exampleResolver) Close()                                 {}

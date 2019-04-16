@@ -63,7 +63,7 @@ func (s) TestRetryUnary(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -131,7 +131,7 @@ func (s) TestRetryDisabledByDefault(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -191,7 +191,7 @@ func (s) TestRetryThrottling(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -386,7 +386,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 	cCheckElapsed := func(d time.Duration) clientOp {
 		return func(_ testpb.TestService_FullDuplexCallClient) error {
 			if elapsed := time.Since(curTime); elapsed < d {
-				return fmt.Errorf("Elapsed time: %v; want >= %v", elapsed, d)
+				return fmt.Errorf("elapsed time: %v; want >= %v", elapsed, d)
 			}
 			return nil
 		}
@@ -502,7 +502,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	ss.r.NewServiceConfig(`{
+	ss.newServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,

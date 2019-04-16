@@ -22,6 +22,7 @@ package main
 import (
 	"flag"
 	"net"
+	"strings"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/alts"
@@ -30,17 +31,28 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
+const (
+	udsAddrPrefix = "unix:"
+)
+
 var (
 	hsAddr     = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
-	serverAddr = flag.String("server_address", ":8080", "The port on which the server is listening")
+	serverAddr = flag.String("server_address", ":8080", "The address on which the server is listening. Only two types of addresses are supported, 'host:port' and 'unix:/path'.")
 )
 
 func main() {
 	flag.Parse()
 
-	lis, err := net.Listen("tcp", *serverAddr)
+	// If the server address starts with `unix:`, then we have a UDS address.
+	network := "tcp"
+	address := *serverAddr
+	if strings.HasPrefix(address, udsAddrPrefix) {
+		network = "unix"
+		address = strings.TrimPrefix(address, udsAddrPrefix)
+	}
+	lis, err := net.Listen(network, address)
 	if err != nil {
-		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", *serverAddr, err)
+		grpclog.Fatalf("gRPC Server: failed to start the server at %v: %v", address, err)
 	}
 	opts := alts.DefaultServerOptions()
 	if *hsAddr != "" {

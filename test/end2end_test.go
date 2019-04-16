@@ -22,6 +22,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -45,12 +46,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 
 	_ "google.golang.org/grpc/grpclog/glogger"
@@ -62,7 +65,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -81,8 +84,25 @@ func init() {
 
 type s struct{}
 
+var lcFailed uint32
+
+type errorer struct {
+	t *testing.T
+}
+
+func (e errorer) Errorf(format string, args ...interface{}) {
+	atomic.StoreUint32(&lcFailed, 1)
+	e.t.Errorf(format, args...)
+}
+
 func (s) Teardown(t *testing.T) {
-	leakcheck.Check(t)
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		return
+	}
+	leakcheck.Check(errorer{t: t})
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		t.Log("Leak check disabled for future tests")
+	}
 }
 
 func Test(t *testing.T) {
@@ -155,7 +175,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 
 func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 	if size < 0 {
-		return nil, fmt.Errorf("Requested a response with invalid length %d", size)
+		return nil, fmt.Errorf("requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
@@ -163,7 +183,7 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 	case testpb.PayloadType_UNCOMPRESSABLE:
 		return nil, fmt.Errorf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		return nil, fmt.Errorf("Unsupported payload type: %d", t)
+		return nil, fmt.Errorf("unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t,
@@ -484,7 +504,7 @@ type test struct {
 	streamServerInt             grpc.StreamServerInterceptor
 	unknownHandler              grpc.StreamHandler
 	sc                          <-chan grpc.ServiceConfig
-	customCodec                 grpc.Codec
+	customCodec                 encoding.Codec
 	serverInitialWindowSize     int32
 	serverInitialConnWindowSize int32
 	clientInitialWindowSize     int32
@@ -493,8 +513,6 @@ type test struct {
 	customDialOptions           []grpc.DialOption
 	customServerOptions         []grpc.ServerOption
 	resolverScheme              string
-	cliKeepAlive                *keepalive.ClientParameters
-	svrKeepAlive                *keepalive.ServerParameters
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -615,12 +633,6 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 		sopts = append(sopts, grpc.Creds(creds))
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
-	}
-	if te.customCodec != nil {
-		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
-	}
-	if te.svrKeepAlive != nil {
-		sopts = append(sopts, grpc.KeepaliveParams(*te.svrKeepAlive))
 	}
 	sopts = append(sopts, te.customServerOptions...)
 	s := grpc.NewServer(sopts...)
@@ -850,7 +862,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
 	}
 	if te.customCodec != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.CallCustomCodec(te.customCodec)))
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ForceCodec(te.customCodec)))
 	}
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
@@ -858,9 +870,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
-	}
-	if te.cliKeepAlive != nil {
-		opts = append(opts, grpc.WithKeepaliveParams(*te.cliKeepAlive))
 	}
 	opts = append(opts, te.customDialOptions...)
 	return opts, scheme
@@ -970,7 +979,6 @@ func (s) TestTimeoutOnDeadServer(t *testing.T) {
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.customDialOptions = []grpc.DialOption{grpc.WithWaitForHandshake()}
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
@@ -1045,7 +1053,9 @@ func testServerGoAway(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	// Finish an RPC to make sure the connection is good.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	ch := make(chan struct{})
@@ -1063,7 +1073,9 @@ func testServerGoAway(t *testing.T, e env) {
 		cancel()
 	}
 	// A new RPC should fail.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s or %s", err, codes.Unavailable, codes.Internal)
 	}
 	<-ch
@@ -1467,29 +1479,31 @@ func (s) TestGetMethodConfig(t *testing.T) {
 
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "EmptyCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": ".001s"
-		},
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService"
-			}
-			],
-			"waitForReady": false
-		}
-		]
-	}`)
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": ".001s"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1507,28 +1521,29 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "UnaryCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": ".001s"
-		},
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService"
-			}
-			],
-			"waitForReady": false
-		}
-		]
-	}`)
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": ".001s"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`})
+
 
 	// Make sure service config has been processed by grpc.
 	for {
@@ -1552,25 +1567,27 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "EmptyCall"
-			},
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"waitForReady": false,
-			"timeout": ".001s"
-		}
-		]
-	}`)
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": false,
+            "timeout": ".001s"
+        }
+    ]
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1593,24 +1610,26 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "EmptyCall"
-			},
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": ".001s"
-		}
-		]
-	}`)
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": ".001s"
+        }
+    ]
+}`})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1637,25 +1656,27 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "EmptyCall"
-			},
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": "3600s"
-		}
-		]
-	}`)
+	addrs := []resolver.Address{{Addr: te.srvAddr}}
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "3600s"
+        }
+    ]
+}`})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1683,24 +1704,26 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "EmptyCall"
-			},
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": ".000000001s"
-		}
-		]
-	}`)
+	r.UpdateState(resolver.State{
+		Addresses: addrs,
+		ServiceConfig: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": ".000000001s"
+        }
+    ]
+}`})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1774,8 +1797,8 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te1.startServer(&testServer{security: e.security})
 	cc1 := te1.clientConn()
 
-	r.NewAddress([]resolver.Address{{Addr: te1.srvAddr}})
-	r.NewServiceConfig(scjs)
+	addrs := []resolver.Address{{Addr: te1.srvAddr}}
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: scjs})
 	tc := testpb.NewTestServiceClient(cc1)
 
 	req := &testpb.SimpleRequest{
@@ -1846,8 +1869,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	cc2 := te2.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te2.srvAddr}})
-	r.NewServiceConfig(scjs)
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: scjs})
 	tc = testpb.NewTestServiceClient(cc2)
 
 	for {
@@ -1908,8 +1930,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer te3.tearDown()
 
 	cc3 := te3.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te3.srvAddr}})
-	r.NewServiceConfig(scjs)
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: scjs})
 	tc = testpb.NewTestServiceClient(cc3)
 
 	for {
@@ -1999,21 +2020,22 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(`{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"waitForReady": true,
-			"timeout": "10s"
-		}
-		]
-	}`)
+	r.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: te.srvAddr}},
+		ServiceConfig: `{
+	    "methodConfig": [
+	        {
+	            "name": [
+	                {
+	                    "service": "grpc.testing.TestService",
+	                    "method": "FullDuplexCall"
+	                }
+	            ],
+	            "waitForReady": true,
+	            "timeout": "10s"
+	        }
+	    ]
+	}`})
 	// Make sure service config has been processed by grpc.
 	for {
 		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
@@ -4913,7 +4935,7 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
-	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -5211,11 +5233,14 @@ type stubServer struct {
 
 	// Customizable implementations of server handlers.
 	emptyCall      func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
+	unaryCall      func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	fullDuplexCall func(stream testpb.TestService_FullDuplexCallServer) error
 
 	// A client connected to this service the test may use.  Created in Start().
 	client testpb.TestServiceClient
 	cc     *grpc.ClientConn
+
+	addr string // address of listener
 
 	cleanups []func() // Lambdas executed in Stop(); populated by Start().
 
@@ -5224,6 +5249,10 @@ type stubServer struct {
 
 func (ss *stubServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	return ss.emptyCall(ctx, in)
+}
+
+func (ss *stubServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return ss.unaryCall(ctx, in)
 }
 
 func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
@@ -5240,6 +5269,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	if err != nil {
 		return fmt.Errorf(`net.Listen("tcp", "localhost:0") = %v`, err)
 	}
+	ss.addr = lis.Addr().String()
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
@@ -5247,7 +5277,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 
-	target := ss.r.Scheme() + ":///" + lis.Addr().String()
+	target := ss.r.Scheme() + ":///" + ss.addr
 
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	cc, err := grpc.Dial(target, opts...)
@@ -5255,7 +5285,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 		return fmt.Errorf("grpc.Dial(%q) = %v", target, err)
 	}
 	ss.cc = cc
-	ss.r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}})
 	if err := ss.waitForReady(cc); err != nil {
 		return err
 	}
@@ -5264,6 +5294,10 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 
 	ss.client = testpb.NewTestServiceClient(cc)
 	return nil
+}
+
+func (ss *stubServer) newServiceConfig(sc string) {
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: sc})
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
@@ -5791,7 +5825,7 @@ func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func (c *errCodec) String() string {
+func (c *errCodec) Name() string {
 	return "Fermat's near-miss."
 }
 
@@ -6953,7 +6987,7 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	time.Sleep(100 * time.Millisecond)
 	rcw.writeHeaders(http2.HeadersFrameParam{
 		StreamID:      tc.getCurrentStreamID(),
-		BlockFragment: rcw.encodeHeader("oversize", strings.Join(val, "")),
+		BlockFragment: rcw.encodeRawHeader("oversize", strings.Join(val, "")),
 		EndStream:     false,
 		EndHeaders:    true,
 	})
@@ -7010,7 +7044,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	for i, maxTimeout := range timeouts {
 		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			deadline, ok := ctx.Deadline()
-			timeout := deadline.Sub(time.Now())
+			timeout := time.Until(deadline)
 			minTimeout := maxTimeout - 5*time.Second
 			if !ok || timeout < minTimeout || timeout > maxTimeout {
 				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
@@ -7075,10 +7109,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
-	r.InitialAddrs([]resolver.Address{
+	r.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
-	})
+	}})
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
@@ -7158,20 +7192,21 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	defer cancel()
 	go func() {
 		time.Sleep(time.Second)
-		r.NewServiceConfig(`{
-			"methodConfig": [
-			{
-				"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "UnaryCall"
-				}
-				],
-				"maxRequestMessageBytes": 0
-			}
-			]
-		}`)
-		r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+		r.UpdateState(resolver.State{
+			Addresses: []resolver.Address{{Addr: te.srvAddr}},
+			ServiceConfig: `{
+		    "methodConfig": [
+		        {
+		            "name": [
+		                {
+		                    "service": "grpc.testing.TestService",
+		                    "method": "UnaryCall"
+		                }
+		            ],
+                    "maxRequestMessageBytes": 0
+		        }
+		    ]
+		}`})
 	}()
 	// We wait a second before providing a service config and resolving
 	// addresses.  So this will wait for that and then honor the
@@ -7184,5 +7219,223 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 	if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, nil", err)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
+	// Non-gRPC content-type fallback path.
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Missing content-type fallback path.
+	for httpCode := range transport.HTTPStatusConvTab {
+		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+			":status", fmt.Sprintf("%d", httpCode),
+			// Omitting content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		})
+	}
+
+	// Malformed HTTP status when fallback.
+	doHTTPHeaderTest(t, codes.Internal, []string{
+		":status", "abc",
+		// Omitting content type to switch to HTTP mode.
+		"grpc-status", "1", // Make up a gRPC status error
+		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+	})
+}
+
+// Testing erroneous ResponseHeader or Trailers-only (delivered in the first HEADERS frame).
+func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
+	for _, test := range []struct {
+		header  []string
+		errCode codes.Code
+	}{
+		{
+			// missing gRPC status.
+			header: []string{
+				":status", "403",
+				"content-type", "application/grpc",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			// malformed grpc-status.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "abc",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// Malformed grpc-tags-bin field.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "0",
+				"grpc-tags-bin", "???",
+			},
+			errCode: codes.Internal,
+		},
+		{
+			// gRPC status error.
+			header: []string{
+				":status", "502",
+				"content-type", "application/grpc",
+				"grpc-status", "3",
+			},
+			errCode: codes.InvalidArgument,
+		},
+	} {
+		doHTTPHeaderTest(t, test.errCode, test.header)
+	}
+}
+
+// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
+	for _, test := range []struct {
+		responseHeader []string
+		trailer        []string
+		errCode        codes.Code
+	}{
+		{
+			responseHeader: []string{
+				":status", "200",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// trailer missing grpc-status
+				":status", "502",
+			},
+			errCode: codes.Unknown,
+		},
+		{
+			responseHeader: []string{
+				":status", "404",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Internal,
+		},
+	} {
+		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
+	}
+}
+
+func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
+	header := []string{
+		":status", "200",
+		"content-type", "application/grpc",
+	}
+	doHTTPHeaderTest(t, codes.Internal, header, header, header)
+}
+
+type httpServer struct {
+	headerFields [][]string
+}
+
+func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
+	if len(headerFields)%2 == 1 {
+		panic("odd number of kv args")
+	}
+
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	for len(headerFields) > 0 {
+		k, v := headerFields[0], headerFields[1]
+		headerFields = headerFields[2:]
+		henc.WriteField(hpack.HeaderField{Name: k, Value: v})
+	}
+
+	return framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndStream:     endStream,
+		EndHeaders:    true,
+	})
+}
+
+func (s *httpServer) start(t *testing.T, lis net.Listener) {
+	// Launch an HTTP server to send back header.
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error accepting connection: %v", err)
+			return
+		}
+		defer conn.Close()
+		// Read preface sent by client.
+		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
+			t.Errorf("Error at server-side while reading preface from client. Err: %v", err)
+			return
+		}
+		reader := bufio.NewReader(conn)
+		writer := bufio.NewWriter(conn)
+		framer := http2.NewFramer(writer, reader)
+		if err = framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
+			return
+		}
+		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
+
+		var sid uint32
+		// Read frames until a header is received.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Errorf("Error at server-side while reading frame. Err: %v", err)
+				return
+			}
+			if hframe, ok := frame.(*http2.HeadersFrame); ok {
+				sid = hframe.Header().StreamID
+				break
+			}
+		}
+		for i, headers := range s.headerFields {
+			if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
+				t.Errorf("Error at server-side while writing headers. Err: %v", err)
+				return
+			}
+			writer.Flush()
+		}
+	}()
+}
+
+func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	server := &httpServer{
+		headerFields: headerFields,
+	}
+	server.start(t, lis)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("failed to dial due to err: %v", err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("error creating stream due to err: %v", err)
+	}
+	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
+		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
 }

@@ -176,7 +176,7 @@ func toRadians(num float64) float64 {
 // The formula is based on http://mathforum.org/library/drmath/view/51879.html.
 func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
 	const CordFactor float64 = 1e7
-	const R float64 = float64(6371000) // earth radius in metres
+	const R = float64(6371000) // earth radius in metres
 	lat1 := toRadians(float64(p1.Latitude) / CordFactor)
 	lat2 := toRadians(float64(p2.Latitude) / CordFactor)
 	lng1 := toRadians(float64(p1.Longitude) / CordFactor)

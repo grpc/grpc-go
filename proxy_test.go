@@ -140,7 +140,7 @@ func testHTTPConnect(t *testing.T, proxyURLModify func(*url.URL) *url.URL, proxy
 	// Dial to proxy server.
 	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 		if deadline, ok := ctx.Deadline(); ok {
-			return net.DialTimeout("tcp", addr, deadline.Sub(time.Now()))
+			return net.DialTimeout("tcp", addr, time.Until(deadline))
 		}
 		return net.Dial("tcp", addr)
 	})
