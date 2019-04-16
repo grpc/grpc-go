@@ -27,12 +27,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/balancer"
+	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
-
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -195,7 +196,7 @@ type scStateChange struct {
 
 type fakeEDSBalancer struct {
 	cc                 balancer.ClientConn
-	edsChan            chan *xdspb.ClusterLoadAssignment
+	edsChan            chan *edspb.ClusterLoadAssignment
 	childPolicy        chan *loadBalancingConfig
 	fallbackPolicy     chan *loadBalancingConfig
 	subconnStateChange chan *scStateChange
@@ -211,7 +212,7 @@ func (f *fakeEDSBalancer) Close() {
 	latestFakeEdsBalancer = nil
 }
 
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
 	f.edsChan <- edsResp
 }
 
@@ -225,7 +226,7 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
-		edsChan:            make(chan *xdspb.ClusterLoadAssignment, 10),
+		edsChan:            make(chan *edspb.ClusterLoadAssignment, 10),
 		childPolicy:        make(chan *loadBalancingConfig, 10),
 		fallbackPolicy:     make(chan *loadBalancingConfig, 10),
 		subconnStateChange: make(chan *scStateChange, 10),
@@ -340,7 +341,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 			if edsLB := getLatestEdsBalancer(); edsLB != nil { // edsLB won't change between the two iterations
 				select {
 				case gotEDS := <-edsLB.edsChan:
-					if !reflect.DeepEqual(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
+					if !proto.Equal(gotEDS, testClusterLoadAssignmentWithoutEndpoints) {
 						t.Fatalf("edsBalancer got eds: %v, want %v", gotEDS, testClusterLoadAssignmentWithoutEndpoints)
 					}
 				case <-time.After(time.Second):
@@ -381,7 +382,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 	}()
 	for _, test := range []struct {
 		cfg                 *testBalancerConfig
-		responseToSend      *xdspb.DiscoveryResponse
+		responseToSend      *discoverypb.DiscoveryResponse
 		expectedChildPolicy *loadBalancingConfig
 	}{
 		{

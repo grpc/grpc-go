@@ -31,10 +31,12 @@ import (
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/xds/edsbalancer"
+	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -96,7 +98,7 @@ func (b *xdsBalancerBuilder) Name() string {
 // It's implemented by the real eds balancer and a fake testing eds balancer.
 type edsBalancerInterface interface {
 	// HandleEDSResponse passes the received EDS message from traffic director to eds balancer.
-	HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment)
+	HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 	// HandleChildPolicy updates the eds balancer the intra-cluster load balancing policy to use.
 	HandleChildPolicy(name string, config json.RawMessage)
 	// HandleSubConnStateChange handles state change for SubConn.
@@ -387,26 +389,26 @@ func (x *xdsBalancer) HandleBalancerConfig(config json.RawMessage) error {
 
 type cdsResp struct {
 	ctx  context.Context
-	resp *xdspb.Cluster
+	resp *cdspb.Cluster
 }
 
 type edsResp struct {
 	ctx  context.Context
-	resp *xdspb.ClusterLoadAssignment
+	resp *edspb.ClusterLoadAssignment
 }
 
 func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) error {
 	var update interface{}
 	switch u := resp.(type) {
-	case *xdspb.Cluster:
+	case *cdspb.Cluster:
 		if u.GetName() != x.cc.Target() {
 			return fmt.Errorf("unmatched service name, got %s, want %s", u.GetName(), x.cc.Target())
 		}
-		if u.GetType() != xdspb.Cluster_EDS {
-			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), xdspb.Cluster_EDS)
+		if u.GetType() != cdspb.Cluster_EDS {
+			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), cdspb.Cluster_EDS)
 		}
 		update = &cdsResp{ctx: ctx, resp: u}
-	case *xdspb.ClusterLoadAssignment:
+	case *edspb.ClusterLoadAssignment:
 		// nothing to check
 		update = &edsResp{ctx: ctx, resp: u}
 	default:
