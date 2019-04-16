@@ -1544,7 +1544,6 @@ func (s) TestGetMethodConfig(t *testing.T) {
     ]
 }`})
 
-
 	// Make sure service config has been processed by grpc.
 	for {
 		if mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall"); mc.WaitForReady != nil && !*mc.WaitForReady {
