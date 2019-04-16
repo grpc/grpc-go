@@ -1,19 +1,19 @@
 /*
-*
-* Copyright 2014 gRPC authors.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
+ *
+ * Copyright 2014 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
 
 package grpc
@@ -240,7 +240,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
-	ctx = newContextWithRPCInfoPreloader(ctx, c.failFast, c.codec, cp, comp)
+	ctx = newContextWithRPCInfo(ctx, c.failFast, c.codec, cp, comp)
 	sh := cc.dopts.copts.StatsHandler
 	var beginTime time.Time
 	if sh != nil {
@@ -671,25 +671,13 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if !cs.desc.ClientStreams {
 		cs.sentLast = true
 	}
-	preparedMsg, ok := m.(*PreparedMsg)
-	var hdr, payload, data []byte
-	if !ok {
-		// The input interface is not a prepared msg.
-		// Marshal and Compress the data at this point
-		data, err = encode(cs.codec, m)
-		if err != nil {
-			return err
-		}
-		compData, err := compress(data, cs.cp, cs.comp)
-		if err != nil {
-			return err
-		}
-		hdr, payload = msgHeader(data, compData)
 
-	} else {
-		hdr, payload = preparedMsg.hdr, preparedMsg.payload
-		data = preparedMsg.encodedData
+	// load hdr, payload, data
+	hdr, payload, data, err := prepareMsg(m, cs.codec, cs.cp, cs.comp)
+	if err != nil {
+		return err
 	}
+
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > *cs.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.callInfo.maxSendMessageSize)
@@ -1152,24 +1140,13 @@ func (as *addrConnStream) SendMsg(m interface{}) (err error) {
 	if !as.desc.ClientStreams {
 		as.sentLast = true
 	}
-	preparedMsg, ok := m.(*PreparedMsg)
-	var hdr, payld, data []byte
-	if !ok {
-		// The input interface is not a prepared msg.
-		// Marshal and Compress the data at this point
-		data, err = encode(as.codec, m)
-		if err != nil {
-			return err
-		}
-		compData, err := compress(data, as.cp, as.comp)
-		if err != nil {
-			return err
-		}
-		hdr, payld = msgHeader(data, compData)
 
-	} else {
-		hdr, payld = preparedMsg.hdr, preparedMsg.payload
+	// load hdr, payload, data
+	hdr, payld, _, err := prepareMsg(m, as.codec, as.cp, as.comp)
+	if err != nil {
+		return err
 	}
+
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payld) > *as.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payld), *as.callInfo.maxSendMessageSize)
@@ -1406,24 +1383,13 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.t.IncrMsgSent()
 		}
 	}()
-	preparedMsg, ok := m.(*PreparedMsg)
-	var hdr, payload, data []byte
-	if !ok {
-		// The input interface is not a prepared msg.
-		// Marshal and Compress the data at this point
-		data, err = encode(ss.codec, m)
-		if err != nil {
-			return err
-		}
-		compData, err := compress(data, ss.cp, ss.comp)
-		if err != nil {
-			return err
-		}
-		hdr, payload = msgHeader(data, compData)
-	} else {
-		hdr, payload = preparedMsg.hdr, preparedMsg.payload
-		data = preparedMsg.encodedData
+
+	// load hdr, payload, data
+	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)
+	if err != nil {
+		return err
 	}
+
 	// TODO(dfawley): should we be checking len(data) instead?
 	if len(payload) > ss.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), ss.maxSendMessageSize)
@@ -1514,4 +1480,28 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 // The returned string is in the format of "/service/method".
 func MethodFromServerStream(stream ServerStream) (string, bool) {
 	return Method(stream.Context())
+}
+
+// prepareMsg returns the hdr, payload and data
+// using the compressors passed or using the
+// passed preparedmsg
+func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
+	preparedMsg, ok := m.(*PreparedMsg)
+	if !ok {
+		// The input interface is not a prepared msg.
+		// Marshal and Compress the data at this point
+		data, err = encode(codec, m)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		compData, err := compress(data, cp, comp)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		hdr, payload = msgHeader(data, compData)
+	} else {
+		hdr, payload = preparedMsg.hdr, preparedMsg.payload
+		data = preparedMsg.encodedData
+	}
+	return
 }

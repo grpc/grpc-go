@@ -21,7 +21,6 @@ package grpc
 import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	// "google.golang.org/grpc/encoding"
 )
 
 // PreparedMsg is responsible for creating a Marshalled and Compressed object
@@ -35,11 +34,14 @@ type PreparedMsg struct {
 
 // checks if the rpcInfo has all the correct information
 func checkPreparedMsgContext(rpc *rpcInfo) error {
-	if rpc.codec == nil {
-		return status.Errorf(codes.Internal, "grpc : preparedmsg : rpcInfo.codec is nil")
+	if rpc.preloaderInfo == nil {
+		return status.Errorf(codes.Internal, "grpc : rpcInfo.preloaderInfo is nil")
 	}
-	if rpc.cp == nil && rpc.comp == nil {
-		return status.Errorf(codes.Internal, "grpc : preparedmsg : rpcInfo.cp is nil AND rpcInfo.comp is nil")
+	if rpc.preloaderInfo.codec == nil {
+		return status.Errorf(codes.Internal, "grpc : rpcInfo.preloaderInfo.codec is nil")
+	}
+	if rpc.preloaderInfo.cp == nil && rpc.preloaderInfo.comp == nil {
+		return status.Errorf(codes.Internal, "grpc : rpcInfo.preloaderInfo.cp is nil and rpcInfo.preloaderInfo.comp is nil")
 	}
 	return nil
 }
@@ -59,12 +61,12 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	if err != nil {
 		return err
 	}
-	data, err := encode(rpcInfo.codec, msg)
+	data, err := encode(rpcInfo.preloaderInfo.codec, msg)
 	if err != nil {
 		return err
 	}
 	p.encodedData = data
-	compData, err := compress(data, rpcInfo.cp, rpcInfo.comp)
+	compData, err := compress(data, rpcInfo.preloaderInfo.cp, rpcInfo.preloaderInfo.comp)
 	if err != nil {
 		return err
 	}

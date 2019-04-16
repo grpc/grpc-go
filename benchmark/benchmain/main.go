@@ -247,28 +247,15 @@ func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
 }
 
 func makeFuncUnconstrainedStreamPreloaded(benchFeatures stats.Features) (func(int), func(int), func()) {
-	tc, cleanup := makeClient(benchFeatures)
-
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
-	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
-		stream, err := tc.UnconstrainedStreamingCall(context.Background())
-		if err != nil {
-			grpclog.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
-		}
-		streams[i] = stream
-	}
-
-	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, benchFeatures.ReqSizeBytes)
-	req := &testpb.SimpleRequest{
-		ResponseType: pl.Type,
-		ResponseSize: int32(benchFeatures.RespSizeBytes),
-		Payload:      pl,
-	}
+	streams, req, cleanup := makeSetupUnconstrainedStream(benchFeatures)
 
 	preparedMsg := make([]*grpc.PreparedMsg, len(streams))
 	for i, stream := range streams {
 		preparedMsg[i] = &grpc.PreparedMsg{}
-		preparedMsg[i].Encode(stream, req)
+		err := preparedMsg[i].Encode(stream, req)
+		if err != nil {
+			grpclog.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[i], req, stream, err)
+		}
 	}
 
 	return func(pos int) {
@@ -279,6 +266,16 @@ func makeFuncUnconstrainedStreamPreloaded(benchFeatures stats.Features) (func(in
 }
 
 func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(int), func()) {
+	streams, req, cleanup := makeSetupUnconstrainedStream(benchFeatures)
+
+	return func(pos int) {
+			streams[pos].Send(req)
+		}, func(pos int) {
+			streams[pos].Recv()
+		}, cleanup
+}
+
+func makeSetupUnconstrainedStream(benchFeatures stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, func()) {
 	tc, cleanup := makeClient(benchFeatures)
 
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
@@ -297,11 +294,7 @@ func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(
 		Payload:      pl,
 	}
 
-	return func(pos int) {
-			streams[pos].Send(req)
-		}, func(pos int) {
-			streams[pos].Recv()
-		}, cleanup
+	return streams, req, cleanup
 }
 
 func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
@@ -623,25 +616,3 @@ func after(data []stats.BenchResults) {
 		f.Close()
 	}
 }
-
-// nopCompressor is a compressor that just copies data.
-// type nopCompressor struct{}
-
-// func (nopCompressor) Do(w io.Writer, p []byte) error {
-// 	n, err := w.Write(p)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if n != len(p) {
-// 		return fmt.Errorf("nopCompressor.Write: wrote %v bytes; want %v", n, len(p))
-// 	}
-// 	return nil
-// }
-
-// func (nopCompressor) Type() string { return "nop" }
-
-// // nopDecompressor is a decompressor that just copies data.
-// type nopDecompressor struct{}
-
-// func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return ioutil.ReadAll(r) }
-// func (nopDecompressor) Type() string                   { return "nop" }

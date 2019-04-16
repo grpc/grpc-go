@@ -1,19 +1,19 @@
 /*
- *
- * Copyright 2014 gRPC authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
+*
+* Copyright 2014 gRPC authors.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*
  */
 
 //go:generate protoc --go_out=plugins=grpc:. codec_perf/perf.proto
@@ -53,7 +53,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip"
 
-	// "google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -1470,27 +1469,27 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "EmptyCall"
-                }
-            ],
-            "waitForReady": true,
-            "timeout": ".001s"
-        },
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService"
-                }
-            ],
-            "waitForReady": false
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "EmptyCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": ".001s"
+		},
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService"
+			}
+			],
+			"waitForReady": false
+		}
+		]
+	}`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1509,27 +1508,27 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	}
 
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "UnaryCall"
-                }
-            ],
-            "waitForReady": true,
-            "timeout": ".001s"
-        },
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService"
-                }
-            ],
-            "waitForReady": false
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "UnaryCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": ".001s"
+		},
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService"
+			}
+			],
+			"waitForReady": false
+		}
+		]
+	}`)
 
 	// Make sure service config has been processed by grpc.
 	for {
@@ -1555,23 +1554,23 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "EmptyCall"
-                },
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "FullDuplexCall"
-                }
-            ],
-            "waitForReady": false,
-            "timeout": ".001s"
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "EmptyCall"
+			},
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"waitForReady": false,
+			"timeout": ".001s"
+		}
+		]
+	}`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1595,23 +1594,23 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "EmptyCall"
-                },
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "FullDuplexCall"
-                }
-            ],
-            "waitForReady": true,
-            "timeout": ".001s"
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "EmptyCall"
+			},
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": ".001s"
+		}
+		]
+	}`)
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1640,23 +1639,23 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "EmptyCall"
-                },
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "FullDuplexCall"
-                }
-            ],
-            "waitForReady": true,
-            "timeout": "3600s"
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "EmptyCall"
+			},
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": "3600s"
+		}
+		]
+	}`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1685,23 +1684,23 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.NewServiceConfig(`{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "EmptyCall"
-                },
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "FullDuplexCall"
-                }
-            ],
-            "waitForReady": true,
-            "timeout": ".000000001s"
-        }
-    ]
-}`)
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "EmptyCall"
+			},
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": ".000000001s"
+		}
+		]
+	}`)
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1748,23 +1747,23 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	}
 
 	scjs := `{
-    "methodConfig": [
-        {
-            "name": [
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "UnaryCall"
-                },
-                {
-                    "service": "grpc.testing.TestService",
-                    "method": "FullDuplexCall"
-                }
-            ],
-            "maxRequestMessageBytes": 2048,
-            "maxResponseMessageBytes": 2048
-        }
-    ]
-}`
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "UnaryCall"
+			},
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"maxRequestMessageBytes": 2048,
+			"maxResponseMessageBytes": 2048
+		}
+		]
+	}`
 
 	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te1 := testServiceConfigSetup(t, e)
@@ -2002,18 +2001,18 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-	    "methodConfig": [
-	        {
-	            "name": [
-	                {
-	                    "service": "grpc.testing.TestService",
-	                    "method": "FullDuplexCall"
-	                }
-	            ],
-	            "waitForReady": true,
-	            "timeout": "10s"
-	        }
-	    ]
+		"methodConfig": [
+		{
+			"name": [
+			{
+				"service": "grpc.testing.TestService",
+				"method": "FullDuplexCall"
+			}
+			],
+			"waitForReady": true,
+			"timeout": "10s"
+		}
+		]
 	}`)
 	// Make sure service config has been processed by grpc.
 	for {
@@ -2058,7 +2057,6 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 }
 
 func (s) TestPreloaderClientSend(t *testing.T) {
-	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		testPreloaderClientSend(t, e)
 	}
@@ -2078,45 +2076,61 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	const smallSize = 1
-	const largeSize = 4 * 1024 * 1024
-	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: int32(largeSize),
-		},
-	}
-	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            smallPayload,
-	}
-
 	// Test for streaming RPC recv.
 	// Set context for send with proper RPC Information
 	stream, err := tc.FullDuplexCall(te.ctx, grpc.UseCompressor("gzip"))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	preparedMsg := &grpc.PreparedMsg{}
-	err = preparedMsg.Encode(stream, sreq)
-	if err != nil {
-		t.Fatalf("PrepareMsg failed : %v", err)
+	var index int
+	for index < len(reqSizes) {
+		respParam := []*testpb.ResponseParameters{
+			{
+				Size: int32(respSizes[index]),
+			},
+		}
+
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := &testpb.StreamingOutputCallRequest{
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
+			ResponseParameters: respParam,
+			Payload:            payload,
+		}
+		preparedMsg := &grpc.PreparedMsg{}
+		err = preparedMsg.Encode(stream, req)
+		if err != nil {
+			t.Fatalf("PrepareMsg failed for size %d : %v", reqSizes[index], err)
+		}
+		if err := stream.SendMsg(preparedMsg); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		reply, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+		}
+		pt := reply.GetPayload().GetType()
+		if pt != testpb.PayloadType_COMPRESSABLE {
+			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
+		}
+		size := len(reply.GetPayload().GetBody())
+		if size != int(respSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		}
+		index++
 	}
-	if err := stream.SendMsg(preparedMsg); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, preparedMsg, err)
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
-	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
 	}
 }
 
 func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
-	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
 	}
@@ -7145,17 +7159,17 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	go func() {
 		time.Sleep(time.Second)
 		r.NewServiceConfig(`{
-		    "methodConfig": [
-		        {
-		            "name": [
-		                {
-		                    "service": "grpc.testing.TestService",
-		                    "method": "UnaryCall"
-		                }
-		            ],
-                    "maxRequestMessageBytes": 0
-		        }
-		    ]
+			"methodConfig": [
+			{
+				"name": [
+				{
+					"service": "grpc.testing.TestService",
+					"method": "UnaryCall"
+				}
+				],
+				"maxRequestMessageBytes": 0
+			}
+			]
 		}`)
 		r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	}()
