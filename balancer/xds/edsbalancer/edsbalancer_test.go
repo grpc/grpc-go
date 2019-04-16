@@ -26,13 +26,14 @@ import (
 	"strconv"
 	"testing"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	xdstypepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	typespb "github.com/gogo/protobuf/types"
+	typespb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	addresspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
+	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	endpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
+	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
@@ -44,25 +45,25 @@ var (
 )
 
 type clusterLoadAssignmentBuilder struct {
-	v *xdspb.ClusterLoadAssignment
+	v *edspb.ClusterLoadAssignment
 }
 
 func newClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) *clusterLoadAssignmentBuilder {
-	var drops []*xdspb.ClusterLoadAssignment_Policy_DropOverload
+	var drops []*edspb.ClusterLoadAssignment_Policy_DropOverload
 	for i, d := range dropPercents {
-		drops = append(drops, &xdspb.ClusterLoadAssignment_Policy_DropOverload{
+		drops = append(drops, &edspb.ClusterLoadAssignment_Policy_DropOverload{
 			Category: fmt.Sprintf("test-drop-%d", i),
-			DropPercentage: &xdstypepb.FractionalPercent{
+			DropPercentage: &percentpb.FractionalPercent{
 				Numerator:   d,
-				Denominator: xdstypepb.FractionalPercent_HUNDRED,
+				Denominator: percentpb.FractionalPercent_HUNDRED,
 			},
 		})
 	}
 
 	return &clusterLoadAssignmentBuilder{
-		v: &xdspb.ClusterLoadAssignment{
+		v: &edspb.ClusterLoadAssignment{
 			ClusterName: clusterName,
-			Policy: &xdspb.ClusterLoadAssignment_Policy{
+			Policy: &edspb.ClusterLoadAssignment_Policy{
 				DropOverloads: drops,
 			},
 		},
@@ -70,7 +71,7 @@ func newClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) 
 }
 
 func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uint32, addrsWithPort []string) {
-	var lbEndPoints []endpointpb.LbEndpoint
+	var lbEndPoints []*endpointpb.LbEndpoint
 	for _, a := range addrsWithPort {
 		host, portStr, err := net.SplitHostPort(a)
 		if err != nil {
@@ -81,21 +82,21 @@ func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uin
 			panic("failed to atoi " + portStr)
 		}
 
-		lbEndPoints = append(lbEndPoints, endpointpb.LbEndpoint{
+		lbEndPoints = append(lbEndPoints, &endpointpb.LbEndpoint{
 			HostIdentifier: &endpointpb.LbEndpoint_Endpoint{
 				Endpoint: &endpointpb.Endpoint{
-					Address: &corepb.Address{
-						Address: &corepb.Address_SocketAddress{
-							SocketAddress: &corepb.SocketAddress{
-								Protocol: corepb.TCP,
+					Address: &addresspb.Address{
+						Address: &addresspb.Address_SocketAddress{
+							SocketAddress: &addresspb.SocketAddress{
+								Protocol: addresspb.SocketAddress_TCP,
 								Address:  host,
-								PortSpecifier: &corepb.SocketAddress_PortValue{
+								PortSpecifier: &addresspb.SocketAddress_PortValue{
 									PortValue: uint32(port)}}}}}}},
 		)
 	}
 
-	clab.v.Endpoints = append(clab.v.Endpoints, endpointpb.LocalityLbEndpoints{
-		Locality: &corepb.Locality{
+	clab.v.Endpoints = append(clab.v.Endpoints, &endpointpb.LocalityLbEndpoints{
+		Locality: &basepb.Locality{
 			Region:  "",
 			Zone:    "",
 			SubZone: subzone,
@@ -105,7 +106,7 @@ func (clab *clusterLoadAssignmentBuilder) addLocality(subzone string, weight uin
 	})
 }
 
-func (clab *clusterLoadAssignmentBuilder) build() *xdspb.ClusterLoadAssignment {
+func (clab *clusterLoadAssignmentBuilder) build() *edspb.ClusterLoadAssignment {
 	return clab.v
 }
 
