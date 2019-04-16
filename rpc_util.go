@@ -712,15 +712,6 @@ type compressorInfo struct {
 	comp  encoding.Compressor
 }
 
-func (r *rpcInfo) setEncodingCompressor(e encoding.Compressor) {
-	if r.preloaderInfo == nil {
-		r.preloaderInfo = &compressorInfo{
-			comp: e,
-		}
-	}
-	r.preloaderInfo.comp = e
-}
-
 type rpcInfoContextKey struct{}
 
 func newContextWithRPCInfo(ctx context.Context, failfast bool, codec baseCodec, cp Compressor, comp encoding.Compressor) context.Context {
