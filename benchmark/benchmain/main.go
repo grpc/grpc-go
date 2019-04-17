@@ -45,6 +45,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -191,6 +193,16 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 		opts = append(opts,
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
+		)
+	}
+	if benchFeatures.EnablePreloader {
+		sopts = append(sopts,
+			grpc.RPCCompressor(nopCompressor{}),
+			grpc.RPCDecompressor(nopDecompressor{}),
+		)
+		opts = append(opts,
+			grpc.WithCompressor(nopCompressor{}),
+			grpc.WithDecompressor(nopDecompressor{}),
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
@@ -618,3 +630,25 @@ func after(data []stats.BenchResults) {
 		f.Close()
 	}
 }
+
+// nopCompressor is a compressor that just copies data.
+type nopCompressor struct{}
+
+func (nopCompressor) Do(w io.Writer, p []byte) error {
+	n, err := w.Write(p)
+	if err != nil {
+		return err
+	}
+	if n != len(p) {
+		return fmt.Errorf("nopCompressor.Write: wrote %v bytes; want %v", n, len(p))
+	}
+	return nil
+}
+
+func (nopCompressor) Type() string { return "nop" }
+
+// nopDecompressor is a decompressor that just copies data.
+type nopDecompressor struct{}
+
+func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return ioutil.ReadAll(r) }
+func (nopDecompressor) Type() string                   { return "nop" }
