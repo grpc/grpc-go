@@ -40,7 +40,7 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	ctx := s.Context()
 	rpcInfo, ok := rpcInfoFromContext(ctx)
 	if !ok {
-		return status.Errorf(codes.Internal, "grpc: PreparedMsg : unable to get rpcInfo")
+		return status.Errorf(codes.Internal, "grpc: unable to get rpcInfo")
 	}
 
 	// check if the context has the relevant information to prepareMsg
