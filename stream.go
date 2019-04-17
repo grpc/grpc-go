@@ -1495,22 +1495,19 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // using the compressors passed or using the
 // passed preparedmsg
 func prepareMsg(m interface{}, codec baseCodec, cp Compressor, comp encoding.Compressor) (hdr, payload, data []byte, err error) {
-	preparedMsg, ok := m.(*PreparedMsg)
-	if !ok {
-		// The input interface is not a prepared msg.
-		// Marshal and Compress the data at this point
-		data, err = encode(codec, m)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		compData, err := compress(data, cp, comp)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		hdr, payload = msgHeader(data, compData)
-	} else {
-		hdr, payload = preparedMsg.hdr, preparedMsg.payload
-		data = preparedMsg.encodedData
+	if preparedMsg, ok := m.(*PreparedMsg); ok {
+		return preparedMsg.hdr, preparedMsg.payload, preparedMsg.encodedData, nil
 	}
-	return
+	// The input interface is not a prepared msg.
+	// Marshal and Compress the data at this point
+	data, err = encode(codec, m)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	compData, err := compress(data, cp, comp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	hdr, payload = msgHeader(data, compData)
+	return hdr, payload, data, nil
 }

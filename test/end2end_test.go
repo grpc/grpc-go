@@ -1,19 +1,19 @@
 /*
-*
-* Copyright 2014 gRPC authors.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
+ *
+ * Copyright 2014 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
 
 //go:generate protoc --go_out=plugins=grpc:. codec_perf/perf.proto
@@ -55,7 +55,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
-
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -1769,23 +1768,23 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	}
 
 	scjs := `{
-		"methodConfig": [
-		{
-			"name": [
-			{
-				"service": "grpc.testing.TestService",
-				"method": "UnaryCall"
-			},
-			{
-				"service": "grpc.testing.TestService",
-				"method": "FullDuplexCall"
-			}
-			],
-			"maxRequestMessageBytes": 2048,
-			"maxResponseMessageBytes": 2048
-		}
-		]
-	}`
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "maxRequestMessageBytes": 2048,
+            "maxResponseMessageBytes": 2048
+        }
+    ]
+}`
 
 	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te1 := testServiceConfigSetup(t, e)

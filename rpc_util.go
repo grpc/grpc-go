@@ -168,7 +168,6 @@ func defaultCallInfo() *callInfo {
 	return &callInfo{
 		failFast:              true,
 		maxRetryRPCBufferSize: 256 * 1024, // 256KB
-		// compressorType : 	   "gzip",
 	}
 }
 

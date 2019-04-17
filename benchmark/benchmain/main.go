@@ -127,9 +127,12 @@ func streamBenchmark(startTimer func(), stopTimer func(uint64), benchFeatures st
 }
 
 func unconstrainedStreamBenchmark(benchFeatures stats.Features, warmuptime, benchtime time.Duration) (uint64, uint64) {
-	sender, recver, cleanup := makeFuncUnconstrainedStream(benchFeatures)
+	var sender, recver func(int)
+	var cleanup func()
 	if benchFeatures.EnablePreloader {
 		sender, recver, cleanup = makeFuncUnconstrainedStreamPreloaded(benchFeatures)
+	} else {
+		sender, recver, cleanup = makeFuncUnconstrainedStream(benchFeatures)
 	}
 	defer cleanup()
 
@@ -246,7 +249,7 @@ func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
 }
 
 func makeFuncUnconstrainedStreamPreloaded(benchFeatures stats.Features) (func(int), func(int), func()) {
-	streams, req, cleanup := makeSetupUnconstrainedStream(benchFeatures)
+	streams, req, cleanup := setupUnconstrainedStream(benchFeatures)
 
 	preparedMsg := make([]*grpc.PreparedMsg, len(streams))
 	for i, stream := range streams {
@@ -265,7 +268,7 @@ func makeFuncUnconstrainedStreamPreloaded(benchFeatures stats.Features) (func(in
 }
 
 func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(int), func()) {
-	streams, req, cleanup := makeSetupUnconstrainedStream(benchFeatures)
+	streams, req, cleanup := setupUnconstrainedStream(benchFeatures)
 
 	return func(pos int) {
 			streams[pos].Send(req)
@@ -274,7 +277,7 @@ func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(
 		}, cleanup
 }
 
-func makeSetupUnconstrainedStream(benchFeatures stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, func()) {
+func setupUnconstrainedStream(benchFeatures stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, func()) {
 	tc, cleanup := makeClient(benchFeatures)
 
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
