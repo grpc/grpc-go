@@ -17,7 +17,7 @@
 
 package wrr
 
-// WRR blah
+// WRR defines an interface that implements weighted round robin.
 type WRR interface {
 	// Add adds an item with weight to the WRR set.
 	Add(item interface{}, weight int64)

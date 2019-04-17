@@ -19,15 +19,15 @@ package wrr
 
 import "google.golang.org/grpc/internal/grpcrand"
 
-// randWeighted is a wrapped weighted item that is used to implement weighted random algorithm.
-type randWeighted struct {
+// weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.
+type weightedItem struct {
 	Item   interface{}
 	Weight int64
 }
 
 // randomWRR is a struct that contains weighted items implement weighted random algorithm.
 type randomWRR struct {
-	items        []*randWeighted
+	items        []*weightedItem
 	sumOfWeights int64
 }
 
@@ -40,6 +40,7 @@ func (rw *randomWRR) Next() (item interface{}) {
 	if rw.sumOfWeights == 0 {
 		return nil
 	}
+	// Random number in [0, sum).
 	randomWeight := grpcrand.Int63n(rw.sumOfWeights)
 	for _, item := range rw.items {
 		randomWeight = randomWeight - item.Weight
@@ -52,7 +53,7 @@ func (rw *randomWRR) Next() (item interface{}) {
 }
 
 func (rw *randomWRR) Add(item interface{}, weight int64) {
-	rItem := &randWeighted{Item: item, Weight: weight}
+	rItem := &weightedItem{Item: item, Weight: weight}
 	rw.items = append(rw.items, rItem)
 	rw.sumOfWeights += weight
 }
