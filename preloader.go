@@ -27,7 +27,6 @@ import (
 type PreparedMsg struct {
 	// Struct for preparing msg before sending them
 	encodedData []byte
-	compredData []byte
 	hdr         []byte
 	payload     []byte
 }
@@ -65,7 +64,6 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	if err != nil {
 		return err
 	}
-	p.compredData = compData
 	p.hdr, p.payload = msgHeader(data, compData)
 	return nil
 }
