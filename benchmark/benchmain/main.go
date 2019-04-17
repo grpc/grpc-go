@@ -22,7 +22,7 @@ Package main provides benchmark with setting flags.
 An example to run some benchmarks with profiling enabled:
 
 go run benchmark/benchmain/main.go -benchtime=10s -workloads=all \
-  -compression=on -maxConcurrentCalls=1 -trace=off \
+  -compression=gzip -maxConcurrentCalls=1 -trace=off \
   -reqSizeBytes=1,1048576 -respSizeBytes=1,1048576 -networkMode=Local \
   -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000 -resultFile=result
 
@@ -74,9 +74,14 @@ const (
 	modeOn   = "on"
 	modeOff  = "off"
 	modeBoth = "both"
+
+	// compression modes
+	modeAll  = "all"
+	modeGzip = "gzip"
+	modeNop  = "nop"
 )
 
-var allCompressionModes = []string{modeOn, modeOff, modeBoth}
+var allCompressionModes = []string{modeOff, modeGzip, modeNop, modeAll}
 var allTraceModes = []string{modeOn, modeOff, modeBoth}
 var allPreloaderModes = []string{modeOn, modeOff, modeBoth}
 
@@ -103,7 +108,7 @@ var (
 	benchtime              time.Duration
 	memProfile, cpuProfile string
 	memProfileRate         int
-	enableCompressor       []bool
+	modeCompressor         []string
 	enablePreloader        []bool
 	enableChannelz         []bool
 	networkMode            string
@@ -185,17 +190,7 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
-	if benchFeatures.EnableCompressor {
-		sopts = append(sopts,
-			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
-			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
-		)
-		opts = append(opts,
-			grpc.WithCompressor(grpc.NewGZIPCompressor()),
-			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
-		)
-	}
-	if benchFeatures.EnablePreloader {
+	if benchFeatures.ModeCompressor == "nop" || benchFeatures.EnablePreloader {
 		sopts = append(sopts,
 			grpc.RPCCompressor(nopCompressor{}),
 			grpc.RPCDecompressor(nopDecompressor{}),
@@ -203,6 +198,16 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 		opts = append(opts,
 			grpc.WithCompressor(nopCompressor{}),
 			grpc.WithDecompressor(nopDecompressor{}),
+		)
+	}
+	if benchFeatures.ModeCompressor == "gzip" {
+		sopts = append(sopts,
+			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
+			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
+		)
+		opts = append(opts,
+			grpc.WithCompressor(grpc.NewGZIPCompressor()),
+			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
@@ -418,7 +423,7 @@ func init() {
 		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
 	}
-	enableCompressor = setMode(compressorMode)
+	modeCompressor = setModeCompressor(compressorMode)
 	enablePreloader = setMode(preloaderMode)
 	enableTrace = setMode(traceMode)
 	enableChannelz = setMode(channelzOn)
@@ -447,8 +452,25 @@ func setMode(name string) []bool {
 		return []bool{false, true}
 	default:
 		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
-			name, name, strings.Join(allCompressionModes, ", "))
+			name, name, strings.Join(allTraceModes, ", "))
 		return []bool{}
+	}
+}
+
+func setModeCompressor(name string) []string {
+	switch name {
+	case modeNop:
+		return []string{"off", "nop"}
+	case modeGzip:
+		return []string{"off", "gzip"}
+	case modeAll:
+		return []string{"off", "nop", "gzip"}
+	case modeOff:
+		return []string{"off"}
+	default:
+		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
+			name, name, strings.Join(allCompressionModes, ", "))
+		return []string{}
 	}
 }
 
@@ -506,7 +528,7 @@ func main() {
 	featuresPos := make([]int, 10)
 	// 0:enableTracing 1:ltc 2:kbps 3:mtu 4:maxC 5:reqSize 6:respSize
 	featuresNum := []int{len(enableTrace), len(ltc), len(kbps), len(mtu),
-		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor), len(enableChannelz), len(enablePreloader)}
+		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(modeCompressor), len(enableChannelz), len(enablePreloader)}
 	initalPos := make([]int, len(featuresPos))
 	s := stats.NewStats(10)
 	s.SortLatency()
@@ -546,7 +568,7 @@ func main() {
 			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[4]],
 			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
 			RespSizeBytes:      respSizeBytes[featuresPos[6]],
-			EnableCompressor:   enableCompressor[featuresPos[7]],
+			ModeCompressor:     modeCompressor[featuresPos[7]],
 			EnableChannelz:     enableChannelz[featuresPos[8]],
 			EnablePreloader:    enablePreloader[featuresPos[9]],
 		}
