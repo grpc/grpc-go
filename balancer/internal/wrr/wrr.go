@@ -22,5 +22,7 @@ type WRR interface {
 	// Add adds an item with weight to the WRR set.
 	Add(item interface{}, weight int64)
 	// Next returns the next picked item.
+	//
+	// Next needs to be thread safe.
 	Next() interface{}
 }

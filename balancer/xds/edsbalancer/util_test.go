@@ -19,6 +19,7 @@
 package edsbalancer
 
 import (
+	"sync"
 	"testing"
 
 	"google.golang.org/grpc/balancer/internal/wrr"
@@ -36,8 +37,10 @@ type testWRR struct {
 		weight int64
 	}
 	length int
-	idx    int   // The index of the item that will be picked
-	count  int64 // The number of times the current item has been picked.
+
+	mu    sync.Mutex
+	idx   int   // The index of the item that will be picked
+	count int64 // The number of times the current item has been picked.
 }
 
 func newTestWRR() wrr.WRR {
@@ -53,12 +56,14 @@ func (twrr *testWRR) Add(item interface{}, weight int64) {
 }
 
 func (twrr *testWRR) Next() interface{} {
+	twrr.mu.Lock()
 	iww := twrr.itemsWithWeight[twrr.idx]
 	twrr.count++
 	if twrr.count >= iww.weight {
 		twrr.idx = (twrr.idx + 1) % twrr.length
 		twrr.count = 0
 	}
+	twrr.mu.Unlock()
 	return iww.item
 }
 
