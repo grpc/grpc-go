@@ -24,8 +24,10 @@ import (
 	"google.golang.org/grpc/balancer/internal/wrr"
 )
 
-// testWRR is a deterministic WRR implementation. With this, the balancer
-// behavior becomes deterministic and easier to test.
+// testWRR is a deterministic WRR implementation.
+//
+// The real implementation does random WRR. testWRR makes the balancer behavior
+// deterministic and easier to test.
 //
 // With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
 type testWRR struct {
