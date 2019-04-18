@@ -28,38 +28,43 @@ import (
 	"testing"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	xdsendpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	xdsdiscoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	structpb "github.com/golang/protobuf/ptypes/struct"
+	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
+	addresspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
+	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	endpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
+	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 var (
 	testServiceName = "test/foo"
-	testCDSReq      = &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+	testCDSReq      = &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					grpcHostname: {
-						Kind: &types.Value_StringValue{StringValue: testServiceName},
+						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
 					},
 				},
 			},
 		},
 		TypeUrl: cdsType,
 	}
-	testEDSReq = &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+	testEDSReq = &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: true},
+						Kind: &structpb.Value_BoolValue{BoolValue: true},
 					},
 				},
 			},
@@ -67,12 +72,12 @@ var (
 		ResourceNames: []string{testServiceName},
 		TypeUrl:       edsType,
 	}
-	testEDSReqWithoutEndpoints = &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+	testEDSReqWithoutEndpoints = &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: false},
+						Kind: &structpb.Value_BoolValue{BoolValue: false},
 					},
 				},
 			},
@@ -80,14 +85,14 @@ var (
 		ResourceNames: []string{testServiceName},
 		TypeUrl:       edsType,
 	}
-	testCluster = &xdspb.Cluster{
+	testCluster = &cdspb.Cluster{
 		Name:                 testServiceName,
-		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
-		LbPolicy:             xdspb.Cluster_ROUND_ROBIN,
+		ClusterDiscoveryType: &cdspb.Cluster_Type{Type: cdspb.Cluster_EDS},
+		LbPolicy:             cdspb.Cluster_ROUND_ROBIN,
 	}
 	marshaledCluster, _ = proto.Marshal(testCluster)
-	testCDSResp         = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+	testCDSResp         = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: cdsType,
 				Value:   marshaledCluster,
@@ -95,24 +100,24 @@ var (
 		},
 		TypeUrl: cdsType,
 	}
-	testClusterLoadAssignment = &xdspb.ClusterLoadAssignment{
+	testClusterLoadAssignment = &edspb.ClusterLoadAssignment{
 		ClusterName: testServiceName,
-		Endpoints: []xdsendpointpb.LocalityLbEndpoints{
+		Endpoints: []*endpointpb.LocalityLbEndpoints{
 			{
-				Locality: &xdscorepb.Locality{
+				Locality: &basepb.Locality{
 					Region:  "asia-east1",
 					Zone:    "1",
 					SubZone: "sa",
 				},
-				LbEndpoints: []xdsendpointpb.LbEndpoint{
+				LbEndpoints: []*endpointpb.LbEndpoint{
 					{
-						HostIdentifier: &xdsendpointpb.LbEndpoint_Endpoint{
-							Endpoint: &xdsendpointpb.Endpoint{
-								Address: &xdscorepb.Address{
-									Address: &xdscorepb.Address_SocketAddress{
-										SocketAddress: &xdscorepb.SocketAddress{
+						HostIdentifier: &endpointpb.LbEndpoint_Endpoint{
+							Endpoint: &endpointpb.Endpoint{
+								Address: &addresspb.Address{
+									Address: &addresspb.Address_SocketAddress{
+										SocketAddress: &addresspb.SocketAddress{
 											Address: "1.1.1.1",
-											PortSpecifier: &xdscorepb.SocketAddress_PortValue{
+											PortSpecifier: &addresspb.SocketAddress_PortValue{
 												PortValue: 10001,
 											},
 											ResolverName: "dns",
@@ -122,12 +127,12 @@ var (
 								HealthCheckConfig: nil,
 							},
 						},
-						Metadata: &xdscorepb.Metadata{
-							FilterMetadata: map[string]*types.Struct{
+						Metadata: &basepb.Metadata{
+							FilterMetadata: map[string]*structpb.Struct{
 								"xx.lb": {
-									Fields: map[string]*types.Value{
+									Fields: map[string]*structpb.Value{
 										"endpoint_name": {
-											Kind: &types.Value_StringValue{
+											Kind: &structpb.Value_StringValue{
 												StringValue: "some.endpoint.name",
 											},
 										},
@@ -137,7 +142,7 @@ var (
 						},
 					},
 				},
-				LoadBalancingWeight: &types.UInt32Value{
+				LoadBalancingWeight: &wrpb.UInt32Value{
 					Value: 1,
 				},
 				Priority: 0,
@@ -145,8 +150,8 @@ var (
 		},
 	}
 	marshaledClusterLoadAssignment, _ = proto.Marshal(testClusterLoadAssignment)
-	testEDSResp                       = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+	testEDSResp                       = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: edsType,
 				Value:   marshaledClusterLoadAssignment,
@@ -154,14 +159,14 @@ var (
 		},
 		TypeUrl: edsType,
 	}
-	testClusterLoadAssignmentWithoutEndpoints = &xdspb.ClusterLoadAssignment{
+	testClusterLoadAssignmentWithoutEndpoints = &edspb.ClusterLoadAssignment{
 		ClusterName: testServiceName,
-		Endpoints: []xdsendpointpb.LocalityLbEndpoints{
+		Endpoints: []*endpointpb.LocalityLbEndpoints{
 			{
-				Locality: &xdscorepb.Locality{
+				Locality: &basepb.Locality{
 					SubZone: "sa",
 				},
-				LoadBalancingWeight: &types.UInt32Value{
+				LoadBalancingWeight: &wrpb.UInt32Value{
 					Value: 128,
 				},
 				Priority: 0,
@@ -170,8 +175,8 @@ var (
 		Policy: nil,
 	}
 	marshaledClusterLoadAssignmentWithoutEndpoints, _ = proto.Marshal(testClusterLoadAssignmentWithoutEndpoints)
-	testEDSRespWithoutEndpoints                       = &xdspb.DiscoveryResponse{
-		Resources: []types.Any{
+	testEDSRespWithoutEndpoints                       = &discoverypb.DiscoveryResponse{
+		Resources: []*anypb.Any{
 			{
 				TypeUrl: edsType,
 				Value:   marshaledClusterLoadAssignmentWithoutEndpoints,
@@ -187,16 +192,16 @@ type testTrafficDirector struct {
 }
 
 type request struct {
-	req *xdspb.DiscoveryRequest
+	req *discoverypb.DiscoveryRequest
 	err error
 }
 
 type response struct {
-	resp *xdspb.DiscoveryResponse
+	resp *discoverypb.DiscoveryResponse
 	err  error
 }
 
-func (ttd *testTrafficDirector) StreamAggregatedResources(s xdsdiscoverypb.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+func (ttd *testTrafficDirector) StreamAggregatedResources(s adspb.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 	for {
 		req, err := s.Recv()
 		if err != nil {
@@ -233,7 +238,7 @@ func (ttd *testTrafficDirector) StreamAggregatedResources(s xdsdiscoverypb.Aggre
 	}
 }
 
-func (ttd *testTrafficDirector) DeltaAggregatedResources(xdsdiscoverypb.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
+func (ttd *testTrafficDirector) DeltaAggregatedResources(adspb.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
 	return status.Error(codes.Unimplemented, "")
 }
 
@@ -254,8 +259,8 @@ func newTestTrafficDirector() *testTrafficDirector {
 
 type testConfig struct {
 	doCDS                bool
-	expectedRequests     []*xdspb.DiscoveryRequest
-	responsesToSend      []*xdspb.DiscoveryResponse
+	expectedRequests     []*discoverypb.DiscoveryRequest
+	responsesToSend      []*discoverypb.DiscoveryResponse
 	expectedADSResponses []proto.Message
 	adsErr               error
 	svrErr               error
@@ -268,7 +273,7 @@ func setupServer(t *testing.T) (addr string, td *testTrafficDirector, cleanup fu
 	}
 	svr := grpc.NewServer()
 	td = newTestTrafficDirector()
-	xdsdiscoverypb.RegisterAggregatedDiscoveryServiceServer(svr, td)
+	adspb.RegisterAggregatedDiscoveryServiceServer(svr, td)
 	go svr.Serve(lis)
 	return lis.Addr().String(), td, func() {
 		svr.Stop()
@@ -280,14 +285,14 @@ func (s) TestXdsClientResponseHandling(t *testing.T) {
 	for _, test := range []*testConfig{
 		{
 			doCDS:                true,
-			expectedRequests:     []*xdspb.DiscoveryRequest{testCDSReq, testEDSReq},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testCDSResp, testEDSResp},
+			expectedRequests:     []*discoverypb.DiscoveryRequest{testCDSReq, testEDSReq},
+			responsesToSend:      []*discoverypb.DiscoveryResponse{testCDSResp, testEDSResp},
 			expectedADSResponses: []proto.Message{testCluster, testClusterLoadAssignment},
 		},
 		{
 			doCDS:                false,
-			expectedRequests:     []*xdspb.DiscoveryRequest{testEDSReqWithoutEndpoints},
-			responsesToSend:      []*xdspb.DiscoveryResponse{testEDSRespWithoutEndpoints},
+			expectedRequests:     []*discoverypb.DiscoveryRequest{testEDSReqWithoutEndpoints},
+			responsesToSend:      []*discoverypb.DiscoveryResponse{testEDSRespWithoutEndpoints},
 			expectedADSResponses: []proto.Message{testClusterLoadAssignmentWithoutEndpoints},
 		},
 	} {
@@ -330,11 +335,11 @@ func (s) TestXdsClientLoseContact(t *testing.T) {
 	for _, test := range []*testConfig{
 		{
 			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{},
+			responsesToSend: []*discoverypb.DiscoveryResponse{},
 		},
 		{
 			doCDS:           false,
-			responsesToSend: []*xdspb.DiscoveryResponse{testEDSRespWithoutEndpoints},
+			responsesToSend: []*discoverypb.DiscoveryResponse{testEDSRespWithoutEndpoints},
 		},
 	} {
 		testXdsClientLoseContactRemoteClose(t, test)
@@ -343,15 +348,15 @@ func (s) TestXdsClientLoseContact(t *testing.T) {
 	for _, test := range []*testConfig{
 		{
 			doCDS:           false,
-			responsesToSend: []*xdspb.DiscoveryResponse{testCDSResp}, // CDS response when in custom mode.
+			responsesToSend: []*discoverypb.DiscoveryResponse{testCDSResp}, // CDS response when in custom mode.
 		},
 		{
 			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{{}}, // response with 0 resources is an error case.
+			responsesToSend: []*discoverypb.DiscoveryResponse{{}}, // response with 0 resources is an error case.
 		},
 		{
 			doCDS:           true,
-			responsesToSend: []*xdspb.DiscoveryResponse{testCDSResp},
+			responsesToSend: []*discoverypb.DiscoveryResponse{testCDSResp},
 			adsErr:          errors.New("some ads parsing error from xdsBalancer"),
 		},
 	} {

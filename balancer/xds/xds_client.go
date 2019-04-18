@@ -25,13 +25,16 @@ import (
 	"sync"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdscorepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	xdsdiscoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
+	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
@@ -56,7 +59,7 @@ var (
 type client struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
-	cli          xdsdiscoverypb.AggregatedDiscoveryServiceClient
+	cli          adspb.AggregatedDiscoveryServiceClient
 	opts         balancer.BuildOptions
 	balancerName string // the traffic director name
 	serviceName  string // the user dial target name
@@ -123,13 +126,13 @@ func (c *client) dial() {
 	c.mu.Unlock()
 }
 
-func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
-	cdsReq := &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
+	cdsReq := &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					grpcHostname: {
-						Kind: &types.Value_StringValue{StringValue: c.serviceName},
+						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
 					},
 				},
 			},
@@ -139,13 +142,13 @@ func (c *client) newCDSRequest() *xdspb.DiscoveryRequest {
 	return cdsReq
 }
 
-func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
-	edsReq := &xdspb.DiscoveryRequest{
-		Node: &xdscorepb.Node{
-			Metadata: &types.Struct{
-				Fields: map[string]*types.Value{
+func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
+	edsReq := &discoverypb.DiscoveryRequest{
+		Node: &basepb.Node{
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
 					endpointRequired: {
-						Kind: &types.Value_BoolValue{BoolValue: c.enableCDS},
+						Kind: &structpb.Value_BoolValue{BoolValue: c.enableCDS},
 					},
 				},
 			},
@@ -157,7 +160,7 @@ func (c *client) newEDSRequest() *xdspb.DiscoveryRequest {
 }
 
 func (c *client) makeADSCall() {
-	c.cli = xdsdiscoverypb.NewAggregatedDiscoveryServiceClient(c.cc)
+	c.cli = adspb.NewAggregatedDiscoveryServiceClient(c.cc)
 	retryCount := 0
 	var doRetry bool
 
@@ -228,15 +231,15 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			// start a new call as we receive CDS response when in EDS-only mode.
 			return
 		}
-		var adsResp types.DynamicAny
-		if err := types.UnmarshalAny(&resources[0], &adsResp); err != nil {
+		var adsResp ptypes.DynamicAny
+		if err := ptypes.UnmarshalAny(resources[0], &adsResp); err != nil {
 			grpclog.Warningf("xds: failed to unmarshal resources due to %v.", err)
 			return
 		}
 		switch adsResp.Message.(type) {
-		case *xdspb.Cluster:
+		case *cdspb.Cluster:
 			expectCDS = false
-		case *xdspb.ClusterLoadAssignment:
+		case *edspb.ClusterLoadAssignment:
 			if expectCDS {
 				grpclog.Warningf("xds: expecting CDS response, got EDS response instead.")
 				return
