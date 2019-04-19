@@ -22,7 +22,7 @@ Package main provides benchmark with setting flags.
 An example to run some benchmarks with profiling enabled:
 
 go run benchmark/benchmain/main.go -benchtime=10s -workloads=all \
-  -compression=on -maxConcurrentCalls=1 -trace=off \
+  -compression=gzip -maxConcurrentCalls=1 -trace=off \
   -reqSizeBytes=1,1048576 -respSizeBytes=1,1048576 -networkMode=Local \
   -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000 -resultFile=result
 
@@ -74,10 +74,16 @@ const (
 	modeOn   = "on"
 	modeOff  = "off"
 	modeBoth = "both"
+
+	// compression modes
+	modeAll  = "all"
+	modeGzip = "gzip"
+	modeNop  = "nop"
 )
 
-var allCompressionModes = []string{modeOn, modeOff, modeBoth}
+var allCompressionModes = []string{modeOff, modeGzip, modeNop, modeAll}
 var allTraceModes = []string{modeOn, modeOff, modeBoth}
+var allPreloaderModes = []string{modeOn, modeOff, modeBoth}
 
 const (
 	workloadsUnary         = "unary"
@@ -102,7 +108,8 @@ var (
 	benchtime              time.Duration
 	memProfile, cpuProfile string
 	memProfileRate         int
-	enableCompressor       []bool
+	modeCompressor         []string
+	enablePreloader        []bool
 	enableChannelz         []bool
 	networkMode            string
 	benchmarkResultFile    string
@@ -127,7 +134,13 @@ func streamBenchmark(startTimer func(), stopTimer func(uint64), benchFeatures st
 }
 
 func unconstrainedStreamBenchmark(benchFeatures stats.Features, warmuptime, benchtime time.Duration) (uint64, uint64) {
-	sender, recver, cleanup := makeFuncUnconstrainedStream(benchFeatures)
+	var sender, recver func(int)
+	var cleanup func()
+	if benchFeatures.EnablePreloader {
+		sender, recver, cleanup = makeFuncUnconstrainedStreamPreloaded(benchFeatures)
+	} else {
+		sender, recver, cleanup = makeFuncUnconstrainedStream(benchFeatures)
+	}
 	defer cleanup()
 
 	var (
@@ -177,7 +190,7 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
-	if benchFeatures.EnableCompressor {
+	if benchFeatures.ModeCompressor == "nop" {
 		sopts = append(sopts,
 			grpc.RPCCompressor(nopCompressor{}),
 			grpc.RPCDecompressor(nopDecompressor{}),
@@ -185,6 +198,16 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 		opts = append(opts,
 			grpc.WithCompressor(nopCompressor{}),
 			grpc.WithDecompressor(nopDecompressor{}),
+		)
+	}
+	if benchFeatures.ModeCompressor == "gzip" {
+		sopts = append(sopts,
+			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
+			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
+		)
+		opts = append(opts,
+			grpc.WithCompressor(grpc.NewGZIPCompressor()),
+			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
@@ -242,7 +265,36 @@ func makeFuncStream(benchFeatures stats.Features) (func(int), func()) {
 	}, cleanup
 }
 
+func makeFuncUnconstrainedStreamPreloaded(benchFeatures stats.Features) (func(int), func(int), func()) {
+	streams, req, cleanup := setupUnconstrainedStream(benchFeatures)
+
+	preparedMsg := make([]*grpc.PreparedMsg, len(streams))
+	for i, stream := range streams {
+		preparedMsg[i] = &grpc.PreparedMsg{}
+		err := preparedMsg[i].Encode(stream, req)
+		if err != nil {
+			grpclog.Fatalf("%v.Encode(%v, %v) = %v", preparedMsg[i], req, stream, err)
+		}
+	}
+
+	return func(pos int) {
+			streams[pos].SendMsg(preparedMsg[pos])
+		}, func(pos int) {
+			streams[pos].Recv()
+		}, cleanup
+}
+
 func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(int), func()) {
+	streams, req, cleanup := setupUnconstrainedStream(benchFeatures)
+
+	return func(pos int) {
+			streams[pos].Send(req)
+		}, func(pos int) {
+			streams[pos].Recv()
+		}, cleanup
+}
+
+func setupUnconstrainedStream(benchFeatures stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, func()) {
 	tc, cleanup := makeClient(benchFeatures)
 
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
@@ -261,11 +313,7 @@ func makeFuncUnconstrainedStream(benchFeatures stats.Features) (func(int), func(
 		Payload:      pl,
 	}
 
-	return func(pos int) {
-			streams[pos].Send(req)
-		}, func(pos int) {
-			streams[pos].Recv()
-		}, cleanup
+	return streams, req, cleanup
 }
 
 func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
@@ -323,6 +371,7 @@ var useBufconn = flag.Bool("bufconn", false, "Use in-memory connection instead o
 func init() {
 	var (
 		workloads, traceMode, compressorMode, readLatency, channelzOn string
+		preloaderMode                                                 string
 		readKbps, readMtu, readMaxConcurrentCalls                     intSliceType
 		readReqSizeBytes, readRespSizeBytes                           intSliceType
 	)
@@ -345,6 +394,8 @@ func init() {
 	flag.StringVar(&cpuProfile, "cpuProfile", "", "Enables CPU profiling output to the filename provided")
 	flag.StringVar(&compressorMode, "compression", modeOff,
 		fmt.Sprintf("Compression mode - One of: %v", strings.Join(allCompressionModes, ", ")))
+	flag.StringVar(&preloaderMode, "preloader", modeOff,
+		fmt.Sprintf("Preloader mode - One of: %v", strings.Join(allPreloaderModes, ", ")))
 	flag.StringVar(&benchmarkResultFile, "resultFile", "", "Save the benchmark result into a binary file")
 	flag.StringVar(&networkMode, "networkMode", "", "Network mode includes LAN, WAN, Local and Longhaul")
 	flag.Parse()
@@ -372,7 +423,8 @@ func init() {
 		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
 	}
-	enableCompressor = setMode(compressorMode)
+	modeCompressor = setModeCompressor(compressorMode)
+	enablePreloader = setMode(preloaderMode)
 	enableTrace = setMode(traceMode)
 	enableChannelz = setMode(channelzOn)
 	// Time input formats as (time + unit).
@@ -400,8 +452,25 @@ func setMode(name string) []bool {
 		return []bool{false, true}
 	default:
 		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
-			name, name, strings.Join(allCompressionModes, ", "))
+			name, name, strings.Join(allTraceModes, ", "))
 		return []bool{}
+	}
+}
+
+func setModeCompressor(name string) []string {
+	switch name {
+	case modeNop:
+		return []string{"nop"}
+	case modeGzip:
+		return []string{"gzip"}
+	case modeAll:
+		return []string{"off", "nop", "gzip"}
+	case modeOff:
+		return []string{"off"}
+	default:
+		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
+			name, name, strings.Join(allCompressionModes, ", "))
+		return []string{}
 	}
 }
 
@@ -456,10 +525,10 @@ func printThroughput(requestCount uint64, requestSize int, responseCount uint64,
 
 func main() {
 	before()
-	featuresPos := make([]int, 9)
+	featuresPos := make([]int, 10)
 	// 0:enableTracing 1:ltc 2:kbps 3:mtu 4:maxC 5:reqSize 6:respSize
 	featuresNum := []int{len(enableTrace), len(ltc), len(kbps), len(mtu),
-		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor), len(enableChannelz)}
+		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(modeCompressor), len(enableChannelz), len(enablePreloader)}
 	initalPos := make([]int, len(featuresPos))
 	s := stats.NewStats(10)
 	s.SortLatency()
@@ -499,8 +568,9 @@ func main() {
 			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[4]],
 			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
 			RespSizeBytes:      respSizeBytes[featuresPos[6]],
-			EnableCompressor:   enableCompressor[featuresPos[7]],
+			ModeCompressor:     modeCompressor[featuresPos[7]],
 			EnableChannelz:     enableChannelz[featuresPos[8]],
+			EnablePreloader:    enablePreloader[featuresPos[9]],
 		}
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
