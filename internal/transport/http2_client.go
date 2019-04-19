@@ -75,11 +75,9 @@ type http2Client struct {
 
 	perRPCCreds []credentials.PerRPCCredentials
 
-	// Boolean to keep track of reading activity on transport.
-	// 1 is true and 0 is false.
-	activity         uint32 // Accessed atomically.
 	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
+	lr               lastRead
 
 	statsHandler stats.Handler
 
@@ -127,6 +125,16 @@ type http2Client struct {
 	onClose  func()
 
 	bufferPool *bufferPool
+}
+
+type lastRead struct {
+	// Stores the Unix time in nanoseconds. This time cannot be directly embedded
+	// in the http2Client struct because this field is accessed using functions
+	// from the atomic package.  And on 32-bit machines, it is the caller's
+	// responsibility to arrange for 64-bit alignment of this field.
+	timeNano int64
+	// Channel to keep track of read activity on the transport.
+	ch chan struct{}
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -259,6 +267,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
+		activityCh:            make(chan struct{}, 1),
+		lr:                    lastRead{ch: make(chan struct{}, 1)},
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -286,6 +296,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 	}
 	if t.keepaliveEnabled {
 		t.kpDormancyCond = sync.NewCond(&t.mu)
+		go t.activityMonitor()
 		go t.keepalive()
 	}
 	// Start the reader goroutine for incoming message. Each transport has
@@ -1233,7 +1244,7 @@ func (t *http2Client) reader() {
 	}
 	t.conn.SetReadDeadline(time.Time{}) // reset deadline once we get the settings frame (we didn't time out, yay!)
 	if t.keepaliveEnabled {
-		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+		t.lr.ch <- struct{}{}
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
@@ -1248,7 +1259,10 @@ func (t *http2Client) reader() {
 		t.controlBuf.throttle()
 		frame, err := t.framer.fr.ReadFrame()
 		if t.keepaliveEnabled {
-			atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+			select {
+			case t.lr.ch <- struct{}{}:
+			default:
+			}
 		}
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
@@ -1292,16 +1306,53 @@ func (t *http2Client) reader() {
 	}
 }
 
-// keepalive running in a separate goroutune makes sure the connection is alive by sending pings.
+// activityMonitory reads from the activity channel (which is written to, when
+// there is a read), and updates the lastRead.timeNano atomic.
+func (t *http2Client) activityMonitor() {
+	for {
+		select {
+		case <-t.lr.ch:
+			atomic.StoreInt64(&t.lr.timeNano, time.Now().UnixNano())
+		case <-t.ctx.Done():
+			return
+		}
+	}
+}
+
+func minTime(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// keepalive running in a separate goroutune makes sure the connection is alive
+// by sending pings.
 func (t *http2Client) keepalive() {
 	p := &ping{data: [8]byte{}}
+	// True iff a ping has been sent, and no data has been received since then.
+	outstandingPing := false
+	// Amount of time remaining before which we should receive an ACK for the
+	// last sent ping.
+	timeoutLeft := time.Duration(0)
+	// UnixNanos recorded before we go block on the timer. This is required to
+	// check for read activity since then.
+	prevNano := time.Now().UTC().UnixNano()
 	timer := time.NewTimer(t.kp.Time)
 	for {
 		select {
 		case <-timer.C:
-			if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
-				timer.Reset(t.kp.Time)
+			if lastRead := atomic.LoadInt64(&t.lr.timeNano); lastRead > prevNano {
+				// Read activity since the last time we were here.
+				outstandingPing = false
+				prevNano = time.Now().UTC().UnixNano()
+				// Timer should fire at kp.Time seconds from lastRead time.
+				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(prevNano))
 				continue
+			}
+			if outstandingPing && timeoutLeft <= 0 {
+				t.Close()
+				return
 			}
 			t.mu.Lock()
 			if t.state == closing {
@@ -1315,36 +1366,37 @@ func (t *http2Client) keepalive() {
 				return
 			}
 			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
+				// If a ping was sent out previously (because there were active
+				// streams at that point) which wasn't acked and it's timeout
+				// hadn't fired, but we got here and are about to go dormant,
+				// we should make sure that we unconditionally send a ping once
+				// we awaken.
+				outstandingPing = false
 				t.kpDormant = true
 				t.kpDormancyCond.Wait()
 			}
 			t.kpDormant = false
 			t.mu.Unlock()
 
-			if channelz.IsOn() {
-				atomic.AddInt64(&t.czData.kpCount, 1)
-			}
 			// We get here either because we were dormant and a new stream was
 			// created which unblocked the Wait() call, or because the
 			// keepalive timer expired. In both cases, we need to send a ping.
-			t.controlBuf.put(p)
-
-			timer.Reset(t.kp.Timeout)
-			select {
-			case <-timer.C:
-				if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
-					timer.Reset(t.kp.Time)
-					continue
+			if !outstandingPing {
+				if channelz.IsOn() {
+					atomic.AddInt64(&t.czData.kpCount, 1)
 				}
-				infof("transport: closing client transport due to idleness.")
-				t.Close()
-				return
-			case <-t.ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
-				return
+				t.controlBuf.put(p)
+				timeoutLeft = t.kp.Timeout
+				outstandingPing = true
 			}
+			// The amount of time to sleep here is the minimum of kp.Time and
+			// timeoutLeft. This will ensure that we wait only for kp.Time
+			// before sending out the next ping (for cases where the ping is
+			// acked).
+			sleepDuration = minTime(kp.Time, timeoutLeft)
+			timeoutLeft -= sleepDuration
+			prevNano = time.Now().UTC().UnixNano()
+			timer.Reset(timeoutLeft)
 		case <-t.ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
