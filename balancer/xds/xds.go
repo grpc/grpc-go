@@ -416,6 +416,10 @@ func parseFullServiceConfig(s string) *serviceConfig {
 }
 
 func (x *xdsBalancer) UpdateResolverState(s resolver.State) {
+	defer func() {
+		x.lastResolverUpdate = &s
+	}()
+
 	var update interface{}
 	// if service config does not change for this update, we only send address update.
 	if x.lastResolverUpdate != nil && x.lastResolverUpdate.ServiceConfig == s.ServiceConfig {
