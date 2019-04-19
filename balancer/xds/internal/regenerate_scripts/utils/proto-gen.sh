@@ -9,6 +9,7 @@ packages=(
   envoy/api/v2/core:base_go_proto
   envoy/api/v2/endpoint:endpoint_go_proto
   envoy/type:percent_go_proto
+  envoy/service/load_stats/v2:lrs_go_grpc
 )
 
 if [ -z $GOPATH ]; then echo 'empty $GOPATH, exiting.'; exit 1
