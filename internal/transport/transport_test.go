@@ -462,6 +462,8 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 // TestInflightStreamClosing ensures that closing in-flight stream
 // sends status error to concurrent stream reader.
 func TestInflightStreamClosing(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
@@ -501,6 +503,8 @@ func TestInflightStreamClosing(t *testing.T) {
 // An idle client is one who doesn't make any RPC calls for a duration of
 // MaxConnectionIdle time.
 func TestMaxConnectionIdle(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
@@ -529,6 +533,8 @@ func TestMaxConnectionIdle(t *testing.T) {
 
 // TestMaxConenctionIdleNegative tests that a server will not send GoAway to a non-idle(busy) client.
 func TestMaxConnectionIdleNegative(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
@@ -556,6 +562,8 @@ func TestMaxConnectionIdleNegative(t *testing.T) {
 
 // TestMaxConnectionAge tests that a server will send GoAway after a duration of MaxConnectionAge.
 func TestMaxConnectionAge(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionAge: 2 * time.Second,
@@ -588,6 +596,8 @@ const (
 
 // TestKeepaliveServer tests that a server closes connection with a client that doesn't respond to keepalive pings.
 func TestKeepaliveServer(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    2 * time.Second,
@@ -632,6 +642,8 @@ func TestKeepaliveServer(t *testing.T) {
 
 // TestKeepaliveServerNegative tests that a server doesn't close connection with a client that responds to keepalive pings.
 func TestKeepaliveServerNegative(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    2 * time.Second,
@@ -653,6 +665,8 @@ func TestKeepaliveServerNegative(t *testing.T) {
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
+	t.Parallel()
+
 	done := make(chan net.Conn, 1)
 	tr, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
@@ -677,6 +691,8 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
+	t.Parallel()
+
 	done := make(chan net.Conn, 1)
 	tr, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:    2 * time.Second, // Keepalive time = 2 sec.
@@ -700,6 +716,8 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+	t.Parallel()
+
 	done := make(chan net.Conn, 1)
 	tr, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:    2 * time.Second, // Keepalive time = 2 sec.
@@ -728,6 +746,8 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
+	t.Parallel()
+
 	s, tr, cancel := setUpWithOptions(t, 0, &ServerConfig{MaxStreams: math.MaxUint32}, normal, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
@@ -747,16 +767,18 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 }
 
 func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 2 * time.Second,
+			MinTime: 5 * time.Second,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:                50 * time.Millisecond,
-			Timeout:             1 * time.Second,
-			PermitWithoutStream: true,
+			Time:                2 * time.Second, // Keepalive time = 2 sec.
+			Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+			PermitWithoutStream: true,            // Run keepalive even with no RPCs.
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
@@ -782,15 +804,17 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 }
 
 func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 2 * time.Second,
+			MinTime: 5 * time.Second,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    50 * time.Millisecond,
-			Timeout: 1 * time.Second,
+			Time:    2 * time.Second, // Keepalive time = 2 sec.
+			Timeout: 1 * time.Second, // Keepalive timeout = 1 sec.
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
@@ -819,16 +843,18 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 }
 
 func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime:             100 * time.Millisecond,
+			MinTime:             1 * time.Second,
 			PermitWithoutStream: true,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:                101 * time.Millisecond,
-			Timeout:             1 * time.Second,
+			Time:                2 * time.Second,
+			Timeout:             5 * time.Second,
 			PermitWithoutStream: true,
 		},
 	}
@@ -838,7 +864,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	defer client.Close()
 
 	// Give keepalive enough time.
-	time.Sleep(3 * time.Second)
+	time.Sleep(10 * time.Second)
 	// Assert that connection is healthy.
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -848,15 +874,17 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 }
 
 func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
+	t.Parallel()
+
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 100 * time.Millisecond,
+			MinTime: 1 * time.Second,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    101 * time.Millisecond,
-			Timeout: 1 * time.Second,
+			Time:    2 * time.Second,
+			Timeout: 5 * time.Second,
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
@@ -869,7 +897,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	}
 
 	// Give keepalive enough time.
-	time.Sleep(3 * time.Second)
+	time.Sleep(10 * time.Second)
 	// Assert that connection is healthy.
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -951,18 +979,35 @@ func performOneRPC(ct ClientTransport) {
 func TestClientMix(t *testing.T) {
 	s, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
+	done := make(chan struct{})
+
 	go func(s *server) {
-		time.Sleep(5 * time.Second)
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
 		s.stop()
 	}(s)
+
 	go func(ct ClientTransport) {
-		<-ct.Error()
+		select {
+		case <-done:
+		case <-ct.Error():
+		}
 		ct.Close()
 	}(ct)
+
+	var wg sync.WaitGroup
 	for i := 0; i < 1000; i++ {
 		time.Sleep(10 * time.Millisecond)
-		go performOneRPC(ct)
+		wg.Add(1)
+		go func() {
+			performOneRPC(ct)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
+	close(done)
 }
 
 func TestLargeMessage(t *testing.T) {
