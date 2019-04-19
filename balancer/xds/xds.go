@@ -255,6 +255,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			x.fallbackLB.Close()
 			x.startFallBackBalancer(u)
 		}
+		x.config = u
 	case *resolverUpdate:
 		// in case of x.config == nil where it returns early, we set the fallbackInitData here.
 		x.fallbackInitData = u.addrUpdate
