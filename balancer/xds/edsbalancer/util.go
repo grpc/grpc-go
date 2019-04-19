@@ -25,9 +25,10 @@ type dropper struct {
 	numerator   uint32
 	denominator uint32
 	w           wrr.WRR
+	category    string
 }
 
-func newDropper(numerator, denominator uint32) *dropper {
+func newDropper(numerator, denominator uint32, category string) *dropper {
 	w := newRandomWRR()
 	w.Add(true, int64(numerator))
 	w.Add(false, int64(denominator-numerator))
@@ -36,6 +37,7 @@ func newDropper(numerator, denominator uint32) *dropper {
 		numerator:   numerator,
 		denominator: denominator,
 		w:           w,
+		category:    category,
 	}
 }
 

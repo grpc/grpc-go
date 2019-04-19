@@ -480,22 +480,22 @@ func TestDropPicker(t *testing.T) {
 		{
 			name: "one drop",
 			drops: []*dropper{
-				newDropper(1, 2),
+				newDropper(1, 2, ""),
 			},
 		},
 		{
 			name: "two drops",
 			drops: []*dropper{
-				newDropper(1, 3),
-				newDropper(1, 2),
+				newDropper(1, 3, ""),
+				newDropper(1, 2, ""),
 			},
 		},
 		{
 			name: "three drops",
 			drops: []*dropper{
-				newDropper(1, 3),
-				newDropper(1, 4),
-				newDropper(1, 2),
+				newDropper(1, 3, ""),
+				newDropper(1, 4, ""),
+				newDropper(1, 2, ""),
 			},
 		},
 	}
