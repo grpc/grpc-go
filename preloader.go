@@ -50,9 +50,6 @@ func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	if rpcInfo.preloaderInfo.codec == nil {
 		return status.Errorf(codes.Internal, "grpc: rpcInfo.preloaderInfo.codec is nil")
 	}
-	if rpcInfo.preloaderInfo.cp == nil && rpcInfo.preloaderInfo.comp == nil {
-		return status.Errorf(codes.Internal, "grpc: rpcInfo.preloaderInfo.cp is nil and rpcInfo.preloaderInfo.comp is nil")
-	}
 
 	// prepare the msg
 	data, err := encode(rpcInfo.preloaderInfo.codec, msg)
