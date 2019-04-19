@@ -460,9 +460,9 @@ func setMode(name string) []bool {
 func setModeCompressor(name string) []string {
 	switch name {
 	case modeNop:
-		return []string{"off", "nop"}
+		return []string{"nop"}
 	case modeGzip:
-		return []string{"off", "gzip"}
+		return []string{"gzip"}
 	case modeAll:
 		return []string{"off", "nop", "gzip"}
 	case modeOff:
