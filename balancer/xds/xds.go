@@ -25,7 +25,6 @@ package xds
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -131,6 +130,8 @@ type xdsBalancer struct {
 	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *addressUpdate // may change when HandleResolved address is called
+
+	lastResolverUpdate *resolver.State
 }
 
 func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
@@ -254,7 +255,37 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			x.fallbackLB.Close()
 			x.startFallBackBalancer(u)
 		}
-		x.config = u
+	case *resolverUpdate:
+		// in case of x.config == nil where it returns early, we set the fallbackInitData here.
+		x.fallbackInitData = u.addrUpdate
+		cfg := u.xdsConfig
+		if x.config == nil {
+			// The first time we get config, we just need to start the xdsClient.
+			x.startNewXDSClient(cfg)
+			x.config = cfg
+			return
+		}
+		// With a different BalancerName, we need to create a new xdsClient.
+		// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
+		// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
+		if cfg.BalancerName != x.config.BalancerName || (cfg.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
+			x.startNewXDSClient(cfg)
+		}
+		// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
+		// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
+		if !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil && x.xdsLB != nil {
+			x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+		}
+
+		if x.fallbackLB != nil {
+			if !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
+				x.fallbackLB.Close()
+				x.startFallBackBalancer(cfg)
+			} else {
+				x.fallbackLB.HandleResolvedAddrs(u.addrUpdate.addrs, u.addrUpdate.err)
+			}
+		}
+		x.config = cfg
 	default:
 		// unreachable path
 		panic("wrong update type")
@@ -351,6 +382,11 @@ type subConnStateUpdate struct {
 	state connectivity.State
 }
 
+type resolverUpdate struct {
+	addrUpdate *addressUpdate
+	xdsConfig  *xdsConfig
+}
+
 func (x *xdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	update := &subConnStateUpdate{
 		sc:    sc,
@@ -363,28 +399,61 @@ func (x *xdsBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connec
 }
 
 func (x *xdsBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	update := &addressUpdate{
-		addrs: addrs,
-		err:   err,
+	grpclog.Error("UpdateResolverState should be called instead of HandleResolvedAddrs")
+}
+
+type serviceConfig struct {
+	LoadBalancingConfig []*loadBalancingConfig
+}
+
+func parseFullServiceConfig(s string) *serviceConfig {
+	var ret serviceConfig
+	err := json.Unmarshal([]byte(s), &ret)
+	if err != nil {
+		return nil
+	}
+	return &ret
+}
+
+func (x *xdsBalancer) UpdateResolverState(s resolver.State) {
+	var update interface{}
+	// if service config does not change for this update, we only send address update.
+	if x.lastResolverUpdate != nil && x.lastResolverUpdate.ServiceConfig == s.ServiceConfig {
+		update = &addressUpdate{
+			addrs: s.Addresses,
+		}
+	} else {
+		sc := parseFullServiceConfig(s.ServiceConfig)
+		var xdsConfigRaw json.RawMessage
+		for _, lbcfg := range sc.LoadBalancingConfig {
+			if lbcfg.Name == xdsName {
+				xdsConfigRaw = lbcfg.Config
+				break
+			}
+		}
+		var cfg xdsConfig
+		if err := json.Unmarshal(xdsConfigRaw, &cfg); err != nil {
+			grpclog.Warningf("unable to unmarshal balancer config %s into xds config", string(xdsConfigRaw))
+			return
+		}
+
+		// if addresses do not change for this update, we only send service config update.
+		if x.lastResolverUpdate != nil && reflect.DeepEqual(x.lastResolverUpdate.Addresses, s.Addresses) {
+			update = &cfg
+		} else {
+			// Both addresses and service config have changed for this update, send the combined update.
+			update = &resolverUpdate{
+				addrUpdate: &addressUpdate{
+					addrs: s.Addresses,
+				},
+				xdsConfig: &cfg,
+			}
+		}
 	}
 	select {
 	case x.grpcUpdate <- update:
 	case <-x.ctx.Done():
 	}
-}
-
-// TODO: once the API is merged, check whether we need to change the function name/signature here.
-func (x *xdsBalancer) HandleBalancerConfig(config json.RawMessage) error {
-	var cfg xdsConfig
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return errors.New("unable to unmarshal balancer config into xds config")
-	}
-
-	select {
-	case x.grpcUpdate <- &cfg:
-	case <-x.ctx.Done():
-	}
-	return nil
 }
 
 type cdsResp struct {
@@ -479,6 +548,7 @@ func (x *xdsBalancer) startFallBackBalancer(c *xdsConfig) {
 	// balancer is registered or not.
 	builder := balancer.Get(c.FallBackPolicy.Name)
 	x.fallbackLB = builder.Build(x.cc, x.buildOpts)
+
 	if x.fallbackInitData != nil {
 		// TODO: uncomment when HandleBalancerConfig API is merged.
 		//x.fallbackLB.HandleBalancerConfig(c.FallBackPolicy.Config)
@@ -596,7 +666,9 @@ type loadBalancingConfig struct {
 }
 
 func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	return nil, nil
+	m := make(map[string]json.RawMessage)
+	m[l.Name] = l.Config
+	return json.Marshal(m)
 }
 
 func (l *loadBalancingConfig) UnmarshalJSON(data []byte) error {
