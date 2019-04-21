@@ -514,7 +514,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		s.ServiceConfig = cc.sc.rawJSONString
 	}
 
-	if cc.dopts.balancerBuilder == nil {
+	if cc.dopts.balancerBuilder == nil || cc.dopts.balancerBuilder.Name() == grpclbName {
 		// Only look at balancer types and switch balancer if balancer dial
 		// option is not set.
 		var isGRPCLB bool
@@ -559,7 +559,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	grpclog.Infof("ClientConn switching balancer to %q", name)
-	if cc.dopts.balancerBuilder != nil {
+	if cc.dopts.balancerBuilder != nil && cc.dopts.balancerBuilder.Name() != grpclbName {
 		grpclog.Infoln("ignoring balancer switching: Balancer DialOption used instead")
 		return
 	}
