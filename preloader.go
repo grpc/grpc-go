@@ -33,9 +33,8 @@ type PreparedMsg struct {
 	payload     []byte
 }
 
-// Encode marshalls and compresses the message using the codec and compressors that is stored in the context of the stream.
+// Encode marshalls and compresses the message using the codec and compressor for the stream.
 func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
-	// TODO(prannayk) : if something changes then mark prepared msg as old
 	ctx := s.Context()
 	rpcInfo, ok := rpcInfoFromContext(ctx)
 	if !ok {
