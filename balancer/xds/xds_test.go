@@ -718,3 +718,84 @@ func (s) TestXdsBalancerConfigParsingSelectingLBPolicy(t *testing.T) {
 		t.Fatalf("got fallback policy %v, want %v", xdsCfg.FallBackPolicy, wantFallbackPolicy)
 	}
 }
+
+func (s) TestXdsFullServiceConfigParsing(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want *serviceConfig
+	}{
+		{
+			name: "empty",
+			s:    "",
+			want: nil,
+		},
+		{
+			name: "success1",
+			s:    `{"loadBalancingConfig":[{"xds":{"childPolicy":[{"pick_first":{}}]}}]}`,
+			want: &serviceConfig{
+				LoadBalancingConfig: []*loadBalancingConfig{
+					{"xds", json.RawMessage(`{"childPolicy":[{"pick_first":{}}]}`)},
+				},
+			},
+		},
+		{
+			name: "success2",
+			s:    `{"loadBalancingConfig":[{"xds":{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}}]}`,
+			want: &serviceConfig{
+				LoadBalancingConfig: []*loadBalancingConfig{
+					{"xds", json.RawMessage(`{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`)},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseFullServiceConfig(tt.s); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, want %+v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+func (s) TestXdsLoadbalancingConfigParsing(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want *xdsConfig
+	}{
+		{
+			name: "empty",
+			s:    "{}",
+			want: &xdsConfig{},
+		},
+		{
+			name: "success1",
+			s:    `{"childPolicy":[{"pick_first":{}}]}`,
+			want: &xdsConfig{
+				ChildPolicy: &loadBalancingConfig{
+					Name:   "pick_first",
+					Config: json.RawMessage(`{}`),
+				},
+			},
+		},
+		{
+			name: "success2",
+			s:    `{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`,
+			want: &xdsConfig{
+				ChildPolicy: &loadBalancingConfig{
+					Name:   "round_robin",
+					Config: json.RawMessage(`{}`),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg xdsConfig
+			if err := json.Unmarshal([]byte(tt.s), &cfg); err != nil || !reflect.DeepEqual(&cfg, tt.want) {
+				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, err: %v, want %+v, <nil>", tt.name, cfg, err, tt.want)
+			}
+		})
+	}
+}

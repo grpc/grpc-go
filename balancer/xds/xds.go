@@ -221,11 +221,6 @@ func (x *xdsBalancer) run() {
 
 func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
-	case *addressUpdate:
-		if x.fallbackLB != nil {
-			x.fallbackLB.HandleResolvedAddrs(u.addrs, u.err)
-		}
-		x.fallbackInitData = u
 	case *subConnStateUpdate:
 		if x.xdsLB != nil {
 			x.xdsLB.HandleSubConnStateChange(u.sc, u.state)
@@ -233,60 +228,45 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 		if x.fallbackLB != nil {
 			x.fallbackLB.HandleSubConnStateChange(u.sc, u.state)
 		}
-	case *xdsConfig:
-		if x.config == nil {
-			// The first time we get config, we just need to start the xdsClient.
-			x.startNewXDSClient(u)
-			x.config = u
-			return
-		}
-		// With a different BalancerName, we need to create a new xdsClient.
-		// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
-		// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
-		if u.BalancerName != x.config.BalancerName || (u.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
-			x.startNewXDSClient(u)
-		}
-		// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
-		// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
-		if !reflect.DeepEqual(u.ChildPolicy, x.config.ChildPolicy) && u.ChildPolicy != nil && x.xdsLB != nil {
-			x.xdsLB.HandleChildPolicy(u.ChildPolicy.Name, u.ChildPolicy.Config)
-		}
-		if !reflect.DeepEqual(u.FallBackPolicy, x.config.FallBackPolicy) && x.fallbackLB != nil {
-			x.fallbackLB.Close()
-			x.startFallBackBalancer(u)
-		}
-		x.config = u
 	case *resolverUpdate:
-		// in case of x.config == nil where it returns early, we set the fallbackInitData here.
-		x.fallbackInitData = u.addrUpdate
+		if u.addrUpdate != nil {
+			// addresses have been updated.
+			// in case of x.config == nil where it returns early, we set the fallbackInitData here.
+			x.fallbackInitData = u.addrUpdate
+		}
 		cfg := u.xdsConfig
-		if x.config == nil {
-			// The first time we get config, we just need to start the xdsClient.
-			x.startNewXDSClient(cfg)
-			x.config = cfg
-			return
-		}
-		// With a different BalancerName, we need to create a new xdsClient.
-		// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
-		// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
-		if cfg.BalancerName != x.config.BalancerName || (cfg.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
-			x.startNewXDSClient(cfg)
-		}
-		// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
-		// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
-		if !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil && x.xdsLB != nil {
-			x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
-		}
 
-		if x.fallbackLB != nil {
-			if !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
+		// service config has been updated.
+		if cfg != nil {
+			if x.config == nil {
+				// The first time we get config, we just need to start the xdsClient.
+				x.startNewXDSClient(cfg)
+				x.config = cfg
+				return
+			}
+
+			// With a different BalancerName, we need to create a new xdsClient.
+			// If current or previous ChildPolicy is nil, then we also need to recreate a new xdsClient.
+			// This is because with nil ChildPolicy xdsClient will do CDS request, while non-nil won't.
+			if cfg.BalancerName != x.config.BalancerName || (cfg.ChildPolicy == nil) != (x.config.ChildPolicy == nil) {
+				x.startNewXDSClient(cfg)
+			}
+			// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
+			// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
+			if !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil && x.xdsLB != nil {
+				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+			}
+
+			if x.fallbackLB != nil && !reflect.DeepEqual(cfg.FallBackPolicy, x.config.FallBackPolicy) {
 				x.fallbackLB.Close()
 				x.startFallBackBalancer(cfg)
-			} else {
-				x.fallbackLB.HandleResolvedAddrs(u.addrUpdate.addrs, u.addrUpdate.err)
 			}
+			x.config = cfg
 		}
-		x.config = cfg
+
+		if u.addrUpdate != nil && x.fallbackLB != nil {
+			x.fallbackLB.HandleResolvedAddrs(u.addrUpdate.addrs, u.addrUpdate.err)
+		}
 	default:
 		// unreachable path
 		panic("wrong update type")
@@ -424,8 +404,10 @@ func (x *xdsBalancer) UpdateResolverState(s resolver.State) {
 	var update interface{}
 	// if service config does not change for this update, we only send address update.
 	if x.lastResolverUpdate != nil && x.lastResolverUpdate.ServiceConfig == s.ServiceConfig {
-		update = &addressUpdate{
-			addrs: s.Addresses,
+		update = &resolverUpdate{
+			addrUpdate: &addressUpdate{
+				addrs: s.Addresses,
+			},
 		}
 	} else {
 		sc := parseFullServiceConfig(s.ServiceConfig)
@@ -444,7 +426,9 @@ func (x *xdsBalancer) UpdateResolverState(s resolver.State) {
 
 		// if addresses do not change for this update, we only send service config update.
 		if x.lastResolverUpdate != nil && reflect.DeepEqual(x.lastResolverUpdate.Addresses, s.Addresses) {
-			update = &cfg
+			update = &resolverUpdate{
+				xdsConfig: &cfg,
+			}
 		} else {
 			// Both addresses and service config have changed for this update, send the combined update.
 			update = &resolverUpdate{
