@@ -2076,6 +2076,80 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	}
 }
 
+func (s) TestPreloaderClientSend(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPreloaderClientSend(t, e)
+	}
+}
+
+func testPreloaderClientSend(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	te.startServer(&testServer{security: e.security})
+
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	// Test for streaming RPC recv.
+	// Set context for send with proper RPC Information
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.UseCompressor("gzip"))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	var index int
+	for index < len(reqSizes) {
+		respParam := []*testpb.ResponseParameters{
+			{
+				Size: int32(respSizes[index]),
+			},
+		}
+
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := &testpb.StreamingOutputCallRequest{
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
+			ResponseParameters: respParam,
+			Payload:            payload,
+		}
+		preparedMsg := &grpc.PreparedMsg{}
+		err = preparedMsg.Encode(stream, req)
+		if err != nil {
+			t.Fatalf("PrepareMsg failed for size %d : %v", reqSizes[index], err)
+		}
+		if err := stream.SendMsg(preparedMsg); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		reply, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+		}
+		pt := reply.GetPayload().GetType()
+		if pt != testpb.PayloadType_COMPRESSABLE {
+			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
+		}
+		size := len(reply.GetPayload().GetBody())
+		if size != int(respSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		}
+		index++
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
+	}
+}
+
 func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
