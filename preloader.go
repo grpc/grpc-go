@@ -23,7 +23,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// PreparedMsg is responsible for creating a Marshalled and Compressed object
+// PreparedMsg is responsible for creating a Marshalled and Compressed object.
+//
 // This API is EXPERIMENTAL.
 type PreparedMsg struct {
 	// Struct for preparing msg before sending them
