@@ -1,6 +1,5 @@
-// +build go1.12
-
 /*
+ *
  * Copyright 2019 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,29 +15,14 @@
  * limitations under the License.
  */
 
-package edsbalancer
+package wrr
 
-import "google.golang.org/grpc/balancer/internal/wrr"
-
-type dropper struct {
-	// Drop rate will be numerator/denominator.
-	numerator   uint32
-	denominator uint32
-	w           wrr.WRR
-}
-
-func newDropper(numerator, denominator uint32) *dropper {
-	w := newRandomWRR()
-	w.Add(true, int64(numerator))
-	w.Add(false, int64(denominator-numerator))
-
-	return &dropper{
-		numerator:   numerator,
-		denominator: denominator,
-		w:           w,
-	}
-}
-
-func (d *dropper) drop() (ret bool) {
-	return d.w.Next().(bool)
+// WRR defines an interface that implements weighted round robin.
+type WRR interface {
+	// Add adds an item with weight to the WRR set.
+	Add(item interface{}, weight int64)
+	// Next returns the next picked item.
+	//
+	// Next needs to be thread safe.
+	Next() interface{}
 }
