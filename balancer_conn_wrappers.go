@@ -243,7 +243,9 @@ func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balanc
 	// case where we wait for ready and then perform an RPC.  If the picker is
 	// updated later, we could call the "connecting" picker when the state is
 	// updated, and then call the "ready" picker after the picker gets updated.
-	ccb.cc.blockingpicker.updatePicker(p)
+	if ccb.cc.blockingpicker.picker != p {
+		ccb.cc.blockingpicker.updatePicker(p)
+	}
 	ccb.cc.csMgr.updateState(s)
 }
 
