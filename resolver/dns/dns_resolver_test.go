@@ -1224,7 +1224,7 @@ func TestRateLimitedResolve(t *testing.T) {
 		}
 	}()
 	wg.Wait()
-	elapsed := time.Now().Sub(start)
+	elapsed := time.Since(start)
 
 	if gotCalls != wantCalls {
 		t.Fatalf("resolve count mismatch for target: %q = %+v, want %+v\n", target, gotCalls, wantCalls)
