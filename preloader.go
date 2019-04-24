@@ -23,7 +23,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// PreparedMsg is responsible for creating a Marshalled and Compressed object
+// PreparedMsg is responsible for creating a Marshalled and Compressed object.
+//
+// This API is EXPERIMENTAL.
 type PreparedMsg struct {
 	// Struct for preparing msg before sending them
 	encodedData []byte
@@ -31,11 +33,7 @@ type PreparedMsg struct {
 	payload     []byte
 }
 
-// Encode is responsible for preprocessing the data using relevant information
-// from the stream's Context
-// TODO(prannayk) : if something changes then mark prepared msg as old
-// Encode : marshal and compresses data based on stream context
-// Returns error in case of error
+// Encode marshalls and compresses the message using the codec and compressor for the stream.
 func (p *PreparedMsg) Encode(s Stream, msg interface{}) error {
 	ctx := s.Context()
 	rpcInfo, ok := rpcInfoFromContext(ctx)
