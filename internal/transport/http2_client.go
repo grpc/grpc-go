@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -117,6 +118,8 @@ type http2Client struct {
 
 	onGoAway func(GoAwayReason)
 	onClose  func()
+
+	bufferPool *bufferPool
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -249,6 +252,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		onGoAway:              onGoAway,
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
+		bufferPool:            newBufferPool(20),
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -367,6 +371,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 			closeStream: func(err error) {
 				t.CloseStream(s, err)
 			},
+			freeBuffer: func(_ *bytes.Buffer) {},
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -946,9 +951,10 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			data := make([]byte, len(f.Data()))
-			copy(data, f.Data())
-			s.write(recvMsg{data: data})
+			buffer := t.bufferPool.Get()
+			buffer.Reset()
+			buffer.Write(f.Data())
+			s.write(recvMsg{buffer: buffer})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that

@@ -24,6 +24,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -347,7 +348,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
 	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
+		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(_ *bytes.Buffer) {}},
 		windowHandler: func(int) {},
 	}
 
@@ -361,7 +362,9 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		for buf := make([]byte, readSize); ; {
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				s.buf.put(recvMsg{data: buf[:n:n]})
+				buffer := new(bytes.Buffer)
+				buffer.Write(buf[:n:n])
+				s.buf.put(recvMsg{buffer: buffer})
 				buf = buf[n:]
 			}
 			if err != nil {

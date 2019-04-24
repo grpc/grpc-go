@@ -22,6 +22,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -39,10 +40,36 @@ import (
 	"google.golang.org/grpc/tap"
 )
 
+type bufferPool struct {
+	c chan *bytes.Buffer
+}
+
+func newBufferPool(max int) *bufferPool {
+	return &bufferPool{
+		c: make(chan *bytes.Buffer, max),
+	}
+}
+
+func (p *bufferPool) Get() *bytes.Buffer {
+	select {
+	case b := <-p.c:
+		return b
+	default:
+		return new(bytes.Buffer)
+	}
+}
+
+func (p *bufferPool) Put(b *bytes.Buffer) {
+	select {
+	case p.c <- b:
+	default:
+	}
+}
+
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
-	data []byte
+	buffer *bytes.Buffer
 	// nil: received some data
 	// io.EOF: stream is completed. data is nil.
 	// other non-nil error: transport failure. data is nil.
@@ -117,8 +144,9 @@ type recvBufferReader struct {
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
 	recv        *recvBuffer
-	last        []byte // Stores the remaining data in the previous calls.
+	last        *bytes.Buffer // Stores the remaining data in the previous calls.
 	err         error
+	freeBuffer  func(*bytes.Buffer)
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -128,10 +156,13 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return 0, r.err
 	}
-	if r.last != nil && len(r.last) > 0 {
+	if r.last != nil {
 		// Read remaining data left in last call.
-		copied := copy(p, r.last)
-		r.last = r.last[copied:]
+		copied, _ := r.last.Read(p)
+		if r.last.Len() == 0 {
+			r.freeBuffer(r.last)
+			r.last = nil
+		}
 		return copied, nil
 	}
 	if r.closeStream != nil {
@@ -170,8 +201,13 @@ func (r *recvBufferReader) readAdditional(m recvMsg, p []byte) (n int, err error
 	if m.err != nil {
 		return 0, m.err
 	}
-	copied := copy(p, m.data)
-	r.last = m.data[copied:]
+	copied, _ := m.buffer.Read(p)
+	if m.buffer.Len() == 0 {
+		r.freeBuffer(m.buffer)
+		r.last = nil
+	} else {
+		r.last = m.buffer
+	}
 	return copied, nil
 }
 
