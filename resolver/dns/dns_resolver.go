@@ -247,6 +247,17 @@ func (d *dnsResolver) watcher() {
 		}
 
 		result, sc := d.lookup()
+		if !d.t.Stop() {
+			// Before resetting a timer, it should be stopped to prevent racing with
+			// reads on it's channel.
+			select {
+			case <-d.t.C:
+			default:
+				// We need the default case because we could have gotten here after the
+				// timer expired and the channel was already read in the previous
+				// select.
+			}
+		}
 		// Next lookup should happen within an interval defined by d.freq. It may be
 		// more often due to exponential retry on empty address list.
 		if len(result) == 0 {

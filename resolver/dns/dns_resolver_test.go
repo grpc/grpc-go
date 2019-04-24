@@ -90,11 +90,18 @@ func (t *testClientConn) getSc() (string, int) {
 }
 
 type testResolver struct {
-	cnt int
+	// A write to this channel is made when this resolver receives a resolution
+	// request. Tests can rely on reading from this channel to be notified about
+	// resolution requests instead of sleeping for a predefined period of time.
+	ch chan struct{}
 }
 
 func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	tr.cnt++
+	select {
+	case tr.ch <- struct{}{}:
+	default:
+		// Do not block when the test is not reading from the channel.
+	}
 	return hostLookup(host)
 }
 
@@ -108,7 +115,7 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 
 func replaceNetFunc() func() {
 	oldResolver := defaultResolver
-	defaultResolver = &testResolver{}
+	defaultResolver = &testResolver{ch: make(chan struct{}, 1)}
 
 	return func() {
 		defaultResolver = oldResolver
@@ -1150,7 +1157,8 @@ func TestCustomAuthority(t *testing.T) {
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 
-	dc := replaceDNSResRate(250 * time.Millisecond)
+	dnsResRate := 100 * time.Millisecond
+	dc := replaceDNSResRate(dnsResRate)
 	defer dc()
 
 	// Create a new testResolver{} for this test because we want the exact count
@@ -1176,23 +1184,54 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	// We set the re-resolution rate to 250ms at the start of this test. We
-	// expect the first call to ResolveNow() to make a resolution request
-	// immediately (T0), and one amongst the other queued up calls to make
-	// another resolution request at (T0+250ms). We wait till a little longer to
-	// make sure that more resolution requests are not made.
+	// Wait for the first resolution request to be done. This happens as part of
+	// the first iteration of the for loop in watcher() because we start with a
+	// timer of zero duration.
+	<-tr.ch
+
+	// Here we start a couple of goroutines. One repeatedly calls ResolveNow()
+	// until asked to stop, and the other waits for two resolution requests to be
+	// made to our testResolver and stops the former. We measure the start and
+	// end times, and expect the duration elapsed to be in the interval
+	// {2*dnsResRate, 3*dnsResRate}
 	start := time.Now()
-	end := start.Add(100 * time.Millisecond)
-	calls := 0
-	for time.Now().Before(end) {
-		r.ResolveNow(resolver.ResolveNowOption{})
-		calls++
-		time.Sleep(1 * time.Millisecond)
+	wantCalls := 2
+	gotCalls := 0
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for {
+			<-tr.ch
+			gotCalls++
+			if gotCalls == wantCalls {
+				close(done)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				r.ResolveNow(resolver.ResolveNowOption{})
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
+	}()
+	wg.Wait()
+	elapsed := time.Now().Sub(start)
+
+	if gotCalls != wantCalls {
+		t.Fatalf("resolve count mismatch for target: %q = %+v, want %+v\n", target, gotCalls, wantCalls)
 	}
-	if calls <= 2 {
-		t.Fatalf("expected to make more than two calls to ResolveNow, made only %d", calls)
+	if elapsed < 2*dnsResRate || elapsed > 3*dnsResRate {
+		t.Fatalf("elapsed time: %v, wanted it to be between {%v and %v}", elapsed, 2*dnsResRate, 3*dnsResRate)
 	}
-	time.Sleep(1 * time.Second)
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	var gotAddrs []resolver.Address
@@ -1206,16 +1245,5 @@ func TestRateLimitedResolve(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotAddrs, wantAddrs) {
 		t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", target, gotAddrs, wantAddrs)
-	}
-
-	// The actual number of resolution requests made could be 2 or 3, because
-	// when the resolver is built in Build(), we also create a timer initialized
-	// to time.Duration(0) and which is eventually reset to defaultFreq (30 mins)
-	// after a successful resolution request. But the first firing of this timer
-	// which happens immediately also leads to another resolution request,
-	// subject to the rate limit though.
-	wantResolveCnt := 3
-	if tr.cnt > wantResolveCnt {
-		t.Errorf("Resolve count mismatch for target: %q = %+v, want %+v\n", target, tr.cnt, wantResolveCnt)
 	}
 }
