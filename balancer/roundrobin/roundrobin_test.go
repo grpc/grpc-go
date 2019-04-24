@@ -476,87 +476,87 @@ func TestAllServersDown(t *testing.T) {
 }
 
 func TestAddressesChanged(t *testing.T) {
-    defer leakcheck.Check(t)
-    r, cleanup := manual.GenerateAndRegisterManualResolver()
-    defer cleanup()
+	defer leakcheck.Check(t)
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
 
-    backendCount := 2
-    test1, err := startTestServers(backendCount)
-    if err != nil {
-        t.Fatalf("failed to start servers: %v", err)
-    }
-    defer test1.cleanup()
+	backendCount := 2
+	test1, err := startTestServers(backendCount)
+	if err != nil {
+		t.Fatalf("failed to start servers: %v", err)
+	}
+	defer test1.cleanup()
 
-    cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name), grpc.WithWaitForHandshake())
-    if err != nil {
-        t.Fatalf("failed to dial: %v", err)
-    }
-    defer cc.Close()
-    testc := testpb.NewTestServiceClient(cc)
-    // The first RPC should fail because there's no address.
-    ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-    defer cancel()
-    if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
-        t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
-    }
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name), grpc.WithWaitForHandshake())
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	testc := testpb.NewTestServiceClient(cc)
+	// The first RPC should fail because there's no address.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+	}
 
-    var resolvedAddrs []resolver.Address
-    for i := 0; i < backendCount; i++ {
-        resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test1.addresses[i]})
-    }
-    r.UpdateState(resolver.State{Addresses: resolvedAddrs})
+	var resolvedAddrs []resolver.Address
+	for i := 0; i < backendCount; i++ {
+		resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test1.addresses[i]})
+	}
+	r.UpdateState(resolver.State{Addresses: resolvedAddrs})
 
-    test2, err := startTestServers(backendCount)
-    if err != nil {
-        t.Fatalf("failed to start servers: %v", err)
-    }
-    defer test2.cleanup()
+	test2, err := startTestServers(backendCount)
+	if err != nil {
+		t.Fatalf("failed to start servers: %v", err)
+	}
+	defer test2.cleanup()
 
-    resolvedAddrs = make([]resolver.Address, 0)
-    for i := 0; i < backendCount; i++ {
-        resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test2.addresses[i]})
-    }
-    r.UpdateState(resolver.State{Addresses: resolvedAddrs})
+	resolvedAddrs = make([]resolver.Address, 0)
+	for i := 0; i < backendCount; i++ {
+		resolvedAddrs = append(resolvedAddrs, resolver.Address{Addr: test2.addresses[i]})
+	}
+	r.UpdateState(resolver.State{Addresses: resolvedAddrs})
 
-    // Make sure connections to all servers are up.
-    var p peer.Peer
-    for si := 0; si < backendCount; si++ {
-        var connected bool
-        for i := 0; i < 1000; i++ {
-            if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-                t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
-            }
-            if p.Addr.String() == test2.addresses[si] {
-                connected = true
-                break
-            }
-            time.Sleep(time.Millisecond)
-        }
-        if !connected {
-            t.Fatalf("Connection to %v was not up after more than 1 second", test2.addresses[si])
-        }
-    }
+	// Make sure connections to all servers are up.
+	var p peer.Peer
+	for si := 0; si < backendCount; si++ {
+		var connected bool
+		for i := 0; i < 1000; i++ {
+			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+				t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+			}
+			if p.Addr.String() == test2.addresses[si] {
+				connected = true
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if !connected {
+			t.Fatalf("Connection to %v was not up after more than 1 second", test2.addresses[si])
+		}
+	}
 
-    for i := 0; i < 3*backendCount; i++ {
-        if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-            t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
-        }
-        if p.Addr.String() != test2.addresses[i%backendCount] {
-            t.Fatalf("Index %d: want peer %v, got peer %v", i, test2.addresses[i%backendCount], p.Addr.String())
-        }
-    }
+	for i := 0; i < 3*backendCount; i++ {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+		}
+		if p.Addr.String() != test2.addresses[i%backendCount] {
+			t.Fatalf("Index %d: want peer %v, got peer %v", i, test2.addresses[i%backendCount], p.Addr.String())
+		}
+	}
 
-    // All servers are stopped, failfast RPC should fail with unavailable.
-    for i := 0; i < backendCount; i++ {
-        test2.servers[i].Stop()
-    }
+	// All servers are stopped, failfast RPC should fail with unavailable.
+	for i := 0; i < backendCount; i++ {
+		test2.servers[i].Stop()
+	}
 
-    time.Sleep(100 * time.Millisecond)
-    for i := 0; i < 1000; i++ {
-        if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) == codes.Unavailable {
-            return
-        }
-        time.Sleep(time.Millisecond)
-    }
-    t.Fatalf("Failfast RPCs didn't fail with Unavailable after all servers are stopped")
+	time.Sleep(100 * time.Millisecond)
+	for i := 0; i < 1000; i++ {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); status.Code(err) == codes.Unavailable {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("Failfast RPCs didn't fail with Unavailable after all servers are stopped")
 }

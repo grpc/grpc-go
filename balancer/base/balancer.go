@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-    "reflect"
+	"reflect"
 )
 
 type baseBuilder struct {
@@ -45,9 +45,9 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) 
 		// Initialize picker to a picker that always return
 		// ErrNoSubConnAvailable, because when state of a SubConn changes, we
 		// may call UpdateBalancerState with this picker.
-		picker: NewErrPicker(balancer.ErrNoSubConnAvailable),
-		config: bb.config,
-        lastReadySCs: make(map[resolver.Address]balancer.SubConn),
+		picker:       NewErrPicker(balancer.ErrNoSubConnAvailable),
+		config:       bb.config,
+		lastReadySCs: make(map[resolver.Address]balancer.SubConn),
 	}
 }
 
@@ -62,11 +62,11 @@ type baseBalancer struct {
 	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
-	subConns map[resolver.Address]balancer.SubConn
-	scStates map[balancer.SubConn]connectivity.State
-	picker   balancer.Picker
-	config   Config
-    lastReadySCs map[resolver.Address]balancer.SubConn
+	subConns     map[resolver.Address]balancer.SubConn
+	scStates     map[balancer.SubConn]connectivity.State
+	picker       balancer.Picker
+	config       Config
+	lastReadySCs map[resolver.Address]balancer.SubConn
 }
 
 func (b *baseBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
@@ -101,16 +101,16 @@ func (b *baseBalancer) UpdateResolverState(s resolver.State) {
 	deletedConns := make([]balancer.SubConn, 0)
 	for a := range b.subConns {
 		if _, ok := addrsSet[a]; !ok {
-            deletedConns = append(deletedConns, b.subConns[a])
+			deletedConns = append(deletedConns, b.subConns[a])
 			delete(b.subConns, a)
 		}
 	}
 
 	for _, sc := range deletedConns {
-        b.cc.RemoveSubConn(sc)
-        // Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
-        // The entry will be deleted in HandleSubConnStateChange.
-    }
+		b.cc.RemoveSubConn(sc)
+		// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
+		// The entry will be deleted in HandleSubConnStateChange.
+	}
 }
 
 // regeneratePicker takes a snapshot of the balancer, and generates a picker
@@ -132,12 +132,12 @@ func (b *baseBalancer) regeneratePicker() {
 	}
 
 	if reflect.DeepEqual(readySCs, b.lastReadySCs) {
-	    // No SubConn is changed
-        return
+		// No SubConn is changed
+		return
 	} else {
-        b.picker = b.pickerBuilder.Build(readySCs)
-        b.lastReadySCs = readySCs
-    }
+		b.picker = b.pickerBuilder.Build(readySCs)
+		b.lastReadySCs = readySCs
+	}
 
 	// if conns are all the same, do nothing
 }
