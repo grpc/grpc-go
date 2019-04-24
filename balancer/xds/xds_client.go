@@ -35,6 +35,7 @@ import (
 	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
+	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
@@ -68,6 +69,7 @@ type client struct {
 	loseContact  func(ctx context.Context)
 	cleanup      func()
 	backoff      backoff.Strategy
+	loadStore    lrs.Store
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -75,6 +77,9 @@ type client struct {
 
 func (c *client) run() {
 	c.dial()
+	if c.loadStore != nil {
+		go c.loadStore.ReportTo(c.ctx, c.cc)
+	}
 	c.makeADSCall()
 }
 
@@ -251,7 +256,7 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 		}
 	}
 }
-func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		balancerName: balancerName,
 		serviceName:  serviceName,
@@ -261,6 +266,7 @@ func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts 
 		loseContact:  loseContact,
 		cleanup:      exitCleanup,
 		backoff:      defaultBackoffConfig,
+		loadStore:    loadStore,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())

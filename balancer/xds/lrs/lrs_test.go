@@ -85,7 +85,7 @@ func Test_lrsStore_buildStats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ls := newStore(testService)
+			ls := NewStore(testService).(*lrsStore)
 
 			for _, ds := range tt.drops {
 				var (
@@ -112,7 +112,7 @@ func Test_lrsStore_buildStats(t *testing.T) {
 					for i := 0; i < int(count); i++ {
 						wg.Add(1)
 						go func(i int, c string) {
-							ls.callDropped(c)
+							ls.CallDropped(c)
 							wg.Done()
 						}(i, c)
 					}
@@ -196,7 +196,7 @@ func setupServer(t *testing.T, reportingInterval *durationpb.Duration) (addr str
 	}
 }
 
-func Test_lrsStore_reportTo(t *testing.T) {
+func Test_lrsStore_ReportTo(t *testing.T) {
 	const intervalNano = 1000 * 1000 * 50
 	addr, lrss, cleanup := setupServer(t, &durationpb.Duration{
 		Seconds: 0,
@@ -204,7 +204,7 @@ func Test_lrsStore_reportTo(t *testing.T) {
 	})
 	defer cleanup()
 
-	ls := newStore(testService)
+	ls := NewStore(testService)
 	cc, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -213,7 +213,7 @@ func Test_lrsStore_reportTo(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		ls.reportTo(ctx, cc)
+		ls.ReportTo(ctx, cc)
 		close(done)
 	}()
 
@@ -224,7 +224,7 @@ func Test_lrsStore_reportTo(t *testing.T) {
 
 	for c, d := range drops {
 		for i := 0; i < int(d); i++ {
-			ls.callDropped(c)
+			ls.CallDropped(c)
 			time.Sleep(time.Nanosecond * intervalNano / 10)
 		}
 	}
