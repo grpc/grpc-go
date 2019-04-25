@@ -574,7 +574,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	var i int
 	for i = 0; i < 10; i++ {
 		if edsLB := getLatestEdsBalancer(); edsLB != nil {
-			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
+			lb.UpdateSubConnState(expectedScStateChange.sc, balancer.SubConnState{ConnectivityState: expectedScStateChange.state})
 			select {
 			case scsc := <-edsLB.subconnStateChange:
 				if !reflect.DeepEqual(scsc, expectedScStateChange) {
@@ -600,7 +600,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	// fallback balancer A takes over
 	for i = 0; i < 10; i++ {
 		if fblb := lbABuilder.getLastBalancer(); fblb != nil {
-			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
+			lb.UpdateSubConnState(expectedScStateChange.sc, balancer.SubConnState{ConnectivityState: expectedScStateChange.state})
 			select {
 			case scsc := <-fblb.subconnStateChange:
 				if !reflect.DeepEqual(scsc, expectedScStateChange) {
@@ -654,7 +654,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	var i int
 	for i = 0; i < 10; i++ {
 		if edsLB := getLatestEdsBalancer(); edsLB != nil {
-			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
+			lb.UpdateSubConnState(expectedScStateChange.sc, balancer.SubConnState{ConnectivityState: expectedScStateChange.state})
 			select {
 			case scsc := <-edsLB.subconnStateChange:
 				if !reflect.DeepEqual(scsc, expectedScStateChange) {
@@ -680,7 +680,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	// fallback balancer A takes over
 	for i = 0; i < 10; i++ {
 		if fblb := lbABuilder.getLastBalancer(); fblb != nil {
-			lb.HandleSubConnStateChange(expectedScStateChange.sc, expectedScStateChange.state)
+			lb.UpdateSubConnState(expectedScStateChange.sc, balancer.SubConnState{ConnectivityState: expectedScStateChange.state})
 			select {
 			case scsc := <-fblb.subconnStateChange:
 				if !reflect.DeepEqual(scsc, expectedScStateChange) {
