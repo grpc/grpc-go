@@ -20,6 +20,7 @@ package wrr
 import (
 	"errors"
 	"math"
+	"math/rand"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -96,4 +97,9 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 
 func TestRandomWRRNext(t *testing.T) {
 	testWRRNext(t, NewRandom)
+}
+
+func init() {
+	r := rand.New(rand.NewSource(0))
+	grpcrandInt63n = r.Int63n
 }
