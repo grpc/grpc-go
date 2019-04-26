@@ -36,12 +36,14 @@ func NewRandom() WRR {
 	return &randomWRR{}
 }
 
+var grpcrandInt63n = grpcrand.Int63n
+
 func (rw *randomWRR) Next() (item interface{}) {
 	if rw.sumOfWeights == 0 {
 		return nil
 	}
 	// Random number in [0, sum).
-	randomWeight := grpcrand.Int63n(rw.sumOfWeights)
+	randomWeight := grpcrandInt63n(rw.sumOfWeights)
 	for _, item := range rw.items {
 		randomWeight = randomWeight - item.Weight
 		if randomWeight < 0 {
