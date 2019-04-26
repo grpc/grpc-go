@@ -91,11 +91,6 @@ func (b *xdsBalancerBuilder) Name() string {
 	return xdsName
 }
 
-// closer is the interface that both Balancer and V2Balancer implements
-type closer interface {
-	Close()
-}
-
 // edsBalancerInterface defines the interface that edsBalancer must implement to
 // communicate with xdsBalancer.
 //
@@ -130,12 +125,11 @@ type xdsBalancer struct {
 	timer           *time.Timer
 	noSubConnAlert  <-chan struct{}
 
-	client            *client    // may change when passed a different service config
-	config            *xdsConfig // may change when passed a different service config
-	xdsLB             edsBalancerInterface
-	fallbackLB        closer
-	fallbackInitData  *resolver.State    // may change when HandleResolved address is called
-	lastFallbackState []resolver.Address // TODO: should also contains config, but it's not available now.
+	client           *client    // may change when passed a different service config
+	config           *xdsConfig // may change when passed a different service config
+	xdsLB            edsBalancerInterface
+	fallbackLB       balancer.Balancer
+	fallbackInitData *resolver.State // may change when HandleResolved address is called
 }
 
 func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
@@ -247,13 +241,10 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			x.xdsLB.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 		}
 		if x.fallbackLB != nil {
-			switch lb := x.fallbackLB.(type) {
-			case balancer.V2Balancer:
+			if lb, ok := x.fallbackLB.(balancer.V2Balancer); ok {
 				lb.UpdateSubConnState(u.sc, u.state)
-			case balancer.Balancer:
-				lb.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
-			default:
-				grpclog.Error("unexpected balancer type")
+			} else {
+				x.fallbackLB.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 			}
 		}
 	case *resolver.State:
@@ -265,17 +256,16 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 		}
 		defer func() {
 			x.config = cfg
-			x.lastFallbackState = u.Addresses
+			x.fallbackInitData = &resolver.State{
+				Addresses: u.Addresses,
+				// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
+				// we can pass along the config struct.
+			}
 		}()
-		x.fallbackInitData = &resolver.State{
-			Addresses: u.Addresses,
-			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
-			// we can pass along the config struct.
-		}
 
 		var fallbackChanged bool
 		// service config has been updated.
-		if cfg != x.config {
+		if !reflect.DeepEqual(cfg, x.config) {
 			if x.config == nil {
 				// The first time we get config, we just need to start the xdsClient.
 				x.startNewXDSClient(cfg)
@@ -290,7 +280,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 			// We will update the xdsLB with the new child policy, if we got a different one and it's not nil.
 			// The nil case will be handled when the CDS response gets processed, we will update xdsLB at that time.
-			if !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil && x.xdsLB != nil {
+			if x.xdsLB != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) && cfg.ChildPolicy != nil {
 				x.xdsLB.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			}
 
@@ -301,8 +291,10 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			}
 		}
 
-		if x.fallbackLB != nil && (!reflect.DeepEqual(x.lastFallbackState, u.Addresses) || fallbackChanged) {
-			x.updateFallbackWithResolverState(x.fallbackInitData)
+		if x.fallbackLB != nil && (!reflect.DeepEqual(x.fallbackInitData.Addresses, u.Addresses) || fallbackChanged) {
+			x.updateFallbackWithResolverState(&resolver.State{
+				Addresses: u.Addresses,
+			})
 		}
 	default:
 		// unreachable path
@@ -494,17 +486,14 @@ func (x *xdsBalancer) switchFallback() {
 }
 
 func (x *xdsBalancer) updateFallbackWithResolverState(s *resolver.State) {
-	switch lb := x.fallbackLB.(type) {
-	case balancer.V2Balancer:
+	if lb, ok := x.fallbackLB.(balancer.V2Balancer); ok {
 		lb.UpdateResolverState(resolver.State{
 			Addresses: s.Addresses,
 			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
 			// we can pass along the config struct.
 		})
-	case balancer.Balancer:
-		lb.HandleResolvedAddrs(s.Addresses, nil)
-	default:
-		grpclog.Error("unexpected balancer type")
+	} else {
+		x.fallbackLB.HandleResolvedAddrs(s.Addresses, nil)
 	}
 }
 
