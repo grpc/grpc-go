@@ -138,7 +138,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 		case percentpb.FractionalPercent_MILLION:
 			denominator = 1000000
 		}
-		newDrops = append(newDrops, newDropper(numerator, denominator))
+		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.GetCategory()))
 
 		// The following reading xdsB.drops doesn't need mutex because it can only
 		// be updated by the code following.

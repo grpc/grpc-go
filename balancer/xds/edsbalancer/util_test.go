@@ -106,7 +106,7 @@ func TestDropper(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newDropper(tt.args.numerator, tt.args.denominator)
+			d := newDropper(tt.args.numerator, tt.args.denominator, "")
 			var (
 				dCount    int
 				wantCount = int(tt.args.numerator) * repeat
