@@ -254,14 +254,6 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			// we support service config validation.
 			return
 		}
-		defer func() {
-			x.config = cfg
-			x.fallbackInitData = &resolver.State{
-				Addresses: u.Addresses,
-				// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
-				// we can pass along the config struct.
-			}
-		}()
 
 		var fallbackChanged bool
 		// service config has been updated.
@@ -269,6 +261,12 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			if x.config == nil {
 				// The first time we get config, we just need to start the xdsClient.
 				x.startNewXDSClient(cfg)
+				x.config = cfg
+				x.fallbackInitData = &resolver.State{
+					Addresses: u.Addresses,
+					// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
+					// we can pass along the config struct.
+				}
 				return
 			}
 
@@ -295,6 +293,13 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 			x.updateFallbackWithResolverState(&resolver.State{
 				Addresses: u.Addresses,
 			})
+		}
+
+		x.config = cfg
+		x.fallbackInitData = &resolver.State{
+			Addresses: u.Addresses,
+			// TODO(yuxuanli): get the fallback balancer config once the validation change completes, where
+			// we can pass along the config struct.
 		}
 	default:
 		// unreachable path
