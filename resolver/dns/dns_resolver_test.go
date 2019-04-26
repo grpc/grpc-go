@@ -1195,24 +1195,8 @@ func TestRateLimitedResolve(t *testing.T) {
 	// end times, and expect the duration elapsed to be in the interval
 	// {2*dnsResRate, 3*dnsResRate}
 	start := time.Now()
-	wantCalls := 2
-	gotCalls := 0
 	done := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(2)
 	go func() {
-		defer wg.Done()
-		for {
-			<-tr.ch
-			gotCalls++
-			if gotCalls == wantCalls {
-				close(done)
-				return
-			}
-		}
-	}()
-	go func() {
-		defer wg.Done()
 		for {
 			select {
 			case <-done:
@@ -1223,20 +1207,33 @@ func TestRateLimitedResolve(t *testing.T) {
 			}
 		}
 	}()
-	wg.Wait()
+
+	gotCalls := 0
+	const wantCalls = 2
+	min, max := wantCalls*dnsResRate, (wantCalls+1)*dnsResRate
+	tMax := time.NewTimer(max)
+	for gotCalls != wantCalls {
+		select {
+		case <-tr.ch:
+			gotCalls++
+		case <-tMax.C:
+			t.Fatalf("Timed out waiting for %v calls after %v; got %v", wantCalls, max, gotCalls)
+		}
+	}
+	close(done)
 	elapsed := time.Since(start)
 
 	if gotCalls != wantCalls {
 		t.Fatalf("resolve count mismatch for target: %q = %+v, want %+v\n", target, gotCalls, wantCalls)
 	}
-	if elapsed < 2*dnsResRate || elapsed > 3*dnsResRate {
-		t.Fatalf("elapsed time: %v, wanted it to be between {%v and %v}", elapsed, 2*dnsResRate, 3*dnsResRate)
+	if elapsed < min {
+		t.Fatalf("elapsed time: %v, wanted it to be between {%v and %v}", elapsed, min, max)
 	}
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
 	var gotAddrs []resolver.Address
-	var cnt int
 	for {
+		var cnt int
 		gotAddrs, cnt = cc.getAddress()
 		if cnt > 0 {
 			break
