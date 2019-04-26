@@ -305,7 +305,7 @@ func TestGetTopChannels(t *testing.T) {
 		},
 		{},
 	}
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	for _, c := range tcs {
 		channelz.RegisterChannel(c, 0, "")
 	}
@@ -349,7 +349,7 @@ func TestGetServers(t *testing.T) {
 			lastCallStartedTimestamp: time.Now().UTC(),
 		},
 	}
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	for _, s := range ss {
 		channelz.RegisterServer(s, "")
 	}
@@ -373,7 +373,7 @@ func TestGetServers(t *testing.T) {
 }
 
 func TestGetServerSockets(t *testing.T) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
 	ids := make([]int64, 3)
@@ -406,7 +406,7 @@ func TestGetServerSockets(t *testing.T) {
 // This test makes a GetServerSockets with a non-zero start ID, and expect only
 // sockets with ID >= the given start ID.
 func TestGetServerSocketsNonZeroStartID(t *testing.T) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
 	ids := make([]int64, 3)
@@ -431,7 +431,7 @@ func TestGetServerSocketsNonZeroStartID(t *testing.T) {
 }
 
 func TestGetChannel(t *testing.T) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
@@ -530,7 +530,7 @@ func TestGetSubChannel(t *testing.T) {
 		subchanConnectivityChange = fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready)
 		subChanPickNewAddress     = fmt.Sprintf("Subchannel picks a new address %q to connect", "0.0.0.0")
 	)
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	ids := make([]int64, 4)
 	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
@@ -598,7 +598,7 @@ func TestGetSubChannel(t *testing.T) {
 }
 
 func TestGetSocket(t *testing.T) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	ss := []*dummySocket{
 		{
 			streamsStarted:                   10,

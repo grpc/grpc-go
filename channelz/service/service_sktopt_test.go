@@ -125,7 +125,7 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 }
 
 func TestGetSocketOptions(t *testing.T) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(false)
 	ss := []*dummySocket{
 		{
 			socketOptions: &channelz.SocketOptionData{

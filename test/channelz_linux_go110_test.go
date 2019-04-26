@@ -40,7 +40,7 @@ func (s) TestCZSocketMetricsSocketOption(t *testing.T) {
 }
 
 func testCZSocketMetricsSocketOption(t *testing.T, e env) {
-	channelz.NewChannelzStorage()
+	channelz.NewChannelzStorage(true)
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()

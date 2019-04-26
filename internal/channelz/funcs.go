@@ -48,7 +48,7 @@ var (
 // TurnOn turns on channelz data collection.
 func TurnOn() {
 	if !IsOn() {
-		NewChannelzStorage()
+		NewChannelzStorage(true)
 		atomic.StoreInt32(&curState, 1)
 	}
 }
@@ -95,9 +95,30 @@ func (d *dbWrapper) get() *channelMap {
 
 // NewChannelzStorage initializes channelz data storage and id generator.
 //
+// If waitClenaup arg is true, then before it initializes the storage, it makes sure the last instance
+// of the storage has been cleaned up. This is a safety measure to prevent old tests from interfering
+// with new test as they share the same global channelz state. It is based on the assumption that
+// if the channelz map is empty, no goroutines will ever try to remove any entity.
+//
 // Note: This function is exported for testing purpose only. User should not call
 // it in most cases.
-func NewChannelzStorage() {
+func NewChannelzStorage(waitCleanup bool) {
+	if waitCleanup {
+		for {
+			cm := db.get()
+			if cm == nil {
+				break
+			}
+			cm.mu.Lock()
+			if len(cm.topLevelChannels) == 0 && len(cm.servers) == 0 && len(cm.channels) == 0 && len(cm.subChannels) == 0 && len(cm.listenSockets) == 0 && len(cm.normalSockets) == 0 {
+				cm.mu.Unlock()
+				// all things stored in the channelz map have been cleared.
+				break
+			}
+			cm.mu.Unlock()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	db.set(&channelMap{
 		topLevelChannels: make(map[int64]struct{}),
 		channels:         make(map[int64]*channel),
