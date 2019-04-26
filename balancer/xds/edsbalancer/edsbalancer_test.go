@@ -27,6 +27,7 @@ import (
 	typespb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer/xds/internal"
 	addresspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
@@ -530,5 +531,57 @@ func TestDropPicker(t *testing.T) {
 				t.Errorf("drops: %+v, scCount %v, wantCount %v", tt.drops, scCount, wantCount)
 			}
 		})
+	}
+}
+
+func TestEDS_LoadReport(t *testing.T) {
+	testLoadStore := newTestLoadStore()
+
+	cc := newTestClientConn(t)
+	edsb := NewXDSBalancer(cc, testLoadStore)
+
+	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityAsMapKey)
+
+	// Two localities, each with one backend.
+	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.addLocality(testSubZones[0], 1, testEndpointAddrs[:1])
+	clab1.addLocality(testSubZones[1], 1, testEndpointAddrs[1:2])
+	edsb.HandleEDSResponse(clab1.build())
+
+	sc1 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+	backendToBalancerID[sc1] = internal.LocalityAsMapKey{
+		SubZone: testSubZones[0],
+	}
+	sc2 := <-cc.newSubConnCh
+	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
+	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
+	backendToBalancerID[sc2] = internal.LocalityAsMapKey{
+		SubZone: testSubZones[1],
+	}
+
+	// Test roundrobin with two subconns.
+	p1 := <-cc.newPickerCh
+	var (
+		wantStart []internal.LocalityAsMapKey
+		wantEnd   []internal.LocalityAsMapKey
+	)
+
+	for i := 0; i < 10; i++ {
+		sc, done, _ := p1.Pick(context.Background(), balancer.PickOptions{})
+		locality := backendToBalancerID[sc]
+		wantStart = append(wantStart, locality)
+		if done != nil && sc != sc1 {
+			done(balancer.DoneInfo{})
+			wantEnd = append(wantEnd, backendToBalancerID[sc])
+		}
+	}
+
+	if !reflect.DeepEqual(testLoadStore.callsStarted, wantStart) {
+		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
+	}
+	if !reflect.DeepEqual(testLoadStore.callsEnded, wantEnd) {
+		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
 	}
 }

@@ -39,6 +39,8 @@ import (
 // them to a server when requested.
 type Store interface {
 	CallDropped(category string)
+	CallStarted(l internal.LocalityAsMapKey)
+	CallFinished(l internal.LocalityAsMapKey, err error)
 	ReportTo(ctx context.Context, cc *grpc.ClientConn)
 }
 
@@ -86,9 +88,13 @@ func (ls *lrsStore) CallDropped(category string) {
 	atomic.AddUint64(p.(*uint64), 1)
 }
 
-// TODO: add query counts
-//  callStarted(l locality)
-//  callFinished(l locality, err error)
+func (ls *lrsStore) CallStarted(l internal.LocalityAsMapKey) {
+	panic("todo: call started")
+}
+
+func (ls *lrsStore) CallFinished(l internal.LocalityAsMapKey, err error) {
+	panic("todo: call finished")
+}
 
 func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	var (

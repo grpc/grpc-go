@@ -17,10 +17,13 @@
 package edsbalancer
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/xds/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
@@ -75,7 +78,7 @@ func (tcc *testClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubCon
 	sc := testSubConns[tcc.subConnIdx]
 	tcc.subConnIdx++
 
-	tcc.t.Logf("testClientConn: NewSubConn(%v, %+v) => %p", a, o, sc)
+	tcc.t.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
 	select {
 	case tcc.newSubConnAddrsCh <- a:
 	default:
@@ -117,6 +120,31 @@ func (tcc *testClientConn) ResolveNow(resolver.ResolveNowOption) {
 }
 
 func (tcc *testClientConn) Target() string {
+	panic("not implemented")
+}
+
+type testLoadStore struct {
+	callsStarted []internal.LocalityAsMapKey
+	callsEnded   []internal.LocalityAsMapKey
+}
+
+func newTestLoadStore() *testLoadStore {
+	return &testLoadStore{}
+}
+
+func (*testLoadStore) CallDropped(category string) {
+	panic("not implemented")
+}
+
+func (tls *testLoadStore) CallStarted(l internal.LocalityAsMapKey) {
+	tls.callsStarted = append(tls.callsStarted, l)
+}
+
+func (tls *testLoadStore) CallFinished(l internal.LocalityAsMapKey, err error) {
+	tls.callsEnded = append(tls.callsEnded, l)
+}
+
+func (*testLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 	panic("not implemented")
 }
 

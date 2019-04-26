@@ -23,20 +23,21 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer/xds/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
-	testBalancerIDs  = []string{"b1", "b2", "b3"}
+	testBalancerIDs  = []internal.LocalityAsMapKey{{Region: "b1"}, {Region: "b2"}, {Region: "b3"}}
 	testBackendAddrs = []resolver.Address{{Addr: "1.1.1.1:1"}, {Addr: "2.2.2.2:2"}, {Addr: "3.3.3.3:3"}, {Addr: "4.4.4.4:4"}}
 )
 
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add one balancer to group.
 	bg.add(testBalancerIDs[0], 1, rrBuilder)
@@ -95,7 +96,7 @@ func TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 // 2 balancers, each with 1 backend.
 func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -127,7 +128,7 @@ func TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 // 2 balancers, each with more than 1 backends.
 func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -223,7 +224,7 @@ func TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 // 2 balancers with different weights.
 func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -261,7 +262,7 @@ func TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 // totally 3 balancers, add/remove balancer.
 func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
@@ -328,7 +329,7 @@ func TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 // 2 balancers, change balancer weight.
 func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := newTestClientConn(t)
-	bg := newBalancerGroup(cc)
+	bg := newBalancerGroup(cc, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -372,5 +373,63 @@ func TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 		return sc
 	}); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+func TestBalancerGroup_LoadReport(t *testing.T) {
+	testLoadStore := newTestLoadStore()
+
+	cc := newTestClientConn(t)
+	bg := newBalancerGroup(cc, testLoadStore)
+
+	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityAsMapKey)
+
+	// Add two balancers to group and send two resolved addresses to both
+	// balancers.
+	bg.add(testBalancerIDs[0], 2, rrBuilder)
+	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
+	sc1 := <-cc.newSubConnCh
+	sc2 := <-cc.newSubConnCh
+	backendToBalancerID[sc1] = testBalancerIDs[0]
+	backendToBalancerID[sc2] = testBalancerIDs[0]
+
+	bg.add(testBalancerIDs[1], 1, rrBuilder)
+	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
+	sc3 := <-cc.newSubConnCh
+	sc4 := <-cc.newSubConnCh
+	backendToBalancerID[sc3] = testBalancerIDs[1]
+	backendToBalancerID[sc4] = testBalancerIDs[1]
+
+	// Send state changes for both subconns.
+	bg.handleSubConnStateChange(sc1, connectivity.Connecting)
+	bg.handleSubConnStateChange(sc1, connectivity.Ready)
+	bg.handleSubConnStateChange(sc2, connectivity.Connecting)
+	bg.handleSubConnStateChange(sc2, connectivity.Ready)
+	bg.handleSubConnStateChange(sc3, connectivity.Connecting)
+	bg.handleSubConnStateChange(sc3, connectivity.Ready)
+	bg.handleSubConnStateChange(sc4, connectivity.Connecting)
+	bg.handleSubConnStateChange(sc4, connectivity.Ready)
+
+	// Test roundrobin on the last picker.
+	p1 := <-cc.newPickerCh
+	var (
+		wantStart []internal.LocalityAsMapKey
+		wantEnd   []internal.LocalityAsMapKey
+	)
+	for i := 0; i < 10; i++ {
+		sc, done, _ := p1.Pick(context.Background(), balancer.PickOptions{})
+		locality := backendToBalancerID[sc]
+		wantStart = append(wantStart, locality)
+		if done != nil && sc != sc1 {
+			done(balancer.DoneInfo{})
+			wantEnd = append(wantEnd, backendToBalancerID[sc])
+		}
+	}
+
+	if !reflect.DeepEqual(testLoadStore.callsStarted, wantStart) {
+		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
+	}
+	if !reflect.DeepEqual(testLoadStore.callsEnded, wantEnd) {
+		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
 	}
 }
