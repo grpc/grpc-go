@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	dc := replaceDNSResRate(time.Duration(0))
 	defer dc()
 
-	cleanup := replaceNetFunc()
+	cleanup := replaceNetFunc(nil)
 	code := m.Run()
 	cleanup()
 	os.Exit(code)
@@ -97,10 +97,8 @@ type testResolver struct {
 }
 
 func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	select {
-	case tr.ch <- struct{}{}:
-	default:
-		// Do not block when the test is not reading from the channel.
+	if tr.ch != nil {
+		tr.ch <- struct{}{}
 	}
 	return hostLookup(host)
 }
@@ -113,9 +111,9 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 	return txtLookup(host)
 }
 
-func replaceNetFunc() func() {
+func replaceNetFunc(ch chan struct{}) func() {
 	oldResolver := defaultResolver
-	defaultResolver = &testResolver{ch: make(chan struct{}, 1)}
+	defaultResolver = &testResolver{ch: ch}
 
 	return func() {
 		defaultResolver = oldResolver
@@ -1157,13 +1155,13 @@ func TestCustomAuthority(t *testing.T) {
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 
-	dnsResRate := 100 * time.Millisecond
+	const dnsResRate = 100 * time.Millisecond
 	dc := replaceDNSResRate(dnsResRate)
 	defer dc()
 
 	// Create a new testResolver{} for this test because we want the exact count
 	// of the number of times the resolver was invoked.
-	nc := replaceNetFunc()
+	nc := replaceNetFunc(make(chan struct{}, 1))
 	defer nc()
 
 	target := "foo.bar.com"
