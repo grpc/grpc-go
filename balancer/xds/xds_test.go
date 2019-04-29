@@ -290,7 +290,7 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 				t.Fatalf("got new subconn address %v, want %v", nsc, append(addrs, specialAddrForBalancerA))
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatal("timeout when geting new subconn result", i)
+			t.Fatal("timeout when geting new subconn result")
 		}
 		addrs = addrs[:2-i]
 	}

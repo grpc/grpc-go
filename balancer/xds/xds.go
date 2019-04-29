@@ -219,6 +219,9 @@ func (x *xdsBalancer) run() {
 
 func getBalancerConfig(serviceConfig string) *xdsConfig {
 	sc := parseFullServiceConfig(serviceConfig)
+	if sc == nil {
+		return nil
+	}
 	var xdsConfigRaw json.RawMessage
 	for _, lbcfg := range sc.LoadBalancingConfig {
 		if lbcfg.Name == xdsName {
