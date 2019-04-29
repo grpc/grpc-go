@@ -5271,6 +5271,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
+	defer s.Stop()
 	testpb.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
@@ -6520,6 +6521,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
+	defer s.Stop()
 	testpb.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -7087,7 +7089,6 @@ func testLargeTimeout(t *testing.T, e env) {
 // test ensures that the connection is re-created after GO_AWAY and not affected by the
 // subsequent (old) connection closure.
 func (s) TestGoAwayThenClose(t *testing.T) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 

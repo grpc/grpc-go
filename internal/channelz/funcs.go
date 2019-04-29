@@ -24,6 +24,7 @@
 package channelz
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -115,6 +116,8 @@ func NewChannelzStorage(waitCleanup bool) {
 				// all things stored in the channelz map have been cleared.
 				break
 			}
+
+			fmt.Println(len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets))
 			cm.mu.Unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
