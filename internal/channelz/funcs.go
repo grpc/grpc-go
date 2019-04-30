@@ -24,7 +24,6 @@
 package channelz
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -49,7 +48,7 @@ var (
 // TurnOn turns on channelz data collection.
 func TurnOn() {
 	if !IsOn() {
-		NewChannelzStorage(true)
+		NewChannelzStorage()
 		atomic.StoreInt32(&curState, 1)
 	}
 }
@@ -96,15 +95,24 @@ func (d *dbWrapper) get() *channelMap {
 
 // NewChannelzStorage initializes channelz data storage and id generator.
 //
-// If waitClenaup arg is true, then before it initializes the storage, it makes sure the last instance
-// of the storage has been cleaned up. This is a safety measure to prevent old tests from interfering
-// with new test as they share the same global channelz state. It is based on the assumption that
-// if the channelz map is empty, no goroutines will ever try to remove any entity.
+// This function returns a cleanup function to wait for all channelz state to be reset by the
+// grpc goroutines when those entities get closed. By using this cleanup function, we make sure tests
+// don't mess up each other, i.e. lingering goroutine from previous test doing entity removal happen
+// to remove some entity just register by the new test, since the id space is the same.
 //
 // Note: This function is exported for testing purpose only. User should not call
 // it in most cases.
-func NewChannelzStorage(waitCleanup bool) {
-	if waitCleanup {
+func NewChannelzStorage() (cleanup func()) {
+	db.set(&channelMap{
+		topLevelChannels: make(map[int64]struct{}),
+		channels:         make(map[int64]*channel),
+		listenSockets:    make(map[int64]*listenSocket),
+		normalSockets:    make(map[int64]*normalSocket),
+		servers:          make(map[int64]*server),
+		subChannels:      make(map[int64]*subChannel),
+	})
+	idGen.reset()
+	return func() {
 		for {
 			cm := db.get()
 			if cm == nil {
@@ -117,20 +125,10 @@ func NewChannelzStorage(waitCleanup bool) {
 				break
 			}
 
-			fmt.Println(len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets))
 			cm.mu.Unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	db.set(&channelMap{
-		topLevelChannels: make(map[int64]struct{}),
-		channels:         make(map[int64]*channel),
-		listenSockets:    make(map[int64]*listenSocket),
-		normalSockets:    make(map[int64]*normalSocket),
-		servers:          make(map[int64]*server),
-		subChannels:      make(map[int64]*subChannel),
-	})
-	idGen.reset()
 }
 
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a

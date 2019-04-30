@@ -5271,7 +5271,6 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
 	s := grpc.NewServer(sopts...)
-	defer s.Stop()
 	testpb.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
@@ -6513,7 +6512,6 @@ func testCompressorRegister(t *testing.T, e env) {
 }
 
 func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
-
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
