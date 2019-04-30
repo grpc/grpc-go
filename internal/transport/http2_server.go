@@ -221,7 +221,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep:               kep,
 		initialWindowSize: iwz,
 		czData:            new(channelzData),
-		bufferPool:        newBufferPool(20),
+		bufferPool:        newBufferPool(100),
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if dynamicWindow {
