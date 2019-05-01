@@ -24,6 +24,8 @@
 package channelz
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -102,7 +104,7 @@ func (d *dbWrapper) get() *channelMap {
 //
 // Note: This function is exported for testing purpose only. User should not call
 // it in most cases.
-func NewChannelzStorage() (cleanup func()) {
+func NewChannelzStorage() (cleanup func() error) {
 	db.set(&channelMap{
 		topLevelChannels: make(map[int64]struct{}),
 		channels:         make(map[int64]*channel),
@@ -112,22 +114,26 @@ func NewChannelzStorage() (cleanup func()) {
 		subChannels:      make(map[int64]*subChannel),
 	})
 	idGen.reset()
-	return func() {
-		for {
+	return func() error {
+		var err error
+		for i := 0; i < 1000; i++ {
 			cm := db.get()
 			if cm == nil {
 				break
 			}
 			cm.mu.Lock()
 			if len(cm.topLevelChannels) == 0 && len(cm.servers) == 0 && len(cm.channels) == 0 && len(cm.subChannels) == 0 && len(cm.listenSockets) == 0 && len(cm.normalSockets) == 0 {
+				if i == 999 {
+					err = errors.New(fmt.Sprintf("after 10s the channelz map has not been cleaned up yet, topchannels: %d, servers: %d, channels: %d, subchannels: %d, listen sockets: %d, normal sockets: %d", len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets)))
+				}
 				cm.mu.Unlock()
 				// all things stored in the channelz map have been cleared.
 				break
 			}
-
 			cm.mu.Unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
+		return err
 	}
 }
 
