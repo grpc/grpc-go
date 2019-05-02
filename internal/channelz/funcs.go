@@ -24,7 +24,6 @@
 package channelz
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -116,23 +115,24 @@ func NewChannelzStorage() (cleanup func() error) {
 	idGen.reset()
 	return func() error {
 		var err error
+		cm := db.get()
+		if cm == nil {
+			return nil
+		}
 		for i := 0; i < 1000; i++ {
-			cm := db.get()
-			if cm == nil {
-				break
-			}
 			cm.mu.Lock()
 			if len(cm.topLevelChannels) == 0 && len(cm.servers) == 0 && len(cm.channels) == 0 && len(cm.subChannels) == 0 && len(cm.listenSockets) == 0 && len(cm.normalSockets) == 0 {
-				if i == 999 {
-					err = errors.New(fmt.Sprintf("after 10s the channelz map has not been cleaned up yet, topchannels: %d, servers: %d, channels: %d, subchannels: %d, listen sockets: %d, normal sockets: %d", len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets)))
-				}
 				cm.mu.Unlock()
 				// all things stored in the channelz map have been cleared.
-				break
+				return nil
 			}
 			cm.mu.Unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
+
+		cm.mu.Lock()
+		err = fmt.Errorf("after 10s the channelz map has not been cleaned up yet, topchannels: %d, servers: %d, channels: %d, subchannels: %d, listen sockets: %d, normal sockets: %d", len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets))
+		cm.mu.Unlock()
 		return err
 	}
 }
