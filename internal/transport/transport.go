@@ -583,7 +583,7 @@ type ClientTransport interface {
 	// finished, the transport will close.
 	//
 	// It does not block.
-	GracefulClose() error
+	GracefulClose()
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
