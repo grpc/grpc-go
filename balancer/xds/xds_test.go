@@ -485,8 +485,10 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
 	})
 
+	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	cfg.FallbackPolicy = []lbPolicy{fakeBalancerB}
 	lb.UpdateResolverState(resolver.State{
+		Addresses:     addrs,
 		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
 	})
 
@@ -504,12 +506,6 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 	}
 
 	cleanup()
-
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	lb.UpdateResolverState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
-	})
 
 	// verify fallback balancer B takes over
 	select {
