@@ -40,8 +40,7 @@ type lrsStore struct {
 	backoff      backoff.Strategy
 	lastReported time.Time
 
-	mu    sync.RWMutex
-	drops map[string]*uint64
+	drops sync.Map // map[string]*uint64
 }
 
 const grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
@@ -62,28 +61,16 @@ func newStore(serviceName string) *lrsStore {
 			MaxDelay: 120 * time.Second,
 		},
 		lastReported: time.Now(),
-		drops:        make(map[string]*uint64),
 	}
 }
 
 func (ls *lrsStore) callDropped(category string) {
-	ls.mu.RLock()
-	if p, ok := ls.drops[category]; ok {
-		atomic.AddUint64(p, 1)
-		ls.mu.RUnlock()
-		return
+	p, ok := ls.drops.Load(category)
+	if !ok {
+		tp := new(uint64)
+		p, _ = ls.drops.LoadOrStore(category, tp)
 	}
-	ls.mu.RUnlock()
-
-	ls.mu.Lock()
-	if p, ok := ls.drops[category]; ok {
-		atomic.AddUint64(p, 1)
-		ls.mu.Unlock()
-		return
-	}
-	var temp uint64 = 1
-	ls.drops[category] = &temp
-	ls.mu.Unlock()
+	atomic.AddUint64(p.(*uint64), 1)
 }
 
 // TODO: add query counts
@@ -91,30 +78,22 @@ func (ls *lrsStore) callDropped(category string) {
 //  callFinished(l locality, err error)
 
 func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
-	ls.mu.Lock()
-	drops := ls.drops
-	ls.drops = make(map[string]*uint64)
-	dur := time.Since(ls.lastReported)
-	ls.lastReported = time.Now()
-	ls.mu.Unlock()
-
 	var (
 		totalDropped uint64
 		droppedReqs  []*loadreportpb.ClusterStats_DroppedRequests
 	)
-	if l := len(drops); l > 0 {
-		droppedReqs = make([]*loadreportpb.ClusterStats_DroppedRequests, l)
-		i := 0
-		for cat, count := range drops {
-			tempCount := atomic.LoadUint64(count)
-			totalDropped += tempCount
-			droppedReqs[i] = &loadreportpb.ClusterStats_DroppedRequests{
-				Category:     cat,
-				DroppedCount: tempCount,
-			}
-			i++
-		}
-	}
+	ls.drops.Range(func(category, countP interface{}) bool {
+		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
+		totalDropped += tempCount
+		droppedReqs = append(droppedReqs, &loadreportpb.ClusterStats_DroppedRequests{
+			Category:     category.(string),
+			DroppedCount: tempCount,
+		})
+		return true
+	})
+
+	dur := time.Since(ls.lastReported)
+	ls.lastReported = time.Now()
 
 	var ret []*loadreportpb.ClusterStats
 	ret = append(ret, &loadreportpb.ClusterStats{
