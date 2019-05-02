@@ -107,25 +107,51 @@ func (mwsm *mapWithSyncMap) result(c string) uint64 {
 
 func benchmarkIncrementUint64Map(b *testing.B, f func() incrementUint64Map) {
 	const cat = "cat"
-	m := f()
-	var wg sync.WaitGroup
-	wg.Add(b.N)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// wg.Add(1)
-		go func() {
-			m.increment(cat)
-			wg.Done()
-		}()
+	benches := []struct {
+		name           string
+		goroutineCount int
+	}{
+		{
+			name:           "   1",
+			goroutineCount: 1,
+		},
+		{
+			name:           "  10",
+			goroutineCount: 10,
+		},
+		{
+			name:           " 100",
+			goroutineCount: 100,
+		},
+		{
+			name:           "1000",
+			goroutineCount: 1000,
+		},
 	}
-	wg.Wait()
-	b.StopTimer()
-	if m.result(cat) != uint64(b.N) {
-		b.Fatalf("result is %d, want %d", m.result(cat), b.N)
+	for _, bb := range benches {
+		b.Run(bb.name, func(b *testing.B) {
+			m := f()
+			var wg sync.WaitGroup
+			wg.Add(bb.goroutineCount)
+			b.ResetTimer()
+			for i := 0; i < bb.goroutineCount; i++ {
+				go func() {
+					for j := 0; j < b.N; j++ {
+						m.increment(cat)
+					}
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+			b.StopTimer()
+			if m.result(cat) != uint64(bb.goroutineCount*b.N) {
+				b.Fatalf("result is %d, want %d", m.result(cat), b.N)
+			}
+		})
 	}
 }
 
-func BenchmarkMapWithLock(b *testing.B) {
+func BenchmarkMapWithSyncMutexContetion(b *testing.B) {
 	benchmarkIncrementUint64Map(b, newMapWithLock)
 }
 
