@@ -19,6 +19,7 @@ package lrs
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -39,8 +40,8 @@ type lrsStore struct {
 	backoff      backoff.Strategy
 	lastReported time.Time
 
-	mu    sync.Mutex
-	drops map[string]uint64
+	mu    sync.RWMutex
+	drops map[string]*uint64
 }
 
 const grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
@@ -61,13 +62,27 @@ func newStore(serviceName string) *lrsStore {
 			MaxDelay: 120 * time.Second,
 		},
 		lastReported: time.Now(),
-		drops:        make(map[string]uint64),
+		drops:        make(map[string]*uint64),
 	}
 }
 
 func (ls *lrsStore) callDropped(category string) {
+	ls.mu.RLock()
+	if p, ok := ls.drops[category]; ok {
+		atomic.AddUint64(p, 1)
+		ls.mu.RUnlock()
+		return
+	}
+	ls.mu.RUnlock()
+
 	ls.mu.Lock()
-	ls.drops[category]++
+	if p, ok := ls.drops[category]; ok {
+		atomic.AddUint64(p, 1)
+		ls.mu.Unlock()
+		return
+	}
+	var temp uint64 = 1
+	ls.drops[category] = &temp
 	ls.mu.Unlock()
 }
 
@@ -78,7 +93,7 @@ func (ls *lrsStore) callDropped(category string) {
 func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	ls.mu.Lock()
 	drops := ls.drops
-	ls.drops = make(map[string]uint64)
+	ls.drops = make(map[string]*uint64)
 	dur := time.Since(ls.lastReported)
 	ls.lastReported = time.Now()
 	ls.mu.Unlock()
@@ -91,10 +106,11 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 		droppedReqs = make([]*loadreportpb.ClusterStats_DroppedRequests, l)
 		i := 0
 		for cat, count := range drops {
-			totalDropped += count
+			tempCount := atomic.LoadUint64(count)
+			totalDropped += tempCount
 			droppedReqs[i] = &loadreportpb.ClusterStats_DroppedRequests{
 				Category:     cat,
-				DroppedCount: count,
+				DroppedCount: tempCount,
 			}
 			i++
 		}

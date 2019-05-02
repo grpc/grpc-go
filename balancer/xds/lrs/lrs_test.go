@@ -107,11 +107,17 @@ func Test_lrsStore_buildStats(t *testing.T) {
 					},
 				}
 
+				var wg sync.WaitGroup
 				for c, count := range ds {
 					for i := 0; i < int(count); i++ {
-						ls.callDropped(c)
+						wg.Add(1)
+						go func(i int, c string) {
+							ls.callDropped(c)
+							wg.Done()
+						}(i, c)
 					}
 				}
+				wg.Wait()
 
 				if got := ls.buildStats(); !equalClusterStats(got, want) {
 					t.Errorf("lrsStore.buildStats() = %v, want %v", got, want)
