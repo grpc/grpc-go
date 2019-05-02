@@ -1130,9 +1130,7 @@ func TestGracefulClose(t *testing.T) {
 	if _, err := s.Read(recvMsg); err != nil {
 		t.Fatalf("Error while reading: %v", err)
 	}
-	if err = ct.GracefulClose(); err != nil {
-		t.Fatalf("GracefulClose() = %v, want <nil>", err)
-	}
+	ct.GracefulClose()
 	var wg sync.WaitGroup
 	// Expect the failure for all the follow-up streams because ct has been closed gracefully.
 	for i := 0; i < 200; i++ {
