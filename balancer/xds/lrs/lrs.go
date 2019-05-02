@@ -39,7 +39,7 @@ type Store interface {
 	ReportTo(ctx context.Context, cc *grpc.ClientConn)
 }
 
-//lrsStore collects loads from xds balancer, and periodically sends load to the
+// lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
 	serviceName  string
