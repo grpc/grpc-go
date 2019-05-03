@@ -69,7 +69,9 @@ type client struct {
 	loseContact  func(ctx context.Context)
 	cleanup      func()
 	backoff      backoff.Strategy
-	loadStore    lrs.Store
+
+	loadStore      lrs.Store
+	loadReportOnce sync.Once
 
 	mu sync.Mutex
 	cc *grpc.ClientConn
@@ -77,9 +79,6 @@ type client struct {
 
 func (c *client) run() {
 	c.dial()
-	if c.loadStore != nil {
-		go c.loadStore.ReportTo(c.ctx, c.cc)
-	}
 	c.makeADSCall()
 }
 
@@ -254,6 +253,15 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 			grpclog.Warningf("xds: processing new ADS message failed due to %v.", err)
 			return
 		}
+		// Only start load reporting after ADS resp is received.
+		//
+		// Also, newADS() will close the previous load reporting stream, so we
+		// don't have double reporting.
+		c.loadReportOnce.Do(func() {
+			if c.loadStore != nil {
+				go c.loadStore.ReportTo(c.ctx, c.cc)
+			}
+		})
 	}
 }
 func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
