@@ -64,6 +64,9 @@ func newStore(serviceName string) *lrsStore {
 	}
 }
 
+// Update functions are called by picker for each RPC. To avoid contention, all
+// updates are done atomically.
+
 func (ls *lrsStore) callDropped(category string) {
 	p, ok := ls.drops.Load(category)
 	if !ok {
@@ -84,6 +87,9 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	)
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
+		if tempCount <= 0 {
+			return true
+		}
 		totalDropped += tempCount
 		droppedReqs = append(droppedReqs, &loadreportpb.ClusterStats_DroppedRequests{
 			Category:     category.(string),

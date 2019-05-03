@@ -79,6 +79,7 @@ func (mwaf *mapWithAtomicFastpath) increment(c string) {
 	mwaf.m[c] = &temp
 	mwaf.mu.Unlock()
 }
+
 func (mwaf *mapWithAtomicFastpath) result(c string) uint64 {
 	return atomic.LoadUint64(mwaf.m[c])
 }
