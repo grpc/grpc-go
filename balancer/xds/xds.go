@@ -36,7 +36,6 @@ import (
 	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	"google.golang.org/grpc/balancer/xds/lrs"
-
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -79,7 +78,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		timer:           createDrainedTimer(), // initialized a timer that won't fire without reset
-		loadStore:       lrs.NewStore(cc.Target()),
+		loadStore:       lrs.NewStore(opts.Target.Endpoint),
 	}
 	x.cc = &xdsClientConn{
 		updateState: x.connStateMgr.updateState,
@@ -187,7 +186,7 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, x.cc.Target(), u.ChildPolicy == nil, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
+	x.client = newXDSClient(u.BalancerName, u.ChildPolicy == nil, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
@@ -451,8 +450,8 @@ func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) er
 	var update interface{}
 	switch u := resp.(type) {
 	case *cdspb.Cluster:
-		if u.GetName() != x.cc.Target() {
-			return fmt.Errorf("unmatched service name, got %s, want %s", u.GetName(), x.cc.Target())
+		if u.GetName() != x.buildOpts.Target.Endpoint {
+			return fmt.Errorf("unmatched service name, got %s, want %s", u.GetName(), x.buildOpts.Target.Endpoint)
 		}
 		if u.GetType() != cdspb.Cluster_EDS {
 			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), cdspb.Cluster_EDS)

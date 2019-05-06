@@ -30,6 +30,7 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/xds/internal"
 	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
@@ -42,7 +43,6 @@ import (
 )
 
 const (
-	grpcHostname     = "com.googleapis.trafficdirector.grpc_hostname"
 	cdsType          = "type.googleapis.com/envoy.api.v2.Cluster"
 	edsType          = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	endpointRequired = "endpoints_required"
@@ -135,7 +135,7 @@ func (c *client) newCDSRequest() *discoverypb.DiscoveryRequest {
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					grpcHostname: {
+					internal.GrpcHostname: {
 						Kind: &structpb.Value_StringValue{StringValue: c.serviceName},
 					},
 				},
@@ -209,11 +209,13 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 	if c.enableCDS {
 		if err := st.Send(c.newCDSRequest()); err != nil {
 			// current stream is broken, start a new one.
+			grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the CDS request ", err)
 			return
 		}
 	}
 	if err := st.Send(c.newEDSRequest()); err != nil {
 		// current stream is broken, start a new one.
+		grpclog.Infof("xds: ads RPC failed due to err: %v, when sending the EDS request", err)
 		return
 	}
 	expectCDS := c.enableCDS
@@ -221,6 +223,7 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 		resp, err := st.Recv()
 		if err != nil {
 			// current stream is broken, start a new one.
+			grpclog.Infof("xds: ads RPC failed due to err: %v, when receiving the response", err)
 			return
 		}
 		firstRespReceived = true
@@ -264,10 +267,11 @@ func (c *client) adsCallAttempt() (firstRespReceived bool) {
 		})
 	}
 }
-func newXDSClient(balancerName string, serviceName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
+
+func newXDSClient(balancerName string, enableCDS bool, opts balancer.BuildOptions, loadStore lrs.Store, newADS func(context.Context, proto.Message) error, loseContact func(ctx context.Context), exitCleanup func()) *client {
 	c := &client{
 		balancerName: balancerName,
-		serviceName:  serviceName,
+		serviceName:  opts.Target.Endpoint,
 		enableCDS:    enableCDS,
 		opts:         opts,
 		newADS:       newADS,

@@ -32,6 +32,7 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	loadreportpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/load_report"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
@@ -144,7 +145,7 @@ func (lrss *lrsServer) StreamLoadStats(stream lrspb.LoadReportingService_StreamL
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					grpcHostname: {
+					internal.GrpcHostname: {
 						Kind: &structpb.Value_StringValue{StringValue: testService},
 					},
 				},

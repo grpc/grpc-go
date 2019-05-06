@@ -35,6 +35,7 @@ import (
 	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/xds/internal"
 	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
 	addresspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/address"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
@@ -44,6 +45,7 @@ import (
 	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
 
@@ -53,7 +55,7 @@ var (
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					grpcHostname: {
+					internal.GrpcHostname: {
 						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
 					},
 				},
@@ -318,7 +320,7 @@ func testXdsClientResponseHandling(t *testing.T, test *testConfig) {
 		adsChan <- i
 		return nil
 	}
-	client := newXDSClient(addr, testServiceName, test.doCDS, balancer.BuildOptions{}, nil, newADS, func(context.Context) {}, func() {})
+	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, func(context.Context) {}, func() {})
 	defer client.close()
 	go client.run()
 
@@ -386,7 +388,7 @@ func testXdsClientLoseContactRemoteClose(t *testing.T, test *testConfig) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, testServiceName, test.doCDS, balancer.BuildOptions{}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -420,7 +422,7 @@ func testXdsClientLoseContactADSRelatedErrorOccur(t *testing.T, test *testConfig
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, testServiceName, test.doCDS, balancer.BuildOptions{}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, test.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 
@@ -454,7 +456,7 @@ func (s) TestXdsClientExponentialRetry(t *testing.T) {
 	loseContactFunc := func(context.Context) {
 		contactChan <- &loseContact{}
 	}
-	client := newXDSClient(addr, testServiceName, cfg.doCDS, balancer.BuildOptions{}, nil, newADS, loseContactFunc, func() {})
+	client := newXDSClient(addr, cfg.doCDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, newADS, loseContactFunc, func() {})
 	defer client.close()
 	go client.run()
 

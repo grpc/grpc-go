@@ -276,7 +276,7 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -310,7 +310,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -385,7 +385,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -471,7 +471,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -546,7 +546,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -626,7 +626,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}

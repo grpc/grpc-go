@@ -31,6 +31,7 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/codes"
@@ -54,7 +55,7 @@ func (lrss *lrsServer) StreamLoadStats(stream lrspb.LoadReportingService_StreamL
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					grpcHostname: {
+					internal.GrpcHostname: {
 						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
 					},
 				},
@@ -97,7 +98,7 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 
 	builder := balancer.Get("xds")
 	cc := newTestClientConn()
-	lb, ok := builder.Build(cc, balancer.BuildOptions{}).(*xdsBalancer)
+	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
 		t.Fatalf("unable to type assert to *xdsBalancer")
 	}
@@ -152,6 +153,6 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 	lrss.mu.Lock()
 	defer lrss.mu.Unlock()
 	if !cmp.Equal(lrss.drops, drops) {
-		t.Errorf("different: %v", cmp.Diff(lrss.drops, drops))
+		t.Errorf("different: %v %v %v", lrss.drops, drops, cmp.Diff(lrss.drops, drops))
 	}
 }
