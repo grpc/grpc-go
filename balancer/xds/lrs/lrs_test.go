@@ -19,11 +19,13 @@ package lrs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,7 +45,23 @@ import (
 
 const testService = "grpc.service.test"
 
-var dropCategories = []string{"drop_for_real", "drop_for_fun"}
+var (
+	dropCategories = []string{"drop_for_real", "drop_for_fun"}
+	localities     = []internal.LocalityAsMapKey{{Region: "a"}, {Region: "b"}}
+	errTest        = fmt.Errorf("test error")
+)
+
+func newRPCCountDataWithInitData(succeeded, errored, inprogress uint64) *rpcCountData {
+	return &rpcCountData{
+		succeeded:  &succeeded,
+		errored:    &errored,
+		inProgress: &inprogress,
+	}
+}
+
+func (rcd *rpcCountData) Equal(b *rpcCountData) bool {
+	return *rcd.inProgress == *b.inProgress && *rcd.errored == *b.errored && *rcd.succeeded == *b.succeeded
+}
 
 // equalClusterStats sorts requests and clear report internal before comparing.
 func equalClusterStats(a, b []*loadreportpb.ClusterStats) bool {
@@ -51,31 +69,37 @@ func equalClusterStats(a, b []*loadreportpb.ClusterStats) bool {
 		sort.Slice(s.DroppedRequests, func(i, j int) bool {
 			return s.DroppedRequests[i].Category < s.DroppedRequests[j].Category
 		})
+		sort.Slice(s.UpstreamLocalityStats, func(i, j int) bool {
+			return s.UpstreamLocalityStats[i].Locality.String() < s.UpstreamLocalityStats[j].Locality.String()
+		})
 		s.LoadReportInterval = nil
 	}
 	for _, s := range b {
 		sort.Slice(s.DroppedRequests, func(i, j int) bool {
 			return s.DroppedRequests[i].Category < s.DroppedRequests[j].Category
 		})
+		sort.Slice(s.UpstreamLocalityStats, func(i, j int) bool {
+			return s.UpstreamLocalityStats[i].Locality.String() < s.UpstreamLocalityStats[j].Locality.String()
+		})
 		s.LoadReportInterval = nil
 	}
 	return reflect.DeepEqual(a, b)
 }
 
-func Test_lrsStore_buildStats(t *testing.T) {
+func Test_lrsStore_buildStats_drops(t *testing.T) {
 	tests := []struct {
 		name  string
 		drops []map[string]uint64
 	}{
 		{
-			name: "one report",
+			name: "one drop report",
 			drops: []map[string]uint64{{
 				dropCategories[0]: 31,
 				dropCategories[1]: 41,
 			}},
 		},
 		{
-			name: "two reports",
+			name: "two drop reports",
 			drops: []map[string]uint64{{
 				dropCategories[0]: 31,
 				dropCategories[1]: 41,
@@ -130,11 +154,118 @@ func Test_lrsStore_buildStats(t *testing.T) {
 	}
 }
 
+func Test_lrsStore_buildStats_rpcCounts(t *testing.T) {
+	tests := []struct {
+		name string
+		rpcs []map[internal.LocalityAsMapKey]*rpcCountData
+	}{
+		{
+			name: "one rpcCount report",
+			rpcs: []map[internal.LocalityAsMapKey]*rpcCountData{{
+				localities[0]: newRPCCountDataWithInitData(3, 1, 4),
+			}},
+		},
+		{
+			name: "two localities rpcCount reports",
+			rpcs: []map[internal.LocalityAsMapKey]*rpcCountData{{
+				localities[0]: newRPCCountDataWithInitData(3, 1, 4),
+				localities[1]: newRPCCountDataWithInitData(1, 5, 9),
+			}},
+		},
+		{
+			name: "two rpcCount reports",
+			rpcs: []map[internal.LocalityAsMapKey]*rpcCountData{{
+				localities[0]: newRPCCountDataWithInitData(3, 1, 4),
+				localities[1]: newRPCCountDataWithInitData(1, 5, 9),
+			}, {
+				localities[0]: newRPCCountDataWithInitData(3, 1, 4),
+			}, {
+				localities[1]: newRPCCountDataWithInitData(1, 5, 9),
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ls := NewStore(testService).(*lrsStore)
+
+			// InProgress count doesn't get cleared at each buildStats, keep
+			// them to carry over.
+			inProgressCounts := make(map[internal.LocalityAsMapKey]uint64)
+
+			for _, counts := range tt.rpcs {
+				var upstreamLocalityStats []*loadreportpb.UpstreamLocalityStats
+
+				for l, count := range counts {
+					tempInProgress := *count.inProgress + inProgressCounts[l]
+					upstreamLocalityStats = append(upstreamLocalityStats, &loadreportpb.UpstreamLocalityStats{
+						Locality:                l.ToProto(),
+						TotalSuccessfulRequests: *count.succeeded,
+						TotalRequestsInProgress: tempInProgress,
+						TotalErrorRequests:      *count.errored,
+					})
+					inProgressCounts[l] = tempInProgress
+				}
+				// InProgress count doesn't get cleared at each buildStats, and
+				// needs to be carried over to the next result.
+				for l, c := range inProgressCounts {
+					if _, ok := counts[l]; !ok {
+						upstreamLocalityStats = append(upstreamLocalityStats, &loadreportpb.UpstreamLocalityStats{
+							Locality:                l.ToProto(),
+							TotalRequestsInProgress: c,
+						})
+					}
+				}
+				want := []*loadreportpb.ClusterStats{
+					{
+						ClusterName:           testService,
+						UpstreamLocalityStats: upstreamLocalityStats,
+					},
+				}
+
+				var wg sync.WaitGroup
+				for l, count := range counts {
+					for i := 0; i < int(*count.succeeded); i++ {
+						wg.Add(1)
+						go func(i int, l internal.LocalityAsMapKey) {
+							ls.CallStarted(l)
+							ls.CallFinished(l, nil)
+							wg.Done()
+						}(i, l)
+					}
+					for i := 0; i < int(*count.inProgress); i++ {
+						wg.Add(1)
+						go func(i int, l internal.LocalityAsMapKey) {
+							ls.CallStarted(l)
+							wg.Done()
+						}(i, l)
+					}
+					for i := 0; i < int(*count.errored); i++ {
+						wg.Add(1)
+						go func(i int, l internal.LocalityAsMapKey) {
+							ls.CallStarted(l)
+							ls.CallFinished(l, errTest)
+							wg.Done()
+						}(i, l)
+					}
+				}
+				wg.Wait()
+
+				if got := ls.buildStats(); !equalClusterStats(got, want) {
+					t.Errorf("lrsStore.buildStats() = %v, want %v", got, want)
+					t.Errorf("%s", cmp.Diff(got, want))
+				}
+			}
+		})
+	}
+}
+
 type lrsServer struct {
-	mu                sync.Mutex
-	dropTotal         uint64
-	drops             map[string]uint64
 	reportingInterval *durationpb.Duration
+
+	mu        sync.Mutex
+	dropTotal uint64
+	drops     map[string]uint64
+	rpcs      map[internal.LocalityAsMapKey]*rpcCountData
 }
 
 func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
@@ -176,6 +307,21 @@ func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_Strea
 		for _, d := range stats.DroppedRequests {
 			lrss.drops[d.Category] += d.DroppedCount
 		}
+		for _, ss := range stats.UpstreamLocalityStats {
+			l := internal.LocalityAsMapKey{
+				Region:  ss.Locality.Region,
+				Zone:    ss.Locality.Zone,
+				SubZone: ss.Locality.SubZone,
+			}
+			counts, ok := lrss.rpcs[l]
+			if !ok {
+				counts = newRPCCountDataWithInitData(0, 0, 0)
+				lrss.rpcs[l] = counts
+			}
+			atomic.AddUint64(counts.succeeded, ss.TotalSuccessfulRequests)
+			atomic.StoreUint64(counts.inProgress, ss.TotalRequestsInProgress)
+			atomic.AddUint64(counts.errored, ss.TotalErrorRequests)
+		}
 		lrss.mu.Unlock()
 	}
 }
@@ -187,8 +333,9 @@ func setupServer(t *testing.T, reportingInterval *durationpb.Duration) (addr str
 	}
 	svr := grpc.NewServer()
 	lrss = &lrsServer{
-		drops:             make(map[string]uint64),
 		reportingInterval: reportingInterval,
+		drops:             make(map[string]uint64),
+		rpcs:              make(map[internal.LocalityAsMapKey]*rpcCountData),
 	}
 	lrsgrpc.RegisterLoadReportingServiceServer(svr, lrss)
 	go svr.Serve(lis)
@@ -220,16 +367,40 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	}()
 
 	drops := map[string]uint64{
-		dropCategories[0]: 31,
-		dropCategories[1]: 41,
+		dropCategories[0]: 13,
+		dropCategories[1]: 14,
 	}
-
 	for c, d := range drops {
 		for i := 0; i < int(d); i++ {
 			ls.CallDropped(c)
 			time.Sleep(time.Nanosecond * intervalNano / 10)
 		}
 	}
+
+	rpcs := map[internal.LocalityAsMapKey]*rpcCountData{
+		localities[0]: newRPCCountDataWithInitData(3, 1, 4),
+		localities[1]: newRPCCountDataWithInitData(1, 5, 9),
+	}
+	for l, count := range rpcs {
+		for i := 0; i < int(*count.succeeded); i++ {
+			go func(i int, l internal.LocalityAsMapKey) {
+				ls.CallStarted(l)
+				ls.CallFinished(l, nil)
+			}(i, l)
+		}
+		for i := 0; i < int(*count.inProgress); i++ {
+			go func(i int, l internal.LocalityAsMapKey) {
+				ls.CallStarted(l)
+			}(i, l)
+		}
+		for i := 0; i < int(*count.errored); i++ {
+			go func(i int, l internal.LocalityAsMapKey) {
+				ls.CallStarted(l)
+				ls.CallFinished(l, errTest)
+			}(i, l)
+		}
+	}
+
 	time.Sleep(time.Nanosecond * intervalNano * 2)
 	cancel()
 	<-done
@@ -238,5 +409,8 @@ func Test_lrsStore_ReportTo(t *testing.T) {
 	defer lrss.mu.Unlock()
 	if !cmp.Equal(lrss.drops, drops) {
 		t.Errorf("different: %v", cmp.Diff(lrss.drops, drops))
+	}
+	if !cmp.Equal(lrss.rpcs, rpcs) {
+		t.Errorf("different: %v", cmp.Diff(lrss.rpcs, rpcs))
 	}
 }

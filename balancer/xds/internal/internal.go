@@ -17,7 +17,11 @@
 
 package internal
 
-import "fmt"
+import (
+	"fmt"
+
+	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+)
 
 // LocalityAsMapKey is xds.Locality without XXX fields, so it can be used as map
 // keys.
@@ -31,4 +35,13 @@ type LocalityAsMapKey struct {
 
 func (lamk LocalityAsMapKey) String() string {
 	return fmt.Sprintf("%s-%s-%s", lamk.Region, lamk.Zone, lamk.SubZone)
+}
+
+// ToProto convert LocalityAsMapKey to the proto representation.
+func (lamk LocalityAsMapKey) ToProto() *basepb.Locality {
+	return &basepb.Locality{
+		Region:  lamk.Region,
+		Zone:    lamk.Zone,
+		SubZone: lamk.SubZone,
+	}
 }
