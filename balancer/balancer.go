@@ -155,6 +155,8 @@ type BuildOptions struct {
 	Dialer func(context.Context, string) (net.Conn, error)
 	// ChannelzParentID is the entity parent's channelz unique identification number.
 	ChannelzParentID int64
+	// ParsedTarget contains the parsed address info of the dial target.
+	ParsedTarget resolver.Target
 }
 
 // Builder creates a balancer.
