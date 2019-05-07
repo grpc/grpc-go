@@ -27,16 +27,16 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	orcapb "google.golang.org/grpc/balancer/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
+	"google.golang.org/grpc/balancer/xds/orca"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/balancerload/orca"
-	orcapb "google.golang.org/grpc/internal/balancerload/orca/orca_v1"
 	"google.golang.org/grpc/resolver"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 
-	_ "google.golang.org/grpc/internal/balancerload/orca"
+	_ "google.golang.org/grpc/balancer/xds/orca"
 )
 
 const testBalancerName = "testbalancer"

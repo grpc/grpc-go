@@ -22,16 +22,14 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/internal/balancerload/orca/orca_v1"
+	orcapb "google.golang.org/grpc/balancer/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 	"google.golang.org/grpc/metadata"
 )
 
 var (
-	testMessage = &orca_v1.LoadReport{
+	testMessage = &orcapb.OrcaLoadReport{
 		CpuUtilization:           0.1,
 		MemUtilization:           0.2,
-		NicInUtilization:         0,
-		NicOutUtilization:        0,
 		RequestCostOrUtilization: map[string]float64{"ttt": 0.4},
 	}
 	testBytes, _ = proto.Marshal(testMessage)
@@ -40,7 +38,7 @@ var (
 func TestToMetadata(t *testing.T) {
 	tests := []struct {
 		name string
-		r    *orca_v1.LoadReport
+		r    *orcapb.OrcaLoadReport
 		want metadata.MD
 	}{{
 		name: "nil",
@@ -66,7 +64,7 @@ func TestFromMetadata(t *testing.T) {
 	tests := []struct {
 		name string
 		md   metadata.MD
-		want *orca_v1.LoadReport
+		want *orcapb.OrcaLoadReport
 	}{{
 		name: "nil",
 		md:   nil,
