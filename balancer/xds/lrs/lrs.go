@@ -136,7 +136,6 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 		droppedReqs   []*loadreportpb.ClusterStats_DroppedRequests
 		localityStats []*loadreportpb.UpstreamLocalityStats
 	)
-	// TODO: skip if count is zero.
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
 		if tempCount == 0 {
@@ -149,10 +148,16 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 		})
 		return true
 	})
-	// TODO: skip if all counts are zero.
 	ls.localityRPCCount.Range(func(locality, countP interface{}) bool {
 		tempLocality := locality.(internal.LocalityAsMapKey)
 		tempCount := countP.(*rpcCountData)
+
+		tempSucceeded := atomic.SwapUint64(tempCount.succeeded, 0)
+		tempInProgress := atomic.LoadUint64(tempCount.inProgress) // InProgress count is not clear when reading.
+		tempErrored := atomic.SwapUint64(tempCount.errored, 0)
+		if tempSucceeded == 0 && tempInProgress == 0 && tempErrored == 0 {
+			return true
+		}
 
 		localityStats = append(localityStats, &loadreportpb.UpstreamLocalityStats{
 			Locality: &basepb.Locality{
@@ -160,9 +165,9 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 				Zone:    tempLocality.Zone,
 				SubZone: tempLocality.SubZone,
 			},
-			TotalSuccessfulRequests: atomic.SwapUint64(tempCount.succeeded, 0),
-			TotalRequestsInProgress: atomic.LoadUint64(tempCount.inProgress), // InProgress count is not clear when reading.
-			TotalErrorRequests:      atomic.SwapUint64(tempCount.errored, 0),
+			TotalSuccessfulRequests: tempSucceeded,
+			TotalRequestsInProgress: tempInProgress,
+			TotalErrorRequests:      tempErrored,
 			LoadMetricStats:         nil, // TODO: populate for user loads.
 			UpstreamEndpointStats:   nil, // TODO: populate for per endpoint loads.
 		})
