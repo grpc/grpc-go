@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
+	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -56,6 +57,7 @@ type EDSBalancer struct {
 	bg                 *balancerGroup
 	subBalancerBuilder balancer.Builder
 	lidToConfig        map[string]*localityConfig
+	loadStore          lrs.Store
 
 	pickerMu    sync.Mutex
 	drops       []*dropper
@@ -64,12 +66,13 @@ type EDSBalancer struct {
 }
 
 // NewXDSBalancer create a new EDSBalancer.
-func NewXDSBalancer(cc balancer.ClientConn) *EDSBalancer {
+func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 	xdsB := &EDSBalancer{
 		ClientConn:         cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		lidToConfig: make(map[string]*localityConfig),
+		loadStore:   loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -158,7 +161,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment
 		xdsB.drops = newDrops
 		if xdsB.innerPicker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops))
+			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -269,7 +272,7 @@ func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Pi
 	xdsB.innerPicker = p
 	xdsB.innerState = s
 	// Don't reset drops when it's a state change.
-	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops))
+	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
 }
 
 // Close closes the balancer.
@@ -278,26 +281,35 @@ func (xdsB *EDSBalancer) Close() {
 }
 
 type dropPicker struct {
-	drops []*dropper
-	p     balancer.Picker
+	drops     []*dropper
+	p         balancer.Picker
+	loadStore lrs.Store
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
 	return &dropPicker{
-		drops: drops,
-		p:     p,
+		drops:     drops,
+		p:         p,
+		loadStore: loadStore,
 	}
 }
 
 func (d *dropPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
-	var drop bool
+	var (
+		drop     bool
+		category string
+	)
 	for _, dp := range d.drops {
 		if dp.drop() {
 			drop = true
+			category = dp.category
 			break
 		}
 	}
 	if drop {
+		if d.loadStore != nil {
+			d.loadStore.CallDropped(category)
+		}
 		return nil, nil, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to

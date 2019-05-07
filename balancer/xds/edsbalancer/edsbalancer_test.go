@@ -117,7 +117,7 @@ func (clab *clusterLoadAssignmentBuilder) build() *edspb.ClusterLoadAssignment {
 //  - change drop rate
 func TestEDS_OneLocality(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := NewXDSBalancer(cc)
+	edsb := NewXDSBalancer(cc, nil)
 
 	// One locality with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -226,7 +226,7 @@ func TestEDS_OneLocality(t *testing.T) {
 //  - update locality weight
 func TestEDS_TwoLocalities(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := NewXDSBalancer(cc)
+	edsb := NewXDSBalancer(cc, nil)
 
 	// Two localities, each with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -385,7 +385,7 @@ func (tcp *testConstPicker) Pick(ctx context.Context, opts balancer.PickOptions)
 // eds response.
 func TestEDS_UpdateSubBalancerName(t *testing.T) {
 	cc := newTestClientConn(t)
-	edsb := NewXDSBalancer(cc)
+	edsb := NewXDSBalancer(cc, nil)
 
 	t.Logf("update sub-balancer to test-const-balancer")
 	edsb.HandleChildPolicy("test-const-balancer", nil)
@@ -502,7 +502,7 @@ func TestDropPicker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			p := newDropPicker(constPicker, tt.drops)
+			p := newDropPicker(constPicker, tt.drops, nil)
 
 			// scCount is the number of sc's returned by pick. The opposite of
 			// drop-count.

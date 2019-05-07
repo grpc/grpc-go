@@ -32,6 +32,13 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 )
 
+// Store defines the interface for a load store. It keeps loads and can report
+// them to a server when requested.
+type Store interface {
+	CallDropped(category string)
+	ReportTo(ctx context.Context, cc *grpc.ClientConn)
+}
+
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
@@ -45,7 +52,8 @@ type lrsStore struct {
 
 const grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
 
-func newStore(serviceName string) *lrsStore {
+// NewStore creates a store for load reports.
+func NewStore(serviceName string) Store {
 	return &lrsStore{
 		serviceName: serviceName,
 		node: &basepb.Node{
@@ -67,7 +75,8 @@ func newStore(serviceName string) *lrsStore {
 // Update functions are called by picker for each RPC. To avoid contention, all
 // updates are done atomically.
 
-func (ls *lrsStore) callDropped(category string) {
+// CallDropped adds one drop record with the given category to store.
+func (ls *lrsStore) CallDropped(category string) {
 	p, ok := ls.drops.Load(category)
 	if !ok {
 		tp := new(uint64)
@@ -114,10 +123,10 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	return ret
 }
 
-// reportTo makes a streaming lrs call to cc and blocks.
+// ReportTo makes a streaming lrs call to cc and blocks.
 //
 // It retries the call (with backoff) until ctx is canceled.
-func (ls *lrsStore) reportTo(ctx context.Context, cc *grpc.ClientConn) {
+func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 	c := lrspb.NewLoadReportingServiceClient(cc)
 	var (
 		retryCount int

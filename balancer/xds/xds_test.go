@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -214,6 +215,7 @@ type fakeEDSBalancer struct {
 	childPolicy        chan *loadBalancingConfig
 	fallbackPolicy     chan *loadBalancingConfig
 	subconnStateChange chan *scStateChange
+	loadStore          lrs.Store
 }
 
 func (f *fakeEDSBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
@@ -237,13 +239,14 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 	}
 }
 
-func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerInterface {
+func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
 	lb := &fakeEDSBalancer{
 		cc:                 cc,
 		edsChan:            make(chan *edspb.ClusterLoadAssignment, 10),
 		childPolicy:        make(chan *loadBalancingConfig, 10),
 		fallbackPolicy:     make(chan *loadBalancingConfig, 10),
 		subconnStateChange: make(chan *scStateChange, 10),
+		loadStore:          loadStore,
 	}
 	mu.Lock()
 	latestFakeEdsBalancer = lb
@@ -337,7 +340,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	// In the first iteration, an eds balancer takes over fallback balancer
 	// In the second iteration, a new xds client takes over previous one.
 	for i := 0; i < 2; i++ {
-		addr, td, cleanup := setupServer(t)
+		addr, td, _, cleanup := setupServer(t)
 		cleanups = append(cleanups, cleanup)
 		workingServiceConfig := constructServiceConfigFromXdsConfig(&testBalancerConfig{
 			BalancerName:   addr,
@@ -426,7 +429,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			},
 		},
 	} {
-		addr, td, cleanup := setupServer(t)
+		addr, td, _, cleanup := setupServer(t)
 		cleanups = append(cleanups, cleanup)
 		test.cfg.BalancerName = addr
 
@@ -474,7 +477,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 	}
 	defer lb.Close()
 
-	addr, td, cleanup := setupServer(t)
+	addr, td, _, cleanup := setupServer(t)
 
 	cfg := &testBalancerConfig{
 		BalancerName:   addr,
@@ -549,7 +552,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	}
 	defer lb.Close()
 
-	addr, td, cleanup := setupServer(t)
+	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &testBalancerConfig{
 		BalancerName:   addr,
@@ -629,7 +632,7 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 	}
 	defer lb.Close()
 
-	addr, td, cleanup := setupServer(t)
+	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
 	cfg := &testBalancerConfig{
 		BalancerName:   addr,

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/balancer/xds/edsbalancer"
 	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	"google.golang.org/grpc/balancer/xds/lrs"
 
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -51,8 +52,8 @@ var (
 	// TODO: if later we make startupTimeout configurable through BuildOptions(maybe?), then we can remove
 	// this field and configure through BuildOptions instead.
 	startupTimeout = defaultTimeout
-	newEDSBalancer = func(cc balancer.ClientConn) edsBalancerInterface {
-		return edsbalancer.NewXDSBalancer(cc)
+	newEDSBalancer = func(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerInterface {
+		return edsbalancer.NewXDSBalancer(cc, loadStore)
 	}
 )
 
@@ -78,6 +79,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		timer:           createDrainedTimer(), // initialized a timer that won't fire without reset
+		loadStore:       lrs.NewStore(cc.Target()),
 	}
 	x.cc = &xdsClientConn{
 		updateState: x.connStateMgr.updateState,
@@ -130,6 +132,7 @@ type xdsBalancer struct {
 	xdsLB            edsBalancerInterface
 	fallbackLB       balancer.Balancer
 	fallbackInitData *resolver.State // may change when HandleResolved address is called
+	loadStore        lrs.Store
 }
 
 func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
@@ -184,7 +187,7 @@ func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 			prevClient.close()
 		}
 	}
-	x.client = newXDSClient(u.BalancerName, x.cc.Target(), u.ChildPolicy == nil, x.buildOpts, newADS, loseContact, exitCleanup)
+	x.client = newXDSClient(u.BalancerName, x.cc.Target(), u.ChildPolicy == nil, x.buildOpts, x.loadStore, newADS, loseContact, exitCleanup)
 	go x.client.run()
 }
 
@@ -519,7 +522,7 @@ func (x *xdsBalancer) cancelFallbackAndSwitchEDSBalancerIfNecessary() {
 			x.fallbackLB.Close()
 			x.fallbackLB = nil
 		}
-		x.xdsLB = newEDSBalancer(x.cc)
+		x.xdsLB = newEDSBalancer(x.cc, x.loadStore)
 		if x.config.ChildPolicy != nil {
 			x.xdsLB.HandleChildPolicy(x.config.ChildPolicy.Name, x.config.ChildPolicy.Config)
 		}
