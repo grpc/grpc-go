@@ -293,7 +293,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		CredsBundle:      cc.dopts.copts.CredsBundle,
 		Dialer:           cc.dopts.copts.Dialer,
 		ChannelzParentID: cc.channelzID,
-		ParsedTarget:     cc.parsedTarget,
+		Target:           cc.parsedTarget,
 	}
 
 	// Build the resolver.
