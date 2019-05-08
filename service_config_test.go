@@ -31,7 +31,7 @@ import (
 
 type parseTestCase struct {
 	scjs    string
-	wantSC  ServiceConfig
+	wantSC  *ServiceConfig
 	wantErr bool
 }
 
@@ -39,7 +39,7 @@ func runParseTests(t *testing.T, testCases []parseTestCase) {
 	for _, c := range testCases {
 		sc, err := parseServiceConfig(c.scjs)
 		if !c.wantErr {
-			c.wantSC.rawJSONString = &c.scjs
+			c.wantSC.rawJSONString = c.scjs
 		}
 		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
@@ -80,7 +80,7 @@ func (s) TestParseLBConfig(t *testing.T) {
 			`{
     "loadBalancingConfig": [{"pbb": { "foo": "hi" } }]
 }`,
-			ServiceConfig{
+			&ServiceConfig{
 				Methods:  make(map[string]MethodConfig),
 				lbConfig: &lbConfig{name: "pbb", cfg: pbbData{Foo: "hi"}},
 			},

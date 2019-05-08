@@ -266,9 +266,9 @@ func init() {
 	}
 }
 
-func parseServiceConfig(js string) (ServiceConfig, error) {
+func parseServiceConfig(js string) (*ServiceConfig, error) {
 	if len(js) == 0 {
-		return ServiceConfig{}, fmt.Errorf("no JSON service config provided")
+		return nil, fmt.Errorf("no JSON service config provided")
 	}
 	var rsc jsonSC
 	err := json.Unmarshal([]byte(js), &rsc)
@@ -288,7 +288,7 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 			if len(lbcfg) != 1 {
 				err := fmt.Errorf("invalid loadBalancingConfig: entry %v does not contain exactly 1 policy/config pair: %q", i, lbcfg)
 				grpclog.Warningf(err.Error())
-				return ServiceConfig{}, err
+				return nil, err
 			}
 			var name string
 			var jsonCfg json.RawMessage
@@ -303,7 +303,7 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 				var err error
 				sc.lbConfig.cfg, err = parser.Parse(jsonCfg)
 				if err != nil {
-					return ServiceConfig{}, fmt.Errorf("error parsing loadBalancingConfig for policy %q: %v", name, err)
+					return nil, fmt.Errorf("error parsing loadBalancingConfig for policy %q: %v", name, err)
 				}
 			}
 			break
@@ -354,10 +354,10 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 
 	if sc.retryThrottling != nil {
 		if mt := sc.retryThrottling.MaxTokens; mt <= 0 || mt > 1000 {
-			return ServiceConfig{}, fmt.Errorf("invalid retry throttling config: maxTokens (%v) out of range (0, 1000]", mt)
+			return nil, fmt.Errorf("invalid retry throttling config: maxTokens (%v) out of range (0, 1000]", mt)
 		}
 		if tr := sc.retryThrottling.TokenRatio; tr <= 0 {
-			return ServiceConfig{}, fmt.Errorf("invalid retry throttling config: tokenRatio (%v) may not be negative", tr)
+			return nil, fmt.Errorf("invalid retry throttling config: tokenRatio (%v) may not be negative", tr)
 		}
 	}
 	return &sc, nil
