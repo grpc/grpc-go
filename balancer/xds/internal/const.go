@@ -19,5 +19,7 @@
 package internal
 
 var (
+	// GrpcHostname is the metadata key for specifying the grpc service name when sending xDS requests
+	// from grpc to the traffic director.
 	GrpcHostname = "TRAFFICDIRECTOR_GRPC_HOSTNAME"
 )
