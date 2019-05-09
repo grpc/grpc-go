@@ -20,7 +20,6 @@ package grpc
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -34,13 +33,7 @@ type balancerWrapperBuilder struct {
 }
 
 func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	targetAddr := cc.Target()
-	targetSplitted := strings.Split(targetAddr, ":///")
-	if len(targetSplitted) >= 2 {
-		targetAddr = targetSplitted[1]
-	}
-
-	bwb.b.Start(targetAddr, BalancerConfig{
+	bwb.b.Start(opts.Target.Endpoint, BalancerConfig{
 		DialCreds: opts.DialCreds,
 		Dialer:    opts.Dialer,
 	})
@@ -49,7 +42,7 @@ func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConn, opts balancer.B
 		balancer:   bwb.b,
 		pickfirst:  pickfirst,
 		cc:         cc,
-		targetAddr: targetAddr,
+		targetAddr: opts.Target.Endpoint,
 		startCh:    make(chan struct{}),
 		conns:      make(map[resolver.Address]balancer.SubConn),
 		connSt:     make(map[balancer.SubConn]*scState),

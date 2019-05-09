@@ -28,7 +28,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -144,17 +143,9 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	scheme := "grpclb_internal_" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	r := &lbManualResolver{scheme: scheme, ccb: cc}
 
-	var target string
-	targetSplitted := strings.Split(cc.Target(), ":///")
-	if len(targetSplitted) < 2 {
-		target = cc.Target()
-	} else {
-		target = targetSplitted[1]
-	}
-
 	lb := &lbBalancer{
 		cc:              newLBCacheClientConn(cc),
-		target:          target,
+		target:          opt.Target.Endpoint,
 		opt:             opt,
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
