@@ -25,6 +25,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	loadreportpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/load_report"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
@@ -50,8 +51,6 @@ type lrsStore struct {
 	drops sync.Map // map[string]*uint64
 }
 
-const grpcHostname = "com.googleapis.trafficdirector.grpc_hostname"
-
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
@@ -59,7 +58,7 @@ func NewStore(serviceName string) Store {
 		node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					grpcHostname: {
+					internal.GrpcHostname: {
 						Kind: &structpb.Value_StringValue{StringValue: serviceName},
 					},
 				},
