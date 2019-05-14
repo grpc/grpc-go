@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/internal/wrr"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -279,13 +280,12 @@ func buildPickerAndState(m map[string]*pickerState) (connectivity.State, balance
 	return aggregatedState, newPickerGroup(readyPickerWithWeights)
 }
 
-type pickerGroup struct {
-	readyPickerWithWeights []pickerState
-	length                 int
+// RandomWRR constructor, to be modified in tests.
+var newRandomWRR = wrr.NewRandom
 
-	mu    sync.Mutex
-	idx   int    // The index of the picker that will be picked
-	count uint32 // The number of times the current picker has been picked.
+type pickerGroup struct {
+	length int
+	w      wrr.WRR
 }
 
 // newPickerGroup takes pickers with weights, and group them into one picker.
@@ -296,9 +296,14 @@ type pickerGroup struct {
 // TODO: (bg) confirm this is the expected behavior: non-ready balancers should
 // be ignored when picking. Only ready balancers are picked.
 func newPickerGroup(readyPickerWithWeights []pickerState) *pickerGroup {
+	w := newRandomWRR()
+	for _, ps := range readyPickerWithWeights {
+		w.Add(ps.picker, int64(ps.weight))
+	}
+
 	return &pickerGroup{
-		readyPickerWithWeights: readyPickerWithWeights,
-		length:                 len(readyPickerWithWeights),
+		length: len(readyPickerWithWeights),
+		w:      w,
 	}
 }
 
@@ -306,17 +311,7 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 	if pg.length <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
-	// TODO: the WRR algorithm needs a design.
-	// MAYBE: move WRR implmentation to util.go as a separate struct.
-	pg.mu.Lock()
-	pickerSt := pg.readyPickerWithWeights[pg.idx]
-	p := pickerSt.picker
-	pg.count++
-	if pg.count >= pickerSt.weight {
-		pg.idx = (pg.idx + 1) % pg.length
-		pg.count = 0
-	}
-	pg.mu.Unlock()
+	p := pg.w.Next().(balancer.Picker)
 	return p.Pick(ctx, opts)
 }
 

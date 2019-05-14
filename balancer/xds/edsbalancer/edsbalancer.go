@@ -28,10 +28,11 @@ import (
 	"strconv"
 	"sync"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	xdstypepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
+	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -56,6 +57,7 @@ type EDSBalancer struct {
 	bg                 *balancerGroup
 	subBalancerBuilder balancer.Builder
 	lidToConfig        map[string]*localityConfig
+	loadStore          lrs.Store
 
 	pickerMu    sync.Mutex
 	drops       []*dropper
@@ -64,12 +66,13 @@ type EDSBalancer struct {
 }
 
 // NewXDSBalancer create a new EDSBalancer.
-func NewXDSBalancer(cc balancer.ClientConn) *EDSBalancer {
+func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 	xdsB := &EDSBalancer{
 		ClientConn:         cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
 		lidToConfig: make(map[string]*localityConfig),
+		loadStore:   loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
 	// response. Otherwise the balancer group will be started with round-robin,
@@ -119,7 +122,7 @@ func (xdsB *EDSBalancer) updateSubBalancerName(subBalancerName string) {
 
 // updateDrops compares new drop policies with the old. If they are different,
 // it updates the drop policies and send ClientConn an updated picker.
-func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment_Policy_DropOverload) {
+func (xdsB *EDSBalancer) updateDrops(dropPolicies []*edspb.ClusterLoadAssignment_Policy_DropOverload) {
 	var (
 		newDrops     []*dropper
 		dropsChanged bool
@@ -131,14 +134,14 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 			denominator uint32
 		)
 		switch percentage.GetDenominator() {
-		case xdstypepb.FractionalPercent_HUNDRED:
+		case percentpb.FractionalPercent_HUNDRED:
 			denominator = 100
-		case xdstypepb.FractionalPercent_TEN_THOUSAND:
+		case percentpb.FractionalPercent_TEN_THOUSAND:
 			denominator = 10000
-		case xdstypepb.FractionalPercent_MILLION:
+		case percentpb.FractionalPercent_MILLION:
 			denominator = 1000000
 		}
-		newDrops = append(newDrops, newDropper(numerator, denominator))
+		newDrops = append(newDrops, newDropper(numerator, denominator, dropPolicy.GetCategory()))
 
 		// The following reading xdsB.drops doesn't need mutex because it can only
 		// be updated by the code following.
@@ -158,7 +161,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 		xdsB.drops = newDrops
 		if xdsB.innerPicker != nil {
 			// Update picker with old inner picker, new drops.
-			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops))
+			xdsB.ClientConn.UpdateBalancerState(xdsB.innerState, newDropPicker(xdsB.innerPicker, newDrops, xdsB.loadStore))
 		}
 		xdsB.pickerMu.Unlock()
 	}
@@ -168,7 +171,7 @@ func (xdsB *EDSBalancer) updateDrops(dropPolicies []*xdspb.ClusterLoadAssignment
 // SubConns. It also handles drops.
 //
 // HandleCDSResponse and HandleEDSResponse must be called by the same goroutine.
-func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *xdspb.ClusterLoadAssignment) {
+func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment) {
 	// Create balancer group if it's never created (this is the first EDS
 	// response).
 	if xdsB.bg == nil {
@@ -269,7 +272,7 @@ func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Pi
 	xdsB.innerPicker = p
 	xdsB.innerState = s
 	// Don't reset drops when it's a state change.
-	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops))
+	xdsB.ClientConn.UpdateBalancerState(s, newDropPicker(p, xdsB.drops, xdsB.loadStore))
 }
 
 // Close closes the balancer.
@@ -278,29 +281,35 @@ func (xdsB *EDSBalancer) Close() {
 }
 
 type dropPicker struct {
-	drops []*dropper
-	p     balancer.Picker
+	drops     []*dropper
+	p         balancer.Picker
+	loadStore lrs.Store
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore lrs.Store) *dropPicker {
 	return &dropPicker{
-		drops: drops,
-		p:     p,
+		drops:     drops,
+		p:         p,
+		loadStore: loadStore,
 	}
 }
 
 func (d *dropPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
-	var drop bool
+	var (
+		drop     bool
+		category string
+	)
 	for _, dp := range d.drops {
-		// It's necessary to call drop on all droppers if the droppers are
-		// stateful. For example, if the second drop only drops 1/2, and only
-		// drops even number picks, we need to call it's drop() even if the
-		// first dropper already returned true.
-		//
-		// It won't be necessary if droppers are stateless, like toss a coin.
-		drop = drop || dp.drop()
+		if dp.drop() {
+			drop = true
+			category = dp.category
+			break
+		}
 	}
 	if drop {
+		if d.loadStore != nil {
+			d.loadStore.CallDropped(category)
+		}
 		return nil, nil, status.Errorf(codes.Unavailable, "RPC is dropped")
 	}
 	// TODO: (eds) don't drop unless the inner picker is READY. Similar to

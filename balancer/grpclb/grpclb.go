@@ -28,7 +28,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -129,19 +128,8 @@ func newLBBuilderWithFallbackTimeout(fallbackTimeout time.Duration) balancer.Bui
 	}
 }
 
-// newLBBuilderWithPickFirst creates a grpclb builder with pick-first.
-func newLBBuilderWithPickFirst() balancer.Builder {
-	return &lbBuilder{
-		usePickFirst: true,
-	}
-}
-
 type lbBuilder struct {
 	fallbackTimeout time.Duration
-
-	// TODO: delete this when balancer can handle service config. This should be
-	//  updated by service config.
-	usePickFirst bool // Use roundrobin or pickfirst for backends.
 }
 
 func (b *lbBuilder) Name() string {
@@ -155,19 +143,10 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 	scheme := "grpclb_internal_" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	r := &lbManualResolver{scheme: scheme, ccb: cc}
 
-	var target string
-	targetSplitted := strings.Split(cc.Target(), ":///")
-	if len(targetSplitted) < 2 {
-		target = cc.Target()
-	} else {
-		target = targetSplitted[1]
-	}
-
 	lb := &lbBalancer{
 		cc:              newLBCacheClientConn(cc),
-		target:          target,
+		target:          opt.Target.Endpoint,
 		opt:             opt,
-		usePickFirst:    b.usePickFirst,
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
 
@@ -231,11 +210,14 @@ type lbBalancer struct {
 	// serverList contains anything new. Each generate picker will also have
 	// reference to this list to do the first layer pick.
 	fullServerList []*lbpb.Server
+	// Backend addresses. It's kept so the addresses are available when
+	// switching between round_robin and pickfirst.
+	backendAddrs []resolver.Address
 	// All backends addresses, with metadata set to nil. This list contains all
 	// backend addresses in the same order and with the same duplicates as in
 	// serverlist. When generating picker, a SubConn slice with the same order
 	// but with only READY SCs will be gerenated.
-	backendAddrs []resolver.Address
+	backendAddrsWithoutMetadata []resolver.Address
 	// Roundrobin functionalities.
 	state    connectivity.State
 	subConns map[resolver.Address]balancer.SubConn   // Used to new/remove SubConn.
@@ -275,7 +257,7 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 			break
 		}
 	} else {
-		for _, a := range lb.backendAddrs {
+		for _, a := range lb.backendAddrsWithoutMetadata {
 			if sc, ok := lb.subConns[a]; ok {
 				if st, ok := lb.scStates[sc]; ok && st == connectivity.Ready {
 					readySCs = append(readySCs, sc)
@@ -339,6 +321,11 @@ func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 }
 
 func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	panic("not used")
+}
+
+func (lb *lbBalancer) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState) {
+	s := scs.ConnectivityState
 	if grpclog.V(2) {
 		grpclog.Infof("lbBalancer: handle SubConn state change: %p, %v", sc, s)
 	}
@@ -371,7 +358,7 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 	if lb.state != connectivity.Ready {
 		if !lb.inFallback && !lb.remoteBalancerConnected {
 			// Enter fallback.
-			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+			lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 		}
 	}
 }
@@ -410,7 +397,7 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 		return
 	}
 	// Enter fallback.
-	lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+	lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 	lb.mu.Unlock()
 }
 
@@ -418,9 +405,30 @@ func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 // clientConn. The remoteLB clientConn will handle creating/removing remoteLB
 // connections.
 func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
-	if grpclog.V(2) {
-		grpclog.Infof("lbBalancer: handleResolvedResult: %+v", addrs)
+	panic("not used")
+}
+
+func (lb *lbBalancer) handleServiceConfig(sc string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	newUsePickFirst := childIsPickFirst(sc)
+	if lb.usePickFirst == newUsePickFirst {
+		return
 	}
+	if grpclog.V(2) {
+		grpclog.Infof("lbBalancer: switching mode, new usePickFirst: %+v", newUsePickFirst)
+	}
+	lb.refreshSubConns(lb.backendAddrs, lb.inFallback, newUsePickFirst)
+}
+
+func (lb *lbBalancer) UpdateResolverState(rs resolver.State) {
+	if grpclog.V(2) {
+		grpclog.Infof("lbBalancer: UpdateResolverState: %+v", rs)
+	}
+	lb.handleServiceConfig(rs.ServiceConfig)
+
+	addrs := rs.Addresses
 	if len(addrs) <= 0 {
 		return
 	}
@@ -457,7 +465,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 		// This means we received a new list of resolved backends, and we are
 		// still in fallback mode. Need to update the list of backends we are
 		// using to the new list of backends.
-		lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+		lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 	}
 	lb.mu.Unlock()
 }

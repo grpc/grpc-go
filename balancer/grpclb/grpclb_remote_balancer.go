@@ -87,14 +87,14 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 
 	// Call refreshSubConns to create/remove SubConns.  If we are in fallback,
 	// this is also exiting fallback.
-	lb.refreshSubConns(backendAddrs, true)
+	lb.refreshSubConns(backendAddrs, false, lb.usePickFirst)
 }
 
 // refreshSubConns creates/removes SubConns with backendAddrs, and refreshes
 // balancer state and picker.
 //
 // Caller must hold lb.mu.
-func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCLBServer bool) {
+func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback bool, pickFirst bool) {
 	defer func() {
 		// Regenerate and update picker after refreshing subconns because with
 		// cache, even if SubConn was newed/removed, there might be no state
@@ -103,14 +103,28 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCL
 		lb.updateStateAndPicker(true, true)
 	}()
 
-	lb.inFallback = !fromGRPCLBServer
+	lb.inFallback = fallback
 
 	opts := balancer.NewSubConnOptions{}
-	if fromGRPCLBServer {
+	if !fallback {
 		opts.CredsBundle = lb.grpclbBackendCreds
 	}
 
-	lb.backendAddrs = nil
+	lb.backendAddrs = backendAddrs
+	lb.backendAddrsWithoutMetadata = nil
+
+	if lb.usePickFirst != pickFirst {
+		// Remove all SubConns when switching modes.
+		for a, sc := range lb.subConns {
+			if lb.usePickFirst {
+				lb.cc.cc.RemoveSubConn(sc)
+			} else {
+				lb.cc.RemoveSubConn(sc)
+			}
+			delete(lb.subConns, a)
+		}
+		lb.usePickFirst = pickFirst
+	}
 
 	if lb.usePickFirst {
 		var sc balancer.SubConn
@@ -134,7 +148,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCL
 		return
 	}
 
-	// addrsSet is the set converted from backendAddrs, it's used to quick
+	// addrsSet is the set converted from backendAddrsWithoutMetadata, it's used to quick
 	// lookup for an address.
 	addrsSet := make(map[resolver.Address]struct{})
 	// Create new SubConns.
@@ -142,7 +156,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fromGRPCL
 		addrWithoutMD := addr
 		addrWithoutMD.Metadata = nil
 		addrsSet[addrWithoutMD] = struct{}{}
-		lb.backendAddrs = append(lb.backendAddrs, addrWithoutMD)
+		lb.backendAddrsWithoutMetadata = append(lb.backendAddrsWithoutMetadata, addrWithoutMD)
 
 		if _, ok := lb.subConns[addrWithoutMD]; !ok {
 			// Use addrWithMD to create the SubConn.
@@ -282,7 +296,7 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 		// aggregated state is not Ready.
 		if !lb.inFallback && lb.state != connectivity.Ready {
 			// Entering fallback.
-			lb.refreshSubConns(lb.resolvedBackendAddrs, false)
+			lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 		}
 		lb.mu.Unlock()
 

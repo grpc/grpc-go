@@ -46,6 +46,12 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+func czCleanupWrapper(cleanup func() error, t *testing.T) {
+	if err := cleanup(); err != nil {
+		t.Error(err)
+	}
+}
+
 func (te *test) startServers(ts testpb.TestServiceServer, num int) {
 	for i := 0; i < num; i++ {
 		te.startServer(ts)
@@ -85,7 +91,8 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		channelz.NewChannelzStorage()
+		czCleanup := channelz.NewChannelzStorage()
+		defer czCleanupWrapper(czCleanup, t)
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServers(&testServer{security: e.security}, c.total)
@@ -103,7 +110,8 @@ func (s) TestCZServerRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZGetServer(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -154,7 +162,8 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		channelz.NewChannelzStorage()
+		czCleanup := channelz.NewChannelzStorage()
+		defer czCleanupWrapper(czCleanup, t)
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		var ccs []*grpc.ClientConn
@@ -191,7 +200,8 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	// Make dial fails (due to no transport security specified)
 	_, err := grpc.Dial("fake.addr")
 	if err == nil {
@@ -203,7 +213,8 @@ func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
 }
 
 func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -247,7 +258,8 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 }
 
 func (s) TestCZClientSubChannelSocketRegistrationAndDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -335,11 +347,11 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		channelz.NewChannelzStorage()
+		czCleanup := channelz.NewChannelzStorage()
+		defer czCleanupWrapper(czCleanup, t)
 		e := tcpClearRREnv
 		te := newTest(t, e)
 		te.startServer(&testServer{security: e.security})
-		defer te.tearDown()
 		var ccs []*grpc.ClientConn
 		for i := 0; i < c.total; i++ {
 			cc := te.clientConn()
@@ -390,11 +402,13 @@ func (s) TestCZServerSocketRegistrationAndDeletion(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		te.tearDown()
 	}
 }
 
 func (s) TestCZServerListenSocketDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -450,7 +464,8 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 	//    |             |
 	//    v             v
 	// Socket1       Socket2
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	topChanID := channelz.RegisterChannel(&dummyChannel{}, 0, "")
 	subChanID1 := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
 	subChanID2 := channelz.RegisterSubChannel(&dummyChannel{}, topChanID, "")
@@ -494,7 +509,8 @@ func (s) TestCZRecusivelyDeletionOfEntry(t *testing.T) {
 }
 
 func (s) TestCZChannelMetrics(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	num := 3 // number of backends
 	te := newTest(t, e)
@@ -582,7 +598,8 @@ func (s) TestCZChannelMetrics(t *testing.T) {
 }
 
 func (s) TestCZServerMetrics(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(8)
@@ -866,7 +883,8 @@ func doIdleCallToInvokeKeepAlive(tc testpb.TestServiceClient, t *testing.T) {
 }
 
 func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
@@ -965,7 +983,8 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 // It is separated from other cases due to setup incompatibly, i.e. max receive
 // size violation will mask flow control violation.
 func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.serverInitialWindowSize = 65536
@@ -1025,7 +1044,8 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 }
 
 func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	// disable BDP
@@ -1137,7 +1157,8 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 }
 
 func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	defer func(t time.Duration) { internal.KeepaliveMinPingTime = t }(internal.KeepaliveMinPingTime)
 	internal.KeepaliveMinPingTime = time.Second
 	e := tcpClearRREnv
@@ -1189,7 +1210,8 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 }
 
 func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)
@@ -1249,7 +1271,8 @@ func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 }
 
 func (s) TestCZServerSocketMetricsKeepAlive(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.customServerOptions = append(te.customServerOptions, grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Second, Timeout: 500 * time.Millisecond}))
@@ -1307,7 +1330,8 @@ var cipherSuites = []string{
 }
 
 func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpTLSRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1356,7 +1380,8 @@ func (s) TestCZSocketGetSecurityValueTLS(t *testing.T) {
 }
 
 func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -1431,7 +1456,8 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 }
 
 func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1509,7 +1535,8 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 }
 
 func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
@@ -1611,7 +1638,8 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
 }
 
 func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	e.balancer = ""
 	te := newTest(t, e)
@@ -1671,7 +1699,8 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 }
 
 func (s) TestCZSubChannelConnectivityState(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1765,7 +1794,8 @@ func (s) TestCZSubChannelConnectivityState(t *testing.T) {
 }
 
 func (s) TestCZChannelConnectivityState(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -1821,7 +1851,8 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 }
 
 func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
@@ -1881,7 +1912,8 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 }
 
 func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
@@ -1940,7 +1972,8 @@ func (s) TestCZTraceOverwriteSubChannelDeletion(t *testing.T) {
 }
 
 func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
-	channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorage()
+	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})

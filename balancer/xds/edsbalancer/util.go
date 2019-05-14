@@ -18,41 +18,29 @@
 
 package edsbalancer
 
-import (
-	"sync"
-)
+import "google.golang.org/grpc/balancer/internal/wrr"
 
 type dropper struct {
 	// Drop rate will be numerator/denominator.
 	numerator   uint32
 	denominator uint32
-
-	mu sync.Mutex
-	i  uint32
+	w           wrr.WRR
+	category    string
 }
 
-func newDropper(numerator, denominator uint32) *dropper {
+func newDropper(numerator, denominator uint32, category string) *dropper {
+	w := newRandomWRR()
+	w.Add(true, int64(numerator))
+	w.Add(false, int64(denominator-numerator))
+
 	return &dropper{
 		numerator:   numerator,
 		denominator: denominator,
+		w:           w,
+		category:    category,
 	}
 }
 
 func (d *dropper) drop() (ret bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// TODO: the drop algorithm needs a design.
-	// Currently, for drop rate 3/5:
-	// 0 1 2 3 4
-	// d d d n n
-	if d.i < d.numerator {
-		ret = true
-	}
-	d.i++
-	if d.i >= d.denominator {
-		d.i = 0
-	}
-
-	return
+	return d.w.Next().(bool)
 }

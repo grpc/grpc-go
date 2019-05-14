@@ -19,8 +19,57 @@
 package edsbalancer
 
 import (
+	"sync"
 	"testing"
+
+	"google.golang.org/grpc/balancer/internal/wrr"
 )
+
+// testWRR is a deterministic WRR implementation.
+//
+// The real implementation does random WRR. testWRR makes the balancer behavior
+// deterministic and easier to test.
+//
+// With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
+type testWRR struct {
+	itemsWithWeight []struct {
+		item   interface{}
+		weight int64
+	}
+	length int
+
+	mu    sync.Mutex
+	idx   int   // The index of the item that will be picked
+	count int64 // The number of times the current item has been picked.
+}
+
+func newTestWRR() wrr.WRR {
+	return &testWRR{}
+}
+
+func (twrr *testWRR) Add(item interface{}, weight int64) {
+	twrr.itemsWithWeight = append(twrr.itemsWithWeight, struct {
+		item   interface{}
+		weight int64
+	}{item: item, weight: weight})
+	twrr.length++
+}
+
+func (twrr *testWRR) Next() interface{} {
+	twrr.mu.Lock()
+	iww := twrr.itemsWithWeight[twrr.idx]
+	twrr.count++
+	if twrr.count >= iww.weight {
+		twrr.idx = (twrr.idx + 1) % twrr.length
+		twrr.count = 0
+	}
+	twrr.mu.Unlock()
+	return iww.item
+}
+
+func init() {
+	newRandomWRR = newTestWRR
+}
 
 func TestDropper(t *testing.T) {
 	const repeat = 2
@@ -57,7 +106,7 @@ func TestDropper(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newDropper(tt.args.numerator, tt.args.denominator)
+			d := newDropper(tt.args.numerator, tt.args.denominator, "")
 			var (
 				dCount    int
 				wantCount = int(tt.args.numerator) * repeat

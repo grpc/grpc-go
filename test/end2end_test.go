@@ -2076,6 +2076,80 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	}
 }
 
+func (s) TestPreloaderClientSend(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPreloaderClientSend(t, e)
+	}
+}
+
+func testPreloaderClientSend(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	te.startServer(&testServer{security: e.security})
+
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	// Test for streaming RPC recv.
+	// Set context for send with proper RPC Information
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.UseCompressor("gzip"))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	var index int
+	for index < len(reqSizes) {
+		respParam := []*testpb.ResponseParameters{
+			{
+				Size: int32(respSizes[index]),
+			},
+		}
+
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := &testpb.StreamingOutputCallRequest{
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
+			ResponseParameters: respParam,
+			Payload:            payload,
+		}
+		preparedMsg := &grpc.PreparedMsg{}
+		err = preparedMsg.Encode(stream, req)
+		if err != nil {
+			t.Fatalf("PrepareMsg failed for size %d : %v", reqSizes[index], err)
+		}
+		if err := stream.SendMsg(preparedMsg); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		reply, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+		}
+		pt := reply.GetPayload().GetType()
+		if pt != testpb.PayloadType_COMPRESSABLE {
+			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
+		}
+		size := len(reply.GetPayload().GetBody())
+		if size != int(respSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		}
+		index++
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
+	}
+}
+
 func (s) TestMaxMsgSizeClientDefault(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
@@ -6438,7 +6512,6 @@ func testCompressorRegister(t *testing.T, e env) {
 }
 
 func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
-
 	ss := &stubServer{
 		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -6446,6 +6519,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
+	defer s.Stop()
 	testpb.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -6638,6 +6712,29 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 			return
 		}
 		time.Sleep(time.Millisecond)
+	}
+	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
+}
+
+func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: "round_robin"})
+	te.startServer(&testServer{security: te.e.security})
+	defer te.tearDown()
+
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
+	dctx, dcancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dcancel()
+	cc, err := grpc.DialContext(dctx, te.srvAddr, opts...)
+	if err != nil {
+		t.Fatalf("Dial(_) = %v, want %v", err, nil)
+	}
+	defer cc.Close()
+
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		return
 	}
 	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 }
@@ -6990,7 +7087,6 @@ func testLargeTimeout(t *testing.T, e env) {
 // test ensures that the connection is re-created after GO_AWAY and not affected by the
 // subsequent (old) connection closure.
 func (s) TestGoAwayThenClose(t *testing.T) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
