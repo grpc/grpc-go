@@ -49,6 +49,8 @@ import (
 )
 
 const (
+	// minimum time to give a connection to complete
+	minConnectTimeout = 20 * time.Second
 	// must match grpclbName in grpclb/grpclb.go
 	grpclbName = "grpclb"
 )
@@ -230,7 +232,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 	if cc.dopts.bs == nil {
-		cc.dopts.bs = backoff.NewExponentialBuilder().Build()
+		cc.dopts.bs = backoff.Exponential{
+			MaxDelay: DefaultBackoffConfig.MaxDelay,
+		}
 	}
 	if cc.dopts.resolverBuilder == nil {
 		// Only try to parse target when resolver builder is not already set.
@@ -950,7 +954,7 @@ func (ac *addrConn) resetTransport() {
 		addrs := ac.addrs
 		backoffFor := ac.dopts.bs.Backoff(ac.backoffIdx)
 		// This will be the duration that dial gets to finish.
-		dialDuration := ac.dopts.mct
+		dialDuration := minConnectTimeout
 		if ac.dopts.minConnectTimeout != nil {
 			dialDuration = ac.dopts.minConnectTimeout()
 		}

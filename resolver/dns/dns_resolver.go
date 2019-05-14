@@ -125,7 +125,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &dnsResolver{
 		freq:                 b.minFreq,
-		backoff:              backoff.NewExponentialBuilder().MaxDelay(b.minFreq).Build(),
+		backoff:              backoff.Exponential{MaxDelay: b.minFreq},
 		host:                 host,
 		port:                 port,
 		ctx:                  ctx,
@@ -197,7 +197,7 @@ func (i *ipResolver) watcher() {
 // dnsResolver watches for the name resolution update for a non-IP target.
 type dnsResolver struct {
 	freq       time.Duration
-	backoff    backoff.Strategy
+	backoff    backoff.Exponential
 	retryCount int
 	host       string
 	port       string
