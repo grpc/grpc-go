@@ -221,7 +221,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep:               kep,
 		initialWindowSize: iwz,
 		czData:            new(channelzData),
-		bufferPool:        newBufferPool(100),
+		bufferPool:        newBufferPool(defaultBufferPoolSize),
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if dynamicWindow {
@@ -410,8 +410,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			ctx:     s.ctx,
 			ctxDone: s.ctxDone,
 			recv:    s.buf,
-			freeBuffer: func(buffer *bytes.Buffer) {
-				t.bufferPool.Put(buffer)
+			freeBuffer: func(b *bytes.Buffer) {
+				t.bufferPool.put(b)
 			},
 		},
 		windowHandler: func(n int) {
@@ -596,7 +596,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
 		if len(f.Data()) > 0 {
-			buffer := t.bufferPool.Get()
+			buffer := t.bufferPool.get()
 			buffer.Reset()
 			buffer.Write(f.Data())
 			s.write(recvMsg{buffer: buffer})

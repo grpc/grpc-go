@@ -50,7 +50,7 @@ func newBufferPool(max int) *bufferPool {
 	}
 }
 
-func (p *bufferPool) Get() *bytes.Buffer {
+func (p *bufferPool) get() *bytes.Buffer {
 	select {
 	case b := <-p.c:
 		return b
@@ -59,7 +59,7 @@ func (p *bufferPool) Get() *bytes.Buffer {
 	}
 }
 
-func (p *bufferPool) Put(b *bytes.Buffer) {
+func (p *bufferPool) put(b *bytes.Buffer) {
 	select {
 	case p.c <- b:
 	default:
