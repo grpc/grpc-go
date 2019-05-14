@@ -42,8 +42,8 @@ import (
 	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
 	endpointpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/endpoint"
-	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
-	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
+	adsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
+	lrsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -205,7 +205,7 @@ type response struct {
 	err  error
 }
 
-func (ttd *testTrafficDirector) StreamAggregatedResources(s adspb.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+func (ttd *testTrafficDirector) StreamAggregatedResources(s adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 	for {
 		req, err := s.Recv()
 		if err != nil {
@@ -242,7 +242,7 @@ func (ttd *testTrafficDirector) StreamAggregatedResources(s adspb.AggregatedDisc
 	}
 }
 
-func (ttd *testTrafficDirector) DeltaAggregatedResources(adspb.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
+func (ttd *testTrafficDirector) DeltaAggregatedResources(adsgrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
 	return status.Error(codes.Unimplemented, "")
 }
 
@@ -284,8 +284,8 @@ func setupServer(t *testing.T) (addr string, td *testTrafficDirector, lrss *lrsS
 			Nanos:   0,
 		},
 	}
-	adspb.RegisterAggregatedDiscoveryServiceServer(svr, td)
-	lrspb.RegisterLoadReportingServiceServer(svr, lrss)
+	adsgrpc.RegisterAggregatedDiscoveryServiceServer(svr, td)
+	lrsgrpc.RegisterLoadReportingServiceServer(svr, lrss)
 	go svr.Serve(lis)
 	return lis.Addr().String(), td, lrss, func() {
 		svr.Stop()

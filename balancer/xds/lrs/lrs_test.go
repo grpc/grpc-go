@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	loadreportpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/load_report"
+	lrsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -136,7 +137,7 @@ type lrsServer struct {
 	reportingInterval *durationpb.Duration
 }
 
-func (lrss *lrsServer) StreamLoadStats(stream lrspb.LoadReportingService_StreamLoadStatsServer) error {
+func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -189,7 +190,7 @@ func setupServer(t *testing.T, reportingInterval *durationpb.Duration) (addr str
 		drops:             make(map[string]uint64),
 		reportingInterval: reportingInterval,
 	}
-	lrspb.RegisterLoadReportingServiceServer(svr, lrss)
+	lrsgrpc.RegisterLoadReportingServiceServer(svr, lrss)
 	go svr.Serve(lis)
 	return lis.Addr().String(), lrss, func() {
 		svr.Stop()

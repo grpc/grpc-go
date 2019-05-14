@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package primitives
+package primitives_test
 
 import (
 	"sync"

@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
+	lrsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
@@ -46,7 +47,7 @@ type lrsServer struct {
 	reportingInterval *durationpb.Duration
 }
 
-func (lrss *lrsServer) StreamLoadStats(stream lrspb.LoadReportingService_StreamLoadStatsServer) error {
+func (lrss *lrsServer) StreamLoadStats(stream lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err

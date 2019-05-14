@@ -35,7 +35,7 @@ import (
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	discoverypb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/discovery"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
-	adspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
+	adsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/discovery/v2/ads"
 	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
@@ -60,7 +60,7 @@ var (
 type client struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
-	cli          adspb.AggregatedDiscoveryServiceClient
+	cli          adsgrpc.AggregatedDiscoveryServiceClient
 	opts         balancer.BuildOptions
 	balancerName string // the traffic director name
 	serviceName  string // the user dial target name
@@ -164,7 +164,7 @@ func (c *client) newEDSRequest() *discoverypb.DiscoveryRequest {
 }
 
 func (c *client) makeADSCall() {
-	c.cli = adspb.NewAggregatedDiscoveryServiceClient(c.cc)
+	c.cli = adsgrpc.NewAggregatedDiscoveryServiceClient(c.cc)
 	retryCount := 0
 	var doRetry bool
 
