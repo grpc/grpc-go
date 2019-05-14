@@ -60,7 +60,7 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 	if retries == 0 {
 		return baseDelay
 	}
-	backoff, max := float64(baseDelay), float64(maxDelay)
+	backoff, max := float64(baseDelay), float64(bc.MaxDelay)
 	for backoff < max && retries > 0 {
 		backoff *= factor
 		retries--
