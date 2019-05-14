@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package lrs implements load reporting service for xds balancer.
 package lrs
 
 import (
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/xds/internal"
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 	loadreportpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/endpoint/load_report"
+	lrsgrpc "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	lrspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/service/load_stats/v2/lrs"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/backoff"
@@ -126,7 +128,7 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 //
 // It retries the call (with backoff) until ctx is canceled.
 func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
-	c := lrspb.NewLoadReportingServiceClient(cc)
+	c := lrsgrpc.NewLoadReportingServiceClient(cc)
 	var (
 		retryCount int
 		doBackoff  bool
@@ -188,7 +190,7 @@ func (ls *lrsStore) ReportTo(ctx context.Context, cc *grpc.ClientConn) {
 	}
 }
 
-func (ls *lrsStore) sendLoads(ctx context.Context, stream lrspb.LoadReportingService_StreamLoadStatsClient, clusterName string, interval time.Duration) {
+func (ls *lrsStore) sendLoads(ctx context.Context, stream lrsgrpc.LoadReportingService_StreamLoadStatsClient, clusterName string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
