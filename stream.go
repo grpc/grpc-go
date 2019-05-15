@@ -30,7 +30,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancerload"
@@ -966,32 +965,17 @@ func (a *csAttempt) finish(err error) {
 }
 
 func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, t transport.ClientTransport, opts ...CallOption) (_ ClientStream, err error) {
-	ac.mu.Lock()
-	if ac.transport != t {
-		ac.mu.Unlock()
-		return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
-	}
-	// transition to CONNECTING state when an attempt starts
-	if ac.state != connectivity.Connecting {
-		ac.updateConnectivityState(connectivity.Connecting)
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
-	}
-	ac.mu.Unlock()
-
 	if t == nil {
 		// TODO: return RPC error here?
 		return nil, errors.New("transport provided is nil")
 	}
 	// defaultCallInfo contains unnecessary info(i.e. failfast, maxRetryRPCBufferSize), so we just initialize an empty struct.
-	c := &callInfo{}
+	// c := &callInfo{}
+	c := defaultCallInfo()
 
-	for _, o := range opts {
-		if err := o.before(c); err != nil {
-			return nil, toRPCErr(err)
-		}
-	}
-	c.maxReceiveMessageSize = getMaxSize(nil, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
-	c.maxSendMessageSize = getMaxSize(nil, c.maxSendMessageSize, defaultServerMaxSendMessageSize)
+	// missing: service config
+	//  - waitForResolvedAddrs()
+	//  - find & apply method config
 
 	// Possible context leak:
 	// The cancel function for the child context we create will only be called
@@ -1005,6 +989,13 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 		}
 	}()
 
+	for _, o := range opts {
+		if err := o.before(c); err != nil {
+			return nil, toRPCErr(err)
+		}
+	}
+	c.maxReceiveMessageSize = getMaxSize(nil, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	c.maxSendMessageSize = getMaxSize(nil, c.maxSendMessageSize, defaultServerMaxSendMessageSize)
 	if err := setCallInfoCodec(c); err != nil {
 		return nil, err
 	}
@@ -1037,6 +1028,9 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 		callHdr.Creds = c.creds
 	}
 
+	// missing: tracing and stats handler.
+
+	// different: special addrConnStream to avoid retry.
 	as := &addrConnStream{
 		callHdr:  callHdr,
 		ac:       ac,
