@@ -24,19 +24,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	orcapb "google.golang.org/grpc/balancer/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
-	"google.golang.org/grpc/balancer/xds/orca"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/balancerload"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
-
-	_ "google.golang.org/grpc/balancer/xds/orca"
 )
 
 const testBalancerName = "testbalancer"
@@ -200,7 +197,20 @@ func testDoneInfo(t *testing.T, e env) {
 	}
 }
 
+const loadMDKey = "X-Endpoint-Load-Metrics-Bin"
+
+type testLoadParser struct{}
+
+func (*testLoadParser) Parse(md metadata.MD) interface{} {
+	vs := md.Get(loadMDKey)
+	if len(vs) == 0 {
+		return nil
+	}
+	return vs[0]
+}
+
 func (s) TestDoneLoads(t *testing.T) {
+	balancerload.SetParser(&testLoadParser{})
 	for _, e := range listTestEnv() {
 		testDoneLoads(t, e)
 	}
@@ -210,17 +220,11 @@ func testDoneLoads(t *testing.T, e env) {
 	b := &testBalancer{}
 	balancer.Register(b)
 
-	testLoad := &orcapb.LoadReport{
-		CpuUtilization:           0.31,
-		MemUtilization:           0.41,
-		NicInUtilization:         0.59,
-		NicOutUtilization:        0.26,
-		RequestCostOrUtilization: nil,
-	}
+	const testLoad = "test-load-,-should-be-orca"
 
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			grpc.SetTrailer(ctx, orca.ToMetadata(testLoad))
+			grpc.SetTrailer(ctx, metadata.Pairs(loadMDKey, testLoad))
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -247,8 +251,8 @@ func testDoneLoads(t *testing.T, e env) {
 	if len(b.doneInfo) < 1 {
 		t.Fatalf("b.doneInfo = %v, want length 1", b.doneInfo)
 	}
-	gotLoad, _ := b.doneInfo[0].ServerLoad.(*orcapb.LoadReport)
-	if !proto.Equal(gotLoad, testLoad) {
+	gotLoad, _ := b.doneInfo[0].ServerLoad.(string)
+	if gotLoad != testLoad {
 		t.Fatalf("b.doneInfo[0].ServerLoad = %v; want = %v", b.doneInfo[0].ServerLoad, testLoad)
 	}
 }
