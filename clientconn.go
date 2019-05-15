@@ -1237,25 +1237,21 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 
 	// Set up the health check helper functions.
 	currentTr := ac.transport
-	newStream := func() (interface{}, error) {
+	newStream := func(method string) (interface{}, error) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		if ac.transport != currentTr {
 			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 		}
-		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, "/grpc.health.v1.Health/Watch", currentTr)
+		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr)
 	}
-	reportHealth := func(ok bool) {
+	reportHealth := func(s connectivity.State) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		if ac.transport != currentTr {
 			return
 		}
-		if ok {
-			ac.updateConnectivityState(connectivity.Ready)
-		} else {
-			ac.updateConnectivityState(connectivity.TransientFailure)
-		}
+		ac.updateConnectivityState(s)
 	}
 	// Start the health checking stream.
 	go func() {

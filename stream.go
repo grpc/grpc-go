@@ -964,18 +964,24 @@ func (a *csAttempt) finish(err error) {
 	a.mu.Unlock()
 }
 
+// newClientStream creates a ClientConn with the specified transport, on the
+// given addrConn.
+//
+// It's expected that the given transport is either the same one in addrConn, or
+// is already closed. To avoid race, transport is specified separately, instead
+// of using ac.transpot.
+//
+// Main difference between this and ClientConn.NewStream:
+// - no retry
+// - no service config (or wait for service config)
+// - no tracing or stats
 func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, method string, t transport.ClientTransport, opts ...CallOption) (_ ClientStream, err error) {
 	if t == nil {
 		// TODO: return RPC error here?
 		return nil, errors.New("transport provided is nil")
 	}
 	// defaultCallInfo contains unnecessary info(i.e. failfast, maxRetryRPCBufferSize), so we just initialize an empty struct.
-	// c := &callInfo{}
-	c := defaultCallInfo()
-
-	// missing: service config
-	//  - waitForResolvedAddrs()
-	//  - find & apply method config
+	c := &callInfo{}
 
 	// Possible context leak:
 	// The cancel function for the child context we create will only be called
@@ -1028,9 +1034,7 @@ func (ac *addrConn) newClientStream(ctx context.Context, desc *StreamDesc, metho
 		callHdr.Creds = c.creds
 	}
 
-	// missing: tracing and stats handler.
-
-	// different: special addrConnStream to avoid retry.
+	// Use a special addrConnStream to avoid retry.
 	as := &addrConnStream{
 		callHdr:  callHdr,
 		ac:       ac,

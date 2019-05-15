@@ -23,6 +23,8 @@ package internal
 import (
 	"context"
 	"time"
+
+	"google.golang.org/grpc/connectivity"
 )
 
 var (
@@ -48,7 +50,7 @@ var (
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
-type HealthChecker func(ctx context.Context, newStream func() (interface{}, error), reportHealth func(bool), serviceName string) error
+type HealthChecker func(ctx context.Context, newStream func(string) (interface{}, error), reportHealth func(connectivity.State), serviceName string) error
 
 const (
 	// CredsBundleModeFallback switches GoogleDefaultCreds to fallback mode.
