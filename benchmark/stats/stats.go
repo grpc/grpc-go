@@ -32,6 +32,7 @@ import (
 // Features contains most fields for a benchmark
 type Features struct {
 	NetworkMode        string
+	UseBufConn         bool
 	EnableTrace        bool
 	Latency            time.Duration
 	Kbps               int
@@ -42,8 +43,6 @@ type Features struct {
 	ModeCompressor     string
 	EnableChannelz     bool
 	EnablePreloader    bool
-	// TODO(easwars): Plumb usebuffconn in below functions
-	UseBuffConn bool
 }
 
 // String returns the textual output of the Features as string.

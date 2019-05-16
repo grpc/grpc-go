@@ -262,7 +262,7 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	opts = append(opts, grpc.WithInsecure())
 
 	var lis net.Listener
-	if benchFeatures.UseBuffConn {
+	if benchFeatures.UseBufConn {
 		bcLis := bufconn.Listen(256 * 1024)
 		lis = bcLis
 		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
@@ -482,7 +482,7 @@ func (b *benchOpts) generateFeatures() []stats.Features {
 		result = append(result, stats.Features{
 			// These features stay the same for each iteration.
 			NetworkMode: b.networkMode,
-			UseBuffConn: b.useBufconn,
+			UseBufConn:  b.useBufconn,
 			// These features can potentially change for each iteration.
 			EnableTrace:        b.features.enableTrace[curPos[0]],
 			Latency:            b.features.readLatencies[curPos[1]],
@@ -693,7 +693,7 @@ func after(opts *benchOpts, data []stats.BenchResults) {
 		}
 		runtime.GC() // materialize all statistics
 		if err = pprof.WriteHeapProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "testing: can't write heap profile %s: %s\n", memProfile, err)
+			fmt.Fprintf(os.Stderr, "testing: can't write heap profile %s: %s\n", opts.memProfile, err)
 			os.Exit(2)
 		}
 		f.Close()
@@ -701,7 +701,7 @@ func after(opts *benchOpts, data []stats.BenchResults) {
 	if opts.benchmarkResultFile != "" {
 		f, err := os.Create(opts.benchmarkResultFile)
 		if err != nil {
-			log.Fatalf("testing: can't write benchmark result %s: %s\n", benchmarkResultFile, err)
+			log.Fatalf("testing: can't write benchmark result %s: %s\n", opts.benchmarkResultFile, err)
 		}
 		dataEncoder := gob.NewEncoder(f)
 		dataEncoder.Encode(data)
