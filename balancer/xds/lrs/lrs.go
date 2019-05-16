@@ -161,9 +161,7 @@ func NewStore(serviceName string) Store {
 				},
 			},
 		},
-		backoff: backoff.Exponential{
-			MaxDelay: 120 * time.Second,
-		},
+		backoff:      backoff.NewExponentialBuilder().Build(),
 		lastReported: time.Now(),
 	}
 }
