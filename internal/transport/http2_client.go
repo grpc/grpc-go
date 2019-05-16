@@ -1180,7 +1180,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}()
 
-	// If headersChan hasn't been closed yet
+	// If headerChan hasn't been closed yet
 	if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
 		if !endStream {
 			// Headers frame is ResponseHeader.
