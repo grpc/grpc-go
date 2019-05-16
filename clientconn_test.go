@@ -849,7 +849,7 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 
 	actual, ok := conn.dopts.bs.(backoff.Exponential)
 	if !ok {
-		t.Fatalf("unexpected type of backoff config : %#v", conn.dopts.bs)
+		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
 	}
 
 	expectedValue := backoff.Exponential{
