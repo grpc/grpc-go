@@ -42,6 +42,8 @@ type Features struct {
 	ModeCompressor     string
 	EnableChannelz     bool
 	EnablePreloader    bool
+	// TODO(easwars): Plumb usebuffconn in below functions
+	UseBuffConn bool
 }
 
 // String returns the textual output of the Features as string.
