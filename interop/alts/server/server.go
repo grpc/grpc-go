@@ -70,15 +70,16 @@ func main() {
 // application-layer authorization checks.
 func authz(ctx context.Context, info *tap.Info) (context.Context, error) {
 	authInfo, err := alts.AuthInfoFromContext(ctx)
-	if err == nil {
-		// Access all alts.AuthInfo data:
-		grpclog.Infof("authInfo.ApplicationProtocol() = %v", authInfo.ApplicationProtocol())
-		grpclog.Infof("authInfo.RecordProtocol() = %v", authInfo.RecordProtocol())
-		grpclog.Infof("authInfo.SecurityLevel() = %v", authInfo.SecurityLevel())
-		grpclog.Infof("authInfo.PeerServiceAccount() = %v", authInfo.PeerServiceAccount())
-		grpclog.Infof("authInfo.LocalServiceAccount() = %v", authInfo.LocalServiceAccount())
-		grpclog.Infof("authInfo.PeerRPCVersions() = %v", authInfo.PeerRPCVersions())
-		grpclog.Infof("info.FullMethodName = %v", info.FullMethodName)
+	if err != nil {
+		return nil, err
 	}
+	// Access all alts.AuthInfo data:
+	grpclog.Infof("authInfo.ApplicationProtocol() = %v", authInfo.ApplicationProtocol())
+	grpclog.Infof("authInfo.RecordProtocol() = %v", authInfo.RecordProtocol())
+	grpclog.Infof("authInfo.SecurityLevel() = %v", authInfo.SecurityLevel())
+	grpclog.Infof("authInfo.PeerServiceAccount() = %v", authInfo.PeerServiceAccount())
+	grpclog.Infof("authInfo.LocalServiceAccount() = %v", authInfo.LocalServiceAccount())
+	grpclog.Infof("authInfo.PeerRPCVersions() = %v", authInfo.PeerRPCVersions())
+	grpclog.Infof("info.FullMethodName = %v", info.FullMethodName)
 	return ctx, nil
 }
