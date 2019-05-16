@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/tap"
 )
 
 const (
@@ -59,7 +61,25 @@ func main() {
 		opts.HandshakerServiceAddress = *hsAddr
 	}
 	altsTC := alts.NewServerCreds(opts)
-	grpcServer := grpc.NewServer(grpc.Creds(altsTC))
+	grpcServer := grpc.NewServer(grpc.Creds(altsTC), grpc.InTapHandle(authz))
 	testpb.RegisterTestServiceServer(grpcServer, interop.NewTestServer())
 	grpcServer.Serve(lis)
+}
+
+// authz shows how to access client information at the server side to perform
+// application-layer authorization checks.
+func authz(ctx context.Context, info *tap.Info) (context.Context, error) {
+	authInfo, err := alts.AuthInfoFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Access all alts.AuthInfo data:
+	grpclog.Infof("authInfo.ApplicationProtocol() = %v", authInfo.ApplicationProtocol())
+	grpclog.Infof("authInfo.RecordProtocol() = %v", authInfo.RecordProtocol())
+	grpclog.Infof("authInfo.SecurityLevel() = %v", authInfo.SecurityLevel())
+	grpclog.Infof("authInfo.PeerServiceAccount() = %v", authInfo.PeerServiceAccount())
+	grpclog.Infof("authInfo.LocalServiceAccount() = %v", authInfo.LocalServiceAccount())
+	grpclog.Infof("authInfo.PeerRPCVersions() = %v", authInfo.PeerRPCVersions())
+	grpclog.Infof("info.FullMethodName = %v", info.FullMethodName)
+	return ctx, nil
 }
