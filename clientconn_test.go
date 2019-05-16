@@ -679,7 +679,7 @@ func (s) TestWithConnectParams(t *testing.T) {
 	testBackoffStrategySet(t, expected, WithConnectParams(crt))
 }
 
-func testBackoffStrategySet(t *testing.T, expected *backoff.Strategy, opts ...DialOption) {
+func testBackoffStrategySet(t *testing.T, expected backoff.Strategy, opts ...DialOption) {
 	opts = append(opts, WithInsecure())
 	conn, err := Dial("passthrough:///foo:80", opts...)
 	if err != nil {
