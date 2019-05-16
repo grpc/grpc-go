@@ -1720,22 +1720,19 @@ func TestInvalidHeaderField(t *testing.T) {
 func TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
 	defer cancel()
-	callHdr := &CallHdr{
-		Host:   "localhost",
-		Method: "foo",
-	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	defer server.stop()
+	defer ct.Close()
+	s, err := ct.NewStream(context.Background(), &CallHdr{Host: "localhost", Method: "foo"})
 	if err != nil {
 		t.Fatalf("failed to create the stream")
 	}
-	time.Sleep(10 * time.Millisecond)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
 	select {
 	case <-s.headerChan:
-	default:
+	case <-timer.C:
 		t.Errorf("s.headerChan: got open, want closed")
 	}
-	ct.Close()
-	server.stop()
 }
 
 func TestIsReservedHeader(t *testing.T) {
