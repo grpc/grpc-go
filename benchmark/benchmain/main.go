@@ -238,7 +238,7 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
-	if benchFeatures.ModeCompressor == "nop" {
+	if benchFeatures.ModeCompressor == compModeNop {
 		sopts = append(sopts,
 			grpc.RPCCompressor(nopCompressor{}),
 			grpc.RPCDecompressor(nopDecompressor{}),
@@ -248,7 +248,7 @@ func makeClient(benchFeatures stats.Features) (testpb.BenchmarkServiceClient, fu
 			grpc.WithDecompressor(nopDecompressor{}),
 		)
 	}
-	if benchFeatures.ModeCompressor == "gzip" {
+	if benchFeatures.ModeCompressor == compModeGzip {
 		sopts = append(sopts,
 			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
@@ -584,7 +584,7 @@ func setCompressorMode(cf *flags.StringFlagWithAllowedValues) []string {
 	case compModeNop, compModeGzip, compModeOff:
 		return []string{cf.String()}
 	case compModeAll:
-		return []string{"off", "nop", "gzip"}
+		return []string{compModeNop, compModeGzip, compModeOff}
 	default:
 		// This should never happen because a wrong value passed to this flag would
 		// be caught during flag.Parse().
@@ -723,10 +723,10 @@ func (nopCompressor) Do(w io.Writer, p []byte) error {
 	return nil
 }
 
-func (nopCompressor) Type() string { return "nop" }
+func (nopCompressor) Type() string { return compModeNop }
 
 // nopDecompressor is a decompressor that just copies data.
 type nopDecompressor struct{}
 
 func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return ioutil.ReadAll(r) }
-func (nopDecompressor) Type() string                   { return "nop" }
+func (nopDecompressor) Type() string                   { return compModeNop }
