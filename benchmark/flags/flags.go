@@ -24,7 +24,6 @@ package flags
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -74,7 +73,7 @@ func (as *StringFlagWithAllowedValues) Set(val string) error {
 			return nil
 		}
 	}
-	return errors.New(fmt.Sprintf("want one of: %v", strings.Join(as.allowed, ", ")))
+	return fmt.Errorf("want one of: %v", strings.Join(as.allowed, ", "))
 }
 
 type durationSliceValue []time.Duration
