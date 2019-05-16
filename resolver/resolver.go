@@ -108,8 +108,9 @@ type State struct {
 	// ServiceConfig is the parsed service config; obtained from
 	// serviceconfig.Parse.
 	ServiceConfig serviceconfig.Config
+	Err           error // Err getting name resolved.
 
-	// TODO: add Err error
+	// TODO: add ParsedServiceConfig interface{}
 }
 
 // ClientConn contains the callbacks for resolver to notify any updates

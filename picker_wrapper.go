@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -39,9 +40,13 @@ type pickerWrapper struct {
 	blockingCh chan struct{}
 	picker     balancer.Picker
 
-	// The latest connection happened.
-	connErrMu sync.Mutex
+	// The latest connection error.
+	connErrMu sync.RWMutex
 	connErr   error
+
+	// The latest resolver error.
+	resolverErrMu sync.RWMutex
+	resolverErr   error
 }
 
 func newPickerWrapper() *pickerWrapper {
@@ -56,10 +61,31 @@ func (bp *pickerWrapper) updateConnectionError(err error) {
 }
 
 func (bp *pickerWrapper) connectionError() error {
-	bp.connErrMu.Lock()
+	bp.connErrMu.RLock()
 	err := bp.connErr
-	bp.connErrMu.Unlock()
+	bp.connErrMu.RUnlock()
 	return err
+}
+
+func (bp *pickerWrapper) updateResolverError(err error) {
+	bp.resolverErrMu.Lock()
+	bp.resolverErr = err
+	bp.resolverErrMu.Unlock()
+}
+
+func (bp *pickerWrapper) errors() (desc string, errored bool) {
+	bp.connErrMu.RLock()
+	connErr := bp.connErr
+	bp.connErrMu.RUnlock()
+
+	bp.resolverErrMu.RLock()
+	rErr := bp.resolverErr
+	bp.resolverErrMu.RUnlock()
+
+	if connErr == nil && rErr == nil {
+		return "", false
+	}
+	return fmt.Sprintf("lastest connection error: %v, lastest name resolution error: %v", connErr, rErr), true
 }
 
 // updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
@@ -120,12 +146,12 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 			bp.mu.Unlock()
 			select {
 			case <-ctx.Done():
-				if connectionErr := bp.connectionError(); connectionErr != nil {
+				if desc, errored := bp.errors(); errored {
 					switch ctx.Err() {
 					case context.DeadlineExceeded:
-						return nil, nil, status.Errorf(codes.DeadlineExceeded, "latest connection error: %v", connectionErr)
+						return nil, nil, status.Errorf(codes.DeadlineExceeded, desc)
 					case context.Canceled:
-						return nil, nil, status.Errorf(codes.Canceled, "latest connection error: %v", connectionErr)
+						return nil, nil, status.Errorf(codes.Canceled, desc)
 					}
 				}
 				return nil, nil, ctx.Err()
@@ -148,7 +174,10 @@ func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.
 				if !failfast {
 					continue
 				}
-				return nil, nil, status.Errorf(codes.Unavailable, "%v, latest connection error: %v", err, bp.connectionError())
+				if desc, errored := bp.errors(); errored {
+					return nil, nil, status.Errorf(codes.Unavailable, "%v, %v", err, desc)
+				}
+				return nil, nil, status.Errorf(codes.Unavailable, "%v", err)
 			case context.DeadlineExceeded:
 				return nil, nil, status.Error(codes.DeadlineExceeded, err.Error())
 			case context.Canceled:

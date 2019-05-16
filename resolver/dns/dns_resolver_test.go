@@ -60,14 +60,19 @@ type testClientConn struct {
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) {
-	panic("unused")
+	t.m1.Lock()
+	defer t.m1.Unlock()
+	t.addrs = s.Addresses
+	t.a++
+
+	t.m2.Lock()
+	defer t.m2.Unlock()
+	t.sc = s.ServiceConfig
+	t.s++
 }
 
 func (t *testClientConn) NewAddress(addresses []resolver.Address) {
-	t.m1.Lock()
-	defer t.m1.Unlock()
-	t.addrs = addresses
-	t.a++
+	panic("unused, call UpdateState() instead")
 }
 
 func (t *testClientConn) getAddress() ([]resolver.Address, int) {
@@ -77,10 +82,6 @@ func (t *testClientConn) getAddress() ([]resolver.Address, int) {
 }
 
 func (t *testClientConn) NewServiceConfig(serviceConfig string) {
-	t.m2.Lock()
-	defer t.m2.Unlock()
-	t.sc = serviceConfig
-	t.s++
 }
 
 func (t *testClientConn) getSc() (string, int) {
@@ -149,7 +150,7 @@ func hostLookup(host string) ([]string, error) {
 	if addrs, cnt := hostLookupTbl.tbl[host]; cnt {
 		return addrs, nil
 	}
-	return nil, fmt.Errorf("failed to lookup host:%s resolution in hostLookupTbl", host)
+	return nil, nil
 }
 
 var srvLookupTbl = struct {
@@ -667,13 +668,7 @@ func txtLookup(host string) ([]string, error) {
 	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
 }
 
-func TestResolve(t *testing.T) {
-	testDNSResolver(t)
-	testDNSResolveNow(t)
-	testIPResolver(t)
-}
-
-func testDNSResolver(t *testing.T) {
+func TestDNSResolver(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target   string
@@ -779,7 +774,7 @@ func mutateTbl(target string) func() {
 	}
 }
 
-func testDNSResolveNow(t *testing.T) {
+func TestDNSResolveNow(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target   string
@@ -856,7 +851,7 @@ func testDNSResolveNow(t *testing.T) {
 
 const colonDefaultPort = ":" + defaultPort
 
-func testIPResolver(t *testing.T) {
+func TestIPResolver(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target string

@@ -543,6 +543,10 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
+	if s.Err != nil {
+		cc.blockingpicker.updateResolverError(s.Err)
+		return s.Err
+	}
 	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
 		if cc.dopts.defaultServiceConfig != nil && cc.sc == nil {
 			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)

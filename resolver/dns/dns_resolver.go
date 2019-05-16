@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 func init() {
@@ -119,7 +120,7 @@ func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts 
 			rn: make(chan struct{}, 1),
 			q:  make(chan struct{}),
 		}
-		cc.NewAddress(addr)
+		cc.UpdateState(resolver.State{Addresses: addr})
 		go i.watcher()
 		return i, nil
 	}
@@ -190,7 +191,7 @@ func (i *ipResolver) watcher() {
 	for {
 		select {
 		case <-i.rn:
-			i.cc.NewAddress(i.ip)
+			i.cc.UpdateState(resolver.State{Addresses: i.ip})
 		case <-i.q:
 			return
 		}
@@ -251,7 +252,7 @@ func (d *dnsResolver) watcher() {
 			}
 		}
 
-		result, sc := d.lookup()
+		result, sc, err := d.lookup()
 		// Next lookup should happen within an interval defined by d.freq. It may be
 		// more often due to exponential retry on empty address list.
 		if len(result) == 0 {
@@ -261,8 +262,12 @@ func (d *dnsResolver) watcher() {
 			d.retryCount = 0
 			d.t.Reset(d.freq)
 		}
-		d.cc.NewServiceConfig(sc)
-		d.cc.NewAddress(result)
+		scParsed, _ := serviceconfig.Parse(sc) // TODO: what if it errored?
+		d.cc.UpdateState(resolver.State{
+			Addresses:     result,
+			ServiceConfig: scParsed,
+			Err:           err,
+		})
 
 		// Sleep to prevent excessive re-resolutions. Incoming resolution requests
 		// will be queued in d.rn.
@@ -302,6 +307,25 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	return newAddrs
 }
 
+func (d *dnsResolver) lookupHost() ([]resolver.Address, error) {
+	var newAddrs []resolver.Address
+	addrs, err := d.resolver.LookupHost(d.ctx, d.host)
+	if err != nil {
+		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
+		return nil, err
+	}
+	for _, a := range addrs {
+		a, ok := formatIP(a)
+		if !ok {
+			grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
+			continue
+		}
+		addr := a + ":" + d.port
+		newAddrs = append(newAddrs, resolver.Address{Addr: addr})
+	}
+	return newAddrs, nil
+}
+
 func (d *dnsResolver) lookupTXT() string {
 	ss, err := d.resolver.LookupTXT(d.ctx, txtPrefix+d.host)
 	if err != nil {
@@ -321,34 +345,19 @@ func (d *dnsResolver) lookupTXT() string {
 	return strings.TrimPrefix(res, txtAttribute)
 }
 
-func (d *dnsResolver) lookupHost() []resolver.Address {
-	var newAddrs []resolver.Address
-	addrs, err := d.resolver.LookupHost(d.ctx, d.host)
+func (d *dnsResolver) lookup() ([]resolver.Address, string, error) {
+	hostAddrs, err := d.lookupHost()
 	if err != nil {
-		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
-		return nil
+		return nil, "", err
 	}
-	for _, a := range addrs {
-		a, ok := formatIP(a)
-		if !ok {
-			grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
-			continue
-		}
-		addr := a + ":" + d.port
-		newAddrs = append(newAddrs, resolver.Address{Addr: addr})
-	}
-	return newAddrs
-}
-
-func (d *dnsResolver) lookup() ([]resolver.Address, string) {
 	newAddrs := d.lookupSRV()
 	// Support fallback to non-balancer address.
-	newAddrs = append(newAddrs, d.lookupHost()...)
+	newAddrs = append(newAddrs, hostAddrs...)
 	if d.disableServiceConfig {
-		return newAddrs, ""
+		return newAddrs, "", nil
 	}
 	sc := d.lookupTXT()
-	return newAddrs, canaryingSC(sc)
+	return newAddrs, canaryingSC(sc), nil
 }
 
 // formatIP returns ok = false if addr is not a valid textual representation of an IP address.
