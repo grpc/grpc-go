@@ -1243,7 +1243,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		if ac.transport != currentTr {
 			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
 		}
-		return ac.newClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr)
+		return newNonRetryClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr, ac)
 	}
 	reportHealth := func(s connectivity.State) {
 		ac.mu.Lock()
