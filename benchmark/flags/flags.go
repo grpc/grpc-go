@@ -23,6 +23,7 @@ of flag values on the command line.
 package flags
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"strconv"
@@ -94,7 +95,7 @@ func (dsv *durationSliceValue) Set(s string) error {
 
 // String implements the flag.Value interface.
 func (dsv *durationSliceValue) String() string {
-	var b strings.Builder
+	var b bytes.Buffer
 	for i, d := range *dsv {
 		if i > 0 {
 			b.WriteRune(',')
@@ -134,7 +135,7 @@ func (isv *intSliceValue) Set(s string) error {
 
 // String implements the flag.Value interface.
 func (isv *intSliceValue) String() string {
-	var b strings.Builder
+	var b bytes.Buffer
 	for i, n := range *isv {
 		if i > 0 {
 			b.WriteRune(',')
