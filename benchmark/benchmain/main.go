@@ -533,25 +533,25 @@ func processFlags() *benchOpts {
 	}
 
 	opts := &benchOpts{
-		rModes:              runModesFromWorkloads(workloads.String()),
+		rModes:              runModesFromWorkloads(*workloads),
 		benchTime:           *benchTime,
 		memProfileRate:      *memProfileRate,
 		memProfile:          *memProfile,
 		cpuProfile:          *cpuProfile,
-		networkMode:         networkMode.String(),
+		networkMode:         *networkMode,
 		benchmarkResultFile: *benchmarkResultFile,
 		useBufconn:          *useBufconn,
 		features: &featureOpts{
-			enableTrace:        setToggleMode(traceMode),
+			enableTrace:        setToggleMode(*traceMode),
 			readLatencies:      append([]time.Duration(nil), *readLatency...),
 			readKbps:           append([]int(nil), *readKbps...),
 			readMTU:            append([]int(nil), *readMTU...),
 			maxConcurrentCalls: append([]int(nil), *maxConcurrentCalls...),
 			reqSizeBytes:       append([]int(nil), *readReqSizeBytes...),
 			respSizeBytes:      append([]int(nil), *readRespSizeBytes...),
-			compModes:          setCompressorMode(compressorMode),
-			enableChannelz:     setToggleMode(channelzOn),
-			enablePreloader:    setToggleMode(preloaderMode),
+			compModes:          setCompressorMode(*compressorMode),
+			enableChannelz:     setToggleMode(*channelzOn),
+			enablePreloader:    setToggleMode(*preloaderMode),
 		},
 	}
 
@@ -564,8 +564,8 @@ func processFlags() *benchOpts {
 	return opts
 }
 
-func setToggleMode(tf flag.Value) []bool {
-	switch tf.String() {
+func setToggleMode(val string) []bool {
+	switch val {
 	case toggleModeOn:
 		return []bool{true}
 	case toggleModeOff:
@@ -579,10 +579,10 @@ func setToggleMode(tf flag.Value) []bool {
 	}
 }
 
-func setCompressorMode(cf flag.Value) []string {
-	switch cf.String() {
+func setCompressorMode(val string) []string {
+	switch val {
 	case compModeNop, compModeGzip, compModeOff:
-		return []string{cf.String()}
+		return []string{val}
 	case compModeAll:
 		return []string{compModeNop, compModeGzip, compModeOff}
 	default:

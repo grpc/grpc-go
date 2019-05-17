@@ -42,10 +42,10 @@ var _ flag.Value = (*stringFlagWithAllowedValues)(nil)
 // StringWithAllowedValues returns a flag variable of type
 // stringFlagWithAllowedValues configured with the provided parameters.
 // 'allowed` is the set of values that this flag can be set to.
-func StringWithAllowedValues(name, defaultVal, usage string, allowed []string) flag.Value {
+func StringWithAllowedValues(name, defaultVal, usage string, allowed []string) *string {
 	as := &stringFlagWithAllowedValues{defaultVal, allowed}
 	flag.CommandLine.Var(as, name, usage)
-	return as
+	return &as.val
 }
 
 // String implements the flag.Value interface.

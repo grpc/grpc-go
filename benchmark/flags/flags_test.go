@@ -47,8 +47,8 @@ func TestStringWithAllowedValues(t *testing.T) {
 		case test.wantErr && err == nil:
 			t.Errorf("flag.Parse(%v) = nil, want non-nil error", test.args)
 		default:
-			if w.String() != test.wantVal {
-				t.Errorf("flag value is %v, want %v", w.String(), test.wantVal)
+			if *w != test.wantVal {
+				t.Errorf("flag value is %v, want %v", *w, test.wantVal)
 			}
 		}
 	}
