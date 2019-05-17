@@ -108,11 +108,6 @@ type intSliceValue []int
 
 var _ flag.Value = (*intSliceValue)(nil)
 
-func makeIntSliceValue(val []int, is *[]int) *intSliceValue {
-	*is = val
-	return (*intSliceValue)(is)
-}
-
 // IntSlice returns a flag representing a slice of ints.
 func IntSlice(name string, defaultVal []int, usage string) *[]int {
 	is := make([]int, len(defaultVal))
