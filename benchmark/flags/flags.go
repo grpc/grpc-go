@@ -23,7 +23,6 @@ of flag values on the command line.
 package flags
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"strconv"
@@ -31,42 +30,31 @@ import (
 	"time"
 )
 
-// StringFlagWithAllowedValues represents a string flag which can only take a
+// stringFlagWithAllowedValues represents a string flag which can only take a
 // predefined set of values.
-type StringFlagWithAllowedValues struct {
+type stringFlagWithAllowedValues struct {
 	val     string
 	allowed []string
 }
 
-var _ flag.Value = (*StringFlagWithAllowedValues)(nil)
+var _ flag.Value = (*stringFlagWithAllowedValues)(nil)
 
 // StringWithAllowedValues returns a flag variable of type
-// StringFlagWithAllowedValues configured with the provided parameters.
+// stringFlagWithAllowedValues configured with the provided parameters.
 // 'allowed` is the set of values that this flag can be set to.
-func StringWithAllowedValues(name, defaultVal, usage string, allowed []string) *StringFlagWithAllowedValues {
-	as := &StringFlagWithAllowedValues{defaultVal, allowed}
-	StringWithAllowedValuesVar(flag.CommandLine, as, name, defaultVal, usage, allowed)
-	return as
-}
-
-// StringWithAllowedValuesVar is similar to StringWithAllowedValues except that
-// the flag value is stored in the provided 'as' argument.
-func StringWithAllowedValuesVar(f *flag.FlagSet, as *StringFlagWithAllowedValues, name, defaultVal, usage string, allowed []string) {
-	f.Var(as, name, usage)
-}
-
-// Get implements the flag.Getter interface.
-func (as *StringFlagWithAllowedValues) Get() interface{} {
+func StringWithAllowedValues(name, defaultVal, usage string, allowed []string) *stringFlagWithAllowedValues {
+	as := &stringFlagWithAllowedValues{defaultVal, allowed}
+	flag.CommandLine.Var(as, name, usage)
 	return as
 }
 
 // String implements the flag.Value interface.
-func (as *StringFlagWithAllowedValues) String() string {
+func (as *stringFlagWithAllowedValues) String() string {
 	return as.val
 }
 
 // Set implements the flag.Value interface.
-func (as *StringFlagWithAllowedValues) Set(val string) error {
+func (as *stringFlagWithAllowedValues) Set(val string) error {
 	for _, a := range as.allowed {
 		if a == val {
 			as.val = val
@@ -80,29 +68,13 @@ type durationSliceValue []time.Duration
 
 var _ flag.Value = (*durationSliceValue)(nil)
 
-func newDurationSliceValue(val []time.Duration, ds *[]time.Duration) *durationSliceValue {
-	*ds = val
-	return (*durationSliceValue)(ds)
-}
-
 // DurationSlice returns a flag representing a slice of time.Duration objects.
 func DurationSlice(name string, defaultVal []time.Duration, usage string) *[]time.Duration {
-	ds := new([]time.Duration)
-	DurationSliceVar(flag.CommandLine, ds, name, defaultVal, usage)
-	return ds
-}
-
-// DurationSliceVar is similar to DurationSlice except that is returns the flag
-// in the passed in 'ds' argument.
-func DurationSliceVar(f *flag.FlagSet, ds *[]time.Duration, name string, defaultVal []time.Duration, usage string) {
-	val := append([]time.Duration(nil), defaultVal...)
-	dsv := newDurationSliceValue(val, ds)
-	f.Var(dsv, name, usage)
-}
-
-// Get implements the flag.Getter interface.
-func (dsv *durationSliceValue) Get() interface{} {
-	return []time.Duration(*dsv)
+	ds := make([]time.Duration, len(defaultVal))
+	copy(ds, defaultVal)
+	dsv := (*durationSliceValue)(&ds)
+	flag.CommandLine.Var(dsv, name, usage)
+	return &ds
 }
 
 // Set implements the flag.Value interface.
@@ -122,7 +94,7 @@ func (dsv *durationSliceValue) Set(s string) error {
 
 // String implements the flag.Value interface.
 func (dsv *durationSliceValue) String() string {
-	var b bytes.Buffer
+	var b strings.Builder
 	for i, d := range *dsv {
 		if i > 0 {
 			b.WriteRune(',')
@@ -136,29 +108,18 @@ type intSliceValue []int
 
 var _ flag.Value = (*intSliceValue)(nil)
 
-func newIntSliceValue(val []int, is *[]int) *intSliceValue {
+func makeIntSliceValue(val []int, is *[]int) *intSliceValue {
 	*is = val
 	return (*intSliceValue)(is)
 }
 
 // IntSlice returns a flag representing a slice of ints.
 func IntSlice(name string, defaultVal []int, usage string) *[]int {
-	is := new([]int)
-	IntSliceVar(flag.CommandLine, is, name, defaultVal, usage)
-	return is
-}
-
-// IntSliceVar is similar to IntSlice except that is returns the flag in the
-// passed in 'is' argument.
-func IntSliceVar(f *flag.FlagSet, is *[]int, name string, defaultVal []int, usage string) {
-	val := append([]int(nil), defaultVal...)
-	isv := newIntSliceValue(val, is)
-	f.Var(isv, name, usage)
-}
-
-// Get implements the flag.Getter interface.
-func (isv *intSliceValue) Get() interface{} {
-	return []int(*isv)
+	is := make([]int, len(defaultVal))
+	copy(is, defaultVal)
+	isv := (*intSliceValue)(&is)
+	flag.CommandLine.Var(isv, name, usage)
+	return &is
 }
 
 // Set implements the flag.Value interface.
@@ -178,7 +139,7 @@ func (isv *intSliceValue) Set(s string) error {
 
 // String implements the flag.Value interface.
 func (isv *intSliceValue) String() string {
-	var b bytes.Buffer
+	var b strings.Builder
 	for i, n := range *isv {
 		if i > 0 {
 			b.WriteRune(',')

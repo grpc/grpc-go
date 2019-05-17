@@ -564,7 +564,7 @@ func processFlags() *benchOpts {
 	return opts
 }
 
-func setToggleMode(tf *flags.StringFlagWithAllowedValues) []bool {
+func setToggleMode(tf flag.Value) []bool {
 	switch tf.String() {
 	case toggleModeOn:
 		return []bool{true}
@@ -579,7 +579,7 @@ func setToggleMode(tf *flags.StringFlagWithAllowedValues) []bool {
 	}
 }
 
-func setCompressorMode(cf *flags.StringFlagWithAllowedValues) []string {
+func setCompressorMode(cf flag.Value) []string {
 	switch cf.String() {
 	case compModeNop, compModeGzip, compModeOff:
 		return []string{cf.String()}
