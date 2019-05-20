@@ -42,17 +42,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// AddOne add 1 to the features slice
-func AddOne(features []int, featuresMaxPosition []int) {
-	for i := len(features) - 1; i >= 0; i-- {
-		features[i] = (features[i] + 1)
-		if features[i]/featuresMaxPosition[i] == 0 {
-			break
-		}
-		features[i] = features[i] % featuresMaxPosition[i]
-	}
-}
-
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {

@@ -123,7 +123,7 @@ const (
 )
 
 var (
-	allWorkloads              = []string{workloadsUnary, workloadsStreaming, workloadsUnconstrained, workloadsAll}
+	allWorkloads              = []string{workloadsAll}
 	allCompModes              = []string{compModeOff, compModeGzip, compModeNop, compModeAll}
 	allToggleModes            = []string{toggleModeOff, toggleModeOn, toggleModeBoth}
 	allNetworkModes           = []string{networkModeNone, networkModeLocal, networkModeLAN, networkModeWAN, networkLongHaul}
@@ -444,6 +444,27 @@ type featureOpts struct {
 	enablePreloader    []bool          // Feature index 9
 }
 
+// featureIndex is an enum for the different features that could be configured
+// by the user through command line flags.
+type featureIndex int
+
+const (
+	enableTraceIndex featureIndex = iota
+	readLatenciesIndex
+	readKbpsIndex
+	readMTUIndex
+	maxConcurrentCallsIndex
+	reqSizeBytesIndex
+	respSizeBytesIndex
+	compModesIndex
+	enableChannelzIndex
+	enablePreloaderIndex
+
+	// This is a place holder to indicate the total number of feature indices we
+	// have. Any new feature indices should be added above this.
+	maxFeatureIndex
+)
+
 // generateFeatures generates all combinations of the provided feature options.
 // For example, let's say the user sets -workloads=all and
 // -maxConcurrentCalls=1,100, this would end up with the following
@@ -455,67 +476,136 @@ type featureOpts struct {
 // [workloads: unconstrained, maxConcurrentCalls=1]
 // [workloads: unconstrained, maxConcurrentCalls=100]
 func (b *benchOpts) generateFeatures() []stats.Features {
-	// We use reflection here to get the number of features. Then we get the
-	// number of values for each feature. Each combination is represented using a
-	// slice (size=#features), where each item represents one feature. The value
-	// of each item is an index into a slice which contains all possible values
-	// for that feature. Based off of each combination, we create stats.Feature
-	// objects.
-	value := reflect.ValueOf(*b.features)
-	num := value.NumField()
-	featuresNum := make([]int, num)
-	for i := 0; i < num; i++ {
-		field := value.Field(i)
-		if field.Kind() != reflect.Slice {
-			log.Fatalf("Expect features to be slices, but found %v", field.Kind())
+	// featuresNum is an int slice with the value of each entry representing the
+	// number of values to be tested for that particular feature. Each entry
+	// represents a feature based on the featureIndex enum. featuresNum[0]
+	// represents the number of values for enableTrace feature, featuresNum[1]
+	// represents the number of value of readLatencies feature and so on.
+	featuresNum := make([]int, maxFeatureIndex)
+	for i := 0; i < len(featuresNum); i++ {
+		switch featureIndex(i) {
+		case enableTraceIndex:
+			featuresNum[i] = len(b.features.enableTrace)
+		case readLatenciesIndex:
+			featuresNum[i] = len(b.features.readLatencies)
+		case readKbpsIndex:
+			featuresNum[i] = len(b.features.readKbps)
+		case readMTUIndex:
+			featuresNum[i] = len(b.features.readMTU)
+		case maxConcurrentCallsIndex:
+			featuresNum[i] = len(b.features.maxConcurrentCalls)
+		case reqSizeBytesIndex:
+			featuresNum[i] = len(b.features.reqSizeBytes)
+		case respSizeBytesIndex:
+			featuresNum[i] = len(b.features.respSizeBytes)
+		case compModesIndex:
+			featuresNum[i] = len(b.features.compModes)
+		case enableChannelzIndex:
+			featuresNum[i] = len(b.features.enableChannelz)
+		case enablePreloaderIndex:
+			featuresNum[i] = len(b.features.enablePreloader)
+		default:
+			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, maxFeatureIndex)
 		}
-		featuresNum[i] = field.Len()
 	}
 
+	// curPos and initialPos are two slices where each value acts as an index
+	// into the appropriate feature slice maintained in benchOpts.features. This
+	// loop generates all possible combinations of features by changing one value
+	// at a time, and once curPos becomes equal to intialPos, we have explored
+	// all options.
 	var result []stats.Features
 	var curPos []int
-	initialPos := make([]int, num)
+	initialPos := make([]int, maxFeatureIndex)
 	for !reflect.DeepEqual(initialPos, curPos) {
 		if curPos == nil {
-			curPos = make([]int, num)
+			curPos = make([]int, maxFeatureIndex)
 		}
 		result = append(result, stats.Features{
 			// These features stay the same for each iteration.
 			NetworkMode: b.networkMode,
 			UseBufConn:  b.useBufconn,
 			// These features can potentially change for each iteration.
-			EnableTrace:        b.features.enableTrace[curPos[0]],
-			Latency:            b.features.readLatencies[curPos[1]],
-			Kbps:               b.features.readKbps[curPos[2]],
-			Mtu:                b.features.readMTU[curPos[3]],
-			MaxConcurrentCalls: b.features.maxConcurrentCalls[curPos[4]],
-			ReqSizeBytes:       b.features.reqSizeBytes[curPos[5]],
-			RespSizeBytes:      b.features.respSizeBytes[curPos[6]],
-			ModeCompressor:     b.features.compModes[curPos[7]],
-			EnableChannelz:     b.features.enableChannelz[curPos[8]],
-			EnablePreloader:    b.features.enablePreloader[curPos[9]],
+			EnableTrace:        b.features.enableTrace[curPos[enableTraceIndex]],
+			Latency:            b.features.readLatencies[curPos[readLatenciesIndex]],
+			Kbps:               b.features.readKbps[curPos[readKbpsIndex]],
+			Mtu:                b.features.readMTU[curPos[readMTUIndex]],
+			MaxConcurrentCalls: b.features.maxConcurrentCalls[curPos[maxConcurrentCallsIndex]],
+			ReqSizeBytes:       b.features.reqSizeBytes[curPos[reqSizeBytesIndex]],
+			RespSizeBytes:      b.features.respSizeBytes[curPos[respSizeBytesIndex]],
+			ModeCompressor:     b.features.compModes[curPos[compModesIndex]],
+			EnableChannelz:     b.features.enableChannelz[curPos[enableChannelzIndex]],
+			EnablePreloader:    b.features.enablePreloader[curPos[enablePreloaderIndex]],
 		})
-		bm.AddOne(curPos, featuresNum)
+		addOne(curPos, featuresNum)
 	}
 	return result
 }
 
-// sharedFeatures returns a bool slice which acts as a bitmask. Each item in
-// the slice represents a feature (which item corresponds to which feature can
-// be found in the comments for featureOpts). The bit is set to 1 if the
-// corresponding feature does not have multiple value, so is shared amongst all
-// benchmarks.
-func (b *benchOpts) sharedFeatures() []bool {
-	value := reflect.ValueOf(*b.features)
-	num := value.NumField()
-	result := make([]bool, num)
-	for i := 0; i < num; i++ {
-		field := value.Field(i)
-		if field.Kind() != reflect.Slice {
-			log.Fatalf("Expect features to be slices, but found %v", field.Kind())
+// addOne mutates the input slice 'features' by changing one feature, thus
+// arriving at the next combination of feature values. 'featuresMaxPosition'
+// provides the numbers of allowed values for each feature, indexed by
+// 'featureIndex' enum.
+func addOne(features []int, featuresMaxPosition []int) {
+	for i := len(features) - 1; i >= 0; i-- {
+		features[i] = (features[i] + 1)
+		if features[i]/featuresMaxPosition[i] == 0 {
+			break
 		}
-		if field.Len() <= 1 {
-			result[i] = true
+		features[i] = features[i] % featuresMaxPosition[i]
+	}
+}
+
+// sharedFeatures returns a bool slice which acts as a bitmask. Each item in
+// the slice represents a feature, indexed by 'featureIndex' enum.  The bit is
+// set to 1 if the corresponding feature does not have multiple value, so is
+// shared amongst all benchmarks.
+func (b *benchOpts) sharedFeatures() []bool {
+	result := make([]bool, maxFeatureIndex)
+	for i := 0; i < len(result); i++ {
+		switch featureIndex(i) {
+		case enableTraceIndex:
+			if len(b.features.enableTrace) <= 1 {
+				result[enableTraceIndex] = true
+			}
+		case readLatenciesIndex:
+			if len(b.features.readLatencies) <= 1 {
+				result[readLatenciesIndex] = true
+			}
+		case readKbpsIndex:
+			if len(b.features.readKbps) <= 1 {
+				result[readKbpsIndex] = true
+			}
+		case readMTUIndex:
+			if len(b.features.readMTU) <= 1 {
+				result[readMTUIndex] = true
+			}
+		case maxConcurrentCallsIndex:
+			if len(b.features.maxConcurrentCalls) <= 1 {
+				result[maxConcurrentCallsIndex] = true
+			}
+		case reqSizeBytesIndex:
+			if len(b.features.reqSizeBytes) <= 1 {
+				result[reqSizeBytesIndex] = true
+			}
+		case respSizeBytesIndex:
+			if len(b.features.respSizeBytes) <= 1 {
+				result[respSizeBytesIndex] = true
+			}
+		case compModesIndex:
+			if len(b.features.compModes) <= 1 {
+				result[compModesIndex] = true
+			}
+		case enableChannelzIndex:
+			if len(b.features.enableChannelz) <= 1 {
+				result[enableChannelzIndex] = true
+			}
+		case enablePreloaderIndex:
+			if len(b.features.enablePreloader) <= 1 {
+				result[enablePreloaderIndex] = true
+			}
+		default:
+			log.Fatalf("Unknown feature index %v in sharedFeatures. maxFeatureIndex is %v", i, maxFeatureIndex)
 		}
 	}
 	return result

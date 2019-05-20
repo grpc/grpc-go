@@ -38,8 +38,6 @@ type stringFlagWithAllowedValues struct {
 	allowed []string
 }
 
-var _ flag.Value = (*stringFlagWithAllowedValues)(nil)
-
 // StringWithAllowedValues returns a flag variable of type
 // stringFlagWithAllowedValues configured with the provided parameters.
 // 'allowed` is the set of values that this flag can be set to.
@@ -66,8 +64,6 @@ func (as *stringFlagWithAllowedValues) Set(val string) error {
 }
 
 type durationSliceValue []time.Duration
-
-var _ flag.Value = (*durationSliceValue)(nil)
 
 // DurationSlice returns a flag representing a slice of time.Duration objects.
 func DurationSlice(name string, defaultVal []time.Duration, usage string) *[]time.Duration {
@@ -106,8 +102,6 @@ func (dsv *durationSliceValue) String() string {
 }
 
 type intSliceValue []int
-
-var _ flag.Value = (*intSliceValue)(nil)
 
 // IntSlice returns a flag representing a slice of ints.
 func IntSlice(name string, defaultVal []int, usage string) *[]int {
