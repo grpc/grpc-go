@@ -465,22 +465,13 @@ const (
 	maxFeatureIndex
 )
 
-// generateFeatures generates all combinations of the provided feature options.
-// For example, let's say the user sets -workloads=all and
-// -maxConcurrentCalls=1,100, this would end up with the following
-// combinations:
-// [workloads: unary, maxConcurrentCalls=1]
-// [workloads: unary, maxConcurrentCalls=1]
-// [workloads: streaming, maxConcurrentCalls=100]
-// [workloads: streaming, maxConcurrentCalls=100]
-// [workloads: unconstrained, maxConcurrentCalls=1]
-// [workloads: unconstrained, maxConcurrentCalls=100]
-func (b *benchOpts) generateFeatures() []stats.Features {
-	// featuresNum is an int slice with the value of each entry representing the
-	// number of values to be tested for that particular feature. Each entry
-	// represents a feature based on the featureIndex enum. featuresNum[0]
-	// represents the number of values for enableTrace feature, featuresNum[1]
-	// represents the number of value of readLatencies feature and so on.
+// makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
+// element of the slice (indexed by 'featuresIndex' enum) contains the number
+// of features to be exercised by the benchmark code.
+// For example: Index 0 of the returned slice contains the number of values for
+// enableTrace feature, while index 1 contains the number of value of
+// readLatencies feature and so on.
+func makeFeaturesNum(b *benchOpts) []int {
 	featuresNum := make([]int, maxFeatureIndex)
 	for i := 0; i < len(featuresNum); i++ {
 		switch featureIndex(i) {
@@ -508,7 +499,37 @@ func (b *benchOpts) generateFeatures() []stats.Features {
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, maxFeatureIndex)
 		}
 	}
+	return featuresNum
+}
 
+// sharedFeatures returns a bool slice which acts as a bitmask. Each item in
+// the slice represents a feature, indexed by 'featureIndex' enum.  The bit is
+// set to 1 if the corresponding feature does not have multiple value, so is
+// shared amongst all benchmarks.
+func sharedFeatures(featuresNum []int) []bool {
+	result := make([]bool, len(featuresNum))
+	for i, num := range featuresNum {
+		if num <= 1 {
+			result[i] = true
+		}
+	}
+	return result
+}
+
+// generateFeatures generates all combinations of the provided feature options.
+// While all the feature options are stored in the benchOpts struct, the input
+// parameter 'featuresNum' is a slice indexed by 'featureIndex' enum containing
+// the number of values for each feature.
+// For example, let's say the user sets -workloads=all and
+// -maxConcurrentCalls=1,100, this would end up with the following
+// combinations:
+// [workloads: unary, maxConcurrentCalls=1]
+// [workloads: unary, maxConcurrentCalls=1]
+// [workloads: streaming, maxConcurrentCalls=100]
+// [workloads: streaming, maxConcurrentCalls=100]
+// [workloads: unconstrained, maxConcurrentCalls=1]
+// [workloads: unconstrained, maxConcurrentCalls=100]
+func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 	// curPos and initialPos are two slices where each value acts as an index
 	// into the appropriate feature slice maintained in benchOpts.features. This
 	// loop generates all possible combinations of features by changing one value
@@ -554,61 +575,6 @@ func addOne(features []int, featuresMaxPosition []int) {
 		}
 		features[i] = features[i] % featuresMaxPosition[i]
 	}
-}
-
-// sharedFeatures returns a bool slice which acts as a bitmask. Each item in
-// the slice represents a feature, indexed by 'featureIndex' enum.  The bit is
-// set to 1 if the corresponding feature does not have multiple value, so is
-// shared amongst all benchmarks.
-func (b *benchOpts) sharedFeatures() []bool {
-	result := make([]bool, maxFeatureIndex)
-	for i := 0; i < len(result); i++ {
-		switch featureIndex(i) {
-		case enableTraceIndex:
-			if len(b.features.enableTrace) <= 1 {
-				result[enableTraceIndex] = true
-			}
-		case readLatenciesIndex:
-			if len(b.features.readLatencies) <= 1 {
-				result[readLatenciesIndex] = true
-			}
-		case readKbpsIndex:
-			if len(b.features.readKbps) <= 1 {
-				result[readKbpsIndex] = true
-			}
-		case readMTUIndex:
-			if len(b.features.readMTU) <= 1 {
-				result[readMTUIndex] = true
-			}
-		case maxConcurrentCallsIndex:
-			if len(b.features.maxConcurrentCalls) <= 1 {
-				result[maxConcurrentCallsIndex] = true
-			}
-		case reqSizeBytesIndex:
-			if len(b.features.reqSizeBytes) <= 1 {
-				result[reqSizeBytesIndex] = true
-			}
-		case respSizeBytesIndex:
-			if len(b.features.respSizeBytes) <= 1 {
-				result[respSizeBytesIndex] = true
-			}
-		case compModesIndex:
-			if len(b.features.compModes) <= 1 {
-				result[compModesIndex] = true
-			}
-		case enableChannelzIndex:
-			if len(b.features.enableChannelz) <= 1 {
-				result[enableChannelzIndex] = true
-			}
-		case enablePreloaderIndex:
-			if len(b.features.enablePreloader) <= 1 {
-				result[enablePreloaderIndex] = true
-			}
-		default:
-			log.Fatalf("Unknown feature index %v in sharedFeatures. maxFeatureIndex is %v", i, maxFeatureIndex)
-		}
-	}
-	return result
 }
 
 // processFlags reads the command line flags and builds benchOpts. Specifying
@@ -715,11 +681,12 @@ func main() {
 			MemBytes:  memStats.TotalAlloc - startBytes,
 		}
 	}
-	sharedPos := opts.sharedFeatures()
 
 	// Run benchmarks
 	resultSlice := []stats.BenchResults{}
-	for _, benchFeature := range opts.generateFeatures() {
+	featuresNum := makeFeaturesNum(opts)
+	sharedPos := sharedFeatures(featuresNum)
+	for _, benchFeature := range opts.generateFeatures(featuresNum) {
 		grpc.EnableTracing = benchFeature.EnableTrace
 		if benchFeature.EnableChannelz {
 			channelz.TurnOn()
