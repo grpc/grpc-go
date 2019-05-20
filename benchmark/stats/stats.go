@@ -32,6 +32,7 @@ import (
 // Features contains most fields for a benchmark
 type Features struct {
 	NetworkMode        string
+	UseBufConn         bool
 	EnableTrace        bool
 	Latency            time.Duration
 	Kbps               int
