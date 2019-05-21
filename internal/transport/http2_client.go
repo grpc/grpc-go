@@ -1145,16 +1145,14 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0
 
 	if !initialHeader && !endStream {
-		// As specified by gRPC over HTTP2, a HEADERS frame (and associated CONTINUATION frames) can only appear
-		// at the start or end of a stream. Therefore, second HEADERS frame must have EOS bit set.
+		// As specified by gRPC over HTTP2, a HEADERS frame (and associated CONTINUATION frames) can only appear at the start or end of a stream. Therefore, second HEADERS frame must have EOS bit set.
 		st := status.New(codes.Internal, "a HEADERS frame cannot appear in the middle of a stream")
 		t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, false)
 		return
 	}
 
 	state := &decodeState{}
-	// Initialize isGRPC value to be !initialHeader, since if a gRPC ResponseHeader has been received
-	// which indicates peer speaking gRPC, we are in gRPC mode.
+	// Initialize isGRPC value to be !initialHeader, since if a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
 	state.data.isGRPC = !initialHeader
 	if err := state.decodeHeader(frame); err != nil {
 		t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
@@ -1183,7 +1181,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	// If headerChan hasn't been closed yet
 	if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
 		if !endStream {
-			// Headers frame is ResponseHeader.
+			// HEADERS frame block carries a Response-Headers.
 			isHeader = true
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
@@ -1192,12 +1190,15 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			if len(state.data.mdata) > 0 {
 				s.header = state.data.mdata
 			}
-			close(s.headerChan)
-			return
+		} else {
+			// HEADERS frame block carries a Trailers-Only.
+			s.noHeaders = true
 		}
-		// Headers frame is Trailers-only.
-		s.noHeaders = true
 		close(s.headerChan)
+	}
+
+	if !endStream {
+		return
 	}
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
