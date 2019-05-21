@@ -348,7 +348,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		ht.stats.HandleRPC(s.ctx, inHeader)
 	}
 	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(_ *bytes.Buffer) {}},
+		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
 		windowHandler: func(int) {},
 	}
 
@@ -363,7 +363,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 			n, err := req.Body.Read(buf)
 			if n > 0 {
 				buffer := new(bytes.Buffer)
-				buffer.Write(buf[:n:n])
+				buffer.Write(buf[:n])
 				s.buf.put(recvMsg{buffer: buffer})
 				buf = buf[n:]
 			}

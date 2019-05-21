@@ -1971,7 +1971,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 			ctx:        s.ctx,
 			ctxDone:    s.ctx.Done(),
 			recv:       s.buf,
-			freeBuffer: func(_ *bytes.Buffer) {},
+			freeBuffer: func(*bytes.Buffer) {},
 		},
 		windowHandler: func(int) {},
 	}
