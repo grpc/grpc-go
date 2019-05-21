@@ -154,6 +154,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			return
 		default:
 		}
+		ccb.cc.firstResolveEvent.Fire()
 	}
 }
 
@@ -178,13 +179,14 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 	})
 }
 
-func (ccb *ccBalancerWrapper) updateClientConnState(s *balancer.ClientConnState) {
+func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) {
 	if ccb.cc.curBalancerName != grpclbName {
 		// Filter any grpclb addresses since we don't have the grpclb balancer.
-		for i := 0; i < len(s.ResolverState.Addresses); {
-			if s.ResolverState.Addresses[i].Type == resolver.GRPCLB {
-				copy(s.ResolverState.Addresses[i:], s.ResolverState.Addresses[i+1:])
-				s.ResolverState.Addresses = s.ResolverState.Addresses[:len(s.ResolverState.Addresses)-1]
+		s := ccs.ResolverState
+		for i := 0; i < len(s.Addresses); {
+			if s.Addresses[i].Type == resolver.GRPCLB {
+				copy(s.Addresses[i:], s.Addresses[i+1:])
+				s.Addresses = s.Addresses[:len(s.Addresses)-1]
 				continue
 			}
 			i++
@@ -194,7 +196,7 @@ func (ccb *ccBalancerWrapper) updateClientConnState(s *balancer.ClientConnState)
 	case <-ccb.ccUpdateCh:
 	default:
 	}
-	ccb.ccUpdateCh <- s
+	ccb.ccUpdateCh <- ccs
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {

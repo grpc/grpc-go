@@ -120,8 +120,6 @@ type ServiceConfig struct {
 	rawJSONString string
 }
 
-type loadBalancingConfig map[string]json.RawMessage
-
 // healthCheckConfig defines the go-native version of the LB channel health check config.
 type healthCheckConfig struct {
 	// serviceName is the service name to use in the health-checking request.
@@ -251,6 +249,8 @@ type jsonMC struct {
 	RetryPolicy             *jsonRetryPolicy
 }
 
+type loadBalancingConfig map[string]json.RawMessage
+
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
 	LoadBalancingPolicy *string
@@ -299,12 +299,14 @@ func parseServiceConfig(js string) (*ServiceConfig, error) {
 				continue
 			}
 			sc.lbConfig = &lbConfig{name: name}
-			if parser, ok := builder.(balancer.Parser); ok {
+			if parser, ok := builder.(balancer.ConfigParser); ok {
 				var err error
-				sc.lbConfig.cfg, err = parser.Parse(jsonCfg)
+				sc.lbConfig.cfg, err = parser.ParseConfig(jsonCfg)
 				if err != nil {
 					return nil, fmt.Errorf("error parsing loadBalancingConfig for policy %q: %v", name, err)
 				}
+			} else if string(jsonCfg) != "{}" {
+				grpclog.Warningf("non-empty balancer configuration %q, but balancer does not implement ParseConfig", string(jsonCfg))
 			}
 			break
 		}

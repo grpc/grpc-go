@@ -1601,19 +1601,19 @@ func (s) TestCZChannelAddressResolutionChange(t *testing.T) {
         }
     ]
 }`)
-
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: newSC})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm := channelz.GetChannel(cid)
 
+		var es []string
 		for i := len(cm.Trace.Events) - 1; i >= 0; i-- {
 			if strings.Contains(cm.Trace.Events[i].Desc, "service config updated") {
-				fmt.Printf("%+v\n", cm.Trace.Events[i])
 				break
 			}
+			es = append(es, cm.Trace.Events[i].Desc)
 			if i == 0 {
-				return false, fmt.Errorf("events do not contain expected address resolution of new service config")
+				return false, fmt.Errorf("events do not contain expected address resolution of new service config\n Events:\n%v", strings.Join(es, "\n"))
 			}
 		}
 		return true, nil

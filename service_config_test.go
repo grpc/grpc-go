@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 type parseTestCase struct {
@@ -48,6 +49,7 @@ func runParseTests(t *testing.T, testCases []parseTestCase) {
 }
 
 type pbbData struct {
+	serviceconfig.LoadBalancingConfig
 	Foo string
 	Bar int
 }
@@ -58,7 +60,7 @@ func (parseBalancerBuilder) Name() string {
 	return "pbb"
 }
 
-func (parseBalancerBuilder) Parse(c json.RawMessage) (interface{}, error) {
+func (parseBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	d := pbbData{}
 	if err := json.Unmarshal(c, &d); err != nil {
 		return nil, err
@@ -410,16 +412,4 @@ func newDuration(b time.Duration) *time.Duration {
 
 func newString(b string) *string {
 	return &b
-}
-
-func scCompareWithRawJSONSkipped(s1, s2 *ServiceConfig) bool {
-	if s1 == nil && s2 == nil {
-		return true
-	}
-	if (s1 == nil) != (s2 == nil) {
-		return false
-	}
-	s1.rawJSONString = ""
-	s2.rawJSONString = ""
-	return reflect.DeepEqual(s1, s2)
 }

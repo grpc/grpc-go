@@ -151,8 +151,8 @@ func (ccr *ccResolverWrapper) NewServiceConfig(sc string) {
 
 func (ccr *ccResolverWrapper) addChannelzTraceEvent(s resolver.State) {
 	var updates []string
-	oldSC, oldOK := ccr.curState.ServiceConfig.(ServiceConfig)
-	newSC, newOK := s.ServiceConfig.(ServiceConfig)
+	oldSC, oldOK := ccr.curState.ServiceConfig.(*ServiceConfig)
+	newSC, newOK := s.ServiceConfig.(*ServiceConfig)
 	if oldOK != newOK || (oldOK && newOK && oldSC.rawJSONString != newSC.rawJSONString) {
 		updates = append(updates, "service config updated")
 	}

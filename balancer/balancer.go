@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 var (
@@ -41,9 +42,9 @@ var (
 
 // Register registers the balancer builder to the balancer map. b.Name
 // (lowercased) will be used as the name registered with this builder.  If the
-// Builder implements Parser, Parse will be called when new service configs are
-// received by the resolver, and the result will be provided to the Balancer in
-// UpdateClientConnState.
+// Builder implements ConfigParser, ParseConfig will be called when new service
+// configs are received by the resolver, and the result will be provided to the
+// Balancer in UpdateClientConnState.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple Balancers are
@@ -176,12 +177,12 @@ type Builder interface {
 	Name() string
 }
 
-// Parser parses service configs.
-type Parser interface {
-	// Parse parses the JSON load balancer config provided into an internal
-	// form or returns an error if the config is invalid.  For future
+// ConfigParser parses load balancer configs.
+type ConfigParser interface {
+	// ParseConfig parses the JSON load balancer config provided into an
+	// internal form or returns an error if the config is invalid.  For future
 	// compatibility reasons, unknown fields in the config should be ignored.
-	Parse(LoadBalancerConfig json.RawMessage) (interface{}, error)
+	ParseConfig(LoadBalancingConfigJSON json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 }
 
 // PickOptions contains addition information for the Pick operation.
@@ -299,8 +300,8 @@ type SubConnState struct {
 // balancer.
 type ClientConnState struct {
 	ResolverState resolver.State
-	// The parsed load balancer configuration returned by the builder's Parse
-	// method, if implemented.
+	// The parsed load balancer configuration returned by the builder's
+	// ParseConfig method, if implemented.
 	BalancerConfig interface{}
 }
 

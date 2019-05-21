@@ -118,8 +118,12 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		BalancerName: addr,
 		ChildPolicy:  []lbPolicy{fakeBalancerA}, // Set this to skip cds.
 	}
-	lb.UpdateResolverState(resolver.State{
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
+	sc, lbc := constructServiceConfigFromXdsConfig(cfg)
+	lb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			ServiceConfig: sc,
+		},
+		BalancerConfig: lbc,
 	})
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
 	var (
