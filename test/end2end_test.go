@@ -2098,7 +2098,7 @@ func testPreloaderClientSend(t *testing.T, e env) {
 
 	// Test for streaming RPC recv.
 	// Set context for send with proper RPC Information
-	stream, err := tc.FullDuplexCall(te.ctx)
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.UseCompressor("gzip"))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
