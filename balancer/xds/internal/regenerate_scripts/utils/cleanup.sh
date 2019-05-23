@@ -1,6 +1,7 @@
 #!/bin/bash
 
-for f in $(find . -name \*.proto)
+find . -name '*.proto' -print0 |
+while IFS= read -r -d '' f
 do
   commands=(
     # Import mangling.

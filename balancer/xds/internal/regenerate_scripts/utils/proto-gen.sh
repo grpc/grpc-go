@@ -17,13 +17,13 @@ packages=(
 if [ -z $GOPATH ]; then echo 'empty $GOPATH, exiting.'; exit 1
 fi
 
-for i in "${packages[@]}"
+for i in ${packages[@]}
 do
   bazel build "$i"
 done
 
 cwd=$(pwd)
-dest=$cwd/../proto/
+dest=$cwd/../../proto/
 rm -rf "$dest"
 srcs=( "$(find -L ./bazel-bin/envoy/ -name *.pb.go)" "$(find -L ./bazel-bin/udpa/ -name *.pb.go)" "$(find -L ./bazel-bin/ -name validate.pb.go)" )
 for origin in ${srcs[@]}
