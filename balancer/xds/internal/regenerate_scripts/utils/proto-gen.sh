@@ -10,6 +10,8 @@ packages=(
   envoy/api/v2/endpoint:endpoint_go_proto
   envoy/type:percent_go_proto
   envoy/service/load_stats/v2:lrs_go_grpc
+  udpa/data/orca/v1:orca_load_report_go_proto
+  udpa/service/orca/v1:orca_go_grpc
 )
 
 if [ -z $GOPATH ]; then echo 'empty $GOPATH, exiting.'; exit 1
@@ -17,16 +19,17 @@ fi
 
 for i in "${packages[@]}"
 do
-  (bazel build $i)
+  bazel build "$i"
 done
 
-dest=$GOPATH/src/google.golang.org/grpc/balancer/xds/internal/proto/
-rm -rf $dest
-srcs=( "$(find -L ./bazel-bin/envoy/ -name *.pb.go)" "$(find -L ./bazel-bin/ -name validate.pb.go)" )
+cwd=$(pwd)
+dest=$cwd/../proto/
+rm -rf "$dest"
+srcs=( "$(find -L ./bazel-bin/envoy/ -name *.pb.go)" "$(find -L ./bazel-bin/udpa/ -name *.pb.go)" "$(find -L ./bazel-bin/ -name validate.pb.go)" )
 for origin in ${srcs[@]}
 do
   target=${origin##*proto/}
   final=$dest$target
-  mkdir -p ${final%*/*}
-  cp $origin $dest$target
+  mkdir -p "${final%*/*}"
+  cp "$origin" "$dest$target"
 done

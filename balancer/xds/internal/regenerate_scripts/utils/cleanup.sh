@@ -5,7 +5,6 @@ do
   commands=(
     # Import mangling.
     -e 's#import "gogoproto/gogo.proto";##'
-    # -e 's#import "validate/validate.proto";##'
     # Remove references to gogo.proto extensions.
     -e 's#option (gogoproto\.[a-z_]\+) = \(true\|false\);##'
     -e 's#\(, \)\?(gogoproto\.[a-z_]\+) = \(true\|false\),\?##'

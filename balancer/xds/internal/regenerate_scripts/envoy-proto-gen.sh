@@ -1,6 +1,6 @@
 #!/bin/bash
 set -ex
-DATA_PLANE_API_VERSION=d4e9e33e72c996856df2def6b5a9fa6bcb09ca72
+DATA_PLANE_API_VERSION=1935b52f94f7889ad9f538a17250e78cffd0af27
 
 git clone git@github.com:envoyproxy/data-plane-api.git
 git clone git@github.com:envoyproxy/protoc-gen-validate.git
@@ -23,10 +23,10 @@ cd ../data-plane-api
 git checkout $DATA_PLANE_API_VERSION
 
 # cleanup.sh remove all gogo proto related imports and labels.
-chmod +x ../utils/cleanup.sh; ../utils/cleanup.sh
+../utils/cleanup.sh
 
 git apply ../utils/data-plane-api.patch
 # proto-gen.sh build all packages required for grpc xds implementation and move
 # proto generated code to grpc/balancer/xds/internal/proto subdirectory.
-chmod +x ../utils/proto-gen.sh; ../utils/proto-gen.sh
+../utils/proto-gen.sh
 
