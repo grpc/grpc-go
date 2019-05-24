@@ -41,29 +41,25 @@ import (
 )
 
 type bufferPool struct {
-	c chan *bytes.Buffer
+	pool sync.Pool
 }
 
-func newBufferPool(max int) *bufferPool {
+func newBufferPool() *bufferPool {
 	return &bufferPool{
-		c: make(chan *bytes.Buffer, max),
+		pool: sync.Pool{
+			New: func() interface{} {
+				return new(bytes.Buffer)
+			},
+		},
 	}
 }
 
 func (p *bufferPool) get() *bytes.Buffer {
-	select {
-	case b := <-p.c:
-		return b
-	default:
-		return new(bytes.Buffer)
-	}
+	return p.pool.Get().(*bytes.Buffer)
 }
 
 func (p *bufferPool) put(b *bytes.Buffer) {
-	select {
-	case p.c <- b:
-	default:
-	}
+	p.pool.Put(b)
 }
 
 // recvMsg represents the received msg from the transport. All transport
