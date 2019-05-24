@@ -209,8 +209,11 @@ func (*testLoadParser) Parse(md metadata.MD) interface{} {
 	return vs[0]
 }
 
-func (s) TestDoneLoads(t *testing.T) {
+func init() {
 	balancerload.SetParser(&testLoadParser{})
+}
+
+func (s) TestDoneLoads(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testDoneLoads(t, e)
 	}
