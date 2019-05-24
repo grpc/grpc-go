@@ -97,7 +97,7 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 	)
 	ls.drops.Range(func(category, countP interface{}) bool {
 		tempCount := atomic.SwapUint64(countP.(*uint64), 0)
-		if tempCount <= 0 {
+		if tempCount == 0 {
 			return true
 		}
 		totalDropped += tempCount
