@@ -300,9 +300,9 @@ type SubConnState struct {
 // balancer.
 type ClientConnState struct {
 	ResolverState resolver.State
-	// The parsed load balancer configuration returned by the builder's
+	// The parsed load balancing configuration returned by the builder's
 	// ParseConfig method, if implemented.
-	BalancerConfig interface{}
+	BalancerConfig serviceconfig.LoadBalancingConfig
 }
 
 // V2Balancer is defined for documentation purposes.  If a Balancer also

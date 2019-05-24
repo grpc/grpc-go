@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/resolver/passthrough" // To register passthrough resolver.
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 )
 
@@ -550,7 +551,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		cc.applyServiceConfig(sc)
 	}
 
-	var balCfg interface{}
+	var balCfg serviceconfig.LoadBalancingConfig
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial
 		// option is not set.

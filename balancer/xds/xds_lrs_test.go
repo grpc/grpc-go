@@ -114,17 +114,11 @@ func (s) TestXdsLoadReporting(t *testing.T) {
 		Nanos:   intervalNano,
 	}
 
-	cfg := &testBalancerConfig{
+	cfg := &xdsConfig{
 		BalancerName: addr,
-		ChildPolicy:  []lbPolicy{fakeBalancerA}, // Set this to skip cds.
+		ChildPolicy:  &loadBalancingConfig{Name: fakeBalancerA}, // Set this to skip cds.
 	}
-	sc, lbc := constructServiceConfigFromXdsConfig(cfg)
-	lb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			ServiceConfig: sc,
-		},
-		BalancerConfig: lbc,
-	})
+	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
 	var (
 		i     int

@@ -66,7 +66,7 @@ type MethodConfig struct {
 
 type lbConfig struct {
 	name string
-	cfg  interface{}
+	cfg  serviceconfig.LoadBalancingConfig
 }
 
 // ServiceConfig is provided by the service provider and contains parameters for how
