@@ -121,7 +121,6 @@ google.golang.org/grpc/clientconn_test.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server_test.go:SA1019
 google.golang.org/grpc/resolver/dns/dns_resolver.go:SA1019
-google.golang.org/grpc/naming/dns_resolver_test.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/channelz_test.go:SA1019
 google.golang.org/grpc/test/end2end_test.go:SA1019
