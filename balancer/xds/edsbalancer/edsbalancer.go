@@ -277,7 +277,9 @@ func (xdsB *EDSBalancer) UpdateBalancerState(s connectivity.State, p balancer.Pi
 
 // Close closes the balancer.
 func (xdsB *EDSBalancer) Close() {
-	xdsB.bg.close()
+	if xdsB.bg != nil {
+		xdsB.bg.close()
+	}
 }
 
 type dropPicker struct {

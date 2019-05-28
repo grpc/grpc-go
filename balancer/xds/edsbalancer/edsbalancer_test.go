@@ -337,6 +337,13 @@ func TestEDS_TwoLocalities(t *testing.T) {
 	}
 }
 
+func TestClose(t *testing.T) {
+	edsb := NewXDSBalancer(nil, nil)
+	// This is what could happen when switching between fallback and eds. This
+	// make sure it doesn't panic.
+	edsb.Close()
+}
+
 func init() {
 	balancer.Register(&testConstBalancerBuilder{})
 }
