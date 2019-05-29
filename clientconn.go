@@ -767,8 +767,8 @@ func (ac *addrConn) connect() error {
 
 // tryUpdateAddrs tries to update ac.addrs with the new addresses list.
 //
-// If ac is Connecting, it returnes false. The caller should tear down the ac
-// and create a new one. Note that the backoff will be reset when this happens.
+// If ac is Connecting, it returns false. The caller should tear down the ac and
+// create a new one. Note that the backoff will be reset when this happens.
 //
 // If ac is TransientFailure, it updates ac.addrs and returns true. The updated
 // addresses will be picked up by retry in the next iteration after backoff.
