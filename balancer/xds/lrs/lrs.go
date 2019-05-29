@@ -41,8 +41,8 @@ const negativeOneUInt64 = ^uint64(0)
 // them to a server when requested.
 type Store interface {
 	CallDropped(category string)
-	CallStarted(l internal.LocalityAsMapKey)
-	CallFinished(l internal.LocalityAsMapKey, err error)
+	CallStarted(l internal.Locality)
+	CallFinished(l internal.Locality, err error)
 	ReportTo(ctx context.Context, cc *grpc.ClientConn)
 }
 
@@ -70,7 +70,7 @@ type lrsStore struct {
 	lastReported time.Time
 
 	drops            sync.Map // map[string]*uint64
-	localityRPCCount sync.Map // map[internal.LocalityAsMapKey]*rpcCountData
+	localityRPCCount sync.Map // map[internal.Locality]*rpcCountData
 }
 
 // NewStore creates a store for load reports.
@@ -106,7 +106,7 @@ func (ls *lrsStore) CallDropped(category string) {
 	atomic.AddUint64(p.(*uint64), 1)
 }
 
-func (ls *lrsStore) CallStarted(l internal.LocalityAsMapKey) {
+func (ls *lrsStore) CallStarted(l internal.Locality) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		tp := newRPCCountData()
@@ -115,7 +115,7 @@ func (ls *lrsStore) CallStarted(l internal.LocalityAsMapKey) {
 	atomic.AddUint64(p.(*rpcCountData).inProgress, 1)
 }
 
-func (ls *lrsStore) CallFinished(l internal.LocalityAsMapKey, err error) {
+func (ls *lrsStore) CallFinished(l internal.Locality, err error) {
 	p, ok := ls.localityRPCCount.Load(l)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -149,7 +149,7 @@ func (ls *lrsStore) buildStats() []*loadreportpb.ClusterStats {
 		return true
 	})
 	ls.localityRPCCount.Range(func(locality, countP interface{}) bool {
-		tempLocality := locality.(internal.LocalityAsMapKey)
+		tempLocality := locality.(internal.Locality)
 		tempCount := countP.(*rpcCountData)
 
 		tempSucceeded := atomic.SwapUint64(tempCount.succeeded, 0)

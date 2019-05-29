@@ -54,7 +54,7 @@ type EDSBalancer struct {
 
 	bg                 *balancerGroup
 	subBalancerBuilder balancer.Builder
-	lidToConfig        map[internal.LocalityAsMapKey]*localityConfig
+	lidToConfig        map[internal.Locality]*localityConfig
 	loadStore          lrs.Store
 
 	pickerMu    sync.Mutex
@@ -69,7 +69,7 @@ func NewXDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) *EDSBalancer {
 		ClientConn:         cc,
 		subBalancerBuilder: balancer.Get(roundrobin.Name),
 
-		lidToConfig: make(map[internal.LocalityAsMapKey]*localityConfig),
+		lidToConfig: make(map[internal.Locality]*localityConfig),
 		loadStore:   loadStore,
 	}
 	// Don't start balancer group here. Start it when handling the first EDS
@@ -189,7 +189,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 
 	// newLocalitiesSet contains all names of localitis in the new EDS response.
 	// It's used to delete localities that are removed in the new EDS response.
-	newLocalitiesSet := make(map[internal.LocalityAsMapKey]struct{})
+	newLocalitiesSet := make(map[internal.Locality]struct{})
 	for _, locality := range edsResp.Endpoints {
 		// One balancer for each locality.
 
@@ -198,7 +198,7 @@ func (xdsB *EDSBalancer) HandleEDSResponse(edsResp *edspb.ClusterLoadAssignment)
 			grpclog.Warningf("xds: received LocalityLbEndpoints with <nil> Locality")
 			continue
 		}
-		lid := internal.LocalityAsMapKey{
+		lid := internal.Locality{
 			Region:  l.Region,
 			Zone:    l.Zone,
 			SubZone: l.SubZone,

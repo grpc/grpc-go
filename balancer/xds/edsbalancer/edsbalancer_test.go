@@ -540,7 +540,7 @@ func TestEDS_LoadReport(t *testing.T) {
 	cc := newTestClientConn(t)
 	edsb := NewXDSBalancer(cc, testLoadStore)
 
-	backendToBalancerID := make(map[balancer.SubConn]internal.LocalityAsMapKey)
+	backendToBalancerID := make(map[balancer.SubConn]internal.Locality)
 
 	// Two localities, each with one backend.
 	clab1 := newClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -551,21 +551,21 @@ func TestEDS_LoadReport(t *testing.T) {
 	sc1 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
-	backendToBalancerID[sc1] = internal.LocalityAsMapKey{
+	backendToBalancerID[sc1] = internal.Locality{
 		SubZone: testSubZones[0],
 	}
 	sc2 := <-cc.newSubConnCh
 	edsb.HandleSubConnStateChange(sc2, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc2, connectivity.Ready)
-	backendToBalancerID[sc2] = internal.LocalityAsMapKey{
+	backendToBalancerID[sc2] = internal.Locality{
 		SubZone: testSubZones[1],
 	}
 
 	// Test roundrobin with two subconns.
 	p1 := <-cc.newPickerCh
 	var (
-		wantStart []internal.LocalityAsMapKey
-		wantEnd   []internal.LocalityAsMapKey
+		wantStart []internal.Locality
+		wantEnd   []internal.Locality
 	)
 
 	for i := 0; i < 10; i++ {

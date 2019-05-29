@@ -124,8 +124,8 @@ func (tcc *testClientConn) Target() string {
 }
 
 type testLoadStore struct {
-	callsStarted []internal.LocalityAsMapKey
-	callsEnded   []internal.LocalityAsMapKey
+	callsStarted []internal.Locality
+	callsEnded   []internal.Locality
 }
 
 func newTestLoadStore() *testLoadStore {
@@ -136,11 +136,11 @@ func (*testLoadStore) CallDropped(category string) {
 	panic("not implemented")
 }
 
-func (tls *testLoadStore) CallStarted(l internal.LocalityAsMapKey) {
+func (tls *testLoadStore) CallStarted(l internal.Locality) {
 	tls.callsStarted = append(tls.callsStarted, l)
 }
 
-func (tls *testLoadStore) CallFinished(l internal.LocalityAsMapKey, err error) {
+func (tls *testLoadStore) CallFinished(l internal.Locality, err error) {
 	tls.callsEnded = append(tls.callsEnded, l)
 }
 

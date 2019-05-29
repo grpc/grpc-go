@@ -59,29 +59,29 @@ type balancerGroup struct {
 	cc balancer.ClientConn
 
 	mu           sync.Mutex
-	idToBalancer map[internal.LocalityAsMapKey]balancer.Balancer
-	scToID       map[balancer.SubConn]internal.LocalityAsMapKey
+	idToBalancer map[internal.Locality]balancer.Balancer
+	scToID       map[balancer.SubConn]internal.Locality
 	loadStore    lrs.Store
 
 	pickerMu sync.Mutex
 	// All balancer IDs exist as keys in this map. If an ID is not in map, it's
 	// either removed or never added.
-	idToPickerState map[internal.LocalityAsMapKey]*pickerState
+	idToPickerState map[internal.Locality]*pickerState
 }
 
 func newBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store) *balancerGroup {
 	return &balancerGroup{
 		cc: cc,
 
-		scToID:          make(map[balancer.SubConn]internal.LocalityAsMapKey),
-		idToBalancer:    make(map[internal.LocalityAsMapKey]balancer.Balancer),
-		idToPickerState: make(map[internal.LocalityAsMapKey]*pickerState),
+		scToID:          make(map[balancer.SubConn]internal.Locality),
+		idToBalancer:    make(map[internal.Locality]balancer.Balancer),
+		idToPickerState: make(map[internal.Locality]*pickerState),
 		loadStore:       loadStore,
 	}
 }
 
 // add adds a balancer built by builder to the group, with given id and weight.
-func (bg *balancerGroup) add(id internal.LocalityAsMapKey, weight uint32, builder balancer.Builder) {
+func (bg *balancerGroup) add(id internal.Locality, weight uint32, builder balancer.Builder) {
 	bg.mu.Lock()
 	if _, ok := bg.idToBalancer[id]; ok {
 		bg.mu.Unlock()
@@ -113,7 +113,7 @@ func (bg *balancerGroup) add(id internal.LocalityAsMapKey, weight uint32, builde
 //
 // It also removes the picker generated from this balancer from the picker
 // group. It always results in a picker update.
-func (bg *balancerGroup) remove(id internal.LocalityAsMapKey) {
+func (bg *balancerGroup) remove(id internal.Locality) {
 	bg.mu.Lock()
 	// Close balancer.
 	if b, ok := bg.idToBalancer[id]; ok {
@@ -143,7 +143,7 @@ func (bg *balancerGroup) remove(id internal.LocalityAsMapKey) {
 // NOTE: It always results in a picker update now. This probably isn't
 // necessary. But it seems better to do the update because it's a change in the
 // picker (which is balancer's snapshot).
-func (bg *balancerGroup) changeWeight(id internal.LocalityAsMapKey, newWeight uint32) {
+func (bg *balancerGroup) changeWeight(id internal.Locality, newWeight uint32) {
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
 	pState, ok := bg.idToPickerState[id]
@@ -185,7 +185,7 @@ func (bg *balancerGroup) handleSubConnStateChange(sc balancer.SubConn, state con
 }
 
 // Address change: forward to balancer.
-func (bg *balancerGroup) handleResolvedAddrs(id internal.LocalityAsMapKey, addrs []resolver.Address) {
+func (bg *balancerGroup) handleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
 	bg.mu.Lock()
 	b, ok := bg.idToBalancer[id]
 	bg.mu.Unlock()
@@ -214,7 +214,7 @@ func (bg *balancerGroup) handleResolvedAddrs(id internal.LocalityAsMapKey, addrs
 // from map. Delete sc from the map only when state changes to Shutdown. Since
 // it's just forwarding the action, there's no need for a removeSubConn()
 // wrapper function.
-func (bg *balancerGroup) newSubConn(id internal.LocalityAsMapKey, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (bg *balancerGroup) newSubConn(id internal.Locality, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc, err := bg.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func (bg *balancerGroup) newSubConn(id internal.LocalityAsMapKey, addrs []resolv
 
 // updateBalancerState: create an aggregated picker and an aggregated
 // connectivity state, then forward to ClientConn.
-func (bg *balancerGroup) updateBalancerState(id internal.LocalityAsMapKey, state connectivity.State, picker balancer.Picker) {
+func (bg *balancerGroup) updateBalancerState(id internal.Locality, state connectivity.State, picker balancer.Picker) {
 	grpclog.Infof("balancer group: update balancer state: %v, %v, %p", id, state, picker)
 	bg.pickerMu.Lock()
 	defer bg.pickerMu.Unlock()
@@ -255,7 +255,7 @@ func (bg *balancerGroup) close() {
 	bg.mu.Unlock()
 }
 
-func buildPickerAndState(m map[internal.LocalityAsMapKey]*pickerState) (connectivity.State, balancer.Picker) {
+func buildPickerAndState(m map[internal.Locality]*pickerState) (connectivity.State, balancer.Picker) {
 	var readyN, connectingN int
 	readyPickerWithWeights := make([]pickerState, 0, len(m))
 	for _, ps := range m {
@@ -320,11 +320,11 @@ func (pg *pickerGroup) Pick(ctx context.Context, opts balancer.PickOptions) (con
 type loadReportPicker struct {
 	balancer.Picker
 
-	id        internal.LocalityAsMapKey
+	id        internal.Locality
 	loadStore lrs.Store
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityAsMapKey, loadStore lrs.Store) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id internal.Locality, loadStore lrs.Store) *loadReportPicker {
 	return &loadReportPicker{
 		Picker:    p,
 		id:        id,
@@ -354,7 +354,7 @@ func (lrp *loadReportPicker) Pick(ctx context.Context, opts balancer.PickOptions
 // Some of the actions are forwarded to the parent ClientConn with no change.
 // Some are forward to balancer group with the sub-balancer ID.
 type balancerGroupCC struct {
-	id    internal.LocalityAsMapKey
+	id    internal.Locality
 	group *balancerGroup
 }
 

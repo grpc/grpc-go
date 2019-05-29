@@ -23,22 +23,25 @@ import (
 	basepb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/core/base"
 )
 
-// LocalityAsMapKey is xds.Locality without XXX fields, so it can be used as map
+// Locality is xds.Locality without XXX fields, so it can be used as map
 // keys.
 //
 // xds.Locality cannot be map keys because one of the XXX fields is a slice.
-type LocalityAsMapKey struct {
+//
+// This struct should only be used as map keys. Use the proto message directly
+// in all other places.
+type Locality struct {
 	Region  string
 	Zone    string
 	SubZone string
 }
 
-func (lamk LocalityAsMapKey) String() string {
+func (lamk Locality) String() string {
 	return fmt.Sprintf("%s-%s-%s", lamk.Region, lamk.Zone, lamk.SubZone)
 }
 
-// ToProto convert LocalityAsMapKey to the proto representation.
-func (lamk LocalityAsMapKey) ToProto() *basepb.Locality {
+// ToProto convert Locality to the proto representation.
+func (lamk Locality) ToProto() *basepb.Locality {
 	return &basepb.Locality{
 		Region:  lamk.Region,
 		Zone:    lamk.Zone,
