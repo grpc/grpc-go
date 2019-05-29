@@ -244,8 +244,7 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 	case *balancer.ClientConnState:
 		cfg, _ := u.BalancerConfig.(*xdsConfig)
 		if cfg == nil {
-			// service config parsing failed. should never happen. And this parsing will be removed, once
-			// we support service config validation.
+			// service config parsing failed. should never happen.
 			return
 		}
 
