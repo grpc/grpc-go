@@ -25,11 +25,20 @@ done
 cwd=$(pwd)
 dest=$cwd/../../proto/
 rm -rf "$dest"
-srcs=( "$(find -L ./bazel-bin/envoy/ -name *.pb.go)" "$(find -L ./bazel-bin/udpa/ -name *.pb.go)" "$(find -L ./bazel-bin/ -name validate.pb.go)" )
-for origin in ${srcs[@]}
+srcs=(
+    "find -L ./bazel-bin/envoy/ -name *.pb.go -print0"
+    "find -L ./bazel-bin/udpa/ -name *.pb.go -print0"
+    "find -L ./bazel-bin/ -name validate.pb.go -print0"
+)
+
+for src in "${srcs[@]}"
 do
-  target=${origin##*proto/}
-  final=$dest$target
-  mkdir -p "${final%*/*}"
-  cp "$origin" "$dest$target"
+    eval "$src" |
+    while IFS= read -r -d '' origin
+    do
+        target=${origin##*proto/}
+        final=$dest$target
+        mkdir -p "${final%*/*}"
+        cp "$origin" "$dest$target"
+    done
 done
