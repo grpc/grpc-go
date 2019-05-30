@@ -423,9 +423,8 @@ func (x *xdsBalancer) newADSResponse(ctx context.Context, resp proto.Message) er
 	var update interface{}
 	switch u := resp.(type) {
 	case *cdspb.Cluster:
-		if u.GetName() != x.buildOpts.Target.Endpoint {
-			return fmt.Errorf("unmatched service name, got %s, want %s", u.GetName(), x.buildOpts.Target.Endpoint)
-		}
+		// TODO: EDS requests should use CDS response's Name. Store
+		// `u.GetName()` in `x.clusterName` and use it in xds_client.
 		if u.GetType() != cdspb.Cluster_EDS {
 			return fmt.Errorf("unexpected service discovery type, got %v, want %v", u.GetType(), cdspb.Cluster_EDS)
 		}
