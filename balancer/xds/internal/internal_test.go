@@ -35,11 +35,11 @@ func TestLocalityMatchProtoMessage(t *testing.T) {
 		want1[f.Name] = f.Type.Name()
 	}
 
-	const ignorePrevix = "XXX_"
+	const ignorePrefix = "XXX_"
 	want2 := make(map[string]string)
 	for ty, i := reflect.TypeOf(basepb.Locality{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
-		if strings.HasPrefix(f.Name, ignorePrevix) {
+		if strings.HasPrefix(f.Name, ignorePrefix) {
 			continue
 		}
 		want2[f.Name] = f.Type.Name()
