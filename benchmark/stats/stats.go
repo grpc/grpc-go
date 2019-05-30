@@ -36,6 +36,7 @@ import (
 // user through command line flags.
 type FeatureIndex int
 
+// FeatureIndex enum values corresponding to individually settable features.
 const (
 	EnableTraceIndex FeatureIndex = iota
 	ReadLatenciesIndex
@@ -48,8 +49,8 @@ const (
 	EnableChannelzIndex
 	EnablePreloaderIndex
 
-	// This is a place holder to indicate the total number of feature indices we
-	// have. Any new feature indices should be added above this.
+	// MaxFeatureIndex is a place holder to indicate the total number of feature
+	// indices we have. Any new feature indices should be added above this.
 	MaxFeatureIndex
 )
 
@@ -126,8 +127,8 @@ func (f Features) SharedFeatures(wantFeatures []bool) string {
 	return b.String()
 }
 
-// Name returns a one line name which includes the features specified by
-// 'wantFeatures' which is a bitmask of wanted features, indexed by
+// PrintableName returns a one line name which includes the features specified
+// by 'wantFeatures' which is a bitmask of wanted features, indexed by
 // FeaturesIndex.
 func (f Features) PrintableName(wantFeatures []bool) string {
 	var b bytes.Buffer

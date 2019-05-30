@@ -83,7 +83,7 @@ func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 
 			l1 := v1.Data.Latencies
 			l2 := v2.Data.Latencies
-			for i, _ := range l1 {
+			for i := range l1 {
 				suff := ""
 				if len(l1) > 1 {
 					if i == 0 {
