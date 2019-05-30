@@ -91,7 +91,7 @@ func (b *xdsBalancerBuilder) Name() string {
 	return xdsName
 }
 
-func (x *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (b *xdsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg xdsConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into xds config", string(c))
