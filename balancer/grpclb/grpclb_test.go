@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -808,7 +809,11 @@ func TestFallback(t *testing.T) {
 }
 
 func TestGRPCLBPickFirst(t *testing.T) {
-	const grpclbServiceConfigWithPickFirst = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`
+	const pfc = `{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`
+	svcCfg, err := serviceconfig.Parse(pfc)
+	if err != nil {
+		t.Fatalf("Error parsing config %q: %v", pfc, err)
+	}
 
 	defer leakcheck.Check(t)
 
@@ -866,7 +871,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfig: grpclbServiceConfigWithPickFirst,
+		ServiceConfig: svcCfg,
 	})
 
 	result = ""
@@ -905,6 +910,10 @@ func TestGRPCLBPickFirst(t *testing.T) {
 	}
 
 	// Switch sub policy to roundrobin.
+	grpclbServiceConfigEmpty, err := serviceconfig.Parse(`{}`)
+	if err != nil {
+		t.Fatalf("Error parsing config %q: %v", grpclbServiceConfigEmpty, err)
+	}
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{
@@ -912,7 +921,7 @@ func TestGRPCLBPickFirst(t *testing.T) {
 			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
 		}},
-		ServiceConfig: `{}`,
+		ServiceConfig: grpclbServiceConfigEmpty,
 	})
 
 	result = ""

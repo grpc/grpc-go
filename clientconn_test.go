@@ -916,7 +916,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 	// SwitchBalancer before NewAddress. There was no balancer created, this
 	// makes sure we don't call close on nil balancerWrapper.
-	r.UpdateState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`}) // This should not panic.
+	r.UpdateState(resolver.State{ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -932,7 +932,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		}
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.UpdateState(resolver.State{ServiceConfig: `{"loadBalancingPolicy": "round_robin"}`}) // This should not panic.
+		go r.UpdateState(resolver.State{ServiceConfig: parseCfg(`{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
 	}
 }
 
@@ -1025,7 +1025,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	r.UpdateState(resolver.State{ServiceConfig: `{
+	r.UpdateState(resolver.State{ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1037,11 +1037,11 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
             "waitForReady": true
         }
     ]
-}`})
+}`)})
 	time.Sleep(1 * time.Second)
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady != nil {
-		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %v", m)
+		t.Fatalf("want: method (\"/foo/bar/\") config to be empty, got: %+v", m)
 	}
 }
 
@@ -1327,7 +1327,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r r
 	// Resolver service config gets ignored since resolver service config is disabled.
 	r.(*manual.Resolver).UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: addr}},
-		ServiceConfig: "{}",
+		ServiceConfig: parseCfg("{}"),
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")
@@ -1356,7 +1356,7 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 	defer cc.Close()
 	r.(*manual.Resolver).UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: addr}},
-		ServiceConfig: "{something wrong,}",
+		ServiceConfig: nil,
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")

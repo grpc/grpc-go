@@ -37,6 +37,9 @@ var (
 	// KeepaliveMinPingTime is the minimum ping interval.  This must be 10s by
 	// default, but tests may wish to set it lower for convenience.
 	KeepaliveMinPingTime = 10 * time.Second
+	// ParseServiceConfig is a function to parse JSON service configs into
+	// opaque data structures.
+	ParseServiceConfig func(sc string) (interface{}, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

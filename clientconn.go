@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
 	_ "google.golang.org/grpc/resolver/passthrough" // To register passthrough resolver.
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 )
 
@@ -532,24 +533,6 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 }
 
-// gRPC should resort to default service config when:
-// * resolver service config is disabled
-// * or, resolver does not return a service config or returns an invalid one.
-func (cc *ClientConn) fallbackToDefaultServiceConfig(sc string) bool {
-	if cc.dopts.disableServiceConfig {
-		return true
-	}
-	// The logic below is temporary, will be removed once we change the resolver.State ServiceConfig field type.
-	// Right now, we assume that empty service config string means resolver does not return a config.
-	if sc == "" {
-		return true
-	}
-	// TODO: the logic below is temporary. Once we finish the logic to validate service config
-	// in resolver, we will replace the logic below.
-	_, err := parseServiceConfig(sc)
-	return err != nil
-}
-
 func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -560,44 +543,37 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		return nil
 	}
 
-	if cc.fallbackToDefaultServiceConfig(s.ServiceConfig) {
+	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
 		if cc.dopts.defaultServiceConfig != nil && cc.sc == nil {
 			cc.applyServiceConfig(cc.dopts.defaultServiceConfig)
 		}
-	} else {
-		// TODO: the parsing logic below will be moved inside resolver.
-		sc, err := parseServiceConfig(s.ServiceConfig)
-		if err != nil {
-			return err
-		}
-		if cc.sc == nil || cc.sc.rawJSONString != s.ServiceConfig {
-			cc.applyServiceConfig(sc)
-		}
+	} else if sc, ok := s.ServiceConfig.(*ServiceConfig); ok {
+		cc.applyServiceConfig(sc)
 	}
 
-	// update the service config that will be sent to balancer.
-	if cc.sc != nil {
-		s.ServiceConfig = cc.sc.rawJSONString
-	}
-
+	var balCfg serviceconfig.LoadBalancingConfig
 	if cc.dopts.balancerBuilder == nil {
 		// Only look at balancer types and switch balancer if balancer dial
 		// option is not set.
-		var isGRPCLB bool
-		for _, a := range s.Addresses {
-			if a.Type == resolver.GRPCLB {
-				isGRPCLB = true
-				break
-			}
-		}
 		var newBalancerName string
-		// TODO: use new loadBalancerConfig field with appropriate priority.
-		if isGRPCLB {
-			newBalancerName = grpclbName
-		} else if cc.sc != nil && cc.sc.LB != nil {
-			newBalancerName = *cc.sc.LB
+		if cc.sc != nil && cc.sc.lbConfig != nil {
+			newBalancerName = cc.sc.lbConfig.name
+			balCfg = cc.sc.lbConfig.cfg
 		} else {
-			newBalancerName = PickFirstBalancerName
+			var isGRPCLB bool
+			for _, a := range s.Addresses {
+				if a.Type == resolver.GRPCLB {
+					isGRPCLB = true
+					break
+				}
+			}
+			if isGRPCLB {
+				newBalancerName = grpclbName
+			} else if cc.sc != nil && cc.sc.LB != nil {
+				newBalancerName = *cc.sc.LB
+			} else {
+				newBalancerName = PickFirstBalancerName
+			}
 		}
 		cc.switchBalancer(newBalancerName)
 	} else if cc.balancerWrapper == nil {
@@ -607,8 +583,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
 	}
 
-	cc.balancerWrapper.updateResolverState(s)
-	cc.firstResolveEvent.Fire()
+	cc.balancerWrapper.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
 	return nil
 }
 
