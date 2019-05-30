@@ -192,7 +192,7 @@ func (bg *balancerGroup) handleResolvedAddrs(id string, addrs []resolver.Address
 		return
 	}
 	if ub, ok := b.(balancer.V2Balancer); ok {
-		ub.UpdateResolverState(resolver.State{Addresses: addrs})
+		ub.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Addresses: addrs}})
 	} else {
 		b.HandleResolvedAddrs(addrs, nil)
 	}

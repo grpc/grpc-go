@@ -38,10 +38,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-var lbABuilder *balancerABuilder
+var lbABuilder = &balancerABuilder{}
 
 func init() {
-	lbABuilder = &balancerABuilder{}
 	balancer.Register(lbABuilder)
 	balancer.Register(&balancerBBuilder{})
 }
@@ -56,21 +55,19 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type lbPolicy string
-
 const (
-	fakeBalancerA lbPolicy = "fake_balancer_A"
-	fakeBalancerB lbPolicy = "fake_balancer_B"
-	fakeBalancerC lbPolicy = "fake_balancer_C"
+	fakeBalancerA = "fake_balancer_A"
+	fakeBalancerB = "fake_balancer_B"
+	fakeBalancerC = "fake_balancer_C"
 )
 
 var (
-	testBalancerNameFooBar  = "foo.bar"
-	testServiceConfigFooBar = constructServiceConfigFromXdsConfig(&testBalancerConfig{
+	testBalancerNameFooBar = "foo.bar"
+	testLBConfigFooBar     = &xdsConfig{
 		BalancerName:   testBalancerNameFooBar,
-		ChildPolicy:    []lbPolicy{fakeBalancerA},
-		FallbackPolicy: []lbPolicy{fakeBalancerA},
-	})
+		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
+		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
+	}
 
 	specialAddrForBalancerA = resolver.Address{Addr: "this.is.balancer.A"}
 	specialAddrForBalancerB = resolver.Address{Addr: "this.is.balancer.B"}
@@ -79,36 +76,6 @@ var (
 	mu                    sync.Mutex
 	latestFakeEdsBalancer *fakeEDSBalancer
 )
-
-type testBalancerConfig struct {
-	BalancerName   string     `json:"balancerName,omitempty"`
-	ChildPolicy    []lbPolicy `json:"childPolicy,omitempty"`
-	FallbackPolicy []lbPolicy `json:"fallbackPolicy,omitempty"`
-}
-
-func (l *lbPolicy) UnmarshalJSON(b []byte) error {
-	// no need to implement, not used.
-	return nil
-}
-
-func (l lbPolicy) MarshalJSON() ([]byte, error) {
-	m := make(map[string]struct{})
-	m[string(l)] = struct{}{}
-	return json.Marshal(m)
-}
-
-func constructServiceConfigFromXdsConfig(xdsCfg *testBalancerConfig) string {
-	cfgRaw, _ := json.Marshal(xdsCfg)
-	sc, _ := json.Marshal(&serviceConfig{
-		LoadBalancingConfig: []*loadBalancingConfig{
-			{
-				Name:   xdsName,
-				Config: cfgRaw,
-			},
-		},
-	})
-	return string(sc)
-}
 
 type balancerABuilder struct {
 	mu           sync.Mutex
@@ -283,9 +250,9 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 	defer lb.Close()
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
 	for i := 0; i < 3; i++ {
-		lb.UpdateResolverState(resolver.State{
-			Addresses:     addrs,
-			ServiceConfig: string(testServiceConfigFooBar),
+		lb.UpdateClientConnState(balancer.ClientConnState{
+			ResolverState:  resolver.State{Addresses: addrs},
+			BalancerConfig: testLBConfigFooBar,
 		})
 		select {
 		case nsc := <-cc.newSubConns:
@@ -316,9 +283,9 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	}
 	defer lb.Close()
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	lb.UpdateResolverState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: string(testServiceConfigFooBar),
+	lb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs},
+		BalancerConfig: testLBConfigFooBar,
 	})
 
 	// verify fallback takes over
@@ -342,14 +309,14 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		addr, td, _, cleanup := setupServer(t)
 		cleanups = append(cleanups, cleanup)
-		workingServiceConfig := constructServiceConfigFromXdsConfig(&testBalancerConfig{
+		workingLBConfig := &xdsConfig{
 			BalancerName:   addr,
-			ChildPolicy:    []lbPolicy{fakeBalancerA},
-			FallbackPolicy: []lbPolicy{fakeBalancerA},
-		})
-		lb.UpdateResolverState(resolver.State{
-			Addresses:     addrs,
-			ServiceConfig: string(workingServiceConfig),
+			ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
+			FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
+		}
+		lb.UpdateClientConnState(balancer.ClientConnState{
+			ResolverState:  resolver.State{Addresses: addrs},
+			BalancerConfig: workingLBConfig,
 		})
 		td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
 
@@ -398,13 +365,16 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		}
 	}()
 	for _, test := range []struct {
-		cfg                 *testBalancerConfig
+		cfg                 *xdsConfig
 		responseToSend      *discoverypb.DiscoveryResponse
 		expectedChildPolicy *loadBalancingConfig
 	}{
 		{
-			cfg: &testBalancerConfig{
-				ChildPolicy: []lbPolicy{fakeBalancerA},
+			cfg: &xdsConfig{
+				ChildPolicy: &loadBalancingConfig{
+					Name:   fakeBalancerA,
+					Config: json.RawMessage("{}"),
+				},
 			},
 			responseToSend: testEDSRespWithoutEndpoints,
 			expectedChildPolicy: &loadBalancingConfig{
@@ -413,8 +383,11 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			},
 		},
 		{
-			cfg: &testBalancerConfig{
-				ChildPolicy: []lbPolicy{fakeBalancerB},
+			cfg: &xdsConfig{
+				ChildPolicy: &loadBalancingConfig{
+					Name:   fakeBalancerB,
+					Config: json.RawMessage("{}"),
+				},
 			},
 			expectedChildPolicy: &loadBalancingConfig{
 				Name:   string(fakeBalancerB),
@@ -422,7 +395,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 			},
 		},
 		{
-			cfg:            &testBalancerConfig{},
+			cfg:            &xdsConfig{},
 			responseToSend: testCDSResp,
 			expectedChildPolicy: &loadBalancingConfig{
 				Name: "ROUND_ROBIN",
@@ -433,9 +406,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		cleanups = append(cleanups, cleanup)
 		test.cfg.BalancerName = addr
 
-		lb.UpdateResolverState(resolver.State{
-			ServiceConfig: constructServiceConfigFromXdsConfig(test.cfg),
-		})
+		lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: test.cfg})
 		if test.responseToSend != nil {
 			td.sendResp(&response{resp: test.responseToSend})
 		}
@@ -462,7 +433,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 
 // not in fallback mode, overwrite fallback info.
 // in fallback mode, update config or switch balancer.
-func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
+func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
@@ -479,20 +450,19 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 
 	addr, td, _, cleanup := setupServer(t)
 
-	cfg := &testBalancerConfig{
+	cfg := xdsConfig{
 		BalancerName:   addr,
-		ChildPolicy:    []lbPolicy{fakeBalancerA},
-		FallbackPolicy: []lbPolicy{fakeBalancerA},
+		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
+		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
-	lb.UpdateResolverState(resolver.State{
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
-	})
+	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: &cfg})
 
 	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}, {Addr: "2.2.2.2:10002"}, {Addr: "3.3.3.3:10003"}}
-	cfg.FallbackPolicy = []lbPolicy{fakeBalancerB}
-	lb.UpdateResolverState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
+	cfg2 := cfg
+	cfg2.FallBackPolicy = &loadBalancingConfig{Name: fakeBalancerB}
+	lb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs},
+		BalancerConfig: &cfg2,
 	})
 
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
@@ -520,10 +490,11 @@ func (s) TestXdsBalanceHandleBalancerConfigFallbackUpdate(t *testing.T) {
 		t.Fatalf("timeout when geting new subconn result")
 	}
 
-	cfg.FallbackPolicy = []lbPolicy{fakeBalancerA}
-	lb.UpdateResolverState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
+	cfg3 := cfg
+	cfg3.FallBackPolicy = &loadBalancingConfig{Name: fakeBalancerA}
+	lb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs},
+		BalancerConfig: &cfg3,
 	})
 
 	// verify fallback balancer A takes over
@@ -554,14 +525,12 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
-	cfg := &testBalancerConfig{
+	cfg := &xdsConfig{
 		BalancerName:   addr,
-		ChildPolicy:    []lbPolicy{fakeBalancerA},
-		FallbackPolicy: []lbPolicy{fakeBalancerA},
+		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
+		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
-	lb.UpdateResolverState(resolver.State{
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
-	})
+	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
 
@@ -617,7 +586,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	}
 }
 
-func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
+func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {
@@ -634,14 +603,12 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 
 	addr, td, _, cleanup := setupServer(t)
 	defer cleanup()
-	cfg := &testBalancerConfig{
+	cfg := &xdsConfig{
 		BalancerName:   addr,
-		ChildPolicy:    []lbPolicy{fakeBalancerA},
-		FallbackPolicy: []lbPolicy{fakeBalancerA},
+		ChildPolicy:    &loadBalancingConfig{Name: fakeBalancerA},
+		FallBackPolicy: &loadBalancingConfig{Name: fakeBalancerA},
 	}
-	lb.UpdateResolverState(resolver.State{
-		ServiceConfig: constructServiceConfigFromXdsConfig(cfg),
-	})
+	lb.UpdateClientConnState(balancer.ClientConnState{BalancerConfig: cfg})
 
 	td.sendResp(&response{resp: testEDSRespWithoutEndpoints})
 
@@ -698,16 +665,16 @@ func (s) TestXdsBalancerFallbackSignalFromEdsBalancer(t *testing.T) {
 }
 
 func (s) TestXdsBalancerConfigParsingSelectingLBPolicy(t *testing.T) {
-	tesCfg := &testBalancerConfig{
-		BalancerName:   "fake.foo.bar",
-		ChildPolicy:    []lbPolicy{fakeBalancerC, fakeBalancerA, fakeBalancerB}, // selects fakeBalancerA
-		FallbackPolicy: []lbPolicy{fakeBalancerC, fakeBalancerB, fakeBalancerA}, // selects fakeBalancerB
+	js := json.RawMessage(`{
+"balancerName": "fake.foo.bar",
+"childPolicy": [{"fake_balancer_C": {}}, {"fake_balancer_A": {}}, {"fake_balancer_B": {}}],
+"fallbackPolicy": [{"fake_balancer_C": {}}, {"fake_balancer_B": {}}, {"fake_balancer_A": {}}]
+}`)
+	cfg, err := (&xdsBalancerBuilder{}).ParseConfig(js)
+	if err != nil {
+		t.Fatalf("unable to unmarshal balancer config into xds config: %v", err)
 	}
-	js, _ := json.Marshal(tesCfg)
-	var xdsCfg xdsConfig
-	if err := json.Unmarshal(js, &xdsCfg); err != nil {
-		t.Fatal("unable to unmarshal balancer config into xds config")
-	}
+	xdsCfg := cfg.(*xdsConfig)
 	wantChildPolicy := &loadBalancingConfig{Name: string(fakeBalancerA), Config: json.RawMessage(`{}`)}
 	if !reflect.DeepEqual(xdsCfg.ChildPolicy, wantChildPolicy) {
 		t.Fatalf("got child policy %v, want %v", xdsCfg.ChildPolicy, wantChildPolicy)
@@ -715,45 +682,6 @@ func (s) TestXdsBalancerConfigParsingSelectingLBPolicy(t *testing.T) {
 	wantFallbackPolicy := &loadBalancingConfig{Name: string(fakeBalancerB), Config: json.RawMessage(`{}`)}
 	if !reflect.DeepEqual(xdsCfg.FallBackPolicy, wantFallbackPolicy) {
 		t.Fatalf("got fallback policy %v, want %v", xdsCfg.FallBackPolicy, wantFallbackPolicy)
-	}
-}
-
-func (s) TestXdsFullServiceConfigParsing(t *testing.T) {
-	tests := []struct {
-		name string
-		s    string
-		want *serviceConfig
-	}{
-		{
-			name: "empty",
-			s:    "",
-			want: nil,
-		},
-		{
-			name: "success1",
-			s:    `{"loadBalancingConfig":[{"xds":{"childPolicy":[{"pick_first":{}}]}}]}`,
-			want: &serviceConfig{
-				LoadBalancingConfig: []*loadBalancingConfig{
-					{"xds", json.RawMessage(`{"childPolicy":[{"pick_first":{}}]}`)},
-				},
-			},
-		},
-		{
-			name: "success2",
-			s:    `{"loadBalancingConfig":[{"xds":{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}}]}`,
-			want: &serviceConfig{
-				LoadBalancingConfig: []*loadBalancingConfig{
-					{"xds", json.RawMessage(`{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`)},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseFullServiceConfig(tt.s); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("test name: %s, parseFullServiceConfig() = %+v, want %+v", tt.name, got, tt.want)
-			}
-		})
 	}
 }
 

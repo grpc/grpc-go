@@ -14,23 +14,21 @@
  * limitations under the License.
  */
 
-//go:generate protoc -I ./orca_v1 --go_out=plugins=grpc:./orca_v1 ./orca_v1/orca.proto
-
 // Package orca implements Open Request Cost Aggregation.
 package orca
 
 import (
 	"github.com/golang/protobuf/proto"
+	orcapb "google.golang.org/grpc/balancer/xds/internal/proto/udpa/data/orca/v1/orca_load_report"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancerload"
-	orcapb "google.golang.org/grpc/internal/balancerload/orca/orca_v1"
 	"google.golang.org/grpc/metadata"
 )
 
 const mdKey = "X-Endpoint-Load-Metrics-Bin"
 
 // toBytes converts a orca load report into bytes.
-func toBytes(r *orcapb.LoadReport) []byte {
+func toBytes(r *orcapb.OrcaLoadReport) []byte {
 	if r == nil {
 		return nil
 	}
@@ -44,7 +42,7 @@ func toBytes(r *orcapb.LoadReport) []byte {
 }
 
 // ToMetadata converts a orca load report into grpc metadata.
-func ToMetadata(r *orcapb.LoadReport) metadata.MD {
+func ToMetadata(r *orcapb.OrcaLoadReport) metadata.MD {
 	b := toBytes(r)
 	if b == nil {
 		return nil
@@ -53,8 +51,8 @@ func ToMetadata(r *orcapb.LoadReport) metadata.MD {
 }
 
 // fromBytes reads load report bytes and converts it to orca.
-func fromBytes(b []byte) *orcapb.LoadReport {
-	ret := new(orcapb.LoadReport)
+func fromBytes(b []byte) *orcapb.OrcaLoadReport {
+	ret := new(orcapb.OrcaLoadReport)
 	if err := proto.Unmarshal(b, ret); err != nil {
 		grpclog.Warningf("orca: failed to unmarshal load report: %v", err)
 		return nil
@@ -65,7 +63,7 @@ func fromBytes(b []byte) *orcapb.LoadReport {
 // FromMetadata reads load report from metadata and converts it to orca.
 //
 // It returns nil if report is not found in metadata.
-func FromMetadata(md metadata.MD) *orcapb.LoadReport {
+func FromMetadata(md metadata.MD) *orcapb.OrcaLoadReport {
 	vs := md.Get(mdKey)
 	if len(vs) == 0 {
 		return nil

@@ -533,7 +533,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 	// curPos and initialPos are two slices where each value acts as an index
 	// into the appropriate feature slice maintained in benchOpts.features. This
 	// loop generates all possible combinations of features by changing one value
-	// at a time, and once curPos becomes equal to intialPos, we have explored
+	// at a time, and once curPos becomes equal to initialPos, we have explored
 	// all options.
 	var result []stats.Features
 	var curPos []int

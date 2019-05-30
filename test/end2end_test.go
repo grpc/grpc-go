@@ -1481,7 +1481,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1502,7 +1502,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
             "waitForReady": false
         }
     ]
-}`})
+}`)})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1520,7 +1520,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: `{
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1541,7 +1541,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
             "waitForReady": false
         }
     ]
-}`})
+}`)})
 
 	// Make sure service config has been processed by grpc.
 	for {
@@ -1568,7 +1568,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1585,7 +1585,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
             "timeout": ".001s"
         }
     ]
-}`})
+}`)})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1610,7 +1610,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1627,7 +1627,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
             "timeout": ".001s"
         }
     ]
-}`})
+}`)})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1657,7 +1657,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1674,7 +1674,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
             "timeout": "3600s"
         }
     ]
-}`})
+}`)})
 
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -1704,7 +1704,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1721,7 +1721,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
             "timeout": ".000000001s"
         }
     ]
-}`})
+}`)})
 
 	// Wait for the new service config to take effect.
 	for {
@@ -1767,7 +1767,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scjs := `{
+	sc := parseCfg(`{
     "methodConfig": [
         {
             "name": [
@@ -1784,7 +1784,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
             "maxResponseMessageBytes": 2048
         }
     ]
-}`
+}`)
 
 	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te1 := testServiceConfigSetup(t, e)
@@ -1796,7 +1796,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	cc1 := te1.clientConn()
 
 	addrs := []resolver.Address{{Addr: te1.srvAddr}}
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: scjs})
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: sc})
 	tc := testpb.NewTestServiceClient(cc1)
 
 	req := &testpb.SimpleRequest{
@@ -1867,7 +1867,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	cc2 := te2.clientConn()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: scjs})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc2)
 
 	for {
@@ -1928,7 +1928,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer te3.tearDown()
 
 	cc3 := te3.clientConn()
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: scjs})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: sc})
 	tc = testpb.NewTestServiceClient(cc3)
 
 	for {
@@ -2020,7 +2020,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: te.srvAddr}},
-		ServiceConfig: `{
+		ServiceConfig: parseCfg(`{
 	    "methodConfig": [
 	        {
 	            "name": [
@@ -2033,7 +2033,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	            "timeout": "10s"
 	        }
 	    ]
-	}`})
+	}`)})
 	// Make sure service config has been processed by grpc.
 	for {
 		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
@@ -5295,7 +5295,7 @@ func (ss *stubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 }
 
 func (ss *stubServer) newServiceConfig(sc string) {
-	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: sc})
+	ss.r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.addr}}, ServiceConfig: parseCfg(sc)})
 }
 
 func (ss *stubServer) waitForReady(cc *grpc.ClientConn) error {
@@ -7214,7 +7214,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 		time.Sleep(time.Second)
 		r.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: te.srvAddr}},
-			ServiceConfig: `{
+			ServiceConfig: parseCfg(`{
 		    "methodConfig": [
 		        {
 		            "name": [
@@ -7226,7 +7226,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
                     "maxRequestMessageBytes": 0
 		        }
 		    ]
-		}`})
+		}`)})
 	}()
 	// We wait a second before providing a service config and resolving
 	// addresses.  So this will wait for that and then honor the
