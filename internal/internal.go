@@ -40,6 +40,11 @@ var (
 	// ParseServiceConfig is a function to parse JSON service configs into
 	// opaque data structures.
 	ParseServiceConfig func(sc string) (interface{}, error)
+	// StatusRawProto is exported by status/status.go. This func returns a
+	// pointer to the wrapped Status proto for a given status.Status without a
+	// call to proto.Clone(). The returned Status proto should not be mutated by
+	// the caller.
+	StatusRawProto interface{} // func (*status.Status) *spb.Status
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.
