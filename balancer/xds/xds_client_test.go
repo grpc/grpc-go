@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	structpb "github.com/golang/protobuf/ptypes/struct"
@@ -150,6 +151,9 @@ var (
 				Priority: 0,
 			},
 		},
+		Policy: &edspb.ClusterLoadAssignment_Policy{
+			EndpointStaleAfter: ptypes.DurationProto(time.Millisecond * 100),
+		},
 	}
 	marshaledClusterLoadAssignment, _ = proto.Marshal(testClusterLoadAssignment)
 	testEDSResp                       = &discoverypb.DiscoveryResponse{
@@ -174,7 +178,9 @@ var (
 				Priority: 0,
 			},
 		},
-		Policy: nil,
+		Policy: &edspb.ClusterLoadAssignment_Policy{
+			EndpointStaleAfter: ptypes.DurationProto(time.Millisecond * 100),
+		},
 	}
 	marshaledClusterLoadAssignmentWithoutEndpoints, _ = proto.Marshal(testClusterLoadAssignmentWithoutEndpoints)
 	testEDSRespWithoutEndpoints                       = &discoverypb.DiscoveryResponse{

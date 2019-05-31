@@ -584,7 +584,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 	}
 }
 
-func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
+func (s) TestXdsBalancerFallBackWithStaleTimeout(t *testing.T) {
 	originalNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = newFakeEDSBalancer
 	defer func() {

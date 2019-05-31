@@ -29,10 +29,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/xds/edsbalancer"
 	cdspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/cds"
 	edspb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/api/v2/eds"
+	percentpb "google.golang.org/grpc/balancer/xds/internal/proto/envoy/type/percent"
 	"google.golang.org/grpc/balancer/xds/lrs"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -73,7 +75,6 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		buildOpts:       opts,
 		startupTimeout:  startupTimeout,
 		connStateMgr:    &connStateMgr{},
-		startup:         true,
 		grpcUpdate:      make(chan interface{}),
 		xdsClientUpdate: make(chan interface{}),
 		timer:           createDrainedTimer(), // initialized a timer that won't fire without reset
@@ -83,6 +84,7 @@ func (b *xdsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		updateState: x.connStateMgr.updateState,
 		ClientConn:  cc,
 	}
+
 	go x.run()
 	return x
 }
@@ -114,6 +116,19 @@ type edsBalancerInterface interface {
 	Close()
 }
 
+type xdsState int
+
+const (
+	// initState is the initial state when xdsBalancer is just initialized
+	initState xdsState = iota
+	// startup indicates we have started contacting remote balancer and waiting for response
+	startup
+	// firstUpdate indicates we have got update from xds client, either it is ads response or lose contact signal
+	firstUpdate
+	// afterStartup indicated the initState timer has timed out or has been cancelled, which means we are now at the after startup stage
+	afterStartup
+)
+
 // xdsBalancer manages xdsClient and the actual balancer that does load balancing (either edsBalancer,
 // or fallback LB).
 type xdsBalancer struct {
@@ -124,14 +139,13 @@ type xdsBalancer struct {
 	connStateMgr      *connStateMgr
 	ctx               context.Context
 	cancel            context.CancelFunc
-	startup           bool // startup indicates whether this xdsBalancer is in startup stage.
 	inFallbackMonitor bool
+	state             xdsState
 
 	// xdsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
 	xdsClientUpdate chan interface{}
 	timer           *time.Timer
-	noSubConnAlert  <-chan struct{}
 
 	client           *client    // may change when passed a different service config
 	config           *xdsConfig // may change when passed a different service config
@@ -144,7 +158,7 @@ type xdsBalancer struct {
 func (x *xdsBalancer) startNewXDSClient(u *xdsConfig) {
 	// If the xdsBalancer is in startup stage, then we need to apply the startup timeout for the first
 	// xdsClient to get a response from the traffic director.
-	if x.startup {
+	if x.state == initState {
 		x.startFallbackMonitoring()
 	}
 
@@ -208,8 +222,6 @@ func (x *xdsBalancer) run() {
 		case update := <-x.xdsClientUpdate:
 			x.handleXDSClientUpdate(update)
 		case <-x.timer.C: // x.timer.C will block if we are not in fallback monitoring stage.
-			x.switchFallback()
-		case <-x.noSubConnAlert: // x.noSubConnAlert will block if we are not in fallback monitoring stage.
 			x.switchFallback()
 		case <-x.ctx.Done():
 			if x.client != nil {
@@ -299,6 +311,11 @@ func (x *xdsBalancer) handleGRPCUpdate(update interface{}) {
 }
 
 func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
+	defer func() {
+		if x.state == startup {
+			x.state = firstUpdate
+		}
+	}()
 	switch u := update.(type) {
 	case *cdsResp:
 		select {
@@ -306,10 +323,9 @@ func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 			return
 		default:
 		}
+		// TODO: Ultimately we want to switch to EDSBalancer only after it reports READY
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
-		// TODO: Get the optional xds record stale timeout from OutlierDetection message. If not exist,
-		// reset to 0.
-		// x.xdsStaleTimeout = u.OutlierDetection.TO_BE_DEFINED_AND_ADDED
+
 		x.xdsLB.HandleChildPolicy(u.resp.LbPolicy.String(), nil)
 	case *edsResp:
 		select {
@@ -317,13 +333,32 @@ func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 			return
 		default:
 		}
+		// TODO: Ultimately we want to switch to EDSBalancer only after it reports READY
 		x.cancelFallbackAndSwitchEDSBalancerIfNecessary()
+
+		if staleTimeout, err := ptypes.Duration(u.resp.GetPolicy().GetEndpointStaleAfter()); err == nil {
+			x.xdsStaleTimeout = &staleTimeout
+		}
+		if isAllDrop(u.resp.GetPolicy().GetDropOverloads()) {
+			x.cancelFallbackMonitoring()
+			if x.fallbackLB != nil {
+				x.fallbackLB.Close()
+				x.fallbackLB = nil
+			}
+		} else if x.state == afterStartup {
+			x.cancelFallbackMonitoring()
+		}
+
 		x.xdsLB.HandleEDSResponse(u.resp)
 	case *loseContact:
 		select {
 		case <-u.ctx.Done():
 			return
 		default:
+		}
+		if x.state == startup {
+			x.switchFallback()
+			return
 		}
 		// if we are already doing fallback monitoring, then we ignore new loseContact signal.
 		if x.inFallbackMonitor {
@@ -336,6 +371,28 @@ func (x *xdsBalancer) handleXDSClientUpdate(update interface{}) {
 	}
 }
 
+func isAllDrop(dropPolicies []*edspb.ClusterLoadAssignment_Policy_DropOverload) bool {
+	for _, dropPolicy := range dropPolicies {
+		percentage := dropPolicy.GetDropPercentage()
+		var (
+			numerator   = percentage.GetNumerator()
+			denominator uint32
+		)
+		switch percentage.GetDenominator() {
+		case percentpb.FractionalPercent_HUNDRED:
+			denominator = 100
+		case percentpb.FractionalPercent_TEN_THOUSAND:
+			denominator = 10000
+		case percentpb.FractionalPercent_MILLION:
+			denominator = 1000000
+		}
+		if numerator != denominator {
+			return false
+		}
+	}
+	return true
+}
+
 type connStateMgr struct {
 	mu       sync.Mutex
 	curState connectivity.State
@@ -346,23 +403,24 @@ func (c *connStateMgr) updateState(s connectivity.State) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.curState = s
-	if s != connectivity.Ready && c.notify != nil {
+	if s == connectivity.Ready && c.notify != nil {
 		close(c.notify)
 		c.notify = nil
 	}
 }
 
-func (c *connStateMgr) notifyWhenNotReady() <-chan struct{} {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.curState != connectivity.Ready {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}
-	c.notify = make(chan struct{})
-	return c.notify
-}
+// TODO: notifyWhenReady will be used for the upcoming update for fallback.
+//func (c *connStateMgr) notifyWhenReady() <-chan struct{} {
+//	c.mu.Lock()
+//	defer c.mu.Unlock()
+//	if c.curState == connectivity.Ready {
+//		ch := make(chan struct{})
+//		close(ch)
+//		return ch
+//	}
+//	c.notify = make(chan struct{})
+//	return c.notify
+//}
 
 // xdsClientConn wraps around the balancer.ClientConn passed in from grpc. The wrapping is to add
 // functionality to get notification when no subconn is in READY state.
@@ -518,32 +576,32 @@ func (x *xdsBalancer) buildFallBackBalancer(c *xdsConfig) {
 }
 
 // There are three ways that could lead to fallback:
-// 1. During startup (i.e. the first xds client is just created and attempts to contact the traffic
-//    director), fallback if it has not received any response from the director within the configured
+// 1. TODO: During startup (i.e. the first xds client is just created and attempts to contact the traffic
+//    director), fallback if no backend has been successfully connected to within the configured
 //    timeout.
-// 2. After xds client loses contact with the remote, fallback if all connections to the backends are
-//    lost (i.e. not in state READY).
-// 3. After xds client loses contact with the remote, fallback if the stale eds timeout has been
+//    Currently, fallback if xds client has not received any response from the director within the configured timeout.
+// 2. After xds client loses contact with the remote, fallback if the stale eds timeout has been
 //    configured through CDS and is timed out.
 func (x *xdsBalancer) startFallbackMonitoring() {
-	if x.startup {
-		x.startup = false
+	if x.state == initState {
+		x.state = startup
 		x.timer.Reset(x.startupTimeout)
 		return
 	}
-
-	x.noSubConnAlert = x.connStateMgr.notifyWhenNotReady()
 	if x.xdsStaleTimeout != nil {
 		if !x.timer.Stop() {
-			<-x.timer.C
+			select {
+			case <-x.timer.C:
+			default:
+			}
 		}
 		x.timer.Reset(*x.xdsStaleTimeout)
 	}
 }
 
-// There are two cases where fallback monitoring should be canceled:
-// 1. xDS client returns a new ADS message.
-// 2. fallback has been triggered.
+// TODO: At startup, we cancel the monitor for entering fallback when at least one backend becomes ready.
+// After startup, we cancel the monitor when an ADS response is received.
+// And in both cases, we cancel the monitor if fallback has been triggered.
 func (x *xdsBalancer) cancelFallbackMonitoring() {
 	if !x.timer.Stop() {
 		select {
@@ -554,8 +612,12 @@ func (x *xdsBalancer) cancelFallbackMonitoring() {
 			// if the timer timeout leads us here, then there's no thing to drain from x.timer.C.
 		}
 	}
-	x.noSubConnAlert = nil
 	x.inFallbackMonitor = false
+	if x.state != afterStartup {
+		// either the initState timer times out or it gets cancelled, cancelFallbackMonitoring will be invoked, and we will
+		// transition into afterStartup stage.
+		x.state = afterStartup
+	}
 }
 
 func (x *xdsBalancer) Close() {
