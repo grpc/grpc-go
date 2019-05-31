@@ -65,27 +65,31 @@ var (
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
+					},
 					endpointRequired: {
 						Kind: &structpb.Value_BoolValue{BoolValue: true},
 					},
 				},
 			},
 		},
-		ResourceNames: []string{testServiceName},
-		TypeUrl:       edsType,
+		TypeUrl: edsType,
 	}
 	testEDSReqWithoutEndpoints = &discoverypb.DiscoveryRequest{
 		Node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
+					internal.GrpcHostname: {
+						Kind: &structpb.Value_StringValue{StringValue: testServiceName},
+					},
 					endpointRequired: {
 						Kind: &structpb.Value_BoolValue{BoolValue: false},
 					},
 				},
 			},
 		},
-		ResourceNames: []string{testServiceName},
-		TypeUrl:       edsType,
+		TypeUrl: edsType,
 	}
 	testCluster = &cdspb.Cluster{
 		Name:                 testServiceName,
