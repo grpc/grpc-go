@@ -239,7 +239,7 @@ func (s) TestXdsBalanceHandleResolvedAddrs(t *testing.T) {
 	startupTimeout = 500 * time.Millisecond
 	defer func() { startupTimeout = defaultTimeout }()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
@@ -273,7 +273,7 @@ func (s) TestXdsBalanceHandleBalancerConfigBalancerNameUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
@@ -348,7 +348,7 @@ func (s) TestXdsBalanceHandleBalancerConfigChildPolicyUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
@@ -438,7 +438,7 @@ func (s) TestXdsBalanceHandleBalancerConfigFallBackUpdate(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
@@ -513,7 +513,7 @@ func (s) TestXdsBalancerHandlerSubConnStateChange(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
@@ -591,7 +591,7 @@ func (s) TestXdsBalancerFallBackSignalFromEdsBalancer(t *testing.T) {
 		newEDSBalancer = originalNewEDSBalancer
 	}()
 
-	builder := balancer.Get("xds")
+	builder := balancer.Get(xdsName)
 	cc := newTestClientConn()
 	lb, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}).(*xdsBalancer)
 	if !ok {
