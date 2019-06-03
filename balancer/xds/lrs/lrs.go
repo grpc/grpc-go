@@ -64,7 +64,6 @@ func newRPCCountData() *rpcCountData {
 // lrsStore collects loads from xds balancer, and periodically sends load to the
 // server.
 type lrsStore struct {
-	serviceName  string
 	node         *basepb.Node
 	backoff      backoff.Strategy
 	lastReported time.Time
@@ -76,7 +75,6 @@ type lrsStore struct {
 // NewStore creates a store for load reports.
 func NewStore(serviceName string) Store {
 	return &lrsStore{
-		serviceName: serviceName,
 		node: &basepb.Node{
 			Metadata: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
