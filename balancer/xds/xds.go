@@ -42,7 +42,7 @@ import (
 
 const (
 	defaultTimeout = 10 * time.Second
-	xdsName        = "xds"
+	xdsName        = "xds_experimental"
 )
 
 var (
