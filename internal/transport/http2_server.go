@@ -57,6 +57,9 @@ var (
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
 	// than the limit set by peer.
 	ErrHeaderListSizeLimitViolation = errors.New("transport: trying to send header list size larger than the limit set by peer")
+	// statusRawProto is a function to get to the raw status proto wrapped in a
+	// status.Status without a proto.Clone().
+	statusRawProto = internal.StatusRawProto.(func(*status.Status) *spb.Status)
 )
 
 // http2Server implements the ServerTransport interface with HTTP2.
@@ -819,8 +822,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
 
-	srp := internal.StatusRawProto.(func(*status.Status) *spb.Status)
-	if p := srp(st); p != nil && len(p.Details) > 0 {
+	if p := statusRawProto(st); p != nil && len(p.Details) > 0 {
 		stBytes, err := proto.Marshal(p)
 		if err != nil {
 			// TODO: return error instead, when callers are able to handle it.
