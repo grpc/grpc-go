@@ -95,14 +95,6 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 //
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback bool, pickFirst bool) {
-	defer func() {
-		// Regenerate and update picker after refreshing subconns because with
-		// cache, even if SubConn was newed/removed, there might be no state
-		// changes (the subconn will be kept in cache, not actually
-		// newed/removed).
-		lb.updateStateAndPicker(true, true)
-	}()
-
 	lb.inFallback = fallback
 
 	opts := balancer.NewSubConnOptions{}
@@ -184,6 +176,12 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 			// The entry will be deleted in HandleSubConnStateChange.
 		}
 	}
+
+	// Regenerate and update picker after refreshing subconns because with
+	// cache, even if SubConn was newed/removed, there might be no state
+	// changes (the subconn will be kept in cache, not actually
+	// newed/removed).
+	lb.updateStateAndPicker(true, true)
 }
 
 func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) error {
